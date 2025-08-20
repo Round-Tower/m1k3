@@ -1,0 +1,8 @@
+requests>=2.31.0
+tqdm>=4.65.0
+huggingface-hub>=0.17.0
+ctransformers>=0.2.27
+torch>=2.0.0
+torchaudio>=2.0.0
+sounddevice>=0.4.6
+numpy>=1.20.0
