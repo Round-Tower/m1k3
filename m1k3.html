@@ -2,28 +2,27 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>M1K3 Avatar Dashboard</title>
     <style>
         :root {
-            /* M1K3 Design System */
+            /* M1K3 Monochrome Design System */
             --bg-primary: #0A0A0A;
-            --bg-secondary: #141414; 
-            --bg-tertiary: #1F1F1F;
-            --bg-elevated: #2A2A2A;
-            --bg-input: #1A1A1A;
+            --bg-secondary: rgba(255, 255, 255, 0.05);
+            --bg-tertiary: rgba(255, 255, 255, 0.08);
+            --bg-elevated: rgba(255, 255, 255, 0.12);
+            --bg-input: rgba(255, 255, 255, 0.03);
             
-            --m1k3-orange: #E25303;
-            --m1k3-blue: #0F4C81;
-            --m1k3-green: #92B48B;
-            --m1k3-red: #8E354A;
-            --m1k3-purple: #9370DB;
+            --accent-primary: rgba(255, 255, 255, 0.9);
+            --accent-secondary: rgba(255, 255, 255, 0.6);
+            --accent-tertiary: rgba(255, 255, 255, 0.4);
+            --accent-disabled: rgba(255, 255, 255, 0.2);
             
-            --text-primary: #FFFFFF;
-            --text-secondary: #A0A0A0;
-            --text-disabled: #666666;
-            --text-user: #E25303;
-            --text-ai: #92B48B;
+            --text-primary: rgba(255, 255, 255, 0.95);
+            --text-secondary: rgba(255, 255, 255, 0.7);
+            --text-disabled: rgba(255, 255, 255, 0.4);
+            --text-user: rgba(255, 255, 255, 0.95);
+            --text-ai: rgba(255, 255, 255, 0.85);
             
             --spacing-xs: 4px;
             --spacing-sm: 8px;
@@ -35,9 +34,13 @@
             --border-radius-sm: 8px;
             --border-radius-xs: 4px;
             
-            --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.3);
-            --shadow-md: 0 4px 8px rgba(0, 0, 0, 0.4);
-            --shadow-lg: 0 8px 16px rgba(0, 0, 0, 0.5);
+            --border-subtle: 1px solid rgba(255, 255, 255, 0.1);
+            --border-light: 1px solid rgba(255, 255, 255, 0.15);
+            --border-medium: 1px solid rgba(255, 255, 255, 0.2);
+            
+            --shadow-subtle: 0 2px 8px rgba(0, 0, 0, 0.2);
+            --shadow-medium: 0 4px 12px rgba(0, 0, 0, 0.3);
+            --shadow-strong: 0 8px 24px rgba(0, 0, 0, 0.4);
         }
 
         * {
@@ -57,27 +60,47 @@
         }
 
         .dashboard {
-            display: grid;
-            grid-template-columns: 400px 1fr;
-            grid-template-rows: auto 1fr auto;
-            grid-template-areas: 
-                "header header"
-                "avatar chat"
-                "controls chat-input";
+            display: flex;
+            flex-direction: column;
             height: 100vh;
-            gap: var(--spacing-md);
-            padding: var(--spacing-md);
+            gap: var(--spacing-sm);
+            padding: var(--spacing-sm);
+        }
+        
+        /* Mobile-first responsive layout */
+        @media (min-width: 768px) {
+            .dashboard {
+                display: grid;
+                grid-template-columns: 380px 1fr;
+                grid-template-rows: auto 1fr auto;
+                grid-template-areas: 
+                    "header header"
+                    "avatar chat"
+                    "controls chat-input";
+                gap: var(--spacing-md);
+                padding: var(--spacing-md);
+            }
         }
 
         .header {
-            grid-area: header;
             display: flex;
             justify-content: space-between;
             align-items: center;
             background: var(--bg-secondary);
-            padding: var(--spacing-md);
-            border-radius: var(--border-radius);
-            border: 1px solid var(--bg-tertiary);
+            padding: var(--spacing-xs) var(--spacing-md);
+            border-radius: var(--border-radius-sm);
+            border: var(--border-subtle);
+            box-shadow: var(--shadow-subtle);
+            flex-shrink: 0;
+            backdrop-filter: blur(8px);
+            min-height: 48px;
+        }
+        
+        @media (min-width: 768px) {
+            .header {
+                grid-area: header;
+                padding: var(--spacing-md);
+            }
         }
 
         .title-section {
@@ -135,23 +158,37 @@
         }
 
         .avatar-panel {
-            grid-area: avatar;
             background: var(--bg-secondary);
             border-radius: var(--border-radius);
-            border: 1px solid var(--bg-tertiary);
-            padding: var(--spacing-lg);
+            border: var(--border-subtle);
+            box-shadow: var(--shadow-subtle);
+            padding: var(--spacing-md);
             display: flex;
             flex-direction: column;
-            gap: var(--spacing-md);
+            gap: var(--spacing-sm);
             overflow: hidden;
+            flex-shrink: 0;
+            max-height: 340px;
+            backdrop-filter: blur(8px);
+        }
+        
+        @media (min-width: 768px) {
+            .avatar-panel {
+                grid-area: avatar;
+                padding: var(--spacing-lg);
+                gap: var(--spacing-md);
+                max-height: none;
+                flex-shrink: 1;
+            }
         }
 
         .avatar-display {
             position: relative;
             aspect-ratio: 1;
-            background: var(--bg-tertiary);
+            background: rgba(255, 255, 255, 0.95);
             border-radius: var(--border-radius-sm);
-            border: 1px solid var(--bg-elevated);
+            border: var(--border-light);
+            box-shadow: inset var(--shadow-subtle);
             overflow: hidden;
         }
 
@@ -264,21 +301,32 @@
         }
 
         .chat-panel {
-            grid-area: chat;
             background: var(--bg-secondary);
             border-radius: var(--border-radius);
-            border: 1px solid var(--bg-tertiary);
+            border: var(--border-subtle);
+            box-shadow: var(--shadow-subtle);
             display: flex;
             flex-direction: column;
             overflow: hidden;
+            flex: 1;
+            min-height: 250px;
+            backdrop-filter: blur(8px);
+        }
+        
+        @media (min-width: 768px) {
+            .chat-panel {
+                grid-area: chat;
+                min-height: auto;
+            }
         }
 
         .chat-header {
-            padding: var(--spacing-md);
+            padding: var(--spacing-sm) var(--spacing-md);
             border-bottom: 1px solid var(--bg-tertiary);
             display: flex;
             justify-content: space-between;
             align-items: center;
+            flex-shrink: 0;
         }
 
         .chat-title {
@@ -294,24 +342,27 @@
 
         .control-button {
             background: var(--bg-tertiary);
-            border: 1px solid var(--bg-elevated);
+            border: var(--border-subtle);
             color: var(--text-secondary);
             padding: var(--spacing-xs) var(--spacing-sm);
             border-radius: var(--border-radius-xs);
             font-size: 0.75rem;
             cursor: pointer;
             transition: all 0.2s ease;
+            backdrop-filter: blur(4px);
         }
 
         .control-button:hover {
             background: var(--bg-elevated);
             color: var(--text-primary);
+            border-color: var(--border-light);
+            box-shadow: var(--shadow-subtle);
         }
 
         .control-button.active {
-            background: var(--m1k3-orange);
+            background: var(--accent-primary);
             color: var(--bg-primary);
-            border-color: var(--m1k3-orange);
+            border-color: var(--accent-primary);
         }
 
         .chat-messages {
@@ -351,38 +402,44 @@
         }
 
         .message.user .message-avatar {
-            background: var(--m1k3-orange);
+            background: var(--accent-primary);
             color: var(--bg-primary);
+            border: var(--border-light);
         }
 
         .message.ai .message-avatar {
-            background: var(--m1k3-green);
+            background: var(--accent-secondary);
             color: var(--bg-primary);
+            border: var(--border-light);
         }
 
         .message-content {
             background: var(--bg-tertiary);
-            padding: var(--spacing-sm) var(--spacing-md);
+            padding: var(--spacing-md);
             border-radius: var(--border-radius);
-            border: 1px solid var(--bg-elevated);
+            border: var(--border-subtle);
             position: relative;
+            backdrop-filter: blur(8px);
+            box-shadow: var(--shadow-subtle);
         }
 
         .message.user .message-content {
-            background: rgba(226, 83, 3, 0.1);
-            border-color: rgba(226, 83, 3, 0.3);
-            color: var(--text-user);
+            background: var(--bg-elevated);
+            border-color: var(--border-light);
+            color: var(--text-primary);
+            border-radius: var(--border-radius) var(--border-radius-xs) var(--border-radius) var(--border-radius);
         }
 
         .message.ai .message-content {
-            background: rgba(146, 180, 139, 0.1);
-            border-color: rgba(146, 180, 139, 0.3);
+            background: var(--bg-tertiary);
+            border-color: var(--border-subtle);
             color: var(--text-ai);
+            border-radius: var(--border-radius-xs) var(--border-radius) var(--border-radius) var(--border-radius);
         }
 
         .message-text {
-            font-size: 0.875rem;
-            line-height: 1.5;
+            font-size: 0.9rem;
+            line-height: 1.6;
             word-wrap: break-word;
             white-space: pre-wrap;
         }
@@ -391,6 +448,7 @@
             font-size: 0.75rem;
             color: var(--text-disabled);
             margin-top: var(--spacing-xs);
+            opacity: 0.8;
         }
 
         .typing-indicator {
@@ -428,14 +486,26 @@
         }
 
         .controls-panel {
-            grid-area: controls;
             background: var(--bg-secondary);
             border-radius: var(--border-radius);
-            border: 1px solid var(--bg-tertiary);
-            padding: var(--spacing-md);
+            border: var(--border-subtle);
+            box-shadow: var(--shadow-subtle);
+            padding: var(--spacing-sm) var(--spacing-md);
             display: flex;
-            gap: var(--spacing-md);
+            gap: var(--spacing-sm);
             align-items: center;
+            flex-shrink: 0;
+            order: 1;
+            backdrop-filter: blur(8px);
+        }
+        
+        @media (min-width: 768px) {
+            .controls-panel {
+                grid-area: controls;
+                padding: var(--spacing-md);
+                gap: var(--spacing-md);
+                order: initial;
+            }
         }
 
         .volume-control {
@@ -463,14 +533,24 @@
         }
 
         .chat-input-panel {
-            grid-area: chat-input;
             background: var(--bg-secondary);
             border-radius: var(--border-radius);
-            border: 1px solid var(--bg-tertiary);
+            border: var(--border-subtle);
+            box-shadow: var(--shadow-subtle);
             padding: var(--spacing-md);
             display: flex;
             gap: var(--spacing-sm);
             align-items: flex-end;
+            flex-shrink: 0;
+            order: 2;
+            backdrop-filter: blur(8px);
+        }
+        
+        @media (min-width: 768px) {
+            .chat-input-panel {
+                grid-area: chat-input;
+                order: initial;
+            }
         }
 
         .input-group {
@@ -482,7 +562,7 @@
 
         .chat-input {
             background: var(--bg-input);
-            border: 1px solid var(--bg-elevated);
+            border: var(--border-subtle);
             border-radius: var(--border-radius-sm);
             padding: var(--spacing-sm) var(--spacing-md);
             color: var(--text-primary);
@@ -492,11 +572,12 @@
             min-height: 40px;
             max-height: 120px;
             outline: none;
-            transition: border-color 0.2s ease;
+            transition: border-color 0.2s ease, box-shadow 0.2s ease;
         }
 
         .chat-input:focus {
-            border-color: var(--m1k3-orange);
+            border-color: var(--accent-primary);
+            box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.1);
         }
 
         .chat-input::placeholder {
@@ -511,7 +592,7 @@
 
         .action-button {
             background: var(--bg-elevated);
-            border: 1px solid var(--bg-tertiary);
+            border: var(--border-subtle);
             color: var(--text-secondary);
             padding: var(--spacing-sm);
             border-radius: var(--border-radius-xs);
@@ -522,18 +603,20 @@
             justify-content: center;
             min-width: 40px;
             height: 40px;
+            backdrop-filter: blur(4px);
         }
 
         .action-button:hover {
-            background: var(--m1k3-orange);
+            background: var(--accent-secondary);
             color: var(--bg-primary);
-            border-color: var(--m1k3-orange);
+            border-color: var(--accent-secondary);
+            box-shadow: var(--shadow-subtle);
         }
 
         .action-button.primary {
-            background: var(--m1k3-orange);
+            background: var(--accent-primary);
             color: var(--bg-primary);
-            border-color: var(--m1k3-orange);
+            border-color: var(--accent-primary);
         }
 
         .action-button:disabled {
@@ -562,25 +645,111 @@
             transition: transform 0.1s ease;
         }
 
-        /* Responsive Design */
-        @media (max-width: 768px) {
+        /* Mobile-specific adjustments and touch optimizations */
+        @media (max-width: 767px) {
             .dashboard {
-                grid-template-columns: 1fr;
-                grid-template-rows: auto auto 1fr auto;
-                grid-template-areas: 
-                    "header"
-                    "avatar"
-                    "chat"
-                    "chat-input";
+                gap: var(--spacing-xs);
+                padding: var(--spacing-xs);
             }
 
             .avatar-panel {
-                max-height: 300px;
+                max-height: 320px;
+                order: 0;
+            }
+
+            .chat-panel {
+                order: 1;
+                min-height: 200px;
+            }
+
+            .controls-panel {
+                order: 2;
+            }
+
+            .chat-input-panel {
+                order: 3;
             }
 
             .avatar-status {
-                grid-template-columns: 1fr 1fr 1fr 1fr;
+                grid-template-columns: 1fr 1fr;
             }
+
+            /* Touch-optimized buttons */
+            .control-button,
+            .action-button {
+                min-height: 44px;
+                min-width: 44px;
+                padding: var(--spacing-sm);
+            }
+
+            /* Improved message spacing on mobile */
+            .message {
+                max-width: 90%;
+            }
+
+            .message-avatar {
+                width: 32px;
+                height: 32px;
+            }
+
+            /* Larger input area for mobile */
+            .chat-input {
+                min-height: 44px;
+                font-size: 16px; /* Prevents zoom on iOS */
+            }
+
+            /* Reduce visual noise on small screens */
+            .header {
+                padding: var(--spacing-xs) var(--spacing-sm);
+            }
+
+            .title {
+                font-size: 1.2rem;
+            }
+
+            .subtitle {
+                font-size: 0.8rem;
+            }
+        }
+
+        /* Touch interaction improvements */
+        @media (hover: none) and (pointer: coarse) {
+            /* Touch device specific styles */
+            .control-button:hover,
+            .action-button:hover {
+                background: var(--bg-elevated);
+                transform: none;
+            }
+
+            .control-button:active,
+            .action-button:active {
+                background: var(--accent-secondary);
+                transform: scale(0.95);
+                transition: transform 0.1s ease;
+            }
+
+            /* Remove hover effects that don't work on touch */
+            #testCanvas:hover {
+                transform: none;
+                box-shadow: var(--shadow-subtle);
+            }
+        }
+
+        /* Improved scrolling on mobile */
+        .chat-messages {
+            -webkit-overflow-scrolling: touch;
+            scroll-behavior: smooth;
+        }
+
+        /* Safe area handling for newer phones */
+        @supports (padding-top: env(safe-area-inset-top)) {
+            .dashboard {
+                padding-top: max(var(--spacing-sm), env(safe-area-inset-top));
+                padding-bottom: max(var(--spacing-sm), env(safe-area-inset-bottom));
+                padding-left: max(var(--spacing-sm), env(safe-area-inset-left));
+                padding-right: max(var(--spacing-sm), env(safe-area-inset-right));
+            }
+        }
 
             .header {
                 flex-direction: column;
@@ -854,22 +1023,12 @@
     <div class="dashboard">
         <!-- Header -->
         <div class="header">
-            <div class="title-section">
-                <div>
-                    <h1 class="title">M1K3 Avatar Dashboard</h1>
-                    <p class="subtitle">Real-time AI companion with chat interface</p>
-                </div>
-            </div>
+            <h1 class="title">M1K3</h1>
             <div class="header-controls">
                 <div class="connection-status disconnected" id="connectionStatus">
                     <div class="status-dot"></div>
                     <span id="connectionText">Disconnected</span>
                 </div>
-                <div class="connection-status" id="audioStatus" style="display:none;">
-                    <span>🔊</span>
-                    <span id="audioStatusText">Audio Ready</span>
-                </div>
-                <button class="theme-toggle" id="themeToggle" title="Toggle theme">🌓</button>
             </div>
         </div>
 
@@ -895,33 +1054,6 @@
                 <div class="status-item" id="stateStatus">
                     <div><span id="currentState">💤 Idle</span></div>
                 </div>
-                <div class="status-item" id="styleStatus">
-                    <div><span id="currentStyle">🤖 Robot</span></div>
-                </div>
-                <div class="status-item" id="tokenStatus" style="display:none;">
-                    <div><span id="currentTokens">🎯 0</span></div>
-                </div>
-            </div>
-
-            <div class="metrics-panel">
-                <div class="metrics-grid">
-                    <div class="metric-item">
-                        <span class="metric-label">⚡ Energy</span>
-                        <span class="metric-value" id="energySaved">0 Wh</span>
-                    </div>
-                    <div class="metric-item">
-                        <span class="metric-label">💧 Water</span>
-                        <span class="metric-value" id="waterSaved">0 ml</span>
-                    </div>
-                    <div class="metric-item">
-                        <span class="metric-label">🌍 CO2</span>
-                        <span class="metric-value" id="co2Saved">0g</span>
-                    </div>
-                    <div class="metric-item">
-                        <span class="metric-label">💬 Msgs</span>
-                        <span class="metric-value" id="messageCount">0</span>
-                    </div>
-                </div>
             </div>
         </div>
 
@@ -930,11 +1062,7 @@
             <div class="chat-header">
                 <div class="chat-title">Conversation</div>
                 <div class="chat-controls">
-                    <button class="control-button" id="soundToggle" title="Toggle sounds">🔊</button>
-                    <button class="control-button" id="testSoundBtn" title="Test sound">🔔</button>
-                    <button class="control-button" id="debugToggle" title="Toggle debug console">🐛</button>
                     <button class="control-button" id="clearChat" title="Clear chat">🗑️</button>
-                    <button class="control-button" id="exportChat" title="Export chat">💾</button>
                 </div>
             </div>
             <div class="chat-messages" id="chatMessages">
@@ -954,12 +1082,6 @@
                 <span>🔊</span>
                 <input type="range" class="volume-slider" id="volumeSlider" min="0" max="100" value="70">
                 <span id="volumeValue">70%</span>
-            </div>
-            <div style="flex: 1"></div>
-            <div style="font-size: 0.75rem; color: var(--text-disabled);">
-                WebSocket: <span id="wsStatus">Disconnected</span> | 
-                Messages: <span id="totalMessages">1</span> |
-                Uptime: <span id="uptime">0:00</span>
             </div>
         </div>
 
@@ -1022,6 +1144,7 @@
     </div>
 
     <!-- Load external JavaScript -->
+    <script src="gameboy_pixel_engine.js"></script>
     <script src="avatar_dashboard.js"></script>
     
     <script>
@@ -1052,6 +1175,9 @@
             color: '#E25303'
         };
 
+        // Gameboy Pixel Engine
+        let pixelEngine = null;
+        
         // Canvas contexts
         let canvas = null;
         let ctx = null;
@@ -1062,6 +1188,15 @@
         let particles = [];
         let animationFrame = null;
         let animationState = { breathing: 0, time: 0 };
+        
+        // System metrics for care mechanics
+        let systemMetrics = {
+            battery: 100,
+            temperature: 50,
+            network: true,
+            wifi_strength: 80,
+            eco_savings: 0
+        };
 
         // Initialize everything when DOM loads
         document.addEventListener('DOMContentLoaded', function() {
@@ -1167,27 +1302,144 @@
             }
         }
 
-        function handleServerMessage(data) {
-            console.log('Received:', data);
+        // Optimized Protocol Decoder
+        class M1K3Protocol {
+            constructor() {
+                this.MessageType = {
+                    SYSTEM_UPDATE: 1,
+                    AVATAR_UPDATE: 2,
+                    CARE_UPDATE: 3,
+                    STATE_CHANGE: 4,
+                    TEXT_DISPLAY: 5,
+                    PING: 6,
+                    ERROR: 7
+                };
+                
+                this.stateMap = {
+                    'i': 'idle',
+                    't': 'thinking',
+                    'g': 'generating', 
+                    's': 'speaking',
+                    'e': 'error',
+                    'l': 'listening'
+                };
+            }
             
-            switch (data.type) {
-                case 'emotion':
-                    updateEmotion(data.emotion, data.intensity || 50, data.message || '');
+            decodeMessage(data) {
+                try {
+                    // Handle binary system updates
+                    if (data instanceof ArrayBuffer && data.byteLength === 11) {
+                        return this.decodeSystemBinary(data);
+                    }
+                    
+                    // Handle JSON messages
+                    const text = typeof data === 'string' ? data : new TextDecoder().decode(data);
+                    const msg = JSON.parse(text);
+                    
+                    // Route optimized messages
+                    switch (msg.type) {
+                        case this.MessageType.SYSTEM_UPDATE:
+                            return { type: 'system', data: msg };
+                        case this.MessageType.AVATAR_UPDATE:
+                            return { type: 'avatar', data: msg };
+                        case this.MessageType.CARE_UPDATE:
+                            return { type: 'care', data: msg };
+                        case this.MessageType.STATE_CHANGE:
+                            return { type: 'state', data: this.stateMap[msg.s] || msg.s };
+                        case this.MessageType.TEXT_DISPLAY:
+                            return { type: 'text', data: msg };
+                        default:
+                            return { type: msg.type || 'unknown', data: msg };
+                    }
+                } catch (error) {
+                    console.error('Protocol decode error:', error);
+                    return { type: 'error', error: error.message };
+                }
+            }
+            
+            decodeSystemBinary(buffer) {
+                const view = new DataView(buffer);
+                return {
+                    type: 'system',
+                    data: {
+                        bat: view.getUint8(1),
+                        cpu: view.getUint8(2),
+                        mem: view.getUint8(3),
+                        temp: view.getUint8(4),
+                        net: view.getUint8(5),
+                        wifi: view.getUint8(6),
+                        eco: view.getFloat32(7, false)
+                    }
+                };
+            }
+        }
+        
+        // Initialize protocol decoder
+        const protocol = new M1K3Protocol();
+
+        function handleServerMessage(data) {
+            // Decode message using optimized protocol
+            const decoded = protocol.decodeMessage(data);
+            console.log('📨 Received:', decoded);
+            
+            // Handle optimized message types
+            switch (decoded.type) {
+                case 'system':
+                    updateMetrics(decoded.data);
                     break;
+                    
+                case 'avatar':
+                    if (decoded.data.emo) {
+                        updateEmotion(decoded.data.emo, decoded.data.int || 50);
+                    }
+                    if (decoded.data.style) {
+                        updateStyle(decoded.data.style, decoded.data.color);
+                    }
+                    break;
+                    
+                case 'care':
+                    // Update care metrics
+                    if (pixelEngine) {
+                        Object.assign(pixelEngine.avatarState, {
+                            health: decoded.data.hp,
+                            energy: decoded.data.nrg,
+                            evolution: decoded.data.evo,
+                            mood: decoded.data.mood
+                        });
+                    }
+                    console.log('🧘 Care metrics updated:', decoded.data);
+                    break;
+                    
                 case 'state':
-                    updateState(data.state);
+                    updateState(decoded.data);
+                    break;
+                    
+                case 'text':
+                    if (pixelEngine) {
+                        pixelEngine.renderAnimatedText(
+                            decoded.data.msg, 
+                            2, 2, 
+                            'normal', 3, 'text',
+                            decoded.data.style || 'normal'
+                        );
+                    }
+                    break;
+                    
+                // Legacy message types for backward compatibility
+                case 'emotion':
+                    updateEmotion(decoded.data.emotion, decoded.data.intensity || 50, decoded.data.message || '');
                     break;
                 case 'style':
-                    updateStyle(data.style, data.color);
+                    updateStyle(decoded.data.style, decoded.data.color);
                     break;
                 case 'progress':
-                    updateProgress(data.stage, data.progress, data.tokens, data.message);
+                    updateProgress(decoded.data.stage, decoded.data.progress, decoded.data.tokens, decoded.data.message);
                     break;
                 case 'chat_ai_chunk':
-                    appendToLastMessage(data.chunk);
+                    appendToLastMessage(decoded.data.chunk);
                     break;
                 case 'chat_user':
-                    addMessage(data.message, 'user');
+                    addMessage(decoded.data.message, 'user');
                     break;
                 case 'chat_ai_start':
                     addMessage('', 'ai');
@@ -1198,19 +1450,19 @@
                     playSound('message_received');
                     break;
                 case 'metrics':
-                    updateMetrics(data);
+                    updateMetrics(decoded.data);
                     break;
                 case 'sound':
-                    playSound(data.sound);
+                    playSound(decoded.data.sound);
                     break;
                 case 'welcome':
-                    addMessage(data.message, 'ai');
+                    addMessage(decoded.data.message, 'ai');
                     break;
                 case 'pong':
                     // Connection alive
                     break;
                 default:
-                    console.log('Unknown message type:', data.type);
+                    console.log('Unknown message type:', decoded.type);
             }
         }
 
@@ -1228,6 +1480,104 @@
                 particleCtx = particleCanvas.getContext('2d');
                 particleCanvas.width = 256;
                 particleCanvas.height = 256;
+            }
+            
+            // Polyfill for roundRect if not available
+            if (!CanvasRenderingContext2D.prototype.roundRect) {
+                CanvasRenderingContext2D.prototype.roundRect = function(x, y, width, height, radius = 0) {
+                    if (radius === 0) {
+                        this.rect(x, y, width, height);
+                        return;
+                    }
+                    
+                    this.moveTo(x + radius, y);
+                    this.lineTo(x + width - radius, y);
+                    this.arcTo(x + width, y, x + width, y + radius, radius);
+                    this.lineTo(x + width, y + height - radius);
+                    this.arcTo(x + width, y + height, x + width - radius, y + height, radius);
+                    this.lineTo(x + radius, y + height);
+                    this.arcTo(x, y + height, x, y + height - radius, radius);
+                    this.lineTo(x, y + radius);
+                    this.arcTo(x, y, x + radius, y, radius);
+                };
+            }
+
+            // Initialize Enhanced Gameboy Pixel Engine with rounded pixels
+            if (typeof GameboyPixelEngine !== 'undefined') {
+                pixelEngine = new GameboyPixelEngine(canvas, {
+                    pixelSize: 16, // Larger pixels for mobile
+                    mode: 'avatar',
+                    enableCare: true,
+                    enableEInk: false,
+                    debugMode: false
+                });
+                
+                // Switch to monochrome palette for consistency
+                pixelEngine.currentPalette = pixelEngine.palettes.monochrome;
+                
+                // Store original setPixel for fallback
+                const originalSetPixel = pixelEngine.setPixel.bind(pixelEngine);
+                
+                // Add rounded pixel functionality
+                pixelEngine.setRoundedPixel = function(x, y, colorIndex, layer = 'avatar') {
+                    if (x < 0 || x >= this.gridWidth || y < 0 || y >= this.gridHeight) return;
+                    if (colorIndex < 0 || colorIndex >= this.currentPalette.length) return;
+                    
+                    const ctx = this.ctx;
+                    const color = this.currentPalette[colorIndex];
+                    
+                    // Calculate pixel position with padding
+                    const pixelX = x * this.pixelSize;
+                    const pixelY = y * this.pixelSize;
+                    const padding = 1;
+                    const size = this.pixelSize - (padding * 2);
+                    const radius = Math.min(size / 4, 3);
+                    
+                    // Draw rounded rectangle with padding
+                    ctx.fillStyle = color;
+                    ctx.beginPath();
+                    try {
+                        ctx.roundRect(pixelX + padding, pixelY + padding, size, size, radius);
+                        ctx.fill();
+                    } catch (e) {
+                        // Fallback to regular rectangle
+                        ctx.fillRect(pixelX + padding, pixelY + padding, size, size);
+                    }
+                };
+                
+                // Override setPixel to use rounded version
+                pixelEngine.setPixel = function(x, y, colorIndex, layer = 'avatar') {
+                    this.setRoundedPixel(x, y, colorIndex, layer);
+                };
+                
+                // Add pulse effect for special states
+                pixelEngine.setPulsingPixel = function(x, y, colorIndex, layer = 'avatar') {
+                    this.setRoundedPixel(x, y, colorIndex, layer);
+                    
+                    const ctx = this.ctx;
+                    const pixelX = x * this.pixelSize;
+                    const pixelY = y * this.pixelSize;
+                    const padding = 1;
+                    const size = this.pixelSize - (padding * 2);
+                    
+                    ctx.shadowColor = this.currentPalette[colorIndex];
+                    ctx.shadowBlur = 6;
+                    ctx.beginPath();
+                    try {
+                        ctx.roundRect(pixelX + padding, pixelY + padding, size, size, 2);
+                        ctx.fill();
+                    } catch (e) {
+                        ctx.fillRect(pixelX + padding, pixelY + padding, size, size);
+                    }
+                    ctx.shadowBlur = 0;
+                };
+                
+                // Set initial system state
+                pixelEngine.updateSystemState(systemMetrics);
+                
+                console.log('✅ Enhanced Gameboy Pixel Engine initialized with rounded pixels and monochrome palette');
+            } else {
+                console.warn('⚠️ GameboyPixelEngine not loaded, using fallback avatar rendering');
             }
         }
 
@@ -1284,29 +1634,43 @@
         }
 
         function generateAvatar() {
-            // Generate initial avatar display
-            if (!ctx) return;
-            
-            // Clear canvas
-            ctx.clearRect(0, 0, 256, 256);
-            
-            // Draw a simple avatar placeholder
-            const centerX = 128;
-            const centerY = 128;
-            const size = 80;
-            
-            // Draw avatar body (simple circle for now)
-            ctx.fillStyle = avatarStyle.color || '#E25303';
-            ctx.beginPath();
-            ctx.arc(centerX, centerY, size/2, 0, Math.PI * 2);
-            ctx.fill();
-            
-            // Draw eyes
-            ctx.fillStyle = '#FFFFFF';
-            ctx.beginPath();
-            ctx.arc(centerX - 15, centerY - 10, 5, 0, Math.PI * 2);
-            ctx.arc(centerX + 15, centerY - 10, 5, 0, Math.PI * 2);
-            ctx.fill();
+            if (pixelEngine) {
+                // Use Gameboy Pixel Engine for avatar rendering
+                pixelEngine.setAvatar({
+                    emotion: currentEmotion,
+                    style: currentStyle,
+                    color: currentColor,
+                    intensity: emotionIntensity
+                });
+                
+                // Update system metrics for care mechanics
+                pixelEngine.updateSystemState(systemMetrics);
+                
+            } else {
+                // Fallback to simple canvas rendering
+                if (!ctx) return;
+                
+                // Clear canvas
+                ctx.clearRect(0, 0, 256, 256);
+                
+                // Draw a simple avatar placeholder
+                const centerX = 128;
+                const centerY = 128;
+                const size = 80;
+                
+                // Draw avatar body (simple circle for now)
+                ctx.fillStyle = avatarStyle.color || '#E25303';
+                ctx.beginPath();
+                ctx.arc(centerX, centerY, size/2, 0, Math.PI * 2);
+                ctx.fill();
+                
+                // Draw eyes
+                ctx.fillStyle = '#FFFFFF';
+                ctx.beginPath();
+                ctx.arc(centerX - 15, centerY - 10, 5, 0, Math.PI * 2);
+                ctx.arc(centerX + 15, centerY - 10, 5, 0, Math.PI * 2);
+                ctx.fill();
+            }
         }
 
         function startAnimation() {
@@ -1315,9 +1679,14 @@
                 animationState.time += 0.016; // ~60fps
                 animationState.breathing = Math.sin(animationState.time * 2) * 0.5 + 0.5;
                 
-                // Update avatar breathing effect
-                if (ctx) {
-                    generateAvatar();
+                if (pixelEngine) {
+                    // Use Gameboy Pixel Engine animation system
+                    pixelEngine.animate(animationState.time);
+                } else {
+                    // Fallback: Update avatar breathing effect
+                    if (ctx) {
+                        generateAvatar();
+                    }
                 }
                 
                 // Update particles
@@ -1366,8 +1735,15 @@
                 emotionIndicator.textContent = `${getEmotionEmoji(emotion)} ${emotion.charAt(0).toUpperCase() + emotion.slice(1)}`;
             }
             
-            // Trigger avatar redraw with new emotion
-            generateAvatar();
+            // Update pixel engine with new emotion
+            if (pixelEngine) {
+                pixelEngine.setEmotion(emotion, intensity);
+                // Trigger particles for emotion changes
+                pixelEngine.createEmotionParticles(emotion, intensity);
+            } else {
+                // Trigger avatar redraw with new emotion
+                generateAvatar();
+            }
             
             // Show emotion message if provided
             if (message) {
@@ -1377,9 +1753,22 @@
 
         function updateState(state) {
             // Update avatar state
+            currentState = state;
+            
             const stateIndicator = document.getElementById('currentState');
             if (stateIndicator) {
                 stateIndicator.textContent = `${getStateEmoji(state)} ${state.charAt(0).toUpperCase() + state.slice(1)}`;
+            }
+            
+            // Update pixel engine with new state
+            if (pixelEngine) {
+                pixelEngine.setState(state);
+            }
+            
+            // Add CSS class for state-specific animations
+            const avatarDisplay = document.getElementById('avatarDisplay');
+            if (avatarDisplay) {
+                avatarDisplay.className = 'avatar-display ' + state;
             }
         }
 
@@ -1387,8 +1776,21 @@
             avatarStyle.type = style;
             if (color) {
                 avatarStyle.color = color;
+                currentColor = color;
             }
-            generateAvatar();
+            
+            // Update pixel engine with new style
+            if (pixelEngine) {
+                pixelEngine.setAvatarStyle(style, color);
+            } else {
+                generateAvatar();
+            }
+            
+            // Update style indicator
+            const styleIndicator = document.getElementById('currentStyle');
+            if (styleIndicator) {
+                styleIndicator.textContent = `${getStyleEmoji(style)} ${style.charAt(0).toUpperCase() + style.slice(1)}`;
+            }
         }
         
         function getEmotionEmoji(emotion) {
@@ -1403,6 +1805,18 @@
                 'excited': '🤩'
             };
             return emojiMap[emotion] || '😊';
+        }
+        
+        function getStyleEmoji(style) {
+            const styleMap = {
+                'robot': '🤖',
+                'organic': '🌿', 
+                'crystal': '💎',
+                'ghost': '👻',
+                'energy': '⚡',
+                'cute': '🐣'
+            };
+            return styleMap[style] || '🤖';
         }
         
         function getStateEmoji(state) {
@@ -1423,7 +1837,54 @@
         }
 
         function updateMetrics(data) {
-            // Update metrics display
+            // Handle optimized protocol data formats
+            if (data.type === 'system') {
+                // Direct system metrics update
+                Object.assign(systemMetrics, {
+                    battery: data.bat || data.battery,
+                    cpu: data.cpu,
+                    memory: data.mem || data.memory,
+                    temperature: data.temp || data.temperature,
+                    network: data.net !== undefined ? !!data.net : data.network,
+                    wifi_strength: data.wifi || data.wifi_strength,
+                    eco_savings: data.eco || data.eco_savings || systemMetrics.eco_savings
+                });
+                
+                // Update pixel engine
+                if (pixelEngine) {
+                    pixelEngine.updateSystemState(systemMetrics);
+                }
+                
+                console.log('📊 System metrics updated:', systemMetrics);
+                return;
+            }
+            
+            // Legacy format support
+            if (data.eco_metrics) {
+                const { energy_saved, water_saved, co2_saved } = data.eco_metrics;
+                
+                const energyElement = document.getElementById('energySaved');
+                const waterElement = document.getElementById('waterSaved');
+                const co2Element = document.getElementById('co2Saved');
+                
+                if (energyElement) energyElement.textContent = `${energy_saved} Wh`;
+                if (waterElement) waterElement.textContent = `${water_saved} ml`;
+                if (co2Element) co2Element.textContent = `${co2_saved}g`;
+                
+                // Update system metrics for care mechanics
+                systemMetrics.eco_savings = parseFloat(energy_saved) || 0;
+            }
+            
+            // Update system metrics (legacy format)
+            if (data.system_metrics) {
+                Object.assign(systemMetrics, data.system_metrics);
+                
+                // Update pixel engine with new system state
+                if (pixelEngine) {
+                    pixelEngine.updateSystemState(systemMetrics);
+                }
+            }
+            
             console.log('Metrics update:', data);
         }
 

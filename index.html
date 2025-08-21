@@ -3,205 +3,296 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>M1K3 - Local AI Architecture</title>
+    <title>M1K3 - Local AI Assistant with Avatar Dashboard</title>
     <style>
-        /* --- Basic Design System --- */
         :root {
-            /* Palette */
-            --color-background: #111111;
-            --color-background-panel: #1e1e1e;
-            --color-border: #333333;
-            --color-text-primary: #e0e0e0;
-            --color-text-secondary: #999999;
-            --color-accent: #007aff;
-            --color-accent-hover: #0a84ff;
-
-            /* Typography */
-            --font-family-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            --font-family-mono: 'SF Mono', 'Menlo', 'Monaco', 'Consolas', monospace;
-            --font-size-base: 16px;
-            --font-size-lg: 1.25rem;
-            --font-size-xl: 1.75rem;
-            --font-size-xxl: 2.5rem;
-            --line-height: 1.6;
-
-            /* Spacing & Radius */
-            --spacing-unit: 8px;
+            /* M1K3 Monochrome Design System */
+            --bg-primary: #0A0A0A;
+            --bg-secondary: rgba(255, 255, 255, 0.05);
+            --bg-tertiary: rgba(255, 255, 255, 0.08);
+            --bg-elevated: rgba(255, 255, 255, 0.12);
+            
+            --accent-primary: rgba(255, 255, 255, 0.9);
+            --accent-secondary: rgba(255, 255, 255, 0.6);
+            --accent-tertiary: rgba(255, 255, 255, 0.4);
+            
+            --text-primary: rgba(255, 255, 255, 0.95);
+            --text-secondary: rgba(255, 255, 255, 0.7);
+            --text-muted: rgba(255, 255, 255, 0.4);
+            
+            --border-subtle: 1px solid rgba(255, 255, 255, 0.1);
+            --border-light: 1px solid rgba(255, 255, 255, 0.15);
+            
+            --shadow-subtle: 0 2px 8px rgba(0, 0, 0, 0.2);
+            --shadow-medium: 0 4px 12px rgba(0, 0, 0, 0.3);
+            
+            --spacing-xs: 4px;
+            --spacing-sm: 8px;
+            --spacing-md: 16px;
+            --spacing-lg: 24px;
+            --spacing-xl: 32px;
+            
             --border-radius: 12px;
-            --card-padding: calc(var(--spacing-unit) * 3);
+            --border-radius-sm: 8px;
         }
-        /* --- End Design System --- */
 
         * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
         }
-        
-        html {
-            font-size: var(--font-size-base);
-            scroll-behavior: smooth;
-        }
 
         body {
-            font-family: var(--font-family-sans);
-            line-height: var(--line-height);
-            color: var(--color-text-primary);
-            background-color: var(--color-background);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, monospace;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            line-height: 1.6;
+            -webkit-font-smoothing: antialiased;
         }
-        
+
         .container {
-            max-width: 1000px;
+            max-width: 1200px;
             margin: 0 auto;
-            padding: calc(var(--spacing-unit) * 5) calc(var(--spacing-unit) * 2);
+            padding: var(--spacing-xl) var(--spacing-md);
         }
-        
-        .header {
+
+        .hero {
             text-align: center;
-            margin-bottom: calc(var(--spacing-unit) * 8);
+            margin-bottom: calc(var(--spacing-xl) * 2);
+            padding: var(--spacing-xl) 0;
         }
-        
-        .header h1 {
-            font-size: var(--font-size-xxl);
+
+        .hero h1 {
+            font-size: clamp(2rem, 8vw, 4rem);
             font-weight: 700;
-            margin-bottom: var(--spacing-unit);
-            letter-spacing: -1px;
+            margin-bottom: var(--spacing-md);
+            background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
         }
-        
-        .header p {
-            font-size: var(--font-size-lg);
-            color: var(--color-text-secondary);
+
+        .hero .subtitle {
+            font-size: clamp(1rem, 4vw, 1.5rem);
+            color: var(--text-secondary);
+            margin-bottom: var(--spacing-xl);
+            max-width: 800px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        .hero .tagline {
+            font-size: 0.9rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            margin-bottom: var(--spacing-lg);
+        }
+
+        .cta-buttons {
+            display: flex;
+            gap: var(--spacing-md);
+            justify-content: center;
+            flex-wrap: wrap;
+            margin-top: var(--spacing-xl);
+        }
+
+        .btn {
+            padding: var(--spacing-md) var(--spacing-lg);
+            border-radius: var(--border-radius-sm);
+            text-decoration: none;
+            font-weight: 600;
+            transition: all 0.2s ease;
+            border: none;
+            cursor: pointer;
+            font-size: 0.9rem;
+            min-width: 160px;
+            text-align: center;
+        }
+
+        .btn-primary {
+            background: var(--bg-elevated);
+            color: var(--text-primary);
+            border: var(--border-light);
+            box-shadow: var(--shadow-subtle);
+        }
+
+        .btn-primary:hover {
+            background: rgba(255, 255, 255, 0.15);
+            transform: translateY(-1px);
+            box-shadow: var(--shadow-medium);
+        }
+
+        .btn-secondary {
+            background: transparent;
+            color: var(--text-secondary);
+            border: var(--border-subtle);
+        }
+
+        .btn-secondary:hover {
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+        }
+
+        .features {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: var(--spacing-lg);
+            margin-bottom: calc(var(--spacing-xl) * 2);
+        }
+
+        .feature-card {
+            background: var(--bg-secondary);
+            border: var(--border-subtle);
+            border-radius: var(--border-radius);
+            padding: var(--spacing-lg);
+            backdrop-filter: blur(8px);
+            transition: all 0.3s ease;
+        }
+
+        .feature-card:hover {
+            background: var(--bg-tertiary);
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-medium);
+        }
+
+        .feature-icon {
+            font-size: 2.5rem;
+            margin-bottom: var(--spacing-md);
+            display: block;
+        }
+
+        .feature-card h3 {
+            font-size: 1.25rem;
+            margin-bottom: var(--spacing-sm);
+            color: var(--text-primary);
+        }
+
+        .feature-card p {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+
+        .specs {
+            background: var(--bg-secondary);
+            border: var(--border-subtle);
+            border-radius: var(--border-radius);
+            padding: var(--spacing-xl);
+            margin-bottom: calc(var(--spacing-xl) * 2);
+            backdrop-filter: blur(8px);
+        }
+
+        .specs h2 {
+            text-align: center;
+            margin-bottom: var(--spacing-xl);
+            color: var(--text-primary);
+        }
+
+        .specs-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: var(--spacing-lg);
+        }
+
+        .spec-item {
+            background: var(--bg-tertiary);
+            border: var(--border-subtle);
+            border-radius: var(--border-radius-sm);
+            padding: var(--spacing-md);
+        }
+
+        .spec-item h4 {
+            color: var(--accent-secondary);
+            margin-bottom: var(--spacing-xs);
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .spec-item p {
+            color: var(--text-primary);
+            font-weight: 600;
+        }
+
+        .getting-started {
+            background: var(--bg-tertiary);
+            border: var(--border-light);
+            border-radius: var(--border-radius);
+            padding: var(--spacing-xl);
+            margin-bottom: calc(var(--spacing-xl) * 2);
+        }
+
+        .getting-started h2 {
+            text-align: center;
+            margin-bottom: var(--spacing-xl);
+            color: var(--text-primary);
+        }
+
+        .install-steps {
+            display: grid;
+            gap: var(--spacing-md);
             max-width: 600px;
             margin: 0 auto;
         }
-        
-        .section {
-            margin-bottom: calc(var(--spacing-unit) * 8);
-        }
 
-        .section-header {
-            font-size: var(--font-size-xl);
-            font-weight: 600;
-            color: var(--color-text-secondary);
-            text-align: center;
-            margin-bottom: calc(var(--spacing-unit) * 4);
-        }
-
-        .grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-            gap: calc(var(--spacing-unit) * 3);
-        }
-        
-        .card {
-            background: var(--color-background-panel);
-            border: 1px solid var(--color-border);
-            border-radius: var(--border-radius);
-            padding: var(--card-padding);
-            transition: transform 0.2s ease, border-color 0.2s ease;
-        }
-        
-        .card:hover {
-            transform: translateY(-4px);
-            border-color: var(--color-accent);
-        }
-        
-        .card h3 {
-            font-size: var(--font-size-lg);
-            font-weight: 600;
-            margin-bottom: var(--spacing-unit);
+        .install-step {
+            background: var(--bg-primary);
+            border: var(--border-subtle);
+            border-radius: var(--border-radius-sm);
+            padding: var(--spacing-md);
+            font-family: 'SF Mono', 'Monaco', 'Consolas', monospace;
+            font-size: 0.9rem;
             display: flex;
             align-items: center;
-            gap: var(--spacing-unit);
-        }
-        
-        .card-icon {
-            font-size: 1.5rem;
-        }
-        
-        .card p {
-            color: var(--color-text-secondary);
-            margin-bottom: calc(var(--spacing-unit) * 2);
-        }
-        
-        .file-list {
-            margin-top: calc(var(--spacing-unit) * 2);
+            gap: var(--spacing-md);
         }
 
-        .file-list h4 {
-            font-family: var(--font-family-mono);
-            font-size: 0.8rem;
-            color: var(--color-text-secondary);
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            margin-bottom: var(--spacing-unit);
-            font-weight: 500;
-        }
-        
-        .file-item {
-            font-family: var(--font-family-mono);
-            font-size: 0.9rem;
-            color: var(--color-text-primary);
-            background-color: var(--color-background);
-            padding: calc(var(--spacing-unit) * 0.5) var(--spacing-unit);
-            border-radius: 4px;
-            display: block;
-            margin-bottom: calc(var(--spacing-unit) * 0.5);
-        }
-
-        .flow-diagram {
-            list-style: none;
-        }
-        .flow-step {
-            display: flex;
-            align-items: flex-start;
-            gap: calc(var(--spacing-unit) * 2);
-            position: relative;
-            padding-bottom: calc(var(--spacing-unit) * 4);
-        }
-        .flow-step:not(:last-child)::before {
-            content: '';
-            position: absolute;
-            left: 15px;
-            top: 30px;
-            width: 1px;
-            height: calc(100% - 15px);
-            background-color: var(--color-border);
-        }
         .step-number {
-            background: var(--color-border);
-            color: var(--color-text-secondary);
-            width: 30px;
-            height: 30px;
+            background: var(--bg-elevated);
+            color: var(--accent-secondary);
+            width: 24px;
+            height: 24px;
             border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
             font-weight: bold;
+            font-size: 0.8rem;
             flex-shrink: 0;
-            z-index: 1;
-            font-family: var(--font-family-mono);
-        }
-        .step-content h4 {
-            font-weight: 600;
-            margin-bottom: calc(var(--spacing-unit) * 0.5);
-        }
-        .step-content p {
-            color: var(--color-text-secondary);
-            font-size: 0.9rem;
         }
 
         .footer {
             text-align: center;
-            margin-top: calc(var(--spacing-unit) * 8);
-            padding-top: calc(var(--spacing-unit) * 3);
-            border-top: 1px solid var(--color-border);
-            color: var(--color-text-secondary);
-            font-size: 0.9rem;
+            padding: var(--spacing-xl) 0;
+            border-top: var(--border-subtle);
+            color: var(--text-muted);
+            font-size: 0.8rem;
+        }
+
+        .footer a {
+            color: var(--accent-secondary);
+            text-decoration: none;
+        }
+
+        .footer a:hover {
+            color: var(--accent-primary);
         }
 
         @media (max-width: 768px) {
-            .grid {
+            .container {
+                padding: var(--spacing-lg) var(--spacing-md);
+            }
+            
+            .cta-buttons {
+                flex-direction: column;
+                align-items: center;
+            }
+            
+            .features {
+                grid-template-columns: 1fr;
+            }
+            
+            .specs-grid {
                 grid-template-columns: 1fr;
             }
         }
@@ -209,156 +300,109 @@
 </head>
 <body>
     <div class="container">
-        <header class="header">
-            <h1>M1K3 Architecture</h1>
-            <p>A lightweight, local AI CLI powered by small language models, featuring voice synthesis and system-aware dynamic context.</p>
+        <header class="hero">
+            <div class="tagline">Privacy-Focused • Local-First • Production Ready</div>
+            <h1>M1K3</h1>
+            <p class="subtitle">Local AI Assistant with Real-Time Avatar Dashboard, Voice Synthesis, and Mobile-First Design</p>
+            
+            <div class="cta-buttons">
+                <a href="m1k3.html" class="btn btn-primary">🎮 Launch Dashboard</a>
+                <a href="#getting-started" class="btn btn-secondary">📖 Get Started</a>
+            </div>
         </header>
 
-        <section class="section">
-            <h2 class="section-header">Core Components</h2>
-            <div class="grid">
-                <div class="card">
-                    <h3><span class="card-icon">🧠</span>AI Engine</h3>
-                    <p>Handles model loading, inference, and context management. Swappable between a real GGUF-based engine and a mock engine.</p>
-                    <div class="file-list">
-                        <h4>Key Files</h4>
-                        <span class="file-item">ai_inference.py</span>
-                        <span class="file-item">simple_ai_engine.py</span>
-                    </div>
-                </div>
+        <section class="features">
+            <div class="feature-card">
+                <span class="feature-icon">🤖</span>
+                <h3>Real-Time Avatar</h3>
+                <p>Gameboy-inspired pixel art avatar with emotion tracking, breathing animations, and context-aware responses during conversations.</p>
+            </div>
+            
+            <div class="feature-card">
+                <span class="feature-icon">💬</span>
+                <h3>Live Chat Dashboard</h3>
+                <p>Mobile-first web interface with WebSocket communication, real-time message bubbles, and responsive design across all devices.</p>
+            </div>
+            
+            <div class="feature-card">
+                <span class="feature-icon">🧠</span>
+                <h3>Multi-Backend AI</h3>
+                <p>Intelligent model selection with HuggingFace Transformers, GGUF support, and universal compatibility across all architectures.</p>
+            </div>
+            
+            <div class="feature-card">
+                <span class="feature-icon">🔊</span>
+                <h3>Voice Synthesis</h3>
+                <p>Advanced text-to-speech with ONNX optimization, smart text chunking, and graceful fallbacks for reliable audio output.</p>
+            </div>
+            
+            <div class="feature-card">
+                <span class="feature-icon">📱</span>
+                <h3>Mobile Optimized</h3>
+                <p>44px touch targets, responsive layouts, smooth scrolling, and iOS keyboard handling for excellent mobile experience.</p>
+            </div>
+            
+            <div class="feature-card">
+                <span class="feature-icon">🌱</span>
+                <h3>Eco-Friendly</h3>
+                <p>Track energy savings, water conservation, and CO2 prevention vs cloud AI. 100% local processing with 0 bytes transmitted.</p>
+            </div>
+        </section>
 
-                <div class="card">
-                    <h3><span class="card-icon">🎮</span>CLI Interface</h3>
-                    <p>The main user interface, managing state, animations, user commands, and orchestrating the other components.</p>
-                    <div class="file-list">
-                        <h4>Key Files</h4>
-                        <span class="file-item">cli.py</span>
-                        <span class="file-item">cli_animations.py</span>
-                    </div>
+        <section class="specs">
+            <h2>Technical Specifications</h2>
+            <div class="specs-grid">
+                <div class="spec-item">
+                    <h4>AI Models</h4>
+                    <p>TinyLlama 1.1B, DialoGPT, GGUF Support</p>
                 </div>
-                
-                <div class="card">
-                    <h3><span class="card-icon">🔊</span>Voice Engine</h3>
-                    <p>Provides text-to-speech synthesis with a layered approach, preferring advanced models and falling back to system TTS.</p>
-                    <div class="file-list">
-                        <h4>Key Files</h4>
-                        <span class="file-item">enhanced_voice_engine.py</span>
-                        <span class="file-item">zen_voice_engine.py</span>
-                        <span class="file-item">simple_voice_engine.py</span>
-                    </div>
+                <div class="spec-item">
+                    <h4>Compatibility</h4>
+                    <p>Universal (x86_64, ARM64, Any Platform)</p>
                 </div>
-
-                <div class="card">
-                    <h3><span class="card-icon">📊</span>System Monitor</h3>
-                    <p>Collects privacy-safe system metrics like CPU, memory, and battery to provide dynamic, context-aware greetings.</p>
-                     <div class="file-list">
-                        <h4>Key Files</h4>
-                        <span class="file-item">system_metrics.py</span>
-                    </div>
+                <div class="spec-item">
+                    <h4>Context Window</h4>
+                    <p>8K Tokens with Conversation Memory</p>
                 </div>
-
-                <div class="card">
-                    <h3><span class="card-icon">⬇️</span>Model Manager</h3>
-                    <p>Handles downloading and verifying GGUF model files from HuggingFace, with device analysis for recommendations.</p>
-                     <div class="file-list">
-                        <h4>Key Files</h4>
-                        <span class="file-item">download_model.py</span>
-                    </div>
+                <div class="spec-item">
+                    <h4>Response Time</h4>
+                    <p>2.36s Model Loading, Real-time Streaming</p>
                 </div>
-
-                 <div class="card">
-                    <h3><span class="card-icon">🛠️</span>Utilities</h3>
-                    <p>Supporting scripts for development, including performance benchmarking and demonstrations.</p>
-                     <div class="file-list">
-                        <h4>Key Files</h4>
-                        <span class="file-item">benchmark.py</span>
-                        <span class="file-item">Makefile</span>
-                    </div>
+                <div class="spec-item">
+                    <h4>Voice Engine</h4>
+                    <p>ONNX TTS, KittenML, System Fallbacks</p>
+                </div>
+                <div class="spec-item">
+                    <h4>Privacy</h4>
+                    <p>100% Local Processing, No Data Transmission</p>
                 </div>
             </div>
         </section>
 
-        <section class="section">
-            <h2 class="section-header">System Flow</h2>
-            <ul class="flow-diagram">
-                <li class="flow-step">
-                    <div class="step-number">1</div>
-                    <div class="step-content">
-                        <h4>Initialization</h4>
-                        <p>The CLI starts, collects system metrics, and determines which AI engine to use (real or mock).</p>
-                    </div>
-                </li>
-                <li class="flow-step">
-                    <div class="step-number">2</div>
-                    <div class="step-content">
-                        <h4>Model Loading</h4>
-                        <p>The AI engine checks for a local model. If not found, the Model Manager downloads it before loading into memory.</p>
-                    </div>
-                </li>
-                 <li class="flow-step">
-                    <div class="step-number">3</div>
-                    <div class="step-content">
-                        <h4>Dynamic Greeting</h4>
-                        <p>The System Monitor generates a personalized greeting based on time of day, battery status, and CPU load.</p>
-                    </div>
-                </li>
-                <li class="flow-step">
-                    <div class="step-number">4</div>
-                    <div class="step-content">
-                        <h4>Interactive Loop</h4>
-                        <p>The CLI waits for user input, processes commands, and passes prompts to the AI engine for a streaming response.</p>
-                    </div>
-                </li>
-                 <li class="flow-step">
-                    <div class="step-number">5</div>
-                    <div class="step-content">
-                        <h4>Voice Synthesis</h4>
-                        <p>The generated text response is sent to the Voice Engine, which synthesizes and plays the audio in the background.</p>
-                    </div>
-                </li>
-            </ul>
-        </section>
-
-        <section class="section">
-            <h2 class="section-header">Design System</h2>
-            <div class="grid">
-                <div class="card">
-                    <h3>Colors</h3>
-                    <p>A minimal, dark palette with a strong accent for focus and clarity.</p>
-                    <div class="file-list">
-                        <h4>Palette</h4>
-                        <span class="file-item" style="color: var(--color-background); background: var(--color-text-primary);">Background: #111111</span>
-                        <span class="file-item">Panel: #1e1e1e</span>
-                        <span class="file-item">Border: #333333</span>
-                        <span class="file-item">Primary Text: #e0e0e0</span>
-                        <span class="file-item">Secondary Text: #999999</span>
-                        <span class="file-item" style="background: var(--color-accent); color: white;">Accent: #007aff</span>
-                    </div>
+        <section class="getting-started" id="getting-started">
+            <h2>Quick Start</h2>
+            <div class="install-steps">
+                <div class="install-step">
+                    <span class="step-number">1</span>
+                    <span>pip install -r requirements.txt</span>
                 </div>
-                <div class="card">
-                    <h3>Typography</h3>
-                    <p>System fonts for a native feel. Sans-serif for UI and mono for code/data.</p>
-                     <div class="file-list">
-                        <h4>Fonts</h4>
-                        <span class="file-item">UI: -apple-system</span>
-                        <span class="file-item" style="font-family: var(--font-family-mono);">Code: SF Mono, Menlo</span>
-                    </div>
+                <div class="install-step">
+                    <span class="step-number">2</span>
+                    <span>python m1k3.py --tui  # Modern TUI interface</span>
                 </div>
-                <div class="card">
-                    <h3>Components</h3>
-                    <p>Reusable styles for consistency, defined in the CSS `:root` block.</p>
-                    <div class="file-list">
-                        <h4>Elements</h4>
-                        <span class="file-item">Card Radius: 12px</span>
-                        <span class="file-item">Padding Unit: 8px</span>
-                        <span class="file-item">Border: 1px solid #333</span>
-                    </div>
+                <div class="install-step">
+                    <span class="step-number">3</span>
+                    <span>python cli.py --with-avatar  # CLI + Dashboard</span>
+                </div>
+                <div class="install-step">
+                    <span class="step-number">4</span>
+                    <span>Open http://localhost:8080 for web dashboard</span>
                 </div>
             </div>
         </section>
 
         <footer class="footer">
-            <p>M1K3 - A Local-First AI Companion</p>
+            <p>M1K3 v0 - A Local-First AI Companion • <a href="https://github.com/anthropics/claude-code">Built with Claude Code</a></p>
         </footer>
     </div>
 </body>

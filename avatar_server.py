@@ -90,7 +90,7 @@ class AvatarHTTPHandler(SimpleHTTPRequestHandler):
     
     def do_GET(self):
         if self.path == '/':
-            self.path = '/m1k3_avatar.html'
+            self.path = '/m1k3.html'
         return super().do_GET()
     
     def log_message(self, format, *args):
