@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>M1K3 - Local AI Architecture</title>
+    <style>
+        /* --- Basic Design System --- */
+        :root {
+            /* Palette */
+            --color-background: #111111;
+            --color-background-panel: #1e1e1e;
+            --color-border: #333333;
+            --color-text-primary: #e0e0e0;
+            --color-text-secondary: #999999;
+            --color-accent: #007aff;
+            --color-accent-hover: #0a84ff;
+
+            /* Typography */
+            --font-family-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            --font-family-mono: 'SF Mono', 'Menlo', 'Monaco', 'Consolas', monospace;
+            --font-size-base: 16px;
+            --font-size-lg: 1.25rem;
+            --font-size-xl: 1.75rem;
+            --font-size-xxl: 2.5rem;
+            --line-height: 1.6;
+
+            /* Spacing & Radius */
+            --spacing-unit: 8px;
+            --border-radius: 12px;
+            --card-padding: calc(var(--spacing-unit) * 3);
+        }
+        /* --- End Design System --- */
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        html {
+            font-size: var(--font-size-base);
+            scroll-behavior: smooth;
+        }
+
+        body {
+            font-family: var(--font-family-sans);
+            line-height: var(--line-height);
+            color: var(--color-text-primary);
+            background-color: var(--color-background);
+        }
+        
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: calc(var(--spacing-unit) * 5) calc(var(--spacing-unit) * 2);
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: calc(var(--spacing-unit) * 8);
+        }
+        
+        .header h1 {
+            font-size: var(--font-size-xxl);
+            font-weight: 700;
+            margin-bottom: var(--spacing-unit);
+            letter-spacing: -1px;
+        }
+        
+        .header p {
+            font-size: var(--font-size-lg);
+            color: var(--color-text-secondary);
+            max-width: 600px;
+            margin: 0 auto;
+        }
+        
+        .section {
+            margin-bottom: calc(var(--spacing-unit) * 8);
+        }
+
+        .section-header {
+            font-size: var(--font-size-xl);
+            font-weight: 600;
+            color: var(--color-text-secondary);
+            text-align: center;
+            margin-bottom: calc(var(--spacing-unit) * 4);
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: calc(var(--spacing-unit) * 3);
+        }
+        
+        .card {
+            background: var(--color-background-panel);
+            border: 1px solid var(--color-border);
+            border-radius: var(--border-radius);
+            padding: var(--card-padding);
+            transition: transform 0.2s ease, border-color 0.2s ease;
+        }
+        
+        .card:hover {
+            transform: translateY(-4px);
+            border-color: var(--color-accent);
+        }
+        
+        .card h3 {
+            font-size: var(--font-size-lg);
+            font-weight: 600;
+            margin-bottom: var(--spacing-unit);
+            display: flex;
+            align-items: center;
+            gap: var(--spacing-unit);
+        }
+        
+        .card-icon {
+            font-size: 1.5rem;
+        }
+        
+        .card p {
+            color: var(--color-text-secondary);
+            margin-bottom: calc(var(--spacing-unit) * 2);
+        }
+        
+        .file-list {
+            margin-top: calc(var(--spacing-unit) * 2);
+        }
+
+        .file-list h4 {
+            font-family: var(--font-family-mono);
+            font-size: 0.8rem;
+            color: var(--color-text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: var(--spacing-unit);
+            font-weight: 500;
+        }
+        
+        .file-item {
+            font-family: var(--font-family-mono);
+            font-size: 0.9rem;
+            color: var(--color-text-primary);
+            background-color: var(--color-background);
+            padding: calc(var(--spacing-unit) * 0.5) var(--spacing-unit);
+            border-radius: 4px;
+            display: block;
+            margin-bottom: calc(var(--spacing-unit) * 0.5);
+        }
+
+        .flow-diagram {
+            list-style: none;
+        }
+        .flow-step {
+            display: flex;
+            align-items: flex-start;
+            gap: calc(var(--spacing-unit) * 2);
+            position: relative;
+            padding-bottom: calc(var(--spacing-unit) * 4);
+        }
+        .flow-step:not(:last-child)::before {
+            content: '';
+            position: absolute;
+            left: 15px;
+            top: 30px;
+            width: 1px;
+            height: calc(100% - 15px);
+            background-color: var(--color-border);
+        }
+        .step-number {
+            background: var(--color-border);
+            color: var(--color-text-secondary);
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            flex-shrink: 0;
+            z-index: 1;
+            font-family: var(--font-family-mono);
+        }
+        .step-content h4 {
+            font-weight: 600;
+            margin-bottom: calc(var(--spacing-unit) * 0.5);
+        }
+        .step-content p {
+            color: var(--color-text-secondary);
+            font-size: 0.9rem;
+        }
+
+        .footer {
+            text-align: center;
+            margin-top: calc(var(--spacing-unit) * 8);
+            padding-top: calc(var(--spacing-unit) * 3);
+            border-top: 1px solid var(--color-border);
+            color: var(--color-text-secondary);
+            font-size: 0.9rem;
+        }
+
+        @media (max-width: 768px) {
+            .grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <h1>M1K3 Architecture</h1>
+            <p>A lightweight, local AI CLI powered by small language models, featuring voice synthesis and system-aware dynamic context.</p>
+        </header>
+
+        <section class="section">
+            <h2 class="section-header">Core Components</h2>
+            <div class="grid">
+                <div class="card">
+                    <h3><span class="card-icon">🧠</span>AI Engine</h3>
+                    <p>Handles model loading, inference, and context management. Swappable between a real GGUF-based engine and a mock engine.</p>
+                    <div class="file-list">
+                        <h4>Key Files</h4>
+                        <span class="file-item">ai_inference.py</span>
+                        <span class="file-item">simple_ai_engine.py</span>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h3><span class="card-icon">🎮</span>CLI Interface</h3>
+                    <p>The main user interface, managing state, animations, user commands, and orchestrating the other components.</p>
+                    <div class="file-list">
+                        <h4>Key Files</h4>
+                        <span class="file-item">cli.py</span>
+                        <span class="file-item">cli_animations.py</span>
+                    </div>
+                </div>
+                
+                <div class="card">
+                    <h3><span class="card-icon">🔊</span>Voice Engine</h3>
+                    <p>Provides text-to-speech synthesis with a layered approach, preferring advanced models and falling back to system TTS.</p>
+                    <div class="file-list">
+                        <h4>Key Files</h4>
+                        <span class="file-item">enhanced_voice_engine.py</span>
+                        <span class="file-item">zen_voice_engine.py</span>
+                        <span class="file-item">simple_voice_engine.py</span>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h3><span class="card-icon">📊</span>System Monitor</h3>
+                    <p>Collects privacy-safe system metrics like CPU, memory, and battery to provide dynamic, context-aware greetings.</p>
+                     <div class="file-list">
+                        <h4>Key Files</h4>
+                        <span class="file-item">system_metrics.py</span>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h3><span class="card-icon">⬇️</span>Model Manager</h3>
+                    <p>Handles downloading and verifying GGUF model files from HuggingFace, with device analysis for recommendations.</p>
+                     <div class="file-list">
+                        <h4>Key Files</h4>
+                        <span class="file-item">download_model.py</span>
+                    </div>
+                </div>
+
+                 <div class="card">
+                    <h3><span class="card-icon">🛠️</span>Utilities</h3>
+                    <p>Supporting scripts for development, including performance benchmarking and demonstrations.</p>
+                     <div class="file-list">
+                        <h4>Key Files</h4>
+                        <span class="file-item">benchmark.py</span>
+                        <span class="file-item">Makefile</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="section">
+            <h2 class="section-header">System Flow</h2>
+            <ul class="flow-diagram">
+                <li class="flow-step">
+                    <div class="step-number">1</div>
+                    <div class="step-content">
+                        <h4>Initialization</h4>
+                        <p>The CLI starts, collects system metrics, and determines which AI engine to use (real or mock).</p>
+                    </div>
+                </li>
+                <li class="flow-step">
+                    <div class="step-number">2</div>
+                    <div class="step-content">
+                        <h4>Model Loading</h4>
+                        <p>The AI engine checks for a local model. If not found, the Model Manager downloads it before loading into memory.</p>
+                    </div>
+                </li>
+                 <li class="flow-step">
+                    <div class="step-number">3</div>
+                    <div class="step-content">
+                        <h4>Dynamic Greeting</h4>
+                        <p>The System Monitor generates a personalized greeting based on time of day, battery status, and CPU load.</p>
+                    </div>
+                </li>
+                <li class="flow-step">
+                    <div class="step-number">4</div>
+                    <div class="step-content">
+                        <h4>Interactive Loop</h4>
+                        <p>The CLI waits for user input, processes commands, and passes prompts to the AI engine for a streaming response.</p>
+                    </div>
+                </li>
+                 <li class="flow-step">
+                    <div class="step-number">5</div>
+                    <div class="step-content">
+                        <h4>Voice Synthesis</h4>
+                        <p>The generated text response is sent to the Voice Engine, which synthesizes and plays the audio in the background.</p>
+                    </div>
+                </li>
+            </ul>
+        </section>
+
+        <section class="section">
+            <h2 class="section-header">Design System</h2>
+            <div class="grid">
+                <div class="card">
+                    <h3>Colors</h3>
+                    <p>A minimal, dark palette with a strong accent for focus and clarity.</p>
+                    <div class="file-list">
+                        <h4>Palette</h4>
+                        <span class="file-item" style="color: var(--color-background); background: var(--color-text-primary);">Background: #111111</span>
+                        <span class="file-item">Panel: #1e1e1e</span>
+                        <span class="file-item">Border: #333333</span>
+                        <span class="file-item">Primary Text: #e0e0e0</span>
+                        <span class="file-item">Secondary Text: #999999</span>
+                        <span class="file-item" style="background: var(--color-accent); color: white;">Accent: #007aff</span>
+                    </div>
+                </div>
+                <div class="card">
+                    <h3>Typography</h3>
+                    <p>System fonts for a native feel. Sans-serif for UI and mono for code/data.</p>
+                     <div class="file-list">
+                        <h4>Fonts</h4>
+                        <span class="file-item">UI: -apple-system</span>
+                        <span class="file-item" style="font-family: var(--font-family-mono);">Code: SF Mono, Menlo</span>
+                    </div>
+                </div>
+                <div class="card">
+                    <h3>Components</h3>
+                    <p>Reusable styles for consistency, defined in the CSS `:root` block.</p>
+                    <div class="file-list">
+                        <h4>Elements</h4>
+                        <span class="file-item">Card Radius: 12px</span>
+                        <span class="file-item">Padding Unit: 8px</span>
+                        <span class="file-item">Border: 1px solid #333</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <footer class="footer">
+            <p>M1K3 - A Local-First AI Companion</p>
+        </footer>
+    </div>
+</body>
+</html>

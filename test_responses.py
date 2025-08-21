@@ -14,7 +14,7 @@ def test_ai_responses():
     # Initialize the AI engine
     engine = LocalAIEngine()
     
-    if not engine.load_model():
+    if not engine.model:
         print("❌ Failed to load AI model")
         return
     

@@ -36,8 +36,8 @@ def test_real_ai():
                 print(f"   Model available: {engine.is_model_available()}")
                 
                 if engine.is_model_available():
-                    print("   Loading model...")
-                    success = engine.load_model()
+                    print("   Model auto-loaded during initialization")
+                    success = engine.model is not None
                     print(f"   Load success: {success}")
                     
                     if success:

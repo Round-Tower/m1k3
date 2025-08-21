@@ -9,6 +9,9 @@ import json
 import threading
 import time
 import socket
+import argparse
+import sys
+from datetime import datetime
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 from urllib.parse import urlparse
 from pathlib import Path
@@ -97,9 +100,10 @@ class AvatarHTTPHandler(SimpleHTTPRequestHandler):
 class AvatarServer:
     """M1K3 Avatar Server with WebSocket support"""
     
-    def __init__(self, http_port=8080, ws_port=8081):
+    def __init__(self, http_port=8080, ws_port=8081, verbose=False):
         self.http_port = http_port
         self.ws_port = ws_port
+        self.verbose = verbose
         self.http_server = None
         self.websocket_server = None
         self.http_thread = None
@@ -107,9 +111,25 @@ class AvatarServer:
         self.running = False
         self.clients = []
         
+        # Message statistics
+        self.message_stats = {
+            'total_sent': 0,
+            'total_received': 0,
+            'by_type': {},
+            'start_time': time.time()
+        }
+        
         # Setup logging
-        logging.basicConfig(level=logging.INFO)
+        log_level = logging.DEBUG if verbose else logging.INFO
+        logging.basicConfig(
+            level=log_level,
+            format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+            datefmt='%H:%M:%S'
+        )
         self.logger = logging.getLogger('AvatarServer')
+        
+        if verbose:
+            self.logger.info("🔍 Verbose logging enabled")
     
     def start(self):
         """Start both HTTP and WebSocket servers"""
@@ -190,6 +210,8 @@ class AvatarServer:
         }
         
         message_json = json.dumps(data)
+        self._log_sent_message(data)
+        
         for client in self.clients[:]:  # Copy list to avoid modification during iteration
             try:
                 self.websocket_server.send_message(client, message_json)
@@ -209,6 +231,8 @@ class AvatarServer:
         }
         
         message_json = json.dumps(data)
+        self._log_sent_message(data)
+        
         for client in self.clients[:]:
             try:
                 self.websocket_server.send_message(client, message_json)
@@ -251,6 +275,27 @@ class AvatarServer:
         }
         
         message_json = json.dumps(data)
+        for client in self.clients[:]:
+            try:
+                self.websocket_server.send_message(client, message_json)
+            except Exception as e:
+                self.logger.warning(f"Failed to send to client {client['id']}: {e}")
+                self._remove_client(client)
+    
+    def send_metrics_update(self, metrics_data):
+        """Send metrics update to all connected clients"""
+        if not self.running or not self.clients:
+            return
+        
+        data = {
+            "type": "metrics",
+            "metrics": metrics_data,
+            "timestamp": time.time()
+        }
+        
+        message_json = json.dumps(data)
+        self._log_sent_message(data)
+        
         for client in self.clients[:]:
             try:
                 self.websocket_server.send_message(client, message_json)
@@ -308,17 +353,257 @@ class AvatarServer:
         """Handle messages from clients"""
         try:
             data = json.loads(message)
-            self.logger.debug(f"Received from client {client['id']}: {data}")
+            message_type = data.get("type", "unknown")
             
-            # Handle client messages if needed
-            if data.get("type") == "ping":
+            # Update statistics
+            self.message_stats['total_received'] += 1
+            self.message_stats['by_type'][message_type] = self.message_stats['by_type'].get(message_type, 0) + 1
+            
+            if self.verbose:
+                timestamp = datetime.now().strftime('%H:%M:%S.%f')[:-3]
+                self.logger.info(f"📨 [{timestamp}] RECV {message_type.upper()}: {self._format_message_for_log(data)}")
+            else:
+                self.logger.debug(f"Received from client {client['id']}: {data}")
+            
+            if message_type == "ping":
                 pong_data = {"type": "pong", "timestamp": time.time()}
                 server.send_message(client, json.dumps(pong_data))
+                self._log_sent_message(pong_data)
+            
+            elif message_type == "chat_user":
+                # Handle user chat message - forward to CLI if needed
+                self.logger.info(f"Chat message from client: {data.get('message', '')}")
+                # Broadcast to other clients or handle as needed
+                self._handle_chat_message(client, data)
+            
+            elif message_type == "voice_data":
+                # Handle voice data from speech-to-text
+                self.logger.info(f"Voice data from client: {data.get('text', '')}")
+                # Process voice input
+                self._handle_voice_input(client, data)
+            
+            elif message_type == "sound_trigger":
+                # Handle sound effect trigger
+                sound_name = data.get('sound')
+                if sound_name:
+                    self._broadcast_sound(sound_name)
+            
+            elif message_type == "metrics_request":
+                # Handle metrics request
+                self._send_metrics_update(client)
                 
-        except json.JSONDecodeError:
-            self.logger.warning(f"Invalid JSON from client {client['id']}: {message}")
+        except json.JSONDecodeError as e:
+            self.logger.warning(f"Invalid JSON from client {client['id']}: {e}")
         except Exception as e:
             self.logger.error(f"Error handling message from client {client['id']}: {e}")
+    
+    def _format_message_for_log(self, data):
+        """Format message data for logging"""
+        msg_type = data.get('type', 'unknown')
+        
+        if msg_type == 'chat_user':
+            return f"User message: \"{data.get('message', '')[:50]}...\""
+        elif msg_type == 'chat_ai_chunk':
+            return f"AI chunk: \"{data.get('chunk', '')[:30]}...\""
+        elif msg_type == 'emotion':
+            return f"{data.get('emotion', 'unknown')} ({data.get('intensity', 0)}%)"
+        elif msg_type == 'state':
+            return f"State: {data.get('state', 'unknown')}"
+        elif msg_type == 'sound':
+            return f"Sound: {data.get('sound', 'unknown')}"
+        elif msg_type == 'metrics':
+            return f"Metrics update"
+        elif msg_type in ['ping', 'pong']:
+            return "Keep-alive"
+        else:
+            return json.dumps(data, separators=(',', ':'))[:100]
+    
+    def _log_sent_message(self, data):
+        """Log sent message with statistics"""
+        message_type = data.get('type', 'unknown')
+        self.message_stats['total_sent'] += 1
+        
+        if self.verbose:
+            timestamp = datetime.now().strftime('%H:%M:%S.%f')[:-3]
+            self.logger.info(f"📤 [{timestamp}] SENT {message_type.upper()}: {self._format_message_for_log(data)}")
+    
+    def _handle_chat_message(self, sender_client, data):
+        """Handle chat message from client"""
+        # Store the message (in a real implementation, you might save to a database)
+        message_data = {
+            "type": "chat_user",
+            "message": data.get("message", ""),
+            "timestamp": time.time(),
+            "client_id": sender_client["id"]
+        }
+        
+        # Broadcast to other clients (excluding sender)
+        for client in self.clients[:]:
+            if client["id"] != sender_client["id"]:
+                try:
+                    self.websocket_server.send_message(client, json.dumps(message_data))
+                except Exception as e:
+                    self.logger.warning(f"Failed to broadcast message to client {client['id']}: {e}")
+                    self._remove_client(client)
+    
+    def _handle_voice_input(self, client, data):
+        """Handle voice input from client"""
+        voice_text = data.get("text", "")
+        if voice_text:
+            # Convert voice to chat message
+            chat_data = {
+                "type": "chat_user", 
+                "message": voice_text,
+                "source": "voice"
+            }
+            self._handle_chat_message(client, chat_data)
+    
+    def _broadcast_sound(self, sound_name):
+        """Broadcast sound effect to all clients"""
+        if not self.running or not self.clients:
+            return
+        
+        data = {
+            "type": "sound",
+            "sound": sound_name,
+            "timestamp": time.time()
+        }
+        
+        message_json = json.dumps(data)
+        for client in self.clients[:]:
+            try:
+                self.websocket_server.send_message(client, message_json)
+            except Exception as e:
+                self.logger.warning(f"Failed to send sound to client {client['id']}: {e}")
+                self._remove_client(client)
+    
+    def _send_metrics_update(self, client):
+        """Send current metrics to a specific client"""
+        # This would typically fetch real metrics from the CLI/system
+        metrics_data = {
+            "type": "metrics",
+            "energy_saved": "12.5",
+            "water_saved": "450",
+            "co2_saved": "35",
+            "message_count": len(self.clients),
+            "timestamp": time.time()
+        }
+        
+        try:
+            self.websocket_server.send_message(client, json.dumps(metrics_data))
+        except Exception as e:
+            self.logger.warning(f"Failed to send metrics to client {client['id']}: {e}")
+            self._remove_client(client)
+    
+    def send_chat_ai_start(self):
+        """Notify clients that AI is starting to respond"""
+        if not self.running or not self.clients:
+            return
+        
+        data = {
+            "type": "chat_ai_start",
+            "timestamp": time.time()
+        }
+        
+        message_json = json.dumps(data)
+        for client in self.clients[:]:
+            try:
+                self.websocket_server.send_message(client, message_json)
+            except Exception as e:
+                self.logger.warning(f"Failed to send AI start to client {client['id']}: {e}")
+                self._remove_client(client)
+    
+    def send_chat_ai_chunk(self, chunk):
+        """Send AI response chunk to all clients"""
+        if not self.running or not self.clients:
+            return
+        
+        data = {
+            "type": "chat_ai_chunk",
+            "chunk": chunk,
+            "timestamp": time.time()
+        }
+        
+        message_json = json.dumps(data)
+        for client in self.clients[:]:
+            try:
+                self.websocket_server.send_message(client, message_json)
+            except Exception as e:
+                self.logger.warning(f"Failed to send AI chunk to client {client['id']}: {e}")
+                self._remove_client(client)
+    
+    def send_chat_ai_complete(self):
+        """Notify clients that AI response is complete"""
+        if not self.running or not self.clients:
+            return
+        
+        data = {
+            "type": "chat_ai_complete",
+            "timestamp": time.time()
+        }
+        
+        message_json = json.dumps(data)
+        for client in self.clients[:]:
+            try:
+                self.websocket_server.send_message(client, message_json)
+            except Exception as e:
+                self.logger.warning(f"Failed to send AI complete to client {client['id']}: {e}")
+                self._remove_client(client)
+    
+    def send_metrics_broadcast(self, metrics):
+        """Broadcast metrics update to all clients"""
+        if not self.running or not self.clients:
+            return
+        
+        data = {
+            "type": "metrics",
+            "timestamp": time.time(),
+            **metrics
+        }
+        
+        message_json = json.dumps(data)
+        for client in self.clients[:]:
+            try:
+                self.websocket_server.send_message(client, message_json)
+            except Exception as e:
+                self.logger.warning(f"Failed to send metrics to client {client['id']}: {e}")
+                self._remove_client(client)
+    
+    def get_message_statistics(self):
+        """Get message statistics"""
+        uptime = time.time() - self.message_stats['start_time']
+        
+        return {
+            'uptime_seconds': uptime,
+            'uptime_formatted': f"{int(uptime // 3600)}h {int((uptime % 3600) // 60)}m {int(uptime % 60)}s",
+            'total_sent': self.message_stats['total_sent'],
+            'total_received': self.message_stats['total_received'],
+            'total_messages': self.message_stats['total_sent'] + self.message_stats['total_received'],
+            'messages_per_minute': (self.message_stats['total_sent'] + self.message_stats['total_received']) / (uptime / 60) if uptime > 0 else 0,
+            'by_type': dict(self.message_stats['by_type']),
+            'connected_clients': len(self.clients)
+        }
+    
+    def print_statistics(self):
+        """Print current statistics to console"""
+        stats = self.get_message_statistics()
+        
+        print("\n" + "="*60)
+        print("📊 M1K3 WebSocket Server Statistics")
+        print("="*60)
+        print(f"⏱️  Uptime: {stats['uptime_formatted']}")
+        print(f"👥 Connected clients: {stats['connected_clients']}")
+        print(f"📤 Messages sent: {stats['total_sent']}")
+        print(f"📥 Messages received: {stats['total_received']}")
+        print(f"💬 Total messages: {stats['total_messages']}")
+        print(f"📊 Rate: {stats['messages_per_minute']:.1f} msg/min")
+        
+        if stats['by_type']:
+            print(f"\n📋 Message types:")
+            for msg_type, count in sorted(stats['by_type'].items(), key=lambda x: x[1], reverse=True):
+                print(f"   {msg_type}: {count}")
+        
+        print("="*60)
 
 # Global server instance
 _avatar_server = None
@@ -365,16 +650,68 @@ def get_avatar_server_status():
     server = get_avatar_server()
     return server.get_status()
 
+def send_chat_ai_start():
+    """Notify clients that AI is starting to respond"""
+    server = get_avatar_server()
+    server.send_chat_ai_start()
+
+def send_chat_ai_chunk(chunk):
+    """Send AI response chunk to clients"""
+    server = get_avatar_server()
+    server.send_chat_ai_chunk(chunk)
+
+def send_chat_ai_complete():
+    """Notify clients that AI response is complete"""
+    server = get_avatar_server()
+    server.send_chat_ai_complete()
+
+def send_sound_trigger(sound_name):
+    """Trigger a sound effect on all clients"""
+    server = get_avatar_server()
+    server.send_sound_trigger(sound_name)
+
+def send_metrics_update(metrics_data):
+    """Send real-time metrics update to avatar"""
+    server = get_avatar_server()
+    server.send_metrics_update(metrics_data)
+
 if __name__ == "__main__":
-    # Test the server
-    server = AvatarServer()
+    # Command line interface
+    parser = argparse.ArgumentParser(description="M1K3 Avatar Server")
+    parser.add_argument('--port', '-p', type=int, default=8080, help='HTTP server port')
+    parser.add_argument('--ws-port', type=int, default=8081, help='WebSocket server port')
+    parser.add_argument('--verbose', '-v', action='store_true', help='Enable verbose logging')
+    parser.add_argument('--stats', '-s', action='store_true', help='Show statistics every 30 seconds')
+    
+    args = parser.parse_args()
+    
+    # Create server with verbose logging if requested
+    server = AvatarServer(http_port=args.port, ws_port=args.ws_port, verbose=args.verbose)
+    
     if server.start():
         print("Server started successfully")
+        
+        if args.verbose:
+            print("🔍 Verbose logging enabled - all WebSocket messages will be logged")
+        
+        if args.stats:
+            print("📊 Statistics mode enabled - stats will be printed every 30 seconds")
+        
         try:
+            stats_counter = 0
             while True:
                 time.sleep(1)
+                stats_counter += 1
+                
+                # Print statistics every 30 seconds if enabled
+                if args.stats and stats_counter >= 30:
+                    server.print_statistics()
+                    stats_counter = 0
+                    
         except KeyboardInterrupt:
             print("\nShutting down...")
+            if args.verbose or args.stats:
+                server.print_statistics()
             server.stop()
     else:
         print("Failed to start server")

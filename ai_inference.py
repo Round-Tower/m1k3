@@ -77,6 +77,9 @@ class LocalAIEngine:
         
         print(f"🔧 Backend selection: HF={self.use_transformers}, CT={self.use_ctransformers}")
         
+        # Auto-load model during initialization
+        self.load_model()
+        
     def _get_default_model_path(self) -> str:
         """Get default model path"""
         models_dir = Path("models")

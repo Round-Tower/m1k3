@@ -109,6 +109,7 @@ class SystemMonitor:
     
     def __init__(self):
         self.platform = platform.system().lower()
+        self.start_time = time.time()  # Track session start time
         
     def get_battery_info(self) -> tuple[Optional[int], Optional[bool]]:
         """Get battery percentage and charging status"""

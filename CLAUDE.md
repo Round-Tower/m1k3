@@ -3,7 +3,7 @@
 ## Project Overview
 M1K3 is a privacy-focused local AI assistant with voice synthesis and real-time avatar visualization. Features include a web-based dashboard with emotion tracking, rich CLI animations, eco-friendly metrics, and comprehensive device context analysis. Built with a robust multi-backend AI system that works on any architecture.
 
-## Current Status (2025-08-21) ✅ FULLY OPERATIONAL
+## Current Status (2025-08-21) ✅ FULLY ENHANCED & OPERATIONAL
 
 ### ✅ Core Features
 - **Local AI inference** with TinyLlama-1.1B-Chat working on all architectures
@@ -37,6 +37,24 @@ M1K3 is a privacy-focused local AI assistant with voice synthesis and real-time 
 - ✅ **Smart truncation**: Long text truncated with user notification
 - ✅ **No more crashes**: Graceful error handling and fallback to system TTS
 - ✅ **Universal voice**: Works reliably on any architecture
+
+#### **Enhanced TUI System (NEW - 2025-08-21)**
+**Latest Enhancement**: Advanced Terminal User Interfaces with comprehensive features
+
+**New TUI Features**:
+- ✅ **Textual TUI**: Modern full-screen interface with real-time updates, session persistence, and intelligent emotion detection
+- ✅ **Rich TUI**: Lightweight full-screen interface with 8fps smooth refresh and optimized display updates
+- ✅ **Auto-loading AI Models**: All interfaces now automatically load models during startup (no more "Model not loaded" errors)
+- ✅ **Avatar Integration**: Real-time avatar emotion tracking and WebSocket communication in all TUI modes
+- ✅ **Session Management**: Automatic chat history save/restore with contextual conversation memory
+- ✅ **Health Monitoring**: Periodic system health checks with battery awareness and connection status
+- ✅ **Error Resilience**: Robust error handling with graceful fallbacks and comprehensive status reporting
+- ✅ **Performance Optimization**: Reduced refresh conflicts, targeted updates, and responsive input handling
+
+**Interface Options**:
+- **Classic CLI** (`python m1k3.py`) - Traditional command-line interface
+- **Textual TUI** (`python m1k3.py --tui`) - Modern full-screen terminal interface (recommended)
+- **Rich TUI** (`python m1k3.py --fullscreen`) - Lightweight full-screen interface
 
 ## AI Backend Architecture
 
@@ -111,23 +129,78 @@ M1K3 is a privacy-focused local AI assistant with voice synthesis and real-time 
 
 ## Usage
 
-### Basic Commands
+### Interface Options
+M1K3 now supports **three different interfaces** to suit your preferences:
+
+#### 🖥️ Classic CLI (Default)
 ```bash
-# Full experience with voice synthesis
+# Traditional command-line interface
 python m1k3.py
 
-# CLI only (recommended for testing)
+# CLI only (recommended for testing)  
 python m1k3.py --no-voice
-
-# CLI with avatar dashboard (auto-opens browser)
-python cli.py --with-avatar
-
-# CLI with avatar on custom port (no browser)
-python cli.py --with-avatar --avatar-port 8090 --no-browser
 
 # Direct CLI entry point
 python cli.py
 ```
+
+#### ✨ Textual TUI (Modern Full-Screen) - **RECOMMENDED**
+```bash
+# Modern full-screen terminal interface (like Claude Code)
+python m1k3.py --tui
+
+# TUI without voice synthesis
+python m1k3.py --tui --no-voice
+
+# TUI without avatar server
+python m1k3.py --tui --no-avatar
+
+# Direct TUI launch
+python m1k3_tui.py
+```
+
+#### 🎨 Rich Full-Screen (Lightweight)
+```bash
+# Rich-based full-screen interface
+python m1k3.py --fullscreen
+
+# Rich without voice or avatar
+python m1k3.py --fullscreen --no-voice --no-avatar
+
+# Direct Rich TUI launch
+python m1k3_rich_tui.py
+```
+
+### Interface Feature Comparison
+| Feature | Classic CLI | Textual TUI | Rich TUI |
+|---------|------------|-------------|----------|
+| **Full-Screen Mode** | ❌ | ✅ | ✅ |
+| **Real-time Updates** | ❌ | ✅ | ✅ |
+| **Multiple Panels** | ❌ | ✅ | ✅ |
+| **Mouse Support** | ❌ | ✅ | ❌ |
+| **Keyboard Shortcuts** | Basic | Advanced | Basic |
+| **Avatar Integration** | ✅ | ✅ | ✅ |
+| **Voice Synthesis** | ✅ | ✅ | ✅ |
+| **Eco Metrics Display** | ✅ | ✅ | ✅ |
+| **Resource Usage** | Low | Medium | Low |
+
+### TUI Keyboard Shortcuts
+#### Textual TUI Shortcuts
+- **Ctrl+Q** - Quit application
+- **Ctrl+C** - Clear chat history
+- **Ctrl+S** - Show statistics tab
+- **Ctrl+A** - Toggle avatar server
+- **Ctrl+V** - Toggle voice synthesis
+- **Escape** - Focus chat input
+- **F1** - Show help
+- **Tab** - Switch between panels
+
+#### Rich TUI Shortcuts
+- **Ctrl+C** - Exit application
+- **Ctrl+L** - Clear display
+- **Ctrl+S** - Show detailed stats
+- **Enter** - Send message
+- **Backspace** - Delete character
 
 ### Interactive Commands
 ```bash
@@ -335,7 +408,17 @@ python -c "import platform; print(platform.machine())"  # Python architecture
 
 ## Development Notes
 
-### Recent Major Update (2025-08-21)
+### Latest Major Update (2025-08-21) - TUI Enhancement Release
+- ✅ **Enhanced TUI System**: Two new full-screen interfaces (Textual + Rich TUI)
+- ✅ **Auto-Loading AI Models**: Eliminated "Model not loaded" errors across all interfaces
+- ✅ **Advanced Session Management**: Chat history persistence and conversation context restoration
+- ✅ **Intelligent Avatar Integration**: Real-time emotion detection and avatar state tracking
+- ✅ **Performance Optimization**: 8fps smooth refresh, reduced conflicts, responsive input
+- ✅ **Comprehensive Error Handling**: Robust fallbacks and graceful degradation
+- ✅ **Health Monitoring**: System status tracking with battery awareness
+- ✅ **Universal Compatibility**: Fixed parameter conflicts and API consistency
+
+### Previous Major Update (2025-08-21)
 - ✅ **Avatar System Integration**: Real-time web dashboard with emotion tracking
 - ✅ **WebSocket Communication**: Bidirectional messaging for live updates
 - ✅ **Pixel Art Visualization**: Dynamic avatar with multiple styles and emotions
@@ -429,4 +512,4 @@ Any Platform | ✅ Primary  | ⚠️  Variable  | ✅ Fallback | ✅ Working
 
 ---
 
-**M1K3 Status**: ✅ **FULLY OPERATIONAL** - Local AI working on all architectures!
+**M1K3 Status**: ✅ **FULLY ENHANCED & OPERATIONAL** - Advanced TUI system with auto-loading AI models and comprehensive avatar integration working flawlessly on all architectures!

@@ -9,8 +9,8 @@ def test_html_code():
     print("🌐 Testing HTML Code Question\n" + "="*50)
     
     engine = LocalAIEngine()
-    if not engine.load_model():
-        print("❌ Failed to load model")
+    if not engine.model:
+        print("❌ Model not loaded")
         return
     
     # Test the HTML code question

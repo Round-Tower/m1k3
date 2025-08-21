@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>M1K3 Avatar Companion</title>
+    <title>M1K3 Avatar Dashboard</title>
     <style>
         :root {
             /* M1K3 Design System */
@@ -11,22 +11,33 @@
             --bg-secondary: #141414; 
             --bg-tertiary: #1F1F1F;
             --bg-elevated: #2A2A2A;
+            --bg-input: #1A1A1A;
             
             --m1k3-orange: #E25303;
             --m1k3-blue: #0F4C81;
             --m1k3-green: #92B48B;
             --m1k3-red: #8E354A;
+            --m1k3-purple: #9370DB;
             
             --text-primary: #FFFFFF;
             --text-secondary: #A0A0A0;
             --text-disabled: #666666;
+            --text-user: #E25303;
+            --text-ai: #92B48B;
             
+            --spacing-xs: 4px;
             --spacing-sm: 8px;
             --spacing-md: 16px;
             --spacing-lg: 24px;
+            --spacing-xl: 32px;
             
             --border-radius: 12px;
             --border-radius-sm: 8px;
+            --border-radius-xs: 4px;
+            
+            --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.3);
+            --shadow-md: 0 4px 8px rgba(0, 0, 0, 0.4);
+            --shadow-lg: 0 8px 16px rgba(0, 0, 0, 0.5);
         }
 
         * {
@@ -36,165 +47,159 @@
         }
 
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, monospace;
             background: var(--bg-primary);
             color: var(--text-primary);
             line-height: 1.6;
-            padding: var(--spacing-md);
-            min-height: 100vh;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
+            overflow: hidden;
+            height: 100vh;
             -webkit-font-smoothing: antialiased;
         }
 
-        .container {
-            max-width: 600px;
-            width: 100%;
-            text-align: center;
+        .dashboard {
+            display: grid;
+            grid-template-columns: 400px 1fr;
+            grid-template-rows: auto 1fr auto;
+            grid-template-areas: 
+                "header header"
+                "avatar chat"
+                "controls chat-input";
+            height: 100vh;
+            gap: var(--spacing-md);
+            padding: var(--spacing-md);
         }
 
         .header {
-            margin-bottom: var(--spacing-lg);
+            grid-area: header;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: var(--bg-secondary);
+            padding: var(--spacing-md);
+            border-radius: var(--border-radius);
+            border: 1px solid var(--bg-tertiary);
+        }
+
+        .title-section {
+            display: flex;
+            align-items: center;
+            gap: var(--spacing-md);
         }
 
         .title {
-            font-size: 2rem;
+            font-size: 1.5rem;
             font-weight: 700;
             color: var(--text-primary);
-            margin-bottom: var(--spacing-sm);
             letter-spacing: -0.02em;
         }
 
         .subtitle {
-            font-size: 1rem;
+            font-size: 0.875rem;
             color: var(--text-secondary);
-            font-weight: 400;
+        }
+
+        .header-controls {
+            display: flex;
+            align-items: center;
+            gap: var(--spacing-sm);
+        }
+
+        .connection-status {
+            display: flex;
+            align-items: center;
+            gap: var(--spacing-xs);
+            padding: var(--spacing-xs) var(--spacing-sm);
+            border-radius: var(--border-radius-xs);
+            font-size: 0.75rem;
+            font-weight: 500;
+        }
+
+        .connection-status.connected {
+            background: rgba(0, 255, 133, 0.1);
+            color: #00FF85;
+            border: 1px solid rgba(0, 255, 133, 0.3);
+        }
+
+        .connection-status.disconnected {
+            background: rgba(255, 0, 153, 0.1);
+            color: #FF0099;
+            border: 1px solid rgba(255, 0, 153, 0.3);
+        }
+
+        .status-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: currentColor;
+            animation: pulse 2s infinite;
+        }
+
+        .avatar-panel {
+            grid-area: avatar;
+            background: var(--bg-secondary);
+            border-radius: var(--border-radius);
+            border: 1px solid var(--bg-tertiary);
+            padding: var(--spacing-lg);
+            display: flex;
+            flex-direction: column;
+            gap: var(--spacing-md);
+            overflow: hidden;
         }
 
         .avatar-display {
-            background: var(--bg-secondary);
-            border-radius: var(--border-radius);
-            padding: var(--spacing-lg);
-            border: 1px solid var(--bg-tertiary);
-            margin-bottom: var(--spacing-lg);
             position: relative;
+            aspect-ratio: 1;
+            background: var(--bg-tertiary);
+            border-radius: var(--border-radius-sm);
+            border: 1px solid var(--bg-elevated);
+            overflow: hidden;
         }
 
         .canvas-container {
             position: relative;
-            display: inline-block;
-            margin-bottom: var(--spacing-md);
-            width: 100%;
-            max-width: 400px;
-            aspect-ratio: 1;
-        }
-
-        #avatarCanvas {
             width: 100%;
             height: 100%;
-            border: 1px solid var(--bg-elevated);
-            border-radius: var(--border-radius-sm);
-            background: var(--bg-tertiary);
+        }
+
+        #avatarCanvas, #particleCanvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
             image-rendering: pixelated;
             image-rendering: -moz-crisp-edges;
             image-rendering: crisp-edges;
         }
 
-        .status-display {
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            gap: var(--spacing-md);
-            margin-bottom: var(--spacing-md);
-            flex-wrap: wrap;
-        }
-
-        .status-item {
-            background: var(--bg-tertiary);
-            padding: var(--spacing-sm) var(--spacing-md);
-            border-radius: var(--border-radius-sm);
-            font-size: 0.875rem;
-            border: 1px solid var(--bg-elevated);
-        }
-
-        .status-item.active {
-            background: var(--m1k3-orange);
-            color: var(--bg-primary);
-            border-color: var(--m1k3-orange);
-        }
-
-        .connection-status {
-            position: absolute;
-            top: var(--spacing-sm);
-            right: var(--spacing-sm);
-            padding: var(--spacing-sm);
-            border-radius: 50%;
-            font-size: 0.75rem;
-            width: 12px;
-            height: 12px;
-            border: 2px solid var(--bg-elevated);
-        }
-
-        .connection-status.connected {
-            background: #00FF85;
-            border-color: #00FF85;
-        }
-
-        .connection-status.disconnected {
-            background: #FF0099;
-            border-color: #FF0099;
-        }
-
-        .message-display {
-            background: var(--bg-tertiary);
-            border-radius: var(--border-radius-sm);
-            padding: var(--spacing-md);
-            margin-top: var(--spacing-md);
-            border: 1px solid var(--bg-elevated);
-            min-height: 60px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-style: italic;
-            color: var(--text-secondary);
-        }
-
-        .animation-indicator {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            font-size: 2rem;
-            animation: pulse 2s infinite;
-            z-index: 10;
+        #particleCanvas {
             pointer-events: none;
+            z-index: 5;
         }
 
         .state-overlay {
             position: absolute;
-            top: 10px;
-            right: 10px;
+            top: var(--spacing-sm);
+            right: var(--spacing-sm);
             display: flex;
             flex-direction: column;
             align-items: center;
-            gap: var(--spacing-sm);
-            z-index: 15;
+            gap: var(--spacing-xs);
+            z-index: 10;
             pointer-events: none;
         }
 
         .state-icon {
-            font-size: 1.5rem;
-            animation: rotate 2s linear infinite;
+            font-size: 1.25rem;
             filter: drop-shadow(0 0 3px rgba(226, 83, 3, 0.8));
+            animation: rotate 2s linear infinite;
         }
 
         .progress-bar {
-            width: 60px;
-            height: 6px;
+            width: 40px;
+            height: 4px;
             background: var(--bg-elevated);
-            border-radius: 3px;
+            border-radius: 2px;
             overflow: hidden;
             border: 1px solid var(--m1k3-orange);
         }
@@ -204,38 +209,395 @@
             background: linear-gradient(90deg, var(--m1k3-orange), #FFB366);
             width: 0%;
             transition: width 0.3s ease;
-            animation: pulse 1s infinite;
         }
 
+        .avatar-status {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: var(--spacing-sm);
+        }
+
+        .status-item {
+            background: var(--bg-tertiary);
+            padding: var(--spacing-sm);
+            border-radius: var(--border-radius-xs);
+            font-size: 0.75rem;
+            text-align: center;
+            border: 1px solid var(--bg-elevated);
+            transition: all 0.3s ease;
+        }
+
+        .status-item.active {
+            background: var(--m1k3-orange);
+            color: var(--bg-primary);
+            border-color: var(--m1k3-orange);
+            transform: scale(1.05);
+        }
+
+        .metrics-panel {
+            background: var(--bg-tertiary);
+            border-radius: var(--border-radius-xs);
+            padding: var(--spacing-sm);
+            border: 1px solid var(--bg-elevated);
+        }
+
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: var(--spacing-xs);
+            font-size: 0.75rem;
+        }
+
+        .metric-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .metric-label {
+            color: var(--text-secondary);
+        }
+
+        .metric-value {
+            color: var(--text-primary);
+            font-weight: 600;
+        }
+
+        .chat-panel {
+            grid-area: chat;
+            background: var(--bg-secondary);
+            border-radius: var(--border-radius);
+            border: 1px solid var(--bg-tertiary);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .chat-header {
+            padding: var(--spacing-md);
+            border-bottom: 1px solid var(--bg-tertiary);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .chat-title {
+            font-size: 1rem;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .chat-controls {
+            display: flex;
+            gap: var(--spacing-sm);
+        }
+
+        .control-button {
+            background: var(--bg-tertiary);
+            border: 1px solid var(--bg-elevated);
+            color: var(--text-secondary);
+            padding: var(--spacing-xs) var(--spacing-sm);
+            border-radius: var(--border-radius-xs);
+            font-size: 0.75rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .control-button:hover {
+            background: var(--bg-elevated);
+            color: var(--text-primary);
+        }
+
+        .control-button.active {
+            background: var(--m1k3-orange);
+            color: var(--bg-primary);
+            border-color: var(--m1k3-orange);
+        }
+
+        .chat-messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: var(--spacing-md);
+            display: flex;
+            flex-direction: column;
+            gap: var(--spacing-md);
+        }
+
+        .message {
+            display: flex;
+            gap: var(--spacing-sm);
+            max-width: 85%;
+            animation: fadeInUp 0.3s ease;
+        }
+
+        .message.user {
+            align-self: flex-end;
+            flex-direction: row-reverse;
+        }
+
+        .message.ai {
+            align-self: flex-start;
+        }
+
+        .message-avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1rem;
+            flex-shrink: 0;
+        }
+
+        .message.user .message-avatar {
+            background: var(--m1k3-orange);
+            color: var(--bg-primary);
+        }
+
+        .message.ai .message-avatar {
+            background: var(--m1k3-green);
+            color: var(--bg-primary);
+        }
+
+        .message-content {
+            background: var(--bg-tertiary);
+            padding: var(--spacing-sm) var(--spacing-md);
+            border-radius: var(--border-radius);
+            border: 1px solid var(--bg-elevated);
+            position: relative;
+        }
+
+        .message.user .message-content {
+            background: rgba(226, 83, 3, 0.1);
+            border-color: rgba(226, 83, 3, 0.3);
+            color: var(--text-user);
+        }
+
+        .message.ai .message-content {
+            background: rgba(146, 180, 139, 0.1);
+            border-color: rgba(146, 180, 139, 0.3);
+            color: var(--text-ai);
+        }
+
+        .message-text {
+            font-size: 0.875rem;
+            line-height: 1.5;
+            word-wrap: break-word;
+            white-space: pre-wrap;
+        }
+
+        .message-time {
+            font-size: 0.75rem;
+            color: var(--text-disabled);
+            margin-top: var(--spacing-xs);
+        }
+
+        .typing-indicator {
+            display: flex;
+            align-items: center;
+            gap: var(--spacing-xs);
+            padding: var(--spacing-sm) var(--spacing-md);
+            background: var(--bg-tertiary);
+            border-radius: var(--border-radius);
+            border: 1px solid var(--bg-elevated);
+            color: var(--text-secondary);
+            font-size: 0.875rem;
+            max-width: 200px;
+        }
+
+        .typing-dots {
+            display: flex;
+            gap: 2px;
+        }
+
+        .typing-dot {
+            width: 4px;
+            height: 4px;
+            border-radius: 50%;
+            background: var(--text-secondary);
+            animation: typingPulse 1.4s infinite;
+        }
+
+        .typing-dot:nth-child(2) {
+            animation-delay: 0.2s;
+        }
+
+        .typing-dot:nth-child(3) {
+            animation-delay: 0.4s;
+        }
+
+        .controls-panel {
+            grid-area: controls;
+            background: var(--bg-secondary);
+            border-radius: var(--border-radius);
+            border: 1px solid var(--bg-tertiary);
+            padding: var(--spacing-md);
+            display: flex;
+            gap: var(--spacing-md);
+            align-items: center;
+        }
+
+        .volume-control {
+            display: flex;
+            align-items: center;
+            gap: var(--spacing-sm);
+        }
+
+        .volume-slider {
+            width: 80px;
+            height: 4px;
+            background: var(--bg-elevated);
+            border-radius: 2px;
+            outline: none;
+            -webkit-appearance: none;
+        }
+
+        .volume-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: var(--m1k3-orange);
+            cursor: pointer;
+        }
+
+        .chat-input-panel {
+            grid-area: chat-input;
+            background: var(--bg-secondary);
+            border-radius: var(--border-radius);
+            border: 1px solid var(--bg-tertiary);
+            padding: var(--spacing-md);
+            display: flex;
+            gap: var(--spacing-sm);
+            align-items: flex-end;
+        }
+
+        .input-group {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: var(--spacing-xs);
+        }
+
+        .chat-input {
+            background: var(--bg-input);
+            border: 1px solid var(--bg-elevated);
+            border-radius: var(--border-radius-sm);
+            padding: var(--spacing-sm) var(--spacing-md);
+            color: var(--text-primary);
+            font-size: 0.875rem;
+            font-family: inherit;
+            resize: none;
+            min-height: 40px;
+            max-height: 120px;
+            outline: none;
+            transition: border-color 0.2s ease;
+        }
+
+        .chat-input:focus {
+            border-color: var(--m1k3-orange);
+        }
+
+        .chat-input::placeholder {
+            color: var(--text-disabled);
+        }
+
+        .input-actions {
+            display: flex;
+            gap: var(--spacing-xs);
+            align-items: center;
+        }
+
+        .action-button {
+            background: var(--bg-elevated);
+            border: 1px solid var(--bg-tertiary);
+            color: var(--text-secondary);
+            padding: var(--spacing-sm);
+            border-radius: var(--border-radius-xs);
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 40px;
+            height: 40px;
+        }
+
+        .action-button:hover {
+            background: var(--m1k3-orange);
+            color: var(--bg-primary);
+            border-color: var(--m1k3-orange);
+        }
+
+        .action-button.primary {
+            background: var(--m1k3-orange);
+            color: var(--bg-primary);
+            border-color: var(--m1k3-orange);
+        }
+
+        .action-button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .voice-button {
+            position: relative;
+        }
+
+        .voice-button.recording {
+            background: var(--m1k3-red) !important;
+            animation: pulseRed 1s infinite;
+        }
+
+        .voice-level {
+            position: absolute;
+            bottom: -2px;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: var(--m1k3-orange);
+            border-radius: 1px;
+            transform: scaleX(0);
+            transition: transform 0.1s ease;
+        }
+
+        /* Responsive Design */
+        @media (max-width: 768px) {
+            .dashboard {
+                grid-template-columns: 1fr;
+                grid-template-rows: auto auto 1fr auto;
+                grid-template-areas: 
+                    "header"
+                    "avatar"
+                    "chat"
+                    "chat-input";
+            }
+
+            .avatar-panel {
+                max-height: 300px;
+            }
+
+            .avatar-status {
+                grid-template-columns: 1fr 1fr 1fr 1fr;
+            }
+
+            .header {
+                flex-direction: column;
+                gap: var(--spacing-sm);
+                text-align: center;
+            }
+        }
+
+        /* Animations */
         @keyframes pulse {
-            0%, 100% { opacity: 0.5; transform: translate(-50%, -50%) scale(1); }
-            50% { opacity: 1; transform: translate(-50%, -50%) scale(1.1); }
-        }
-
-        @keyframes bounce {
-            0%, 100% { transform: translateY(0); }
-            50% { transform: translateY(-10px); }
-        }
-
-        @keyframes shake {
-            0%, 100% { transform: translateX(0); }
-            25% { transform: translateX(-5px); }
-            75% { transform: translateX(5px); }
-        }
-
-        @keyframes typing {
-            0%, 100% { transform: scale(1); }
-            50% { transform: scale(1.05); }
-        }
-
-        @keyframes glow {
-            0%, 100% { box-shadow: 0 0 5px var(--m1k3-orange); }
-            50% { box-shadow: 0 0 20px var(--m1k3-orange), 0 0 30px var(--m1k3-orange); }
-        }
-
-        @keyframes fadeInOut {
-            0%, 100% { opacity: 0.3; }
+            0%, 100% { opacity: 0.5; }
             50% { opacity: 1; }
+        }
+
+        @keyframes pulseRed {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(142, 53, 74, 0.7); }
+            50% { box-shadow: 0 0 0 8px rgba(142, 53, 74, 0); }
         }
 
         @keyframes rotate {
@@ -243,6 +605,29 @@
             to { transform: rotate(360deg); }
         }
 
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes typingPulse {
+            0%, 60%, 100% {
+                transform: scale(1);
+                opacity: 0.5;
+            }
+            30% {
+                transform: scale(1.2);
+                opacity: 1;
+            }
+        }
+
+        /* Avatar state animations */
         .avatar-display.thinking .canvas-container {
             animation: pulse 2s infinite;
         }
@@ -255,11 +640,7 @@
             animation: typing 0.8s infinite;
         }
 
-        .avatar-display.post_response .canvas-container {
-            animation: bounce 0.5s ease-out;
-        }
-
-        .avatar-display.excited .canvas-container {
+        .avatar-display.speaking .canvas-container {
             animation: bounce 1s infinite;
         }
 
@@ -268,169 +649,462 @@
             filter: hue-rotate(200deg) brightness(1.2);
         }
 
-        .avatar-display.speaking .canvas-container {
-            animation: pulse 1s infinite ease-in-out;
+        @keyframes glow {
+            0%, 100% { box-shadow: inset 0 0 10px var(--m1k3-orange); }
+            50% { box-shadow: inset 0 0 20px var(--m1k3-orange); }
         }
 
-        .avatar-display.farewell .canvas-container {
-            animation: fadeInOut 2s ease-in-out;
+        @keyframes typing {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.02); }
         }
 
-        .footer {
-            text-align: center;
-            color: var(--text-disabled);
+        @keyframes bounce {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-2px); }
+        }
+
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-2px); }
+            75% { transform: translateX(2px); }
+        }
+
+        /* Scrollbar styling */
+        .chat-messages::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .chat-messages::-webkit-scrollbar-track {
+            background: var(--bg-tertiary);
+            border-radius: 3px;
+        }
+
+        .chat-messages::-webkit-scrollbar-thumb {
+            background: var(--bg-elevated);
+            border-radius: 3px;
+        }
+
+        .chat-messages::-webkit-scrollbar-thumb:hover {
+            background: var(--text-disabled);
+        }
+
+        /* Theme toggle */
+        .theme-toggle {
+            background: none;
+            border: none;
+            color: var(--text-secondary);
+            cursor: pointer;
+            padding: var(--spacing-xs);
+            border-radius: var(--border-radius-xs);
+            transition: color 0.2s ease;
+        }
+
+        .theme-toggle:hover {
+            color: var(--text-primary);
+        }
+
+        /* Debug Console Styles */
+        .debug-console {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            width: 400px;
+            max-height: 500px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--bg-tertiary);
+            border-radius: var(--border-radius);
+            box-shadow: var(--shadow-lg);
+            z-index: 1000;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .debug-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: var(--spacing-sm) var(--spacing-md);
+            border-bottom: 1px solid var(--bg-tertiary);
+            background: var(--bg-elevated);
+            border-radius: var(--border-radius) var(--border-radius) 0 0;
+        }
+
+        .debug-title {
             font-size: 0.875rem;
-            margin-top: var(--spacing-lg);
+            font-weight: 600;
+            color: var(--text-primary);
         }
 
-        /* Responsive */
-        @media (max-width: 768px) {
-            .container {
-                padding: var(--spacing-sm);
-            }
-            
-            .title {
-                font-size: 1.5rem;
-            }
-            
-            .status-display {
-                flex-direction: column;
-                gap: var(--spacing-sm);
-            }
+        .debug-controls {
+            display: flex;
+            gap: var(--spacing-xs);
+        }
+
+        .debug-btn {
+            background: var(--bg-tertiary);
+            border: 1px solid var(--bg-elevated);
+            color: var(--text-secondary);
+            padding: 2px 6px;
+            border-radius: var(--border-radius-xs);
+            font-size: 0.75rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .debug-btn:hover {
+            background: var(--m1k3-orange);
+            color: var(--bg-primary);
+            border-color: var(--m1k3-orange);
+        }
+
+        .debug-stats {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: var(--spacing-xs);
+            padding: var(--spacing-sm);
+            background: var(--bg-tertiary);
+            border-bottom: 1px solid var(--bg-elevated);
+            font-size: 0.75rem;
+        }
+
+        .debug-stat {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .stat-label {
+            color: var(--text-secondary);
+        }
+
+        .stat-value {
+            color: var(--text-primary);
+            font-weight: 600;
+        }
+
+        .debug-messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: var(--spacing-sm);
+            max-height: 300px;
+            font-size: 0.75rem;
+            font-family: monospace;
+        }
+
+        .debug-message {
+            display: flex;
+            gap: var(--spacing-sm);
+            padding: 2px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .debug-message:last-child {
+            border-bottom: none;
+        }
+
+        .debug-timestamp {
+            color: var(--text-disabled);
+            font-weight: 600;
+            min-width: 60px;
+        }
+
+        .debug-type {
+            min-width: 60px;
+            font-weight: 600;
+        }
+
+        .debug-message.sent .debug-type {
+            color: var(--m1k3-orange);
+        }
+
+        .debug-message.received .debug-type {
+            color: var(--m1k3-green);
+        }
+
+        .debug-message.error .debug-type {
+            color: var(--m1k3-red);
+        }
+
+        .debug-message.info .debug-type {
+            color: var(--m1k3-blue);
+        }
+
+        .debug-content {
+            color: var(--text-secondary);
+            word-break: break-all;
+            flex: 1;
+        }
+
+        .debug-messages::-webkit-scrollbar {
+            width: 4px;
+        }
+
+        .debug-messages::-webkit-scrollbar-track {
+            background: var(--bg-elevated);
+        }
+
+        .debug-messages::-webkit-scrollbar-thumb {
+            background: var(--text-disabled);
+            border-radius: 2px;
         }
     </style>
 </head>
 <body>
-    <div class="container">
+    <div class="dashboard">
+        <!-- Header -->
         <div class="header">
-            <h1 class="title">M1K3 Avatar</h1>
-            <p class="subtitle">Your AI Companion</p>
+            <div class="title-section">
+                <div>
+                    <h1 class="title">M1K3 Avatar Dashboard</h1>
+                    <p class="subtitle">Real-time AI companion with chat interface</p>
+                </div>
+            </div>
+            <div class="header-controls">
+                <div class="connection-status disconnected" id="connectionStatus">
+                    <div class="status-dot"></div>
+                    <span id="connectionText">Disconnected</span>
+                </div>
+                <div class="connection-status" id="audioStatus" style="display:none;">
+                    <span>🔊</span>
+                    <span id="audioStatusText">Audio Ready</span>
+                </div>
+                <button class="theme-toggle" id="themeToggle" title="Toggle theme">🌓</button>
+            </div>
         </div>
 
-        <div class="avatar-display" id="avatarDisplay">
-            <div class="connection-status disconnected" id="connectionStatus"></div>
-            
-            <div class="canvas-container">
-                <canvas id="avatarCanvas" width="256" height="256"></canvas>
-                <canvas id="particleCanvas" width="256" height="256" style="position: absolute; top: 0; left: 0; pointer-events: none; z-index: 5;"></canvas>
-                <div class="animation-indicator" id="animationIndicator" style="display:none;">⚙️</div>
-                <div class="state-overlay" id="stateOverlay" style="display:none;">
-                    <div class="state-icon" id="stateIcon">💭</div>
-                    <div class="progress-bar" id="progressBar" style="display:none;">
-                        <div class="progress-fill" id="progressFill"></div>
+        <!-- Avatar Panel -->
+        <div class="avatar-panel">
+            <div class="avatar-display" id="avatarDisplay">
+                <div class="canvas-container">
+                    <canvas id="avatarCanvas" width="256" height="256"></canvas>
+                    <canvas id="particleCanvas" width="256" height="256"></canvas>
+                    <div class="state-overlay" id="stateOverlay" style="display:none;">
+                        <div class="state-icon" id="stateIcon">💭</div>
+                        <div class="progress-bar" id="progressBar" style="display:none;">
+                            <div class="progress-fill" id="progressFill"></div>
+                        </div>
                     </div>
                 </div>
             </div>
-            
-            <div class="status-display">
+
+            <div class="avatar-status">
                 <div class="status-item" id="emotionStatus">
-                    <span id="currentEmotion">😊 Happy</span>
+                    <div><span id="currentEmotion">😊 Happy</span></div>
                 </div>
                 <div class="status-item" id="stateStatus">
-                    <span id="currentState">💤 Idle</span>
+                    <div><span id="currentState">💤 Idle</span></div>
                 </div>
                 <div class="status-item" id="styleStatus">
-                    <span id="currentStyle">🤖 Robot</span>
+                    <div><span id="currentStyle">🤖 Robot</span></div>
                 </div>
                 <div class="status-item" id="tokenStatus" style="display:none;">
-                    <span id="currentTokens">🎯 0 tokens</span>
+                    <div><span id="currentTokens">🎯 0</span></div>
                 </div>
             </div>
-            
-            <div class="message-display" id="messageDisplay">
-                Waiting for connection to M1K3...
+
+            <div class="metrics-panel">
+                <div class="metrics-grid">
+                    <div class="metric-item">
+                        <span class="metric-label">⚡ Energy</span>
+                        <span class="metric-value" id="energySaved">0 Wh</span>
+                    </div>
+                    <div class="metric-item">
+                        <span class="metric-label">💧 Water</span>
+                        <span class="metric-value" id="waterSaved">0 ml</span>
+                    </div>
+                    <div class="metric-item">
+                        <span class="metric-label">🌍 CO2</span>
+                        <span class="metric-value" id="co2Saved">0g</span>
+                    </div>
+                    <div class="metric-item">
+                        <span class="metric-label">💬 Msgs</span>
+                        <span class="metric-value" id="messageCount">0</span>
+                    </div>
+                </div>
             </div>
         </div>
 
-        <div class="footer">
-            <p>WebSocket: <span id="wsStatus">Disconnected</span> | Rendered frames: <span id="frameCount">0</span></p>
+        <!-- Chat Panel -->
+        <div class="chat-panel">
+            <div class="chat-header">
+                <div class="chat-title">Conversation</div>
+                <div class="chat-controls">
+                    <button class="control-button" id="soundToggle" title="Toggle sounds">🔊</button>
+                    <button class="control-button" id="testSoundBtn" title="Test sound">🔔</button>
+                    <button class="control-button" id="debugToggle" title="Toggle debug console">🐛</button>
+                    <button class="control-button" id="clearChat" title="Clear chat">🗑️</button>
+                    <button class="control-button" id="exportChat" title="Export chat">💾</button>
+                </div>
+            </div>
+            <div class="chat-messages" id="chatMessages">
+                <div class="message ai">
+                    <div class="message-avatar">🤖</div>
+                    <div class="message-content">
+                        <div class="message-text">Hello! I'm M1K3, your AI companion. Start chatting to see real-time avatar emotions!</div>
+                        <div class="message-time">Just now</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Controls Panel -->
+        <div class="controls-panel">
+            <div class="volume-control">
+                <span>🔊</span>
+                <input type="range" class="volume-slider" id="volumeSlider" min="0" max="100" value="70">
+                <span id="volumeValue">70%</span>
+            </div>
+            <div style="flex: 1"></div>
+            <div style="font-size: 0.75rem; color: var(--text-disabled);">
+                WebSocket: <span id="wsStatus">Disconnected</span> | 
+                Messages: <span id="totalMessages">1</span> |
+                Uptime: <span id="uptime">0:00</span>
+            </div>
+        </div>
+
+        <!-- Chat Input Panel -->
+        <div class="chat-input-panel">
+            <div class="input-group">
+                <textarea 
+                    class="chat-input" 
+                    id="chatInput" 
+                    placeholder="Type your message here... (Enter to send, Shift+Enter for new line)"
+                    rows="1"></textarea>
+                <div class="input-actions">
+                    <button class="action-button voice-button" id="voiceButton" title="Hold to record">
+                        🎤
+                        <div class="voice-level" id="voiceLevel"></div>
+                    </button>
+                    <button class="action-button primary" id="sendButton" title="Send message">
+                        ➤
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Debug Console (hidden by default) -->
+        <div class="debug-console" id="debugConsole" style="display: none;">
+            <div class="debug-header">
+                <div class="debug-title">🐛 WebSocket Debug Console</div>
+                <div class="debug-controls">
+                    <button class="debug-btn" id="clearDebugLog">Clear</button>
+                    <button class="debug-btn" id="exportDebugLog">Export</button>
+                    <button class="debug-btn" id="closeDebugConsole">✕</button>
+                </div>
+            </div>
+            <div class="debug-stats">
+                <div class="debug-stat">
+                    <span class="stat-label">Messages Sent:</span>
+                    <span class="stat-value" id="debugSentCount">0</span>
+                </div>
+                <div class="debug-stat">
+                    <span class="stat-label">Messages Received:</span>
+                    <span class="stat-value" id="debugReceivedCount">0</span>
+                </div>
+                <div class="debug-stat">
+                    <span class="stat-label">Connection:</span>
+                    <span class="stat-value" id="debugConnectionStatus">Disconnected</span>
+                </div>
+                <div class="debug-stat">
+                    <span class="stat-label">Last Activity:</span>
+                    <span class="stat-value" id="debugLastActivity">Never</span>
+                </div>
+            </div>
+            <div class="debug-messages" id="debugMessages">
+                <div class="debug-message info">
+                    <span class="debug-timestamp">00:00:00</span>
+                    <span class="debug-type">[INFO]</span>
+                    <span class="debug-content">Debug console initialized</span>
+                </div>
+            </div>
         </div>
     </div>
 
+    <!-- Load external JavaScript -->
+    <script src="avatar_dashboard.js"></script>
+    
     <script>
+        // Global state
+        let websocket = null;
+        let isConnected = false;
+        let reconnectTimer = null;
+        let startTime = Date.now();
+        let messageCount = 1;
+        let isRecording = false;
+        let recognition = null;
+        let audioContext = null;
+        let soundsEnabled = true;
+        let currentVolume = 70;
+        let debugConsole = null;
+
         // Avatar state
         let currentEmotion = 'happy';
         let currentState = 'idle';
         let currentStyle = 'robot';
         let currentColor = '#E25303';
         let emotionIntensity = 50;
-        let isAnimating = false;
         let frameCount = 0;
-        
-        // WebSocket connection
-        let websocket = null;
-        let reconnectTimer = null;
-        let isConnected = false;
-        
-        // Canvas context
+
+        // Canvas contexts
         let canvas = null;
         let ctx = null;
-        
-        // Animation state
-        let animationFrame = null;
-        let animationState = {
-            breathing: 0,
-            bounce: 0,
-            time: 0
-        };
-        
-        // Particle system
-        let particles = [];
         let particleCanvas = null;
         let particleCtx = null;
-        
-        // Emotion expressions for pixel art (16x16 grid)
-        const pixelEmotions = {
-            happy: {
-                eyes: [[1,1,1,0,0,1,1,1], [1,0,0,0,0,0,0,1]],
-                mouth: [[0,1,0,0,0,0,1,0], [1,0,1,1,1,1,0,1]]
-            },
-            sad: {
-                eyes: [[1,1,0,0,0,0,1,1], [1,0,1,0,0,1,0,1]],
-                mouth: [[1,0,1,1,1,1,0,1], [0,1,0,0,0,0,1,0]]
-            },
-            angry: {
-                eyes: [[1,0,0,0,0,0,0,1], [0,1,1,0,0,1,1,0]],
-                mouth: [[1,1,1,1,1,1,1,1], [1,0,0,0,0,0,0,1]]
-            },
-            surprised: {
-                eyes: [[0,1,1,1,1,1,1,0], [1,0,0,0,0,0,0,1]],
-                mouth: [[0,0,1,1,1,1,0,0], [0,1,0,0,0,0,1,0]]
-            },
-            love: {
-                eyes: [[0,1,1,0,0,1,1,0], [1,1,1,1,1,1,1,1]],
-                mouth: [[0,1,0,0,0,0,1,0], [1,0,1,1,1,1,0,1]]
-            },
-            thinking: {
-                eyes: [[1,1,1,0,0,0,0,0], [1,0,0,0,0,1,1,1]],
-                mouth: [[0,0,0,1,1,0,0,0], [0,0,1,0,0,1,0,0]]
-            },
-            sleepy: {
-                eyes: [[0,0,0,0,0,0,0,0], [1,1,1,1,1,1,1,1]],
-                mouth: [[0,0,1,1,1,1,0,0], [0,0,0,0,0,0,0,0]]
-            },
-            excited: {
-                eyes: [[1,0,1,0,0,1,0,1], [0,1,0,1,1,0,1,0]],
-                mouth: [[1,0,0,0,0,0,0,1], [0,1,1,1,1,1,1,0]]
-            }
-        };
-        
-        // Initialize
-        function init() {
-            canvas = document.getElementById('avatarCanvas');
-            ctx = canvas.getContext('2d');
-            ctx.imageSmoothingEnabled = false;
-            
-            // Initialize particle canvas
-            particleCanvas = document.getElementById('particleCanvas');
-            particleCtx = particleCanvas.getContext('2d');
-            
-            connectWebSocket();
+
+        // Particle system
+        let particles = [];
+        let animationFrame = null;
+        let animationState = { breathing: 0, time: 0 };
+
+        // Initialize everything when DOM loads
+        document.addEventListener('DOMContentLoaded', function() {
+            initializeDebugConsole();
+            initializeCanvas();
+            initializeWebSocket();
+            initializeChat();
+            initializeSpeechRecognition();
+            initializeAudio();
+            initializeControls();
             generateAvatar();
             startAnimation();
+            startUptime();
+        });
+
+        function initializeDebugConsole() {
+            debugConsole = new DebugConsole();
+            
+            // Bind debug console events
+            const debugToggle = document.getElementById('debugToggle');
+            const clearDebugLog = document.getElementById('clearDebugLog');
+            const exportDebugLog = document.getElementById('exportDebugLog');
+            const closeDebugConsole = document.getElementById('closeDebugConsole');
+            
+            if (debugToggle) {
+                debugToggle.addEventListener('click', () => {
+                    debugConsole.toggle();
+                });
+            }
+            
+            if (clearDebugLog) {
+                clearDebugLog.addEventListener('click', () => {
+                    debugConsole.clear();
+                });
+            }
+            
+            if (exportDebugLog) {
+                exportDebugLog.addEventListener('click', () => {
+                    debugConsole.export();
+                });
+            }
+            
+            if (closeDebugConsole) {
+                closeDebugConsole.addEventListener('click', () => {
+                    debugConsole.toggle();
+                });
+            }
         }
-        
-        // WebSocket connection
+
         function connectWebSocket() {
             try {
                 websocket = new WebSocket('ws://localhost:8081');
@@ -439,18 +1113,19 @@
                     console.log('Connected to M1K3 Avatar Server');
                     isConnected = true;
                     updateConnectionStatus(true);
-                    updateMessage('Connected to M1K3! 🚀');
-                    
-                    // Send ping to test connection
+                    playSound('connect');
+                    debugConsole?.logConnection('Connected');
                     sendMessage({type: 'ping'});
                 };
                 
                 websocket.onmessage = function(event) {
                     try {
                         const data = JSON.parse(event.data);
+                        debugConsole?.logReceived(data);
                         handleServerMessage(data);
                     } catch (e) {
                         console.error('Error parsing message:', e);
+                        debugConsole?.logError(`Parse error: ${e.message}`);
                     }
                 };
                 
@@ -458,32 +1133,34 @@
                     console.log('Disconnected from M1K3 Avatar Server');
                     isConnected = false;
                     updateConnectionStatus(false);
-                    updateMessage('Disconnected from M1K3 - trying to reconnect...');
+                    debugConsole?.logConnection('Disconnected');
                     
-                    // Attempt to reconnect
                     if (reconnectTimer) clearTimeout(reconnectTimer);
                     reconnectTimer = setTimeout(connectWebSocket, 3000);
                 };
                 
                 websocket.onerror = function(error) {
                     console.error('WebSocket error:', error);
-                    updateMessage('Connection error - is M1K3 running?');
+                    debugConsole?.logError(`WebSocket error: ${error.message || error}`);
                 };
                 
             } catch (e) {
                 console.error('Failed to connect to WebSocket:', e);
-                updateMessage('Failed to connect - check if M1K3 is running');
+                debugConsole?.logError(`Connection failed: ${e.message}`);
                 if (reconnectTimer) clearTimeout(reconnectTimer);
                 reconnectTimer = setTimeout(connectWebSocket, 5000);
             }
         }
-        
+
         function sendMessage(data) {
             if (websocket && websocket.readyState === WebSocket.OPEN) {
                 websocket.send(JSON.stringify(data));
+                debugConsole?.logSent(data);
+            } else {
+                debugConsole?.logError(`Cannot send message - WebSocket not open: ${JSON.stringify(data)}`);
             }
         }
-        
+
         function handleServerMessage(data) {
             console.log('Received:', data);
             
@@ -500,515 +1177,36 @@
                 case 'progress':
                     updateProgress(data.stage, data.progress, data.tokens, data.message);
                     break;
+                case 'chat_ai_chunk':
+                    appendToLastMessage(data.chunk);
+                    break;
+                case 'chat_user':
+                    addMessage(data.message, 'user');
+                    break;
+                case 'chat_ai_start':
+                    addMessage('', 'ai');
+                    showTypingIndicator(true);
+                    break;
+                case 'chat_ai_complete':
+                    showTypingIndicator(false);
+                    playSound('message_received');
+                    break;
+                case 'metrics':
+                    updateMetrics(data);
+                    break;
+                case 'sound':
+                    playSound(data.sound);
+                    break;
                 case 'welcome':
-                    updateMessage(data.message);
+                    addMessage(data.message, 'ai');
                     break;
                 case 'pong':
-                    // Connection is alive
+                    // Connection alive
                     break;
                 default:
                     console.log('Unknown message type:', data.type);
             }
         }
-        
-        // Update functions
-        function updateEmotion(emotion, intensity, message) {
-            if (emotion && emotion !== currentEmotion) {
-                currentEmotion = emotion;
-                emotionIntensity = intensity || 50;
-                
-                // Update UI
-                const emotionEmojis = {
-                    'happy': '😊', 'sad': '😢', 'angry': '😠', 'surprised': '😲',
-                    'love': '😍', 'thinking': '🤔', 'sleepy': '😴', 'excited': '🤩'
-                };
-                
-                const emoji = emotionEmojis[emotion] || '😊';
-                const emotionName = emotion.charAt(0).toUpperCase() + emotion.slice(1);
-                document.getElementById('currentEmotion').textContent = `${emoji} ${emotionName}`;
-                
-                generateAvatar();
-                
-                // Trigger emotion-specific particles
-                createEmotionParticles(emotion, intensity);
-                
-                if (message) {
-                    updateMessage(message);
-                }
-                
-                console.log(`Emotion updated: ${emotion} (${intensity}%)`);
-            }
-        }
-        
-        // Particle system
-        class Particle {
-            constructor(x, y, type, color) {
-                this.x = x;
-                this.y = y;
-                this.vx = (Math.random() - 0.5) * 4;
-                this.vy = (Math.random() - 0.5) * 4;
-                this.life = 1.0;
-                this.decay = 0.02 + Math.random() * 0.02;
-                this.size = 2 + Math.random() * 4;
-                this.type = type;
-                this.color = color;
-                this.angle = Math.random() * Math.PI * 2;
-                this.spin = (Math.random() - 0.5) * 0.2;
-            }
-            
-            update() {
-                this.x += this.vx;
-                this.y += this.vy;
-                this.vy += 0.1; // Gravity
-                this.vx *= 0.99; // Air resistance
-                this.life -= this.decay;
-                this.angle += this.spin;
-                return this.life > 0;
-            }
-            
-            draw(ctx) {
-                ctx.save();
-                ctx.globalAlpha = this.life;
-                ctx.translate(this.x, this.y);
-                ctx.rotate(this.angle);
-                
-                if (this.type === 'sparkle') {
-                    ctx.fillStyle = this.color;
-                    ctx.fillRect(-this.size/2, -this.size/2, this.size, this.size);
-                } else if (this.type === 'heart') {
-                    ctx.fillStyle = this.color;
-                    ctx.font = `${this.size * 2}px serif`;
-                    ctx.textAlign = 'center';
-                    ctx.fillText('♥', 0, this.size/2);
-                } else if (this.type === 'star') {
-                    ctx.fillStyle = this.color;
-                    ctx.font = `${this.size * 2}px serif`;
-                    ctx.textAlign = 'center';
-                    ctx.fillText('✨', 0, this.size/2);
-                } else {
-                    ctx.fillStyle = this.color;
-                    ctx.beginPath();
-                    ctx.arc(0, 0, this.size, 0, Math.PI * 2);
-                    ctx.fill();
-                }
-                
-                ctx.restore();
-            }
-        }
-        
-        function createEmotionParticles(emotion, intensity) {
-            const centerX = particleCanvas.width / 2;
-            const centerY = particleCanvas.height / 2;
-            const count = Math.floor(intensity / 10) + 3;
-            
-            const emotionConfigs = {
-                'happy': { type: 'sparkle', color: '#FFD700', spread: 40 },
-                'excited': { type: 'star', color: '#FF6B6B', spread: 60 },
-                'love': { type: 'heart', color: '#FF69B4', spread: 30 },
-                'surprised': { type: 'sparkle', color: '#00FFFF', spread: 80 },
-                'thinking': { type: 'circle', color: '#9370DB', spread: 20 },
-                'sad': { type: 'circle', color: '#4169E1', spread: 15 },
-                'angry': { type: 'sparkle', color: '#FF4500', spread: 50 },
-                'sleepy': { type: 'circle', color: '#DDA0DD', spread: 10 }
-            };
-            
-            const config = emotionConfigs[emotion] || emotionConfigs['happy'];
-            
-            for (let i = 0; i < count; i++) {
-                const angle = (Math.PI * 2 * i) / count + Math.random() * 0.5;
-                const distance = Math.random() * config.spread;
-                const x = centerX + Math.cos(angle) * distance;
-                const y = centerY + Math.sin(angle) * distance;
-                
-                particles.push(new Particle(x, y, config.type, config.color));
-            }
-        }
-        
-        function updateParticles() {
-            particleCtx.clearRect(0, 0, particleCanvas.width, particleCanvas.height);
-            
-            for (let i = particles.length - 1; i >= 0; i--) {
-                const particle = particles[i];
-                if (!particle.update()) {
-                    particles.splice(i, 1);
-                } else {
-                    particle.draw(particleCtx);
-                }
-            }
-        }
-        
-        function updateState(state) {
-            if (state && state !== currentState) {
-                currentState = state;
-                
-                // Update UI
-                const stateEmojis = {
-                    'idle': '💤', 'thinking': '🤔', 'generating': '⚡',
-                    'speaking': '🔊', 'error': '❌', 'loading': '⏳',
-                    'pre_thinking': '🧠', 'post_response': '✅', 'farewell': '👋'
-                };
-                
-                const emoji = stateEmojis[state] || '💤';
-                const stateName = state.replace('_', ' ').split(' ').map(word => 
-                    word.charAt(0).toUpperCase() + word.slice(1)
-                ).join(' ');
-                document.getElementById('currentState').textContent = `${emoji} ${stateName}`;
-                
-                // Update avatar display class for animations
-                const avatarDisplay = document.getElementById('avatarDisplay');
-                avatarDisplay.className = 'avatar-display ' + state;
-                
-                // Show/hide state overlay with specific icons and progress
-                updateStateOverlay(state);
-                
-                console.log(`State updated: ${state}`);
-            }
-        }
-        
-        function updateStateOverlay(state) {
-            const overlay = document.getElementById('stateOverlay');
-            const icon = document.getElementById('stateIcon');
-            const progressBar = document.getElementById('progressBar');
-            const progressFill = document.getElementById('progressFill');
-            
-            // State-specific overlays
-            const stateConfigs = {
-                'pre_thinking': { icon: '🧠', showProgress: false, show: true },
-                'thinking': { icon: '💭', showProgress: true, show: true },
-                'generating': { icon: '⚡', showProgress: true, show: true },
-                'speaking': { icon: '🗣️', showProgress: false, show: true },
-                'post_response': { icon: '✅', showProgress: false, show: true },
-                'error': { icon: '❌', showProgress: false, show: true },
-                'loading': { icon: '⏳', showProgress: true, show: true },
-                'farewell': { icon: '👋', showProgress: false, show: true },
-                'idle': { show: false }
-            };
-            
-            const config = stateConfigs[state] || { show: false };
-            
-            if (config.show) {
-                overlay.style.display = 'flex';
-                icon.textContent = config.icon;
-                
-                if (config.showProgress) {
-                    progressBar.style.display = 'block';
-                    // Simulate progress for demo
-                    animateProgress();
-                } else {
-                    progressBar.style.display = 'none';
-                }
-            } else {
-                overlay.style.display = 'none';
-            }
-        }
-        
-        function animateProgress() {
-            const progressFill = document.getElementById('progressFill');
-            let progress = 0;
-            
-            const animate = () => {
-                if (currentState === 'thinking' || currentState === 'generating' || currentState === 'loading') {
-                    progress += Math.random() * 15 + 5; // Random increment
-                    if (progress > 100) progress = 100;
-                    
-                    progressFill.style.width = progress + '%';
-                    
-                    if (progress < 100) {
-                        setTimeout(animate, 300 + Math.random() * 500);
-                    }
-                }
-            };
-            
-            animate();
-        }
-        
-        function updateStyle(style, color) {
-            if (style && style !== currentStyle) {
-                currentStyle = style;
-                
-                const styleEmojis = {
-                    'robot': '🤖', 'organic': '🌿', 'crystal': '💎',
-                    'ghost': '👻', 'energy': '⚡', 'cute': '🐣'
-                };
-                
-                const emoji = styleEmojis[style] || '🤖';
-                const styleName = style.charAt(0).toUpperCase() + style.slice(1);
-                document.getElementById('currentStyle').textContent = `${emoji} ${styleName}`;
-                
-                generateAvatar();
-            }
-            
-            if (color && color !== currentColor) {
-                currentColor = color;
-                generateAvatar();
-            }
-        }
-        
-        function updateConnectionStatus(connected) {
-            const statusElement = document.getElementById('connectionStatus');
-            const wsStatusElement = document.getElementById('wsStatus');
-            
-            if (connected) {
-                statusElement.className = 'connection-status connected';
-                wsStatusElement.textContent = 'Connected';
-            } else {
-                statusElement.className = 'connection-status disconnected';
-                wsStatusElement.textContent = 'Disconnected';
-            }
-        }
-        
-        function updateMessage(message) {
-            document.getElementById('messageDisplay').textContent = message;
-        }
-        
-        function updateProgress(stage, progress, tokens, message) {
-            // Update progress bar in state overlay
-            const progressFill = document.getElementById('progressFill');
-            if (progressFill) {
-                progressFill.style.width = progress + '%';
-            }
-            
-            // Update token counter
-            const tokenStatus = document.getElementById('tokenStatus');
-            const tokenText = document.getElementById('currentTokens');
-            
-            if (tokens > 0) {
-                tokenStatus.style.display = 'block';
-                tokenText.textContent = `🎯 ${tokens} tokens`;
-                
-                // Add active class for visual feedback
-                tokenStatus.classList.add('active');
-                setTimeout(() => tokenStatus.classList.remove('active'), 300);
-            } else if (stage === 'complete') {
-                // Hide token counter after completion
-                setTimeout(() => {
-                    tokenStatus.style.display = 'none';
-                }, 2000);
-            }
-            
-            // Update message if provided
-            if (message) {
-                updateMessage(message);
-            }
-            
-            console.log(`Progress: ${stage} ${progress}% (${tokens} tokens)`);
-        }
-        
-        // Avatar generation
-        function generateAvatar() {
-            const pixelSize = 16;
-            const gridSize = 16;
-            
-            // Clear canvas
-            ctx.fillStyle = '#2D2D2D';
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-            
-            // Draw base shape based on style
-            drawAvatarShape(ctx, pixelSize, gridSize);
-            
-            // Apply emotion
-            drawEmotion(ctx, pixelSize, gridSize);
-            
-            frameCount++;
-            document.getElementById('frameCount').textContent = frameCount;
-        }
-        
-        function drawAvatarShape(ctx, pixelSize, gridSize) {
-            ctx.fillStyle = currentColor;
-            
-            switch (currentStyle) {
-                case 'robot':
-                    drawRobot(ctx, pixelSize, gridSize);
-                    break;
-                case 'organic':
-                    drawOrganic(ctx, pixelSize, gridSize);
-                    break;
-                case 'crystal':
-                    drawCrystal(ctx, pixelSize, gridSize);
-                    break;
-                case 'ghost':
-                    drawGhost(ctx, pixelSize, gridSize);
-                    break;
-                case 'energy':
-                    drawEnergy(ctx, pixelSize, gridSize);
-                    break;
-                case 'cute':
-                    drawCute(ctx, pixelSize, gridSize);
-                    break;
-                default:
-                    drawRobot(ctx, pixelSize, gridSize);
-            }
-        }
-        
-        function drawRobot(ctx, pixelSize, gridSize) {
-            // Head outline
-            for (let x = 4; x < 12; x++) {
-                for (let y = 2; y < 10; y++) {
-                    if (y === 2 || y === 9 || x === 4 || x === 11) {
-                        ctx.fillRect(x * pixelSize, y * pixelSize, pixelSize, pixelSize);
-                    }
-                }
-            }
-            
-            // Fill head
-            ctx.fillRect(5 * pixelSize, 3 * pixelSize, 6 * pixelSize, 6 * pixelSize);
-            
-            // Body
-            for (let x = 5; x < 11; x++) {
-                for (let y = 10; y < 14; y++) {
-                    ctx.fillRect(x * pixelSize, y * pixelSize, pixelSize, pixelSize);
-                }
-            }
-            
-            // Antenna
-            ctx.fillRect(7 * pixelSize, pixelSize, pixelSize, pixelSize);
-            ctx.fillRect(8 * pixelSize, pixelSize, pixelSize, pixelSize);
-            ctx.fillRect(7 * pixelSize, 0, pixelSize, pixelSize);
-            ctx.fillRect(8 * pixelSize, 0, pixelSize, pixelSize);
-        }
-        
-        function drawOrganic(ctx, pixelSize, gridSize) {
-            // Circular organic shape
-            const centerX = 8;
-            const centerY = 8;
-            const radius = 5;
-            
-            for (let x = 0; x < gridSize; x++) {
-                for (let y = 0; y < gridSize; y++) {
-                    const distance = Math.sqrt(Math.pow(x - centerX, 2) + Math.pow(y - centerY, 2));
-                    if (distance <= radius) {
-                        ctx.fillRect(x * pixelSize, y * pixelSize, pixelSize, pixelSize);
-                    }
-                }
-            }
-        }
-        
-        function drawCrystal(ctx, pixelSize, gridSize) {
-            // Diamond shape
-            const centerX = 8;
-            const centerY = 8;
-            
-            for (let x = 0; x < gridSize; x++) {
-                for (let y = 0; y < gridSize; y++) {
-                    const distance = Math.abs(x - centerX) + Math.abs(y - centerY);
-                    if (distance <= 6) {
-                        ctx.fillRect(x * pixelSize, y * pixelSize, pixelSize, pixelSize);
-                    }
-                }
-            }
-        }
-        
-        function drawGhost(ctx, pixelSize, gridSize) {
-            // Ghost shape
-            for (let x = 4; x < 12; x++) {
-                for (let y = 3; y < 13; y++) {
-                    if (y < 10 || (y >= 10 && (x % 2 === 0))) {
-                        ctx.fillRect(x * pixelSize, y * pixelSize, pixelSize, pixelSize);
-                    }
-                }
-            }
-        }
-        
-        function drawEnergy(ctx, pixelSize, gridSize) {
-            // Lightning bolt shape
-            const bolt = [
-                [7, 2], [8, 2],
-                [6, 3], [7, 3], [8, 3],
-                [5, 4], [6, 4], [7, 4],
-                [6, 5], [7, 5], [8, 5],
-                [7, 6], [8, 6], [9, 6],
-                [8, 7], [9, 7], [10, 7],
-                [7, 8], [8, 8], [9, 8],
-                [6, 9], [7, 9], [8, 9],
-                [7, 10], [8, 10],
-                [8, 11], [9, 11],
-                [9, 12], [10, 12]
-            ];
-            
-            bolt.forEach(([x, y]) => {
-                ctx.fillRect(x * pixelSize, y * pixelSize, pixelSize, pixelSize);
-            });
-        }
-        
-        function drawCute(ctx, pixelSize, gridSize) {
-            // Round cute shape with ears
-            // Main body
-            for (let x = 5; x < 11; x++) {
-                for (let y = 5; y < 11; y++) {
-                    ctx.fillRect(x * pixelSize, y * pixelSize, pixelSize, pixelSize);
-                }
-            }
-            
-            // Ears
-            ctx.fillRect(4 * pixelSize, 3 * pixelSize, pixelSize * 2, pixelSize * 2);
-            ctx.fillRect(10 * pixelSize, 3 * pixelSize, pixelSize * 2, pixelSize * 2);
-        }
-        
-        function drawEmotion(ctx, pixelSize, gridSize) {
-            const emotion = pixelEmotions[currentEmotion] || pixelEmotions.happy;
-            const intensity = emotionIntensity / 100;
-            
-            // Eyes
-            ctx.fillStyle = '#FFFFFF';
-            const eyeY = 5;
-            
-            for (let i = 0; i < emotion.eyes[0].length; i++) {
-                if (emotion.eyes[Math.floor(intensity + 0.5)][i]) {
-                    const x = i % 4;
-                    const y = Math.floor(i / 4);
-                    ctx.fillRect((5 + x) * pixelSize, (eyeY + y) * pixelSize, pixelSize, pixelSize);
-                    ctx.fillRect((8 + x) * pixelSize, (eyeY + y) * pixelSize, pixelSize, pixelSize);
-                }
-            }
-            
-            // Mouth
-            const mouthY = 7;
-            for (let i = 0; i < emotion.mouth[0].length; i++) {
-                if (emotion.mouth[Math.floor(intensity + 0.5)][i]) {
-                    const x = i % 4;
-                    const y = Math.floor(i / 4);
-                    ctx.fillRect((6 + x) * pixelSize, (mouthY + y) * pixelSize, pixelSize, pixelSize);
-                }
-            }
-        }
-        
-        // Animation loop
-        function startAnimation() {
-            function animate() {
-                animationState.time += 0.016; // ~60fps
-                
-                // Breathing effect
-                animationState.breathing = Math.sin(animationState.time * 1.2) * 0.02;
-                
-                // Apply breathing to canvas
-                const scale = 1 + animationState.breathing;
-                canvas.style.transform = `scale(${scale})`;
-                
-                // Update particles
-                updateParticles();
-                
-                // Update frame counter
-                frameCount++;
-                document.getElementById('frameCount').textContent = frameCount;
-                
-                animationFrame = requestAnimationFrame(animate);
-            }
-            
-            animate();
-        }
-        
-        // Initialize when page loads
-        window.onload = init;
-        
-        // Cleanup on page unload
-        window.onbeforeunload = function() {
-            if (websocket) {
-                websocket.close();
-            }
-            if (animationFrame) {
-                cancelAnimationFrame(animationFrame);
-            }
-        };
     </script>
 </body>
 </html>

@@ -33,7 +33,8 @@ from cli_animations import CLIAnimator, AnimationType
 try:
     from avatar_server import (
         start_avatar_server, stop_avatar_server, is_avatar_server_running,
-        send_avatar_emotion, send_avatar_state, send_avatar_progress, get_avatar_server_status
+        send_avatar_emotion, send_avatar_state, send_avatar_progress, get_avatar_server_status,
+        send_chat_ai_start, send_chat_ai_chunk, send_chat_ai_complete, send_sound_trigger, send_metrics_update
     )
     from avatar_controller import AvatarController, AvatarEmotion, AvatarState as AvatarServerState
     AVATAR_AVAILABLE = True
@@ -256,6 +257,11 @@ class M1K3CLI:
         # Send pre-thinking state - user just submitted input
         self.send_avatar_update(user_input, "pre_thinking")
         
+        # Send user message to avatar dashboard
+        if AVATAR_AVAILABLE and is_avatar_server_running():
+            # User message is handled by the dashboard itself, but we can trigger sounds
+            send_sound_trigger("message_sent")
+        
         # Handle special commands
         if user_input.lower() in ['quit', 'exit', 'q']:
             goodbye_msg = "Goodbye!"
@@ -350,6 +356,11 @@ class M1K3CLI:
         
         self.start_animated_status("Generating response...", "generating")
         self.send_avatar_update("", "generating")
+        
+        # Notify avatar dashboard that AI is starting to respond
+        if AVATAR_AVAILABLE and is_avatar_server_running():
+            send_chat_ai_start()
+        
         time.sleep(0.5)  # Brief pause before starting generation
         self.stop_animated_status()
         
@@ -373,6 +384,10 @@ class M1K3CLI:
                 full_response += token
                 token_count += 1
                 
+                # Send token to avatar dashboard
+                if AVATAR_AVAILABLE and is_avatar_server_running():
+                    send_chat_ai_chunk(token)
+                
                 # Send progress updates every few tokens
                 if AVATAR_AVAILABLE and is_avatar_server_running() and token_count % 5 == 0:
                     progress = min((token_count / estimated_max_tokens) * 100, 95)
@@ -381,8 +396,9 @@ class M1K3CLI:
             print()  # Final newline
             self.set_avatar_state(AvatarState.IDLE)
             
-            # Send completion progress
+            # Notify avatar dashboard that AI response is complete
             if AVATAR_AVAILABLE and is_avatar_server_running():
+                send_chat_ai_complete()
                 send_avatar_progress("complete", 100, token_count, f"Response complete! {token_count} tokens generated.")
             
             # Send avatar emotion update based on response
@@ -958,6 +974,16 @@ Available styles: robot, organic, crystal, ghost, energy, cute"""
         print(f"   🔒 Privacy score: {eco_metrics['privacy_score']}")
         print(f"   📡 Data transmitted: {eco_metrics['data_transmitted']}")
         print(f"   💬 Responses generated: {eco_metrics['responses_count']}")
+        
+        # Send metrics to avatar dashboard
+        if AVATAR_AVAILABLE and is_avatar_server_running():
+            avatar_metrics = {
+                "energy_saved": eco_metrics['energy_saved_kwh'],
+                "water_saved": eco_metrics['water_saved_gallons'].replace(' gallons', '').replace(' ml', ''),
+                "co2_saved": eco_metrics['co2_saved_grams'].replace('g', ''),
+                "message_count": eco_metrics['responses_count']
+            }
+            send_metrics_update(avatar_metrics)
 
 def main():
     parser = argparse.ArgumentParser(description="M1K3 Local AI CLI with Voice")
