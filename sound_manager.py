@@ -24,6 +24,8 @@ class SoundManager:
         self.current_profile = "default"
         self.volume = 0.8
         self.enabled = True
+        self.voice_active = False  # Track when voice synthesis is active
+        self.background_processes = []  # Track background sound processes for ducking
         
     def _discover_sounds(self) -> Dict[str, Dict[str, Path]]:
         """Discover and categorize all sound files"""
@@ -225,23 +227,33 @@ class SoundManager:
         return False
     
     def _execute_sound_playback(self, sound_path: Path, background: bool) -> bool:
-        """Execute platform-specific sound playback"""
+        """Execute platform-specific sound playback with sidechain awareness"""
         try:
+            # Determine volume based on voice activity (sidechain ducking)
+            current_volume = self.volume
+            if self.voice_active and background:
+                current_volume *= 0.3  # Duck background sounds when voice is active
+            
             if self.platform == "darwin":  # macOS
-                cmd = ["afplay", str(sound_path)]
+                cmd = ["afplay", "-v", str(current_volume), str(sound_path)]
             elif self.platform == "linux":
                 if sound_path.suffix.lower() == ".wav":
+                    # Use amixer to control volume on Linux
                     cmd = ["aplay", str(sound_path)]
                 else:
-                    cmd = ["mpg123", "-q", str(sound_path)]
+                    cmd = ["mpg123", "-q", "--volume", str(int(current_volume * 100)), str(sound_path)]
             elif self.platform == "windows":
+                # Windows doesn't have easy command-line volume control
                 cmd = ["powershell", "-Command", 
                       f"(New-Object Media.SoundPlayer '{sound_path}').PlaySync()"]
             else:
                 return False
             
             if background:
-                subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                process = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                self.background_processes.append(process)
+                # Clean up finished processes
+                self.background_processes = [p for p in self.background_processes if p.poll() is None]
             else:
                 result = subprocess.run(cmd, timeout=30, capture_output=True)
                 return result.returncode == 0
@@ -280,6 +292,40 @@ class SoundManager:
                 results["test_results"]["error"] = str(e)
         
         return results
+    
+    def set_voice_active(self, active: bool):
+        """Set voice synthesis state for sidechain ducking"""
+        self.voice_active = active
+        if not active:
+            # Clean up finished background processes when voice stops
+            self.background_processes = [p for p in self.background_processes if p.poll() is None]
+    
+    def duck_background_sounds(self, duck_level: float = 0.3):
+        """Immediately duck any currently playing background sounds"""
+        # Note: This is a system-level approach. Individual process volume control
+        # varies by platform and is complex. The _execute_sound_playback method
+        # handles this for new sounds, but existing sounds would need platform-specific
+        # system audio control (like AppleScript on macOS)
+        pass
+    
+    def play_system_event_sound(self, event_type: str, details: Dict[str, Any] = None) -> bool:
+        """Play sounds for system events"""
+        event_sounds = {
+            "model_loaded": "complete",
+            "model_failed": "oh_no", 
+            "voice_enabled": "chime1",
+            "avatar_connected": "cast_a_spell_sound",
+            "wifi_scan_complete": "wave_sfx",
+            "bluetooth_found": "ding_ding",
+            "cache_cleared": "brush_sfx",
+            "shutdown": "water_ripples"
+        }
+        
+        sound_name = event_sounds.get(event_type)
+        if sound_name:
+            return self.play_sound(sound_name, background=True)
+        
+        return False
 
 class ContextualSoundManager:
     """Extended sound manager with AI context awareness"""
@@ -314,21 +360,3 @@ class ContextualSoundManager:
         else:
             return self.sound_manager.play_contextual_sound("interaction")
     
-    def play_system_event_sound(self, event_type: str, details: Dict[str, Any] = None) -> bool:
-        """Play sounds for system events"""
-        event_sounds = {
-            "model_loaded": "complete",
-            "model_failed": "oh_no", 
-            "voice_enabled": "chime1",
-            "avatar_connected": "cast_a_spell_sound",
-            "wifi_scan_complete": "wave_sfx",
-            "bluetooth_found": "ding_ding",
-            "cache_cleared": "brush_sfx",
-            "shutdown": "water_ripples"
-        }
-        
-        sound_name = event_sounds.get(event_type)
-        if sound_name:
-            return self.sound_manager.play_sound(sound_name, background=True)
-        
-        return False

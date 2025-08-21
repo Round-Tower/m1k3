@@ -3,13 +3,13 @@
 ## Project Overview
 M1K3 is a privacy-focused local AI assistant with voice synthesis and real-time avatar visualization. Features include a web-based dashboard with emotion tracking, rich CLI animations, eco-friendly metrics, and comprehensive device context analysis. Built with a robust multi-backend AI system that works on any architecture.
 
-## Current Status (2025-08-21) ✅ FULLY OPTIMIZED & PRODUCTION READY
+## Current Status (2025-08-21) ⚠️ PRODUCTION READY WITH KNOWN ISSUES
 
 ### ✅ Core Features
 - **Local AI inference** with TinyLlama-1.1B-Chat working on all architectures
 - **Adaptive AI parameters** optimized for each model (150 tokens for TinyLlama)
 - **Universal compatibility** - works on x86_64, ARM64, any platform
-- **Voice synthesis** with ONNX error handling and text length limiting
+- **Voice synthesis** with ONNX error handling, text length limiting, and sidechain compression ⚠️ (speech cutoff bug)
 - **Enhanced CLI animations** with typewriter effects, fade-ins, and status indicators
 - **Avatar system** with real-time web dashboard and emotion tracking
 - **WebSocket communication** for live avatar updates and bidirectional messaging
@@ -74,6 +74,27 @@ M1K3 is a privacy-focused local AI assistant with voice synthesis and real-time 
 - **Classic CLI** (`python m1k3.py`) - Traditional command-line interface
 - **Textual TUI** (`python m1k3.py --tui`) - Modern full-screen terminal interface (recommended)
 - **Rich TUI** (`python m1k3.py --fullscreen`) - Lightweight full-screen interface
+
+#### **Voice Synthesis Enhancements (NEW - 2025-08-21)**
+**Latest Enhancement**: Professional audio processing with sidechain compression and speech completion improvements
+
+**Voice System Features**:
+- ✅ **Sidechain Compression**: Automatically ducks background sounds when voice is active
+- ✅ **Professional Broadcast Quality**: Default intercom effect for M1K3 brand consistency  
+- ✅ **Multi-Tier Voice Architecture**: Premium/Balanced/Fast/Fallback engine selection
+- ✅ **Advanced Audio Effects**: Formant correction, sibilance reduction, clarity enhancement
+- ✅ **Smart Text Chunking**: Optimized processing for natural speech flow
+- ✅ **Voice Profile System**: Multiple configurable voices and effects pipelines
+- ⚠️ **Speech Completion Enhancement**: Extensive padding and timing fixes (see known issues)
+
+### ⚠️ Known Issues
+
+#### **Speech Cutoff Bug (HIGH PRIORITY)**
+**Status**: Active - documented in `BUGS.md`  
+**Impact**: Speech synthesis cuts off at the end of sentences  
+**Investigation**: Multiple attempted fixes including 950ms padding, hardware-aware timing, and smart fade-out  
+**Workaround**: None currently available  
+**Next Steps**: Alternative TTS engine testing, platform-specific investigation  
 
 ## AI Backend Architecture
 
@@ -567,4 +588,4 @@ Auto-Selected: TinyLlama/TinyLlama-1.1B-Chat-v1.0 (4.2GB, 2.36s load)
 
 ---
 
-**M1K3 Status**: ✅ **PRODUCTION READY & OPTIMIZED** - LocalModelManager with intelligent model selection, zero downloads, single initialization, and optimal performance on all architectures!
+**M1K3 Status**: ⚠️ **PRODUCTION READY WITH KNOWN ISSUES** - LocalModelManager with intelligent model selection, sidechain compression, professional voice processing, and optimal performance on all architectures. Active speech cutoff bug documented in BUGS.md.

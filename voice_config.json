@@ -1,85 +1,148 @@
 {
-  "default_persona": "assistant",
-  "audio_settings": {
-    "sample_rate": 25000,
-    "normalization_level": 0.85,
-    "enable_effects": true,
-    "speed_factor": 1.2
+  "default_profile": "broadcast",
+  "global_settings": {
+    "sample_rate": 24000,
+    "chunk_size": 300,
+    "text_overlap_words": 1,
+    "inter_chunk_silence": 0.03,
+    "speed_optimization": true,
+    "quality_tier": "balanced"
   },
-  "personas": {
+  "voice_profiles": {
     "natural": {
       "name": "Natural",
-      "description": "Pure, unprocessed voice with maximum clarity",
-      "voice": {
-        "intercom_filter": false,
-        "compression": false,
-        "gate": false
-      },
-      "text_replacements": {}
+      "description": "Pure, unprocessed voice with maximum clarity.",
+      "kitten_voice": "expr-voice-2-f",
+      "effects_pipeline": [
+        {
+          "module": "NormalizationEffect",
+          "config": {
+            "level": 0.85
+          }
+        }
+      ]
     },
     "assistant": {
-      "name": "Assistant", 
-      "description": "Clean, clear voice with light processing (default)",
-      "voice": {
-        "intercom_filter": false,
-        "compression": true,
-        "gate": false
-      },
-      "text_replacements": {}
-    },
-    "pa_system": {
-      "name": "PA System",
-      "description": "Public address system voice with gentle filtering",
-      "voice": {
-        "intercom_filter": true,
-        "compression": true,
-        "gate": false
-      },
-      "text_replacements": {}
+      "name": "Assistant",
+      "description": "Clean, clear voice with light processing.",
+      "kitten_voice": "expr-voice-4-f",
+      "effects_pipeline": [
+        {
+          "module": "CompressionEffect",
+          "config": {
+            "threshold": 0.6,
+            "ratio": 0.4
+          }
+        },
+        {
+          "module": "NormalizationEffect",
+          "config": {
+            "level": 0.8
+          }
+        }
+      ]
     },
     "broadcast": {
       "name": "Broadcast",
-      "description": "Radio-quality voice with professional sound",
-      "voice": {
-        "intercom_filter": true,
-        "compression": true,
-        "gate": false
-      },
-      "text_replacements": {
-        "Loading": "Stand by",
-        "Error": "Technical difficulty"
-      }
+      "description": "Radio-quality voice with professional sound and sidechain compression.",
+      "kitten_voice": "expr-voice-2-m",
+      "effects_pipeline": [
+        {
+          "module": "IntercomEffect",
+          "config": {
+            "low_freq": 350,
+            "high_freq": 3500
+          }
+        },
+        {
+          "module": "SidechainCompressionEffect",
+          "config": {
+            "ducking_threshold": 0.12,
+            "reduction_ratio": 0.3,
+            "attack_ms": 8,
+            "release_ms": 120
+          }
+        },
+        {
+          "module": "CompressionEffect",
+          "config": {
+            "threshold": 0.5,
+            "ratio": 0.3
+          }
+        },
+        {
+          "module": "NormalizationEffect",
+          "config": {
+            "level": 0.9
+          }
+        }
+      ]
     },
     "terminal": {
       "name": "Terminal",
-      "description": "Retro computer terminal voice",
-      "voice": {
-        "intercom_filter": true,
-        "compression": false,
-        "gate": false
-      },
-      "text_replacements": {
-        "Loading": "Processing",
-        "Error": "System fault",
-        "Ready": "System ready"
-      }
+      "description": "Retro computer terminal voice with a distinct filter.",
+      "kitten_voice": "expr-voice-3-m",
+      "effects_pipeline": [
+        {
+          "module": "IntercomEffect",
+          "config": {
+            "low_freq": 600,
+            "high_freq": 2800
+          }
+        },
+        {
+          "module": "NormalizationEffect",
+          "config": {
+            "level": 0.7
+          }
+        }
+      ]
+    },
+    "premium": {
+      "name": "Premium",
+      "description": "Ultra-clear voice with advanced speech processing.",
+      "kitten_voice": "expr-voice-2-f",
+      "effects_pipeline": [
+        {
+          "module": "SibilanceReductionEffect",
+          "config": {
+            "reduction_factor": 0.75,
+            "freq_low": 4000,
+            "freq_high": 8000
+          }
+        },
+        {
+          "module": "FormantCorrectionEffect",
+          "config": {
+            "shift_factor": 0.98
+          }
+        },
+        {
+          "module": "ClarityEnhancementEffect",
+          "config": {
+            "gate_threshold": 0.01
+          }
+        },
+        {
+          "module": "CompressionEffect",
+          "config": {
+            "threshold": 0.6,
+            "ratio": 0.3
+          }
+        },
+        {
+          "module": "ClippingProtectionEffect",
+          "config": {
+            "threshold": 0.9
+          }
+        },
+        {
+          "module": "NormalizationEffect",
+          "config": {
+            "level": 0.8
+          }
+        }
+      ]
     }
-  },
-  "filter_settings": {
-    "bandpass": {
-      "low_freq": 200,
-      "high_freq": 5000,
-      "order": 2
-    }
-  },
-  "compression_settings": {
-    "threshold": 0.7,
-    "ratio": 0.5,
-    "attack_time": 0.003,
-    "release_time": 0.100
-  },
-  "gate_settings": {
-    "threshold": 0.02,
-    "fade_percent": 0.01
   }
 }
