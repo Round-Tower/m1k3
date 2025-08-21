@@ -569,6 +569,27 @@ class AvatarServer:
                 self.logger.warning(f"Failed to send metrics to client {client['id']}: {e}")
                 self._remove_client(client)
     
+    def send_sound_trigger(self, sound_name):
+        """Trigger a sound effect on all connected clients"""
+        if not self.running or not self.clients:
+            return
+        
+        data = {
+            "type": "sound",
+            "sound": sound_name,
+            "timestamp": time.time()
+        }
+        
+        message_json = json.dumps(data)
+        self._log_sent_message(data)
+        
+        for client in self.clients[:]:
+            try:
+                self.websocket_server.send_message(client, message_json)
+            except Exception as e:
+                self.logger.warning(f"Failed to send sound trigger to client {client['id']}: {e}")
+                self._remove_client(client)
+    
     def get_message_statistics(self):
         """Get message statistics"""
         uptime = time.time() - self.message_stats['start_time']
@@ -612,7 +633,7 @@ def get_avatar_server():
     """Get or create the global avatar server instance"""
     global _avatar_server
     if _avatar_server is None:
-        _avatar_server = AvatarServer()
+        _avatar_server = AvatarServer(verbose=True)  # Enable verbose logging for debugging
     return _avatar_server
 
 def start_avatar_server():

@@ -12,3 +12,11 @@ websocket-server>=0.6.4
 rich>=13.0.0
 psutil>=5.9.0
 textual>=0.47.0
+
+# Voice synthesis enhancements
+TTS>=0.22.0
+soundfile>=0.12.1
+kittentts>=0.1.0
+
+# Audio processing (optional)
+scipy>=1.10.0

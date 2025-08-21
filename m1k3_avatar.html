@@ -1045,6 +1045,12 @@
         let currentColor = '#E25303';
         let emotionIntensity = 50;
         let frameCount = 0;
+        
+        // Avatar style object
+        let avatarStyle = {
+            type: 'robot',
+            color: '#E25303'
+        };
 
         // Canvas contexts
         let canvas = null;
@@ -1061,7 +1067,7 @@
         document.addEventListener('DOMContentLoaded', function() {
             initializeDebugConsole();
             initializeCanvas();
-            initializeWebSocket();
+            connectWebSocket();  // Fixed: was initializeWebSocket()
             initializeChat();
             initializeSpeechRecognition();
             initializeAudio();
@@ -1207,6 +1213,423 @@
                     console.log('Unknown message type:', data.type);
             }
         }
+
+        // Missing initialization functions
+        function initializeCanvas() {
+            canvas = document.getElementById('avatarCanvas');
+            if (canvas) {
+                ctx = canvas.getContext('2d');
+                canvas.width = 256;
+                canvas.height = 256;
+            }
+            
+            particleCanvas = document.getElementById('particleCanvas');
+            if (particleCanvas) {
+                particleCtx = particleCanvas.getContext('2d');
+                particleCanvas.width = 256;
+                particleCanvas.height = 256;
+            }
+        }
+
+        function initializeChat() {
+            const chatInput = document.querySelector('.chat-input');
+            const sendBtn = document.querySelector('.send-btn');
+            
+            if (chatInput) {
+                chatInput.addEventListener('keypress', function(e) {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        sendChatMessage();
+                    }
+                });
+            }
+            
+            if (sendBtn) {
+                sendBtn.addEventListener('click', sendChatMessage);
+            }
+        }
+
+        function initializeSpeechRecognition() {
+            // Speech recognition setup (placeholder for now)
+            if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+                const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+                recognition = new SpeechRecognition();
+                recognition.continuous = false;
+                recognition.interimResults = false;
+                recognition.lang = 'en-US';
+            }
+        }
+
+        function initializeAudio() {
+            // Initialize Web Audio API for sound effects (delayed until user interaction)
+            // AudioContext will be created when first sound is played to avoid autoplay restrictions
+        }
+
+        function initializeControls() {
+            // Initialize control buttons
+            const volumeSlider = document.getElementById('volumeSlider');
+            if (volumeSlider) {
+                volumeSlider.addEventListener('input', function(e) {
+                    currentVolume = e.target.value;
+                });
+            }
+            
+            const soundToggle = document.getElementById('soundToggle');
+            if (soundToggle) {
+                soundToggle.addEventListener('click', function() {
+                    soundsEnabled = !soundsEnabled;
+                    this.textContent = soundsEnabled ? '🔊' : '🔇';
+                });
+            }
+        }
+
+        function generateAvatar() {
+            // Generate initial avatar display
+            if (!ctx) return;
+            
+            // Clear canvas
+            ctx.clearRect(0, 0, 256, 256);
+            
+            // Draw a simple avatar placeholder
+            const centerX = 128;
+            const centerY = 128;
+            const size = 80;
+            
+            // Draw avatar body (simple circle for now)
+            ctx.fillStyle = avatarStyle.color || '#E25303';
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, size/2, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Draw eyes
+            ctx.fillStyle = '#FFFFFF';
+            ctx.beginPath();
+            ctx.arc(centerX - 15, centerY - 10, 5, 0, Math.PI * 2);
+            ctx.arc(centerX + 15, centerY - 10, 5, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        function startAnimation() {
+            // Start the animation loop
+            function animate() {
+                animationState.time += 0.016; // ~60fps
+                animationState.breathing = Math.sin(animationState.time * 2) * 0.5 + 0.5;
+                
+                // Update avatar breathing effect
+                if (ctx) {
+                    generateAvatar();
+                }
+                
+                // Update particles
+                updateParticles();
+                
+                animationFrame = requestAnimationFrame(animate);
+            }
+            animate();
+        }
+
+        function startUptime() {
+            // Start uptime counter
+            setInterval(function() {
+                const elapsed = Date.now() - startTime;
+                const seconds = Math.floor(elapsed / 1000) % 60;
+                const minutes = Math.floor(elapsed / 60000) % 60;
+                const hours = Math.floor(elapsed / 3600000);
+                
+                const uptimeElement = document.getElementById('uptime');
+                if (uptimeElement) {
+                    if (hours > 0) {
+                        uptimeElement.textContent = `${hours}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+                    } else {
+                        uptimeElement.textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+                    }
+                }
+            }, 1000);
+        }
+
+        // Missing utility functions
+        function updateConnectionStatus(connected) {
+            const wsStatus = document.getElementById('wsStatus');
+            if (wsStatus) {
+                wsStatus.textContent = connected ? 'Connected' : 'Disconnected';
+                wsStatus.style.color = connected ? '#92B48B' : '#8E354A';
+            }
+        }
+
+        function updateEmotion(emotion, intensity, message) {
+            // Update avatar emotion
+            currentEmotion = emotion;
+            emotionIntensity = intensity;
+            
+            const emotionIndicator = document.getElementById('currentEmotion');
+            if (emotionIndicator) {
+                emotionIndicator.textContent = `${getEmotionEmoji(emotion)} ${emotion.charAt(0).toUpperCase() + emotion.slice(1)}`;
+            }
+            
+            // Trigger avatar redraw with new emotion
+            generateAvatar();
+            
+            // Show emotion message if provided
+            if (message) {
+                console.log('Emotion message:', message);
+            }
+        }
+
+        function updateState(state) {
+            // Update avatar state
+            const stateIndicator = document.getElementById('currentState');
+            if (stateIndicator) {
+                stateIndicator.textContent = `${getStateEmoji(state)} ${state.charAt(0).toUpperCase() + state.slice(1)}`;
+            }
+        }
+
+        function updateStyle(style, color) {
+            avatarStyle.type = style;
+            if (color) {
+                avatarStyle.color = color;
+            }
+            generateAvatar();
+        }
+        
+        function getEmotionEmoji(emotion) {
+            const emojiMap = {
+                'happy': '😊',
+                'sad': '😢', 
+                'angry': '😠',
+                'surprised': '😲',
+                'love': '😍',
+                'thinking': '🤔',
+                'sleepy': '😴',
+                'excited': '🤩'
+            };
+            return emojiMap[emotion] || '😊';
+        }
+        
+        function getStateEmoji(state) {
+            const stateMap = {
+                'idle': '💤',
+                'thinking': '🤔',
+                'generating': '⚡',
+                'speaking': '🔊',
+                'error': '❌',
+                'loading': '⏳'
+            };
+            return stateMap[state] || '💤';
+        }
+
+        function updateProgress(stage, progress, tokens, message) {
+            // Update progress indicators
+            console.log(`Progress: ${stage} - ${progress}% (${tokens} tokens)`);
+        }
+
+        function updateMetrics(data) {
+            // Update metrics display
+            console.log('Metrics update:', data);
+        }
+
+        function addMessage(message, sender) {
+            const chatMessages = document.getElementById('chatMessages');
+            if (!chatMessages) return;
+            
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${sender}-message`;
+            messageDiv.textContent = message;
+            chatMessages.appendChild(messageDiv);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+            
+            messageCount++;
+            updateMessageCount();
+        }
+
+        function appendToLastMessage(chunk) {
+            const chatMessages = document.getElementById('chatMessages');
+            if (!chatMessages) return;
+            
+            const lastMessage = chatMessages.lastElementChild;
+            if (lastMessage && lastMessage.classList.contains('ai-message')) {
+                lastMessage.textContent += chunk;
+                chatMessages.scrollTop = chatMessages.scrollHeight;
+            }
+        }
+
+        function showTypingIndicator(show) {
+            // Show/hide typing indicator
+            console.log('Typing indicator:', show);
+        }
+
+        function playSound(soundName) {
+            if (!soundsEnabled) return;
+            
+            // Play sound effect (simplified version)
+            console.log('Playing sound:', soundName);
+            
+            // Initialize AudioContext on first use (after user interaction)
+            if (!audioContext) {
+                try {
+                    audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                } catch (e) {
+                    console.log('Web Audio API not supported');
+                    return;
+                }
+            }
+            
+            // Resume AudioContext if suspended (browser autoplay policy)
+            if (audioContext && audioContext.state === 'suspended') {
+                audioContext.resume().then(() => {
+                    playActualSound(soundName);
+                }).catch(e => {
+                    console.log('Could not resume audio context:', e);
+                });
+            } else if (audioContext) {
+                playActualSound(soundName);
+            }
+        }
+        
+        function playActualSound(soundName) {
+            try {
+                // Create a simple beep
+                const oscillator = audioContext.createOscillator();
+                const gainNode = audioContext.createGain();
+                
+                oscillator.connect(gainNode);
+                gainNode.connect(audioContext.destination);
+                
+                oscillator.frequency.value = soundName === 'connect' ? 880 : 440;
+                gainNode.gain.value = currentVolume / 100 * 0.1;
+                
+                oscillator.start();
+                oscillator.stop(audioContext.currentTime + 0.1);
+            } catch (e) {
+                console.log('Sound playback error:', e);
+            }
+        }
+
+        function updateParticles() {
+            if (!particleCtx) return;
+            
+            particleCtx.clearRect(0, 0, 256, 256);
+            
+            // Update and draw particles
+            particles = particles.filter(particle => {
+                particle.y -= particle.speed;
+                particle.life -= 0.01;
+                
+                if (particle.life > 0) {
+                    particleCtx.globalAlpha = particle.life;
+                    particleCtx.fillStyle = particle.color;
+                    particleCtx.fillRect(particle.x, particle.y, particle.size, particle.size);
+                    return true;
+                }
+                return false;
+            });
+        }
+
+        function sendChatMessage() {
+            const chatInput = document.querySelector('.chat-input');
+            if (!chatInput || !chatInput.value.trim()) return;
+            
+            const message = chatInput.value.trim();
+            addMessage(message, 'user');
+            
+            // Send to server
+            sendMessage({
+                type: 'chat_user',
+                message: message
+            });
+            
+            chatInput.value = '';
+        }
+
+        function updateMessageCount() {
+            const totalMessages = document.getElementById('totalMessages');
+            if (totalMessages) {
+                totalMessages.textContent = messageCount;
+            }
+        }
+
+        // Debug Console class definition (with guard)
+        if (typeof DebugConsole === 'undefined') {
+            window.DebugConsole = class DebugConsole {
+            constructor() {
+                this.messages = [];
+                this.visible = false;
+                this.consoleElement = document.getElementById('debugConsole');
+                this.logElement = document.getElementById('debugLog');
+            }
+            
+            toggle() {
+                this.visible = !this.visible;
+                if (this.consoleElement) {
+                    this.consoleElement.style.display = this.visible ? 'block' : 'none';
+                }
+            }
+            
+            logConnection(status) {
+                this.log(`[CONNECTION] ${status}`, 'connection');
+            }
+            
+            logSent(data) {
+                this.log(`[SENT] ${data.type}: ${JSON.stringify(data)}`, 'sent');
+                this.updateStats('sent');
+            }
+            
+            logReceived(data) {
+                this.log(`[RECEIVED] ${data.type}: ${JSON.stringify(data)}`, 'received');
+                this.updateStats('received');
+            }
+            
+            logError(error) {
+                this.log(`[ERROR] ${error}`, 'error');
+                this.updateStats('error');
+            }
+            
+            log(message, type) {
+                const timestamp = new Date().toLocaleTimeString();
+                const logEntry = { timestamp, message, type };
+                this.messages.push(logEntry);
+                
+                if (this.logElement) {
+                    const entry = document.createElement('div');
+                    entry.className = `debug-entry debug-${type}`;
+                    entry.textContent = `${timestamp} ${message}`;
+                    this.logElement.appendChild(entry);
+                    this.logElement.scrollTop = this.logElement.scrollHeight;
+                }
+            }
+            
+            updateStats(type) {
+                const sentCount = document.getElementById('debugSentCount');
+                const receivedCount = document.getElementById('debugReceivedCount');
+                const errorCount = document.getElementById('debugErrorCount');
+                
+                if (type === 'sent' && sentCount) {
+                    sentCount.textContent = parseInt(sentCount.textContent) + 1;
+                } else if (type === 'received' && receivedCount) {
+                    receivedCount.textContent = parseInt(receivedCount.textContent) + 1;
+                } else if (type === 'error' && errorCount) {
+                    errorCount.textContent = parseInt(errorCount.textContent) + 1;
+                }
+            }
+            
+            clear() {
+                this.messages = [];
+                if (this.logElement) {
+                    this.logElement.innerHTML = '';
+                }
+            }
+            
+            export() {
+                const data = JSON.stringify(this.messages, null, 2);
+                const blob = new Blob([data], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `debug-log-${Date.now()}.json`;
+                a.click();
+                URL.revokeObjectURL(url);
+            }
+        } // end class DebugConsole
+        } // end if DebugConsole undefined
     </script>
 </body>
 </html>

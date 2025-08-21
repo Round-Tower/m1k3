@@ -9,6 +9,9 @@ import json
 import os
 import time
 import argparse
+import atexit
+import signal
+import sys
 from datetime import datetime
 from typing import Optional
 
@@ -42,7 +45,7 @@ from system_metrics import SystemMonitor
 
 try:
     from avatar_server import (
-        start_avatar_server, is_avatar_server_running, send_avatar_emotion,
+        start_avatar_server, stop_avatar_server, is_avatar_server_running, send_avatar_emotion,
         send_avatar_state, send_chat_ai_start, send_chat_ai_chunk, 
         send_chat_ai_complete, send_sound_trigger
     )
@@ -325,6 +328,11 @@ class M1K3TUIApp(App):
         self.session_file = ".m1k3_session.json"
         self.load_session()
         
+        # Set up cleanup handlers
+        atexit.register(self.cleanup_on_exit)
+        signal.signal(signal.SIGTERM, self._signal_handler)
+        signal.signal(signal.SIGINT, self._signal_handler)
+        
         # CSS fallback handling
         self.setup_css()
         
@@ -574,7 +582,8 @@ Features:
         """Toggle avatar server"""
         if AVATAR_AVAILABLE:
             if self.avatar_running:
-                # Stop avatar (if we had a stop function)
+                # Stop avatar server
+                stop_avatar_server()
                 self.avatar_running = False
                 self.notify("Avatar server stopped")
             else:
@@ -596,6 +605,25 @@ Features:
     def action_help(self) -> None:
         """Show help"""
         self.show_help()
+    
+    def _signal_handler(self, signum, frame):
+        """Handle signals (SIGTERM, SIGINT) for graceful shutdown"""
+        self.cleanup_on_exit()
+        sys.exit(0)
+    
+    def cleanup_on_exit(self):
+        """Clean up resources on application exit"""
+        try:
+            # Save session data
+            self.save_session()
+            
+            # Stop avatar server if running
+            if AVATAR_AVAILABLE and hasattr(self, 'avatar_running') and self.avatar_running:
+                stop_avatar_server()
+                
+        except Exception as e:
+            # Fail silently during cleanup to avoid exit issues
+            pass
     
     def setup_css(self):
         """Setup CSS with fallback to embedded styles"""

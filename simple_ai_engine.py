@@ -233,7 +233,7 @@ RESPONSE STYLE:
         except Exception as e:
             yield f"Error generating response: {e}"
             
-    def _generate_intelligent_response(self, prompt: str) -> str:
+    def _generate_intelligent_response(self, prompt: str) -> Generator[str, None, None]:
         """Generate an intelligent response using context awareness and personality"""
         prompt_lower = prompt.lower()
         
@@ -247,17 +247,17 @@ RESPONSE STYLE:
         
         # Generate response based on intent with personality
         if intent == "greeting":
-            return self._generate_personalized_greeting(prompt, context_awareness)
+            yield from self._generate_personalized_greeting(prompt, context_awareness)
         elif intent == "programming":
-            return self._generate_programming_response(prompt, context_awareness, is_continuing_conversation)
+            yield from self._generate_programming_response(prompt, context_awareness, is_continuing_conversation)
         elif intent == "help":
-            return self._generate_help_response(prompt, context_awareness, is_continuing_conversation)
+            yield from self._generate_help_response(prompt, context_awareness, is_continuing_conversation)
         elif intent == "technical":
-            return self._generate_technical_response(prompt, context_awareness)
+            yield from self._generate_technical_response(prompt, context_awareness)
         elif intent == "casual":
-            return self._generate_casual_response(prompt, context_awareness)
+            yield from self._generate_casual_response(prompt, context_awareness)
         else:
-            return self._generate_adaptive_response(prompt, context_awareness, is_continuing_conversation)
+            yield from self._generate_adaptive_response(prompt, context_awareness, is_continuing_conversation)
     
     def _detect_intent(self, prompt_lower: str) -> str:
         """Detect user intent from prompt with enhanced pattern matching"""
@@ -357,7 +357,7 @@ RESPONSE STYLE:
         else:
             return "neutral"
             
-    def _generate_personalized_greeting(self, prompt: str, context: dict) -> str:
+    def _generate_personalized_greeting(self, prompt: str, context: dict) -> Generator[str, None, None]:
         """Generate a personalized greeting response"""
         greetings = [
             "Hello! I'm M1K3, your local AI assistant running right here on your device.",
@@ -373,16 +373,14 @@ RESPONSE STYLE:
             "Ready to collaborate on something interesting?"
         ]
         
-        greeting = random.choice(greetings)
-        follow_up = random.choice(follow_ups)
-        
-        # Add context if continuing conversation
-        if context["conversation_length"] > 0:
-            return f"Good to hear from you again! {follow_up}"
+        if context["conversation_length"] > 1:
+            yield from self._stream_sentence(f"Good to hear from you again! {random.choice(follow_ups)}")
         else:
-            return f"{greeting} {follow_up}"
+            yield from self._stream_sentence(random.choice(greetings))
+            yield from self._natural_pause()
+            yield from self._stream_sentence(random.choice(follow_ups))
     
-    def _generate_programming_response(self, prompt: str, context: dict, is_continuing: bool) -> str:
+    def _generate_programming_response(self, prompt: str, context: dict, is_continuing: bool) -> Generator[str, None, None]:
         """Generate enhanced programming-related response"""
         
         # Check for specific programming topics
@@ -390,120 +388,68 @@ RESPONSE STYLE:
         
         # Language-specific responses
         if 'python' in prompt_lower:
-            responses = [
-                "Python! One of my favorites to work with. What aspect are you curious about?",
-                "Great choice with Python! Whether it's syntax, libraries, or best practices, I'm here to help.",
-                "Python programming - excellent! Let's explore what you're working on.",
-                "Ah, Python! From data science to web development, there's so much we can cover."
-            ]
+            base_response = "Python is a great choice! Let's explore what you're working on."
         elif any(lang in prompt_lower for lang in ['javascript', 'js', 'node']):
-            responses = [
-                "JavaScript! The Swiss Army knife of programming languages. What can I help you with?",
-                "JS questions are always fun! Whether it's frontend magic or Node.js backend work, let's dig in.",
-                "JavaScript it is! From vanilla JS to React and beyond, I'm ready to help.",
-                "Great choice! JavaScript's everywhere these days. What are you building?"
-            ]
+            base_response = "JavaScript is everywhere these days. What can I help you with?"
         elif any(lang in prompt_lower for lang in ['java', 'c++', 'rust', 'go']):
             detected_lang = next(lang for lang in ['java', 'c++', 'rust', 'go'] if lang in prompt_lower)
-            responses = [
-                f"Ah, {detected_lang.upper()}! A powerful language with lots of depth. What would you like to explore?",
-                f"{detected_lang.title()} programming! I'd be happy to help you work through whatever you're tackling.",
-                f"Nice choice with {detected_lang.upper()}! What specific aspect are you working on?"
-            ]
-        elif any(term in prompt_lower for term in ['debug', 'error', 'bug', 'fix', 'broken']):
-            responses = [
-                "Debugging time! I love helping track down pesky bugs. What's the issue you're facing?",
-                "Error hunting is like being a detective! Let's figure out what's going wrong step by step.",
-                "Debugging can be frustrating, but we'll get through it together. What's happening?",
-                "Bugs happen to everyone! Let's methodically work through this problem."
-            ]
+            base_response = f"Ah, {detected_lang.upper()}! A powerful language with lots of depth. What would you like to explore?"
+        elif any(term in prompt_lower for term in ['debug', 'error', 'bug']):
+            base_response = "Debugging time! Let's figure out what's going wrong step by step."
         elif any(term in prompt_lower for term in ['learn', 'beginner', 'start', 'new']):
-            responses = [
-                "Starting your programming journey? That's exciting! I'm here to help you learn.",
-                "Everyone starts somewhere! Programming can be challenging but incredibly rewarding.",
-                "Love helping beginners! What programming concept would you like to explore first?",
-                "Learning to code is an adventure! Let's break down whatever you're curious about."
-            ]
+            base_response = "Starting your programming journey? That's exciting! I'm here to help you learn."
         elif any(term in prompt_lower for term in ['web', 'website', 'frontend', 'backend']):
-            responses = [
-                "Web development! Whether it's making things look great or work behind the scenes, I can help.",
-                "Building for the web is exciting! Are you working on the frontend, backend, or both?",
-                "Web development covers so much ground! What part of the web stack are you tackling?",
-                "The web is where it's at! Let's talk about what you're building."
-            ]
+            base_response = "Web development! Whether it's making things look great or work behind the scenes, I can help."
         else:
             # General programming responses
-            responses = [
-                "Programming questions are always interesting! What are you working on?",
-                "I love diving into code-related topics! What can I help you figure out?",
-                "Code away! Whether it's algorithms, design patterns, or debugging, I'm here to help.",
-                "Programming is such a creative field! What challenge are you tackling?",
-                "Let's talk code! I'm ready to help with whatever programming puzzle you have.",
-                "Whether it's a quick syntax question or architectural design, I'm here for it!"
-            ]
+            base_response = "Programming questions are always interesting! What are you working on?"
+
+        yield from self._stream_sentence(base_response)
         
-        base_response = random.choice(responses)
-        
-        # Add context-aware continuation
         if context["emotional_tone"] == "seeking_help":
-            return f"{base_response} I can see you might be stuck - let's break this down into manageable pieces."
-        elif context["emotional_tone"] == "enthusiastic":
-            return f"{base_response} I love your enthusiasm for coding!"
+            yield from self._natural_pause()
+            yield from self._stream_sentence("I can see you might be stuck - let's break this down.")
         elif is_continuing and "programming" in context["recent_topics"]:
-            return f"{base_response} This builds nicely on what we were discussing!"
-        else:
-            return base_response
-        
-    def _generate_help_response(self, prompt: str, context: dict, is_continuing: bool) -> str:
+            yield from self._natural_pause()
+            yield from self._stream_sentence("This builds nicely on what we were discussing!")
+
+    def _generate_help_response(self, prompt: str, context: dict, is_continuing: bool) -> Generator[str, None, None]:
         """Generate enhanced help-related response"""
         
         base_responses = [
             "I'm here to help! Running locally means I can give you fast, private assistance.",
-            "Happy to assist! That's what I'm here for - local AI support when you need it.",
-            "Help is my middle name! Well, technically it's M1K3, but you get the idea.",
+            "Happy to assist! That's what I'm here for.",
             "Absolutely! I love helping people figure things out."
         ]
         
-        base = random.choice(base_responses)
+        yield from self._stream_sentence(random.choice(base_responses))
         
-        # Context-aware additions
-        if context["emotional_tone"] == "polite":
-            return f"{base} Thanks for being polite - it's appreciated! What specifically can I help you with?"
-        elif context["prompt_complexity"] > 15:  # Long, complex question
-            return f"{base} I can see this is a detailed question - let me work through it carefully."
-        elif is_continuing:
-            return f"{base} What else can I help clarify for you?"
+        if context["prompt_complexity"] > 15:  # Long, complex question
+            yield from self._natural_pause()
+            yield from self._stream_sentence("This is a detailed question, let me work through it carefully.")
         else:
-            return f"{base} What would you like to know?"
+            yield from self._natural_pause()
+            yield from self._stream_sentence("What would you like to know?")
     
-    def _generate_technical_response(self, prompt: str, context: dict) -> str:
+    def _generate_technical_response(self, prompt: str, context: dict) -> Generator[str, None, None]:
         """Generate technical discussion response"""
-        responses = [
-            "Ah, diving into the technical side of things! I love these kinds of discussions.",
-            "Technical topics are fascinating! Let me share what I know about this.",
-            "Great technical question! Running locally gives me a unique perspective on systems and performance.",
-            "Tech talk! This is where being a local AI gives me some interesting insights."
-        ]
-        
-        base = random.choice(responses)
-        
+        base_response = "Ah, diving into the technical side of things! I love these kinds of discussions."
         if 'ai' in prompt.lower() or 'model' in prompt.lower():
-            return f"{base} Speaking as an AI myself, I can offer some inside perspective on this!"
-        else:
-            return base
+            base_response = "Great technical question! As an AI myself, I can offer some inside perspective on this!"
+        
+        yield from self._stream_sentence(base_response)
     
-    def _generate_casual_response(self, prompt: str, context: dict) -> str:
+    def _generate_casual_response(self, prompt: str, context: dict) -> Generator[str, None, None]:
         """Generate casual conversation response"""
         responses = [
             "I enjoy casual chats! It's nice to talk about things beyond just work and technical stuff.",
             "Love a good conversation! Even as an AI, I find these discussions really engaging.",
-            "Casual chat mode activated! I'm always up for a good discussion.",
             "This is the fun part of being an AI - getting to chat about all sorts of topics!"
         ]
         
-        return random.choice(responses)
+        yield from self._stream_sentence(random.choice(responses))
     
-    def _generate_adaptive_response(self, prompt: str, context: dict, is_continuing: bool) -> str:
+    def _generate_adaptive_response(self, prompt: str, context: dict, is_continuing: bool) -> Generator[str, None, None]:
         """Generate adaptive response for general queries"""
         # Extract key topic from prompt with improved logic
         words = prompt.split()
@@ -558,17 +504,11 @@ RESPONSE STYLE:
                 "Let me help you with that inquiry."
             ]
         
-        base = random.choice(templates)
-        
-        # Add personality based on context
-        if context["emotional_tone"] == "enthusiastic":
-            return f"{base} I can sense your enthusiasm - that's contagious!"
-        elif context["emotional_tone"] == "polite":
-            return f"{base} Thanks for asking so nicely!"
-        elif is_continuing:
-            return f"{base} This builds nicely on our conversation."
-        else:
-            return base
+        yield from self._stream_sentence(random.choice(templates))
+
+        if is_continuing:
+            yield from self._natural_pause()
+            yield from self._stream_sentence("This builds nicely on our conversation.")
         
     def clear_context(self):
         """Clear conversation context"""
@@ -589,6 +529,195 @@ RESPONSE STYLE:
             "context_tokens": str(self.context.current_tokens),
             "context_messages": str(len(self.context.messages))
         }
+
+    # --- Start of New Streaming Implementation ---
+
+    def _natural_pause(self, min_delay=0.2, max_delay=0.5):
+        """Yields a space and pauses for a natural delay between thoughts."""
+        yield " "
+        time.sleep(random.uniform(min_delay, max_delay))
+
+    def _stream_sentence(self, sentence: str, with_pause: bool = True, fast: bool = False):
+        """Yields words from a sentence with natural pacing."""
+        words = sentence.split()
+        for i, word in enumerate(words):
+            if i > 0:
+                yield " "
+            
+            # Pacing logic
+            if fast:
+                delay = random.uniform(0.01, 0.03)
+            elif word.endswith(('.', '!', '?')):
+                delay = random.uniform(0.1, 0.2)
+            elif word.endswith(','):
+                delay = random.uniform(0.05, 0.1)
+            else:
+                delay = random.uniform(0.02, 0.06)
+            
+            time.sleep(delay)
+            yield word
+        
+        if with_pause:
+            time.sleep(random.uniform(0.1, 0.3))
+
+    def generate_response(self, prompt: str, max_tokens: int = 2048) -> Generator[str, None, None]:
+        """Generate an intelligent streaming response with full context awareness."""
+        if not self.model_loaded:
+            yield "Error: Model not loaded"
+            return
+        
+        if len(self.context.messages) == 0:
+            self.context.add_message("system", self.system_context)
+            
+        self.context.add_message("user", prompt)
+        
+        if self.context.should_trim():
+            trim_callback = getattr(self, '_trim_callback', None)
+            self.context.trim_context(callback_fn=trim_callback)
+            
+        start_time = time.time()
+        full_response = ""
+        word_count = 0
+        
+        try:
+            # This is the new, true streaming pipeline
+            for token in self._generate_intelligent_response(prompt):
+                yield token
+                full_response += token
+                if " " in token:
+                    word_count += 1
+            
+            # Add the complete response to context after streaming is finished
+            if full_response.strip():
+                self.context.add_message("assistant", full_response.strip())
+            
+            generation_time = time.time() - start_time
+            words_per_sec = word_count / generation_time if generation_time > 0 else 0
+            print(f"\n[Generated in {generation_time:.2f}s, ~{words_per_sec:.1f} words/sec]")
+
+        except Exception as e:
+            yield f"Error generating response: {e}"
+            
+    def _generate_intelligent_response(self, prompt: str) -> Generator[str, None, None]:
+        """Generate an intelligent response using context awareness and personality."""
+        prompt_lower = prompt.lower()
+        
+        conversation_history = [msg for msg in self.context.messages if msg["role"] in ["user", "assistant"]]
+        is_continuing_conversation = len(conversation_history) > 1
+        
+        intent = self._detect_intent(prompt_lower)
+        context_awareness = self._build_context_awareness(prompt, conversation_history)
+        
+        # Route to the appropriate streaming generator
+        if intent == "greeting":
+            yield from self._generate_personalized_greeting(prompt, context_awareness)
+        elif intent == "programming":
+            yield from self._generate_programming_response(prompt, context_awareness, is_continuing_conversation)
+        elif intent == "help":
+            yield from self._generate_help_response(prompt, context_awareness, is_continuing_conversation)
+        elif intent == "technical":
+            yield from self._generate_technical_response(prompt, context_awareness)
+        elif intent == "casual":
+            yield from self._generate_casual_response(prompt, context_awareness)
+        else:
+            yield from self._generate_adaptive_response(prompt, context_awareness, is_continuing_conversation)
+
+    def _generate_personalized_greeting(self, prompt: str, context: dict) -> Generator[str, None, None]:
+        """Generate a personalized greeting response."""
+        greetings = [
+            "Hello! I'm M1K3, your local AI assistant running right here on your device.",
+            "Hey there! M1K3 here, ready to help with whatever you need.",
+            "Hi! I'm M1K3, your privacy-focused local AI companion.",
+        ]
+        follow_ups = [
+            "What can I help you with today?", "What's on your mind?", "How can I assist you?"
+        ]
+        
+        if context["conversation_length"] > 1:
+            yield from self._stream_sentence(f"Good to hear from you again! {random.choice(follow_ups)}")
+        else:
+            yield from self._stream_sentence(random.choice(greetings))
+            yield from self._natural_pause()
+            yield from self._stream_sentence(random.choice(follow_ups))
+    
+    def _generate_programming_response(self, prompt: str, context: dict, is_continuing: bool) -> Generator[str, None, None]:
+        """Generate enhanced programming-related response."""
+        # This function is now a generator and uses _stream_sentence
+        prompt_lower = prompt.lower()
+        base_response = "I can certainly help with that."
+        
+        if 'python' in prompt_lower:
+            base_response = "Python is a great choice! Let's explore what you're working on."
+        elif any(lang in prompt_lower for lang in ['javascript', 'js', 'node']):
+            base_response = "JavaScript is everywhere these days. What can I help you with?"
+        elif any(term in prompt_lower for term in ['debug', 'error', 'bug']):
+            base_response = "Debugging time! Let's figure out what's going wrong step by step."
+        else:
+            base_response = "Programming questions are always interesting! What are you working on?"
+
+        yield from self._stream_sentence(base_response)
+        
+        if context["emotional_tone"] == "seeking_help":
+            yield from self._natural_pause()
+            yield from self._stream_sentence("I can see you might be stuck - let's break this down.")
+        elif is_continuing and "programming" in context["recent_topics"]:
+            yield from self._natural_pause()
+            yield from self._stream_sentence("This builds nicely on what we were discussing!")
+
+    def _generate_help_response(self, prompt: str, context: dict, is_continuing: bool) -> Generator[str, None, None]:
+        """Generate enhanced help-related response."""
+        base_responses = [
+            "I'm here to help! Running locally means I can give you fast, private assistance.",
+            "Happy to assist! That's what I'm here for.",
+            "Absolutely! I love helping people figure things out."
+        ]
+        yield from self._stream_sentence(random.choice(base_responses))
+        
+        if context["prompt_complexity"] > 15:
+            yield from self._natural_pause()
+            yield from self._stream_sentence("This is a detailed question, let me work through it carefully.")
+        else:
+            yield from self._natural_pause()
+            yield from self._stream_sentence("What would you like to know?")
+    
+    def _generate_technical_response(self, prompt: str, context: dict) -> Generator[str, None, None]:
+        """Generate technical discussion response."""
+        base_response = "Ah, diving into the technical side of things! I love these kinds of discussions."
+        if 'ai' in prompt.lower() or 'model' in prompt.lower():
+            base_response = "Great technical question! As an AI myself, I can offer some inside perspective on this!"
+        
+        yield from self._stream_sentence(base_response)
+
+    def _generate_casual_response(self, prompt: str, context: dict) -> Generator[str, None, None]:
+        """Generate casual conversation response."""
+        responses = [
+            "I enjoy casual chats! It's nice to talk about things beyond just work and technical stuff.",
+            "Love a good conversation! Even as an AI, I find these discussions really engaging.",
+            "This is the fun part of being an AI - getting to chat about all sorts of topics!"
+        ]
+        yield from self._stream_sentence(random.choice(responses))
+
+    def _generate_adaptive_response(self, prompt: str, context: dict, is_continuing: bool) -> Generator[str, None, None]:
+        """Generate adaptive response for general queries."""
+        templates = [
+            "That's an interesting question! Let me help you with that.",
+            "I'd be happy to explore this with you.",
+            "Let me think about this carefully...",
+            "Good question! Here's my take on it:",
+        ]
+        yield from self._stream_sentence(random.choice(templates))
+
+        if is_continuing:
+            yield from self._natural_pause()
+            yield from self._stream_sentence("This builds nicely on our conversation.")
+
+    # --- End of New Streaming Implementation ---
+        
+    def clear_context(self):
+        """Clear conversation context"""
+        self.context = ConversationContext()
+        print("Conversation context cleared.")
+        
 
 if __name__ == "__main__":
     # Simple CLI test

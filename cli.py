@@ -10,9 +10,11 @@ import time
 import threading
 import webbrowser
 import atexit
+import signal
 from enum import Enum
 from typing import Optional
 import argparse
+from dataclasses import asdict
 
 # Enable HuggingFace tokenizers parallelism for better performance
 os.environ['TOKENIZERS_PARALLELISM'] = 'true'
@@ -32,6 +34,7 @@ from download_model import download_model
 from enhanced_voice_engine import create_voice_engine
 from system_metrics import SystemMonitor, generate_dynamic_greeting
 from cli_animations import CLIAnimator, AnimationType
+from sound_manager import SoundManager, ContextualSoundManager
 
 # Avatar system imports
 try:
@@ -73,6 +76,8 @@ class M1K3CLI:
             print("🎭 Initialized with mock AI engine (demo mode)")
             
         self.voice_engine = create_voice_engine()
+        self.sound_manager = SoundManager()
+        self.context_sound_manager = ContextualSoundManager(self.sound_manager)
         self.animator = CLIAnimator()
         self.avatar_state = AvatarState.IDLE
         self.running = True
@@ -82,42 +87,34 @@ class M1K3CLI:
         # Initialize avatar controller if available
         if AVATAR_AVAILABLE:
             self.avatar_controller = AvatarController()
-            print("🧘 Avatar controller initialized")
+            self._log_startup_message("OK", "Avatar controller initialized")
         else:
             self.avatar_controller = None
         
         # Set up AI engine with system context
         self._initialize_ai_context()
     
+    def _log_startup_message(self, level: str, message: str):
+        """Helper for logging formatted startup messages."""
+        level_map = {
+            "INFO": "\033[94m[INFO]\033[0m", # Blue
+            "OK": "\033[92m[OK]\033[0m",     # Green
+            "WARN": "\033[93m[WARN]\033[0m",   # Yellow
+            "ERROR": "\033[91m[ERROR]\033[0m" # Red
+        }
+        print(f" {level_map.get(level, '[ ]')}  {message}")
+
     def _initialize_ai_context(self):
-        """Initialize AI engine with rich system context"""
+        """Initialize AI engine with rich system context."""
+        self._log_startup_message("INFO", "Collecting rich device context...")
         metrics = self.system_monitor.collect_metrics()
         
-        # Set session context with system information
-        session_context = {
-            "device_type": f"{metrics.cpu_model} with {metrics.memory_total_gb:.1f}GB RAM" if metrics.memory_total_gb else f"{metrics.cpu_model}",
-            "operating_system": f"{metrics.os_name} {metrics.os_version}",
-            "performance_state": metrics.performance_status(),
-            "battery_state": metrics.battery_status(),
-            "thermal_state": metrics.thermal_status(),
-            "timezone": metrics.timezone,
-            "locale": metrics.locale_info,
-            "cpu_cores": f"{metrics.cpu_cores}c/{metrics.cpu_threads}t",
-            "uptime_hours": f"{metrics.uptime_hours:.1f}h" if metrics.uptime_hours else "unknown"
-        }
+        # Convert dataclass to a simple dict for the AI engine
+        session_context = asdict(metrics) if metrics else {}
         
-        # Only set session context if the engine supports it
         if hasattr(self.ai_engine, 'set_session_context'):
             self.ai_engine.set_session_context(session_context)
-        
-        # Set some default user preferences (can be updated based on interaction)
-        if hasattr(self.ai_engine, 'add_user_preference'):
-            self.ai_engine.add_user_preference("response_style", "conversational")
-            self.ai_engine.add_user_preference("technical_level", "intermediate")
-        
-        # Set up trim callback for animations
-        if hasattr(self.ai_engine, '_trim_callback'):
-            self.ai_engine._trim_callback = self._animate_context_trim
+            self._log_startup_message("OK", "AI context injected successfully")
         
     def set_avatar_state(self, state: AvatarState):
         """Update avatar state"""
@@ -155,8 +152,8 @@ class M1K3CLI:
         self.animator.stop_animation()
         
     def setup_ai(self) -> bool:
-        """Initialize AI engine and voice with animations"""
-        self.animated_print("Initializing M1K3 AI Engine...", AvatarState.LOADING, "fade")
+        """Initialize AI engine and voice with animations."""
+        self._log_startup_message("INFO", "Initializing AI Engine...")
         
         # Check if model exists
         if not self.ai_engine.is_model_available():
@@ -170,28 +167,26 @@ class M1K3CLI:
                 
         # Load AI model
         self.start_animated_status("Loading AI model...", "processing")
-        success = self.ai_engine.load_model()
-        self.stop_animated_status()
-        
-        if not success:
-            self.animated_print("Failed to load model", AvatarState.ERROR, "pulse")
+        if not self.ai_engine.load_model():
+            self.stop_animated_status()
+            self._log_startup_message("ERROR", "Failed to load AI model. M1K3 cannot continue.")
             return False
+        self.stop_animated_status()
             
         # Load voice model if enabled
-        if self.voice_enabled and self.voice_engine.is_available():
+        if self.voice_enabled:
             self.start_animated_status("Loading voice synthesis...", "loading")
-            voice_success = self.voice_engine.load_model()
-            self.stop_animated_status()
-            
-            if voice_success:
-                self.animated_print("Voice synthesis ready!", AvatarState.IDLE, "pulse")
+            if self.voice_engine.load_model():
+                self.stop_animated_status()
+                self._log_startup_message("OK", "Voice synthesis ready!")
             else:
-                self.print_with_avatar("Voice failed, continuing without", AvatarState.IDLE)
+                self.stop_animated_status()
+                self._log_startup_message("WARN", "Voice synthesis failed. Continuing without voice.")
                 self.voice_enabled = False
-        elif not self.voice_engine.is_available():
-            self.voice_enabled = False
+        else:
+            self._log_startup_message("INFO", "Voice synthesis is disabled.")
             
-        self.animated_print("AI Engine ready!", AvatarState.IDLE, "pulse")
+        self._log_startup_message("OK", "AI Engine is ready!")
         
         # Auto-start avatar server if requested
         if self.auto_avatar and AVATAR_AVAILABLE:
@@ -236,8 +231,10 @@ class M1K3CLI:
                         self.print_with_avatar(f"⚠️  Could not open browser: {e}", AvatarState.ERROR)
                         self.print_with_avatar(f"Please manually open: {local_url}", AvatarState.IDLE)
                 
-                # Set up cleanup on exit
+                # Set up cleanup on exit and signal handling
                 atexit.register(self.cleanup_avatar_server)
+                signal.signal(signal.SIGTERM, self._signal_handler)
+                signal.signal(signal.SIGINT, self._signal_handler)
                 
             else:
                 self.print_with_avatar("❌ Failed to start avatar server", AvatarState.ERROR)
@@ -245,33 +242,119 @@ class M1K3CLI:
         except Exception as e:
             self.print_with_avatar(f"❌ Error starting avatar: {e}", AvatarState.ERROR)
     
+    def _signal_handler(self, signum, frame):
+        """Handle signals (SIGTERM, SIGINT) for graceful shutdown"""
+        print(f"\n📡 Received signal {signum}, shutting down gracefully...")
+        self.cleanup_avatar_server()
+        sys.exit(0)
+    
     def cleanup_avatar_server(self):
         """Clean up avatar server on exit"""
         try:
             if AVATAR_AVAILABLE and is_avatar_server_running():
                 print("\n🛑 Shutting down avatar server...")
+                self.sound_manager.play_system_event_sound("shutdown")
                 stop_avatar_server()
                 print("✅ Avatar server stopped")
         except Exception as e:
             print(f"⚠️  Error stopping avatar server: {e}")
         
+    def _handle_action_command(self, user_input: str) -> bool:
+        """Handle special action commands starting with /."""
+        command = user_input.split()[0].lower()
+        
+        action_map = {
+            "/help": self.show_help,
+            "/stats": self.display_system_stats,
+            "/context": self.display_device_context,
+            "/tokens": self.display_token_stats,
+            "/clear": self.ai_engine.clear_context,
+            "/demo": self.demo_animations,
+            "/sound": self.handle_sound_command,
+            "/exit": lambda: setattr(self, 'running', False)
+        }
+        
+        if command in action_map:
+            print(f"Executing action: {command}")
+            # Pass the full command for commands that need it
+            if command == "/sound":
+                action_map[command](user_input)
+            else:
+                action_map[command]()
+            return True
+            
+        # Handle avatar commands specifically
+        if command.startswith("/avatar"):
+            avatar_command = user_input.replace("/", "")
+            self.handle_avatar_command(avatar_command)
+            return True
+
+        return False
+
+    def handle_sound_command(self, user_input: str = ""):
+        """Handle sound-related commands"""
+        parts = user_input.lower().split()
+        command = parts[1] if len(parts) > 1 else "status"
+
+        if command in ["on", "enable"]:
+            self.sound_manager.enabled = True
+            self.print_with_avatar("🔊 Sound effects enabled", AvatarState.IDLE)
+            self.sound_manager.play_contextual_sound("success")
+        elif command in ["off", "disable", "mute"]:
+            self.sound_manager.enabled = False
+            self.print_with_avatar("🔇 Sound effects disabled", AvatarState.IDLE)
+        elif command in ["profile", "set"]:
+            if len(parts) > 2:
+                profile_name = parts[2]
+                if self.sound_manager.set_sound_profile(profile_name):
+                    self.sound_manager.play_contextual_sound("success")
+                else:
+                    self.print_with_avatar(f"❌ Unknown sound profile: {profile_name}", AvatarState.ERROR)
+                    self.sound_manager.play_contextual_sound("error")
+            else:
+                msg = f"Available profiles: {', '.join(self.sound_manager.get_available_profiles())}"
+                self.print_with_avatar(msg, AvatarState.IDLE)
+        elif command == "test":
+            self.print_with_avatar("🎶 Testing sound system...", AvatarState.IDLE)
+            self.sound_manager.play_success_sequence("minor")
+            time.sleep(0.5)
+            self.sound_manager.play_contextual_sound("error")
+            time.sleep(0.5)
+            self.sound_manager.play_thinking_ambient()
+        else: # status
+            status = self.sound_manager.test_sound_system()
+            msg = f"🔊 Sound System Status:\n"
+            msg += f"   Enabled: {'✅' if self.sound_manager.enabled else '❌'}\n"
+            msg += f"   Profile: {status['current_profile']}\n"
+            msg += f"   Discovered sounds: {status['total_sounds']}"
+            self.print_with_avatar(msg, AvatarState.IDLE)
+
     def handle_user_input(self, user_input: str):
-        """Process user input and generate AI response"""
+        """Process user input and generate AI response."""
         
         # Send pre-thinking state - user just submitted input
         self.send_avatar_update(user_input, "pre_thinking")
+        
+        self.sound_manager.play_contextual_sound("interaction")
         
         # Send user message to avatar dashboard
         if AVATAR_AVAILABLE and is_avatar_server_running():
             # User message is handled by the dashboard itself, but we can trigger sounds
             send_sound_trigger("message_sent")
         
-        # Handle special commands
+        # Handle special commands (now including /actions)
+        if user_input.startswith('/'):
+            if self._handle_action_command(user_input):
+                return # Action was handled, so we are done.
+        
+        # Legacy command handling for backward compatibility
         if user_input.lower() in ['quit', 'exit', 'q']:
             goodbye_msg = "Goodbye!"
             self.print_with_avatar(goodbye_msg, AvatarState.IDLE)
             if self.voice_enabled:
-                self.voice_engine.synthesize_and_play(goodbye_msg, background=False)
+                self.voice_engine.synthesize_and_play(goodbye_msg)
+            # Explicitly cleanup avatar server
+            self.cleanup_avatar_server()
             self.running = False
             return
             
@@ -279,53 +362,35 @@ class M1K3CLI:
             msg = "Context cleared"
             self.ai_engine.clear_context()
             self.print_with_avatar(msg, AvatarState.IDLE)
+            self.sound_manager.play_sound("brush_sfx")
             if self.voice_enabled:
                 self.voice_engine.synthesize_and_play(msg)
             return
             
         elif user_input.lower() in ['voice', 'mute']:
             self.voice_enabled = not self.voice_enabled
-            self.voice_engine.set_voice_enabled(self.voice_enabled)
+            # The new VoiceManager doesn't need an explicit set_voice_enabled
             msg = f"Voice {'enabled' if self.voice_enabled else 'disabled'}"
             self.print_with_avatar(msg, AvatarState.IDLE)
+            self.sound_manager.play_contextual_sound("notification" if self.voice_enabled else "error")
             if self.voice_enabled:
                 self.voice_engine.synthesize_and_play("Voice enabled")
             return
             
-        elif user_input.lower().startswith('persona ') or user_input.lower().startswith('character '):
-            # Support both "persona" and "character" commands
-            if user_input.lower().startswith('persona '):
-                persona_name = user_input[8:].strip()
-            else:
-                persona_name = user_input[10:].strip()
-                
-            if hasattr(self.voice_engine, 'quick_persona_switch'):
-                if self.voice_engine.quick_persona_switch(persona_name):
-                    # Get current persona info
-                    if hasattr(self.voice_engine, 'get_current_persona'):
-                        persona = self.voice_engine.get_current_persona()
-                        msg = f"Persona: {persona.get('name', persona_name)}"
-                        self.print_with_avatar(msg, AvatarState.IDLE)
-                        if self.voice_enabled:
-                            self.voice_engine.speak_persona_intro()
-                    else:
-                        msg = f"Persona: {persona_name}"
-                        self.print_with_avatar(msg, AvatarState.IDLE)
+        elif user_input.lower().startswith(('/profile', 'persona', 'character')):
+            parts = user_input.split()
+            if len(parts) > 1:
+                profile_name = parts[1].strip()
+                if self.voice_engine.set_profile(profile_name):
+                    self.sound_manager.play_success_sequence("minor")
+                    self.voice_engine.synthesize_and_play(f"Voice profile set to {profile_name}", background=False)
                 else:
-                    available = list(self.voice_engine.get_personas().keys()) if hasattr(self.voice_engine, 'get_personas') else []
-                    shortcuts = ["natural", "assistant", "pa_system", "broadcast", "terminal", "clear", "ai", "pa", "radio"]
-                    msg = f"Available personas: {', '.join(available)} (shortcuts: {', '.join(shortcuts)})"
-                    self.print_with_avatar(msg, AvatarState.IDLE)
+                    msg = f"Unknown profile. Available: {', '.join(self.voice_engine.profiles.keys())}"
+                    self.print_with_avatar(msg, AvatarState.ERROR)
+                    self.sound_manager.play_contextual_sound("error")
             else:
-                self.print_with_avatar("Persona switching not available", AvatarState.IDLE)
-            return
-            
-        elif user_input.lower() in ['zen', 'classic', 'retro']:
-            if hasattr(self.voice_engine, 'toggle_zen_mode'):
-                success = self.voice_engine.toggle_zen_mode()
-                if success and self.voice_enabled:
-                    mode = "zen" if self.voice_engine.zen_mode else "classic"
-                    self.voice_engine.synthesize_and_play(f"{mode.title()} voice mode activated")
+                msg = f"Please specify a profile. Available: {', '.join(self.voice_engine.profiles.keys())}"
+                self.print_with_avatar(msg, AvatarState.IDLE)
             return
             
         elif user_input.lower() in ['stats', 'status']:
@@ -355,6 +420,7 @@ class M1K3CLI:
         # Generate AI response with animations
         self.start_animated_status("Thinking...", "thinking")
         self.send_avatar_update(user_input, "thinking")
+        self.sound_manager.play_thinking_ambient()
         time.sleep(1.0)  # Give time to see thinking animation
         self.stop_animated_status()
         
@@ -405,6 +471,8 @@ class M1K3CLI:
                 send_chat_ai_complete()
                 send_avatar_progress("complete", 100, token_count, f"Response complete! {token_count} tokens generated.")
             
+            self.context_sound_manager.play_response_sound(full_response, user_input)
+            
             # Send avatar emotion update based on response
             if full_response.strip():
                 self.send_avatar_update(full_response.strip(), "response")
@@ -427,6 +495,7 @@ class M1K3CLI:
             error_msg = f"Error: {e}"
             self.print_with_avatar(error_msg, AvatarState.ERROR)
             self.send_avatar_update(error_msg, "error")
+            self.context_sound_manager.play_response_sound(error_msg, user_input)
             if self.voice_enabled:
                 self.voice_engine.synthesize_and_play(error_msg)
             
@@ -447,8 +516,7 @@ M1K3 Local AI CLI Commands:
     
   Voice Commands:
     voice, mute     Toggle voice synthesis on/off
-    persona <name>  Set persona (natural, assistant, pa_system, broadcast, terminal)
-    zen, classic    Toggle between zen and standard voice modes
+    /profile <name> Set voice profile (natural, assistant, broadcast, terminal)
     
   Avatar Commands:
     avatar start    Start the avatar web server
@@ -509,9 +577,9 @@ M1K3 Local AI CLI Commands:
         
         # Voice engine stats
         print(f"🔊 Voice Engine:")
-        print(f"   Status: {'Enabled' if voice_status['enabled'] else 'Disabled'}")
-        print(f"   Persona: {voice_status.get('persona_name', 'Unknown')}")
-        print(f"   Engine: {voice_status.get('engine', 'None')}")
+        print(f"   Status: {'Enabled' if self.voice_enabled else 'Disabled'}")
+        print(f"   Profile: {voice_status.get('current_profile', 'Unknown')}")
+        print(f"   Model: {voice_status.get('model_name', 'Unknown')}")
         
         # System performance
         if metrics.cpu_usage is not None:
@@ -537,6 +605,128 @@ M1K3 Local AI CLI Commands:
                 status_msg += f", battery at {metrics.battery_percent} percent"
             self.voice_engine.synthesize_and_play(status_msg)
     
+    def display_system_diagnostics(self, context_summary):
+        """Display comprehensive system diagnostics and M1K3 capabilities"""
+        try:
+            metrics = self.system_monitor
+            
+            # Compact multi-line context display
+            print(f"🔍 Context: {metrics.cpu_model} | Cores: {metrics.cpu_cores}c/{metrics.cpu_threads}", end="")
+            if metrics.gpu_info:
+                print(f" | GPU: {metrics.gpu_info}", end="")
+            if metrics.memory_total_gb:
+                print(f" | RAM: {metrics.memory_total_gb:.0f}GB", end="")
+            print(f" | OS: {metrics.os_name} {metrics.os_version}", end="")
+            if metrics.timezone:
+                print(f" | TZ: {metrics.timezone}", end="")
+            print(f" | Lo...")  # Truncated for space
+            
+            # M1K3 Capabilities Summary (single line)
+            capabilities = []
+            
+            # AI Backend Status
+            try:
+                if hasattr(self.ai_engine, 'backend_name'):
+                    capabilities.append(f"🤖 AI: {self.ai_engine.backend_name}")
+                else:
+                    capabilities.append("🤖 AI: Local")
+            except:
+                capabilities.append("🤖 AI: Available")
+            
+            # Voice Status
+            if self.voice_enabled:
+                capabilities.append("🗣️ Voice")
+            
+            # Avatar Status
+            if AVATAR_AVAILABLE and self.avatar_controller:
+                try:
+                    if is_avatar_server_running():
+                        capabilities.append("🧘 Avatar: Live")
+                    else:
+                        capabilities.append("🧘 Avatar: Ready")
+                except:
+                    capabilities.append("🧘 Avatar: Ready")
+            
+            # Model Information
+            try:
+                from local_model_manager import LocalModelManager
+                manager = LocalModelManager()
+                model_count = len(manager.available_models)
+                if model_count > 0:
+                    best_model = manager.get_best_model()
+                    if best_model:
+                        # Shorten model names for display
+                        display_name = best_model.split('/')[-1] if '/' in best_model else best_model
+                        display_name = display_name.replace('-1.1B-Chat-v1.0', '').replace('.Q4_K_M', '')
+                        capabilities.append(f"📦 Model: {display_name}")
+                    capabilities.append(f"🔧 {model_count} models")
+            except:
+                capabilities.append("📦 Models: Available")
+            
+            # Sound System
+            try:
+                from sound_manager import SoundManager
+                sound_mgr = SoundManager()
+                sound_count = len(sound_mgr.all_sounds)
+                capabilities.append(f"🎮 {sound_count} SFX")
+            except:
+                capabilities.append("🎮 Audio")
+            
+            # Privacy & Environmental
+            capabilities.append("🔒 100% Local")
+            capabilities.append("🌱 Eco-Friendly")
+            
+            # Display capabilities in a compact format
+            if capabilities:
+                print(f"⚡ M1K3: {' | '.join(capabilities[:6])}")  # Limit to 6 items for space
+                if len(capabilities) > 6:
+                    print(f"        {' | '.join(capabilities[6:])}")
+                    
+        except Exception as e:
+            # Fallback to simple context if diagnostics fail
+            if context_summary:
+                print(f"🔍 Context: {context_summary[:100]}{'...' if len(context_summary) > 100 else ''}")
+            print(f"⚡ M1K3: 🤖 AI Ready | 🗣️ Voice {'✅' if self.voice_enabled else '❌'} | 🧘 Avatar Ready | 🔒 100% Local")
+
+    def _collect_m1k3_context(self) -> dict:
+        """Collect M1K3-specific context for enhanced greetings"""
+        context = {
+            'ai_ready': True,  # AI engine is always ready by this point
+            'voice_enabled': self.voice_enabled,
+            'avatar_ready': AVATAR_AVAILABLE and self.avatar_controller is not None,
+            'avatar_live': False,
+            'model_count': 0,
+            'backend_name': 'Unknown'
+        }
+        
+        # Check avatar server status
+        if AVATAR_AVAILABLE:
+            try:
+                context['avatar_live'] = is_avatar_server_running()
+            except:
+                pass
+        
+        # Get AI backend information
+        try:
+            if hasattr(self.ai_engine, 'use_transformers') and self.ai_engine.use_transformers:
+                context['backend_name'] = "HuggingFace"
+            elif hasattr(self.ai_engine, 'use_ctransformers') and self.ai_engine.use_ctransformers:
+                context['backend_name'] = "ctransformers"
+            elif hasattr(self.ai_engine, '__class__'):
+                context['backend_name'] = self.ai_engine.__class__.__name__
+        except:
+            pass
+        
+        # Get model count
+        try:
+            from local_model_manager import LocalModelManager
+            manager = LocalModelManager()
+            context['model_count'] = len(manager.available_models)
+        except:
+            pass
+        
+        return context
+
     def display_device_context(self):
         """Display comprehensive device context"""
         self.start_animated_status("Analyzing device capabilities...", "processing")
@@ -855,31 +1045,32 @@ Available styles: robot, organic, crystal, ghost, energy, cute"""
             print(f"Debug: Avatar update error: {e}")
         
     def run_interactive(self):
-        """Run interactive CLI session with animations"""
-        # Animated startup
-        self.animator.typewriter_effect("🧘 M1K3 - Local AI with Advanced Voice & Animations")
-        self.animator.fade_in_text("✨ Fast synthesis • Rich context • Privacy-focused")
+        """Run interactive CLI session with animations."""
+        # A cleaner, more structured startup sequence
+        print("\033[1m🧘 M1K3 - Local AI with Advanced Voice & Animations\033[0m")
         print("=" * 60)
-        
+
         # Setup AI engine
         if not self.setup_ai():
             return 1
         
+        self.sound_manager.play_startup_sequence()
+        
+        print("-" * 60)
+        
         # Generate dynamic greeting based on system metrics
         try:
-            self.start_animated_status("Collecting device context for personalized greeting...", "processing")
             metrics = self.system_monitor.collect_metrics()
-            greeting = generate_dynamic_greeting(metrics)
-            context_summary = self.system_monitor.get_context_summary(metrics)
-            self.stop_animated_status()
+            m1k3_context = self._collect_m1k3_context()
+            greeting = generate_dynamic_greeting(metrics, m1k3_context)
             
-            print(f"\n💬 {greeting}")
+            print(f"💬 {greeting}")
             
-            # Show brief context summary
-            if context_summary:
-                print(f"🔍 Context: {context_summary[:100]}{'...' if len(context_summary) > 100 else ''}")
+            # Display the new compact diagnostics
+            self.display_system_diagnostics(None)
             
-            self.animated_print("Type 'help' for commands or start chatting!", effect="fade")
+            print("-" * 60)
+            print("Type '/help' for a list of commands or start chatting below.")
             
             # Speak the greeting if voice is enabled
             if self.voice_enabled:
@@ -903,6 +1094,7 @@ Available styles: robot, organic, crystal, ghost, energy, cute"""
                 
             except KeyboardInterrupt:
                 self.print_with_avatar("\nExiting...", AvatarState.IDLE)
+                self.cleanup_avatar_server()
                 break
             except EOFError:
                 break
@@ -1015,16 +1207,12 @@ def main():
     if args.test_voice:
         from enhanced_voice_engine import create_voice_engine
         engine = create_voice_engine()
-        if engine.is_available():
-            if engine.load_model():
-                print("🔊 Testing voice synthesis...")
-                engine.synthesize_and_play("Voice synthesis test successful! M1K3 is ready to speak.", background=False)
-                return 0
-            else:
-                print("❌ Failed to load voice model")
-                return 1
+        if engine.load_model():
+            print("🔊 Testing voice synthesis...")
+            engine.synthesize_and_play("Voice synthesis test successful! M1K3 is ready to speak.", background=False)
+            return 0
         else:
-            print("❌ Voice synthesis not available")
+            print("❌ Failed to load voice model")
             return 1
             
     voice_enabled = not args.no_voice

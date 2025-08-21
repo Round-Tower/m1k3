@@ -5,6 +5,7 @@ Lightweight full-screen terminal interface using Rich library
 """
 
 import asyncio
+import atexit
 import threading
 import time
 import signal
@@ -37,7 +38,7 @@ from system_metrics import SystemMonitor
 
 try:
     from avatar_server import (
-        start_avatar_server, is_avatar_server_running, send_avatar_emotion,
+        start_avatar_server, stop_avatar_server, is_avatar_server_running, send_avatar_emotion,
         send_avatar_state, send_chat_ai_start, send_chat_ai_chunk, 
         send_chat_ai_complete, send_sound_trigger
     )
@@ -99,6 +100,11 @@ class M1K3RichTUI:
         # Start avatar server if requested
         if avatar_enabled and AVATAR_AVAILABLE:
             self.start_avatar_server()
+        
+        # Set up cleanup handlers
+        atexit.register(self.cleanup_on_exit)
+        signal.signal(signal.SIGTERM, self._signal_handler)
+        signal.signal(signal.SIGINT, self._signal_handler)
     
     def setup_layout(self):
         """Setup the Rich layout structure"""
@@ -459,6 +465,22 @@ Avatar: {'Running' if self.avatar_running else 'Stopped'}"""
                     pass
         except Exception as e:
             # Handle any terminal-related errors gracefully
+            pass
+    
+    def _signal_handler(self, signum, frame):
+        """Handle signals (SIGTERM, SIGINT) for graceful shutdown"""
+        self.cleanup_on_exit()
+        sys.exit(0)
+    
+    def cleanup_on_exit(self):
+        """Clean up resources on application exit"""
+        try:
+            # Stop avatar server if running
+            if AVATAR_AVAILABLE and self.avatar_running:
+                stop_avatar_server()
+                self.avatar_running = False
+        except Exception as e:
+            # Fail silently during cleanup to avoid exit issues
             pass
     
     def run(self):

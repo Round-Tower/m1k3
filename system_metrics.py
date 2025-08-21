@@ -63,6 +63,9 @@ class SystemMetrics:
     has_microphone: Optional[bool] = None
     has_speakers: Optional[bool] = None
     
+    # Session duration
+    session_duration_minutes: Optional[float] = None
+    
     def battery_status(self) -> str:
         """Get battery status description"""
         if self.battery_percent is None:
@@ -264,6 +267,14 @@ class SystemMonitor:
                         gpu_info = "AMD GPU"
                     elif "intel" in output:
                         gpu_info = "Intel GPU"
+                    else:
+                        # Try to find a more specific model name if available
+                        for line in output.splitlines():
+                            if "Chipset Model:" in line:
+                                gpu_info = line.split(":", 1)[1].strip()
+                                break
+                        else:
+                            gpu_info = "Apple GPU" # Fallback
                         
             except:
                 pass
@@ -471,6 +482,9 @@ class SystemMonitor:
         except:
             pass
         
+        # Session duration
+        session_duration_minutes = (time.time() - self.start_time) / 60
+        
         return SystemMetrics(
             # Power and thermal
             battery_percent=battery_percent,
@@ -516,7 +530,8 @@ class SystemMonitor:
             # Audio capabilities
             audio_devices=audio_devices,
             has_microphone=has_microphone,
-            has_speakers=has_speakers
+            has_speakers=has_speakers,
+            session_duration_minutes=session_duration_minutes
         )
     
     def get_context_summary(self, metrics: SystemMetrics) -> str:
@@ -591,8 +606,8 @@ class SystemMonitor:
         
         return json.dumps(context_data, indent=2, default=str)
 
-def generate_dynamic_greeting(metrics: SystemMetrics) -> str:
-    """Generate an intelligent, entropy-rich greeting based on comprehensive system analysis"""
+def generate_dynamic_greeting(metrics: SystemMetrics, m1k3_context: dict = None) -> str:
+    """Generate an intelligent, entropy-rich greeting based on comprehensive system analysis and M1K3 capabilities"""
     
     import random
     import datetime
@@ -710,6 +725,38 @@ def generate_dynamic_greeting(metrics: SystemMetrics) -> str:
         ]
     }
     
+    # M1K3-specific capability observations
+    m1k3_observations = {
+        "ai_ready": [
+            "AI engine is loaded and ready", "Local intelligence is online",
+            "Your AI companion is standing by", "Neural pathways are active"
+        ],
+        "voice_enabled": [
+            "Voice synthesis is primed", "Ready to speak your thoughts",
+            "Audio output systems are go", "Voice engine warmed up"
+        ],
+        "avatar_live": [
+            "Avatar dashboard is live and tracking", "Your pixel companion is watching",
+            "Real-time emotion tracking active", "Avatar system broadcasting"
+        ],
+        "avatar_ready": [
+            "Avatar system standing by", "Pixel companion ready to activate",
+            "Dashboard awaiting your command", "Avatar engine loaded"
+        ],
+        "multi_models": [
+            "Multiple AI models at your disposal", "Model arsenal fully loaded",
+            "AI backend selection optimized", "Neural variety pack ready"
+        ],
+        "local_privacy": [
+            "100% local processing secured", "Your privacy fortress is active",
+            "Zero cloud dependency confirmed", "Data stays on your machine"
+        ],
+        "eco_friendly": [
+            "Environmental savings mode engaged", "Green AI computing active",
+            "Local efficiency beating cloud waste", "Eco-conscious processing enabled"
+        ]
+    }
+    
     # Build intelligent greeting with entropy
     battery_status = metrics.battery_status()
     thermal_status = metrics.thermal_status()
@@ -723,6 +770,40 @@ def generate_dynamic_greeting(metrics: SystemMetrics) -> str:
     
     # Build personality-rich observations
     observations = []
+    
+    # Include M1K3-specific observations based on context
+    if m1k3_context:
+        m1k3_items = []
+        
+        # AI status (always include if available)
+        if m1k3_context.get('ai_ready'):
+            m1k3_items.append('ai_ready')
+        
+        # Voice status (high priority if enabled)
+        if m1k3_context.get('voice_enabled') and random.random() < 0.6:
+            m1k3_items.append('voice_enabled')
+        
+        # Avatar status (include if active)
+        if m1k3_context.get('avatar_live') and random.random() < 0.7:
+            m1k3_items.append('avatar_live')
+        elif m1k3_context.get('avatar_ready') and random.random() < 0.3:
+            m1k3_items.append('avatar_ready')
+        
+        # Model variety (mention if multiple models)
+        if m1k3_context.get('model_count', 0) > 3 and random.random() < 0.4:
+            m1k3_items.append('multi_models')
+        
+        # Privacy/eco-friendly (occasional mentions)
+        if random.random() < 0.2:
+            if random.random() < 0.5:
+                m1k3_items.append('local_privacy')
+            else:
+                m1k3_items.append('eco_friendly')
+        
+        # Add selected M1K3 observations
+        for item in m1k3_items[:2]:  # Limit to 2 M1K3 observations max
+            if item in m1k3_observations:
+                observations.append(random.choice(m1k3_observations[item]))
     
     # Always include battery observation with personality
     if battery_status in battery_observations:
