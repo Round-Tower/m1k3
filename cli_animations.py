@@ -16,6 +16,10 @@ class AnimationType(Enum):
     WAVE = "wave"
     DOTS = "dots"
     PROGRESS = "progress"
+    TOKEN_BAR = "token_bar"
+    ECO_COUNTER = "eco_counter"
+    CONTEXT_TRIM = "context_trim"
+    PRIVACY_SHIELD = "privacy_shield"
 
 class CLIAnimator:
     """Handles CLI animations and visual effects"""
@@ -31,7 +35,11 @@ class CLIAnimator:
             AnimationType.PULSE: ["💤", "😴", "💤", "😴"],
             AnimationType.WAVE: ["▁", "▂", "▃", "▄", "▅", "▆", "▇", "█", "▇", "▆", "▅", "▄", "▃", "▂"],
             AnimationType.DOTS: ["⠁", "⠂", "⠄", "⠅", "⠆", "⠇", "⠈", "⠉", "⠊", "⠋"],
-            AnimationType.PROGRESS: ["▱▱▱▱▱", "▰▱▱▱▱", "▰▰▱▱▱", "▰▰▰▱▱", "▰▰▰▰▱", "▰▰▰▰▰"]
+            AnimationType.PROGRESS: ["▱▱▱▱▱", "▰▱▱▱▱", "▰▰▱▱▱", "▰▰▰▱▱", "▰▰▰▰▱", "▰▰▰▰▰"],
+            AnimationType.TOKEN_BAR: ["░", "▒", "▓", "█"],
+            AnimationType.ECO_COUNTER: ["🌱", "🌿", "🍃", "🌳"],
+            AnimationType.CONTEXT_TRIM: ["✂️", "📝", "🗑️", "♻️"],
+            AnimationType.PRIVACY_SHIELD: ["🔒", "🛡️", "🔐", "🔑"]
         }
         
         # Avatar state animations
@@ -191,6 +199,65 @@ class CLIAnimator:
         # Show final text
         sys.stdout.write(f"\r{text}")
         sys.stdout.flush()
+        print()
+        
+    def animate_token_bar(self, current_tokens: int, max_tokens: int, width: int = 30):
+        """Display animated token usage bar with eco-friendly colors"""
+        usage_percent = (current_tokens / max_tokens) * 100
+        filled_width = int(width * current_tokens // max_tokens)
+        
+        # Color coding based on usage
+        if usage_percent < 50:
+            fill_char = "🟢"  # Green for low usage
+        elif usage_percent < 80:
+            fill_char = "🟡"  # Yellow for moderate usage  
+        else:
+            fill_char = "🟠"  # Orange for high usage
+            
+        empty_char = "⚪"
+        
+        bar = fill_char * filled_width + empty_char * (width - filled_width)
+        return f"🧠 Tokens: [{bar}] {usage_percent:.1f}% ({current_tokens:,}/{max_tokens:,})"
+    
+    def animate_eco_metrics(self, energy_saved: str, water_saved: str, co2_saved: str):
+        """Display animated eco-friendly metrics with pulsing effects"""
+        eco_icons = ["🌱", "🌿", "🍃", "🌳"]
+        
+        for i, icon in enumerate(eco_icons):
+            eco_display = (
+                f"{icon} Eco Impact: "
+                f"⚡ {energy_saved} kWh saved • "
+                f"💧 {water_saved} gal saved • "
+                f"🌍 {co2_saved}g CO2 prevented"
+            )
+            
+            sys.stdout.write(f"\r{eco_display}")
+            sys.stdout.flush()
+            time.sleep(0.3)
+            
+        print()  # Final newline
+    
+    def animate_context_trimming(self, messages_removed: int):
+        """Display animated context trimming with falling text effect"""
+        trim_sequence = ["✂️ Trimming context...", "📝 Compressing memories...", "♻️ Optimizing space...", "✨ Context refreshed!"]
+        
+        for message in trim_sequence:
+            sys.stdout.write(f"\r{message}")
+            sys.stdout.flush()
+            time.sleep(0.5)
+            
+        print(f"\n🗑️ Removed {messages_removed} older messages to free up token space")
+    
+    def animate_privacy_shield(self, data_size: str = "0 bytes"):
+        """Display animated privacy shield showing local processing"""
+        shield_sequence = ["🔒", "🛡️", "🔐", "🔑"]
+        
+        for shield in shield_sequence:
+            privacy_display = f"{shield} Private Processing: {data_size} transmitted to cloud"
+            sys.stdout.write(f"\r{privacy_display}")
+            sys.stdout.flush()
+            time.sleep(0.4)
+            
         print()
 
 # Global animator instance

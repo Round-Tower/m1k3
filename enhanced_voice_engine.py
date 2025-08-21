@@ -74,9 +74,35 @@ class EnhancedVoiceEngine:
             return False
             
         try:
-            return self.current_engine.synthesize_and_play(text, background)
+            result = self.current_engine.synthesize_and_play(text, background)
+            
+            # If zen voice fails due to ONNX issues, fall back to system TTS
+            if not result and self.zen_mode and self.primary_engine:
+                error_msg = "ONNX/hardware compatibility issue detected"
+                print(f"🔇 {error_msg}, switching to system TTS...")
+                
+                # Switch to fallback engine
+                if self.fallback_engine.load_model():
+                    self.current_engine = self.fallback_engine
+                    self.zen_mode = False
+                    print("🔊 Switched to system TTS successfully")
+                    return self.fallback_engine.synthesize_and_play(text, background)
+            
+            return result
+            
         except Exception as e:
-            print(f"🔇 Voice synthesis error: {e}")
+            error_msg = str(e).lower()
+            if "onnx" in error_msg or "expand" in error_msg or "bert" in error_msg:
+                print(f"🔇 ONNX error detected: {e}")
+                print("🔄 Switching to system TTS...")
+                
+                # Fall back to system TTS
+                if self.fallback_engine.load_model():
+                    self.current_engine = self.fallback_engine
+                    self.zen_mode = False
+                    return self.fallback_engine.synthesize_and_play(text, background)
+            else:
+                print(f"🔇 Voice synthesis error: {e}")
             return False
             
     def set_persona(self, persona_name: str) -> bool:

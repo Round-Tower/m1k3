@@ -156,32 +156,34 @@ class SystemMonitor:
         """Get CPU temperature in Celsius"""
         try:
             if self.platform == "darwin":  # macOS
-                # Try using powermetrics (requires sudo, so fallback)
-                try:
-                    result = subprocess.run([
-                        "sudo", "-n", "powermetrics", "--samplers", "smc", "-n", "1", "-i", "1"
-                    ], capture_output=True, text=True, timeout=3)
-                    
-                    for line in result.stdout.split('\n'):
-                        if 'CPU die temperature' in line:
-                            temp_str = line.split(':')[1].strip().replace('C', '')
-                            return float(temp_str)
-                except:
-                    pass
-                    
-                # Alternative: Use built-in thermal sensors via psutil
-                temps = psutil.sensors_temperatures()
-                if temps:
-                    for name, entries in temps.items():
-                        if entries:
-                            return entries[0].current
+                # Use powermetrics for Apple Silicon
+                if "arm" in platform.machine().lower():
+                    try:
+                        result = subprocess.run(
+                            ["/usr/bin/sudo", "-n", "powermetrics", "--samplers", "smc", "-n1"],
+                            capture_output=True, text=True, timeout=2
+                        )
+                        for line in result.stdout.splitlines():
+                            if "CPU die temperature" in line:
+                                temp_str = line.split(":")[1].strip().replace(" C", "")
+                                return float(temp_str)
+                    except (FileNotFoundError, subprocess.TimeoutExpired, ValueError):
+                        pass  # Fallback if powermetrics fails or requires password
+
+                # Fallback for Intel Macs or if powermetrics fails
+                if hasattr(psutil, 'sensors_temperatures'):
+                    temps = psutil.sensors_temperatures()
+                    if 'coretemp' in temps:
+                        return temps['coretemp'][0].current
+                return None # No reliable method found
                             
             elif self.platform == "linux":
-                temps = psutil.sensors_temperatures()
-                if 'coretemp' in temps and temps['coretemp']:
-                    # Average core temperatures
-                    core_temps = [entry.current for entry in temps['coretemp']]
-                    return sum(core_temps) / len(core_temps)
+                if hasattr(psutil, 'sensors_temperatures'):
+                    temps = psutil.sensors_temperatures()
+                    if 'coretemp' in temps and temps['coretemp']:
+                        # Average core temperatures
+                        core_temps = [entry.current for entry in temps['coretemp']]
+                        return sum(core_temps) / len(core_temps)
                     
         except Exception as e:
             print(f"Temperature error: {e}")
@@ -589,83 +591,169 @@ class SystemMonitor:
         return json.dumps(context_data, indent=2, default=str)
 
 def generate_dynamic_greeting(metrics: SystemMetrics) -> str:
-    """Generate a unique greeting based on system metrics"""
-    
-    # Base greeting parts
-    greetings = [
-        "Hello there!", "Hey!", "Greetings!", "Hi!", "Welcome back!",
-        "Good to see you!", "Ready to help!", "At your service!"
-    ]
-    
-    # Battery-based comments
-    battery_comments = {
-        "excellent": "Your battery is looking fantastic",
-        "good": "Battery levels are solid", 
-        "low": "Might want to charge up soon",
-        "critical": "Better find a charger quick",
-        "charging-full": "Almost fully charged",
-        "charging-good": "Charging nicely",
-        "charging-low": "Good thing you're charging",
-        "charging-critical": "Charging just in time",
-        "unknown": "Can't check your battery right now"
-    }
-    
-    # Thermal comments  
-    thermal_comments = {
-        "cool": "Your system is running nice and cool",
-        "warm": "Temperature is comfortable",
-        "hot": "Things are heating up a bit",
-        "overheating": "Whoa, your CPU is running hot!",
-        "unknown": "Can't read temperature sensors"
-    }
-    
-    # Performance comments
-    performance_comments = {
-        "idle": "System is relaxed and ready",
-        "moderate": "Moderate load, all good",
-        "busy": "You've got the system working hard",
-        "stressed": "System is under heavy load",
-        "unknown": "System metrics unavailable"
-    }
+    """Generate an intelligent, entropy-rich greeting based on comprehensive system analysis"""
     
     import random
+    import datetime
+    import hashlib
+    import time
     
-    # Build greeting
-    greeting = random.choice(greetings)
+    # Create entropy seed from system state for consistent randomness per session
+    entropy_data = f"{metrics.cpu_usage:.1f}{metrics.memory_percent:.1f}{int(time.time() / 300)}"  # 5-min windows
+    random.seed(int(hashlib.md5(entropy_data.encode()).hexdigest()[:8], 16))
     
-    # Add system-specific comment
+    # Time-aware greetings
+    current_hour = datetime.datetime.now().hour
+    if 5 <= current_hour < 12:
+        time_greetings = ["Good morning!", "Morning!", "Rise and shine!", "Early bird today!", "Starting the day right!"]
+    elif 12 <= current_hour < 17:
+        time_greetings = ["Good afternoon!", "Afternoon!", "Hope your day's going well!", "Midday check-in!", "Afternoon vibes!"]
+    elif 17 <= current_hour < 22:
+        time_greetings = ["Good evening!", "Evening!", "End of day productivity!", "Evening session!", "Twilight coding!"]
+    else:
+        time_greetings = ["Working late?", "Night owl mode!", "Burning the midnight oil!", "Late night hacking!", "Night shift!"]
+    
+    # Contextual greetings based on system state
+    contextual_greetings = [
+        "Ready to dive in!", "What's on the agenda?", "Let's get creative!", 
+        "Time for some AI magic!", "Your local assistant is online!", "M1K3 ready for action!",
+        "Local AI at your service!", "What can we build today?", "Ready to collaborate!",
+        "Your digital companion awaits!", "Local intelligence activated!", "Let's make something happen!"
+    ]
+    
+    # Intelligent battery observations with personality
+    battery_observations = {
+        "excellent": [
+            "Battery's fully charged and ready to go", "Power levels are maxed out",
+            "You've got juice for days", "Battery is locked and loaded"
+        ],
+        "good": [
+            "Battery's in good shape", "Power situation is solid", 
+            "Plenty of battery left", "Energy reserves looking healthy"
+        ],
+        "low": [
+            "Battery's getting thirsty", "Might want to find some power soon",
+            "Energy levels are dropping", "Time to hunt for a charger"
+        ],
+        "critical": [
+            "Battery's on life support!", "Power emergency mode activated",
+            "Better find electricity fast", "Your battery needs CPR"
+        ],
+        "charging-full": [
+            "Almost topped off on power", "Charging cycle nearly complete",
+            "Battery's drinking up that electricity", "Nearly back to full strength"
+        ],
+        "charging-good": [
+            "Battery's getting fed nicely", "Power flowing in smoothly",
+            "Charging progress looks good", "Energy tank filling up"
+        ],
+        "charging-low": [
+            "Thank goodness you're charging", "Power rescue in progress",
+            "Battery's getting some much-needed juice", "Emergency charging engaged"
+        ],
+        "charging-critical": [
+            "Just in time with that charger!", "Barely made it to power!",
+            "Last-second energy rescue", "Talk about cutting it close!"
+        ],
+        "unknown": [
+            "Can't peek at your battery stats", "Power levels are a mystery",
+            "Battery info is playing hide and seek", "Power meter is being shy"
+        ]
+    }
+    
+    # Thermal personality with more nuance
+    thermal_observations = {
+        "cool": [
+            "CPU is chilling like a cucumber", "Temperature is zen-level cool",
+            "Your processor is in arctic mode", "Thermal situation is frosty"
+        ],
+        "warm": [
+            "CPU's running at a cozy temperature", "Processor is nicely warmed up",
+            "Temperature's in the comfort zone", "Thermal readings are pleasant"
+        ],
+        "hot": [
+            "CPU's feeling the heat today", "Processor's working up a sweat",
+            "Temperature's climbing the charts", "Things are getting toasty"
+        ],
+        "overheating": [
+            "CPU is basically lava right now!", "Processor needs a vacation!",
+            "Temperature warnings are screaming", "Your CPU is melting!"
+        ],
+        "unknown": [
+            "Thermal sensors are being mysterious", "Temperature is classified info",
+            "Heat levels are top secret", "Thermal data is off the grid"
+        ]
+    }
+    
+    # Performance insights with character
+    performance_insights = {
+        "idle": [
+            "System is meditation-level calm", "CPU is basically napping",
+            "Resources are zen and available", "Everything's running smooth as silk"
+        ],
+        "moderate": [
+            "System's got a nice productive rhythm", "CPU is happily multitasking",
+            "Resources are well-balanced", "Everything's humming along nicely"
+        ],
+        "busy": [
+            "System is in full productivity mode", "CPU is juggling like a pro",
+            "Resources are working overtime", "Everything's firing on all cylinders"
+        ],
+        "stressed": [
+            "System is maxed out and grinding", "CPU is screaming for mercy",
+            "Resources are completely slammed", "Everything's at the breaking point"
+        ],
+        "unknown": [
+            "Performance metrics are playing coy", "System load is a black box",
+            "Resource usage is classified", "Performance data went AWOL"
+        ]
+    }
+    
+    # Build intelligent greeting with entropy
     battery_status = metrics.battery_status()
     thermal_status = metrics.thermal_status()
     perf_status = metrics.performance_status()
     
-    comments = []
-    
-    # Add battery comment (most important)
-    if battery_status in battery_comments:
-        comments.append(battery_comments[battery_status])
-        
-    # Add thermal comment if notable
-    if thermal_status in ["hot", "overheating", "cool"]:
-        comments.append(thermal_comments[thermal_status])
-    elif thermal_status == "warm" and random.random() < 0.3:
-        comments.append(thermal_comments[thermal_status])
-        
-    # Add performance comment if notable
-    if perf_status in ["busy", "stressed"]:
-        comments.append(performance_comments[perf_status])
-    elif perf_status == "idle" and random.random() < 0.4:
-        comments.append(performance_comments[perf_status])
-        
-    # Combine greeting with comments
-    if comments:
-        if len(comments) == 1:
-            return f"{greeting} {comments[0]}."
-        elif len(comments) == 2:
-            return f"{greeting} {comments[0]}, and {comments[1].lower()}."
-        else:
-            return f"{greeting} {comments[0]}."
+    # Select primary greeting intelligently
+    if random.random() < 0.7:  # 70% time-aware, 30% contextual
+        primary_greeting = random.choice(time_greetings)
     else:
-        return f"{greeting} I'm M1K3, ready to assist you!"
+        primary_greeting = random.choice(contextual_greetings)
+    
+    # Build personality-rich observations
+    observations = []
+    
+    # Always include battery observation with personality
+    if battery_status in battery_observations:
+        observations.append(random.choice(battery_observations[battery_status]))
+    
+    # Include thermal observation based on entropy and significance
+    thermal_include_chance = {
+        "cool": 0.4, "warm": 0.25, "hot": 0.8, "overheating": 1.0, "unknown": 0.1
+    }
+    if thermal_status in thermal_include_chance and random.random() < thermal_include_chance[thermal_status]:
+        observations.append(random.choice(thermal_observations[thermal_status]))
+    
+    # Include performance observation based on significance
+    perf_include_chance = {
+        "idle": 0.3, "moderate": 0.15, "busy": 0.6, "stressed": 0.9, "unknown": 0.1
+    }
+    if perf_status in perf_include_chance and random.random() < perf_include_chance[perf_status]:
+        observations.append(random.choice(performance_insights[perf_status]))
+    
+    # Craft final greeting with natural flow
+    if not observations:
+        return f"{primary_greeting}"
+    elif len(observations) == 1:
+        return f"{primary_greeting} {observations[0]}."
+    elif len(observations) == 2:
+        return f"{primary_greeting} {observations[0]}, and {observations[1]}."
+    else:
+        # Multiple observations - create a flowing narrative
+        first_part = f"{primary_greeting} {observations[0]}"
+        middle_parts = ", ".join(observations[1:-1])
+        last_part = observations[-1]
+        return f"{first_part}, {middle_parts}, and {last_part}."
 
 if __name__ == "__main__":
     # Test comprehensive system metrics collection

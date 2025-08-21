@@ -11,7 +11,17 @@ from enum import Enum
 from typing import Optional
 import argparse
 
-from simple_ai_engine import SimpleAIEngine
+# Try to import the real AI engine first, fall back to mock if not available
+try:
+    from ai_inference import LocalAIEngine
+    REAL_AI_AVAILABLE = True
+    print("🧠 Using real AI inference engine")
+except ImportError as e:
+    print(f"⚠️  Real AI engine not available: {e}")
+    print("🔄 Falling back to mock AI engine")
+    from simple_ai_engine import SimpleAIEngine
+    REAL_AI_AVAILABLE = False
+
 from download_model import download_model
 from enhanced_voice_engine import create_voice_engine
 from system_metrics import SystemMonitor, generate_dynamic_greeting
@@ -27,14 +37,56 @@ class AvatarState(Enum):
 
 class M1K3CLI:
     def __init__(self, voice_enabled: bool = True):
-        self.ai_engine = SimpleAIEngine()
-        self.voice_engine = create_voice_engine()
+        # Initialize system monitoring first to gather context
         self.system_monitor = SystemMonitor()
+        
+        # Use real AI engine if available, otherwise fall back to mock
+        if REAL_AI_AVAILABLE:
+            self.ai_engine = LocalAIEngine()
+            print("🚀 Initialized with real AI inference engine")
+        else:
+            self.ai_engine = SimpleAIEngine()
+            print("🎭 Initialized with mock AI engine (demo mode)")
+            
+        self.voice_engine = create_voice_engine()
         self.animator = CLIAnimator()
         self.avatar_state = AvatarState.IDLE
         self.running = True
         self.voice_enabled = voice_enabled
         self.show_context = False  # Show detailed system context
+        
+        # Set up AI engine with system context
+        self._initialize_ai_context()
+    
+    def _initialize_ai_context(self):
+        """Initialize AI engine with rich system context"""
+        metrics = self.system_monitor.collect_metrics()
+        
+        # Set session context with system information
+        session_context = {
+            "device_type": f"{metrics.cpu_model} with {metrics.memory_total_gb:.1f}GB RAM" if metrics.memory_total_gb else f"{metrics.cpu_model}",
+            "operating_system": f"{metrics.os_name} {metrics.os_version}",
+            "performance_state": metrics.performance_status(),
+            "battery_state": metrics.battery_status(),
+            "thermal_state": metrics.thermal_status(),
+            "timezone": metrics.timezone,
+            "locale": metrics.locale_info,
+            "cpu_cores": f"{metrics.cpu_cores}c/{metrics.cpu_threads}t",
+            "uptime_hours": f"{metrics.uptime_hours:.1f}h" if metrics.uptime_hours else "unknown"
+        }
+        
+        # Only set session context if the engine supports it
+        if hasattr(self.ai_engine, 'set_session_context'):
+            self.ai_engine.set_session_context(session_context)
+        
+        # Set some default user preferences (can be updated based on interaction)
+        if hasattr(self.ai_engine, 'add_user_preference'):
+            self.ai_engine.add_user_preference("response_style", "conversational")
+            self.ai_engine.add_user_preference("technical_level", "intermediate")
+        
+        # Set up trim callback for animations
+        if hasattr(self.ai_engine, '_trim_callback'):
+            self.ai_engine._trim_callback = self._animate_context_trim
         
     def set_avatar_state(self, state: AvatarState):
         """Update avatar state"""
@@ -184,6 +236,10 @@ class M1K3CLI:
             self.display_device_context()
             return
             
+        elif user_input.lower() in ['tokens', 'usage']:
+            self.display_token_stats()
+            return
+            
         elif user_input.lower() in ['animate', 'demo']:
             self.demo_animations()
             return
@@ -216,6 +272,9 @@ class M1K3CLI:
             print()  # Final newline
             self.set_avatar_state(AvatarState.IDLE)
             
+            # Display eco-friendly metrics and token usage
+            self._display_post_response_metrics()
+            
             # Synthesize voice in background
             if self.voice_enabled and full_response.strip():
                 self.set_avatar_state(AvatarState.SPEAKING)
@@ -238,6 +297,7 @@ M1K3 Local AI CLI Commands:
     clear, reset    Clear conversation context  
     stats, status   Show system statistics with animations
     context, device Show comprehensive device context
+    tokens, usage   Show token usage and eco impact
     animate, demo   Demonstrate animation capabilities
     help, h         Show this help
     quit, q         Exit application
@@ -504,6 +564,66 @@ M1K3 Local AI CLI Commands:
             
         self.handle_user_input(query)
         return 0
+
+    def _animate_context_trim(self, messages_removed: int):
+        """Animate context trimming process"""
+        self.animator.animate_context_trimming(messages_removed)
+    
+    def _display_post_response_metrics(self):
+        """Display token usage and eco metrics after response"""
+        # Get current token usage
+        token_usage = self.ai_engine.get_token_usage()
+        
+        # Display animated token bar
+        token_display = self.animator.animate_token_bar(
+            token_usage["current_tokens"], 
+            token_usage["max_tokens"]
+        )
+        print(token_display)
+        
+        # Get and display eco metrics
+        eco_metrics = self.ai_engine.get_eco_metrics()
+        self.animator.animate_eco_metrics(
+            eco_metrics["energy_saved_kwh"],
+            eco_metrics["water_saved_gallons"], 
+            eco_metrics["co2_saved_grams"]
+        )
+        
+        # Show privacy shield animation
+        self.animator.animate_privacy_shield(eco_metrics["data_transmitted"])
+        
+    def display_token_stats(self):
+        """Display comprehensive token and eco statistics"""
+        print("🧠 M1K3 Token & Eco Statistics")
+        print("=" * 50)
+        
+        # Token usage
+        token_usage = self.ai_engine.get_token_usage()
+        token_display = self.animator.animate_token_bar(
+            token_usage["current_tokens"], 
+            token_usage["max_tokens"]
+        )
+        print(token_display)
+        print(f"📊 Messages in context: {token_usage['messages_count']}")
+        print(f"🎯 Trimming threshold: {token_usage['trimming_threshold']:,} tokens")
+        
+        if token_usage["needs_trimming"]:
+            print("⚠️ Context will be trimmed on next message")
+        else:
+            remaining = token_usage["trimming_threshold"] - token_usage["current_tokens"]
+            print(f"✅ {remaining:,} tokens until trimming")
+            
+        print()
+        
+        # Eco metrics
+        eco_metrics = self.ai_engine.get_eco_metrics()
+        print("🌱 Environmental Impact:")
+        print(f"   ⚡ Energy saved: {eco_metrics['energy_saved_kwh']} kWh")
+        print(f"   💧 Water saved: {eco_metrics['water_saved_gallons']} gallons")
+        print(f"   🌍 CO2 prevented: {eco_metrics['co2_saved_grams']}g")
+        print(f"   🔒 Privacy score: {eco_metrics['privacy_score']}")
+        print(f"   📡 Data transmitted: {eco_metrics['data_transmitted']}")
+        print(f"   💬 Responses generated: {eco_metrics['responses_count']}")
 
 def main():
     parser = argparse.ArgumentParser(description="M1K3 Local AI CLI with Voice")

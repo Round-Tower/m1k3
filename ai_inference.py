@@ -14,11 +14,27 @@ from dataclasses import dataclass
 import threading
 import queue
 
+# Import order: prioritize HuggingFace Transformers for better x86_64 compatibility
+try:
+    from transformers import AutoTokenizer, AutoModelForCausalLM as HFAutoModel
+    import torch
+    TRANSFORMERS_AVAILABLE = True
+    print("✅ HuggingFace Transformers available")
+except ImportError:
+    TRANSFORMERS_AVAILABLE = False
+    print("❌ HuggingFace Transformers not available")
+
 try:
     from ctransformers import AutoModelForCausalLM
+    CTRANSFORMERS_AVAILABLE = True
+    print("✅ ctransformers available") 
 except ImportError:
-    print("ctransformers not installed. Run: pip install ctransformers")
-    sys.exit(1)
+    CTRANSFORMERS_AVAILABLE = False
+    print("❌ ctransformers not available")
+
+if not CTRANSFORMERS_AVAILABLE and not TRANSFORMERS_AVAILABLE:
+    print("❌ No AI libraries available. Run: pip install transformers torch")
+    raise ImportError("No AI backends available")
 
 @dataclass
 class ConversationContext:
@@ -49,46 +65,114 @@ class ConversationContext:
 class LocalAIEngine:
     def __init__(self, model_path: str = None):
         self.model_path = model_path or self._get_default_model_path()
-        self.model: Optional[AutoModelForCausalLM] = None
+        self.model = None
+        self.tokenizer = None
         self.context = ConversationContext()
         self.loading = False
+        
+        # Choose backend: prefer HuggingFace for x86_64 compatibility
+        self.use_transformers = TRANSFORMERS_AVAILABLE
+        self.use_ctransformers = CTRANSFORMERS_AVAILABLE and not self.use_transformers
+        self.architecture_error = False
+        
+        print(f"🔧 Backend selection: HF={self.use_transformers}, CT={self.use_ctransformers}")
         
     def _get_default_model_path(self) -> str:
         """Get default model path"""
         models_dir = Path("models")
         models_dir.mkdir(exist_ok=True)
-        return str(models_dir / "SmolLM-135M.Q4_K_M.gguf")
+        return str(models_dir / "tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf")
         
     def is_model_available(self) -> bool:
         """Check if model file exists"""
         return Path(self.model_path).exists()
         
     def load_model(self) -> bool:
-        """Load the AI model"""
-        if not self.is_model_available():
-            print(f"Model not found at {self.model_path}")
-            return False
-            
-        print(f"Loading model from {self.model_path}...")
+        """Load the AI model with fallback strategies"""
         start_time = time.time()
         
-        try:
-            self.model = AutoModelForCausalLM.from_pretrained(
-                self.model_path,
-                model_type="llama",
-                max_new_tokens=512,
-                context_length=2048,
-                threads=4,
-                gpu_layers=0  # CPU inference for compatibility
-            )
-            
-            load_time = time.time() - start_time
-            print(f"Model loaded in {load_time:.2f} seconds")
-            return True
-            
-        except Exception as e:
-            print(f"Failed to load model: {e}")
-            return False
+        # Try HuggingFace Transformers first for better x86_64 compatibility
+        if self.use_transformers:
+            print("🔄 Attempting to load HuggingFace model...")
+            if self._try_huggingface_model():
+                load_time = time.time() - start_time
+                print(f"✅ Model loaded with HuggingFace Transformers in {load_time:.2f} seconds")
+                return True
+            else:
+                print("❌ HuggingFace model loading failed, trying ctransformers...")
+                self.use_transformers = False
+                self.use_ctransformers = True
+        
+        # Fallback to ctransformers for GGUF files
+        if self.use_ctransformers and CTRANSFORMERS_AVAILABLE and self.is_model_available():
+            print(f"Loading GGUF model from {self.model_path}...")
+            try:
+                from ctransformers import AutoModelForCausalLM as CTAutoModel
+                self.model = CTAutoModel.from_pretrained(
+                    self.model_path,
+                    model_type='llama',
+                    max_new_tokens=512,
+                    context_length=2048,
+                    threads=2,  # Reduced threads for x86_64 compatibility
+                    gpu_layers=0  # Disable Metal GPU for x86_64 compatibility
+                )
+                
+                load_time = time.time() - start_time
+                print(f"✅ Model loaded with ctransformers in {load_time:.2f} seconds")
+                return True
+                
+            except Exception as e:
+                error_msg = str(e).lower()
+                if "illegal" in error_msg or "instruction" in error_msg:
+                    print(f"❌ Architecture error with ctransformers: {e}")
+                    print("🔄 Hardware incompatibility detected...")
+                    self.architecture_error = True
+                else:
+                    print(f"❌ ctransformers error: {e}")
+        
+        # Final fallback - raise ImportError to trigger SimpleAIEngine
+        print("❌ All AI backends failed. Falling back to SimpleAIEngine...")
+        raise ImportError("Hardware incompatibility - falling back to mock engine")
+    
+    def _try_huggingface_model(self) -> bool:
+        """Try to load a compatible HuggingFace model"""
+        # 2025 best small models for on-device assistant use
+        model_candidates = [
+            "TinyLlama/TinyLlama-1.1B-Chat-v1.0",  # Best overall: instruction-tuned chat model ~1.1GB
+            "Qwen/Qwen2.5-0.5B-Instruct",          # Excellent small instruction model ~500MB
+            "microsoft/DialoGPT-small",            # Fallback chat model ~350MB
+            "distilgpt2",                          # General fallback ~350MB
+        ]
+        
+        for model_name in model_candidates:
+            try:
+                print(f"🔄 Trying model: {model_name}")
+                self.tokenizer = AutoTokenizer.from_pretrained(model_name)
+                
+                # Handle tokenizer issues
+                if self.tokenizer.pad_token is None:
+                    self.tokenizer.pad_token = self.tokenizer.eos_token
+                
+                self.model = HFAutoModel.from_pretrained(
+                    model_name,
+                    torch_dtype=torch.float32,  # Use float32 for x86_64 compatibility
+                    low_cpu_mem_usage=True      # Optimize for lower memory usage
+                )
+                self.model = self.model.to('cpu')  # Move to CPU after loading
+                
+                print(f"✅ Successfully loaded: {model_name}")
+                print("ℹ️  Using HuggingFace model for x86_64 compatibility")
+                
+                # Store model name for adaptive parameters
+                self._current_model_name = model_name
+                return True
+                
+            except Exception as e:
+                print(f"❌ Failed to load {model_name}: {e}")
+                continue
+        
+        print("❌ All HuggingFace models failed to load")
+        return False
             
     def generate_response(self, prompt: str, max_tokens: int = 512) -> Generator[str, None, None]:
         """Generate streaming response"""
@@ -110,18 +194,79 @@ class LocalAIEngine:
             start_time = time.time()
             response_text = ""
             
-            # Generate response with streaming
-            for token in self.model(
-                formatted_prompt,
-                max_new_tokens=max_tokens,
-                stop=["</s>", "<|endoftext|>", "\n\n"],
-                temperature=0.7,
-                top_p=0.9,
-                stream=True
-            ):
-                if token:
-                    response_text += token
-                    yield token
+            # Generate response based on active backend
+            if self.use_ctransformers and hasattr(self.model, '__call__'):
+                # ctransformers method
+                for token in self.model(
+                    formatted_prompt,
+                    max_new_tokens=max_tokens,
+                    stop=["</s>", "<|endoftext|>", "\n\n"],
+                    temperature=0.7,
+                    top_p=0.9,
+                    stream=True
+                ):
+                    if token:
+                        response_text += token
+                        yield token
+            elif self.use_transformers and self.tokenizer:
+                # HuggingFace transformers method for DialoGPT
+                
+                # Prepare input with proper instruction formatting
+                if formatted_prompt:
+                    # Existing conversation context + new user message
+                    input_text = formatted_prompt + f"\n\n### User:\n{prompt}\n\n### Assistant:\n"
+                else:
+                    # First message with instruction format
+                    input_text = f"### User:\n{prompt}\n\n### Assistant:\n"
+                
+                # Tokenize with attention mask
+                encoded = self.tokenizer(
+                    input_text, 
+                    return_tensors="pt",
+                    max_length=256,  # Shorter context for better quality
+                    truncation=True,
+                    padding=True
+                )
+                
+                inputs = encoded['input_ids']
+                attention_mask = encoded['attention_mask']
+                
+                with torch.no_grad():
+                    # Adaptive parameters based on model size and type
+                    model_params = self._get_adaptive_generation_params(max_tokens)
+                    
+                    outputs = self.model.generate(
+                        inputs,
+                        attention_mask=attention_mask,
+                        **model_params
+                    )
+                
+                # Decode only the new tokens (response)
+                response = self.tokenizer.decode(
+                    outputs[0][inputs.shape[1]:], 
+                    skip_special_tokens=True
+                )
+                response_text = response.strip()
+                
+                # Clean up response for better quality
+                if response_text:
+                    # Clean up response intelligently
+                    response_text = self._clean_response(response_text)
+                    
+                    # Handle empty or very short responses
+                    if len(response_text) < 3:
+                        response_text = "I understand. Could you tell me more?"
+                    
+                    # Simulate streaming by yielding word by word
+                    words = response_text.split()
+                    for i, word in enumerate(words):
+                        if i > 0:
+                            yield " "
+                        yield word
+                        time.sleep(0.04)  # Slightly faster for longer responses
+                else:
+                    response_text = "I'm processing that. Could you rephrase?"
+                    yield response_text
                         
             # Add assistant response to context
             if response_text.strip():
@@ -137,19 +282,38 @@ class LocalAIEngine:
             
     def _format_conversation(self) -> str:
         """Format conversation history for the model"""
-        if not self.context.messages:
-            return ""
+        if self.use_transformers:
+            # Format for instruction-tuned models (TinyLlama, Qwen)
+            if not self.context.messages:
+                return ""
             
-        # Simple format for SmolLM
-        formatted = ""
-        for msg in self.context.messages:
-            if msg["role"] == "user":
-                formatted += f"User: {msg['content']}\n"
-            elif msg["role"] == "assistant":
-                formatted += f"Assistant: {msg['content']}\n"
+            # Keep only the last 2-3 exchanges to avoid context issues
+            recent_messages = self.context.messages[-4:] if len(self.context.messages) > 4 else self.context.messages
+            
+            # Use proper instruction format for modern models
+            conversation_parts = []
+            for msg in recent_messages:
+                if msg["role"] == "user":
+                    conversation_parts.append(f"### User:\n{msg['content']}")
+                elif msg["role"] == "assistant":
+                    conversation_parts.append(f"### Assistant:\n{msg['content']}")
+            
+            return "\n\n".join(conversation_parts) if conversation_parts else ""
+        
+        else:
+            # ctransformers format for GGUF models
+            if not self.context.messages:
+                return ""
                 
-        formatted += "Assistant: "
-        return formatted
+            formatted = ""
+            for msg in self.context.messages:
+                if msg["role"] == "user":
+                    formatted += f"User: {msg['content']}\n"
+                elif msg["role"] == "assistant":
+                    formatted += f"Assistant: {msg['content']}\n"
+                    
+            formatted += "Assistant: "
+            return formatted
         
     def clear_context(self):
         """Clear conversation context"""
@@ -166,6 +330,143 @@ class LocalAIEngine:
             "context_tokens": str(self.context.current_tokens),
             "context_messages": str(len(self.context.messages))
         }
+    
+    def get_token_usage(self) -> Dict[str, any]:
+        """Get current token usage statistics"""
+        usage_percent = (self.context.current_tokens / self.context.max_tokens) * 100
+        return {
+            "current_tokens": self.context.current_tokens,
+            "max_tokens": self.context.max_tokens,
+            "usage_percent": usage_percent,
+            "messages_count": len(self.context.messages),
+            "trimming_threshold": int(self.context.max_tokens * 0.8),
+            "needs_trimming": self.context.should_trim()
+        }
+    
+    def get_eco_metrics(self) -> Dict[str, str]:
+        """Get environmental impact metrics for local AI usage"""
+        responses_generated = len([msg for msg in self.context.messages if msg["role"] == "assistant"])
+        
+        # Estimated savings vs cloud AI (approximate values)
+        energy_saved_kwh = responses_generated * 0.003  # ~3 Wh per response saved
+        water_saved_gallons = responses_generated * 0.12  # ~120ml per response saved  
+        co2_saved_grams = responses_generated * 14  # ~14g CO2 per response saved
+        
+        return {
+            "energy_saved_kwh": f"{energy_saved_kwh:.2f}",
+            "water_saved_gallons": f"{water_saved_gallons:.1f}",
+            "co2_saved_grams": f"{co2_saved_grams:.0f}",
+            "responses_count": str(responses_generated),
+            "privacy_score": "100%",  # All processing is local
+            "data_transmitted": "0 bytes"  # No cloud transmission
+        }
+    
+    def set_session_context(self, context: Dict[str, str]):
+        """Set session context information"""
+        self.session_context = context
+        
+    def add_user_preference(self, key: str, value: str):
+        """Add user preference"""
+        if not hasattr(self, 'user_preferences'):
+            self.user_preferences = {}
+        self.user_preferences[key] = value
+    
+    def _get_adaptive_generation_params(self, max_tokens: int) -> Dict:
+        """Get adaptive generation parameters based on model type and size"""
+        # Get model info for adaptive parameters
+        model_name = getattr(self, '_current_model_name', 'unknown')
+        
+        # Base parameters that work well for most models
+        base_params = {
+            'pad_token_id': self.tokenizer.eos_token_id,
+            'eos_token_id': self.tokenizer.eos_token_id,
+            'do_sample': True,
+        }
+        
+        # Model-specific optimizations
+        if 'tinyllama' in model_name.lower():
+            # TinyLlama optimizations
+            return {
+                **base_params,
+                'max_new_tokens': min(max_tokens, 150),  # Increased for fuller responses
+                'temperature': 0.8,  # Slightly higher for more creativity
+                'top_p': 0.9,
+                'top_k': 40,
+                'repetition_penalty': 1.1,
+                'no_repeat_ngram_size': 3,
+            }
+        
+        elif 'qwen' in model_name.lower():
+            # Qwen optimizations  
+            return {
+                **base_params,
+                'max_new_tokens': min(max_tokens, 200),  # Qwen can handle longer
+                'temperature': 0.7,
+                'top_p': 0.95,
+                'top_k': 50,
+                'repetition_penalty': 1.05,
+                'no_repeat_ngram_size': 2,
+            }
+        
+        elif 'dialogpt' in model_name.lower():
+            # DialoGPT optimizations
+            return {
+                **base_params,
+                'max_new_tokens': min(max_tokens, 100),
+                'temperature': 0.9,
+                'top_p': 0.9,
+                'top_k': 0,  # Disable top_k for DialoGPT
+                'repetition_penalty': 1.3,  # Higher penalty for chat models
+                'no_repeat_ngram_size': 4,
+            }
+        
+        elif 'gpt2' in model_name.lower() or 'distilgpt2' in model_name.lower():
+            # GPT-2 style models
+            return {
+                **base_params,
+                'max_new_tokens': min(max_tokens, 80),
+                'temperature': 0.8,
+                'top_p': 0.9,
+                'top_k': 50,
+                'repetition_penalty': 1.2,
+                'no_repeat_ngram_size': 3,
+            }
+        
+        else:
+            # Universal fallback parameters
+            return {
+                **base_params,
+                'max_new_tokens': min(max_tokens, 100),
+                'temperature': 0.8,
+                'top_p': 0.9,
+                'top_k': 50,
+                'repetition_penalty': 1.1,
+                'no_repeat_ngram_size': 3,
+            }
+    
+    def _clean_response(self, response_text: str) -> str:
+        """Clean up model response intelligently"""
+        # Remove EOS tokens and special tokens
+        if hasattr(self.tokenizer, 'eos_token') and self.tokenizer.eos_token:
+            response_text = response_text.split(self.tokenizer.eos_token)[0]
+        
+        # Remove common artifacts
+        response_text = response_text.replace('<|endoftext|>', '')
+        response_text = response_text.replace('</s>', '')
+        
+        # For instruction-tuned models, stop at next instruction marker
+        if "### User:" in response_text:
+            response_text = response_text.split("### User:")[0]
+        if "### Assistant:" in response_text:
+            response_text = response_text.split("### Assistant:")[0]
+        
+        # Remove incomplete sentences for better quality
+        sentences = response_text.split('. ')
+        if len(sentences) > 1 and len(sentences[-1]) < 10:
+            response_text = '. '.join(sentences[:-1]) + '.'
+        
+        # Clean whitespace and return
+        return response_text.strip()
 
 def download_model(model_name: str = "smollm-135m-q4_k_m") -> str:
     """Download model if not present"""

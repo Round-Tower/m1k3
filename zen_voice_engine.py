@@ -258,6 +258,13 @@ class ZenVoiceEngine:
         """Synthesize text with zen characteristics and natural pacing"""
         if not self.voice_enabled or not self.tts_model:
             return False
+        
+        # Limit text length to prevent ONNX BERT model issues
+        max_length = 200  # Conservative limit for BERT model
+        if len(text) > max_length:
+            # Truncate long text to prevent ONNX errors
+            text = text[:max_length] + "..."
+            print(f"🔊 Text truncated to {max_length} chars to prevent ONNX issues")
             
         # Enhance text with persona characteristics
         enhanced_text = self._enhance_text_for_persona(text)
