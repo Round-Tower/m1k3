@@ -4,10 +4,14 @@ M1K3 Model Pre-packing Utility
 Ensures all local models are properly prepared for fast startup
 """
 
+import os
 import json
 import time
 from pathlib import Path
 from typing import Dict, List, Tuple, Optional
+
+# Fix HuggingFace tokenizers parallelism warning
+os.environ['TOKENIZERS_PARALLELISM'] = 'false'
 
 try:
     from local_model_manager import LocalModelManager

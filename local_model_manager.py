@@ -13,6 +13,9 @@ from dataclasses import dataclass
 import subprocess
 import json
 
+# Fix HuggingFace tokenizers parallelism warning
+os.environ['TOKENIZERS_PARALLELISM'] = 'false'
+
 @dataclass
 class ModelSpec:
     """Model specification with performance characteristics"""

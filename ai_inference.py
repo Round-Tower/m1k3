@@ -14,6 +14,9 @@ from dataclasses import dataclass
 import threading
 import queue
 
+# Fix HuggingFace tokenizers parallelism warning
+os.environ['TOKENIZERS_PARALLELISM'] = 'false'
+
 # Import local model manager
 try:
     from local_model_manager import LocalModelManager

@@ -4,6 +4,7 @@ M1K3 CLI Application with Local AI Integration
 Command-line interface with avatar state management
 """
 
+import os
 import sys
 import time
 import threading
@@ -12,6 +13,9 @@ import atexit
 from enum import Enum
 from typing import Optional
 import argparse
+
+# Fix HuggingFace tokenizers parallelism warning
+os.environ['TOKENIZERS_PARALLELISM'] = 'false'
 
 # Try to import the real AI engine first, fall back to mock if not available
 try:

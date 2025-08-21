@@ -14,6 +14,9 @@ warnings.filterwarnings("ignore", category=FutureWarning)
 warnings.filterwarnings("ignore", category=UserWarning)
 os.environ['PYTHONWARNINGS'] = 'ignore'
 
+# Fix HuggingFace tokenizers parallelism warning
+os.environ['TOKENIZERS_PARALLELISM'] = 'false'
+
 def main():
     """Main launcher with interface selection"""
     parser = argparse.ArgumentParser(
