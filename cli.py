@@ -14,8 +14,8 @@ from enum import Enum
 from typing import Optional
 import argparse
 
-# Fix HuggingFace tokenizers parallelism warning
-os.environ['TOKENIZERS_PARALLELISM'] = 'false'
+# Enable HuggingFace tokenizers parallelism for better performance
+os.environ['TOKENIZERS_PARALLELISM'] = 'true'
 
 # Try to import the real AI engine first, fall back to mock if not available
 try:

@@ -14,8 +14,12 @@ warnings.filterwarnings("ignore", category=FutureWarning)
 warnings.filterwarnings("ignore", category=UserWarning)
 os.environ['PYTHONWARNINGS'] = 'ignore'
 
-# Fix HuggingFace tokenizers parallelism warning
-os.environ['TOKENIZERS_PARALLELISM'] = 'false'
+# Enable HuggingFace tokenizers parallelism for better performance
+os.environ['TOKENIZERS_PARALLELISM'] = 'true'
+
+# Suppress specific tokenizer fork warnings while keeping performance benefits
+import logging
+logging.getLogger("transformers.tokenization_utils_base").setLevel(logging.ERROR)
 
 def main():
     """Main launcher with interface selection"""

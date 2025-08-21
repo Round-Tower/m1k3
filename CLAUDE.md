@@ -563,7 +563,7 @@ Auto-Selected: TinyLlama/TinyLlama-1.1B-Chat-v1.0 (4.2GB, 2.36s load)
 - **Audio System**: Non-blocking startup sounds → no timeout delays
 - **Error Handling**: Graceful fallbacks → skips broken models automatically
 - **Performance**: 2.36s model loading from cache, 1.1B parameter quality responses
-- **Warning Cleanup**: Fixed HuggingFace tokenizers parallelism warnings
+- **Warning Cleanup**: Enabled parallel tokenizers for better performance while suppressing fork warnings
 
 ---
 

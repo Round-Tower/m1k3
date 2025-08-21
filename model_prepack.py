@@ -10,8 +10,8 @@ import time
 from pathlib import Path
 from typing import Dict, List, Tuple, Optional
 
-# Fix HuggingFace tokenizers parallelism warning
-os.environ['TOKENIZERS_PARALLELISM'] = 'false'
+# Enable HuggingFace tokenizers parallelism for better performance
+os.environ['TOKENIZERS_PARALLELISM'] = 'true'
 
 try:
     from local_model_manager import LocalModelManager
