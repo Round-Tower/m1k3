@@ -308,6 +308,12 @@ class LocalAIEngine:
             # Trim context if needed
             if self.context.should_trim():
                 self.context.trim_context()
+
+            # Create and add system prompt on the first turn
+            if len(self.context.messages) <= 1: # Only user prompt is in context
+                system_prompt = self._create_system_prompt()
+                # Insert system prompt at the beginning of the conversation
+                self.context.messages.insert(0, {"role": "system", "content": system_prompt})
                 
             # Format conversation for the model
             formatted_prompt = self._format_conversation()
@@ -628,6 +634,56 @@ class LocalAIEngine:
         
         # Clean whitespace and return
         return response_text.strip()
+
+    def _create_system_prompt(self) -> str:
+        """Create a detailed system prompt with device and AI context."""
+        
+        # AI Self-Description
+        model_name = getattr(self, '_current_model_name', 'a local language model')
+        ai_description = {
+            "name": "M1K3",
+            "model": model_name,
+            "capabilities": [
+                "conversational chat", "answering questions", "creative writing", 
+                "code assistance", "technical explanations"
+            ],
+            "limitations": [
+                "I am a relatively small model, so my knowledge can be limited.",
+                "I run entirely locally, so I do not have access to real-time information.",
+                "I may occasionally make mistakes or generate incorrect information."
+            ]
+        }
+        
+        # Available Actions
+        actions = {
+            "/stats": "Display current system and AI performance statistics.",
+            "/clear": "Clear the conversation history to start fresh.",
+            "/help": "Show this help message with all available commands.",
+            "/exit": "Quit the application."
+        }
+        
+        # Device Context (from session_context, set by CLI)
+        device_context = self.session_context if hasattr(self, 'session_context') else {}
+        
+        # Assemble the prompt
+        prompt = (
+            f"You are {ai_description['name']}, a helpful AI assistant."
+            f" You are running on the model: {ai_description['model']}.\n\n"
+            f"== Your Capabilities ==\n"
+            f"- Strengths: {', '.join(ai_description['capabilities'])}\n"
+            f"- Weaknesses: {', '.join(ai_description['limitations'])}\n\n"
+            f"== User's Device Context ==\n"
+            f"- OS: {device_context.get('operating_system', 'Unknown')}\n"
+            f"- CPU: {device_context.get('device_type', 'Unknown')}\n"
+            f"- Performance: The system is currently running at a {device_context.get('performance_state', 'normal')} level.\n\n"
+            f"== Available Actions ==\n"
+            f"You can suggest the following commands to the user when appropriate. Do not execute them yourself.\n"
+        )
+        for command, desc in actions.items():
+            prompt += f"- `{command}`: {desc}\n"
+            
+        prompt += "\nBegin the conversation by introducing yourself and offering assistance."
+        return prompt
 
 def download_model(model_name: str = "smollm-135m-q4_k_m") -> str:
     """Download model if not present"""

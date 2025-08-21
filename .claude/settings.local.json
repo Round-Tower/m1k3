@@ -3,7 +3,9 @@
     "allow": [
       "Bash(python:*)",
       "WebSearch",
-      "Bash(pip install:*)"
+      "Bash(pip install:*)",
+      "Bash(grep:*)",
+      "Bash(chmod:*)"
     ],
     "deny": [],
     "ask": []
