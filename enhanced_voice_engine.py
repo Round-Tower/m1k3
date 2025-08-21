@@ -8,43 +8,118 @@ import time
 import threading
 from typing import Optional, Dict, Any
 
-# Try to import Zen Voice Engine
+# Try to import voice engines in order of preference
+try:
+    from turbo_voice_engine import TurboVoiceEngine
+    TURBO_AVAILABLE = True
+except ImportError:
+    TURBO_AVAILABLE = False
+
+try:
+    from optimized_voice_engine import OptimizedVoiceEngine
+    OPTIMIZED_AVAILABLE = True
+except ImportError:
+    OPTIMIZED_AVAILABLE = False
+
 try:
     from zen_voice_engine import ZenVoiceEngine
     ZEN_AVAILABLE = True
 except ImportError:
     ZEN_AVAILABLE = False
 
+try:
+    from sound_manager import SoundManager
+    SOUNDS_AVAILABLE = True
+except ImportError:
+    SOUNDS_AVAILABLE = False
+
 from simple_voice_engine import SimpleVoiceEngine
 
 class EnhancedVoiceEngine:
-    """Intelligent voice engine that prefers Zen Voice but falls back gracefully"""
+    """Intelligent voice engine with optimized performance and graceful fallbacks"""
     
     def __init__(self):
         self.primary_engine = None
+        self.secondary_engine = None
         self.fallback_engine = SimpleVoiceEngine()
         self.current_engine = None
         self.voice_enabled = False
         self.loading = False
-        self.zen_mode = True
+        self.engine_mode = "fallback"  # "turbo", "optimized", "zen", or "fallback"
+        
+        # Sound effects integration
+        self.sound_manager = None
+        if SOUNDS_AVAILABLE:
+            try:
+                self.sound_manager = SoundManager()
+            except:
+                pass
         
     def is_available(self) -> bool:
         """Check if any voice engine is available"""
-        return ZEN_AVAILABLE or self.fallback_engine.is_available()
+        return TURBO_AVAILABLE or OPTIMIZED_AVAILABLE or ZEN_AVAILABLE or self.fallback_engine.is_available()
         
     def load_model(self) -> bool:
-        """Load the best available voice engine"""
+        """Load the best available voice engine with priority optimization"""
         self.loading = True
         
-        if ZEN_AVAILABLE:
+        # Play startup sound if available (non-blocking)
+        if self.sound_manager:
             try:
-                print("🧘 Attempting to load Retro Zen Oracle voice...")
-                self.primary_engine = ZenVoiceEngine()
+                self.sound_manager.play_startup_sequence("random")
+            except:
+                pass  # Don't let sound errors block voice loading
+        
+        # Try turbo engine first (fastest)
+        if TURBO_AVAILABLE:
+            try:
+                print("⚡ Attempting to load Turbo Voice Engine...")
+                self.primary_engine = TurboVoiceEngine()
                 
                 if self.primary_engine.load_model():
                     self.current_engine = self.primary_engine
-                    self.zen_mode = True
-                    print("✨ Retro Zen Oracle loaded successfully - Crystal clear with digital warmth!")
+                    self.engine_mode = "turbo"
+                    print("🚀 Turbo voice engine loaded - Ultra-fast synthesis!")
+                    self.voice_enabled = True
+                    self.loading = False
+                    return True
+                else:
+                    print("⚠️  Turbo voice failed to load, trying optimized...")
+                    
+            except Exception as e:
+                print(f"⚠️  Turbo voice error: {e}")
+                print("🔄 Falling back to optimized voice...")
+        
+        # Try optimized engine (best performance)
+        if OPTIMIZED_AVAILABLE:
+            try:
+                print("🚀 Attempting to load Optimized Voice Engine...")
+                self.primary_engine = OptimizedVoiceEngine()
+                
+                if self.primary_engine.load_model():
+                    self.current_engine = self.primary_engine
+                    self.engine_mode = "optimized"
+                    print("⚡ Optimized voice engine loaded - Enhanced performance & reliability!")
+                    self.voice_enabled = True
+                    self.loading = False
+                    return True
+                else:
+                    print("⚠️  Optimized voice failed to load, trying Zen voice...")
+                    
+            except Exception as e:
+                print(f"⚠️  Optimized voice error: {e}")
+                print("🔄 Falling back to Zen voice...")
+        
+        # Try zen voice engine (high quality)
+        if ZEN_AVAILABLE:
+            try:
+                print("🧘 Attempting to load Retro Zen Oracle voice...")
+                self.secondary_engine = ZenVoiceEngine()
+                
+                if self.secondary_engine.load_model():
+                    self.current_engine = self.secondary_engine
+                    self.engine_mode = "zen"
+                    print("✨ Retro Zen Oracle loaded - Crystal clear with digital warmth!")
                     self.voice_enabled = True
                     self.loading = False
                     return True
@@ -55,10 +130,10 @@ class EnhancedVoiceEngine:
                 print(f"⚠️  Zen voice error: {e}")
                 print("🔄 Falling back to system TTS...")
         
-        # Fallback to system TTS
+        # Final fallback to system TTS
         if self.fallback_engine.load_model():
             self.current_engine = self.fallback_engine
-            self.zen_mode = False
+            self.engine_mode = "fallback"
             print("🔊 System TTS loaded - Standard voice mode active")
             self.voice_enabled = True
             self.loading = False
@@ -67,6 +142,24 @@ class EnhancedVoiceEngine:
             print("❌ No voice synthesis available")
             self.loading = False
             return False
+    
+    def play_startup_sound(self, style: str = "random") -> bool:
+        """Play startup sound effect"""
+        if self.sound_manager:
+            try:
+                return self.sound_manager.play_startup_sequence(style)
+            except:
+                pass
+        return False
+    
+    def play_sound_effect(self, effect_name: str, background: bool = True) -> bool:
+        """Play a sound effect"""
+        if self.sound_manager:
+            try:
+                return self.sound_manager.play_sound(effect_name, background=background)
+            except:
+                pass
+        return False
             
     def synthesize_and_play(self, text: str, background: bool = True) -> bool:
         """Synthesize and play text using the active engine"""
@@ -76,15 +169,26 @@ class EnhancedVoiceEngine:
         try:
             result = self.current_engine.synthesize_and_play(text, background)
             
-            # If zen voice fails due to ONNX issues, fall back to system TTS
-            if not result and self.zen_mode and self.primary_engine:
-                error_msg = "ONNX/hardware compatibility issue detected"
-                print(f"🔇 {error_msg}, switching to system TTS...")
+            # If neural voice fails, try fallback engines
+            if not result and self.engine_mode != "fallback":
+                error_msg = f"{self.engine_mode.title()} voice failed"
+                print(f"🔇 {error_msg}, trying fallback...")
                 
-                # Switch to fallback engine
+                # Try the next available engine in priority order
+                if self.engine_mode == "optimized" and self.secondary_engine:
+                    # Try zen voice as fallback
+                    self.current_engine = self.secondary_engine
+                    self.engine_mode = "zen"
+                    print("🧘 Switched to Zen voice")
+                    result = self.secondary_engine.synthesize_and_play(text, background)
+                    
+                    if result:
+                        return True
+                
+                # Final fallback to system TTS
                 if self.fallback_engine.load_model():
                     self.current_engine = self.fallback_engine
-                    self.zen_mode = False
+                    self.engine_mode = "fallback"
                     print("🔊 Switched to system TTS successfully")
                     return self.fallback_engine.synthesize_and_play(text, background)
             
@@ -175,28 +279,36 @@ class EnhancedVoiceEngine:
             self.current_engine.set_voice_enabled(enabled)
             
     def get_status(self) -> dict:
-        """Get comprehensive voice engine status"""
+        """Get comprehensive voice engine status with optimization info"""
         base_status = {
             "available": self.is_available(),
             "loaded": self.current_engine is not None,
             "enabled": self.voice_enabled,
             "loading": self.loading,
-            "zen_mode": self.zen_mode,
-            "engine": "none"
+            "engine_mode": self.engine_mode,
+            "engine": self.engine_mode
         }
         
         if self.current_engine:
-            engine_status = self.current_engine.get_status()
-            base_status.update({
-                "engine": "zen" if self.zen_mode else "system",
-                "model": engine_status.get("model", "unknown")
-            })
+            if hasattr(self.current_engine, 'get_status'):
+                engine_status = self.current_engine.get_status()
+                base_status.update(engine_status)
             
-            # Add persona info if available
-            if self.zen_mode and "persona" in engine_status:
+            # Add optimization info based on engine mode
+            if self.engine_mode == "optimized":
                 base_status.update({
-                    "persona": engine_status["persona"],
-                    "persona_name": engine_status.get("persona_name", "Unknown")
+                    "performance": "Optimized",
+                    "features": ["Smart chunking", "Audio caching", "Error recovery"],
+                })
+            elif self.engine_mode == "zen":
+                base_status.update({
+                    "performance": "High Quality", 
+                    "features": ["Persona system", "Audio effects", "Digital warmth"],
+                })
+            else:
+                base_status.update({
+                    "performance": "Basic",
+                    "features": ["System TTS", "Reliable fallback"],
                 })
             
         return base_status

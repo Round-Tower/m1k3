@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 M1K3 Local AI Inference Module
-Integrates llama.cpp with SmolLM-135M for local AI inference
+Integrates with LocalModelManager for cached model access
 """
 
 import os
@@ -13,6 +13,14 @@ from typing import Generator, List, Dict, Optional
 from dataclasses import dataclass
 import threading
 import queue
+
+# Import local model manager
+try:
+    from local_model_manager import LocalModelManager
+    LOCAL_MODEL_MANAGER_AVAILABLE = True
+except ImportError:
+    LOCAL_MODEL_MANAGER_AVAILABLE = False
+    print("⚠️  LocalModelManager not available")
 
 # Import order: prioritize HuggingFace Transformers for better x86_64 compatibility
 try:
@@ -63,12 +71,21 @@ class ConversationContext:
             self.current_tokens -= len(removed["content"]) // 4
 
 class LocalAIEngine:
-    def __init__(self, model_path: str = None):
+    def __init__(self, model_path: str = None, auto_load: bool = False):
         self.model_path = model_path or self._get_default_model_path()
         self.model = None
         self.tokenizer = None
         self.context = ConversationContext()
         self.loading = False
+        
+        # Initialize model manager
+        self.model_manager = None
+        if LOCAL_MODEL_MANAGER_AVAILABLE:
+            try:
+                self.model_manager = LocalModelManager()
+                print(f"📦 Found {len(self.model_manager.available_models)} cached models")
+            except Exception as e:
+                print(f"⚠️  Model manager initialization failed: {e}")
         
         # Choose backend: prefer HuggingFace for x86_64 compatibility
         self.use_transformers = TRANSFORMERS_AVAILABLE
@@ -77,8 +94,9 @@ class LocalAIEngine:
         
         print(f"🔧 Backend selection: HF={self.use_transformers}, CT={self.use_ctransformers}")
         
-        # Auto-load model during initialization
-        self.load_model()
+        # Only auto-load if explicitly requested (fixes double initialization)
+        if auto_load:
+            self.load_model()
         
     def _get_default_model_path(self) -> str:
         """Get default model path"""
@@ -138,29 +156,126 @@ class LocalAIEngine:
         raise ImportError("Hardware incompatibility - falling back to mock engine")
     
     def _try_huggingface_model(self) -> bool:
-        """Try to load a compatible HuggingFace model"""
-        # 2025 best small models for on-device assistant use
+        """Try to load a compatible HuggingFace model from local cache"""
+        
+        # First, try to use cached models from LocalModelManager
+        if self.model_manager and self.model_manager.available_models:
+            print("📦 Using LocalModelManager for cached models...")
+            
+            # Get the best available cached HF model using LocalModelManager's logic
+            best_model = None
+            device_info = self.model_manager.analyze_device()
+            
+            # Use recommended models from LocalModelManager, filter for HF transformers
+            for recommended_model in device_info.recommended_models:
+                if (recommended_model in self.model_manager.available_models and 
+                    self.model_manager.available_models[recommended_model].model_type == "hf_transformers"):
+                    best_model = recommended_model
+                    break
+            
+            # Fallback: find any HF transformers model if no recommendations
+            if not best_model:
+                for model_name, spec in self.model_manager.available_models.items():
+                    if spec.model_type == "hf_transformers":
+                        best_model = model_name
+                        break
+            
+            if best_model:
+                print(f"🎯 Best cached HF model: {best_model}")
+                
+                # Try to load the cached HF model using the original model name (not file path)
+                try:
+                    print(f"🔄 Loading cached model: {best_model}")
+                    self.tokenizer = AutoTokenizer.from_pretrained(best_model, local_files_only=True)
+                    
+                    # Handle tokenizer issues
+                    if self.tokenizer.pad_token is None:
+                        self.tokenizer.pad_token = self.tokenizer.eos_token
+                    
+                    # Load model from cache
+                    load_kwargs = {
+                        "local_files_only": True,
+                        "low_cpu_mem_usage": True,
+                        "device_map": "cpu"
+                    }
+                    
+                    # Special handling for different model types
+                    if "gemma" in best_model.lower():
+                        try:
+                            load_kwargs["torch_dtype"] = torch.bfloat16
+                            print("🎯 Using bfloat16 for Gemma model")
+                        except:
+                            load_kwargs["torch_dtype"] = torch.float32
+                    else:
+                        load_kwargs["torch_dtype"] = torch.float32
+                    
+                    self.model = HFAutoModel.from_pretrained(best_model, **load_kwargs)
+                    self.model = self.model.to('cpu')
+                    
+                    print(f"✅ Successfully loaded cached model: {best_model}")
+                    self._current_model_name = best_model
+                    return True
+                        
+                except Exception as e:
+                    print(f"❌ Failed to load cached model {best_model}: {e}")
+                    print("🔄 Falling back to direct model access...")
+        
+        # Fallback to direct model loading (may trigger downloads)
+        print("🔄 No cached models available, trying direct access...")
+        # Reduced candidate list to minimize downloads
         model_candidates = [
-            "TinyLlama/TinyLlama-1.1B-Chat-v1.0",  # Best overall: instruction-tuned chat model ~1.1GB
-            "Qwen/Qwen2.5-0.5B-Instruct",          # Excellent small instruction model ~500MB
-            "microsoft/DialoGPT-small",            # Fallback chat model ~350MB
-            "distilgpt2",                          # General fallback ~350MB
+            "microsoft/DialoGPT-small",           # PROVEN: Great conversational model ~350MB
+            "distilgpt2",                         # FALLBACK: Universal compatibility ~350MB
+            "TinyLlama/TinyLlama-1.1B-Chat-v1.0", # If cached, use it
         ]
         
         for model_name in model_candidates:
             try:
                 print(f"🔄 Trying model: {model_name}")
-                self.tokenizer = AutoTokenizer.from_pretrained(model_name)
+                
+                # First try to load from cache (no download)
+                try:
+                    self.tokenizer = AutoTokenizer.from_pretrained(model_name, local_files_only=True)
+                    print(f"📦 Found cached tokenizer for {model_name}")
+                except:
+                    print(f"📥 Tokenizer not cached, downloading for {model_name}...")
+                    self.tokenizer = AutoTokenizer.from_pretrained(model_name)
                 
                 # Handle tokenizer issues
                 if self.tokenizer.pad_token is None:
                     self.tokenizer.pad_token = self.tokenizer.eos_token
                 
-                self.model = HFAutoModel.from_pretrained(
-                    model_name,
-                    torch_dtype=torch.float32,  # Use float32 for x86_64 compatibility
-                    low_cpu_mem_usage=True      # Optimize for lower memory usage
-                )
+                # Optimize loading based on model type
+                load_kwargs = {
+                    "low_cpu_mem_usage": True,
+                    "device_map": "cpu"  # Force CPU for universal compatibility
+                }
+                
+                # Try cached model first
+                try:
+                    load_kwargs["local_files_only"] = True
+                    load_kwargs["torch_dtype"] = torch.float32
+                    
+                    self.model = HFAutoModel.from_pretrained(model_name, **load_kwargs)
+                    print(f"📦 Loaded cached model: {model_name}")
+                except:
+                    # If not cached, download (with warning)
+                    print(f"📥 Model not cached, downloading {model_name}...")
+                    load_kwargs["local_files_only"] = False
+                    
+                    # Special handling for Gemma 2B models - use bfloat16 if supported
+                    if "gemma" in model_name.lower():
+                        try:
+                            load_kwargs["torch_dtype"] = torch.bfloat16
+                            print("🎯 Using bfloat16 for Gemma model (recommended)")
+                        except:
+                            load_kwargs["torch_dtype"] = torch.float32
+                            print("🔄 Fallback to float32 for compatibility")
+                    else:
+                        load_kwargs["torch_dtype"] = torch.float32  # Use float32 for other models
+                    
+                    self.model = HFAutoModel.from_pretrained(model_name, **load_kwargs)
+                
                 self.model = self.model.to('cpu')  # Move to CPU after loading
                 
                 print(f"✅ Successfully loaded: {model_name}")
@@ -214,13 +329,27 @@ class LocalAIEngine:
             elif self.use_transformers and self.tokenizer:
                 # HuggingFace transformers method for DialoGPT
                 
-                # Prepare input with proper instruction formatting
-                if formatted_prompt:
-                    # Existing conversation context + new user message
-                    input_text = formatted_prompt + f"\n\n### User:\n{prompt}\n\n### Assistant:\n"
+                # Prepare input with model-specific formatting
+                model_name = getattr(self, '_current_model_name', 'unknown')
+                
+                if 'gemma' in model_name.lower():
+                    # Gemma prefers simple, clean instruction format
+                    if formatted_prompt:
+                        input_text = formatted_prompt + f"\n\nUser: {prompt}\n\nAssistant:"
+                    else:
+                        input_text = f"User: {prompt}\n\nAssistant:"
+                elif 'phi-3' in model_name.lower() or 'phi3' in model_name.lower():
+                    # Phi-3 uses system/user/assistant format
+                    if formatted_prompt:
+                        input_text = formatted_prompt + f"\n<|user|>\n{prompt}<|end|>\n<|assistant|>\n"
+                    else:
+                        input_text = f"<|system|>\nYou are a helpful AI assistant.<|end|>\n<|user|>\n{prompt}<|end|>\n<|assistant|>\n"
                 else:
-                    # First message with instruction format
-                    input_text = f"### User:\n{prompt}\n\n### Assistant:\n"
+                    # Default format for other models
+                    if formatted_prompt:
+                        input_text = formatted_prompt + f"\n\n### User:\n{prompt}\n\n### Assistant:\n"
+                    else:
+                        input_text = f"### User:\n{prompt}\n\n### Assistant:\n"
                 
                 # Tokenize with attention mask
                 encoded = self.tokenizer(
@@ -387,7 +516,33 @@ class LocalAIEngine:
         }
         
         # Model-specific optimizations
-        if 'tinyllama' in model_name.lower():
+        if 'gemma' in model_name.lower():
+            # Gemma 2B optimizations - enhanced reasoning and instruction following
+            return {
+                **base_params,
+                'max_new_tokens': min(max_tokens, 300),  # Gemma can handle longer, more detailed responses
+                'temperature': 0.7,  # Balanced temperature for good reasoning
+                'top_p': 0.9,
+                'top_k': 50,
+                'repetition_penalty': 1.05,  # Light penalty to avoid repetition
+                'no_repeat_ngram_size': 3,
+                'length_penalty': 1.0,  # Encourage longer, more complete responses
+            }
+        
+        elif 'phi-3' in model_name.lower() or 'phi3' in model_name.lower():
+            # Microsoft Phi-3 optimizations - excellent reasoning capabilities
+            return {
+                **base_params,
+                'max_new_tokens': min(max_tokens, 350),  # Phi-3 can handle detailed responses
+                'temperature': 0.6,  # Lower temp for more focused reasoning
+                'top_p': 0.9,
+                'top_k': 40,
+                'repetition_penalty': 1.1,
+                'no_repeat_ngram_size': 3,
+                'length_penalty': 1.1,  # Encourage complete, detailed responses
+            }
+        
+        elif 'tinyllama' in model_name.lower():
             # TinyLlama optimizations
             return {
                 **base_params,
@@ -526,7 +681,7 @@ def download_model(model_name: str = "smollm-135m-q4_k_m") -> str:
 
 if __name__ == "__main__":
     # Simple CLI test
-    engine = LocalAIEngine()
+    engine = LocalAIEngine(auto_load=True)
     
     if not engine.is_model_available():
         print("Model not found. Downloading...")
