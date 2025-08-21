@@ -1,7 +1,7 @@
-# M1K3 - Local AI CLI with Voice Synthesis
+# M1K3 - Local AI CLI with Voice Synthesis & Avatar Dashboard
 
 ## Project Overview
-M1K3 is a privacy-focused local AI assistant with voice synthesis capabilities, featuring rich CLI animations, eco-friendly metrics, and comprehensive device context analysis. Built with a robust multi-backend AI system that works on any architecture.
+M1K3 is a privacy-focused local AI assistant with voice synthesis and real-time avatar visualization. Features include a web-based dashboard with emotion tracking, rich CLI animations, eco-friendly metrics, and comprehensive device context analysis. Built with a robust multi-backend AI system that works on any architecture.
 
 ## Current Status (2025-08-21) ✅ FULLY OPERATIONAL
 
@@ -11,6 +11,8 @@ M1K3 is a privacy-focused local AI assistant with voice synthesis capabilities, 
 - **Universal compatibility** - works on x86_64, ARM64, any platform
 - **Voice synthesis** with ONNX error handling and text length limiting
 - **Enhanced CLI animations** with typewriter effects, fade-ins, and status indicators
+- **Avatar system** with real-time web dashboard and emotion tracking
+- **WebSocket communication** for live avatar updates and bidirectional messaging
 - **Eco-friendly metrics** showing energy/water saved vs cloud AI, CO2 prevented
 - **Token visualization** with 8K context window and animated usage bars
 - **Device analysis** with comprehensive hardware detection and model recommendations
@@ -100,8 +102,9 @@ M1K3 is a privacy-focused local AI assistant with voice synthesis capabilities, 
    - Guaranteed compatibility fallback
 
 ### Key Components
-- **CLI** (`cli.py`): Rich animations, eco-metrics, token visualization
+- **CLI** (`cli.py`): Rich animations, eco-metrics, token visualization, avatar integration
 - **Voice** (`enhanced_voice_engine.py`): KittenML TTS with persona system
+- **Avatar** (`avatar_server.py`, `avatar_controller.py`): Web dashboard with real-time emotion tracking
 - **Metrics** (`system_metrics.py`): Device analysis and environmental impact
 - **Download** (`download_model.py`): Smart model downloader with recommendations
 - **Animations** (`cli_animations.py`): Typewriter effects and visual feedback
@@ -115,6 +118,12 @@ python m1k3.py
 
 # CLI only (recommended for testing)
 python m1k3.py --no-voice
+
+# CLI with avatar dashboard (auto-opens browser)
+python cli.py --with-avatar
+
+# CLI with avatar on custom port (no browser)
+python cli.py --with-avatar --avatar-port 8090 --no-browser
 
 # Direct CLI entry point
 python cli.py
@@ -130,6 +139,14 @@ context, device   # Comprehensive device context
 animate, demo     # Animation demonstrations
 clear             # Clear conversation context
 quit, exit        # Exit M1K3
+
+# Avatar Commands
+avatar start      # Start avatar web server and dashboard
+avatar stop       # Stop avatar server
+avatar status     # Show server status and avatar state
+avatar emotion <emotion> [intensity]  # Set avatar emotion (0-100)
+avatar style <style> [color]         # Change avatar style/color
+avatar test       # Test all avatar emotions
 ```
 
 ### Model Management
@@ -180,6 +197,90 @@ python m1k3.py --no-voice
 # ✅ Model loaded with HuggingFace Transformers
 # 💤 Type 'help' for commands or start chatting!
 ```
+
+## Avatar System
+
+### 🧘 Real-Time Web Dashboard
+M1K3 features a sophisticated avatar system with a web-based dashboard that provides real-time emotion tracking and visual feedback during conversations.
+
+#### **Key Features**
+- **Pixel Art Avatar**: Dynamic 16x16 pixel art character with multiple styles
+- **Real-Time Emotions**: Automatic emotion analysis and visual updates
+- **Live State Tracking**: Visual indicators for thinking, generating, speaking, etc.
+- **WebSocket Communication**: Bidirectional real-time messaging
+- **Multi-Device Access**: Available on local network for remote viewing
+- **Particle Effects**: Emotion-specific visual effects and animations
+
+#### **Avatar Components**
+- **Avatar Server** (`avatar_server.py`): HTTP server + WebSocket handler
+- **Avatar Controller** (`avatar_controller.py`): Emotion analysis and state management
+- **Web Dashboard** (`m1k3_avatar.html`): Interactive pixel art display
+- **CLI Integration**: Seamless emotion updates during conversations
+
+#### **Available Avatar Styles**
+- **🤖 Robot**: Classic geometric design (default)
+- **🌿 Organic**: Smooth circular shape
+- **💎 Crystal**: Diamond-shaped crystalline form
+- **👻 Ghost**: Wavy bottom ghost shape
+- **⚡ Energy**: Lightning bolt energy form
+- **🐣 Cute**: Round with ears
+
+#### **Emotion System**
+The avatar displays 8 different emotions with varying intensity:
+- **😊 Happy**: Default positive state
+- **😢 Sad**: Sympathetic responses, apologies
+- **😠 Angry**: Error states, frustration
+- **😲 Surprised**: Unexpected inputs, amazement
+- **😍 Love**: Appreciation, positive feedback
+- **🤔 Thinking**: Processing, analysis
+- **😴 Sleepy**: Idle, low energy
+- **🤩 Excited**: High energy, enthusiasm
+
+#### **Real-Time State Tracking**
+- **💤 Idle**: Ready for input
+- **🧠 Pre-Thinking**: User input received
+- **🤔 Thinking**: Processing user input
+- **⚡ Generating**: Streaming AI response with progress
+- **🔊 Speaking**: Voice synthesis active
+- **✅ Post-Response**: Response complete
+- **❌ Error**: Error state with visual feedback
+- **👋 Farewell**: Goodbye animations
+
+#### **Auto-Start Mode**
+```bash
+# Start CLI with avatar dashboard (auto-opens browser)
+python cli.py --with-avatar
+
+# Custom port without browser
+python cli.py --with-avatar --avatar-port 8090 --no-browser
+```
+
+#### **Manual Control**
+```bash
+# Within M1K3 session
+avatar start                    # Launch web server
+avatar status                   # Show server status
+avatar emotion happy 80         # Set emotion manually
+avatar style crystal #FF6B6B    # Change style and color
+avatar test                     # Cycle through all emotions
+```
+
+#### **Network Access**
+The avatar server automatically detects all network interfaces:
+```
+📱 Available at:
+   Local:   http://127.0.0.1:8080
+   Network: http://192.168.1.100:8080 (primary)
+   Network: http://10.0.0.50:8080
+```
+
+#### **Technical Implementation**
+- **WebSocket Port**: 8081 (auto-assigned)
+- **HTTP Port**: 8080 (configurable)
+- **Real-Time Updates**: Emotion changes during conversation flow
+- **Progress Tracking**: Token generation progress with visual feedback
+- **Particle Effects**: Context-appropriate visual effects
+- **Frame Rate**: 60fps smooth animations with breathing effects
 
 ## Architecture Compatibility
 
@@ -234,7 +335,14 @@ python -c "import platform; print(platform.machine())"  # Python architecture
 
 ## Development Notes
 
-### Recent Major Update (2025-01-21)
+### Recent Major Update (2025-08-21)
+- ✅ **Avatar System Integration**: Real-time web dashboard with emotion tracking
+- ✅ **WebSocket Communication**: Bidirectional messaging for live updates
+- ✅ **Pixel Art Visualization**: Dynamic avatar with multiple styles and emotions
+- ✅ **Network Multi-Access**: Avatar dashboard available on all network interfaces
+- ✅ **Real-Time State Tracking**: Visual feedback during AI processing
+
+### Previous Major Update (2025-01-21)
 - ✅ **Solved architecture incompatibility** with multi-backend system
 - ✅ **Universal compatibility** across all platforms and architectures
 - ✅ **Intelligent backend selection** with automatic fallbacks
@@ -249,11 +357,12 @@ python -c "import platform; print(platform.machine())"  # Python architecture
 - Enhanced voice synthesis pacing and quality
 
 ### Future Roadmap
-1. **MLX Integration**: Add Apple MLX backend for native Apple Silicon optimization
-2. **Ollama Support**: Add Ollama API backend for additional model options
-3. **Model Selection**: Allow user to choose between different models
-4. **Performance Tuning**: Optimize response generation and streaming
-5. **Extended Models**: Support for larger models (Phi-2, Mistral-7B) when resources allow
+1. **Enhanced Avatar Dashboard**: Chat interface, speech-to-text, sound effects integration
+2. **MLX Integration**: Add Apple MLX backend for native Apple Silicon optimization
+3. **Ollama Support**: Add Ollama API backend for additional model options
+4. **Model Selection**: Allow user to choose between different models
+5. **Performance Tuning**: Optimize response generation and streaming
+6. **Extended Models**: Support for larger models (Phi-2, Mistral-7B) when resources allow
 
 ## Privacy & Environmental Impact
 
