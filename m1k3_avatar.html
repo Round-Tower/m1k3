@@ -1,0 +1,1014 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>M1K3 Avatar Companion</title>
+    <style>
+        :root {
+            /* M1K3 Design System */
+            --bg-primary: #0A0A0A;
+            --bg-secondary: #141414; 
+            --bg-tertiary: #1F1F1F;
+            --bg-elevated: #2A2A2A;
+            
+            --m1k3-orange: #E25303;
+            --m1k3-blue: #0F4C81;
+            --m1k3-green: #92B48B;
+            --m1k3-red: #8E354A;
+            
+            --text-primary: #FFFFFF;
+            --text-secondary: #A0A0A0;
+            --text-disabled: #666666;
+            
+            --spacing-sm: 8px;
+            --spacing-md: 16px;
+            --spacing-lg: 24px;
+            
+            --border-radius: 12px;
+            --border-radius-sm: 8px;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            line-height: 1.6;
+            padding: var(--spacing-md);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        .container {
+            max-width: 600px;
+            width: 100%;
+            text-align: center;
+        }
+
+        .header {
+            margin-bottom: var(--spacing-lg);
+        }
+
+        .title {
+            font-size: 2rem;
+            font-weight: 700;
+            color: var(--text-primary);
+            margin-bottom: var(--spacing-sm);
+            letter-spacing: -0.02em;
+        }
+
+        .subtitle {
+            font-size: 1rem;
+            color: var(--text-secondary);
+            font-weight: 400;
+        }
+
+        .avatar-display {
+            background: var(--bg-secondary);
+            border-radius: var(--border-radius);
+            padding: var(--spacing-lg);
+            border: 1px solid var(--bg-tertiary);
+            margin-bottom: var(--spacing-lg);
+            position: relative;
+        }
+
+        .canvas-container {
+            position: relative;
+            display: inline-block;
+            margin-bottom: var(--spacing-md);
+            width: 100%;
+            max-width: 400px;
+            aspect-ratio: 1;
+        }
+
+        #avatarCanvas {
+            width: 100%;
+            height: 100%;
+            border: 1px solid var(--bg-elevated);
+            border-radius: var(--border-radius-sm);
+            background: var(--bg-tertiary);
+            image-rendering: pixelated;
+            image-rendering: -moz-crisp-edges;
+            image-rendering: crisp-edges;
+        }
+
+        .status-display {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: var(--spacing-md);
+            margin-bottom: var(--spacing-md);
+            flex-wrap: wrap;
+        }
+
+        .status-item {
+            background: var(--bg-tertiary);
+            padding: var(--spacing-sm) var(--spacing-md);
+            border-radius: var(--border-radius-sm);
+            font-size: 0.875rem;
+            border: 1px solid var(--bg-elevated);
+        }
+
+        .status-item.active {
+            background: var(--m1k3-orange);
+            color: var(--bg-primary);
+            border-color: var(--m1k3-orange);
+        }
+
+        .connection-status {
+            position: absolute;
+            top: var(--spacing-sm);
+            right: var(--spacing-sm);
+            padding: var(--spacing-sm);
+            border-radius: 50%;
+            font-size: 0.75rem;
+            width: 12px;
+            height: 12px;
+            border: 2px solid var(--bg-elevated);
+        }
+
+        .connection-status.connected {
+            background: #00FF85;
+            border-color: #00FF85;
+        }
+
+        .connection-status.disconnected {
+            background: #FF0099;
+            border-color: #FF0099;
+        }
+
+        .message-display {
+            background: var(--bg-tertiary);
+            border-radius: var(--border-radius-sm);
+            padding: var(--spacing-md);
+            margin-top: var(--spacing-md);
+            border: 1px solid var(--bg-elevated);
+            min-height: 60px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-style: italic;
+            color: var(--text-secondary);
+        }
+
+        .animation-indicator {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 2rem;
+            animation: pulse 2s infinite;
+            z-index: 10;
+            pointer-events: none;
+        }
+
+        .state-overlay {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: var(--spacing-sm);
+            z-index: 15;
+            pointer-events: none;
+        }
+
+        .state-icon {
+            font-size: 1.5rem;
+            animation: rotate 2s linear infinite;
+            filter: drop-shadow(0 0 3px rgba(226, 83, 3, 0.8));
+        }
+
+        .progress-bar {
+            width: 60px;
+            height: 6px;
+            background: var(--bg-elevated);
+            border-radius: 3px;
+            overflow: hidden;
+            border: 1px solid var(--m1k3-orange);
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--m1k3-orange), #FFB366);
+            width: 0%;
+            transition: width 0.3s ease;
+            animation: pulse 1s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 0.5; transform: translate(-50%, -50%) scale(1); }
+            50% { opacity: 1; transform: translate(-50%, -50%) scale(1.1); }
+        }
+
+        @keyframes bounce {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-10px); }
+        }
+
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-5px); }
+            75% { transform: translateX(5px); }
+        }
+
+        @keyframes typing {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+        }
+
+        @keyframes glow {
+            0%, 100% { box-shadow: 0 0 5px var(--m1k3-orange); }
+            50% { box-shadow: 0 0 20px var(--m1k3-orange), 0 0 30px var(--m1k3-orange); }
+        }
+
+        @keyframes fadeInOut {
+            0%, 100% { opacity: 0.3; }
+            50% { opacity: 1; }
+        }
+
+        @keyframes rotate {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        .avatar-display.thinking .canvas-container {
+            animation: pulse 2s infinite;
+        }
+
+        .avatar-display.pre_thinking .canvas-container {
+            animation: glow 1s infinite;
+        }
+
+        .avatar-display.generating .canvas-container {
+            animation: typing 0.8s infinite;
+        }
+
+        .avatar-display.post_response .canvas-container {
+            animation: bounce 0.5s ease-out;
+        }
+
+        .avatar-display.excited .canvas-container {
+            animation: bounce 1s infinite;
+        }
+
+        .avatar-display.error .canvas-container {
+            animation: shake 0.5s infinite;
+            filter: hue-rotate(200deg) brightness(1.2);
+        }
+
+        .avatar-display.speaking .canvas-container {
+            animation: pulse 1s infinite ease-in-out;
+        }
+
+        .avatar-display.farewell .canvas-container {
+            animation: fadeInOut 2s ease-in-out;
+        }
+
+        .footer {
+            text-align: center;
+            color: var(--text-disabled);
+            font-size: 0.875rem;
+            margin-top: var(--spacing-lg);
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .container {
+                padding: var(--spacing-sm);
+            }
+            
+            .title {
+                font-size: 1.5rem;
+            }
+            
+            .status-display {
+                flex-direction: column;
+                gap: var(--spacing-sm);
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1 class="title">M1K3 Avatar</h1>
+            <p class="subtitle">Your AI Companion</p>
+        </div>
+
+        <div class="avatar-display" id="avatarDisplay">
+            <div class="connection-status disconnected" id="connectionStatus"></div>
+            
+            <div class="canvas-container">
+                <canvas id="avatarCanvas" width="256" height="256"></canvas>
+                <canvas id="particleCanvas" width="256" height="256" style="position: absolute; top: 0; left: 0; pointer-events: none; z-index: 5;"></canvas>
+                <div class="animation-indicator" id="animationIndicator" style="display:none;">⚙️</div>
+                <div class="state-overlay" id="stateOverlay" style="display:none;">
+                    <div class="state-icon" id="stateIcon">💭</div>
+                    <div class="progress-bar" id="progressBar" style="display:none;">
+                        <div class="progress-fill" id="progressFill"></div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="status-display">
+                <div class="status-item" id="emotionStatus">
+                    <span id="currentEmotion">😊 Happy</span>
+                </div>
+                <div class="status-item" id="stateStatus">
+                    <span id="currentState">💤 Idle</span>
+                </div>
+                <div class="status-item" id="styleStatus">
+                    <span id="currentStyle">🤖 Robot</span>
+                </div>
+                <div class="status-item" id="tokenStatus" style="display:none;">
+                    <span id="currentTokens">🎯 0 tokens</span>
+                </div>
+            </div>
+            
+            <div class="message-display" id="messageDisplay">
+                Waiting for connection to M1K3...
+            </div>
+        </div>
+
+        <div class="footer">
+            <p>WebSocket: <span id="wsStatus">Disconnected</span> | Rendered frames: <span id="frameCount">0</span></p>
+        </div>
+    </div>
+
+    <script>
+        // Avatar state
+        let currentEmotion = 'happy';
+        let currentState = 'idle';
+        let currentStyle = 'robot';
+        let currentColor = '#E25303';
+        let emotionIntensity = 50;
+        let isAnimating = false;
+        let frameCount = 0;
+        
+        // WebSocket connection
+        let websocket = null;
+        let reconnectTimer = null;
+        let isConnected = false;
+        
+        // Canvas context
+        let canvas = null;
+        let ctx = null;
+        
+        // Animation state
+        let animationFrame = null;
+        let animationState = {
+            breathing: 0,
+            bounce: 0,
+            time: 0
+        };
+        
+        // Particle system
+        let particles = [];
+        let particleCanvas = null;
+        let particleCtx = null;
+        
+        // Emotion expressions for pixel art (16x16 grid)
+        const pixelEmotions = {
+            happy: {
+                eyes: [[1,1,1,0,0,1,1,1], [1,0,0,0,0,0,0,1]],
+                mouth: [[0,1,0,0,0,0,1,0], [1,0,1,1,1,1,0,1]]
+            },
+            sad: {
+                eyes: [[1,1,0,0,0,0,1,1], [1,0,1,0,0,1,0,1]],
+                mouth: [[1,0,1,1,1,1,0,1], [0,1,0,0,0,0,1,0]]
+            },
+            angry: {
+                eyes: [[1,0,0,0,0,0,0,1], [0,1,1,0,0,1,1,0]],
+                mouth: [[1,1,1,1,1,1,1,1], [1,0,0,0,0,0,0,1]]
+            },
+            surprised: {
+                eyes: [[0,1,1,1,1,1,1,0], [1,0,0,0,0,0,0,1]],
+                mouth: [[0,0,1,1,1,1,0,0], [0,1,0,0,0,0,1,0]]
+            },
+            love: {
+                eyes: [[0,1,1,0,0,1,1,0], [1,1,1,1,1,1,1,1]],
+                mouth: [[0,1,0,0,0,0,1,0], [1,0,1,1,1,1,0,1]]
+            },
+            thinking: {
+                eyes: [[1,1,1,0,0,0,0,0], [1,0,0,0,0,1,1,1]],
+                mouth: [[0,0,0,1,1,0,0,0], [0,0,1,0,0,1,0,0]]
+            },
+            sleepy: {
+                eyes: [[0,0,0,0,0,0,0,0], [1,1,1,1,1,1,1,1]],
+                mouth: [[0,0,1,1,1,1,0,0], [0,0,0,0,0,0,0,0]]
+            },
+            excited: {
+                eyes: [[1,0,1,0,0,1,0,1], [0,1,0,1,1,0,1,0]],
+                mouth: [[1,0,0,0,0,0,0,1], [0,1,1,1,1,1,1,0]]
+            }
+        };
+        
+        // Initialize
+        function init() {
+            canvas = document.getElementById('avatarCanvas');
+            ctx = canvas.getContext('2d');
+            ctx.imageSmoothingEnabled = false;
+            
+            // Initialize particle canvas
+            particleCanvas = document.getElementById('particleCanvas');
+            particleCtx = particleCanvas.getContext('2d');
+            
+            connectWebSocket();
+            generateAvatar();
+            startAnimation();
+        }
+        
+        // WebSocket connection
+        function connectWebSocket() {
+            try {
+                websocket = new WebSocket('ws://localhost:8081');
+                
+                websocket.onopen = function(event) {
+                    console.log('Connected to M1K3 Avatar Server');
+                    isConnected = true;
+                    updateConnectionStatus(true);
+                    updateMessage('Connected to M1K3! 🚀');
+                    
+                    // Send ping to test connection
+                    sendMessage({type: 'ping'});
+                };
+                
+                websocket.onmessage = function(event) {
+                    try {
+                        const data = JSON.parse(event.data);
+                        handleServerMessage(data);
+                    } catch (e) {
+                        console.error('Error parsing message:', e);
+                    }
+                };
+                
+                websocket.onclose = function(event) {
+                    console.log('Disconnected from M1K3 Avatar Server');
+                    isConnected = false;
+                    updateConnectionStatus(false);
+                    updateMessage('Disconnected from M1K3 - trying to reconnect...');
+                    
+                    // Attempt to reconnect
+                    if (reconnectTimer) clearTimeout(reconnectTimer);
+                    reconnectTimer = setTimeout(connectWebSocket, 3000);
+                };
+                
+                websocket.onerror = function(error) {
+                    console.error('WebSocket error:', error);
+                    updateMessage('Connection error - is M1K3 running?');
+                };
+                
+            } catch (e) {
+                console.error('Failed to connect to WebSocket:', e);
+                updateMessage('Failed to connect - check if M1K3 is running');
+                if (reconnectTimer) clearTimeout(reconnectTimer);
+                reconnectTimer = setTimeout(connectWebSocket, 5000);
+            }
+        }
+        
+        function sendMessage(data) {
+            if (websocket && websocket.readyState === WebSocket.OPEN) {
+                websocket.send(JSON.stringify(data));
+            }
+        }
+        
+        function handleServerMessage(data) {
+            console.log('Received:', data);
+            
+            switch (data.type) {
+                case 'emotion':
+                    updateEmotion(data.emotion, data.intensity || 50, data.message || '');
+                    break;
+                case 'state':
+                    updateState(data.state);
+                    break;
+                case 'style':
+                    updateStyle(data.style, data.color);
+                    break;
+                case 'progress':
+                    updateProgress(data.stage, data.progress, data.tokens, data.message);
+                    break;
+                case 'welcome':
+                    updateMessage(data.message);
+                    break;
+                case 'pong':
+                    // Connection is alive
+                    break;
+                default:
+                    console.log('Unknown message type:', data.type);
+            }
+        }
+        
+        // Update functions
+        function updateEmotion(emotion, intensity, message) {
+            if (emotion && emotion !== currentEmotion) {
+                currentEmotion = emotion;
+                emotionIntensity = intensity || 50;
+                
+                // Update UI
+                const emotionEmojis = {
+                    'happy': '😊', 'sad': '😢', 'angry': '😠', 'surprised': '😲',
+                    'love': '😍', 'thinking': '🤔', 'sleepy': '😴', 'excited': '🤩'
+                };
+                
+                const emoji = emotionEmojis[emotion] || '😊';
+                const emotionName = emotion.charAt(0).toUpperCase() + emotion.slice(1);
+                document.getElementById('currentEmotion').textContent = `${emoji} ${emotionName}`;
+                
+                generateAvatar();
+                
+                // Trigger emotion-specific particles
+                createEmotionParticles(emotion, intensity);
+                
+                if (message) {
+                    updateMessage(message);
+                }
+                
+                console.log(`Emotion updated: ${emotion} (${intensity}%)`);
+            }
+        }
+        
+        // Particle system
+        class Particle {
+            constructor(x, y, type, color) {
+                this.x = x;
+                this.y = y;
+                this.vx = (Math.random() - 0.5) * 4;
+                this.vy = (Math.random() - 0.5) * 4;
+                this.life = 1.0;
+                this.decay = 0.02 + Math.random() * 0.02;
+                this.size = 2 + Math.random() * 4;
+                this.type = type;
+                this.color = color;
+                this.angle = Math.random() * Math.PI * 2;
+                this.spin = (Math.random() - 0.5) * 0.2;
+            }
+            
+            update() {
+                this.x += this.vx;
+                this.y += this.vy;
+                this.vy += 0.1; // Gravity
+                this.vx *= 0.99; // Air resistance
+                this.life -= this.decay;
+                this.angle += this.spin;
+                return this.life > 0;
+            }
+            
+            draw(ctx) {
+                ctx.save();
+                ctx.globalAlpha = this.life;
+                ctx.translate(this.x, this.y);
+                ctx.rotate(this.angle);
+                
+                if (this.type === 'sparkle') {
+                    ctx.fillStyle = this.color;
+                    ctx.fillRect(-this.size/2, -this.size/2, this.size, this.size);
+                } else if (this.type === 'heart') {
+                    ctx.fillStyle = this.color;
+                    ctx.font = `${this.size * 2}px serif`;
+                    ctx.textAlign = 'center';
+                    ctx.fillText('♥', 0, this.size/2);
+                } else if (this.type === 'star') {
+                    ctx.fillStyle = this.color;
+                    ctx.font = `${this.size * 2}px serif`;
+                    ctx.textAlign = 'center';
+                    ctx.fillText('✨', 0, this.size/2);
+                } else {
+                    ctx.fillStyle = this.color;
+                    ctx.beginPath();
+                    ctx.arc(0, 0, this.size, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+                
+                ctx.restore();
+            }
+        }
+        
+        function createEmotionParticles(emotion, intensity) {
+            const centerX = particleCanvas.width / 2;
+            const centerY = particleCanvas.height / 2;
+            const count = Math.floor(intensity / 10) + 3;
+            
+            const emotionConfigs = {
+                'happy': { type: 'sparkle', color: '#FFD700', spread: 40 },
+                'excited': { type: 'star', color: '#FF6B6B', spread: 60 },
+                'love': { type: 'heart', color: '#FF69B4', spread: 30 },
+                'surprised': { type: 'sparkle', color: '#00FFFF', spread: 80 },
+                'thinking': { type: 'circle', color: '#9370DB', spread: 20 },
+                'sad': { type: 'circle', color: '#4169E1', spread: 15 },
+                'angry': { type: 'sparkle', color: '#FF4500', spread: 50 },
+                'sleepy': { type: 'circle', color: '#DDA0DD', spread: 10 }
+            };
+            
+            const config = emotionConfigs[emotion] || emotionConfigs['happy'];
+            
+            for (let i = 0; i < count; i++) {
+                const angle = (Math.PI * 2 * i) / count + Math.random() * 0.5;
+                const distance = Math.random() * config.spread;
+                const x = centerX + Math.cos(angle) * distance;
+                const y = centerY + Math.sin(angle) * distance;
+                
+                particles.push(new Particle(x, y, config.type, config.color));
+            }
+        }
+        
+        function updateParticles() {
+            particleCtx.clearRect(0, 0, particleCanvas.width, particleCanvas.height);
+            
+            for (let i = particles.length - 1; i >= 0; i--) {
+                const particle = particles[i];
+                if (!particle.update()) {
+                    particles.splice(i, 1);
+                } else {
+                    particle.draw(particleCtx);
+                }
+            }
+        }
+        
+        function updateState(state) {
+            if (state && state !== currentState) {
+                currentState = state;
+                
+                // Update UI
+                const stateEmojis = {
+                    'idle': '💤', 'thinking': '🤔', 'generating': '⚡',
+                    'speaking': '🔊', 'error': '❌', 'loading': '⏳',
+                    'pre_thinking': '🧠', 'post_response': '✅', 'farewell': '👋'
+                };
+                
+                const emoji = stateEmojis[state] || '💤';
+                const stateName = state.replace('_', ' ').split(' ').map(word => 
+                    word.charAt(0).toUpperCase() + word.slice(1)
+                ).join(' ');
+                document.getElementById('currentState').textContent = `${emoji} ${stateName}`;
+                
+                // Update avatar display class for animations
+                const avatarDisplay = document.getElementById('avatarDisplay');
+                avatarDisplay.className = 'avatar-display ' + state;
+                
+                // Show/hide state overlay with specific icons and progress
+                updateStateOverlay(state);
+                
+                console.log(`State updated: ${state}`);
+            }
+        }
+        
+        function updateStateOverlay(state) {
+            const overlay = document.getElementById('stateOverlay');
+            const icon = document.getElementById('stateIcon');
+            const progressBar = document.getElementById('progressBar');
+            const progressFill = document.getElementById('progressFill');
+            
+            // State-specific overlays
+            const stateConfigs = {
+                'pre_thinking': { icon: '🧠', showProgress: false, show: true },
+                'thinking': { icon: '💭', showProgress: true, show: true },
+                'generating': { icon: '⚡', showProgress: true, show: true },
+                'speaking': { icon: '🗣️', showProgress: false, show: true },
+                'post_response': { icon: '✅', showProgress: false, show: true },
+                'error': { icon: '❌', showProgress: false, show: true },
+                'loading': { icon: '⏳', showProgress: true, show: true },
+                'farewell': { icon: '👋', showProgress: false, show: true },
+                'idle': { show: false }
+            };
+            
+            const config = stateConfigs[state] || { show: false };
+            
+            if (config.show) {
+                overlay.style.display = 'flex';
+                icon.textContent = config.icon;
+                
+                if (config.showProgress) {
+                    progressBar.style.display = 'block';
+                    // Simulate progress for demo
+                    animateProgress();
+                } else {
+                    progressBar.style.display = 'none';
+                }
+            } else {
+                overlay.style.display = 'none';
+            }
+        }
+        
+        function animateProgress() {
+            const progressFill = document.getElementById('progressFill');
+            let progress = 0;
+            
+            const animate = () => {
+                if (currentState === 'thinking' || currentState === 'generating' || currentState === 'loading') {
+                    progress += Math.random() * 15 + 5; // Random increment
+                    if (progress > 100) progress = 100;
+                    
+                    progressFill.style.width = progress + '%';
+                    
+                    if (progress < 100) {
+                        setTimeout(animate, 300 + Math.random() * 500);
+                    }
+                }
+            };
+            
+            animate();
+        }
+        
+        function updateStyle(style, color) {
+            if (style && style !== currentStyle) {
+                currentStyle = style;
+                
+                const styleEmojis = {
+                    'robot': '🤖', 'organic': '🌿', 'crystal': '💎',
+                    'ghost': '👻', 'energy': '⚡', 'cute': '🐣'
+                };
+                
+                const emoji = styleEmojis[style] || '🤖';
+                const styleName = style.charAt(0).toUpperCase() + style.slice(1);
+                document.getElementById('currentStyle').textContent = `${emoji} ${styleName}`;
+                
+                generateAvatar();
+            }
+            
+            if (color && color !== currentColor) {
+                currentColor = color;
+                generateAvatar();
+            }
+        }
+        
+        function updateConnectionStatus(connected) {
+            const statusElement = document.getElementById('connectionStatus');
+            const wsStatusElement = document.getElementById('wsStatus');
+            
+            if (connected) {
+                statusElement.className = 'connection-status connected';
+                wsStatusElement.textContent = 'Connected';
+            } else {
+                statusElement.className = 'connection-status disconnected';
+                wsStatusElement.textContent = 'Disconnected';
+            }
+        }
+        
+        function updateMessage(message) {
+            document.getElementById('messageDisplay').textContent = message;
+        }
+        
+        function updateProgress(stage, progress, tokens, message) {
+            // Update progress bar in state overlay
+            const progressFill = document.getElementById('progressFill');
+            if (progressFill) {
+                progressFill.style.width = progress + '%';
+            }
+            
+            // Update token counter
+            const tokenStatus = document.getElementById('tokenStatus');
+            const tokenText = document.getElementById('currentTokens');
+            
+            if (tokens > 0) {
+                tokenStatus.style.display = 'block';
+                tokenText.textContent = `🎯 ${tokens} tokens`;
+                
+                // Add active class for visual feedback
+                tokenStatus.classList.add('active');
+                setTimeout(() => tokenStatus.classList.remove('active'), 300);
+            } else if (stage === 'complete') {
+                // Hide token counter after completion
+                setTimeout(() => {
+                    tokenStatus.style.display = 'none';
+                }, 2000);
+            }
+            
+            // Update message if provided
+            if (message) {
+                updateMessage(message);
+            }
+            
+            console.log(`Progress: ${stage} ${progress}% (${tokens} tokens)`);
+        }
+        
+        // Avatar generation
+        function generateAvatar() {
+            const pixelSize = 16;
+            const gridSize = 16;
+            
+            // Clear canvas
+            ctx.fillStyle = '#2D2D2D';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Draw base shape based on style
+            drawAvatarShape(ctx, pixelSize, gridSize);
+            
+            // Apply emotion
+            drawEmotion(ctx, pixelSize, gridSize);
+            
+            frameCount++;
+            document.getElementById('frameCount').textContent = frameCount;
+        }
+        
+        function drawAvatarShape(ctx, pixelSize, gridSize) {
+            ctx.fillStyle = currentColor;
+            
+            switch (currentStyle) {
+                case 'robot':
+                    drawRobot(ctx, pixelSize, gridSize);
+                    break;
+                case 'organic':
+                    drawOrganic(ctx, pixelSize, gridSize);
+                    break;
+                case 'crystal':
+                    drawCrystal(ctx, pixelSize, gridSize);
+                    break;
+                case 'ghost':
+                    drawGhost(ctx, pixelSize, gridSize);
+                    break;
+                case 'energy':
+                    drawEnergy(ctx, pixelSize, gridSize);
+                    break;
+                case 'cute':
+                    drawCute(ctx, pixelSize, gridSize);
+                    break;
+                default:
+                    drawRobot(ctx, pixelSize, gridSize);
+            }
+        }
+        
+        function drawRobot(ctx, pixelSize, gridSize) {
+            // Head outline
+            for (let x = 4; x < 12; x++) {
+                for (let y = 2; y < 10; y++) {
+                    if (y === 2 || y === 9 || x === 4 || x === 11) {
+                        ctx.fillRect(x * pixelSize, y * pixelSize, pixelSize, pixelSize);
+                    }
+                }
+            }
+            
+            // Fill head
+            ctx.fillRect(5 * pixelSize, 3 * pixelSize, 6 * pixelSize, 6 * pixelSize);
+            
+            // Body
+            for (let x = 5; x < 11; x++) {
+                for (let y = 10; y < 14; y++) {
+                    ctx.fillRect(x * pixelSize, y * pixelSize, pixelSize, pixelSize);
+                }
+            }
+            
+            // Antenna
+            ctx.fillRect(7 * pixelSize, pixelSize, pixelSize, pixelSize);
+            ctx.fillRect(8 * pixelSize, pixelSize, pixelSize, pixelSize);
+            ctx.fillRect(7 * pixelSize, 0, pixelSize, pixelSize);
+            ctx.fillRect(8 * pixelSize, 0, pixelSize, pixelSize);
+        }
+        
+        function drawOrganic(ctx, pixelSize, gridSize) {
+            // Circular organic shape
+            const centerX = 8;
+            const centerY = 8;
+            const radius = 5;
+            
+            for (let x = 0; x < gridSize; x++) {
+                for (let y = 0; y < gridSize; y++) {
+                    const distance = Math.sqrt(Math.pow(x - centerX, 2) + Math.pow(y - centerY, 2));
+                    if (distance <= radius) {
+                        ctx.fillRect(x * pixelSize, y * pixelSize, pixelSize, pixelSize);
+                    }
+                }
+            }
+        }
+        
+        function drawCrystal(ctx, pixelSize, gridSize) {
+            // Diamond shape
+            const centerX = 8;
+            const centerY = 8;
+            
+            for (let x = 0; x < gridSize; x++) {
+                for (let y = 0; y < gridSize; y++) {
+                    const distance = Math.abs(x - centerX) + Math.abs(y - centerY);
+                    if (distance <= 6) {
+                        ctx.fillRect(x * pixelSize, y * pixelSize, pixelSize, pixelSize);
+                    }
+                }
+            }
+        }
+        
+        function drawGhost(ctx, pixelSize, gridSize) {
+            // Ghost shape
+            for (let x = 4; x < 12; x++) {
+                for (let y = 3; y < 13; y++) {
+                    if (y < 10 || (y >= 10 && (x % 2 === 0))) {
+                        ctx.fillRect(x * pixelSize, y * pixelSize, pixelSize, pixelSize);
+                    }
+                }
+            }
+        }
+        
+        function drawEnergy(ctx, pixelSize, gridSize) {
+            // Lightning bolt shape
+            const bolt = [
+                [7, 2], [8, 2],
+                [6, 3], [7, 3], [8, 3],
+                [5, 4], [6, 4], [7, 4],
+                [6, 5], [7, 5], [8, 5],
+                [7, 6], [8, 6], [9, 6],
+                [8, 7], [9, 7], [10, 7],
+                [7, 8], [8, 8], [9, 8],
+                [6, 9], [7, 9], [8, 9],
+                [7, 10], [8, 10],
+                [8, 11], [9, 11],
+                [9, 12], [10, 12]
+            ];
+            
+            bolt.forEach(([x, y]) => {
+                ctx.fillRect(x * pixelSize, y * pixelSize, pixelSize, pixelSize);
+            });
+        }
+        
+        function drawCute(ctx, pixelSize, gridSize) {
+            // Round cute shape with ears
+            // Main body
+            for (let x = 5; x < 11; x++) {
+                for (let y = 5; y < 11; y++) {
+                    ctx.fillRect(x * pixelSize, y * pixelSize, pixelSize, pixelSize);
+                }
+            }
+            
+            // Ears
+            ctx.fillRect(4 * pixelSize, 3 * pixelSize, pixelSize * 2, pixelSize * 2);
+            ctx.fillRect(10 * pixelSize, 3 * pixelSize, pixelSize * 2, pixelSize * 2);
+        }
+        
+        function drawEmotion(ctx, pixelSize, gridSize) {
+            const emotion = pixelEmotions[currentEmotion] || pixelEmotions.happy;
+            const intensity = emotionIntensity / 100;
+            
+            // Eyes
+            ctx.fillStyle = '#FFFFFF';
+            const eyeY = 5;
+            
+            for (let i = 0; i < emotion.eyes[0].length; i++) {
+                if (emotion.eyes[Math.floor(intensity + 0.5)][i]) {
+                    const x = i % 4;
+                    const y = Math.floor(i / 4);
+                    ctx.fillRect((5 + x) * pixelSize, (eyeY + y) * pixelSize, pixelSize, pixelSize);
+                    ctx.fillRect((8 + x) * pixelSize, (eyeY + y) * pixelSize, pixelSize, pixelSize);
+                }
+            }
+            
+            // Mouth
+            const mouthY = 7;
+            for (let i = 0; i < emotion.mouth[0].length; i++) {
+                if (emotion.mouth[Math.floor(intensity + 0.5)][i]) {
+                    const x = i % 4;
+                    const y = Math.floor(i / 4);
+                    ctx.fillRect((6 + x) * pixelSize, (mouthY + y) * pixelSize, pixelSize, pixelSize);
+                }
+            }
+        }
+        
+        // Animation loop
+        function startAnimation() {
+            function animate() {
+                animationState.time += 0.016; // ~60fps
+                
+                // Breathing effect
+                animationState.breathing = Math.sin(animationState.time * 1.2) * 0.02;
+                
+                // Apply breathing to canvas
+                const scale = 1 + animationState.breathing;
+                canvas.style.transform = `scale(${scale})`;
+                
+                // Update particles
+                updateParticles();
+                
+                // Update frame counter
+                frameCount++;
+                document.getElementById('frameCount').textContent = frameCount;
+                
+                animationFrame = requestAnimationFrame(animate);
+            }
+            
+            animate();
+        }
+        
+        // Initialize when page loads
+        window.onload = init;
+        
+        // Cleanup on page unload
+        window.onbeforeunload = function() {
+            if (websocket) {
+                websocket.close();
+            }
+            if (animationFrame) {
+                cancelAnimationFrame(animationFrame);
+            }
+        };
+    </script>
+</body>
+</html>

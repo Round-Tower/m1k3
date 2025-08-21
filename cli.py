@@ -7,6 +7,8 @@ Command-line interface with avatar state management
 import sys
 import time
 import threading
+import webbrowser
+import atexit
 from enum import Enum
 from typing import Optional
 import argparse
@@ -27,6 +29,18 @@ from enhanced_voice_engine import create_voice_engine
 from system_metrics import SystemMonitor, generate_dynamic_greeting
 from cli_animations import CLIAnimator, AnimationType
 
+# Avatar system imports
+try:
+    from avatar_server import (
+        start_avatar_server, stop_avatar_server, is_avatar_server_running,
+        send_avatar_emotion, send_avatar_state, send_avatar_progress, get_avatar_server_status
+    )
+    from avatar_controller import AvatarController, AvatarEmotion, AvatarState as AvatarServerState
+    AVATAR_AVAILABLE = True
+except ImportError as e:
+    print(f"⚠️  Avatar system not available: {e}")
+    AVATAR_AVAILABLE = False
+
 class AvatarState(Enum):
     IDLE = "💤"
     THINKING = "🤔" 
@@ -36,9 +50,14 @@ class AvatarState(Enum):
     SPEAKING = "🔊"
 
 class M1K3CLI:
-    def __init__(self, voice_enabled: bool = True):
+    def __init__(self, voice_enabled: bool = True, auto_avatar: bool = False, avatar_port: int = 8080, open_browser: bool = True):
         # Initialize system monitoring first to gather context
         self.system_monitor = SystemMonitor()
+        
+        # Avatar configuration
+        self.auto_avatar = auto_avatar
+        self.avatar_port = avatar_port
+        self.open_browser = open_browser
         
         # Use real AI engine if available, otherwise fall back to mock
         if REAL_AI_AVAILABLE:
@@ -54,6 +73,13 @@ class M1K3CLI:
         self.running = True
         self.voice_enabled = voice_enabled
         self.show_context = False  # Show detailed system context
+        
+        # Initialize avatar controller if available
+        if AVATAR_AVAILABLE:
+            self.avatar_controller = AvatarController()
+            print("🧘 Avatar controller initialized")
+        else:
+            self.avatar_controller = None
         
         # Set up AI engine with system context
         self._initialize_ai_context()
@@ -161,10 +187,74 @@ class M1K3CLI:
             self.voice_enabled = False
             
         self.animated_print("AI Engine ready!", AvatarState.IDLE, "pulse")
+        
+        # Auto-start avatar server if requested
+        if self.auto_avatar and AVATAR_AVAILABLE:
+            self.start_avatar_with_browser()
+        
         return True
+    
+    def start_avatar_with_browser(self):
+        """Start avatar server and optionally open browser"""
+        try:
+            self.print_with_avatar("🚀 Auto-starting avatar server...", AvatarState.LOADING)
+            
+            if start_avatar_server():
+                status = get_avatar_server_status()
+                
+                # Display all available URLs
+                msg = f"✅ Avatar server started!"
+                if status.get('urls'):
+                    msg += "\n   📱 Available at:"
+                    for url in status['urls']:
+                        if 'localhost' in url or '127.0.0.1' in url:
+                            msg += f"\n      Local:   {url}"
+                        else:
+                            msg += f"\n      Network: {url}"
+                
+                self.print_with_avatar(msg, AvatarState.IDLE)
+                
+                # Open browser if requested
+                if self.open_browser:
+                    local_url = f"http://127.0.0.1:{self.avatar_port}"
+                    self.print_with_avatar(f"🌐 Opening browser: {local_url}", AvatarState.IDLE)
+                    
+                    try:
+                        webbrowser.open(local_url)
+                        self.print_with_avatar("✅ Browser opened successfully!", AvatarState.IDLE)
+                        
+                        # Send initial greeting to avatar
+                        if self.avatar_controller:
+                            self.send_avatar_update("Welcome to M1K3! Your AI companion is ready.", "greeting")
+                            
+                    except Exception as e:
+                        self.print_with_avatar(f"⚠️  Could not open browser: {e}", AvatarState.ERROR)
+                        self.print_with_avatar(f"Please manually open: {local_url}", AvatarState.IDLE)
+                
+                # Set up cleanup on exit
+                atexit.register(self.cleanup_avatar_server)
+                
+            else:
+                self.print_with_avatar("❌ Failed to start avatar server", AvatarState.ERROR)
+                
+        except Exception as e:
+            self.print_with_avatar(f"❌ Error starting avatar: {e}", AvatarState.ERROR)
+    
+    def cleanup_avatar_server(self):
+        """Clean up avatar server on exit"""
+        try:
+            if AVATAR_AVAILABLE and is_avatar_server_running():
+                print("\n🛑 Shutting down avatar server...")
+                stop_avatar_server()
+                print("✅ Avatar server stopped")
+        except Exception as e:
+            print(f"⚠️  Error stopping avatar server: {e}")
         
     def handle_user_input(self, user_input: str):
         """Process user input and generate AI response"""
+        
+        # Send pre-thinking state - user just submitted input
+        self.send_avatar_update(user_input, "pre_thinking")
         
         # Handle special commands
         if user_input.lower() in ['quit', 'exit', 'q']:
@@ -244,16 +334,22 @@ class M1K3CLI:
             self.demo_animations()
             return
             
+        elif user_input.lower().startswith('avatar'):
+            self.handle_avatar_command(user_input)
+            return
+            
         elif user_input.lower() in ['help', 'h']:
             self.show_help()
             return
             
         # Generate AI response with animations
         self.start_animated_status("Thinking...", "thinking")
+        self.send_avatar_update(user_input, "thinking")
         time.sleep(1.0)  # Give time to see thinking animation
         self.stop_animated_status()
         
         self.start_animated_status("Generating response...", "generating")
+        self.send_avatar_update("", "generating")
         time.sleep(0.5)  # Brief pause before starting generation
         self.stop_animated_status()
         
@@ -262,15 +358,39 @@ class M1K3CLI:
         try:
             response_started = False
             full_response = ""
+            token_count = 0
+            estimated_max_tokens = 150  # TinyLlama default
+            
+            # Send initial progress
+            if AVATAR_AVAILABLE and is_avatar_server_running():
+                send_avatar_progress("generating", 0, 0, "Starting generation...")
+            
             for token in self.ai_engine.generate_response(user_input):
                 if not response_started:
                     print("\n", end="", flush=True)  # New line before response
                     response_started = True
                 print(token, end="", flush=True)
                 full_response += token
+                token_count += 1
+                
+                # Send progress updates every few tokens
+                if AVATAR_AVAILABLE and is_avatar_server_running() and token_count % 5 == 0:
+                    progress = min((token_count / estimated_max_tokens) * 100, 95)
+                    send_avatar_progress("generating", progress, token_count, f"Generated {token_count} tokens...")
                 
             print()  # Final newline
             self.set_avatar_state(AvatarState.IDLE)
+            
+            # Send completion progress
+            if AVATAR_AVAILABLE and is_avatar_server_running():
+                send_avatar_progress("complete", 100, token_count, f"Response complete! {token_count} tokens generated.")
+            
+            # Send avatar emotion update based on response
+            if full_response.strip():
+                self.send_avatar_update(full_response.strip(), "response")
+            
+            # Send post-response completion state
+            self.send_avatar_update("Response complete", "post_response")
             
             # Display eco-friendly metrics and token usage
             self._display_post_response_metrics()
@@ -278,12 +398,15 @@ class M1K3CLI:
             # Synthesize voice in background
             if self.voice_enabled and full_response.strip():
                 self.set_avatar_state(AvatarState.SPEAKING)
+                self.send_avatar_update("", "speaking")
                 self.voice_engine.synthesize_and_play(full_response.strip())
                 self.set_avatar_state(AvatarState.IDLE)
+                self.send_avatar_update("", "idle")
             
         except Exception as e:
             error_msg = f"Error: {e}"
             self.print_with_avatar(error_msg, AvatarState.ERROR)
+            self.send_avatar_update(error_msg, "error")
             if self.voice_enabled:
                 self.voice_engine.synthesize_and_play(error_msg)
             
@@ -306,6 +429,14 @@ M1K3 Local AI CLI Commands:
     voice, mute     Toggle voice synthesis on/off
     persona <name>  Set persona (natural, assistant, pa_system, broadcast, terminal)
     zen, classic    Toggle between zen and standard voice modes
+    
+  Avatar Commands:
+    avatar start    Start the avatar web server
+    avatar stop     Stop the avatar web server
+    avatar status   Show avatar server and emotion status
+    avatar emotion <emotion> [intensity] - Set avatar emotion (0-100)
+    avatar style <style> [color] - Set avatar style and color
+    avatar test     Test all avatar emotions
     
   Optimized Personas:
     assistant      Clean, clear voice with light processing (default)
@@ -499,6 +630,209 @@ M1K3 Local AI CLI Commands:
         
         if self.voice_enabled:
             self.voice_engine.synthesize_and_play("Animation demonstration finished")
+    
+    def handle_avatar_command(self, user_input: str):
+        """Handle avatar-related commands"""
+        if not AVATAR_AVAILABLE:
+            self.print_with_avatar("Avatar system not available. Install with: pip install websocket-server", AvatarState.ERROR)
+            return
+        
+        parts = user_input.lower().split()
+        if len(parts) == 1:
+            # Just "avatar" - show status
+            status = get_avatar_server_status()
+            if status['running']:
+                msg = f"🌐 Avatar server running at {status['http_url']}"
+                msg += f"\n   WebSocket: ws://localhost:{status['ws_port']}"
+                msg += f"\n   Connected clients: {status['connected_clients']}"
+                self.print_with_avatar(msg, AvatarState.IDLE)
+            else:
+                self.print_with_avatar("🔴 Avatar server not running. Use 'avatar start' to begin.", AvatarState.IDLE)
+            return
+        
+        command = parts[1] if len(parts) > 1 else ""
+        
+        if command in ['start', 'on', 'begin']:
+            if is_avatar_server_running():
+                self.print_with_avatar("🌐 Avatar server already running", AvatarState.IDLE)
+            else:
+                self.print_with_avatar("🚀 Starting avatar server...", AvatarState.LOADING)
+                if start_avatar_server():
+                    status = get_avatar_server_status()
+                    msg = f"✅ Avatar server started!"
+                    
+                    # Add all available URLs
+                    if status.get('urls'):
+                        msg += "\n   📱 Access from:"
+                        for url in status['urls']:
+                            if 'localhost' in url or '127.0.0.1' in url:
+                                msg += f"\n      Local:   {url}"
+                            else:
+                                msg += f"\n      Network: {url}"
+                    else:
+                        msg += f"\n   Open: {status['http_url']}"
+                    
+                    self.print_with_avatar(msg, AvatarState.IDLE)
+                    if self.voice_enabled:
+                        self.voice_engine.synthesize_and_play("Avatar server started")
+                    
+                    # Send initial emotion to avatar
+                    if self.avatar_controller:
+                        self.send_avatar_update("Hello! I'm your M1K3 AI companion.", "greeting")
+                else:
+                    self.print_with_avatar("❌ Failed to start avatar server", AvatarState.ERROR)
+        
+        elif command in ['stop', 'off', 'end']:
+            if not is_avatar_server_running():
+                self.print_with_avatar("🔴 Avatar server not running", AvatarState.IDLE)
+            else:
+                self.print_with_avatar("🛑 Stopping avatar server...", AvatarState.LOADING)
+                stop_avatar_server()
+                self.print_with_avatar("✅ Avatar server stopped", AvatarState.IDLE)
+                if self.voice_enabled:
+                    self.voice_engine.synthesize_and_play("Avatar server stopped")
+        
+        elif command in ['status', 'info']:
+            status = get_avatar_server_status()
+            if status['running']:
+                msg = f"🌐 Avatar Server Status:\n"
+                msg += f"   Status: ✅ Running\n"
+                
+                # Show all available URLs
+                if status.get('urls'):
+                    msg += f"   📱 Available on:\n"
+                    for url in status['urls']:
+                        if 'localhost' in url or '127.0.0.1' in url:
+                            msg += f"      Local:   {url}\n"
+                        else:
+                            msg += f"      Network: {url}\n"
+                else:
+                    msg += f"   HTTP: {status['http_url']}\n"
+                
+                msg += f"   WebSocket: ws://0.0.0.0:{status['ws_port']}\n"
+                msg += f"   Connected clients: {status['connected_clients']}\n"
+                msg += f"   WebSocket available: {'✅' if status['websocket_available'] else '❌'}"
+                
+                if self.avatar_controller:
+                    avatar_state = self.avatar_controller.get_current_state()
+                    msg += f"\n   Current emotion: {avatar_state['emotion']}\n"
+                    msg += f"   Current state: {avatar_state['state']}\n"
+                    msg += f"   Current style: {avatar_state['style']}"
+                
+                self.print_with_avatar(msg, AvatarState.IDLE)
+            else:
+                self.print_with_avatar("🔴 Avatar server not running", AvatarState.IDLE)
+        
+        elif command in ['emotion', 'feel', 'mood']:
+            if not is_avatar_server_running():
+                self.print_with_avatar("❌ Avatar server not running. Use 'avatar start' first.", AvatarState.ERROR)
+                return
+            
+            emotion = parts[2] if len(parts) > 2 else "happy"
+            intensity = 70
+            
+            # Try to parse intensity if provided
+            if len(parts) > 3:
+                try:
+                    intensity = min(max(int(parts[3]), 0), 100)
+                except ValueError:
+                    pass
+            
+            if self.avatar_controller:
+                # Map emotion to avatar emotion
+                emotion_map = {
+                    'happy': AvatarEmotion.HAPPY,
+                    'sad': AvatarEmotion.SAD,
+                    'angry': AvatarEmotion.ANGRY,
+                    'surprised': AvatarEmotion.SURPRISED,
+                    'love': AvatarEmotion.LOVE,
+                    'thinking': AvatarEmotion.THINKING,
+                    'sleepy': AvatarEmotion.SLEEPY,
+                    'excited': AvatarEmotion.EXCITED
+                }
+                
+                avatar_emotion = emotion_map.get(emotion, AvatarEmotion.HAPPY)
+                result = self.avatar_controller.update_emotion("", "", force_emotion=avatar_emotion)
+                result['intensity'] = intensity
+                
+                send_avatar_emotion(result['emotion'], intensity, f"Emotion set to {emotion}")
+                self.print_with_avatar(f"🎭 Avatar emotion set to {emotion} ({intensity}%)", AvatarState.IDLE)
+        
+        elif command in ['style', 'look']:
+            if not is_avatar_server_running():
+                self.print_with_avatar("❌ Avatar server not running. Use 'avatar start' first.", AvatarState.ERROR)
+                return
+            
+            style = parts[2] if len(parts) > 2 else "robot"
+            color = parts[3] if len(parts) > 3 else "#E25303"
+            
+            from avatar_server import get_avatar_server
+            server = get_avatar_server()
+            server.send_style_update(style, color)
+            self.print_with_avatar(f"✨ Avatar style set to {style} with color {color}", AvatarState.IDLE)
+        
+        elif command in ['test', 'demo']:
+            if not is_avatar_server_running():
+                self.print_with_avatar("❌ Avatar server not running. Use 'avatar start' first.", AvatarState.ERROR)
+                return
+            
+            self.print_with_avatar("🧪 Testing avatar emotions...", AvatarState.LOADING)
+            emotions = ['happy', 'excited', 'thinking', 'surprised', 'love', 'sleepy']
+            
+            for emotion in emotions:
+                send_avatar_emotion(emotion, 70, f"Testing {emotion} emotion")
+                self.print_with_avatar(f"   Testing: {emotion}", AvatarState.THINKING)
+                time.sleep(2)
+            
+            send_avatar_emotion('happy', 50, "Test complete!")
+            self.print_with_avatar("✅ Avatar emotion test complete", AvatarState.IDLE)
+        
+        else:
+            help_msg = """🧘 Avatar Commands:
+  avatar start     - Start the avatar web server
+  avatar stop      - Stop the avatar web server  
+  avatar status    - Show server and avatar status
+  avatar emotion <emotion> [intensity] - Set avatar emotion (0-100)
+  avatar style <style> [color] - Set avatar style and color
+  avatar test      - Test all avatar emotions
+  
+Available emotions: happy, sad, angry, surprised, love, thinking, sleepy, excited
+Available styles: robot, organic, crystal, ghost, energy, cute"""
+            
+            self.print_with_avatar(help_msg, AvatarState.IDLE)
+    
+    def send_avatar_update(self, text: str, context: str = ""):
+        """Send emotion update to avatar based on text analysis"""
+        if not AVATAR_AVAILABLE or not is_avatar_server_running() or not self.avatar_controller:
+            return
+        
+        try:
+            # Analyze emotion from text
+            result = self.avatar_controller.update_emotion(text, context)
+            
+            # Send to avatar server
+            send_avatar_emotion(result['emotion'], result['intensity'], text[:100])
+            
+            # Update state based on context
+            if context in ['error']:
+                send_avatar_state('error')
+            elif context in ['pre_thinking']:
+                send_avatar_state('pre_thinking')
+            elif context in ['thinking', 'processing']:
+                send_avatar_state('thinking')
+            elif context in ['generating']:
+                send_avatar_state('generating')
+            elif context in ['speaking']:
+                send_avatar_state('speaking')
+            elif context in ['post_response']:
+                send_avatar_state('post_response')
+            elif context in ['farewell']:
+                send_avatar_state('farewell')
+            else:
+                send_avatar_state('idle')
+                
+        except Exception as e:
+            print(f"Debug: Avatar update error: {e}")
         
     def run_interactive(self):
         """Run interactive CLI session with animations"""
@@ -632,6 +966,9 @@ def main():
     parser.add_argument("--model", default="SmolLM-135M-Q4_K_M", help="Model to download")
     parser.add_argument("--no-voice", action="store_true", help="Disable voice synthesis")
     parser.add_argument("--test-voice", action="store_true", help="Test voice synthesis only")
+    parser.add_argument("--with-avatar", action="store_true", help="Auto-start avatar server and open browser")
+    parser.add_argument("--avatar-port", type=int, default=8080, help="Avatar server HTTP port (default: 8080)")
+    parser.add_argument("--no-browser", action="store_true", help="Don't auto-open browser with --with-avatar")
     
     args = parser.parse_args()
     
@@ -661,7 +998,16 @@ def main():
             return 1
             
     voice_enabled = not args.no_voice
-    cli = M1K3CLI(voice_enabled=voice_enabled)
+    auto_avatar = args.with_avatar
+    avatar_port = args.avatar_port
+    open_browser = not args.no_browser
+    
+    cli = M1K3CLI(
+        voice_enabled=voice_enabled,
+        auto_avatar=auto_avatar,
+        avatar_port=avatar_port,
+        open_browser=open_browser
+    )
     
     if args.query:
         return cli.run_single_query(args.query)
