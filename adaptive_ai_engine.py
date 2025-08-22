@@ -261,12 +261,30 @@ class AdaptiveAIEngine:
         # Auto mode - show reasoning for complex queries or when explicitly requested
         complexity = self.thinking_engine.assess_query_complexity(query)
         
-        # Show reasoning for complex queries or when user asks for explanation
-        return (complexity == QueryComplexity.COMPLEX or 
-                any(phrase in query.lower() for phrase in [
-                    "explain", "show your work", "step by step", "how did you",
-                    "why", "reasoning", "think through"
-                ]))
+        # Show reasoning only when explicitly requested or for very complex analysis
+        query_lower = query.lower()
+        
+        # More precise pattern matching to avoid false positives
+        reasoning_patterns = [
+            r'\bexplain.*how\b',           # "explain how this works"
+            r'\bshow.*work\b',             # "show your work" 
+            r'\bstep by step\b',           # "step by step"
+            r'\bhow did you\b',            # "how did you calculate"
+            r'\bwhy.*because\b',           # "why is this because"
+            r'\breasoning\b',              # explicit reasoning request
+            r'\bthink through\b',          # "think through this"
+            r'\bwalk.*through\b',          # "walk me through"
+            r'\bbreak.*down\b',            # "break this down"
+            r'\bshow me how\b'             # "show me how"
+        ]
+        
+        import re
+        explicit_reasoning_request = any(
+            re.search(pattern, query_lower) for pattern in reasoning_patterns
+        )
+        
+        # Only show reasoning if explicitly requested OR very complex query
+        return (complexity == QueryComplexity.COMPLEX and explicit_reasoning_request)
     
     def _generate_with_thinking(self, query: str, max_tokens: int, 
                               show_reasoning: bool, start_time: float) -> Generator[str, None, None]:

@@ -25,6 +25,16 @@ except ImportError:
     LOCAL_MODEL_MANAGER_AVAILABLE = False
     print("⚠️  LocalModelManager not available")
 
+# Import new template and formatting systems
+try:
+    from model_template_manager import ModelTemplateManager, format_conversation_for_model
+    from response_formatter import ResponseFormatter, format_ai_response
+    TEMPLATE_SYSTEM_AVAILABLE = True
+    print("✅ Template and formatting systems available")
+except ImportError as e:
+    TEMPLATE_SYSTEM_AVAILABLE = False
+    print(f"⚠️  Template system not available: {e}")
+
 # Import order: prioritize HuggingFace Transformers for better x86_64 compatibility
 try:
     from transformers import AutoTokenizer, AutoModelForCausalLM as HFAutoModel
@@ -89,6 +99,17 @@ class LocalAIEngine:
                 print(f"📦 Found {len(self.model_manager.available_models)} cached models")
             except Exception as e:
                 print(f"⚠️  Model manager initialization failed: {e}")
+        
+        # Initialize template and formatting systems
+        self.template_manager = None
+        self.response_formatter = None
+        if TEMPLATE_SYSTEM_AVAILABLE:
+            try:
+                self.template_manager = ModelTemplateManager()
+                self.response_formatter = ResponseFormatter()
+                print("🎨 Template and formatting systems initialized")
+            except Exception as e:
+                print(f"⚠️  Template system initialization failed: {e}")
         
         # Choose backend: prefer HuggingFace for x86_64 compatibility
         self.use_transformers = TRANSFORMERS_AVAILABLE
@@ -295,8 +316,8 @@ class LocalAIEngine:
         print("❌ All HuggingFace models failed to load")
         return False
             
-    def generate_response(self, prompt: str, max_tokens: int = 512) -> Generator[str, None, None]:
-        """Generate streaming response"""
+    def generate_response(self, prompt: str, max_tokens: int = 512, show_thinking: bool = False) -> Generator[str, None, None]:
+        """Generate streaming response with optional thinking process display"""
         if not self.model:
             yield "Error: Model not loaded"
             return
@@ -382,8 +403,8 @@ class LocalAIEngine:
                 
                 # Validate and clean response with anti-hallucination filters
                 if response_text:
-                    # First apply basic cleaning
-                    response_text = self._clean_response(response_text)
+                    # First apply advanced cleaning and formatting
+                    response_text = self._clean_response(response_text, show_thinking)
                     
                     # Then validate for hallucinations
                     try:
@@ -422,16 +443,42 @@ class LocalAIEngine:
             yield f"Error generating response: {e}"
             
     def _format_conversation(self) -> str:
-        """Format conversation history for the model"""
+        """Format conversation history using model-specific templates"""
+        
+        if not self.context.messages:
+            return ""
+        
+        # Use new template system if available
+        if self.template_manager and hasattr(self, '_current_model_name'):
+            try:
+                # Keep only recent messages to avoid context issues
+                recent_messages = self.context.messages[-4:] if len(self.context.messages) > 4 else self.context.messages
+                
+                # Get proper template for the current model
+                template = self.template_manager.get_template(
+                    model_name=self._current_model_name,
+                    tokenizer=self.tokenizer
+                )
+                
+                # Handle system prompt injection for non-supporting models
+                processed_messages = self.template_manager.inject_system_prompt_for_non_supporting_models(
+                    recent_messages, template
+                )
+                
+                # Format using the appropriate template
+                return self.template_manager.format_conversation(
+                    processed_messages, template, add_generation_prompt=True
+                )
+                
+            except Exception as e:
+                print(f"⚠️  Template formatting failed: {e}, falling back to legacy format")
+        
+        # Fallback to legacy formatting
         if self.use_transformers:
             # Format for instruction-tuned models (TinyLlama, Qwen)
-            if not self.context.messages:
-                return ""
-            
-            # Keep only the last 2-3 exchanges to avoid context issues
             recent_messages = self.context.messages[-4:] if len(self.context.messages) > 4 else self.context.messages
             
-            # Use proper instruction format for modern models
+            # Use generic format as fallback
             conversation_parts = []
             for msg in recent_messages:
                 if msg["role"] == "user":
@@ -443,9 +490,6 @@ class LocalAIEngine:
         
         else:
             # ctransformers format for GGUF models
-            if not self.context.messages:
-                return ""
-                
             formatted = ""
             for msg in self.context.messages:
                 if msg["role"] == "user":
@@ -555,8 +599,24 @@ class LocalAIEngine:
                     'no_repeat_ngram_size': 3,
                 }
     
-    def _clean_response(self, response_text: str) -> str:
-        """Clean up model response intelligently"""
+    def _clean_response(self, response_text: str, show_thinking: bool = False) -> str:
+        """Clean up model response using advanced formatting system"""
+        
+        # Use new response formatter if available
+        if self.response_formatter:
+            try:
+                model_name = getattr(self, '_current_model_name', None)
+                formatted = self.response_formatter.format_response(
+                    response_text, 
+                    show_thinking=show_thinking,
+                    model_name=model_name
+                )
+                return formatted.content
+                
+            except Exception as e:
+                print(f"⚠️  Response formatting failed: {e}, using legacy cleanup")
+        
+        # Legacy cleanup for fallback
         # Remove EOS tokens and special tokens
         if hasattr(self.tokenizer, 'eos_token') and self.tokenizer.eos_token:
             response_text = response_text.split(self.tokenizer.eos_token)[0]
@@ -580,7 +640,7 @@ class LocalAIEngine:
         return response_text.strip()
 
     def _create_system_prompt(self) -> str:
-        """Create a detailed system prompt with device and AI context."""
+        """Create a detailed system prompt optimized for the current model template."""
         
         # AI Self-Description
         model_name = getattr(self, '_current_model_name', 'a local language model')
@@ -609,24 +669,37 @@ class LocalAIEngine:
         # Device Context (from session_context, set by CLI)
         device_context = self.session_context if hasattr(self, 'session_context') else {}
         
-        # Assemble the prompt
-        prompt = (
-            f"You are {ai_description['name']}, a helpful AI assistant."
-            f" You are running on the model: {ai_description['model']}.\n\n"
-            f"== Your Capabilities ==\n"
-            f"- Strengths: {', '.join(ai_description['capabilities'])}\n"
-            f"- Weaknesses: {', '.join(ai_description['limitations'])}\n\n"
-            f"== User's Device Context ==\n"
-            f"- OS: {device_context.get('operating_system', 'Unknown')}\n"
-            f"- CPU: {device_context.get('device_type', 'Unknown')}\n"
-            f"- Performance: The system is currently running at a {device_context.get('performance_state', 'normal')} level.\n\n"
-            f"== Available Actions ==\n"
-            f"You can suggest the following commands to the user when appropriate. Do not execute them yourself.\n"
-        )
-        for command, desc in actions.items():
-            prompt += f"- `{command}`: {desc}\n"
-            
-        prompt += "\nBegin the conversation by introducing yourself and offering assistance."
+        # Check if current model supports system prompts
+        supports_system_prompt = True
+        if self.template_manager:
+            try:
+                template = self.template_manager.get_template(model_name, self.tokenizer)
+                supports_system_prompt = template.system_support
+            except:
+                pass
+        
+        # Create appropriate prompt based on model capabilities
+        if supports_system_prompt:
+            # Full system prompt for models that support system messages
+            prompt = (
+                f"You are {ai_description['name']}, a helpful AI assistant "
+                f"running on {ai_description['model']}. You provide clear, helpful responses "
+                f"without showing your thinking process unless specifically asked to explain your reasoning.\n\n"
+                f"Your strengths: {', '.join(ai_description['capabilities'])}\n"
+                f"Your limitations: {', '.join(ai_description['limitations'])}\n\n"
+                f"User's system: {device_context.get('operating_system', 'Unknown')} on "
+                f"{device_context.get('device_type', 'Unknown')} hardware.\n\n"
+                f"Available commands you can suggest: {', '.join(actions.keys())}\n"
+                f"Always be helpful, accurate, and concise."
+            )
+        else:
+            # Shorter prompt for models without system prompt support (will be injected into user message)
+            prompt = (
+                f"You are {ai_description['name']}, a helpful AI assistant. "
+                f"Provide clear, helpful responses. "
+                f"Available commands: {', '.join(actions.keys())}"
+            )
+        
         return prompt
 
 def download_model(model_name: str = "smollm-135m-q4_k_m") -> str:

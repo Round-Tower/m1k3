@@ -38,6 +38,22 @@ from cli_animations import CLIAnimator, AnimationType
 from sound_manager import SoundManager, ContextualSoundManager
 from llm_greeting_engine import generate_llm_greeting
 
+# Streaming response filter
+try:
+    from streaming_response_filter import filter_colon_prefix
+    STREAMING_FILTER_AVAILABLE = True
+except ImportError:
+    STREAMING_FILTER_AVAILABLE = False
+    print("⚠️  Streaming response filter not available")
+
+# Voice text preprocessor
+try:
+    from voice_text_preprocessor import preprocess_for_voice_synthesis
+    VOICE_PREPROCESSOR_AVAILABLE = True
+except ImportError:
+    VOICE_PREPROCESSOR_AVAILABLE = False
+    print("⚠️  Voice text preprocessor not available")
+
 # Avatar system imports
 try:
     from avatar_server import (
@@ -95,6 +111,27 @@ class M1K3CLI:
         
         # Set up AI engine with system context
         self._initialize_ai_context()
+    
+    def _safe_voice_synthesis(self, text: str, background: bool = True):
+        """Safely synthesize voice with text preprocessing to prevent warnings"""
+        if not self.voice_enabled or not text or not text.strip():
+            return
+        
+        try:
+            # Preprocess text to prevent phonemizer warnings
+            if VOICE_PREPROCESSOR_AVAILABLE:
+                processed_text = preprocess_for_voice_synthesis(text.strip())
+                if not processed_text:
+                    return  # Skip empty or unsuitable text
+            else:
+                processed_text = text.strip()
+            
+            # Synthesize with preprocessed text
+            self.voice_engine.synthesize_and_play(processed_text, background=background)
+            
+        except Exception as e:
+            # Silently handle voice synthesis errors
+            pass
     
     def _log_startup_message(self, level: str, message: str):
         """Helper for logging formatted startup messages."""
@@ -448,7 +485,17 @@ class M1K3CLI:
             if AVATAR_AVAILABLE and is_avatar_server_running():
                 send_avatar_progress("generating", 0, 0, "Starting generation...")
             
-            for token in self.ai_engine.generate_response(user_input):
+            # Apply streaming filter if available
+            token_stream = self.ai_engine.generate_response(user_input)
+            if STREAMING_FILTER_AVAILABLE:
+                try:
+                    token_stream = filter_colon_prefix(token_stream)
+                except Exception as e:
+                    print(f"⚠️  Streaming filter error: {e}")
+                    # Fall back to original stream
+                    token_stream = self.ai_engine.generate_response(user_input)
+            
+            for token in token_stream:
                 if not response_started:
                     print("\n", end="", flush=True)  # New line before response
                     response_started = True
@@ -489,7 +536,7 @@ class M1K3CLI:
             if self.voice_enabled and full_response.strip():
                 self.set_avatar_state(AvatarState.SPEAKING)
                 self.send_avatar_update("", "speaking")
-                self.voice_engine.synthesize_and_play(full_response.strip())
+                self._safe_voice_synthesis(full_response.strip())
                 self.set_avatar_state(AvatarState.IDLE)
                 self.send_avatar_update("", "idle")
             
@@ -499,7 +546,7 @@ class M1K3CLI:
             self.send_avatar_update(error_msg, "error")
             self.context_sound_manager.play_response_sound(error_msg, user_input)
             if self.voice_enabled:
-                self.voice_engine.synthesize_and_play(error_msg)
+                self._safe_voice_synthesis(error_msg)
             
     def show_help(self):
         """Display help information"""
@@ -556,7 +603,7 @@ M1K3 Local AI CLI Commands:
         print(help_text)
         
         if self.voice_enabled:
-            self.voice_engine.synthesize_and_play("Here's what I can do for you")
+            self._safe_voice_synthesis("Here's what I can do for you")
     
     def display_system_stats(self):
         """Display animated system statistics"""
@@ -605,7 +652,7 @@ M1K3 Local AI CLI Commands:
             status_msg = f"System running {metrics.performance_status()}"
             if metrics.battery_percent:
                 status_msg += f", battery at {metrics.battery_percent} percent"
-            self.voice_engine.synthesize_and_play(status_msg)
+            self._safe_voice_synthesis(status_msg)
     
     def display_system_diagnostics(self, context_summary):
         """Display comprehensive system diagnostics and M1K3 capabilities"""

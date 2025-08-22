@@ -144,12 +144,12 @@ class ThinkingModeEngine:
                     if insight.emotion:
                         self.avatar_callback("emotion", insight.emotion, insight.confidence * 100)
             
-            # Decide what to output
-            if show_reasoning and analysis.should_show_reasoning:
-                # Show reasoning process
+            # Decide what to output - respect the explicit show_reasoning parameter
+            if show_reasoning:
+                # Show reasoning process when explicitly requested
                 yield from self._format_reasoning_output(analysis)
             else:
-                # Just show final answer
+                # Just show final answer (default behavior)
                 yield from self._stream_final_answer(analysis.final_answer)
         
         finally:
