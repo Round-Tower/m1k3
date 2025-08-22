@@ -14,6 +14,13 @@ from dataclasses import dataclass
 import threading
 import queue
 
+# Model transparency integration
+try:
+    from model_transparency import transparency_engine, log_model_decision, TransparencyLevel
+    TRANSPARENCY_AVAILABLE = True
+except ImportError:
+    TRANSPARENCY_AVAILABLE = False
+
 # Enable HuggingFace tokenizers parallelism for better performance
 os.environ['TOKENIZERS_PARALLELISM'] = 'true'
 
@@ -117,6 +124,12 @@ class LocalAIEngine:
         self.architecture_error = False
         
         print(f"🔧 Backend selection: HF={self.use_transformers}, CT={self.use_ctransformers}")
+        
+        # Log backend decision for transparency
+        if TRANSPARENCY_AVAILABLE:
+            backend_chosen = "HuggingFace" if self.use_transformers else "ctransformers" if self.use_ctransformers else "none"
+            reasoning = f"TRANSFORMERS_AVAILABLE={TRANSFORMERS_AVAILABLE}, CTRANSFORMERS_AVAILABLE={CTRANSFORMERS_AVAILABLE}"
+            log_model_decision("backend_selection", "Available backends", backend_chosen, reasoning)
         
         # Only auto-load if explicitly requested (fixes double initialization)
         if auto_load:

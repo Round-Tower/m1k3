@@ -1,41 +1,24 @@
-# M1K3 - Local AI CLI with Voice Synthesis & Avatar Dashboard
+# M1K3 - Local AI Assistant with PWA & Voice
 
-## Project Overview
-M1K3 is a privacy-focused local AI assistant with voice synthesis and real-time avatar visualization. Features include a web-based dashboard with emotion tracking, rich CLI animations, eco-friendly metrics, and comprehensive device context analysis. Built with a robust multi-backend AI system that works on any architecture.
+## Overview
+Privacy-focused local AI assistant with voice synthesis, web dashboard, CLI interfaces, and comprehensive device compatibility. Features multi-backend AI, real-time avatar visualization, and complete PWA deployment system.
 
-## Current Status (2025-08-22) ✅ FULL-STACK DEPLOYMENT READY
+## Status: ✅ PRODUCTION READY (2025-08-22)
 
-### 🌐 PWA Deployment System (NEW - 2025-08-22)
-**Major Achievement**: Complete Progressive Web App deployment pipeline with universal browser compatibility and production-ready containerization.
-
-**PWA System Features**:
-- ✅ **Universal Browser Deployment**: Complete PWA with offline support and native app installation
-- ✅ **Device-Adaptive AI Loading**: Automatic model tier selection (2GB→8GB+ RAM) with WebAssembly ONNX Runtime
-- ✅ **Production Docker Containers**: Multi-stage builds with Nginx + Python API, health checks, auto-scaling
-- ✅ **CI/CD Pipeline**: Automated GitHub Actions with testing, security scanning, and cloud deployment
-- ✅ **92.3% Integration Success**: Comprehensive testing suite with PWA features validation
-- ✅ **Cloud-Ready Deployment**: Kubernetes, AWS ECS, Google Cloud Run, and edge function support
-- ✅ **Centralized Configuration**: Unified config system with user preferences and runtime updates
-- ✅ **Advanced Error Handling**: Intelligent error recovery with user-friendly feedback and automatic fallbacks
-
-**PWA Architecture**:
-- **Frontend**: Device detection, progressive model loading, chat interface, RAG knowledge base
-- **Backend**: Model export pipeline, ONNX conversion, metadata API, embeddings system
-- **Deployment**: Docker containerization, Kubernetes configs, cloud platform integration
-- **Testing**: Quick validation (30s), integration tests (2min), full pipeline (5min)
+### 🌐 PWA Deployment (NEW)
+- ✅ Universal browser deployment with offline PWA support
+- ✅ Device-adaptive AI (2GB→8GB+ RAM) with ONNX Runtime
+- ✅ Production Docker containers with multi-stage builds
+- ✅ CI/CD pipeline with 92.3% integration success
+- ✅ Cloud-ready for Kubernetes, AWS, GCP, Azure
 
 ### ✅ Core Features
-- **Local AI inference** with TinyLlama-1.1B-Chat working on all architectures
-- **Adaptive AI parameters** optimized for each model (150 tokens for TinyLlama)
-- **Universal compatibility** - works on x86_64, ARM64, any platform
-- **Voice synthesis** with ONNX error handling, text length limiting, and sidechain compression ⚠️ (speech cutoff bug)
-- **Enhanced CLI animations** with typewriter effects, fade-ins, and status indicators
+- **Local AI inference** with TinyLlama-1.1B-Chat (universal architecture compatibility)
+- **Voice synthesis** with KittenTTS + sidechain compression ⚠️ (speech cutoff bug)
 - **Avatar system** with real-time web dashboard and emotion tracking
-- **WebSocket communication** for live avatar updates and bidirectional messaging
-- **Eco-friendly metrics** showing energy/water saved vs cloud AI, CO2 prevented
-- **Token visualization** with 8K context window and animated usage bars
-- **Device analysis** with comprehensive hardware detection and model recommendations
-- **Privacy-focused design** emphasizing local processing (0 bytes transmitted)
+- **Enhanced CLI** with animations, eco-metrics, 8K context visualization
+- **Model transparency engine** with 5-level debugging system for development visibility
+- **Privacy-focused** - 100% local processing (0 bytes transmitted)
 
 ### ✅ Major Issues Resolved
 
@@ -125,6 +108,65 @@ M1K3 is a privacy-focused local AI assistant with voice synthesis and real-time 
 - **Sound Management**: 67+ audio assets with sidechain compression (✅ Working)
 - **TUI Interfaces**: Modern terminal UIs with real-time updates (✅ Working)
 - **System Integration**: End-to-end workflow validation (✅ Working)
+
+### 🔍 Model Transparency Engine (NEW - 2025-08-22)
+**Latest Enhancement**: Advanced model transparency system for development visibility and user trust
+
+#### **Transparency System Features**
+- ✅ **5-Level Transparency Scale**: Off, Basic, Detailed, Full, Debug for granular control
+- ✅ **Real-time Processing Display**: Live parameter tracking, progress bars, and decision logging
+- ✅ **Response Quality Analysis**: Complexity scoring, coherence detection, thinking process extraction
+- ✅ **Backend Decision Logging**: Complete visibility into AI engine selection and reasoning
+- ✅ **Session Analytics**: Comprehensive tracking with export capabilities for analysis
+- ✅ **Interactive Commands**: Live transparency level switching during conversations
+
+#### **Transparency Levels**
+**Basic Level**: Generation timing and token statistics
+```
+⏱️  Processing completed in 5.33s
+📊 Generated 25 tokens at 240.4 tokens/sec
+```
+
+**Detailed Level**: Parameters, progress tracking, and task classification
+```
+🔍 Starting processing with Qwen/Qwen3-0.6B (HuggingFace)  
+📋 Parameters: max_new_tokens=120, do_sample=True, repetition_penalty=1.30
+⚡ Generating: [██░░░░░░░░░░░░░░░░░░] 13.3% (20/150 tokens)
+🎯 Task: conversational | 🎯 Confidence: 0.75 (Medium)
+```
+
+**Full Level**: Complete response analysis and quality metrics
+```
+📊 Response Quality Analysis:
+   Length: 76 chars, 12 words, 1 sentences
+   Complexity Score: 0.68/1.0 | Has Thinking Process: ❌
+   Coherence Indicators: 1 found
+```
+
+**Debug Level**: Maximum transparency with thinking process preview and decision reasoning
+
+#### **CLI Integration**
+**Transparency Commands**:
+- `/transparency status` - Show current transparency level and session stats
+- `/transparency basic/detailed/full/debug` - Change transparency level dynamically
+- `/transparency summary` - Display comprehensive session analytics
+- `/transparency export` - Export transparency data for analysis
+
+**Command Line Options**:
+```bash
+# Start with specific transparency level
+python cli.py --transparency detailed
+
+# Debug mode for development
+python cli.py --transparency debug --no-voice
+```
+
+#### **Development Benefits**
+- **🐛 Debugging**: Complete visibility into model decision-making process
+- **📊 Performance Analysis**: Real-time generation metrics and bottleneck identification  
+- **🎯 Quality Assessment**: Automated response complexity and coherence scoring
+- **⚙️ Parameter Tuning**: Live feedback on how parameter changes affect output
+- **🔒 Trust Building**: Complete transparency maintains privacy-focused approach
 
 ### 🎨 Pure Black Design System (NEW - 2025-08-22)
 **Latest Enhancement**: Complete UI/UX overhaul with modular CSS architecture and pure black design system

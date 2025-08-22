@@ -38,6 +38,15 @@ from cli_animations import CLIAnimator, AnimationType
 from sound_manager import SoundManager, ContextualSoundManager
 from llm_greeting_engine import generate_llm_greeting
 
+# Model transparency engine
+try:
+    from model_transparency import ModelTransparencyEngine, TransparencyLevel, transparency_engine
+    TRANSPARENCY_AVAILABLE = True
+    print("✅ Model transparency engine available")
+except ImportError:
+    TRANSPARENCY_AVAILABLE = False
+    print("⚠️  Model transparency engine not available")
+
 # Streaming response filter
 try:
     from streaming_response_filter import filter_colon_prefix
@@ -76,7 +85,7 @@ class AvatarState(Enum):
     SPEAKING = "🔊"
 
 class M1K3CLI:
-    def __init__(self, voice_enabled: bool = True, auto_avatar: bool = False, avatar_port: int = 8080, open_browser: bool = True):
+    def __init__(self, voice_enabled: bool = True, auto_avatar: bool = False, avatar_port: int = 8080, open_browser: bool = True, transparency_level: str = "basic"):
         # Initialize system monitoring first to gather context
         self.system_monitor = SystemMonitor()
         
@@ -84,6 +93,20 @@ class M1K3CLI:
         self.auto_avatar = auto_avatar
         self.avatar_port = avatar_port
         self.open_browser = open_browser
+        
+        # Initialize transparency engine
+        self.transparency_enabled = TRANSPARENCY_AVAILABLE
+        if self.transparency_enabled:
+            transparency_map = {
+                "off": TransparencyLevel.OFF,
+                "basic": TransparencyLevel.BASIC,
+                "detailed": TransparencyLevel.DETAILED,
+                "full": TransparencyLevel.FULL,
+                "debug": TransparencyLevel.DEBUG
+            }
+            level = transparency_map.get(transparency_level.lower(), TransparencyLevel.BASIC)
+            transparency_engine.set_transparency_level(level)
+            print(f"🔍 Transparency level: {level.name}")
         
         # Use real AI engine if available, otherwise fall back to mock
         if REAL_AI_AVAILABLE:
@@ -310,13 +333,14 @@ class M1K3CLI:
             "/clear": self.ai_engine.clear_context,
             "/demo": self.demo_animations,
             "/sound": self.handle_sound_command,
+            "/transparency": self.handle_transparency_command,
             "/exit": lambda: setattr(self, 'running', False)
         }
         
         if command in action_map:
             print(f"Executing action: {command}")
             # Pass the full command for commands that need it
-            if command == "/sound":
+            if command in ["/sound", "/transparency"]:
                 action_map[command](user_input)
             else:
                 action_map[command]()
@@ -366,6 +390,47 @@ class M1K3CLI:
             msg += f"   Enabled: {'✅' if self.sound_manager.enabled else '❌'}\n"
             msg += f"   Profile: {status['current_profile']}\n"
             msg += f"   Discovered sounds: {status['total_sounds']}"
+            self.print_with_avatar(msg, AvatarState.IDLE)
+
+    def handle_transparency_command(self, user_input: str = ""):
+        """Handle transparency-related commands"""
+        if not TRANSPARENCY_AVAILABLE:
+            self.print_with_avatar("❌ Transparency engine not available", AvatarState.ERROR)
+            return
+            
+        parts = user_input.lower().split()
+        command = parts[1] if len(parts) > 1 else "status"
+
+        if command in ["off", "disable"]:
+            transparency_engine.set_transparency_level(TransparencyLevel.OFF)
+            self.print_with_avatar("🔍 Transparency disabled", AvatarState.IDLE)
+        elif command in ["basic", "on", "enable"]:
+            transparency_engine.set_transparency_level(TransparencyLevel.BASIC)
+            self.print_with_avatar("🔍 Basic transparency enabled (generation stats)", AvatarState.IDLE)
+        elif command in ["detailed", "verbose"]:
+            transparency_engine.set_transparency_level(TransparencyLevel.DETAILED)
+            self.print_with_avatar("🔍 Detailed transparency enabled (parameters, progress)", AvatarState.IDLE)
+        elif command in ["full", "complete"]:
+            transparency_engine.set_transparency_level(TransparencyLevel.FULL)
+            self.print_with_avatar("🔍 Full transparency enabled (processing analysis)", AvatarState.IDLE)
+        elif command in ["debug", "maximum"]:
+            transparency_engine.set_transparency_level(TransparencyLevel.DEBUG)
+            self.print_with_avatar("🔍 Debug transparency enabled (maximum detail)", AvatarState.IDLE)
+        elif command == "summary":
+            transparency_engine.display_session_summary()
+        elif command == "export":
+            data = transparency_engine.export_transparency_data()
+            if data:
+                print(f"📄 Transparency data exported ({len(data)} keys)")
+                print(f"   Session responses: {data['summary']['total_responses']}")
+                print(f"   Model decisions: {data['summary']['total_decisions']}")
+        else:  # status
+            current_level = transparency_engine.transparency_level
+            msg = f"🔍 Transparency Status:\n"
+            msg += f"   Current Level: {current_level.name}\n"
+            msg += f"   Available Levels: off, basic, detailed, full, debug\n"
+            msg += f"   Session Responses: {len(transparency_engine.current_session_stats)}\n"
+            msg += f"   Model Decisions Logged: {len(transparency_engine.decisions)}"
             self.print_with_avatar(msg, AvatarState.IDLE)
 
     def handle_user_input(self, user_input: str):
@@ -480,6 +545,28 @@ class M1K3CLI:
             full_response = ""
             token_count = 0
             estimated_max_tokens = 150  # TinyLlama default
+            transparency_start_time = None
+            
+            # Initialize transparency tracking
+            if TRANSPARENCY_AVAILABLE:
+                model_name = getattr(self.ai_engine, '_current_model_name', 'Unknown')
+                backend_type = "HuggingFace" if getattr(self.ai_engine, 'use_transformers', False) else "ctransformers" if getattr(self.ai_engine, 'use_ctransformers', False) else "SimpleAI"
+                
+                # Get generation parameters if available
+                try:
+                    if hasattr(self.ai_engine, '_get_adaptive_generation_params'):
+                        params = self.ai_engine._get_adaptive_generation_params(estimated_max_tokens, user_input)
+                    else:
+                        params = {"max_tokens": estimated_max_tokens}
+                except:
+                    params = {"max_tokens": estimated_max_tokens}
+                
+                transparency_start_time = transparency_engine.start_processing(model_name, backend_type, params)
+                
+                # Show model reasoning if transparency is enabled
+                if hasattr(self.ai_engine, 'context') and self.ai_engine.context.messages:
+                    formatted_prompt = ""  # We'd need to get this from the AI engine
+                    transparency_engine.show_model_reasoning(user_input, formatted_prompt, "conversational", params)
             
             # Send initial progress
             if AVATAR_AVAILABLE and is_avatar_server_running():
@@ -512,6 +599,10 @@ class M1K3CLI:
                     progress = min((token_count / estimated_max_tokens) * 100, 95)
                     send_avatar_progress("generating", progress, token_count, f"Generated {token_count} tokens...")
                 
+                # Show streaming progress in transparency mode
+                if TRANSPARENCY_AVAILABLE and token_count % 10 == 0:
+                    transparency_engine.show_streaming_progress(token_count, estimated_max_tokens, token)
+                
             print()  # Final newline
             self.set_avatar_state(AvatarState.IDLE)
             
@@ -521,6 +612,32 @@ class M1K3CLI:
                 send_avatar_progress("complete", 100, token_count, f"Response complete! {token_count} tokens generated.")
             
             self.context_sound_manager.play_response_sound(full_response, user_input)
+            
+            # Transparency analysis and completion tracking
+            if TRANSPARENCY_AVAILABLE and transparency_start_time:
+                # Analyze response quality
+                analysis = transparency_engine.analyze_response_quality(full_response)
+                
+                # Complete processing tracking
+                model_name = getattr(self.ai_engine, '_current_model_name', 'Unknown')
+                backend_type = "HuggingFace" if getattr(self.ai_engine, 'use_transformers', False) else "ctransformers" if getattr(self.ai_engine, 'use_ctransformers', False) else "SimpleAI"
+                
+                try:
+                    params = self.ai_engine._get_adaptive_generation_params(estimated_max_tokens, user_input) if hasattr(self.ai_engine, '_get_adaptive_generation_params') else {"max_tokens": estimated_max_tokens}
+                except:
+                    params = {"max_tokens": estimated_max_tokens}
+                
+                transparency_engine.end_processing(
+                    transparency_start_time, 
+                    model_name, 
+                    backend_type, 
+                    params, 
+                    token_count,
+                    task_classification="conversational",
+                    confidence_score=analysis.get('complexity_score', 0.5),
+                    thinking_detected=analysis.get('has_thinking', False),
+                    response_quality="normal"
+                )
             
             # Send avatar emotion update based on response
             if full_response.strip():
@@ -574,6 +691,16 @@ M1K3 Local AI CLI Commands:
     avatar emotion <emotion> [intensity] - Set avatar emotion (0-100)
     avatar style <style> [color] - Set avatar style and color
     avatar test     Test all avatar emotions
+    
+  Transparency Commands (Dev/Debug):
+    /transparency status    Show current transparency level
+    /transparency off       Disable model transparency
+    /transparency basic     Basic transparency (generation stats)
+    /transparency detailed  Detailed transparency (parameters, progress)  
+    /transparency full      Full transparency (processing analysis)
+    /transparency debug     Debug transparency (maximum detail)
+    /transparency summary   Show session transparency summary
+    /transparency export    Export transparency data
     
   Optimized Personas:
     assistant      Clean, clear voice with light processing (default)
@@ -1294,6 +1421,7 @@ def main():
     parser.add_argument("--with-avatar", action="store_true", help="Auto-start avatar server and open browser")
     parser.add_argument("--avatar-port", type=int, default=8080, help="Avatar server HTTP port (default: 8080)")
     parser.add_argument("--no-browser", action="store_true", help="Don't auto-open browser with --with-avatar")
+    parser.add_argument("--transparency", choices=["off", "basic", "detailed", "full", "debug"], default="basic", help="Set model transparency level for development (default: basic)")
     
     args = parser.parse_args()
     
@@ -1322,12 +1450,14 @@ def main():
     auto_avatar = args.with_avatar
     avatar_port = args.avatar_port
     open_browser = not args.no_browser
+    transparency_level = args.transparency
     
     cli = M1K3CLI(
         voice_enabled=voice_enabled,
         auto_avatar=auto_avatar,
         avatar_port=avatar_port,
-        open_browser=open_browser
+        open_browser=open_browser,
+        transparency_level=transparency_level
     )
     
     if args.query:
