@@ -162,6 +162,10 @@ class LocalModelManager:
         elif "tinyllama" in name_lower:
             return "TinyLlama - Fast, reliable chat model", "~15-30 tokens/sec"
         
+        elif "qwen3-0.6b" in name_lower:
+            return "Qwen3-0.6B - Latest reasoning model with thinking mode", "~15-35 tokens/sec"
+        elif "qwen2.5" in name_lower:
+            return "Qwen2.5 - Enhanced instruction model", "~12-28 tokens/sec"
         elif "qwen" in name_lower:
             return "Qwen - High-quality instruction model", "~10-25 tokens/sec"
         
@@ -228,17 +232,23 @@ class LocalModelManager:
         for name, spec in self.available_models.items():
             ram_req_gb = spec.ram_required_mb / 1024
             if ram_req_gb <= available_ram_gb:
-                # Score based on quality and compatibility (avoid Gemma tokenizer issues)
-                if "tinyllama" in name.lower():
-                    priority = 100  # Highest priority - most compatible
+                # Score based on quality and capabilities (prioritize most powerful models)
+                if "qwen3-0.6b" in name.lower() or "qwen/qwen3-0.6b" in name.lower():
+                    priority = 99   # Highest priority - latest reasoning model, compact and fast
+                elif "gemma-2-2b-it" in name.lower():
+                    priority = 100  # Very high priority - powerful but larger model
+                elif "gemma" in name.lower():
+                    priority = 95   # High priority - enhanced capabilities
+                elif "qwen2.5-1.5b-instruct" in name.lower():
+                    priority = 98   # Excellent reasoning model - small and fast
+                elif "tinyllama" in name.lower():
+                    priority = 90   # Reliable fallback - good compatibility
                 elif "dialogpt" in name.lower():
-                    priority = 90   # Very reliable conversational model
+                    priority = 85   # Good conversational model
                 elif "phi-3" in name.lower():
                     priority = 80   # Good quality when compatible
                 elif "qwen" in name.lower():
-                    priority = 70   # Good but may have issues
-                elif "gemma" in name.lower():
-                    priority = 30   # Lower priority due to SentencePiece tokenizer issues
+                    priority = 85   # Generally good Qwen models
                 else:
                     priority = 50   # Default priority
                 

@@ -23,7 +23,13 @@ class AvatarEmotion(Enum):
 class AvatarState(Enum):
     """Avatar states that reflect AI activity"""
     IDLE = "idle"
+    PRE_THINKING = "pre_thinking" 
     THINKING = "thinking"
+    ANALYZING = "analyzing"
+    REASONING = "reasoning"
+    CALCULATING = "calculating"
+    SYNTHESIZING = "synthesizing"
+    CONCLUDING = "concluding"
     GENERATING = "generating"
     SPEAKING = "speaking"
     ERROR = "error"
@@ -198,7 +204,13 @@ class AvatarController:
         
         # State-specific emotion adjustments
         state_emotions = {
+            AvatarState.PRE_THINKING: AvatarEmotion.THINKING,
             AvatarState.THINKING: AvatarEmotion.THINKING,
+            AvatarState.ANALYZING: AvatarEmotion.THINKING,
+            AvatarState.REASONING: AvatarEmotion.THINKING,
+            AvatarState.CALCULATING: AvatarEmotion.THINKING,
+            AvatarState.SYNTHESIZING: AvatarEmotion.THINKING,
+            AvatarState.CONCLUDING: AvatarEmotion.EXCITED,
             AvatarState.LOADING: AvatarEmotion.THINKING,
             AvatarState.ERROR: AvatarEmotion.SAD,
             AvatarState.IDLE: AvatarEmotion.SLEEPY
@@ -233,6 +245,72 @@ class AvatarController:
             "previous_style": previous_style.value,
             "changed": new_style != previous_style,
             "timestamp": self.last_update
+        }
+    
+    def update_thinking_progress(self, phase: str, progress: float, insight: str = "", 
+                               confidence: float = 0.7) -> Dict[str, Any]:
+        """Update avatar with thinking progress and insights"""
+        
+        # Map thinking phases to avatar states
+        phase_states = {
+            "analyzing": AvatarState.ANALYZING,
+            "reasoning": AvatarState.REASONING,
+            "calculating": AvatarState.CALCULATING,
+            "synthesizing": AvatarState.SYNTHESIZING,
+            "concluding": AvatarState.CONCLUDING,
+        }
+        
+        # Update state if phase is recognized
+        if phase in phase_states:
+            self.update_state(phase_states[phase])
+        
+        # Adjust emotion based on confidence and phase
+        if confidence > 0.8:
+            emotion = AvatarEmotion.EXCITED if phase == "concluding" else AvatarEmotion.HAPPY
+        elif confidence > 0.6:
+            emotion = AvatarEmotion.THINKING
+        else:
+            emotion = AvatarEmotion.SURPRISED  # Uncertainty
+        
+        self.update_emotion(emotion, int(confidence * 100))
+        
+        return {
+            "phase": phase,
+            "progress": progress,
+            "insight": insight,
+            "confidence": confidence,
+            "avatar_state": self.current_state.value,
+            "avatar_emotion": self.current_emotion.value,
+            "timestamp": time.time()
+        }
+    
+    def update_reasoning_insight(self, reasoning_type: str, complexity: float, 
+                               key_concepts: List[str] = None) -> Dict[str, Any]:
+        """Update avatar based on reasoning insights"""
+        
+        # Adjust emotion based on reasoning type and complexity
+        reasoning_emotions = {
+            "mathematical": AvatarEmotion.THINKING,
+            "logical": AvatarEmotion.THINKING,
+            "creative": AvatarEmotion.EXCITED,
+            "analytical": AvatarEmotion.THINKING,
+            "conversational": AvatarEmotion.HAPPY,
+        }
+        
+        base_emotion = reasoning_emotions.get(reasoning_type, AvatarEmotion.THINKING)
+        
+        # Intensity based on complexity (higher complexity = higher intensity)
+        intensity = int(50 + (complexity * 50))  # 50-100 range
+        
+        self.update_emotion(base_emotion, intensity)
+        
+        return {
+            "reasoning_type": reasoning_type,
+            "complexity": complexity,
+            "key_concepts": key_concepts or [],
+            "avatar_emotion": self.current_emotion.value,
+            "emotion_intensity": intensity,
+            "timestamp": time.time()
         }
     
     def get_current_state(self) -> Dict[str, Any]:

@@ -338,27 +338,17 @@ class LocalAIEngine:
             elif self.use_transformers and self.tokenizer:
                 # HuggingFace transformers method for DialoGPT
                 
-                # Prepare input with model-specific formatting
+                # Use optimized prompt formatting to reduce hallucinations
                 model_name = getattr(self, '_current_model_name', 'unknown')
                 
-                if 'gemma' in model_name.lower():
-                    # Gemma prefers simple, clean instruction format
-                    if formatted_prompt:
-                        input_text = formatted_prompt + f"\n\nUser: {prompt}\n\nAssistant:"
-                    else:
-                        input_text = f"User: {prompt}\n\nAssistant:"
-                elif 'phi-3' in model_name.lower() or 'phi3' in model_name.lower():
-                    # Phi-3 uses system/user/assistant format
-                    if formatted_prompt:
-                        input_text = formatted_prompt + f"\n<|user|>\n{prompt}<|end|>\n<|assistant|>\n"
-                    else:
-                        input_text = f"<|system|>\nYou are a helpful AI assistant.<|end|>\n<|user|>\n{prompt}<|end|>\n<|assistant|>\n"
-                else:
-                    # Default format for other models
-                    if formatted_prompt:
-                        input_text = formatted_prompt + f"\n\n### User:\n{prompt}\n\n### Assistant:\n"
-                    else:
-                        input_text = f"### User:\n{prompt}\n\n### Assistant:\n"
+                try:
+                    from optimized_inference_config import get_optimized_prompt_format
+                    # Convert context messages for the formatter
+                    context_history = self.context.messages[:-1] if len(self.context.messages) > 1 else None
+                    input_text = get_optimized_prompt_format(model_name, prompt, context_history)
+                except ImportError:
+                    # Fallback to conservative default
+                    input_text = f"Human: {prompt}\n\nAssistant: "
                 
                 # Tokenize with attention mask
                 encoded = self.tokenizer(
@@ -389,14 +379,23 @@ class LocalAIEngine:
                 )
                 response_text = response.strip()
                 
-                # Clean up response for better quality
+                # Validate and clean response with anti-hallucination filters
                 if response_text:
-                    # Clean up response intelligently
+                    # First apply basic cleaning
                     response_text = self._clean_response(response_text)
                     
-                    # Handle empty or very short responses
-                    if len(response_text) < 3:
-                        response_text = "I understand. Could you tell me more?"
+                    # Then validate for hallucinations
+                    try:
+                        from optimized_inference_config import validate_response_quality
+                        is_valid, cleaned_response = validate_response_quality(response_text, prompt)
+                        if is_valid:
+                            response_text = cleaned_response
+                        else:
+                            response_text = cleaned_response  # Will be a safe fallback response
+                    except ImportError:
+                        # Basic fallback validation
+                        if len(response_text) < 3:
+                            response_text = "I understand. Could you tell me more?"
                     
                     # Simulate streaming by yielding word by word
                     words = response_text.split()
@@ -513,101 +512,28 @@ class LocalAIEngine:
         self.user_preferences[key] = value
     
     def _get_adaptive_generation_params(self, max_tokens: int) -> Dict:
-        """Get adaptive generation parameters based on model type and size"""
-        # Get model info for adaptive parameters
+        """Get anti-hallucination optimized parameters based on model type"""
         model_name = getattr(self, '_current_model_name', 'unknown')
         
-        # Base parameters that work well for most models
-        base_params = {
-            'pad_token_id': self.tokenizer.eos_token_id,
-            'eos_token_id': self.tokenizer.eos_token_id,
-            'do_sample': True,
-        }
-        
-        # Model-specific optimizations
-        if 'gemma' in model_name.lower():
-            # Gemma 2B optimizations - enhanced reasoning and instruction following
+        # Import optimized config
+        try:
+            from optimized_inference_config import get_anti_hallucination_params
+            params = get_anti_hallucination_params(model_name, max_tokens)
+            # Set tokenizer-specific IDs
+            params['pad_token_id'] = self.tokenizer.eos_token_id
+            params['eos_token_id'] = self.tokenizer.eos_token_id
+            return params
+        except ImportError:
+            # Fallback to conservative parameters if config not available
             return {
-                **base_params,
-                'max_new_tokens': min(max_tokens, 300),  # Gemma can handle longer, more detailed responses
-                'temperature': 0.7,  # Balanced temperature for good reasoning
-                'top_p': 0.9,
-                'top_k': 50,
-                'repetition_penalty': 1.05,  # Light penalty to avoid repetition
-                'no_repeat_ngram_size': 3,
-                'length_penalty': 1.0,  # Encourage longer, more complete responses
-            }
-        
-        elif 'phi-3' in model_name.lower() or 'phi3' in model_name.lower():
-            # Microsoft Phi-3 optimizations - excellent reasoning capabilities
-            return {
-                **base_params,
-                'max_new_tokens': min(max_tokens, 350),  # Phi-3 can handle detailed responses
-                'temperature': 0.6,  # Lower temp for more focused reasoning
-                'top_p': 0.9,
-                'top_k': 40,
-                'repetition_penalty': 1.1,
-                'no_repeat_ngram_size': 3,
-                'length_penalty': 1.1,  # Encourage complete, detailed responses
-            }
-        
-        elif 'tinyllama' in model_name.lower():
-            # TinyLlama optimizations
-            return {
-                **base_params,
-                'max_new_tokens': min(max_tokens, 150),  # Increased for fuller responses
-                'temperature': 0.8,  # Slightly higher for more creativity
-                'top_p': 0.9,
-                'top_k': 40,
-                'repetition_penalty': 1.1,
-                'no_repeat_ngram_size': 3,
-            }
-        
-        elif 'qwen' in model_name.lower():
-            # Qwen optimizations  
-            return {
-                **base_params,
-                'max_new_tokens': min(max_tokens, 200),  # Qwen can handle longer
-                'temperature': 0.7,
-                'top_p': 0.95,
-                'top_k': 50,
-                'repetition_penalty': 1.05,
-                'no_repeat_ngram_size': 2,
-            }
-        
-        elif 'dialogpt' in model_name.lower():
-            # DialoGPT optimizations
-            return {
-                **base_params,
-                'max_new_tokens': min(max_tokens, 100),
-                'temperature': 0.9,
-                'top_p': 0.9,
-                'top_k': 0,  # Disable top_k for DialoGPT
-                'repetition_penalty': 1.3,  # Higher penalty for chat models
-                'no_repeat_ngram_size': 4,
-            }
-        
-        elif 'gpt2' in model_name.lower() or 'distilgpt2' in model_name.lower():
-            # GPT-2 style models
-            return {
-                **base_params,
+                'pad_token_id': self.tokenizer.eos_token_id,
+                'eos_token_id': self.tokenizer.eos_token_id,
+                'do_sample': True,
                 'max_new_tokens': min(max_tokens, 80),
-                'temperature': 0.8,
-                'top_p': 0.9,
-                'top_k': 50,
-                'repetition_penalty': 1.2,
-                'no_repeat_ngram_size': 3,
-            }
-        
-        else:
-            # Universal fallback parameters
-            return {
-                **base_params,
-                'max_new_tokens': min(max_tokens, 100),
-                'temperature': 0.8,
-                'top_p': 0.9,
-                'top_k': 50,
-                'repetition_penalty': 1.1,
+                'temperature': 0.5,  # Conservative temperature
+                'top_p': 0.8,
+                'top_k': 30,
+                'repetition_penalty': 1.15,
                 'no_repeat_ngram_size': 3,
             }
     
