@@ -250,6 +250,17 @@ class LocalAIEngine:
                     self.model = self.model.to('cpu')
                     
                     print(f"✅ Successfully loaded cached model: {best_model}")
+                    
+                    # Fix generation config conflicts to prevent PyTorch warnings when using do_sample=False
+                    # The issue is that the model's default generation_config.json has sampling parameters
+                    # that conflict with deterministic generation (do_sample=False)
+                    if hasattr(self.model, 'generation_config'):
+                        # Set safe defaults that work with both sampling and deterministic generation
+                        self.model.generation_config.do_sample = None  # Let our parameters override
+                        self.model.generation_config.temperature = None  # Let our parameters override
+                        self.model.generation_config.top_p = None       # Let our parameters override  
+                        self.model.generation_config.top_k = None       # Let our parameters override
+                    
                     self._current_model_name = best_model
                     return True
                         
@@ -573,18 +584,29 @@ class LocalAIEngine:
         """Get intelligently optimized parameters based on task, model capabilities, and confidence"""
         model_name = getattr(self, '_current_model_name', 'unknown')
         
-        # Try adaptive configuration first (new intelligent system)
+        # Try enhanced adaptive configuration first (new intelligent system with intent classification)
         try:
-            from adaptive_model_config import AdaptiveModelConfig
-            adaptive_config = AdaptiveModelConfig()
+            from enhanced_adaptive_model_config import EnhancedAdaptiveModelConfig
+            adaptive_config = EnhancedAdaptiveModelConfig(enable_websocket=False)  # Disable WebSocket for CLI usage
             config_result = adaptive_config.get_optimal_config(query, model_name, context or [])
             
-            # Filter out metadata to get clean parameters
-            params = {k: v for k, v in config_result.items() if k != '_metadata'}
+            # Filter out metadata and None values to get clean parameters
+            params = {k: v for k, v in config_result.items() if k != '_metadata' and v is not None}
             
             # Set tokenizer-specific IDs
             params['pad_token_id'] = self.tokenizer.eos_token_id
             params['eos_token_id'] = self.tokenizer.eos_token_id
+            
+            # Handle generation config conflicts: when do_sample=False, we should not pass
+            # sampling parameters at all, as they conflict with the model's generation_config.json.
+            # The solution is to let PyTorch handle the defaults for deterministic generation.
+            if params.get('do_sample', True) is False:
+                # For deterministic generation, don't pass sampling parameters to avoid conflicts
+                # with the model's built-in generation_config.json file
+                sampling_params = ['temperature', 'top_p', 'top_k']
+                for param in sampling_params:
+                    if param in params:
+                        del params[param]
             
             # Honor max_tokens limit if specified
             if max_tokens < params.get('max_new_tokens', max_tokens):

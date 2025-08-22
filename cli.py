@@ -68,7 +68,8 @@ try:
     from avatar_server import (
         start_avatar_server, stop_avatar_server, is_avatar_server_running,
         send_avatar_emotion, send_avatar_state, send_avatar_progress, get_avatar_server_status,
-        send_chat_ai_start, send_chat_ai_chunk, send_chat_ai_complete, send_sound_trigger, send_metrics_update
+        send_chat_ai_start, send_chat_ai_chunk, send_chat_ai_complete, send_sound_trigger, send_metrics_update,
+        send_classification_update, send_thinking_phase_update, send_generation_stream_update
     )
     from avatar_controller import AvatarController, AvatarEmotion, AvatarState as AvatarServerState
     AVATAR_AVAILABLE = True
@@ -334,13 +335,15 @@ class M1K3CLI:
             "/demo": self.demo_animations,
             "/sound": self.handle_sound_command,
             "/transparency": self.handle_transparency_command,
+            "/explain": self.handle_explain_command,
+            "/classify": self.handle_classify_command,
             "/exit": lambda: setattr(self, 'running', False)
         }
         
         if command in action_map:
             print(f"Executing action: {command}")
             # Pass the full command for commands that need it
-            if command in ["/sound", "/transparency"]:
+            if command in ["/sound", "/transparency", "/explain", "/classify"]:
                 action_map[command](user_input)
             else:
                 action_map[command]()
@@ -552,10 +555,16 @@ class M1K3CLI:
                 model_name = getattr(self.ai_engine, '_current_model_name', 'Unknown')
                 backend_type = "HuggingFace" if getattr(self.ai_engine, 'use_transformers', False) else "ctransformers" if getattr(self.ai_engine, 'use_ctransformers', False) else "SimpleAI"
                 
-                # Get generation parameters if available
+                # Get generation parameters with classification metadata
+                classification_metadata = None
                 try:
                     if hasattr(self.ai_engine, '_get_adaptive_generation_params'):
                         params = self.ai_engine._get_adaptive_generation_params(estimated_max_tokens, user_input)
+                        
+                        # Extract classification metadata if available
+                        if isinstance(params, dict) and '_metadata' in params:
+                            classification_metadata = params['_metadata']
+                            
                     else:
                         params = {"max_tokens": estimated_max_tokens}
                 except:
@@ -567,6 +576,21 @@ class M1K3CLI:
                 if hasattr(self.ai_engine, 'context') and self.ai_engine.context.messages:
                     formatted_prompt = ""  # We'd need to get this from the AI engine
                     transparency_engine.show_model_reasoning(user_input, formatted_prompt, "conversational", params)
+                
+                # Send enhanced classification data to avatar if available
+                if classification_metadata and AVATAR_AVAILABLE and is_avatar_server_running():
+                    self.send_avatar_update(user_input, "generating", classification_metadata)
+                    
+                    # Send thinking phase updates based on intent
+                    intent = classification_metadata.get('intent', 'unknown')
+                    if intent == 'mathematical_calculation':
+                        send_thinking_phase_update("calculating", 10, "Processing mathematical expression", classification_metadata.get('confidence', 0.7))
+                    elif intent == 'creative_writing':
+                        send_thinking_phase_update("synthesizing", 15, "Generating creative content", classification_metadata.get('confidence', 0.7))
+                    elif intent in ['explanation_request', 'instruction_request']:
+                        send_thinking_phase_update("reasoning", 20, "Structuring explanation", classification_metadata.get('confidence', 0.7))
+                    else:
+                        send_thinking_phase_update("analyzing", 10, "Processing request", classification_metadata.get('confidence', 0.7))
             
             # Send initial progress
             if AVATAR_AVAILABLE and is_avatar_server_running():
@@ -597,7 +621,14 @@ class M1K3CLI:
                 # Send progress updates every few tokens
                 if AVATAR_AVAILABLE and is_avatar_server_running() and token_count % 5 == 0:
                     progress = min((token_count / estimated_max_tokens) * 100, 95)
+                    elapsed = time.time() - generation_start_time
+                    generation_speed = token_count / elapsed if elapsed > 0 else 0
+                    
                     send_avatar_progress("generating", progress, token_count, f"Generated {token_count} tokens...")
+                    
+                    # Send generation stream update with current content preview
+                    content_preview = full_response[-30:] if len(full_response) > 30 else full_response
+                    send_generation_stream_update(token_count, generation_speed, content_preview)
                 
                 # Show streaming progress in transparency mode
                 if TRANSPARENCY_AVAILABLE and token_count % 10 == 0:
@@ -639,9 +670,12 @@ class M1K3CLI:
                     response_quality="normal"
                 )
             
-            # Send avatar emotion update based on response
+            # Send avatar emotion update based on response with classification metadata
             if full_response.strip():
-                self.send_avatar_update(full_response.strip(), "response")
+                if classification_metadata:
+                    self.send_avatar_update(full_response.strip(), "response", classification_metadata)
+                else:
+                    self.send_avatar_update(full_response.strip(), "response")
             
             # Send post-response completion state
             self.send_avatar_update("Response complete", "post_response")
@@ -683,6 +717,10 @@ M1K3 Local AI CLI Commands:
   Voice Commands:
     voice, mute     Toggle voice synthesis on/off
     /profile <name> Set voice profile (natural, assistant, broadcast, terminal)
+    
+  Enhanced Commands:
+    /explain <query>    Show detailed decision explanation for a query
+    /classify <query>   Show intent classification for a query
     
   Avatar Commands:
     avatar start    Start the avatar web server
@@ -1239,35 +1277,56 @@ Available styles: robot, organic, crystal, ghost, energy, cute"""
             
             self.print_with_avatar(help_msg, AvatarState.IDLE)
     
-    def send_avatar_update(self, text: str, context: str = ""):
-        """Send emotion update to avatar based on text analysis"""
+    def send_avatar_update(self, text: str, context: str = "", classification_data: dict = None):
+        """Send enhanced emotion update to avatar with classification metadata"""
         if not AVATAR_AVAILABLE or not is_avatar_server_running() or not self.avatar_controller:
             return
         
         try:
-            # Analyze emotion from text
-            result = self.avatar_controller.update_emotion(text, context)
-            
-            # Send to avatar server
-            send_avatar_emotion(result['emotion'], result['intensity'], text[:100])
-            
-            # Update state based on context
-            if context in ['error']:
-                send_avatar_state('error')
-            elif context in ['pre_thinking']:
-                send_avatar_state('pre_thinking')
-            elif context in ['thinking', 'processing']:
-                send_avatar_state('thinking')
-            elif context in ['generating']:
-                send_avatar_state('generating')
-            elif context in ['speaking']:
-                send_avatar_state('speaking')
-            elif context in ['post_response']:
-                send_avatar_state('post_response')
-            elif context in ['farewell']:
-                send_avatar_state('farewell')
+            # Use enhanced classification data if available
+            if classification_data and hasattr(self.avatar_controller, 'update_from_classification'):
+                result = self.avatar_controller.update_from_classification(classification_data, text)
+                
+                # Send enhanced data to avatar server
+                metadata = {
+                    'intent': classification_data.get('intent'),
+                    'confidence': classification_data.get('confidence', 0.5),
+                    'response_strategy': classification_data.get('response_strategy'),
+                    'reasoning': classification_data.get('reasoning', ''),
+                    'context_factors': classification_data.get('context_factors', {}),
+                    'classification_engine': classification_data.get('classification_engine', 'enhanced')
+                }
+                
+                send_avatar_emotion(result['emotion'], result['intensity'], text[:100], metadata)
+                send_avatar_state(result['state'])
+                
+                # Send classification update
+                send_classification_update(classification_data)
+                
             else:
-                send_avatar_state('idle')
+                # Fallback to traditional emotion analysis
+                result = self.avatar_controller.update_emotion(text, context)
+                
+                # Send to avatar server
+                send_avatar_emotion(result['emotion'], result['intensity'], text[:100])
+                
+                # Update state based on context
+                if context in ['error']:
+                    send_avatar_state('error')
+                elif context in ['pre_thinking']:
+                    send_avatar_state('pre_thinking')
+                elif context in ['thinking', 'processing']:
+                    send_avatar_state('thinking')
+                elif context in ['generating']:
+                    send_avatar_state('generating')
+                elif context in ['speaking']:
+                    send_avatar_state('speaking')
+                elif context in ['post_response']:
+                    send_avatar_state('post_response')
+                elif context in ['farewell']:
+                    send_avatar_state('farewell')
+                else:
+                    send_avatar_state('idle')
                 
         except Exception as e:
             print(f"Debug: Avatar update error: {e}")
@@ -1410,6 +1469,93 @@ Available styles: robot, organic, crystal, ghost, energy, cute"""
                 "message_count": eco_metrics['responses_count']
             }
             send_metrics_update(avatar_metrics)
+
+    def handle_explain_command(self, user_input: str = ""):
+        """Handle /explain command for decision explanations"""
+        try:
+            from decision_explanation_engine import DecisionExplainerEngine
+            
+            parts = user_input.strip().split(" ", 1)
+            if len(parts) < 2:
+                self.print_with_avatar("Usage: /explain <query>", AvatarState.IDLE)
+                self.print_with_avatar("Example: /explain What is 2 + 2?", AvatarState.IDLE)
+                return
+            
+            query = parts[1]
+            self.print_with_avatar(f"🔍 Explaining decision process for: \"{query}\"", AvatarState.THINKING)
+            
+            # Get enhanced configuration
+            from enhanced_adaptive_model_config import EnhancedAdaptiveModelConfig
+            config_engine = EnhancedAdaptiveModelConfig(enable_websocket=False)
+            config_result = config_engine.get_optimal_config(query, "qwen/qwen3-0.6b", [])
+            
+            # Generate explanation
+            explainer = DecisionExplainerEngine()
+            explanation = explainer.explain_decision(query, config_result)
+            
+            # Display explanation
+            print(f"\n🎯 Decision Summary:")
+            print(f"   {explanation.decision_summary}")
+            
+            print(f"\n📊 Intent Classification:")
+            print(f"   Intent: {explanation.final_intent}")
+            print(f"   Confidence: {explanation.intent_confidence:.3f}")
+            print(f"   Strategy: {explanation.response_strategy}")
+            
+            print(f"\n🔍 Pattern Matches:")
+            for i, match in enumerate(explanation.pattern_matches[:3], 1):
+                print(f"   {i}. \"{match.matched_text}\" → {match.intent}")
+                
+            print(f"\n🌐 Context Influences:")
+            for influence in explanation.context_influences[:3]:
+                impact_icon = {"high": "🔥", "medium": "🟡", "low": "🟢"}[influence.impact_level]
+                print(f"   {impact_icon} {influence.factor}: {influence.influence}")
+                
+            print(f"\n⚙️  Key Parameters:")
+            config_params = {k: v for k, v in config_result.items() if k != '_metadata' and v is not None}
+            for key, value in list(config_params.items())[:5]:
+                print(f"   {key}: {value}")
+            
+        except ImportError:
+            self.print_with_avatar("❌ Decision explanation engine not available", AvatarState.ERROR)
+        except Exception as e:
+            self.print_with_avatar(f"❌ Explanation failed: {e}", AvatarState.ERROR)
+
+    def handle_classify_command(self, user_input: str = ""):
+        """Handle /classify command for intent classification"""
+        try:
+            from intent_classification_system import IntentClassificationEngine
+            
+            parts = user_input.strip().split(" ", 1)
+            if len(parts) < 2:
+                self.print_with_avatar("Usage: /classify <query>", AvatarState.IDLE)
+                self.print_with_avatar("Example: /classify What is 2 + 2?", AvatarState.IDLE)
+                return
+                
+            query = parts[1]
+            self.print_with_avatar(f"🔍 Classifying: \"{query}\"", AvatarState.THINKING)
+            
+            # Get intent classification
+            engine = IntentClassificationEngine()
+            classification = engine.classify_intent(query)
+            
+            # Display classification
+            print(f"\n🎯 Classification Results:")
+            print(f"   Intent: {classification.intent.value}")
+            print(f"   Confidence: {classification.confidence:.3f}")
+            print(f"   Strategy: {classification.response_strategy.value}")
+            print(f"   Reasoning: {classification.reasoning}")
+            
+            if classification.context_factors:
+                print(f"\n📋 Context Factors:")
+                for factor, value in classification.context_factors.items():
+                    if value not in [None, False, '', {}]:
+                        print(f"   {factor}: {value}")
+            
+        except ImportError:
+            self.print_with_avatar("❌ Intent classification engine not available", AvatarState.ERROR)
+        except Exception as e:
+            self.print_with_avatar(f"❌ Classification failed: {e}", AvatarState.ERROR)
 
 def main():
     parser = argparse.ArgumentParser(description="M1K3 Local AI CLI with Voice")

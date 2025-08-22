@@ -145,16 +145,35 @@ class TaskClassifier:
         query_lower = query.lower().strip()
         scores = {}
         
+        # High-priority math detection - catch common patterns early
+        high_priority_math_patterns = [
+            r'what\s+is\s+\d+\s*[+\-*/÷×]\s*\d+',  # "what is 2 + 2"
+            r'calculate\s+\d+\s*[+\-*/÷×]\s*\d+',   # "calculate 5 * 6"
+            r'^\d+\s*[+\-*/÷×]\s*\d+\s*[=?]?$',     # "15 * 23" or "15 * 23 ="
+        ]
+        
+        for pattern in high_priority_math_patterns:
+            if re.search(pattern, query_lower):
+                return TaskType.MATHEMATICAL, 0.95  # High confidence math detection
+        
         # Score each task type based on pattern matches
         for task_type, patterns in self.patterns.items():
             score = 0
+            match_weight = 1.0
+            
             for pattern in patterns:
                 matches = len(re.findall(pattern, query_lower, re.IGNORECASE))
-                score += matches
+                score += matches * match_weight
             
-            # Normalize score by pattern count
+            # Weight scores by task type importance for better classification
+            if task_type == TaskType.MATHEMATICAL:
+                score *= 1.5  # Boost math classification
+            elif task_type == TaskType.CODING:
+                score *= 1.3  # Boost coding classification
+                
+            # Normalize score by pattern count (but less aggressively)
             if patterns:
-                scores[task_type] = score / len(patterns)
+                scores[task_type] = score / max(len(patterns) * 0.7, 1.0)
         
         # Apply contextual adjustments
         if context:
@@ -267,18 +286,18 @@ class AdaptiveModelConfig:
         """Create parameter profiles for different task types and confidence levels"""
         profiles = {}
         
-        # Mathematical tasks - need reasoning and verification
+        # Mathematical tasks - need deterministic, precise calculation
         profiles[(TaskType.MATHEMATICAL, ConfidenceLevel.HIGH)] = AdaptiveParameters(
-            max_new_tokens=200, temperature=0.3, top_p=0.8, top_k=25,
-            do_sample=True, repetition_penalty=1.1, no_repeat_ngram_size=3, num_beams=1,
-            enable_thinking_mode=True, show_reasoning=True, quality_threshold=0.8,
-            allow_long_responses=True
+            max_new_tokens=80, temperature=None, top_p=None, top_k=None,
+            do_sample=False, repetition_penalty=1.2, no_repeat_ngram_size=2, num_beams=1,
+            enable_thinking_mode=False, show_reasoning=False, quality_threshold=0.8,
+            allow_long_responses=False
         )
         
         profiles[(TaskType.MATHEMATICAL, ConfidenceLevel.MEDIUM)] = AdaptiveParameters(
-            max_new_tokens=150, temperature=0.2, top_p=0.7, top_k=20,
-            do_sample=True, repetition_penalty=1.15, no_repeat_ngram_size=3, num_beams=1,
-            enable_thinking_mode=True, show_reasoning=False, quality_threshold=0.7,
+            max_new_tokens=100, temperature=None, top_p=None, top_k=None,
+            do_sample=False, repetition_penalty=1.25, no_repeat_ngram_size=2, num_beams=1,
+            enable_thinking_mode=False, show_reasoning=False, quality_threshold=0.7,
             allow_long_responses=False
         )
         
@@ -541,14 +560,15 @@ class AdaptiveModelConfig:
             'num_beams': params.num_beams
         }
         
-        # Only add sampling parameters if sampling is enabled
-        if params.do_sample and params.temperature is not None:
-            config['temperature'] = params.temperature
+        # Only add sampling parameters if sampling is enabled AND temperature exists
+        if params.do_sample:
+            if params.temperature is not None:
+                config['temperature'] = params.temperature
             if params.top_p is not None:
                 config['top_p'] = params.top_p
             if params.top_k is not None:
                 config['top_k'] = params.top_k
-        # For deterministic generation (do_sample=False), completely omit temperature/top_p/top_k
+        # For deterministic generation (do_sample=False), completely omit all sampling parameters
         # This prevents PyTorch warnings and ensures clean deterministic generation
         
         return config

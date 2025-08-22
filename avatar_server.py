@@ -196,8 +196,8 @@ class AvatarServer:
         """Check if server is running"""
         return self.running
     
-    def send_emotion_update(self, emotion, intensity=50, message=""):
-        """Send emotion update to all connected clients"""
+    def send_emotion_update(self, emotion, intensity=50, message="", metadata=None):
+        """Send enhanced emotion update with classification metadata to all connected clients"""
         if not self.running or not self.clients:
             return
         
@@ -208,6 +208,17 @@ class AvatarServer:
             "message": message,
             "timestamp": time.time()
         }
+        
+        # Add enhanced metadata if provided
+        if metadata:
+            data["metadata"] = {
+                "intent": metadata.get("intent"),
+                "confidence": metadata.get("confidence", 0.5),
+                "response_strategy": metadata.get("response_strategy"),
+                "reasoning": metadata.get("reasoning"),
+                "context_factors": metadata.get("context_factors", {}),
+                "classification_engine": metadata.get("classification_engine", "unknown")
+            }
         
         message_json = json.dumps(data)
         self._log_sent_message(data)
@@ -590,6 +601,78 @@ class AvatarServer:
                 self.logger.warning(f"Failed to send sound trigger to client {client['id']}: {e}")
                 self._remove_client(client)
     
+    def send_classification_update(self, classification_data):
+        """Send AI classification results to all connected clients"""
+        if not self.running or not self.clients:
+            return
+        
+        data = {
+            "type": "classification",
+            "intent": classification_data.get("intent"),
+            "confidence": classification_data.get("confidence", 0.5),
+            "response_strategy": classification_data.get("response_strategy"),
+            "reasoning": classification_data.get("reasoning"),
+            "context_factors": classification_data.get("context_factors", {}),
+            "classification_engine": classification_data.get("classification_engine", "unknown"),
+            "timestamp": time.time()
+        }
+        
+        message_json = json.dumps(data)
+        self._log_sent_message(data)
+        
+        for client in self.clients[:]:
+            try:
+                self.websocket_server.send_message(client, message_json)
+            except Exception as e:
+                self.logger.warning(f"Failed to send classification to client {client['id']}: {e}")
+                self._remove_client(client)
+    
+    def send_thinking_phase_update(self, phase, progress=0, insight="", confidence=0.7):
+        """Send AI thinking phase updates to all connected clients"""
+        if not self.running or not self.clients:
+            return
+        
+        data = {
+            "type": "thinking_phase",
+            "phase": phase,  # analyzing, reasoning, calculating, synthesizing, concluding
+            "progress": progress,  # 0-100
+            "insight": insight,
+            "confidence": confidence,
+            "timestamp": time.time()
+        }
+        
+        message_json = json.dumps(data)
+        self._log_sent_message(data)
+        
+        for client in self.clients[:]:
+            try:
+                self.websocket_server.send_message(client, message_json)
+            except Exception as e:
+                self.logger.warning(f"Failed to send thinking phase to client {client['id']}: {e}")
+                self._remove_client(client)
+    
+    def send_generation_stream_update(self, token_count, generation_speed, content_preview=""):
+        """Send real-time generation streaming updates"""
+        if not self.running or not self.clients:
+            return
+        
+        data = {
+            "type": "generation_stream",
+            "token_count": token_count,
+            "generation_speed": generation_speed,  # tokens per second
+            "content_preview": content_preview[:50],  # First 50 chars
+            "timestamp": time.time()
+        }
+        
+        message_json = json.dumps(data)
+        
+        for client in self.clients[:]:
+            try:
+                self.websocket_server.send_message(client, message_json)
+            except Exception as e:
+                self.logger.warning(f"Failed to send generation stream to client {client['id']}: {e}")
+                self._remove_client(client)
+    
     def get_message_statistics(self):
         """Get message statistics"""
         uptime = time.time() - self.message_stats['start_time']
@@ -651,10 +734,10 @@ def is_avatar_server_running():
     server = get_avatar_server()
     return server.is_running()
 
-def send_avatar_emotion(emotion, intensity=50, message=""):
-    """Send emotion update to avatar"""
+def send_avatar_emotion(emotion, intensity=50, message="", metadata=None):
+    """Send enhanced emotion update to avatar with classification metadata"""
     server = get_avatar_server()
-    server.send_emotion_update(emotion, intensity, message)
+    server.send_emotion_update(emotion, intensity, message, metadata)
 
 def send_avatar_state(state):
     """Send state update to avatar"""
@@ -695,6 +778,21 @@ def send_metrics_update(metrics_data):
     """Send real-time metrics update to avatar"""
     server = get_avatar_server()
     server.send_metrics_update(metrics_data)
+
+def send_classification_update(classification_data):
+    """Send AI classification results to avatar"""
+    server = get_avatar_server()
+    server.send_classification_update(classification_data)
+
+def send_thinking_phase_update(phase, progress=0, insight="", confidence=0.7):
+    """Send AI thinking phase updates to avatar"""
+    server = get_avatar_server()
+    server.send_thinking_phase_update(phase, progress, insight, confidence)
+
+def send_generation_stream_update(token_count, generation_speed, content_preview=""):
+    """Send real-time generation streaming updates to avatar"""
+    server = get_avatar_server()
+    server.send_generation_stream_update(token_count, generation_speed, content_preview)
 
 if __name__ == "__main__":
     # Command line interface

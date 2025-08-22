@@ -9,6 +9,13 @@ import time
 from typing import Optional, Dict, Any, List
 from enum import Enum
 
+# Import enhanced classification system if available
+try:
+    from intent_classification_system import UserIntent, ResponseStrategy, IntentClassification
+    ENHANCED_CLASSIFICATION_AVAILABLE = True
+except ImportError:
+    ENHANCED_CLASSIFICATION_AVAILABLE = False
+
 class AvatarEmotion(Enum):
     """Avatar emotions that map to pixel expressions"""
     HAPPY = "happy"
@@ -346,6 +353,144 @@ class AvatarController:
         }
         
         return state_mapping.get(ai_state.lower(), AvatarEmotion.HAPPY)
+    
+    def update_from_classification(self, classification_data: Dict[str, Any], text: str = "") -> Dict[str, Any]:
+        """Update avatar based on enhanced AI classification results"""
+        if not ENHANCED_CLASSIFICATION_AVAILABLE:
+            # Fallback to text-based emotion analysis
+            return self.update_emotion(text, "classification")
+        
+        # Extract classification data
+        intent = classification_data.get("intent", "unknown")
+        confidence = classification_data.get("confidence", 0.5)
+        response_strategy = classification_data.get("response_strategy", "balanced")
+        reasoning = classification_data.get("reasoning", "")
+        context_factors = classification_data.get("context_factors", {})
+        
+        # Map intent to avatar emotion and state
+        emotion, state = self._map_intent_to_avatar(intent, response_strategy, confidence)
+        
+        # Calculate intensity based on confidence and context
+        intensity = self._calculate_classification_intensity(confidence, context_factors, response_strategy)
+        
+        # Update avatar state and emotion
+        previous_emotion = self.current_emotion
+        self.current_emotion = emotion
+        self.emotion_intensity = intensity
+        self.last_update = time.time()
+        
+        # Update state based on intent
+        if intent in ['mathematical_calculation', 'code_debugging']:
+            self.current_state = AvatarState.ANALYZING
+        elif intent == 'creative_writing':
+            self.current_state = AvatarState.SYNTHESIZING
+        elif intent in ['explanation_request', 'instruction_request']:
+            self.current_state = AvatarState.THINKING
+        else:
+            self.current_state = AvatarState.REASONING
+        
+        return {
+            "emotion": emotion.value,
+            "state": self.current_state.value,
+            "intensity": intensity,
+            "previous_emotion": previous_emotion.value,
+            "changed": emotion != previous_emotion,
+            "intent": intent,
+            "confidence": confidence,
+            "response_strategy": response_strategy,
+            "reasoning": reasoning,
+            "context_factors": context_factors,
+            "timestamp": self.last_update
+        }
+    
+    def _map_intent_to_avatar(self, intent: str, strategy: str, confidence: float) -> tuple:
+        """Map AI intent and strategy to avatar emotion and behavior"""
+        
+        # Intent-based emotion mapping with enhanced sophistication
+        intent_emotions = {
+            'mathematical_calculation': AvatarEmotion.THINKING if confidence > 0.7 else AvatarEmotion.SURPRISED,
+            'code_debugging': AvatarEmotion.THINKING,
+            'factual_query': AvatarEmotion.HAPPY if confidence > 0.8 else AvatarEmotion.THINKING,
+            'explanation_request': AvatarEmotion.EXCITED if confidence > 0.7 else AvatarEmotion.THINKING,
+            'creative_writing': AvatarEmotion.EXCITED,
+            'brainstorming': AvatarEmotion.EXCITED,
+            'casual_conversation': AvatarEmotion.HAPPY,
+            'greeting': AvatarEmotion.HAPPY,
+            'help_request': AvatarEmotion.HAPPY,
+            'instruction_request': AvatarEmotion.THINKING
+        }
+        
+        base_emotion = intent_emotions.get(intent, AvatarEmotion.HAPPY)
+        
+        # Strategy-based modifications
+        if strategy == 'creative':
+            if base_emotion == AvatarEmotion.THINKING:
+                base_emotion = AvatarEmotion.EXCITED
+        elif strategy == 'deterministic':
+            if base_emotion == AvatarEmotion.EXCITED:
+                base_emotion = AvatarEmotion.THINKING
+        
+        # Confidence-based adjustments
+        if confidence < 0.5:
+            base_emotion = AvatarEmotion.SURPRISED
+        elif confidence > 0.9:
+            if base_emotion == AvatarEmotion.THINKING:
+                base_emotion = AvatarEmotion.HAPPY
+        
+        # Determine state based on intent
+        intent_states = {
+            'mathematical_calculation': AvatarState.CALCULATING,
+            'code_debugging': AvatarState.ANALYZING,
+            'creative_writing': AvatarState.SYNTHESIZING,
+            'explanation_request': AvatarState.REASONING,
+            'factual_query': AvatarState.THINKING,
+            'greeting': AvatarState.IDLE,
+            'casual_conversation': AvatarState.IDLE
+        }
+        
+        state = intent_states.get(intent, AvatarState.THINKING)
+        
+        return base_emotion, state
+    
+    def _calculate_classification_intensity(self, confidence: float, context_factors: Dict[str, Any], strategy: str) -> int:
+        """Calculate avatar emotion intensity based on classification data"""
+        
+        # Base intensity from confidence (30-90 range)
+        base_intensity = 30 + (confidence * 60)
+        
+        # Context-based adjustments
+        if context_factors.get('urgent', False):
+            base_intensity += 15
+        
+        if context_factors.get('learning_mode', False):
+            base_intensity += 10
+            
+        if context_factors.get('technical_context', False):
+            base_intensity += 5
+        
+        # Strategy-based adjustments
+        strategy_modifiers = {
+            'creative': 1.2,
+            'deterministic': 0.9,
+            'brief': 0.8,
+            'detailed': 1.1,
+            'conversational': 1.0
+        }
+        
+        multiplier = strategy_modifiers.get(strategy, 1.0)
+        final_intensity = base_intensity * multiplier
+        
+        return min(max(int(final_intensity), 10), 100)
+    
+    def update_from_enhanced_metadata(self, metadata: Dict[str, Any], text: str = "") -> Dict[str, Any]:
+        """Update avatar from enhanced adaptive config metadata"""
+        
+        # Use classification data if available
+        if 'intent' in metadata:
+            return self.update_from_classification(metadata, text)
+        
+        # Fallback to traditional update
+        return self.update_emotion(text, "enhanced_metadata")
 
 # Utility functions for easy integration
 def create_avatar_controller() -> AvatarController:
