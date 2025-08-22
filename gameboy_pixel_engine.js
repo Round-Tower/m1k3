@@ -5,9 +5,21 @@
 
 class GameboyPixelEngine {
     constructor(canvas, options = {}) {
+        console.log('🚀 GameboyPixelEngine constructor called');
+        
         this.canvas = canvas;
+        console.log('📺 Canvas element:', canvas);
+        
         this.ctx = canvas.getContext('2d');
+        console.log('🎨 Canvas context:', this.ctx);
+        
+        if (!this.ctx) {
+            console.error('❌ Failed to get canvas context!');
+            throw new Error('Canvas context is null');
+        }
+        
         this.ctx.imageSmoothingEnabled = false;
+        console.log('🔧 Image smoothing disabled');
         
         // Configuration
         this.pixelSize = options.pixelSize || 8;
@@ -15,6 +27,10 @@ class GameboyPixelEngine {
         this.canvasHeight = canvas.height;
         this.gridWidth = Math.floor(this.canvasWidth / this.pixelSize);
         this.gridHeight = Math.floor(this.canvasHeight / this.pixelSize);
+        
+        console.log(`📐 Canvas: ${this.canvasWidth}x${this.canvasHeight}px`);
+        console.log(`🔢 Grid: ${this.gridWidth}x${this.gridHeight} (${this.pixelSize}px per cell)`);
+        console.log(`📱 Options:`, options);
         
         // Gameboy Color palettes
         this.palettes = {
@@ -41,14 +57,8 @@ class GameboyPixelEngine {
         this.isAnimating = false;
         this.animationTime = 0;
         
-        // Layers for efficient rendering
-        this.layers = {
-            background: this.createOffscreenCanvas(),
-            avatar: this.createOffscreenCanvas(),
-            text: this.createOffscreenCanvas(),
-            ui: this.createOffscreenCanvas(),
-            effects: this.createOffscreenCanvas()
-        };
+        // Single canvas direct rendering (no layers)
+        // Removed layer system for cleaner pixel rendering
         
         // Pixel fonts
         this.fonts = {
@@ -64,8 +74,15 @@ class GameboyPixelEngine {
             cpu: 0,
             memory: 0,
             network: true,
+            networkStrength: 75,
             temperature: 25,
             ecoSavings: 0
+        };
+        
+        // System metrics display settings
+        this.systemMetrics = {
+            visible: true,
+            position: 'bottom'
         };
         
         // Avatar care mechanics
@@ -89,14 +106,7 @@ class GameboyPixelEngine {
         this.startAnimationLoop();
     }
     
-    createOffscreenCanvas() {
-        const canvas = document.createElement('canvas');
-        canvas.width = this.canvasWidth;
-        canvas.height = this.canvasHeight;
-        const ctx = canvas.getContext('2d');
-        ctx.imageSmoothingEnabled = false;
-        return { canvas, ctx };
-    }
+    // Removed createOffscreenCanvas - using single canvas rendering
     
     // === CORE RENDERING SYSTEM ===
     
@@ -105,24 +115,40 @@ class GameboyPixelEngine {
         this.ctx.fillRect(0, 0, this.canvasWidth, this.canvasHeight);
     }
     
-    setPixel(x, y, colorIndex, layer = 'avatar') {
-        if (x < 0 || x >= this.gridWidth || y < 0 || y >= this.gridHeight) return;
-        if (colorIndex < 0 || colorIndex >= this.currentPalette.length) return;
+    setPixel(x, y, colorIndex, layer = 'main') {
+        if (x < 0 || x >= this.gridWidth || y < 0 || y >= this.gridHeight) {
+            // console.log(`🚫 setPixel out of bounds: (${x}, ${y}) - grid: ${this.gridWidth}x${this.gridHeight}`);
+            return;
+        }
+        if (colorIndex < 0 || colorIndex >= this.currentPalette.length) {
+            console.log(`🚫 setPixel invalid color: ${colorIndex} - palette length: ${this.currentPalette.length}`);
+            return;
+        }
         
-        const ctx = this.layers[layer].ctx;
         const color = this.currentPalette[colorIndex];
         
-        ctx.fillStyle = color;
-        ctx.fillRect(x * this.pixelSize, y * this.pixelSize, this.pixelSize, this.pixelSize);
+        // Styled pixel rendering with padding and rounded corners
+        const pixelX = x * this.pixelSize;
+        const pixelY = y * this.pixelSize;
+        const padding = 1;
         
-        this.markDirty(x * this.pixelSize, y * this.pixelSize, this.pixelSize, this.pixelSize);
+        // Debug first few pixels
+        if (Math.random() < 0.1) { // Log 10% of pixels to avoid spam
+            console.log(`🎨 setPixel: (${x}, ${y}) -> canvas(${pixelX + padding}, ${pixelY + padding}) color=${color} colorIndex=${colorIndex}`);
+        }
+        const pixelSize = this.pixelSize - (padding * 2); // 4px actual size
+        const radius = Math.min(pixelSize / 4, 1); // 1px radius
+        
+        this.ctx.fillStyle = color;
+        
+        // Use simple fillRect for maximum compatibility
+        this.ctx.fillRect(pixelX + padding, pixelY + padding, pixelSize, pixelSize);
     }
     
-    getPixel(x, y, layer = 'avatar') {
+    getPixel(x, y, layer = 'main') {
         if (x < 0 || x >= this.gridWidth || y < 0 || y >= this.gridHeight) return 0;
         
-        const ctx = this.layers[layer].ctx;
-        const imageData = ctx.getImageData(x * this.pixelSize, y * this.pixelSize, 1, 1);
+        const imageData = this.ctx.getImageData(x * this.pixelSize, y * this.pixelSize, 1, 1);
         const [r, g, b] = imageData.data;
         const hex = '#' + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1).toUpperCase();
         
@@ -261,53 +287,77 @@ class GameboyPixelEngine {
     }
     
     renderAvatar() {
-        const layer = this.layers.avatar;
-        layer.ctx.clearRect(0, 0, this.canvasWidth, this.canvasHeight);
+        console.log('🎭 renderAvatar() called');
         
+        // Center the avatar in the main area (leaving space for bottom metrics)
         const centerX = Math.floor(this.gridWidth / 2);
-        const centerY = Math.floor(this.gridHeight / 2);
+        const centerY = Math.floor((this.gridHeight - 16) / 2); // -16 for metrics strip
         
-        // Avatar body based on evolution level
-        const size = Math.floor(3 + this.avatarState.evolution);
-        this.renderAvatarBody(centerX, centerY, size, layer.ctx);
+        console.log(`🎯 Avatar center: (${centerX}, ${centerY})`);
+        
+        // Apply continuous animations (breathing, jitter, etc.)
+        this.applyAvatarAnimations(centerX, centerY, this.ctx);
+        
+        // Apply jitter from system load
+        const jitterX = this.avatarState.jitterX || 0;
+        const jitterY = this.avatarState.jitterY || 0;
+        const actualCenterX = centerX + Math.floor(jitterX);
+        const actualCenterY = centerY + Math.floor(jitterY);
+        
+        // Avatar body based on evolution level with breathing
+        const baseSize = Math.floor(8 + this.avatarState.evolution * 2); // Larger for high res
+        const breathScale = this.avatarState.breathScale || 1.0;
+        const size = Math.floor(baseSize * breathScale);
+        
+        console.log(`🔮 Avatar size: ${size}, evolution: ${this.avatarState.evolution}, mood: ${this.avatarState.mood}`);
+        
+        this.renderAvatarBody(actualCenterX, actualCenterY, size, this.ctx);
         
         // Eyes with blinking animation
         if (this.shouldBlink()) {
-            this.renderAvatarEyes(centerX, centerY, 'closed', layer.ctx);
+            this.renderAvatarEyes(actualCenterX, actualCenterY, 'closed', this.ctx);
         } else {
-            this.renderAvatarEyes(centerX, centerY, this.avatarState.mood, layer.ctx);
+            this.renderAvatarEyes(actualCenterX, actualCenterY, this.avatarState.mood, this.ctx);
         }
         
         // Mouth based on mood
-        this.renderAvatarMouth(centerX, centerY, this.avatarState.mood, layer.ctx);
+        this.renderAvatarMouth(actualCenterX, actualCenterY, this.avatarState.mood, this.ctx);
         
-        // Status indicators
-        this.renderAvatarStatus(layer.ctx);
+        // Status indicators (but not system metrics - those go in bottom strip)
+        this.renderAvatarStatus(this.ctx);
         
-        // Continuous animations
-        this.applyAvatarAnimations(centerX, centerY, layer.ctx);
+        console.log('✅ renderAvatar() completed');
     }
     
     renderAvatarBody(x, y, size, ctx) {
         const colorIndex = this.getBodyColorFromMood();
+        const evolution = Math.floor(this.avatarState.evolution);
+        
+        console.log(`👤 renderAvatarBody: pos(${x}, ${y}), size=${size}, colorIndex=${colorIndex}, evolution=${evolution}`);
         
         // Different body shapes based on evolution
-        switch(Math.floor(this.avatarState.evolution)) {
+        switch(evolution) {
             case 0: // Basic circle
-                this.drawCircle(x, y, size, colorIndex, 'avatar');
+                console.log('⭕ Drawing circle');
+                this.drawCircle(x, y, size, colorIndex);
                 break;
             case 1: // Rounded square
-                this.drawRoundedRect(x-size, y-size, size*2, size*2, 1, colorIndex, 'avatar');
+                console.log('⬜ Drawing rounded square');
+                this.drawRoundedRect(x-size, y-size, size*2, size*2, 1, colorIndex);
                 break;
             case 2: // Diamond
-                this.drawDiamond(x, y, size, colorIndex, 'avatar');
+                console.log('💎 Drawing diamond');
+                this.drawDiamond(x, y, size, colorIndex);
                 break;
             case 3: // Complex shape
-                this.drawComplexShape(x, y, size, colorIndex, 'avatar');
+                console.log('🌟 Drawing complex shape');
+                this.drawComplexShape(x, y, size, colorIndex);
                 break;
             default: // Masterpiece form
-                this.drawMasterpieceForm(x, y, size, colorIndex, 'avatar');
+                console.log('✨ Drawing masterpiece form');
+                this.drawMasterpieceForm(x, y, size, colorIndex);
         }
+        console.log('👤 renderAvatarBody completed');
     }
     
     renderAvatarEyes(x, y, mood, ctx) {
@@ -335,7 +385,7 @@ class GameboyPixelEngine {
                 case 'sleepy':
                 case 'relaxed':
                 case 'peaceful':
-                    this.drawHorizontalLine(pos.x, pos.y, 1, 3, 'avatar');
+                    this.drawHorizontalLine(pos.x, pos.y, 1, 3);
                     break;
                 case 'critical':
                 case 'overheating':
@@ -349,7 +399,7 @@ class GameboyPixelEngine {
                 case 'busy':
                 case 'noisy':
                     // Squinting
-                    this.drawHorizontalLine(pos.x, pos.y, 1, 2, 'avatar');
+                    this.drawHorizontalLine(pos.x, pos.y, 1, 2);
                     break;
                 case 'cool':
                 case 'poor_signal':
@@ -363,7 +413,7 @@ class GameboyPixelEngine {
                     this.setPixel(pos.x, pos.y - 1, 1); // Highlight
                     break;
                 case 'closed':
-                    this.drawHorizontalLine(pos.x, pos.y, 1, 3, 'avatar');
+                    this.drawHorizontalLine(pos.x, pos.y, 1, 3);
                     break;
                 default:
                     this.setPixel(pos.x, pos.y, 2);
@@ -403,17 +453,17 @@ class GameboyPixelEngine {
             case 'overheating':
             case 'stressed':
                 // Wide open distressed mouth
-                this.drawRect(x - 1, y + 1, 3, 2, 3, 'avatar');
+                this.drawRect(x - 1, y + 1, 3, 2, 3);
                 break;
             case 'hot':
             case 'noisy':
                 // Panting
-                this.drawRect(x - 1, y + 1, 3, 1, 3, 'avatar');
+                this.drawRect(x - 1, y + 1, 3, 1, 3);
                 break;
             case 'busy':
             case 'memory_pressure':
                 // Tight line (concentration)
-                this.drawHorizontalLine(x - 1, y + 1, 3, 3, 'avatar');
+                this.drawHorizontalLine(x - 1, y + 1, 3, 3);
                 break;
             case 'cool':
             case 'poor_signal':
@@ -482,26 +532,26 @@ class GameboyPixelEngine {
         // Health indicator (top-left)
         const healthLevel = Math.floor(this.avatarState.health / 25);
         for (let i = 0; i < healthLevel; i++) {
-            this.setPixel(2 + (i * spacing), 2, 2, 'avatar'); // Red hearts
+            this.setPixel(2 + (i * spacing), 2, 2); // Red hearts
         }
         
         // Energy indicator (top-right)
         const energyLevel = Math.floor(this.avatarState.energy / 25);
         for (let i = 0; i < energyLevel; i++) {
-            this.setPixel(this.gridWidth - 6 - (i * spacing), 2, 1, 'avatar'); // Blue energy
+            this.setPixel(this.gridWidth - 6 - (i * spacing), 2, 1); // Blue energy
         }
         
         // Evolution indicator (bottom-center)
         const evoLevel = Math.floor(this.avatarState.evolution);
         if (evoLevel > 0) {
             for (let i = 0; i < evoLevel; i++) {
-                this.setPixel(this.gridWidth/2 - 2 + i, this.gridHeight - 4, 3, 'avatar');
+                this.setPixel(this.gridWidth/2 - 2 + i, this.gridHeight - 4, 3);
             }
         }
         
         // Mood indicator (small color dot)
         const moodColor = this.getBodyColorFromMood();
-        this.setPixel(2, this.gridHeight - 4, moodColor, 'avatar');
+        this.setPixel(2, this.gridHeight - 4, moodColor);
     }
     
     // === PIXEL TEXT RENDERING ===
@@ -678,28 +728,102 @@ class GameboyPixelEngine {
     // === DATA VISUALIZATION ===
     
     renderSystemMetrics() {
-        const layer = this.layers.ui;
-        layer.ctx.clearRect(0, 0, this.canvasWidth, this.canvasHeight);
+        if (!this.systemMetrics || !this.systemMetrics.visible) return;
         
-        // Battery meter
-        this.renderBatteryMeter(2, 2, this.systemState.battery);
+        // Render metrics in bottom 16 rows (y: 80-96)
+        const metricsStartY = this.gridHeight - 16;
         
-        // CPU usage bar
-        this.renderUsageBar(2, 6, this.systemState.cpu, 'CPU');
+        // Draw background separator line
+        for (let x = 0; x < this.gridWidth; x++) {
+            this.setPixel(x, metricsStartY, 2); // Dark line separator
+        }
         
-        // Memory usage bar
-        this.renderUsageBar(2, 10, this.systemState.memory, 'MEM');
+        // Layout metrics in columns across the bottom strip
+        this.renderMetricColumn(5, metricsStartY + 2, 'BAT', `${this.systemState.battery}%`, this.systemState.battery < 20 ? 3 : 1);
+        this.renderMetricColumn(25, metricsStartY + 2, 'CPU', `${this.systemState.cpu}%`, this.systemState.cpu > 80 ? 3 : 1);
+        this.renderMetricColumn(45, metricsStartY + 2, 'TMP', `${this.systemState.temperature}°`, this.systemState.temperature > 70 ? 3 : 1);
+        this.renderMetricColumn(65, metricsStartY + 2, 'MEM', `${this.systemState.memory}%`, this.systemState.memory > 80 ? 3 : 1);
+        this.renderMetricColumn(85, metricsStartY + 2, 'NET', this.getNetworkBars(), 1);
         
-        // Network signal
-        this.renderNetworkSignal(this.gridWidth - 6, 2, this.systemState.network);
-        
-        // Eco metrics
-        this.renderEcoMetrics(this.gridWidth - 8, 6);
-        
-        // Temperature indicator
-        this.renderTemperature(this.gridWidth - 4, 10, this.systemState.temperature);
+        // Avatar status metrics
+        this.renderMetricColumn(105, metricsStartY + 2, 'MOOD', this.getMoodIcon(), 1);
+        this.renderMetricColumn(120, metricsStartY + 8, 'LVL', `${this.avatarState.evolution}`, 1);
     }
     
+    renderMetricColumn(x, y, label, value, colorIndex) {
+        // Render label (small text)
+        this.renderSmallText(label, x, y, 2);
+        // Render value below label
+        this.renderSmallText(value.toString(), x, y + 6, colorIndex);
+    }
+    
+    renderSmallText(text, x, y, colorIndex) {
+        // Simple 3x5 pixel font for metrics
+        const chars = {
+            'A': [0b111, 0b101, 0b111, 0b101, 0b101],
+            'B': [0b110, 0b101, 0b110, 0b101, 0b110],
+            'C': [0b111, 0b100, 0b100, 0b100, 0b111],
+            'T': [0b111, 0b010, 0b010, 0b010, 0b010],
+            'P': [0b110, 0b101, 0b110, 0b100, 0b100],
+            'M': [0b101, 0b111, 0b101, 0b101, 0b101],
+            'E': [0b111, 0b100, 0b110, 0b100, 0b111],
+            'U': [0b101, 0b101, 0b101, 0b101, 0b111],
+            'N': [0b101, 0b111, 0b111, 0b101, 0b101],
+            'L': [0b100, 0b100, 0b100, 0b100, 0b111],
+            'V': [0b101, 0b101, 0b101, 0b101, 0b010],
+            'O': [0b111, 0b101, 0b101, 0b101, 0b111],
+            'D': [0b110, 0b101, 0b101, 0b101, 0b110],
+            '0': [0b111, 0b101, 0b101, 0b101, 0b111],
+            '1': [0b010, 0b110, 0b010, 0b010, 0b111],
+            '2': [0b111, 0b001, 0b111, 0b100, 0b111],
+            '3': [0b111, 0b001, 0b111, 0b001, 0b111],
+            '4': [0b101, 0b101, 0b111, 0b001, 0b001],
+            '5': [0b111, 0b100, 0b111, 0b001, 0b111],
+            '6': [0b111, 0b100, 0b111, 0b101, 0b111],
+            '7': [0b111, 0b001, 0b001, 0b001, 0b001],
+            '8': [0b111, 0b101, 0b111, 0b101, 0b111],
+            '9': [0b111, 0b101, 0b111, 0b001, 0b111],
+            '%': [0b101, 0b001, 0b010, 0b100, 0b101],
+            '°': [0b010, 0b101, 0b010, 0b000, 0b000],
+            '●': [0b000, 0b010, 0b111, 0b010, 0b000],
+            '○': [0b000, 0b010, 0b101, 0b010, 0b000],
+            ' ': [0b000, 0b000, 0b000, 0b000, 0b000]
+        };
+        
+        let currentX = x;
+        for (let char of text) {
+            const pattern = chars[char] || chars[' '];
+            for (let row = 0; row < 5; row++) {
+                for (let col = 0; col < 3; col++) {
+                    if (pattern[row] & (1 << (2 - col))) {
+                        this.setPixel(currentX + col, y + row, colorIndex);
+                    }
+                }
+            }
+            currentX += 4; // 3 char width + 1 space
+        }
+    }
+    
+    getNetworkBars() {
+        const strength = this.systemState.networkStrength;
+        const bars = Math.floor(strength / 25);
+        return '●'.repeat(bars) + '○'.repeat(4 - bars);
+    }
+    
+    getMoodIcon() {
+        const moodIcons = {
+            'happy': 'H',
+            'sad': 'S', 
+            'excited': 'E',
+            'thinking': 'T',
+            'sleepy': 'Z',
+            'angry': 'A',
+            'love': 'L',
+            'surprised': '!'
+        };
+        return moodIcons[this.avatarState.mood] || 'H';
+    }
+
     renderBatteryMeter(x, y, percent) {
         // Battery outline
         this.drawRect(x, y, 8, 3, 3, 'ui');
@@ -1182,8 +1306,11 @@ class GameboyPixelEngine {
     // === ANIMATION SYSTEM ===
     
     startAnimationLoop() {
+        console.log('🚀 startAnimationLoop() called');
         this.isAnimating = true;
+        console.log('🎬 Animation state set to:', this.isAnimating);
         this.animate();
+        console.log('✅ startAnimationLoop() completed');
     }
     
     stopAnimationLoop() {
@@ -1194,13 +1321,26 @@ class GameboyPixelEngine {
     }
     
     animate() {
-        if (!this.isAnimating) return;
+        if (!this.isAnimating) {
+            console.log('❌ animate() called but isAnimating is false');
+            return;
+        }
         
         const now = performance.now();
         const deltaTime = now - this.lastFrameTime;
         
+        // Log first few animation frames
+        if (this.animationTime < 1000) {
+            console.log(`⏰ animate() called - deltaTime: ${deltaTime.toFixed(1)}ms, frameInterval: ${this.frameInterval}ms`);
+        }
+        
         if (deltaTime >= this.frameInterval) {
             this.animationTime += deltaTime;
+            
+            // Log frame renders for first second
+            if (this.animationTime < 1000) {
+                console.log(`🖼️ Rendering frame - animationTime: ${this.animationTime.toFixed(1)}ms`);
+            }
             
             // Update avatar care mechanics
             this.updateAvatarCare();
@@ -1215,21 +1355,29 @@ class GameboyPixelEngine {
     }
     
     renderFrame() {
-        // Clear main canvas
-        this.ctx.clearRect(0, 0, this.canvasWidth, this.canvasHeight);
+        // Log first few frame renders
+        if (this.animationTime < 1000) {
+            console.log('🎬 renderFrame() called');
+        }
         
-        // Composite all layers
-        Object.values(this.layers).forEach(layer => {
-            this.ctx.drawImage(layer.canvas, 0, 0);
-        });
+        // Clear entire canvas with background color
+        const bgColor = this.currentPalette[0];
+        if (this.animationTime < 1000) {
+            console.log(`🧹 clearCanvas() with color: ${bgColor}`);
+        }
+        this.clearCanvas(bgColor);
         
-        // Render current content
+        // Direct single-canvas rendering (no layers)
         this.renderAvatar();
         this.renderSystemMetrics();
         
         // Apply e-ink dithering if enabled
         if (this.currentPalette === this.palettes.eink) {
             this.applyDithering();
+        }
+        
+        if (this.animationTime < 1000) {
+            console.log('✅ renderFrame() completed');
         }
     }
     
@@ -1243,25 +1391,420 @@ class GameboyPixelEngine {
     }
     
     applyAvatarAnimations(centerX, centerY, ctx) {
-        // Breathing animation
-        const breathCycle = Math.sin(this.animationTime * 0.001) * 0.5 + 0.5;
+        // Breathing animation based on avatar state
+        let breathSpeed = 0.002; // Base breathing speed
+        let breathIntensity = 1.0; // Base breathing intensity
+        
+        // Adjust breathing based on avatar mood and state
+        switch(this.avatarState.mood) {
+            case 'excited':
+            case 'happy':
+                breathSpeed = 0.003; // Faster breathing when excited
+                breathIntensity = 1.2;
+                break;
+            case 'sleepy':
+            case 'relaxed':
+                breathSpeed = 0.001; // Slower breathing when sleepy
+                breathIntensity = 0.8;
+                break;
+            case 'stressed':
+            case 'critical':
+                breathSpeed = 0.004; // Rapid breathing when stressed
+                breathIntensity = 1.5;
+                break;
+            case 'thinking':
+                breathSpeed = 0.0015; // Calm, contemplative breathing
+                breathIntensity = 0.9;
+                break;
+        }
+        
+        // Apply energy level to breathing
+        if (this.avatarState.energy < 30) {
+            breathSpeed *= 0.7; // Slower when low energy
+            breathIntensity *= 0.6;
+        } else if (this.avatarState.energy > 80) {
+            breathSpeed *= 1.2; // Faster when high energy
+            breathIntensity *= 1.1;
+        }
+        
+        const breathCycle = Math.sin(this.animationTime * breathSpeed) * breathIntensity;
+        
+        // Apply breathing to avatar size (subtle scale effect)
+        const breathScale = 1.0 + (breathCycle * 0.03); // 3% size variation
+        this.avatarState.breathScale = breathScale;
         
         // Subtle movements based on system state
         if (this.systemState.cpu > 50) {
             // Vibration when under load
             const jitter = Math.sin(this.animationTime * 0.01) * 0.5;
-            // Apply slight offset to avatar rendering
+            this.avatarState.jitterX = jitter * 0.3;
+            this.avatarState.jitterY = jitter * 0.2;
+        } else {
+            this.avatarState.jitterX = 0;
+            this.avatarState.jitterY = 0;
         }
         
-        if (this.avatarState.energy < 30) {
-            // Slower animations when low energy
-            // Reduce animation frequency
+        // Color pulsing for special states
+        if (this.avatarState.mood === 'excited') {
+            const pulse = Math.sin(this.animationTime * 0.005) * 0.5 + 0.5;
+            this.avatarState.colorPulse = pulse;
+        } else {
+            this.avatarState.colorPulse = 0;
         }
+    }
+    
+    // === ENHANCED AI INTEGRATION METHODS ===
+    
+    setEmotionWithMetadata(emotion, intensity, metadata) {
+        this.avatarState.mood = emotion;
+        this.avatarState.intensity = intensity;
+        
+        // Store classification metadata for specialized behaviors
+        this.avatarState.metadata = metadata || {};
+        
+        // Apply intent-specific avatar modifications
+        const intent = metadata?.intent;
+        if (intent) {
+            this.applyIntentSpecificBehavior(intent, metadata);
+        }
+        
+        // Update the avatar appearance
+        this.renderAvatar();
+    }
+    
+    createEnhancedParticles(emotion, intensity, metadata) {
+        const intent = metadata?.intent;
+        const confidence = metadata?.confidence || 0.5;
+        
+        // Create context-aware particles based on AI intent
+        switch(intent) {
+            case 'mathematical_calculation':
+                this.createMathematicalParticles(intensity, confidence);
+                break;
+            case 'creative_writing':
+                this.createCreativeParticles(intensity, confidence);
+                break;
+            case 'code_debugging':
+                this.createTechnicalParticles(intensity, confidence);
+                break;
+            case 'explanation_request':
+                this.createKnowledgeParticles(intensity, confidence);
+                break;
+            default:
+                this.createEmotionParticles(emotion, intensity);
+        }
+    }
+    
+    setThinkingPhase(phase, progress, confidence) {
+        this.avatarState.thinkingPhase = phase;
+        this.avatarState.thinkingProgress = progress;
+        this.avatarState.thinkingConfidence = confidence;
+        
+        // Update visual representation based on thinking phase
+        this.updateThinkingVisualization(phase, progress, confidence);
+    }
+    
+    setGenerationActivity(tokenCount, generationSpeed) {
+        this.avatarState.generationTokens = tokenCount;
+        this.avatarState.generationSpeed = generationSpeed;
+        
+        // Adjust avatar breathing/animation speed based on generation activity
+        const activityLevel = Math.min(generationSpeed / 10, 1.0); // Normalize to 0-1
+        this.avatarState.activityLevel = activityLevel;
+        
+        // Create generation particles
+        this.createGenerationParticles(tokenCount, generationSpeed);
+    }
+    
+    applyIntentSpecificBehavior(intent, metadata) {
+        const confidence = metadata?.confidence || 0.5;
+        const strategy = metadata?.response_strategy || 'balanced';
+        
+        // Modify avatar appearance based on AI intent
+        switch(intent) {
+            case 'mathematical_calculation':
+                // Sharp, focused appearance for math
+                this.avatarState.visualStyle = 'analytical';
+                this.avatarState.focusLevel = confidence;
+                this.currentPalette = confidence > 0.8 ? this.palettes.crystal : this.palettes.classic;
+                break;
+                
+            case 'creative_writing':
+                // Flowing, artistic appearance for creativity
+                this.avatarState.visualStyle = 'creative';
+                this.avatarState.inspirationLevel = confidence;
+                this.currentPalette = this.palettes.sunset;
+                break;
+                
+            case 'code_debugging':
+                // Technical, systematic appearance
+                this.avatarState.visualStyle = 'technical';
+                this.avatarState.debugMode = true;
+                this.currentPalette = this.palettes.monochrome;
+                break;
+                
+            case 'explanation_request':
+                // Wise, teaching appearance
+                this.avatarState.visualStyle = 'educational';
+                this.avatarState.wisdomLevel = confidence;
+                this.currentPalette = this.palettes.forest;
+                break;
+                
+            case 'casual_conversation':
+                // Friendly, relaxed appearance
+                this.avatarState.visualStyle = 'conversational';
+                this.avatarState.socialLevel = confidence;
+                this.currentPalette = this.palettes.ocean;
+                break;
+                
+            default:
+                this.avatarState.visualStyle = 'default';
+                this.currentPalette = this.palettes.classic;
+        }
+        
+        // Strategy-based modifications
+        if (strategy === 'deterministic') {
+            this.avatarState.precision = 0.9;
+        } else if (strategy === 'creative') {
+            this.avatarState.creativity = 0.9;
+        }
+    }
+    
+    createMathematicalParticles(intensity, confidence) {
+        // Create particles that look like mathematical symbols
+        const particleCount = Math.floor(intensity / 10);
+        const symbols = ['=', '+', '-', '*', '/', '%', '∑', '∏'];
+        
+        for (let i = 0; i < particleCount; i++) {
+            this.createSymbolParticle(
+                Math.random() * this.gridWidth,
+                Math.random() * this.gridHeight,
+                symbols[Math.floor(Math.random() * symbols.length)],
+                confidence
+            );
+        }
+    }
+    
+    createCreativeParticles(intensity, confidence) {
+        // Create flowing, artistic particles
+        const particleCount = Math.floor(intensity / 8);
+        const colors = [1, 2, 3]; // Use different palette colors
+        
+        for (let i = 0; i < particleCount; i++) {
+            this.createFlowingParticle(
+                Math.random() * this.gridWidth,
+                Math.random() * this.gridHeight,
+                colors[Math.floor(Math.random() * colors.length)],
+                confidence * 2 // More dynamic
+            );
+        }
+    }
+    
+    createTechnicalParticles(intensity, confidence) {
+        // Create geometric, technical particles
+        const particleCount = Math.floor(intensity / 12);
+        
+        for (let i = 0; i < particleCount; i++) {
+            this.createGeometricParticle(
+                Math.random() * this.gridWidth,
+                Math.random() * this.gridHeight,
+                3, // Dark color for technical look
+                confidence
+            );
+        }
+    }
+    
+    createKnowledgeParticles(intensity, confidence) {
+        // Create particles that suggest learning/knowledge
+        const particleCount = Math.floor(intensity / 9);
+        
+        for (let i = 0; i < particleCount; i++) {
+            this.createLightBulbParticle(
+                Math.random() * this.gridWidth,
+                Math.random() * this.gridHeight,
+                1, // Bright color for knowledge
+                confidence
+            );
+        }
+    }
+    
+    createGenerationParticles(tokenCount, generationSpeed) {
+        // Create particles representing text generation
+        if (tokenCount % 5 === 0) { // Every 5 tokens
+            const speedLevel = Math.min(generationSpeed / 5, 2.0);
+            this.createTextStreamParticle(speedLevel);
+        }
+    }
+    
+    updateThinkingVisualization(phase, progress, confidence) {
+        // Update avatar expression based on thinking phase
+        switch(phase) {
+            case 'analyzing':
+                this.avatarState.eyeExpression = 'focused';
+                break;
+            case 'reasoning':
+                this.avatarState.eyeExpression = 'contemplative';
+                break;
+            case 'calculating':
+                this.avatarState.eyeExpression = 'sharp';
+                break;
+            case 'synthesizing':
+                this.avatarState.eyeExpression = 'creative';
+                break;
+            case 'concluding':
+                this.avatarState.eyeExpression = 'confident';
+                break;
+        }
+        
+        // Update progress indicator if needed
+        this.avatarState.progressLevel = progress;
+    }
+    
+    // Enhanced particle creation methods
+    createSymbolParticle(x, y, symbol, confidence) {
+        // Create a particle that displays a mathematical symbol
+        this.createTextParticle(x, y, symbol, 3, confidence * 100);
+    }
+    
+    createFlowingParticle(x, y, color, speed) {
+        // Create a particle with flowing movement
+        const particle = {
+            x: x,
+            y: y,
+            color: this.currentPalette[color],
+            life: 1.0,
+            speed: speed,
+            type: 'flowing',
+            dx: (Math.random() - 0.5) * 2,
+            dy: -Math.random(),
+            size: 1
+        };
+        
+        this.addParticleToSystem(particle);
+    }
+    
+    createGeometricParticle(x, y, color, confidence) {
+        // Create a sharp, geometric particle
+        const particle = {
+            x: x,
+            y: y,
+            color: this.currentPalette[color],
+            life: confidence,
+            speed: 0.5,
+            type: 'geometric',
+            size: 2,
+            angle: Math.random() * Math.PI * 2
+        };
+        
+        this.addParticleToSystem(particle);
+    }
+    
+    createLightBulbParticle(x, y, color, confidence) {
+        // Create a particle suggesting knowledge/insight
+        const particle = {
+            x: x,
+            y: y,
+            color: this.currentPalette[color],
+            life: confidence,
+            speed: 0.3,
+            type: 'lightbulb',
+            size: 1,
+            pulse: Math.random() * Math.PI
+        };
+        
+        this.addParticleToSystem(particle);
+    }
+    
+    createTextStreamParticle(speedLevel) {
+        // Create particles representing flowing text generation
+        const particle = {
+            x: this.gridWidth - 2,
+            y: Math.random() * this.gridHeight,
+            color: this.currentPalette[1],
+            life: 1.0,
+            speed: speedLevel,
+            type: 'textstream',
+            size: 1,
+            dx: -speedLevel
+        };
+        
+        this.addParticleToSystem(particle);
+    }
+    
+    addParticleToSystem(particle) {
+        // Add particle to rendering system (simplified for now)
+        // In a full implementation, this would integrate with the existing particle system
+        console.log('Enhanced particle created:', particle.type);
+    }
+    
+    // === MISSING API METHODS FOR HTML INTEGRATION ===
+    
+    setEmotion(emotion, intensity) {
+        this.avatarState.mood = emotion;
+        this.avatarState.health = intensity;
+        this.avatarState.lastInteraction = Date.now();
+        this.renderAvatar();
+        console.log(`🎭 Avatar emotion set: ${emotion} (${intensity}%)`);
+    }
+    
+    setState(state) {
+        const stateToMoodMap = {
+            'thinking': 'thinking',
+            'pre_thinking': 'thinking', 
+            'analyzing': 'thinking',
+            'reasoning': 'thinking',
+            'calculating': 'thinking',
+            'synthesizing': 'thinking',
+            'concluding': 'excited',
+            'generating': 'excited', 
+            'speaking': 'happy',
+            'error': 'sad',
+            'idle': 'sleepy',
+            'loading': 'thinking'
+        };
+        this.avatarState.mood = stateToMoodMap[state] || 'happy';
+        this.avatarState.lastInteraction = Date.now();
+        this.renderAvatar();
+        console.log(`🔄 Avatar state set: ${state} -> ${this.avatarState.mood}`);
+    }
+    
+    setStyle(style, palette) {
+        const stylePaletteMap = {
+            'robot': 'monochrome',
+            'organic': 'forest',
+            'crystal': 'crystal',
+            'ghost': 'ocean',
+            'energy': 'sunset',
+            'cute': 'classic'
+        };
+        const paletteKey = stylePaletteMap[style] || 'monochrome';
+        if (this.palettes[paletteKey]) {
+            this.currentPalette = this.palettes[paletteKey];
+        }
+        this.renderAvatar();
+        console.log(`🎨 Avatar style set: ${style} with ${paletteKey} palette`);
+    }
+    
+    setAvatar(config) {
+        if (config.emotion) {
+            this.avatarState.mood = config.emotion;
+        }
+        if (config.intensity !== undefined) {
+            this.avatarState.health = config.intensity;
+        }
+        if (config.style === 'robot') {
+            this.currentPalette = this.palettes.monochrome;
+        }
+        this.avatarState.lastInteraction = Date.now();
+        
+        // CRITICAL: Trigger rendering like other methods
+        this.renderAvatar();
+        console.log(`🎭 Avatar set: emotion=${config.emotion}, intensity=${config.intensity}, style=${config.style}`);
     }
     
     // === UTILITY DRAWING FUNCTIONS ===
     
-    drawRect(x, y, width, height, colorIndex, layer = 'avatar') {
+    drawRect(x, y, width, height, colorIndex, layer = 'main') {
         for (let dy = 0; dy < height; dy++) {
             for (let dx = 0; dx < width; dx++) {
                 this.setPixel(x + dx, y + dy, colorIndex, layer);
@@ -1269,17 +1812,21 @@ class GameboyPixelEngine {
         }
     }
     
-    drawCircle(centerX, centerY, radius, colorIndex, layer = 'avatar') {
+    drawCircle(centerX, centerY, radius, colorIndex, layer = 'main') {
+        console.log(`🔵 drawCircle: center(${centerX}, ${centerY}), radius=${radius}, colorIndex=${colorIndex}`);
+        let pixelsDrawn = 0;
         for (let y = -radius; y <= radius; y++) {
             for (let x = -radius; x <= radius; x++) {
                 if (x*x + y*y <= radius*radius) {
-                    this.setPixel(centerX + x, centerY + y, colorIndex, layer);
+                    this.setPixel(centerX + x, centerY + y, colorIndex);
+                    pixelsDrawn++;
                 }
             }
         }
+        console.log(`🔵 drawCircle: drew ${pixelsDrawn} pixels`);
     }
     
-    drawLine(x1, y1, x2, y2, colorIndex, layer = 'avatar') {
+    drawLine(x1, y1, x2, y2, colorIndex, layer = 'main') {
         const dx = Math.abs(x2 - x1);
         const dy = Math.abs(y2 - y1);
         const sx = x1 < x2 ? 1 : -1;
@@ -1305,14 +1852,14 @@ class GameboyPixelEngine {
         }
     }
     
-    drawHorizontalLine(x, y, width, colorIndex, layer = 'avatar') {
+    drawHorizontalLine(x, y, width, colorIndex, layer = 'main') {
         for (let i = 0; i < width; i++) {
             this.setPixel(x + i, y, colorIndex, layer);
         }
     }
     
     // Complex shapes for evolution levels
-    drawDiamond(centerX, centerY, size, colorIndex, layer = 'avatar') {
+    drawDiamond(centerX, centerY, size, colorIndex, layer = 'main') {
         for (let y = -size; y <= size; y++) {
             for (let x = -size; x <= size; x++) {
                 if (Math.abs(x) + Math.abs(y) <= size) {
@@ -1322,7 +1869,7 @@ class GameboyPixelEngine {
         }
     }
     
-    drawComplexShape(centerX, centerY, size, colorIndex, layer = 'avatar') {
+    drawComplexShape(centerX, centerY, size, colorIndex, layer = 'main') {
         // Star or more complex geometric shape
         const points = 5;
         for (let i = 0; i < points; i++) {
@@ -1333,7 +1880,7 @@ class GameboyPixelEngine {
         }
     }
     
-    drawMasterpieceForm(centerX, centerY, size, colorIndex, layer = 'avatar') {
+    drawMasterpieceForm(centerX, centerY, size, colorIndex, layer = 'main') {
         // Most advanced form - complex pattern
         for (let y = -size; y <= size; y++) {
             for (let x = -size; x <= size; x++) {
@@ -1346,7 +1893,7 @@ class GameboyPixelEngine {
         }
     }
     
-    drawRoundedRect(x, y, width, height, radius, colorIndex, layer = 'avatar') {
+    drawRoundedRect(x, y, width, height, radius, colorIndex, layer = 'main') {
         // Simplified rounded rectangle for pixel art
         this.drawRect(x + radius, y, width - 2*radius, height, colorIndex, layer);
         this.drawRect(x, y + radius, width, height - 2*radius, colorIndex, layer);

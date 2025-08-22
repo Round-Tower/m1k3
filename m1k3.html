@@ -253,14 +253,91 @@
             flex: 1;
         }
 
-        /* Performance optimizations */
+        /* Canvas container styling */
         .canvas-container {
+            position: relative;
+            width: 100%;
+            height: 300px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #000;
+            border-radius: 8px;
+            border: 2px solid #333;
+            overflow: hidden;
             will-change: transform;
             transform: translateZ(0);
+        }
+        
+        .avatar-canvas {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 300px;
+            height: 225px; /* Maintain 768:576 aspect ratio */
+            background: #000;
+            image-rendering: pixelated;
+            image-rendering: -moz-crisp-edges;
+            image-rendering: crisp-edges;
+        }
+        
+        #avatarCanvas {
+            z-index: 1; /* Behind particles */
+        }
+        
+        #particleCanvas {
+            z-index: 2; /* In front of avatar */
+            pointer-events: none; /* Allow clicks to pass through */
+            background: transparent; /* Ensure transparency */
         }
 
         .message {
             will-change: transform, opacity;
+        }
+
+        /* Confidence indicators */
+        .confidence-indicator {
+            font-weight: 600;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: var(--font-xs);
+        }
+        
+        .confidence-indicator.high {
+            color: var(--m1k3-green);
+            background: rgba(0, 255, 133, 0.1);
+        }
+        
+        .confidence-indicator.medium {
+            color: #FFB366;
+            background: rgba(255, 179, 102, 0.1);
+        }
+        
+        .confidence-indicator.low {
+            color: var(--m1k3-red);
+            background: rgba(255, 69, 0, 0.1);
+        }
+
+        /* Enhanced status grid for more items */
+        .avatar-status {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: var(--space-sm);
+            margin-top: var(--space-md);
+        }
+        
+        /* Mobile responsive for status items */
+        @media (max-width: 640px) {
+            .avatar-status {
+                grid-template-columns: 1fr;
+                gap: var(--space-xs);
+            }
+            
+            .status-item {
+                font-size: var(--font-xs);
+                padding: var(--space-xs);
+            }
         }
 
         /* Custom color definitions for M1K3 branding */
@@ -310,8 +387,8 @@
         <div class="avatar-panel">
             <div class="avatar-container idle" id="avatarDisplay">
                 <div class="canvas-container">
-                    <canvas class="avatar-canvas" id="avatarCanvas" width="256" height="256"></canvas>
-                    <canvas class="avatar-canvas" id="particleCanvas" width="256" height="256"></canvas>
+                    <canvas class="avatar-canvas" id="avatarCanvas" width="768" height="576"></canvas>
+                    <canvas class="avatar-canvas" id="particleCanvas" width="768" height="576"></canvas>
                     <div class="state-overlay" id="stateOverlay" style="display:none;">
                         <div class="state-icon" id="stateIcon">💭</div>
                         <div class="progress-bar" id="progressBar" style="display:none;">
@@ -327,6 +404,18 @@
                 </div>
                 <div class="status-item" id="stateStatus">
                     <div><span id="currentState">💤 Idle</span></div>
+                </div>
+                <div class="status-item" id="intentStatus">
+                    <div><span id="currentIntent">❓ Unknown</span></div>
+                </div>
+                <div class="status-item" id="strategyStatus">
+                    <div><span id="currentStrategy">⚖️ Balanced</span></div>
+                </div>
+                <div class="status-item" id="confidenceStatus">
+                    <div>Confidence: <span id="confidenceIndicator" class="confidence-indicator medium">50.0%</span></div>
+                </div>
+                <div class="status-item" id="generationStatus">
+                    <div>Tokens: <span id="tokenCount">0</span> @ <span id="generationSpeed">0.0 tok/s</span></div>
                 </div>
             </div>
         </div>
@@ -418,7 +507,7 @@
     </div>
 
     <!-- Load external JavaScript -->
-    <script src="gameboy_pixel_engine.js"></script>
+    <script src="gameboy_pixel_engine.js?v=20250122c"></script>
     <script src="avatar_dashboard.js"></script>
     
     <script>
@@ -457,14 +546,30 @@
         let animationFrame = null;
         let animationState = { breathing: 0, time: 0 };
         
-        // System metrics
+        // System metrics - synced with GameboyPixelEngine structure
         let systemMetrics = {
             battery: 100,
-            temperature: 50,
+            cpu: 0,
+            memory: 0,
+            temperature: 25,
             network: true,
-            wifi_strength: 80,
-            eco_savings: 0
+            networkStrength: 80, // Fixed property name
+            eco_savings: 0,
+            ecoSavings: 0 // Alias for GameboyPixelEngine
         };
+        
+        // Helper function to map HTML metrics to GameboyPixelEngine format
+        function mapMetricsForEngine(metrics) {
+            return {
+                battery: metrics.battery,
+                cpu: metrics.cpu,
+                memory: metrics.memory,
+                temperature: metrics.temperature,
+                network: metrics.network,
+                networkStrength: metrics.networkStrength || metrics.wifi_strength || 80,
+                ecoSavings: metrics.eco_savings || metrics.ecoSavings || 0
+            };
+        }
 
         // Initialize everything when DOM loads
         document.addEventListener('DOMContentLoaded', function() {
@@ -601,9 +706,8 @@
                         return this.decodeSystemBinary(data);
                     }
                     
-                    // Handle JSON messages
-                    const text = typeof data === 'string' ? data : new TextDecoder().decode(data);
-                    const msg = JSON.parse(text);
+                    // Handle JSON messages - data is already a parsed object from websocket.onmessage
+                    const msg = typeof data === 'string' ? JSON.parse(data) : data;
                     
                     // Route optimized messages
                     switch (msg.type) {
@@ -694,9 +798,20 @@
                     }
                     break;
                     
+                // Enhanced message types 
+                case 'classification':
+                    updateClassificationDisplay(decoded.data);
+                    break;
+                case 'thinking_phase':
+                    updateThinkingPhase(decoded.data.phase, decoded.data.progress, decoded.data.insight, decoded.data.confidence);
+                    break;
+                case 'generation_stream':
+                    updateGenerationStream(decoded.data.token_count, decoded.data.generation_speed, decoded.data.content_preview);
+                    break;
+                    
                 // Legacy message types for backward compatibility
                 case 'emotion':
-                    updateEmotion(decoded.data.emotion, decoded.data.intensity || 50, decoded.data.message || '');
+                    updateEmotion(decoded.data.emotion, decoded.data.intensity || 50, decoded.data.message || '', decoded.data.metadata);
                     break;
                 case 'style':
                     updateStyle(decoded.data.style, decoded.data.color);
@@ -730,6 +845,33 @@
                 case 'pong':
                     // Connection alive
                     break;
+                    
+                case 'avatar_emotion':
+                    // Handle direct avatar emotion updates
+                    if (decoded.data && decoded.data.emotion) {
+                        if (pixelEngine && pixelEngine.setEmotion) {
+                            pixelEngine.setEmotion(decoded.data.emotion, decoded.data.intensity || 50);
+                        }
+                        updateEmotion(decoded.data.emotion, decoded.data.intensity || 50, decoded.data.metadata);
+                        console.log('🎭 Avatar emotion updated:', decoded.data.emotion, decoded.data.intensity);
+                    }
+                    break;
+                    
+                case 'thinking_phase_update':
+                    // Handle thinking phase updates with progress
+                    if (decoded.data) {
+                        console.log('🤔 Thinking phase:', decoded.data.phase, decoded.data.progress + '%');
+                        // Could add visual thinking indicators here
+                    }
+                    break;
+                    
+                case 'generation_stream_update':
+                    // Handle real-time generation progress
+                    if (decoded.data) {
+                        updateProgress('generating', decoded.data.progress, decoded.data.current_token, decoded.data.token);
+                    }
+                    break;
+                    
                 default:
                     console.log('Unknown message type:', decoded.type);
             }
@@ -738,16 +880,17 @@
         function initializeCanvas() {
             canvas = document.getElementById('avatarCanvas');
             if (canvas) {
-                ctx = canvas.getContext('2d');
-                canvas.width = 256;
-                canvas.height = 256;
+                // Set canvas dimensions but don't get context - let GameboyPixelEngine handle it
+                canvas.width = 768;
+                canvas.height = 576;
+                // ctx will be managed by GameboyPixelEngine
             }
             
             particleCanvas = document.getElementById('particleCanvas');
             if (particleCanvas) {
                 particleCtx = particleCanvas.getContext('2d');
-                particleCanvas.width = 256;
-                particleCanvas.height = 256;
+                particleCanvas.width = 768;
+                particleCanvas.height = 576;
             }
             
             // Polyfill for roundRect if not available
@@ -770,82 +913,58 @@
                 };
             }
 
-            // Initialize Enhanced Gameboy Pixel Engine with rounded pixels
-            if (typeof GameboyPixelEngine !== 'undefined') {
-                pixelEngine = new GameboyPixelEngine(canvas, {
-                    pixelSize: 16, // Larger pixels for mobile
-                    mode: 'avatar',
-                    enableCare: true,
-                    enableEInk: false,
-                    debugMode: false
-                });
-                
-                // Switch to monochrome palette for consistency
-                pixelEngine.currentPalette = pixelEngine.palettes.monochrome;
-                
-                // Store original setPixel for fallback
-                const originalSetPixel = pixelEngine.setPixel.bind(pixelEngine);
-                
-                // Add rounded pixel functionality
-                pixelEngine.setRoundedPixel = function(x, y, colorIndex, layer = 'avatar') {
-                    if (x < 0 || x >= this.gridWidth || y < 0 || y >= this.gridHeight) return;
-                    if (colorIndex < 0 || colorIndex >= this.currentPalette.length) return;
+            // Initialize Enhanced Gameboy Pixel Engine with styled pixels
+            if (typeof GameboyPixelEngine !== 'undefined' && canvas) {
+                try {
+                    pixelEngine = new GameboyPixelEngine(canvas, {
+                        pixelSize: 12, // Larger pixels for visibility (was 6)
+                        mode: 'avatar',
+                        enableCare: true,
+                        enableEInk: false,
+                        debugMode: true
+                    });
                     
-                    const ctx = this.ctx;
-                    const color = this.currentPalette[colorIndex];
+                    // Direct initialization like index.html
+                    // Switch to monochrome palette for consistency  
+                    pixelEngine.currentPalette = pixelEngine.palettes.monochrome;
+                    console.log('🎨 Current palette:', pixelEngine.currentPalette);
+                    console.log('🎨 Background color (palette[0]):', pixelEngine.currentPalette[0]);
                     
-                    // Calculate pixel position with padding
-                    const pixelX = x * this.pixelSize;
-                    const pixelY = y * this.pixelSize;
-                    const padding = 1;
-                    const size = this.pixelSize - (padding * 2);
-                    const radius = Math.min(size / 4, 3);
-                    
-                    // Draw rounded rectangle with padding
-                    ctx.fillStyle = color;
-                    ctx.beginPath();
-                    try {
-                        ctx.roundRect(pixelX + padding, pixelY + padding, size, size, radius);
-                        ctx.fill();
-                    } catch (e) {
-                        // Fallback to regular rectangle
-                        ctx.fillRect(pixelX + padding, pixelY + padding, size, size);
+                    // Set initial system state with proper mapping
+                    if (pixelEngine.updateSystemState) {
+                        pixelEngine.updateSystemState(mapMetricsForEngine(systemMetrics));
                     }
-                };
-                
-                // Override setPixel to use rounded version
-                pixelEngine.setPixel = function(x, y, colorIndex, layer = 'avatar') {
-                    this.setRoundedPixel(x, y, colorIndex, layer);
-                };
-                
-                // Add pulse effect for special states
-                pixelEngine.setPulsingPixel = function(x, y, colorIndex, layer = 'avatar') {
-                    this.setRoundedPixel(x, y, colorIndex, layer);
                     
-                    const ctx = this.ctx;
-                    const pixelX = x * this.pixelSize;
-                    const pixelY = y * this.pixelSize;
-                    const padding = 1;
-                    const size = this.pixelSize - (padding * 2);
+                    // Debug: Check if methods exist
+                    console.log('🔍 setAvatar method exists:', typeof pixelEngine.setAvatar === 'function');
+                    console.log('🔍 animate method exists:', typeof pixelEngine.animate === 'function');
+                    console.log('🔍 renderAvatar method exists:', typeof pixelEngine.renderAvatar === 'function');
                     
-                    ctx.shadowColor = this.currentPalette[colorIndex];
-                    ctx.shadowBlur = 6;
-                    ctx.beginPath();
-                    try {
-                        ctx.roundRect(pixelX + padding, pixelY + padding, size, size, 2);
-                        ctx.fill();
-                    } catch (e) {
-                        ctx.fillRect(pixelX + padding, pixelY + padding, size, size);
-                    }
-                    ctx.shadowBlur = 0;
-                };
-                
-                // Set initial system state
-                pixelEngine.updateSystemState(systemMetrics);
-                
-                console.log('✅ Enhanced Gameboy Pixel Engine initialized with rounded pixels and monochrome palette');
+                    // Set initial avatar state
+                    pixelEngine.setAvatar({
+                        emotion: 'happy',
+                        style: 'robot',
+                        color: '#E25303',
+                        intensity: 70
+                    });
+                    
+                    // Force immediate render to ensure visibility
+                    pixelEngine.renderAvatar();
+                    
+                    
+                    // Use built-in animation system (sets isAnimating flag correctly)
+                    console.log('🔍 isAnimating before startAnimationLoop:', pixelEngine.isAnimating);
+                    pixelEngine.startAnimationLoop();
+                    console.log('🔍 isAnimating after startAnimationLoop:', pixelEngine.isAnimating);
+                    
+                    console.log('✅ M1K3 Avatar system initialized with built-in animation');
+                    
+                } catch (error) {
+                    console.error('❌ Failed to initialize GameboyPixelEngine:', error);
+                    pixelEngine = null;
+                }
             } else {
-                console.warn('⚠️ GameboyPixelEngine not loaded, using fallback avatar rendering');
+                console.warn('⚠️ GameboyPixelEngine not loaded or canvas not available, using fallback avatar rendering');
             }
         }
 
@@ -932,35 +1051,38 @@
 
         function generateAvatar() {
             if (pixelEngine) {
-                pixelEngine.setAvatar({
-                    emotion: currentEmotion,
-                    style: currentStyle,
-                    color: currentColor,
-                    intensity: emotionIntensity
-                });
+                // Update avatar state with current settings
+                pixelEngine.avatarState.mood = currentEmotion;
+                pixelEngine.avatarState.health = emotionIntensity;
                 
-                pixelEngine.updateSystemState(systemMetrics);
+                // Update system state
+                pixelEngine.updateSystemState(mapMetricsForEngine(systemMetrics));
+                
+                // Render the avatar
+                pixelEngine.renderAvatar();
             } else {
                 // Fallback avatar rendering
-                if (!ctx) return;
+                if (!canvas) return;
+                const fallbackCtx = canvas.getContext('2d');
+                if (!fallbackCtx) return;
                 
-                ctx.clearRect(0, 0, 256, 256);
+                fallbackCtx.clearRect(0, 0, 768, 576);
                 
-                const centerX = 128;
-                const centerY = 128;
+                const centerX = 384; // Center of 768px width
+                const centerY = 288; // Center of 576px height  
                 const size = 80;
                 
-                ctx.fillStyle = currentColor || '#E25303';
-                ctx.beginPath();
-                ctx.arc(centerX, centerY, size/2, 0, Math.PI * 2);
-                ctx.fill();
+                fallbackCtx.fillStyle = currentColor || '#E25303';
+                fallbackCtx.beginPath();
+                fallbackCtx.arc(centerX, centerY, size/2, 0, Math.PI * 2);
+                fallbackCtx.fill();
                 
                 // Eyes
-                ctx.fillStyle = '#FFFFFF';
-                ctx.beginPath();
-                ctx.arc(centerX - 15, centerY - 10, 5, 0, Math.PI * 2);
-                ctx.arc(centerX + 15, centerY - 10, 5, 0, Math.PI * 2);
-                ctx.fill();
+                fallbackCtx.fillStyle = '#FFFFFF';
+                fallbackCtx.beginPath();
+                fallbackCtx.arc(centerX - 15, centerY - 10, 5, 0, Math.PI * 2);
+                fallbackCtx.arc(centerX + 15, centerY - 10, 5, 0, Math.PI * 2);
+                fallbackCtx.fill();
             }
         }
 
@@ -969,10 +1091,10 @@
                 animationState.time += 0.016;
                 animationState.breathing = Math.sin(animationState.time * 2) * 0.5 + 0.5;
                 
-                if (pixelEngine) {
-                    pixelEngine.animate(animationState.time);
-                } else {
-                    generateAvatar();
+                // Let GameboyPixelEngine handle its own animation loop
+                // Only handle particles and HTML-specific animations here
+                if (!pixelEngine) {
+                    generateAvatar(); // Fallback for when pixelEngine not loaded
                 }
                 
                 updateParticles();
@@ -992,7 +1114,7 @@
             }
         }
 
-        function updateEmotion(emotion, intensity, message) {
+        function updateEmotion(emotion, intensity, message, metadata) {
             currentEmotion = emotion;
             emotionIntensity = intensity;
             
@@ -1001,15 +1123,125 @@
                 emotionIndicator.textContent = `${getEmotionEmoji(emotion)} ${emotion.charAt(0).toUpperCase() + emotion.slice(1)}`;
             }
             
-            if (pixelEngine) {
+            if (pixelEngine && pixelEngine.setEmotion) {
+                // Use the new API method
                 pixelEngine.setEmotion(emotion, intensity);
-                pixelEngine.createEmotionParticles(emotion, intensity);
+            } else if (pixelEngine && pixelEngine.avatarState && pixelEngine.renderAvatar) {
+                // Fallback to direct state manipulation
+                pixelEngine.avatarState.mood = emotion;
+                pixelEngine.avatarState.health = intensity;
+                pixelEngine.avatarState.lastInteraction = Date.now();
+                pixelEngine.renderAvatar();
+                console.log(`🎭 Avatar emotion updated: ${emotion} (${intensity}%)`);
             } else {
                 generateAvatar();
             }
             
+            // Update classification display if metadata available
+            if (metadata) {
+                updateClassificationDisplay(metadata);
+            }
+            
             if (message) {
                 console.log('Emotion message:', message);
+            }
+        }
+        
+        function updateClassificationDisplay(classification) {
+            console.log('🧠 Classification:', classification);
+            
+            // Update confidence indicator if available
+            const confidenceElement = document.getElementById('confidenceIndicator');
+            if (confidenceElement) {
+                const confidence = (classification.confidence * 100).toFixed(1);
+                confidenceElement.textContent = `${confidence}%`;
+                confidenceElement.className = `confidence-indicator ${getConfidenceLevel(classification.confidence)}`;
+            }
+            
+            // Update intent display
+            const intentElement = document.getElementById('currentIntent');
+            if (intentElement) {
+                intentElement.textContent = `${getIntentEmoji(classification.intent)} ${classification.intent}`;
+            }
+            
+            // Update strategy display  
+            const strategyElement = document.getElementById('currentStrategy');
+            if (strategyElement) {
+                strategyElement.textContent = `${getStrategyEmoji(classification.response_strategy)} ${classification.response_strategy}`;
+            }
+            
+            // Update reasoning if available
+            if (classification.reasoning) {
+                const reasoningElement = document.getElementById('currentReasoning');
+                if (reasoningElement) {
+                    reasoningElement.textContent = classification.reasoning;
+                    reasoningElement.title = classification.reasoning; // Tooltip for full text
+                }
+            }
+        }
+        
+        function updateThinkingPhase(phase, progress, insight, confidence) {
+            console.log('🤔 Thinking phase:', phase, `${progress}%`);
+            
+            // Update avatar state based on thinking phase
+            updateState(phase);
+            
+            // Update progress indicator
+            const progressBar = document.getElementById('progressBar');
+            const progressFill = document.getElementById('progressFill');
+            
+            if (progressBar && progressFill) {
+                if (progress > 0) {
+                    progressBar.style.display = 'block';
+                    progressFill.style.width = progress + '%';
+                } else {
+                    progressBar.style.display = 'none';
+                }
+            }
+            
+            // Display insight if available
+            if (insight) {
+                const insightElement = document.getElementById('thinkingInsight');
+                if (insightElement) {
+                    insightElement.textContent = insight;
+                }
+            }
+            
+            // Update avatar with thinking phase
+            if (pixelEngine && pixelEngine.avatarState && pixelEngine.renderAvatar) {
+                pixelEngine.avatarState.mood = 'thinking';
+                pixelEngine.avatarState.lastInteraction = Date.now();
+                pixelEngine.renderAvatar();
+                console.log(`🤔 Thinking phase: ${phase} (${progress}%)`);
+            }
+        }
+        
+        function updateGenerationStream(tokenCount, generationSpeed, contentPreview) {
+            console.log('⚡ Generation:', `${tokenCount} tokens @ ${generationSpeed.toFixed(1)} tok/s`);
+            
+            // Update generation stats display
+            const tokenCountElement = document.getElementById('tokenCount');
+            if (tokenCountElement) {
+                tokenCountElement.textContent = tokenCount;
+            }
+            
+            const generationSpeedElement = document.getElementById('generationSpeed');  
+            if (generationSpeedElement) {
+                generationSpeedElement.textContent = `${generationSpeed.toFixed(1)} tok/s`;
+            }
+            
+            const contentPreviewElement = document.getElementById('contentPreview');
+            if (contentPreviewElement) {
+                contentPreviewElement.textContent = contentPreview + '...';
+            }
+            
+            // Update avatar with generation activity
+            if (pixelEngine && pixelEngine.avatarState && pixelEngine.renderAvatar) {
+                pixelEngine.avatarState.mood = 'excited';
+                pixelEngine.avatarState.energy = Math.min(100, 50 + generationSpeed * 10);
+                pixelEngine.avatarState.lastInteraction = Date.now();
+                pixelEngine.renderAvatar();
+                console.log(`⚡ Generation activity: ${tokenCount} tokens`);
             }
         }
 
@@ -1021,8 +1253,22 @@
                 stateIndicator.textContent = `${getStateEmoji(state)} ${state.charAt(0).toUpperCase() + state.slice(1)}`;
             }
             
-            if (pixelEngine) {
+            if (pixelEngine && pixelEngine.setState) {
+                // Use the new API method
                 pixelEngine.setState(state);
+            } else if (pixelEngine && pixelEngine.avatarState && pixelEngine.renderAvatar) {
+                // Fallback to direct state manipulation
+                const stateMoodMap = {
+                    'idle': 'sleepy',
+                    'thinking': 'thinking', 
+                    'generating': 'excited',
+                    'speaking': 'happy',
+                    'error': 'sad'
+                };
+                pixelEngine.avatarState.mood = stateMoodMap[state] || 'happy';
+                pixelEngine.avatarState.lastInteraction = Date.now();
+                pixelEngine.renderAvatar();
+                console.log(`🔄 State changed: ${state}`);
             }
             
             const avatarDisplay = document.getElementById('avatarDisplay');
@@ -1037,8 +1283,31 @@
                 currentColor = color;
             }
             
-            if (pixelEngine) {
-                pixelEngine.setAvatarStyle(style, color);
+            if (pixelEngine && pixelEngine.setStyle) {
+                // Use the new API method
+                pixelEngine.setStyle(style, color);
+            } else if (pixelEngine && pixelEngine.palettes && pixelEngine.renderAvatar) {
+                // Fallback to direct style manipulation
+                currentStyle = style;
+                currentColor = color;
+                
+                // Switch palettes based on style
+                const stylePaletteMap = {
+                    'robot': 'monochrome',
+                    'organic': 'forest',
+                    'crystal': 'crystal',
+                    'ghost': 'ocean',
+                    'energy': 'sunset',
+                    'cute': 'classic'
+                };
+                
+                const paletteKey = stylePaletteMap[style] || 'monochrome';
+                if (pixelEngine.palettes[paletteKey]) {
+                    pixelEngine.currentPalette = pixelEngine.palettes[paletteKey];
+                }
+                
+                pixelEngine.renderAvatar();
+                console.log(`🎨 Style updated: ${style} with ${paletteKey} palette`);
             } else {
                 generateAvatar();
             }
@@ -1076,7 +1345,7 @@
                 
                 // Update pixel engine
                 if (pixelEngine) {
-                    pixelEngine.updateSystemState(systemMetrics);
+                    pixelEngine.updateSystemState(mapMetricsForEngine(systemMetrics));
                 }
                 
                 console.log('📊 System metrics updated:', systemMetrics);
@@ -1105,7 +1374,7 @@
                 
                 // Update pixel engine with new system state
                 if (pixelEngine) {
-                    pixelEngine.updateSystemState(systemMetrics);
+                    pixelEngine.updateSystemState(mapMetricsForEngine(systemMetrics));
                 }
             }
             
@@ -1273,12 +1542,57 @@
             const stateMap = {
                 'idle': '💤',
                 'thinking': '🤔',
+                'pre_thinking': '🧠',
+                'analyzing': '🔍',
+                'reasoning': '💭',
+                'calculating': '🧮',
+                'synthesizing': '🔄',
+                'concluding': '✨',
                 'generating': '⚡',
                 'speaking': '🔊',
                 'error': '❌',
                 'loading': '⏳'
             };
             return stateMap[state] || '💤';
+        }
+        
+        function getIntentEmoji(intent) {
+            const intentMap = {
+                'mathematical_calculation': '🧮',
+                'code_debugging': '🐛',
+                'factual_query': '❓',
+                'explanation_request': '💡',
+                'definition_request': '📖',
+                'comparison_request': '⚖️',
+                'creative_writing': '✍️',
+                'brainstorming': '💭',
+                'casual_conversation': '💬',
+                'greeting': '👋',
+                'instruction_request': '📋',
+                'help_request': '🆘',
+                'troubleshooting': '🔧',
+                'analysis_request': '📊'
+            };
+            return intentMap[intent] || '❓';
+        }
+        
+        function getStrategyEmoji(strategy) {
+            const strategyMap = {
+                'deterministic': '🎯',
+                'balanced': '⚖️',
+                'creative': '🎨',
+                'conversational': '💬',
+                'structured': '📊',
+                'brief': '⚡',
+                'detailed': '📝'
+            };
+            return strategyMap[strategy] || '⚖️';
+        }
+        
+        function getConfidenceLevel(confidence) {
+            if (confidence >= 0.8) return 'high';
+            if (confidence >= 0.5) return 'medium';
+            return 'low';
         }
 
         // Debug Console class
