@@ -214,7 +214,7 @@ class AdaptiveModelConfig:
             'qwen/qwen3-0.6b': ModelProfile(
                 name='Qwen3-0.6B',
                 capabilities=[ModelCapability.REASONING, ModelCapability.MATHEMATICAL],
-                optimal_tasks=[TaskType.LOGICAL, TaskType.MATHEMATICAL, TaskType.ANALYTICAL],
+                optimal_tasks=[TaskType.LOGICAL, TaskType.MATHEMATICAL, TaskType.ANALYTICAL, TaskType.FACTUAL, TaskType.INSTRUCTIONAL],
                 base_quality_score=0.75,
                 max_reliable_tokens=150,  # Increased from 30
                 supports_reasoning=True,
@@ -336,10 +336,17 @@ class AdaptiveModelConfig:
         )
         
         profiles[(TaskType.FACTUAL, ConfidenceLevel.MEDIUM)] = AdaptiveParameters(
-            max_new_tokens=80, temperature=0.2, top_p=0.7, top_k=20,
+            max_new_tokens=120, temperature=0.2, top_p=0.7, top_k=20,
             do_sample=True, repetition_penalty=1.25, no_repeat_ngram_size=3, num_beams=1,
             enable_thinking_mode=False, show_reasoning=False, quality_threshold=0.7,
-            allow_long_responses=False
+            allow_long_responses=True
+        )
+        
+        profiles[(TaskType.FACTUAL, ConfidenceLevel.LOW)] = AdaptiveParameters(
+            max_new_tokens=120, temperature=0.1, top_p=0.6, top_k=15,
+            do_sample=True, repetition_penalty=1.3, no_repeat_ngram_size=2, num_beams=1,
+            enable_thinking_mode=False, show_reasoning=False, quality_threshold=0.6,
+            allow_long_responses=True
         )
         
         # Coding tasks - need detailed explanations
@@ -362,13 +369,21 @@ class AdaptiveModelConfig:
     def _generate_default_params(self, task_type: TaskType, conf_level: ConfidenceLevel) -> AdaptiveParameters:
         """Generate sensible default parameters for missing combinations"""
         
-        # Base parameters by confidence level
+        # Task-specific token adjustments for LOW confidence
         if conf_level == ConfidenceLevel.LOW:
+            # Adjust tokens based on task complexity needs
+            if task_type in [TaskType.CODING, TaskType.INSTRUCTIONAL]:
+                max_tokens = 120  # Code and explanations need more space
+            elif task_type in [TaskType.ANALYTICAL, TaskType.LOGICAL]:
+                max_tokens = 100  # Reasoning needs moderate space
+            else:
+                max_tokens = 60   # Simple tasks can be shorter
+                
             return AdaptiveParameters(
-                max_new_tokens=60, temperature=None, top_p=None, top_k=None,
+                max_new_tokens=max_tokens, temperature=None, top_p=None, top_k=None,
                 do_sample=False, repetition_penalty=1.25, no_repeat_ngram_size=2, num_beams=1,
                 enable_thinking_mode=False, show_reasoning=False, quality_threshold=0.8,
-                allow_long_responses=False
+                allow_long_responses=(task_type in [TaskType.CODING, TaskType.INSTRUCTIONAL, TaskType.ANALYTICAL])
             )
         elif conf_level == ConfidenceLevel.MEDIUM:
             return AdaptiveParameters(
