@@ -9,35 +9,15 @@ import time
 from typing import Dict, List, Tuple, Optional, Generator, Callable
 from dataclasses import dataclass
 from enum import Enum
+from thinking_parser import ThinkingFlow as ThinkingAnalysis  # Use unified structure
 
 class QueryComplexity(Enum):
     SIMPLE = "simple"          # Basic facts, greetings - use direct mode
     MODERATE = "moderate"      # Short reasoning - lightweight thinking
     COMPLEX = "complex"        # Multi-step reasoning - full thinking mode
 
-class ThinkingPhase(Enum):
-    ANALYZING = "analyzing"
-    REASONING = "reasoning"  
-    CALCULATING = "calculating"
-    SYNTHESIZING = "synthesizing"
-    CONCLUDING = "concluding"
 
-@dataclass
-class ThinkingStep:
-    phase: ThinkingPhase
-    content: str
-    confidence: float
-    emotion_indicator: str
-    progress: float  # 0.0 to 1.0
-
-@dataclass
-class ThinkingAnalysis:
-    steps: List[ThinkingStep]
-    final_answer: str
-    confidence_score: float
-    reasoning_quality: str  # "excellent", "good", "fair", "poor"
-    should_show_reasoning: bool
-    emotion_progression: List[str]
+# ThinkingAnalysis is now imported as alias for ThinkingFlow from thinking_parser
 
 class ThinkingModeEngine:
     """
@@ -78,24 +58,6 @@ class ThinkingModeEngine:
                 r'\b(multiple|several|various|different)\b.*\b(ways|methods|approaches)\b',
                 r'\d+.*[+\-*/].*\d+.*[+\-*/]',  # Multi-step math
             ]
-        }
-        
-        # Thinking phase detection patterns
-        self.phase_patterns = {
-            ThinkingPhase.ANALYZING: [r'let me analyze', r'looking at', r'examining', r'considering'],
-            ThinkingPhase.REASONING: [r'because', r'therefore', r'since', r'given that', r'this means'],
-            ThinkingPhase.CALCULATING: [r'calculating', r'adding', r'subtracting', r'multiplying', r'equals'],
-            ThinkingPhase.SYNTHESIZING: [r'putting together', r'combining', r'overall', r'in summary'],
-            ThinkingPhase.CONCLUDING: [r'so the answer', r'therefore', r'in conclusion', r'final answer'],
-        }
-        
-        # Emotion indicators in thinking
-        self.emotion_indicators = {
-            'confident': [r'clearly', r'obviously', r'definitely', r'certain'],
-            'uncertain': [r'maybe', r'perhaps', r'might be', r'could be', r'not sure'],
-            'excited': [r'interesting', r'fascinating', r'great question', r'excellent'],
-            'thinking': [r'hmm', r'let me think', r'considering', r'analyzing'],
-            'focused': [r'step by step', r'methodically', r'systematically'],
         }
     
     def assess_query_complexity(self, query: str) -> QueryComplexity:
@@ -177,12 +139,12 @@ class ThinkingModeEngine:
             analysis = self._analyze_thinking_content(thinking_response, query)
             
             # Send thinking progress updates to avatar
-            if self.avatar_callback and analysis.steps:
-                for i, step in enumerate(analysis.steps):
-                    progress = (i + 1) / len(analysis.steps) * 100
+            if self.avatar_callback and analysis.insights:
+                for i, insight in enumerate(analysis.insights):
+                    progress = (i + 1) / len(analysis.insights) * 100
                     self.avatar_callback("progress", progress)
-                    if step.emotion_indicator:
-                        self.avatar_callback("emotion", step.emotion_indicator, step.confidence * 100)
+                    if insight.emotion:
+                        self.avatar_callback("emotion", insight.emotion, insight.confidence * 100)
             
             # Decide what to output
             if show_reasoning and analysis.should_show_reasoning:
@@ -213,125 +175,17 @@ Final answer: [your conclusion]"""
         return f"{system_msg}\n\nUser: {query}\n\nAssistant:"
     
     def _analyze_thinking_content(self, thinking_response: str, original_query: str) -> ThinkingAnalysis:
-        """Parse thinking content and extract insights"""
+        """Parse thinking content and extract insights using unified parser"""
         
-        # Extract thinking blocks
-        think_pattern = r'<think>(.*?)</think>'
-        think_matches = re.findall(think_pattern, thinking_response, re.DOTALL)
+        # Use the unified ThinkingContentParser
+        from thinking_parser import ThinkingContentParser
+        parser = ThinkingContentParser()
         
-        # Extract final answer (everything after last </think> or whole response if no think tags)
-        if think_matches:
-            final_answer = re.split(r'</think>', thinking_response)[-1].strip()
-        else:
-            final_answer = thinking_response.strip()
+        # Parse the thinking content - this returns a ThinkingFlow (aliased as ThinkingAnalysis)
+        analysis = parser.parse_thinking_content(thinking_response)
         
-        # Clean up final answer
-        final_answer = re.sub(r'^(final answer:\s*|answer:\s*)', '', final_answer, flags=re.IGNORECASE)
-        final_answer = final_answer.strip()
-        
-        # Analyze thinking steps
-        steps = []
-        emotion_progression = []
-        overall_confidence = 0.7  # Default
-        
-        for i, think_content in enumerate(think_matches):
-            step = self._analyze_thinking_step(think_content, i, len(think_matches))
-            steps.append(step)
-            emotion_progression.append(step.emotion_indicator)
-            overall_confidence = (overall_confidence + step.confidence) / 2
-        
-        # Determine reasoning quality
-        reasoning_quality = self._assess_reasoning_quality(steps, final_answer, original_query)
-        
-        # Decide if reasoning should be shown
-        should_show_reasoning = (
-            len(steps) > 1 and 
-            reasoning_quality in ['excellent', 'good'] and
-            len(final_answer) > 10
-        )
-        
-        return ThinkingAnalysis(
-            steps=steps,
-            final_answer=final_answer,
-            confidence_score=overall_confidence,
-            reasoning_quality=reasoning_quality,
-            should_show_reasoning=should_show_reasoning,
-            emotion_progression=emotion_progression
-        )
+        return analysis
     
-    def _analyze_thinking_step(self, content: str, step_index: int, total_steps: int) -> ThinkingStep:
-        """Analyze individual thinking step"""
-        
-        content_lower = content.lower()
-        
-        # Detect phase
-        phase = ThinkingPhase.REASONING  # Default
-        for phase_type, patterns in self.phase_patterns.items():
-            if any(re.search(pattern, content_lower) for pattern in patterns):
-                phase = phase_type
-                break
-        
-        # Detect emotion indicators
-        emotion = "thinking"  # Default
-        for emotion_type, patterns in self.emotion_indicators.items():
-            if any(re.search(pattern, content_lower) for pattern in patterns):
-                emotion = emotion_type
-                break
-        
-        # Assess confidence based on language
-        confidence = 0.7  # Default
-        if any(word in content_lower for word in ['clearly', 'obviously', 'definitely']):
-            confidence = 0.9
-        elif any(word in content_lower for word in ['maybe', 'perhaps', 'might']):
-            confidence = 0.4
-        elif any(word in content_lower for word in ['probably', 'likely']):
-            confidence = 0.6
-        
-        # Calculate progress
-        progress = (step_index + 1) / total_steps
-        
-        return ThinkingStep(
-            phase=phase,
-            content=content.strip(),
-            confidence=confidence,
-            emotion_indicator=emotion,
-            progress=progress
-        )
-    
-    def _assess_reasoning_quality(self, steps: List[ThinkingStep], final_answer: str, query: str) -> str:
-        """Assess overall quality of reasoning process"""
-        
-        if not steps:
-            return "fair"  # No thinking steps
-        
-        # Check for logical progression
-        has_analysis = any(step.phase == ThinkingPhase.ANALYZING for step in steps)
-        has_reasoning = any(step.phase == ThinkingPhase.REASONING for step in steps)
-        has_conclusion = any(step.phase == ThinkingPhase.CONCLUDING for step in steps)
-        
-        # Check answer quality
-        answer_length_ok = len(final_answer.strip()) > 5
-        answer_coherent = not any(indicator in final_answer.lower() 
-                                for indicator in ['wait', 'hmm', 'let me think'])
-        
-        # Calculate quality score
-        quality_score = 0
-        if has_analysis: quality_score += 1
-        if has_reasoning: quality_score += 1
-        if has_conclusion: quality_score += 1
-        if answer_length_ok: quality_score += 1
-        if answer_coherent: quality_score += 1
-        if len(steps) >= 2: quality_score += 1  # Multi-step reasoning
-        
-        # Map score to quality
-        if quality_score >= 5:
-            return "excellent"
-        elif quality_score >= 3:
-            return "good"
-        elif quality_score >= 2:
-            return "fair"
-        else:
-            return "poor"
     
     def _format_reasoning_output(self, analysis: ThinkingAnalysis) -> Generator[str, None, None]:
         """Format reasoning for display to user"""
@@ -339,16 +193,16 @@ Final answer: [your conclusion]"""
         # Show brief reasoning summary
         yield "💭 Thinking through this...\n\n"
         
-        for step in analysis.steps:
-            phase_emoji = {
-                ThinkingPhase.ANALYZING: "🔍",
-                ThinkingPhase.REASONING: "🧠", 
-                ThinkingPhase.CALCULATING: "🧮",
-                ThinkingPhase.SYNTHESIZING: "🔗",
-                ThinkingPhase.CONCLUDING: "✅"
-            }.get(step.phase, "💭")
+        for insight in analysis.insights:
+            reasoning_emoji = {
+                "mathematical": "🧮",
+                "logical": "🧠",
+                "creative": "✨",
+                "analytical": "🔍",
+                "conversational": "💬"
+            }.get(insight.reasoning_type.value if hasattr(insight.reasoning_type, 'value') else str(insight.reasoning_type), "💭")
             
-            yield f"{phase_emoji} {step.content[:100]}...\n"
+            yield f"{reasoning_emoji} {insight.content[:100]}...\n"
             time.sleep(0.3)  # Simulate thinking time
         
         yield f"\n💡 **Answer:** {analysis.final_answer}"

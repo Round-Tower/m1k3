@@ -170,7 +170,10 @@ def test_intelligent_thinking_system():
             })
             
         except Exception as e:
+            import traceback
             print(f"❌ Error during generation: {e}")
+            print("Full traceback:")
+            traceback.print_exc()
             results.append({
                 "test_name": test['name'],
                 "success": False,

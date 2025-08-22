@@ -272,7 +272,7 @@ class AvatarController:
         else:
             emotion = AvatarEmotion.SURPRISED  # Uncertainty
         
-        self.update_emotion(emotion, int(confidence * 100))
+        self.update_emotion("", "", force_emotion=emotion)
         
         return {
             "phase": phase,
@@ -302,7 +302,7 @@ class AvatarController:
         # Intensity based on complexity (higher complexity = higher intensity)
         intensity = int(50 + (complexity * 50))  # 50-100 range
         
-        self.update_emotion(base_emotion, intensity)
+        self.update_emotion("", "", force_emotion=base_emotion)
         
         return {
             "reasoning_type": reasoning_type,

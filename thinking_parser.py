@@ -39,12 +39,17 @@ class ReasoningInsight:
 class ThinkingFlow:
     """Analysis of the entire thinking flow"""
     insights: List[ReasoningInsight]
+    final_answer: str
     overall_confidence: float
     reasoning_coherence: float
     emotional_journey: List[str]
     key_breakthroughs: List[str]
     potential_issues: List[str]
     final_confidence: ConfidenceLevel
+    confidence_score: float  # Alias for overall_confidence for compatibility
+    reasoning_quality: str   # Quality assessment string
+    should_show_reasoning: bool
+    emotion_progression: List[str]  # Alias for emotional_journey for compatibility
 
 class ThinkingContentParser:
     """
@@ -162,19 +167,33 @@ class ThinkingContentParser:
             if insight.contains_error or insight.confidence < 0.3:
                 potential_issues.append(f"Low confidence or error in: {segment[:50]}...")
         
+        # Extract final answer from content
+        final_answer = self._extract_final_answer(content)
+        
         # Calculate overall metrics
         overall_confidence = self._calculate_overall_confidence(insights)
         coherence = self._calculate_coherence(insights)
         final_confidence = self._map_confidence_level(overall_confidence)
         
+        # Assess reasoning quality
+        reasoning_quality = self._assess_reasoning_quality(insights, final_answer)
+        
+        # Determine if reasoning should be shown
+        should_show_reasoning = len(insights) > 1 and reasoning_quality in ['excellent', 'good']
+        
         return ThinkingFlow(
             insights=insights,
+            final_answer=final_answer,
             overall_confidence=overall_confidence,
             reasoning_coherence=coherence,
             emotional_journey=emotional_journey,
             key_breakthroughs=key_breakthroughs,
             potential_issues=potential_issues,
-            final_confidence=final_confidence
+            final_confidence=final_confidence,
+            confidence_score=overall_confidence,  # Compatibility alias
+            reasoning_quality=reasoning_quality,
+            should_show_reasoning=should_show_reasoning,
+            emotion_progression=emotional_journey  # Compatibility alias
         )
     
     def _segment_thinking(self, content: str) -> List[str]:
@@ -431,6 +450,74 @@ class ThinkingContentParser:
             coherence_score *= progression_score
         
         return max(0.0, min(1.0, coherence_score))
+    
+    def _extract_final_answer(self, content: str) -> str:
+        """Extract the final answer from thinking content"""
+        
+        # Remove thinking tags first
+        clean_content = re.sub(r'<think>.*?</think>', '', content, flags=re.DOTALL)
+        
+        # Look for explicit answer patterns
+        answer_patterns = [
+            r'(?:final answer|the answer is|answer):?\s*(.+?)(?:\.|$)',
+            r'(?:therefore|so|conclusion|result):?\s*(.+?)(?:\.|$)',
+        ]
+        
+        for pattern in answer_patterns:
+            match = re.search(pattern, clean_content, re.IGNORECASE | re.DOTALL)
+            if match:
+                answer = match.group(1).strip()
+                if len(answer) > 3:  # Reasonable length
+                    return answer
+        
+        # Fallback: take the last substantial sentence
+        sentences = re.split(r'[.!?]+', clean_content.strip())
+        for sentence in reversed(sentences):
+            sentence = sentence.strip()
+            if len(sentence) > 10 and not any(word in sentence.lower() 
+                                            for word in ['let me', 'hmm', 'wait', 'think']):
+                return sentence
+        
+        # Ultimate fallback
+        return clean_content.strip()[:100] if clean_content.strip() else "No clear answer found"
+    
+    def _assess_reasoning_quality(self, insights: List[ReasoningInsight], final_answer: str) -> str:
+        """Assess overall quality of reasoning process"""
+        
+        if not insights:
+            return "poor"
+        
+        # Calculate quality score
+        quality_score = 0
+        
+        # Check for good reasoning progression
+        has_analysis = any(insight.reasoning_type == ReasoningType.ANALYTICAL for insight in insights)
+        has_logical = any(insight.reasoning_type == ReasoningType.LOGICAL for insight in insights)
+        has_mathematical = any(insight.reasoning_type == ReasoningType.MATHEMATICAL for insight in insights)
+        
+        if has_analysis: quality_score += 1
+        if has_logical: quality_score += 1
+        if has_mathematical: quality_score += 1
+        
+        # Check confidence progression
+        avg_confidence = sum(insight.confidence for insight in insights) / len(insights)
+        if avg_confidence > 0.7: quality_score += 1
+        if avg_confidence > 0.8: quality_score += 1
+        
+        # Check answer quality
+        if len(final_answer) > 10: quality_score += 1
+        if not any(indicator in final_answer.lower() for indicator in ['confused', 'not sure', 'unclear']):
+            quality_score += 1
+        
+        # Map score to quality
+        if quality_score >= 5:
+            return "excellent"
+        elif quality_score >= 3:
+            return "good"
+        elif quality_score >= 2:
+            return "fair"
+        else:
+            return "poor"
     
     def _map_confidence_level(self, confidence: float) -> ConfidenceLevel:
         """Map numeric confidence to confidence level enum"""

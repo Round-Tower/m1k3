@@ -74,7 +74,7 @@ class AdaptiveAIEngine:
                 message = args[2] if len(args) > 2 else ""
                 
                 avatar_emotion = getattr(AvatarEmotion, emotion_name.upper(), AvatarEmotion.THINKING)
-                self.avatar_controller.update_emotion(avatar_emotion, intensity)
+                self.avatar_controller.update_emotion(message, "", force_emotion=avatar_emotion)
                 
             elif callback_type == "progress":
                 progress = args[0] if args else 0
@@ -102,7 +102,7 @@ class AdaptiveAIEngine:
         # Update avatar to show we're starting
         if self.avatar_controller:
             self.avatar_controller.update_state(AvatarState.PRE_THINKING)
-            self.avatar_controller.update_emotion(AvatarEmotion.THINKING, 60)
+            self.avatar_controller.update_emotion("", "", force_emotion=AvatarEmotion.THINKING)
         
         try:
             if use_thinking_mode:
@@ -226,7 +226,7 @@ class AdaptiveAIEngine:
         
         if self.avatar_controller:
             self.avatar_controller.update_state(AvatarState.GENERATING)
-            self.avatar_controller.update_emotion(AvatarEmotion.HAPPY, 75)
+            self.avatar_controller.update_emotion("", "", force_emotion=AvatarEmotion.HAPPY)
         
         # Generate using current optimized direct approach
         for token in self.base_ai_engine.generate_response(query, max_tokens):

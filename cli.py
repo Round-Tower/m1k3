@@ -7,6 +7,7 @@ Command-line interface with avatar state management
 import os
 import sys
 import time
+import datetime
 import threading
 import webbrowser
 import atexit
@@ -35,6 +36,7 @@ from enhanced_voice_engine import create_voice_engine
 from system_metrics import SystemMonitor, generate_dynamic_greeting
 from cli_animations import CLIAnimator, AnimationType
 from sound_manager import SoundManager, ContextualSoundManager
+from llm_greeting_engine import generate_llm_greeting
 
 # Avatar system imports
 try:
@@ -727,6 +729,58 @@ M1K3 Local AI CLI Commands:
         
         return context
 
+    def _generate_intelligent_greeting(self, metrics, m1k3_context: dict) -> str:
+        """Generate an intelligent greeting using enhanced rule-based system with optional LLM insights"""
+        
+        # Always use the enhanced rule-based greeting for reliability
+        # The original system is already quite sophisticated and works well
+        base_greeting = generate_dynamic_greeting(metrics, m1k3_context)
+        
+        # Optionally try to enhance with LLM insights for variety (but don't rely on it)
+        if REAL_AI_AVAILABLE and hasattr(self, 'ai_engine'):
+            try:
+                # Quick LLM enhancement attempt
+                enhanced_greeting = self._try_llm_greeting_enhancement(metrics, m1k3_context, base_greeting)
+                if enhanced_greeting and len(enhanced_greeting) <= 80:
+                    # Only use LLM greeting if it's reasonable
+                    if not any(template in enhanced_greeting for template in ['[Your', 'response here', 'generated', 'template']):
+                        return enhanced_greeting
+            except:
+                pass  # Silently fall back to base greeting
+        
+        return base_greeting
+    
+    def _try_llm_greeting_enhancement(self, metrics, m1k3_context: dict, base_greeting: str) -> str:
+        """Try to enhance greeting with LLM, but don't rely on it"""
+        
+        try:
+            # Simple query to get model's take on greeting style
+            current_hour = datetime.datetime.now().hour
+            time_desc = "morning" if 5 <= current_hour < 12 else "afternoon" if 12 <= current_hour < 17 else "evening" if 17 <= current_hour < 22 else "late night"
+            
+            # Ask for a simple greeting variation
+            simple_query = f"Say hello to a user who just started M1K3 AI assistant this {time_desc}. Keep it brief and friendly."
+            
+            response = ""
+            for token in self.ai_engine.generate_response(simple_query, max_tokens=20):
+                response += token
+                if len(response) > 80:  # Don't let it get too long
+                    break
+            
+            # Clean up the response
+            response = response.strip()
+            
+            # If it looks like a reasonable greeting, use it
+            if (len(response) > 10 and len(response) <= 80 and 
+                any(word in response.lower() for word in ['hello', 'hi', 'good', 'welcome', 'ready']) and
+                not any(template in response.lower() for template in ['[your', 'response', 'generate', 'create'])):
+                return response
+            
+        except:
+            pass
+        
+        return None
+
     def display_device_context(self):
         """Display comprehensive device context"""
         self.start_animated_status("Analyzing device capabilities...", "processing")
@@ -1058,11 +1112,13 @@ Available styles: robot, organic, crystal, ghost, energy, cute"""
         
         print("-" * 60)
         
-        # Generate dynamic greeting based on system metrics
+        # Generate dynamic greeting - try LLM first, fallback to rule-based
         try:
             metrics = self.system_monitor.collect_metrics()
             m1k3_context = self._collect_m1k3_context()
-            greeting = generate_dynamic_greeting(metrics, m1k3_context)
+            
+            # Try LLM-powered greeting if AI engine is available
+            greeting = self._generate_intelligent_greeting(metrics, m1k3_context)
             
             print(f"💬 {greeting}")
             
