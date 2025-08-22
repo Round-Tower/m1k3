@@ -28,12 +28,10 @@ class ThinkingModeEngine:
         self.base_ai_engine = base_ai_engine
         self.avatar_callback = avatar_callback  # For sending avatar updates
         
-        # Thinking mode configuration
+        # Thinking mode configuration (compatible with all models)
         self.thinking_params = {
             'max_new_tokens': 200,
-            'temperature': 0.6,
-            'top_p': 0.9,
-            'do_sample': True,
+            'do_sample': False,  # Use greedy decoding for consistency
             'repetition_penalty': 1.1,
         }
         

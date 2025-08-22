@@ -25,6 +25,9 @@ def get_anti_hallucination_params(model_name: str, max_tokens: int = 150) -> dic
             **base_params,
             'max_new_tokens': min(max_tokens, 30),      # Very short responses
             'do_sample': False,                         # Greedy decoding - most likely tokens only
+            'temperature': None,                        # Explicitly disable to avoid warnings
+            'top_p': None,                              # Explicitly disable to avoid warnings
+            'top_k': None,                              # Explicitly disable to avoid warnings
             'repetition_penalty': 1.1,                 # Light repetition penalty
             'no_repeat_ngram_size': 2,                 # Prevent short repetitions
         }
