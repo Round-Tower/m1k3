@@ -118,6 +118,14 @@ class LocalAIEngine:
             except Exception as e:
                 print(f"⚠️  Template system initialization failed: {e}")
         
+        # Initialize cached adaptive configuration (for performance)
+        self.adaptive_config = None
+        try:
+            from enhanced_adaptive_model_config import EnhancedAdaptiveModelConfig
+            self.adaptive_config = EnhancedAdaptiveModelConfig(enable_websocket=False)
+        except ImportError:
+            pass  # Will fall back to runtime creation
+        
         # Choose backend: prefer HuggingFace for x86_64 compatibility
         self.use_transformers = TRANSFORMERS_AVAILABLE
         self.use_ctransformers = CTRANSFORMERS_AVAILABLE and not self.use_transformers
@@ -443,13 +451,12 @@ class LocalAIEngine:
                         if len(response_text) < 3:
                             response_text = "I understand. Could you tell me more?"
                     
-                    # Simulate streaming by yielding word by word
+                    # Stream response naturally (remove artificial delay)
                     words = response_text.split()
                     for i, word in enumerate(words):
                         if i > 0:
                             yield " "
                         yield word
-                        time.sleep(0.04)  # Slightly faster for longer responses
                 else:
                     response_text = "I'm processing that. Could you rephrase?"
                     yield response_text
@@ -466,6 +473,51 @@ class LocalAIEngine:
         except Exception as e:
             yield f"Error generating response: {e}"
             
+    def get_formatted_prompt(self, prompt: str) -> str:
+        """Get the formatted prompt that would be used for generation (for transparency)"""
+        try:
+            # Temporarily add the prompt to context to get formatted version
+            temp_context_length = len(self.context.messages)
+            self.context.add_message("user", prompt)
+            formatted = self._format_conversation()
+            # Remove the temporary message
+            if len(self.context.messages) > temp_context_length:
+                self.context.messages.pop()
+            return formatted
+        except:
+            return prompt  # Fallback to original prompt
+    
+    def generate_clarification_response(self, query: str, classification_metadata: dict) -> str:
+        """Generate a clarification question for ambiguous queries"""
+        
+        # Get the reason for clarification from classification
+        reasoning = classification_metadata.get('reasoning', '')
+        intent = classification_metadata.get('intent', 'unknown')
+        
+        # Generate appropriate clarification based on the type of ambiguity
+        if query.strip().lower() in ['fix', 'do', 'make', 'change', 'update']:
+            return f"I'd like to help you {query.strip().lower()} something. Could you be more specific about what you need help with?"
+        
+        if query.strip().lower() == 'help':
+            return "I'm here to help! What would you like assistance with? You can ask me about programming, math, explanations, or just chat."
+        
+        # Check for pronoun issues
+        pronouns_without_context = ['that', 'this', 'it', 'them', 'those']
+        first_word = query.strip().split()[0].lower() if query.strip() else ""
+        if first_word in pronouns_without_context:
+            return f"I'm not sure what '{first_word}' refers to. Could you provide more context or be more specific?"
+        
+        # Very short queries
+        if len(query.strip()) <= 2:
+            return "Could you provide more details about what you're looking for?"
+        
+        # Check for multiple competing intents
+        if 'competing' in reasoning.lower() or 'similar' in reasoning.lower():
+            return "I see a few ways to interpret your question. Could you clarify what you're specifically asking about?"
+        
+        # Generic low confidence response
+        return "I want to make sure I understand correctly. Could you rephrase or provide more details about what you need?"
+    
     def _format_conversation(self) -> str:
         """Format conversation history using model-specific templates"""
         
@@ -586,14 +638,17 @@ class LocalAIEngine:
         
         # Try enhanced adaptive configuration first (new intelligent system with intent classification)
         try:
-            from enhanced_adaptive_model_config import EnhancedAdaptiveModelConfig
-            adaptive_config = EnhancedAdaptiveModelConfig(enable_websocket=False)  # Disable WebSocket for CLI usage
+            # Use cached config if available, otherwise create new one
+            adaptive_config = self.adaptive_config
+            if adaptive_config is None:
+                from enhanced_adaptive_model_config import EnhancedAdaptiveModelConfig
+                adaptive_config = EnhancedAdaptiveModelConfig(enable_websocket=False)
             config_result = adaptive_config.get_optimal_config(query, model_name, context or [])
             
             # Filter out metadata and None values to get clean parameters
             params = {k: v for k, v in config_result.items() if k != '_metadata' and v is not None}
             
-            # Set tokenizer-specific IDs
+            # Set tokenizer-specific IDs for proper generation
             params['pad_token_id'] = self.tokenizer.eos_token_id
             params['eos_token_id'] = self.tokenizer.eos_token_id
             
@@ -701,7 +756,7 @@ class LocalAIEngine:
             "/exit": "Quit the application."
         }
         
-        # Device Context (from session_context, set by CLI)
+        # Enhanced Device Context (from session_context, set by CLI)
         device_context = self.session_context if hasattr(self, 'session_context') else {}
         
         # Check if current model supports system prompts
@@ -713,6 +768,9 @@ class LocalAIEngine:
             except:
                 pass
         
+        # Create enhanced system context description
+        system_description = self._create_system_context_description(device_context)
+        
         # Create appropriate prompt based on model capabilities
         if supports_system_prompt:
             # Full system prompt for models that support system messages
@@ -722,8 +780,7 @@ class LocalAIEngine:
                 f"without showing your thinking process unless specifically asked to explain your reasoning.\n\n"
                 f"Your strengths: {', '.join(ai_description['capabilities'])}\n"
                 f"Your limitations: {', '.join(ai_description['limitations'])}\n\n"
-                f"User's system: {device_context.get('operating_system', 'Unknown')} on "
-                f"{device_context.get('device_type', 'Unknown')} hardware.\n\n"
+                f"{system_description}\n\n"
                 f"Available commands you can suggest: {', '.join(actions.keys())}\n"
                 f"Always be helpful, accurate, and concise."
             )
@@ -736,6 +793,114 @@ class LocalAIEngine:
             )
         
         return prompt
+    
+    def _create_system_context_description(self, device_context: dict) -> str:
+        """Create a rich description of the system context for the AI"""
+        
+        context_parts = []
+        
+        # Platform and hardware information
+        platform = device_context.get('platform', 'Unknown')
+        cpu_cores = device_context.get('cpu_cores', 0)
+        available_memory_gb = device_context.get('available_memory_gb', 0.0)
+        
+        if platform != 'Unknown':
+            hw_info = f"Running on {platform}"
+            if cpu_cores > 0:
+                hw_info += f" with {cpu_cores} CPU cores"
+            if available_memory_gb > 0:
+                hw_info += f" and {available_memory_gb:.1f}GB available RAM"
+            context_parts.append(hw_info + ".")
+        
+        # Location and time context
+        timezone = device_context.get('timezone')
+        locale = device_context.get('locale')
+        time_of_day = device_context.get('time_of_day', '')
+        
+        if timezone or locale:
+            location_info = "User location:"
+            if timezone:
+                location_info += f" {timezone} timezone"
+            if locale:
+                location_info += f", {locale} locale"
+            if time_of_day:
+                location_info += f" ({time_of_day.lower()})"
+            context_parts.append(location_info + ".")
+        
+        # System capabilities and status
+        capabilities = []
+        if device_context.get('voice_enabled'):
+            capabilities.append("voice synthesis")
+        if device_context.get('avatar_enabled'):
+            capabilities.append("avatar visualization")
+        if device_context.get('sound_enabled'):
+            capabilities.append("sound effects")
+        
+        if capabilities:
+            context_parts.append(f"M1K3 capabilities active: {', '.join(capabilities)}.")
+        
+        # Performance and resource status
+        cpu_usage = device_context.get('cpu_usage', 0)
+        memory_percent = device_context.get('memory_percent', 0)
+        disk_usage = device_context.get('disk_usage', 0)
+        
+        performance_notes = []
+        if cpu_usage > 80:
+            performance_notes.append("CPU under heavy load")
+        elif cpu_usage < 20:
+            performance_notes.append("CPU running efficiently")
+        
+        if memory_percent > 80:
+            performance_notes.append("memory usage is high")
+        elif memory_percent < 50:
+            performance_notes.append("plenty of memory available")
+        
+        if disk_usage > 90:
+            performance_notes.append("storage nearly full")
+        elif disk_usage < 50:
+            performance_notes.append("ample storage space")
+        
+        if performance_notes:
+            context_parts.append(f"System status: {', '.join(performance_notes)}.")
+        
+        # Connectivity information
+        connected_devices = device_context.get('connected_devices', 0)
+        ble_devices = device_context.get('ble_devices', [])
+        network_status = device_context.get('network_status', 'unknown')
+        
+        connectivity_info = []
+        if connected_devices > 0:
+            connectivity_info.append(f"{connected_devices} network connections")
+        if ble_devices and len(ble_devices) > 0:
+            connectivity_info.append(f"{len(ble_devices)} Bluetooth devices nearby")
+        if network_status == 'connected':
+            connectivity_info.append("network active")
+        
+        if connectivity_info:
+            context_parts.append(f"Connectivity: {', '.join(connectivity_info)}.")
+        
+        # Interface information
+        interface_type = device_context.get('interface_type', 'Unknown')
+        transparency_mode = device_context.get('transparency_mode', 'basic')
+        
+        if interface_type != 'Unknown':
+            interface_info = f"User interface: {interface_type}"
+            if transparency_mode != 'basic':
+                interface_info += f" with {transparency_mode} transparency mode"
+            context_parts.append(interface_info + ".")
+        
+        # Battery information (if available)
+        battery_level = device_context.get('battery_level')
+        if battery_level is not None:
+            if battery_level < 20:
+                context_parts.append(f"Battery low ({battery_level}%) - suggest power-saving responses.")
+            elif battery_level > 80:
+                context_parts.append(f"Battery excellent ({battery_level}%).")
+        
+        if context_parts:
+            return "System Environment:\n" + "\n".join(context_parts)
+        else:
+            return "System Environment: Basic system information available."
 
 def download_model(model_name: str = "smollm-135m-q4_k_m") -> str:
     """Download model if not present"""

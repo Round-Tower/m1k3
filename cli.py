@@ -31,12 +31,21 @@ except ImportError as e:
     from simple_ai_engine import SimpleAIEngine
     REAL_AI_AVAILABLE = False
 
+# Try to import RAG engine for enhanced capabilities
+try:
+    from m1k3_rag_integration import M1K3RAGIntegratedEngine
+    RAG_ENGINE_AVAILABLE = True
+    print("🧠 RAG (Retrieval-Augmented Generation) engine available")
+except ImportError as e:
+    RAG_ENGINE_AVAILABLE = False
+    print(f"⚠️  RAG engine not available: {e}")
+
 from download_model import download_model
 from enhanced_voice_engine import create_voice_engine
-from system_metrics import SystemMonitor, generate_dynamic_greeting
+from system_metrics import SystemMonitor
 from cli_animations import CLIAnimator, AnimationType
 from sound_manager import SoundManager, ContextualSoundManager
-from llm_greeting_engine import generate_llm_greeting
+from llm_greeting_engine import LLMGreetingEngine, create_greeting_context
 
 # Model transparency engine
 try:
@@ -86,7 +95,7 @@ class AvatarState(Enum):
     SPEAKING = "🔊"
 
 class M1K3CLI:
-    def __init__(self, voice_enabled: bool = True, auto_avatar: bool = False, avatar_port: int = 8080, open_browser: bool = True, transparency_level: str = "basic"):
+    def __init__(self, voice_enabled: bool = True, auto_avatar: bool = False, avatar_port: int = 8080, open_browser: bool = True, transparency_level: str = "basic", rag_enabled: bool = False):
         # Initialize system monitoring first to gather context
         self.system_monitor = SystemMonitor()
         
@@ -97,6 +106,8 @@ class M1K3CLI:
         
         # Initialize transparency engine
         self.transparency_enabled = TRANSPARENCY_AVAILABLE
+        print(f"🔍 TRANSPARENCY_AVAILABLE: {TRANSPARENCY_AVAILABLE}")
+        
         if self.transparency_enabled:
             transparency_map = {
                 "off": TransparencyLevel.OFF,
@@ -106,16 +117,52 @@ class M1K3CLI:
                 "debug": TransparencyLevel.DEBUG
             }
             level = transparency_map.get(transparency_level.lower(), TransparencyLevel.BASIC)
+            print(f"🔍 Setting transparency level: {transparency_level} -> {level}")
             transparency_engine.set_transparency_level(level)
-            print(f"🔍 Transparency level: {level.name}")
-        
-        # Use real AI engine if available, otherwise fall back to mock
-        if REAL_AI_AVAILABLE:
-            self.ai_engine = LocalAIEngine()
-            print("🚀 Initialized with real AI inference engine")
+            print(f"🔍 Engine transparency level: {transparency_engine.transparency_level}")
+            print(f"🔍 Real-time display enabled: {transparency_engine.enable_real_time_display}")
+            
+            # Test transparency immediately in debug mode
+            if transparency_level.lower() == "debug":
+                print("🔍 DEBUG MODE: Testing transparency output...")
+                transparency_engine.log_decision("initialization", "CLI startup", "debug_test", 
+                                                "Testing transparency system initialization", confidence=1.0)
+                print("🔍 DEBUG MODE: Force enabling all transparency features")
+                transparency_engine.enable_real_time_display = True
         else:
-            self.ai_engine = SimpleAIEngine()
-            print("🎭 Initialized with mock AI engine (demo mode)")
+            print("❌ Model transparency not available - install model_transparency.py")
+        
+        # Initialize AI engine with RAG support if requested
+        self.rag_enabled = rag_enabled
+        if rag_enabled and RAG_ENGINE_AVAILABLE:
+            try:
+                kb_path = "knowledge/comprehensive_knowledge_base.json"
+                if os.path.exists(kb_path):
+                    self.ai_engine = M1K3RAGIntegratedEngine(
+                        knowledge_base_path=kb_path,
+                        enable_rag=True,
+                        auto_load=True
+                    )
+                    print("🧠 Initialized with RAG-enhanced AI engine")
+                    print(f"📚 Knowledge base loaded: {kb_path}")
+                else:
+                    print(f"⚠️  Knowledge base not found at {kb_path}")
+                    print("🔄 Falling back to standard AI engine")
+                    self.rag_enabled = False
+                    self.ai_engine = LocalAIEngine() if REAL_AI_AVAILABLE else SimpleAIEngine()
+            except Exception as e:
+                print(f"⚠️  Failed to initialize RAG engine: {e}")
+                print("🔄 Falling back to standard AI engine")
+                self.rag_enabled = False
+                self.ai_engine = LocalAIEngine() if REAL_AI_AVAILABLE else SimpleAIEngine()
+        else:
+            # Use standard AI engine
+            if REAL_AI_AVAILABLE:
+                self.ai_engine = LocalAIEngine()
+                print("🚀 Initialized with standard AI inference engine")
+            else:
+                self.ai_engine = SimpleAIEngine()
+                print("🎭 Initialized with mock AI engine (demo mode)")
             
         self.voice_engine = create_voice_engine()
         self.sound_manager = SoundManager()
@@ -154,8 +201,21 @@ class M1K3CLI:
             self.voice_engine.synthesize_and_play(processed_text, background=background)
             
         except Exception as e:
-            # Silently handle voice synthesis errors
-            pass
+            # Handle audio errors more gracefully
+            error_msg = str(e).lower()
+            if any(keyword in error_msg for keyword in ['portaudio', 'audio', 'stream', 'device']):
+                # Audio device related errors - disable voice to prevent spam
+                if hasattr(self, '_audio_error_count'):
+                    self._audio_error_count += 1
+                else:
+                    self._audio_error_count = 1
+                
+                # After 3 audio errors, disable voice to prevent spam
+                if self._audio_error_count >= 3:
+                    self.voice_enabled = False
+                    print("❌ Audio playback failed multiple times. Voice disabled for this session.")
+                    print("   Check audio device settings and permissions.")
+            # For other errors, silently continue
     
     def _log_startup_message(self, level: str, message: str):
         """Helper for logging formatted startup messages."""
@@ -168,16 +228,34 @@ class M1K3CLI:
         print(f" {level_map.get(level, '[ ]')}  {message}")
 
     def _initialize_ai_context(self):
-        """Initialize AI engine with rich system context."""
-        self._log_startup_message("INFO", "Collecting rich device context...")
+        """Initialize AI engine with enhanced system context."""
+        self._log_startup_message("INFO", "Collecting enhanced device context...")
         metrics = self.system_monitor.collect_metrics()
         
-        # Convert dataclass to a simple dict for the AI engine
-        session_context = asdict(metrics) if metrics else {}
+        # Create enhanced context using our greeting context system
+        from llm_greeting_engine import create_greeting_context
+        m1k3_context = {
+            'ai_model': getattr(self.ai_engine, '_current_model_name', 'Local AI'),
+            'voice_enabled': self.voice_enabled,
+            'avatar_enabled': hasattr(self, 'avatar_controller') and self.avatar_controller is not None
+        }
+        
+        enhanced_context = create_greeting_context(metrics, m1k3_context)
+        
+        # Convert to dict and add additional CLI-specific context
+        session_context = asdict(enhanced_context) if enhanced_context else {}
+        
+        # Add CLI-specific information
+        session_context.update({
+            'interface_type': 'CLI',
+            'transparency_mode': getattr(self, 'transparency_level', 'basic'),
+            'animation_enabled': True,
+            'sound_enabled': hasattr(self, 'sound_manager') and self.sound_manager is not None
+        })
         
         if hasattr(self.ai_engine, 'set_session_context'):
             self.ai_engine.set_session_context(session_context)
-            self._log_startup_message("OK", "AI context injected successfully")
+            self._log_startup_message("OK", "Enhanced AI context injected successfully")
         
     def set_avatar_state(self, state: AvatarState):
         """Update avatar state"""
@@ -421,6 +499,19 @@ class M1K3CLI:
             self.print_with_avatar("🔍 Debug transparency enabled (maximum detail)", AvatarState.IDLE)
         elif command == "summary":
             transparency_engine.display_session_summary()
+        elif command in ["status", "info"]:
+            print(f"🔍 Current transparency level: {transparency_engine.transparency_level.name}")
+            print(f"🔍 Real-time display: {transparency_engine.enable_real_time_display}")
+            print(f"🔍 Force debug mode: {transparency_engine.force_debug_mode}")
+        elif command in ["test", "verify"]:
+            print("🔍 Testing transparency system...")
+            transparency_engine.log_decision("test", "test_input", "test_output", "Testing transparency", confidence=0.95)
+            transparency_engine.show_model_reasoning("test query", "test formatted prompt", "test_task", {"test_param": "test_value"})
+            transparency_engine.show_streaming_progress(25, 100, "test_token")
+            print("🔍 Transparency test complete")
+        elif command in ["force", "forceall"]:
+            transparency_engine.set_debug_mode(True)
+            self.print_with_avatar("🔍 Debug mode activated - forcing all transparency output", AvatarState.IDLE)
         elif command == "export":
             data = transparency_engine.export_transparency_data()
             if data:
@@ -524,11 +615,11 @@ class M1K3CLI:
             self.show_help()
             return
             
-        # Generate AI response with animations
+        # Generate AI response with minimal delay
         self.start_animated_status("Thinking...", "thinking")
         self.send_avatar_update(user_input, "thinking")
         self.sound_manager.play_thinking_ambient()
-        time.sleep(1.0)  # Give time to see thinking animation
+        time.sleep(0.1)  # Brief visual feedback
         self.stop_animated_status()
         
         self.start_animated_status("Generating response...", "generating")
@@ -538,7 +629,6 @@ class M1K3CLI:
         if AVATAR_AVAILABLE and is_avatar_server_running():
             send_chat_ai_start()
         
-        time.sleep(0.5)  # Brief pause before starting generation
         self.stop_animated_status()
         
         print(f"{AvatarState.GENERATING.value} ", end="", flush=True)
@@ -570,12 +660,42 @@ class M1K3CLI:
                 except:
                     params = {"max_tokens": estimated_max_tokens}
                 
+                # Check if clarification is needed
+                if classification_metadata and classification_metadata.get('intent') == 'needs_clarification':
+                    self.stop_animated_status()
+                    clarification = self.ai_engine.generate_clarification_response(user_input, classification_metadata)
+                    self.print_with_avatar(clarification, AvatarState.IDLE)
+                    
+                    # Send clarification to avatar if available
+                    if AVATAR_AVAILABLE and is_avatar_server_running():
+                        send_chat_ai_complete()
+                        self.send_avatar_update(clarification, "clarification")
+                    
+                    # Play clarification sound
+                    self.sound_manager.play_contextual_sound("notification")
+                    
+                    # Speak clarification if voice enabled
+                    if self.voice_enabled:
+                        self._safe_voice_synthesis(clarification)
+                    
+                    return  # End here, wait for user's clarification
+                
+                # Debug transparency before processing
+                if self.transparency_enabled:
+                    print(f"🔍 DEBUG: About to call transparency with level: {transparency_engine.transparency_level}")
+                    print(f"🔍 DEBUG: Real-time display: {transparency_engine.enable_real_time_display}")
+                    import sys
+                    sys.stdout.flush()
+                
                 transparency_start_time = transparency_engine.start_processing(model_name, backend_type, params)
                 
                 # Show model reasoning if transparency is enabled
                 if hasattr(self.ai_engine, 'context') and self.ai_engine.context.messages:
-                    formatted_prompt = ""  # We'd need to get this from the AI engine
+                    formatted_prompt = self.ai_engine.get_formatted_prompt(user_input) if hasattr(self.ai_engine, 'get_formatted_prompt') else user_input
+                    print(f"🔍 DEBUG: Calling show_model_reasoning with prompt length: {len(formatted_prompt)}")
                     transparency_engine.show_model_reasoning(user_input, formatted_prompt, "conversational", params)
+                    import sys
+                    sys.stdout.flush()
                 
                 # Send enhanced classification data to avatar if available
                 if classification_metadata and AVATAR_AVAILABLE and is_avatar_server_running():
@@ -597,14 +717,17 @@ class M1K3CLI:
                 send_avatar_progress("generating", 0, 0, "Starting generation...")
             
             # Apply streaming filter if available
-            token_stream = self.ai_engine.generate_response(user_input)
+            token_stream = self.ai_engine.generate_response(user_input, max_tokens=estimated_max_tokens)
             if STREAMING_FILTER_AVAILABLE:
                 try:
                     token_stream = filter_colon_prefix(token_stream)
                 except Exception as e:
                     print(f"⚠️  Streaming filter error: {e}")
                     # Fall back to original stream
-                    token_stream = self.ai_engine.generate_response(user_input)
+                    token_stream = self.ai_engine.generate_response(user_input, max_tokens=estimated_max_tokens)
+            
+            # Initialize generation start time for progress tracking
+            generation_start_time = time.time()
             
             for token in token_stream:
                 if not response_started:
@@ -942,56 +1065,54 @@ M1K3 Local AI CLI Commands:
         return context
 
     def _generate_intelligent_greeting(self, metrics, m1k3_context: dict) -> str:
-        """Generate an intelligent greeting using enhanced rule-based system with optional LLM insights"""
+        """Generate an intelligent greeting using the improved LLMGreetingEngine"""
         
-        # Always use the enhanced rule-based greeting for reliability
-        # The original system is already quite sophisticated and works well
-        base_greeting = generate_dynamic_greeting(metrics, m1k3_context)
-        
-        # Optionally try to enhance with LLM insights for variety (but don't rely on it)
-        if REAL_AI_AVAILABLE and hasattr(self, 'ai_engine'):
-            try:
-                # Quick LLM enhancement attempt
-                enhanced_greeting = self._try_llm_greeting_enhancement(metrics, m1k3_context, base_greeting)
-                if enhanced_greeting and len(enhanced_greeting) <= 80:
-                    # Only use LLM greeting if it's reasonable
-                    if not any(template in enhanced_greeting for template in ['[Your', 'response here', 'generated', 'template']):
-                        return enhanced_greeting
-            except:
-                pass  # Silently fall back to base greeting
-        
-        return base_greeting
-    
-    def _try_llm_greeting_enhancement(self, metrics, m1k3_context: dict, base_greeting: str) -> str:
-        """Try to enhance greeting with LLM, but don't rely on it"""
-        
+        # Debug logging in debug mode
+        debug_mode = False
         try:
-            # Simple query to get model's take on greeting style
-            current_hour = datetime.datetime.now().hour
-            time_desc = "morning" if 5 <= current_hour < 12 else "afternoon" if 12 <= current_hour < 17 else "evening" if 17 <= current_hour < 22 else "late night"
-            
-            # Ask for a simple greeting variation
-            simple_query = f"Say hello to a user who just started M1K3 AI assistant this {time_desc}. Keep it brief and friendly."
-            
-            response = ""
-            for token in self.ai_engine.generate_response(simple_query, max_tokens=20):
-                response += token
-                if len(response) > 80:  # Don't let it get too long
-                    break
-            
-            # Clean up the response
-            response = response.strip()
-            
-            # If it looks like a reasonable greeting, use it
-            if (len(response) > 10 and len(response) <= 80 and 
-                any(word in response.lower() for word in ['hello', 'hi', 'good', 'welcome', 'ready']) and
-                not any(template in response.lower() for template in ['[your', 'response', 'generate', 'create'])):
-                return response
-            
+            from model_transparency import transparency_engine, TransparencyLevel
+            if transparency_engine and transparency_engine.transparency_level == TransparencyLevel.DEBUG:
+                debug_mode = True
+                print(f"🔍 [CLI GREETING] Starting greeting generation")
+                print(f"🔍 [CLI GREETING] REAL_AI_AVAILABLE: {REAL_AI_AVAILABLE}")
+                print(f"🔍 [CLI GREETING] Has ai_engine: {hasattr(self, 'ai_engine')}")
         except:
             pass
         
-        return None
+        try:
+            # Use the dedicated greeting engine with LLM support
+            if REAL_AI_AVAILABLE and hasattr(self, 'ai_engine'):
+                if debug_mode:
+                    print(f"🔍 [CLI GREETING] Using LLM greeting engine with AI")
+                greeting_engine = LLMGreetingEngine(self.ai_engine)
+            else:
+                if debug_mode:
+                    print(f"🔍 [CLI GREETING] Using fallback greeting engine")
+                greeting_engine = LLMGreetingEngine()  # Uses fallback system
+            
+            context = create_greeting_context(metrics, m1k3_context)
+            greeting = greeting_engine.generate_greeting(context, max_length=80)
+            
+            if debug_mode:
+                print(f"🔍 [CLI GREETING] Generated: '{greeting}'")
+            
+            return greeting
+            
+        except Exception as e:
+            if debug_mode:
+                print(f"🔍 [CLI GREETING] Exception: {e}")
+            # Fallback to simple greeting if anything fails
+            import datetime
+            current_hour = datetime.datetime.now().hour
+            if 5 <= current_hour < 12:
+                return "Good morning! M1K3 is ready to help."
+            elif 12 <= current_hour < 17:
+                return "Good afternoon! M1K3 is ready to help."
+            elif 17 <= current_hour < 22:
+                return "Good evening! M1K3 is ready to help."
+            else:
+                return "Hello! M1K3 is ready to help."
+    
 
     def display_device_context(self):
         """Display comprehensive device context"""
@@ -1568,6 +1689,7 @@ def main():
     parser.add_argument("--avatar-port", type=int, default=8080, help="Avatar server HTTP port (default: 8080)")
     parser.add_argument("--no-browser", action="store_true", help="Don't auto-open browser with --with-avatar")
     parser.add_argument("--transparency", choices=["off", "basic", "detailed", "full", "debug"], default="basic", help="Set model transparency level for development (default: basic)")
+    parser.add_argument("--rag", action="store_true", help="Enable RAG (Retrieval-Augmented Generation) with comprehensive knowledge base")
     
     args = parser.parse_args()
     
@@ -1603,7 +1725,8 @@ def main():
         auto_avatar=auto_avatar,
         avatar_port=avatar_port,
         open_browser=open_browser,
-        transparency_level=transparency_level
+        transparency_level=transparency_level,
+        rag_enabled=args.rag
     )
     
     if args.query:

@@ -614,9 +614,8 @@ def generate_dynamic_greeting(metrics: SystemMetrics, m1k3_context: dict = None)
     import hashlib
     import time
     
-    # Create entropy seed from system state for consistent randomness per session
-    entropy_data = f"{metrics.cpu_usage:.1f}{metrics.memory_percent:.1f}{int(time.time() / 300)}"  # 5-min windows
-    random.seed(int(hashlib.md5(entropy_data.encode()).hexdigest()[:8], 16))
+    # Use true randomness for greeting variety (no entropy seed for repetition)
+    # This ensures fresh, varied greetings each time M1K3 starts
     
     # Time-aware greetings
     current_hour = datetime.datetime.now().hour
@@ -629,12 +628,12 @@ def generate_dynamic_greeting(metrics: SystemMetrics, m1k3_context: dict = None)
     else:
         time_greetings = ["Working late?", "Night owl mode!", "Burning the midnight oil!", "Late night hacking!", "Night shift!"]
     
-    # Contextual greetings based on system state
+    # Contextual greetings - natural and friendly
     contextual_greetings = [
-        "Ready to dive in!", "What's on the agenda?", "Let's get creative!", 
-        "Time for some AI magic!", "Your local assistant is online!", "M1K3 ready for action!",
-        "Local AI at your service!", "What can we build today?", "Ready to collaborate!",
-        "Your digital companion awaits!", "Local intelligence activated!", "Let's make something happen!"
+        "Ready when you are!", "What can I help with?", "Let's get creative!", 
+        "M1K3 here to help!", "Your AI assistant is ready!", "Ready for anything!",
+        "How can I assist today?", "What shall we work on?", "Ready to chat!",
+        "M1K3 at your service!", "Here to help!", "Let's get started!"
     ]
     
     # Intelligent battery observations with personality
@@ -725,117 +724,114 @@ def generate_dynamic_greeting(metrics: SystemMetrics, m1k3_context: dict = None)
         ]
     }
     
-    # M1K3-specific capability observations
+    # M1K3-specific capability observations - simplified and friendly
     m1k3_observations = {
         "ai_ready": [
-            "AI engine is loaded and ready", "Local intelligence is online",
-            "Your AI companion is standing by", "Neural pathways are active"
+            "M1K3 is ready", "AI assistant online",
+            "Ready to help", "All systems go"
         ],
         "voice_enabled": [
-            "Voice synthesis is primed", "Ready to speak your thoughts",
-            "Audio output systems are go", "Voice engine warmed up"
+            "Voice ready", "Can speak responses",
+            "Audio available", "Voice synthesis active"
         ],
         "avatar_live": [
-            "Avatar dashboard is live and tracking", "Your pixel companion is watching",
-            "Real-time emotion tracking active", "Avatar system broadcasting"
+            "Avatar dashboard live", "Visual companion active",
+            "Real-time emotions on", "Avatar broadcasting"
         ],
         "avatar_ready": [
-            "Avatar system standing by", "Pixel companion ready to activate",
-            "Dashboard awaiting your command", "Avatar engine loaded"
+            "Avatar available", "Visual dashboard ready",
+            "Companion standing by", "Avatar system loaded"
         ],
         "multi_models": [
-            "Multiple AI models at your disposal", "Model arsenal fully loaded",
-            "AI backend selection optimized", "Neural variety pack ready"
+            "Multiple AI models loaded", "Model variety available",
+            "AI options ready", "Various models at hand"
         ],
         "local_privacy": [
-            "100% local processing secured", "Your privacy fortress is active",
-            "Zero cloud dependency confirmed", "Data stays on your machine"
+            "100% private processing", "All data stays local",
+            "Zero cloud needed", "Complete privacy"
         ],
         "eco_friendly": [
-            "Environmental savings mode engaged", "Green AI computing active",
-            "Local efficiency beating cloud waste", "Eco-conscious processing enabled"
+            "Green AI computing", "Eco-friendly processing",
+            "Local efficiency active", "Environmentally conscious"
         ]
     }
     
-    # Build intelligent greeting with entropy
+    # Create varied, natural greetings with better structure
     battery_status = metrics.battery_status()
     thermal_status = metrics.thermal_status()
     perf_status = metrics.performance_status()
     
-    # Select primary greeting intelligently
-    if random.random() < 0.7:  # 70% time-aware, 30% contextual
+    # Define greeting templates for better structure
+    greeting_templates = [
+        "{primary}",                           # Simple: "Good morning!"
+        "{primary} {observation}.",            # Single: "Good morning! M1K3 is ready."
+        "{observation} {primary}",             # Reversed: "M1K3 is ready. Good morning!"
+        "{primary} {observation1} and {observation2}.",  # Double: "Good morning! Voice ready and avatar available."
+    ]
+    
+    # Select primary greeting with more variety
+    if random.random() < 0.6:  # 60% time-aware, 40% contextual
         primary_greeting = random.choice(time_greetings)
     else:
         primary_greeting = random.choice(contextual_greetings)
     
-    # Build personality-rich observations
+    # Collect relevant observations (limited to most important)
     observations = []
     
-    # Include M1K3-specific observations based on context
-    if m1k3_context:
-        m1k3_items = []
-        
-        # AI status (always include if available)
-        if m1k3_context.get('ai_ready'):
-            m1k3_items.append('ai_ready')
-        
-        # Voice status (high priority if enabled)
-        if m1k3_context.get('voice_enabled') and random.random() < 0.6:
-            m1k3_items.append('voice_enabled')
-        
-        # Avatar status (include if active)
-        if m1k3_context.get('avatar_live') and random.random() < 0.7:
-            m1k3_items.append('avatar_live')
-        elif m1k3_context.get('avatar_ready') and random.random() < 0.3:
-            m1k3_items.append('avatar_ready')
-        
-        # Model variety (mention if multiple models)
-        if m1k3_context.get('model_count', 0) > 3 and random.random() < 0.4:
-            m1k3_items.append('multi_models')
-        
-        # Privacy/eco-friendly (occasional mentions)
-        if random.random() < 0.2:
-            if random.random() < 0.5:
-                m1k3_items.append('local_privacy')
-            else:
-                m1k3_items.append('eco_friendly')
-        
-        # Add selected M1K3 observations
-        for item in m1k3_items[:2]:  # Limit to 2 M1K3 observations max
-            if item in m1k3_observations:
-                observations.append(random.choice(m1k3_observations[item]))
+    # Only include critical system status (battery, thermal, performance issues)
+    critical_alerts = []
     
-    # Always include battery observation with personality
-    if battery_status in battery_observations:
-        observations.append(random.choice(battery_observations[battery_status]))
+    # Battery: Only if low or charging from critical
+    if battery_status in ["low", "critical", "charging-low", "charging-critical"]:
+        critical_alerts.append(random.choice(battery_observations[battery_status]))
     
-    # Include thermal observation based on entropy and significance
-    thermal_include_chance = {
-        "cool": 0.4, "warm": 0.25, "hot": 0.8, "overheating": 1.0, "unknown": 0.1
-    }
-    if thermal_status in thermal_include_chance and random.random() < thermal_include_chance[thermal_status]:
-        observations.append(random.choice(thermal_observations[thermal_status]))
+    # Thermal: Only if hot or overheating  
+    if thermal_status in ["hot", "overheating"]:
+        critical_alerts.append(random.choice(thermal_observations[thermal_status]))
     
-    # Include performance observation based on significance
-    perf_include_chance = {
-        "idle": 0.3, "moderate": 0.15, "busy": 0.6, "stressed": 0.9, "unknown": 0.1
-    }
-    if perf_status in perf_include_chance and random.random() < perf_include_chance[perf_status]:
-        observations.append(random.choice(performance_insights[perf_status]))
+    # Performance: Only if stressed
+    if perf_status == "stressed":
+        critical_alerts.append(random.choice(performance_insights[perf_status]))
     
-    # Craft final greeting with natural flow
-    if not observations:
-        return f"{primary_greeting}"
-    elif len(observations) == 1:
-        return f"{primary_greeting} {observations[0]}."
-    elif len(observations) == 2:
-        return f"{primary_greeting} {observations[0]}, and {observations[1]}."
+    # M1K3 features: Rotate mentions, only show 1 feature occasionally
+    if m1k3_context and random.random() < 0.5:  # 50% chance to mention features
+        feature_options = []
+        
+        if m1k3_context.get('voice_enabled'):
+            feature_options.append('voice_enabled')
+        if m1k3_context.get('avatar_live'):
+            feature_options.append('avatar_live')
+        elif m1k3_context.get('avatar_ready'):
+            feature_options.append('avatar_ready')
+        if m1k3_context.get('model_count', 0) > 5:
+            feature_options.append('multi_models')
+        
+        # Occasionally mention privacy/eco
+        if random.random() < 0.3:
+            feature_options.extend(['local_privacy', 'eco_friendly'])
+        
+        # Pick only one feature to mention
+        if feature_options:
+            chosen_feature = random.choice(feature_options)
+            if chosen_feature in m1k3_observations:
+                observations.append(random.choice(m1k3_observations[chosen_feature]))
+    
+    # Combine critical alerts and features (max 2 total)
+    all_observations = critical_alerts + observations
+    final_observations = all_observations[:2]  # Limit to 2 max
+    
+    # Select appropriate template and compose greeting
+    if not final_observations:
+        return primary_greeting
+    elif len(final_observations) == 1:
+        template = random.choice([greeting_templates[1], greeting_templates[2]])
+        return template.format(primary=primary_greeting, observation=final_observations[0])
     else:
-        # Multiple observations - create a flowing narrative
-        first_part = f"{primary_greeting} {observations[0]}"
-        middle_parts = ", ".join(observations[1:-1])
-        last_part = observations[-1]
-        return f"{first_part}, {middle_parts}, and {last_part}."
+        return greeting_templates[3].format(
+            primary=primary_greeting, 
+            observation1=final_observations[0], 
+            observation2=final_observations[1]
+        )
 
 if __name__ == "__main__":
     # Test comprehensive system metrics collection

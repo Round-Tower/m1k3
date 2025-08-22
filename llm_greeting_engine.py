@@ -23,6 +23,16 @@ class GreetingContext:
     ai_model: str = "unknown"
     session_count: int = 1
     uptime_hours: float = 0.0
+    # Enhanced context awareness
+    timezone: Optional[str] = None
+    locale: Optional[str] = None
+    connected_devices: int = 0
+    ble_devices: Optional[list] = None
+    network_status: str = "unknown"
+    disk_usage: float = 0.0
+    available_memory_gb: float = 0.0
+    cpu_cores: int = 0
+    platform: str = "unknown"
     
 class LLMGreetingEngine:
     """
@@ -81,11 +91,20 @@ class LLMGreetingEngine:
         prompt = self._create_greeting_prompt(context, max_length)
         
         # Use the adaptive AI engine to generate the greeting
+        # Check if we're in debug mode for thinking display
+        show_thinking_mode = False
+        try:
+            from model_transparency import transparency_engine, TransparencyLevel
+            if transparency_engine and transparency_engine.transparency_level == TransparencyLevel.DEBUG:
+                show_thinking_mode = True
+        except:
+            pass
+        
         full_response = ""
         for token in self.adaptive_ai_engine.generate_response(
             prompt, 
             max_tokens=50,  # Keep it concise for greetings
-            show_reasoning=False  # We don't need to show reasoning for greetings
+            show_thinking=show_thinking_mode  # Show thinking in debug mode
         ):
             full_response += token
         
@@ -96,22 +115,42 @@ class LLMGreetingEngine:
     def _create_greeting_prompt(self, context: GreetingContext, max_length: int) -> str:
         """Create a contextual prompt for greeting generation"""
         
-        # Build context information
+        # Build enhanced context information
         context_parts = []
         
-        # Time context
-        context_parts.append(f"It's {context.time_of_day}")
+        # Time and location context
+        time_info = f"It's {context.time_of_day}"
+        if context.timezone:
+            time_info += f" in {context.timezone}"
+        context_parts.append(time_info)
         
-        # System performance context
+        # System capabilities and performance
+        system_info = []
+        if context.available_memory_gb > 0:
+            if context.available_memory_gb >= 8:
+                system_info.append("plenty of RAM")
+            elif context.available_memory_gb < 4:
+                system_info.append("limited RAM")
+        
+        if context.cpu_cores > 0:
+            if context.cpu_cores >= 8:
+                system_info.append("powerful CPU")
+            elif context.cpu_cores <= 2:
+                system_info.append("efficient CPU")
+        
         if context.cpu_usage > 80:
-            context_parts.append("the system is working hard")
+            system_info.append("working hard")
         elif context.cpu_usage < 20:
-            context_parts.append("the system is relaxed")
+            system_info.append("running smoothly")
         
-        if context.memory_percent > 80:
-            context_parts.append("memory is quite full")
-        elif context.memory_percent < 30:
-            context_parts.append("plenty of memory available")
+        if system_info:
+            context_parts.append("system has " + " and ".join(system_info))
+        
+        # Storage context
+        if context.disk_usage > 90:
+            context_parts.append("storage is nearly full")
+        elif context.disk_usage < 50:
+            context_parts.append("plenty of storage available")
         
         # Battery context
         if context.battery_level is not None:
@@ -120,38 +159,108 @@ class LLMGreetingEngine:
             elif context.battery_level < 20:
                 context_parts.append("battery is getting low")
         
-        # Thermal context
-        if context.thermal_state == "hot":
-            context_parts.append("the system is running warm")
-        elif context.thermal_state == "cool":
-            context_parts.append("the system is nice and cool")
+        # Connected devices context
+        if context.connected_devices > 0:
+            if context.connected_devices == 1:
+                context_parts.append("1 device connected")
+            elif context.connected_devices > 3:
+                context_parts.append(f"{context.connected_devices} devices connected")
         
-        # Capabilities context
+        # BLE devices context
+        if context.ble_devices and len(context.ble_devices) > 0:
+            ble_count = len(context.ble_devices)
+            if ble_count == 1:
+                context_parts.append("1 Bluetooth device nearby")
+            elif ble_count > 2:
+                context_parts.append(f"{ble_count} Bluetooth devices nearby")
+        
+        # Platform and capabilities
         capabilities = []
         if context.voice_enabled:
             capabilities.append("voice synthesis")
         if context.avatar_enabled:
             capabilities.append("avatar visualization")
-        capabilities.append("local AI")
+        if context.ai_model and context.ai_model != "unknown":
+            capabilities.append(f"{context.ai_model} AI")
+        else:
+            capabilities.append("local AI")
         
         context_str = ", ".join(context_parts)
         capabilities_str = ", ".join(capabilities)
         
-        prompt = f"""I'm M1K3, a local AI assistant. It's {context.time_of_day.lower()} and I just started up. My capabilities include {capabilities_str}. How should I greet the user?"""
+        prompt = f"""Generate a brief, friendly greeting for M1K3 AI assistant. Time: {context.time_of_day.lower()}. Keep it under 60 characters and natural. Just the greeting, nothing else."""
         
         return prompt
     
     def _extract_greeting(self, llm_response: str, max_length: int) -> str:
         """Extract and clean the greeting from LLM response"""
         
+        # Debug logging in debug mode
+        debug_mode = False
+        try:
+            from model_transparency import transparency_engine, TransparencyLevel
+            if transparency_engine and transparency_engine.transparency_level == TransparencyLevel.DEBUG:
+                debug_mode = True
+                print(f"🔍 [GREETING DEBUG] Raw LLM response: '{llm_response[:200]}...'")
+        except:
+            pass
+        
         # Clean the response first
         response = llm_response.strip()
+        
+        # Handle thinking process format first
+        if "**Response:**" in response:
+            # Extract content after **Response:** marker
+            response_part = response.split("**Response:**", 1)[1].strip()
+            if debug_mode:
+                print(f"🔍 [GREETING DEBUG] Found **Response:** section: '{response_part[:100]}...'")
+            
+            # Try to extract quoted content first
+            import re
+            quoted_match = re.search(r'"([^"]+)"', response_part)
+            if quoted_match:
+                response = quoted_match.group(1)
+                if debug_mode:
+                    print(f"🔍 [GREETING DEBUG] Extracted quoted greeting: '{response}'")
+            else:
+                # Use the first sentence/line if no quotes
+                first_sentence = response_part.split('.')[0].split('!')[0].split('?')[0].strip()
+                if len(first_sentence) > 5:
+                    response = first_sentence
+                else:
+                    response = response_part
+                if debug_mode:
+                    print(f"🔍 [GREETING DEBUG] Using unquoted response: '{response}'")
+        elif "💭" in response and "**Thinking Process:**" in response:
+            # Try to find actual response after thinking
+            parts = response.split("**Thinking Process:**")
+            if len(parts) > 1:
+                # Look for the actual response after thinking
+                remaining = parts[1]
+                if "**Response:**" in remaining:
+                    response = remaining.split("**Response:**")[1].strip()
+                    # Try to extract quoted content
+                    import re
+                    quoted_match = re.search(r'"([^"]+)"', response)
+                    if quoted_match:
+                        response = quoted_match.group(1)
+                        if debug_mode:
+                            print(f"🔍 [GREETING DEBUG] Extracted quoted response from thinking: '{response}'")
+                else:
+                    # Try to find quoted content directly
+                    import re
+                    quoted_match = re.search(r'"([^"]+)"', remaining)
+                    if quoted_match:
+                        response = quoted_match.group(1)
+                        if debug_mode:
+                            print(f"🔍 [GREETING DEBUG] Extracted quoted response: '{response}'")
         
         # Remove common unwanted patterns
         unwanted_patterns = [
             "[Your response]", "[Your answer]", "Your greeting:", "Generate greeting:",
             "Context:", "Features:", "Model:", "Examples:", "Create a", "Your greeting is:",
-            "Now, check if", "meets the requirements", "Generate a", "Here's a"
+            "Now, check if", "meets the requirements", "Generate a", "Here's a",
+            "💭", "**Thinking Process:**", "**Response:**", "The user wants"
         ]
         
         for pattern in unwanted_patterns:
@@ -159,6 +268,9 @@ class LLMGreetingEngine:
         
         # Split by common delimiters and find the actual greeting
         lines = [line.strip() for line in response.split('\n') if line.strip()]
+        
+        if debug_mode:
+            print(f"🔍 [GREETING DEBUG] Lines after cleaning: {lines}")
         
         # Look for the generated greeting
         potential_greetings = []
@@ -177,21 +289,31 @@ class LLMGreetingEngine:
             if line.startswith("'") and line.endswith("'"):
                 line = line[1:-1].strip()
             
-            # Check if it looks like a greeting
-            if any(word in line.lower() for word in ['hello', 'hi', 'good', 'welcome', 'm1k3', 'ready', 'morning', 'evening', 'afternoon']):
+            # Check if it looks like a greeting - be more permissive
+            greeting_words = ['hello', 'hi', 'good', 'welcome', 'm1k3', 'ready', 'morning', 'evening', 'afternoon', 'hey', 'greetings', 'howdy']
+            if any(word in line.lower() for word in greeting_words) or len(line) >= 10:
                 potential_greetings.append(line)
+                if debug_mode:
+                    print(f"🔍 [GREETING DEBUG] Found potential greeting: '{line}'")
         
         # Use the first valid greeting found
         if potential_greetings:
             greeting = potential_greetings[0]
+            if debug_mode:
+                print(f"🔍 [GREETING DEBUG] Selected greeting: '{greeting}'")
         else:
             # If no clear greeting found, try to extract from the first substantial line
             for line in lines:
                 if len(line) > 10 and not any(skip in line.lower() for skip in ['generate', 'create', 'example']):
                     greeting = line
+                    if debug_mode:
+                        print(f"🔍 [GREETING DEBUG] Fallback to substantial line: '{greeting}'")
                     break
             else:
+                # Improve the fallback to use context
                 greeting = "M1K3 ready!"
+                if debug_mode:
+                    print(f"🔍 [GREETING DEBUG] Using final fallback: '{greeting}'")
         
         # Clean up any remaining artifacts
         greeting = greeting.replace("- ", "").replace("* ", "").strip()
@@ -211,20 +333,51 @@ class LLMGreetingEngine:
         return greeting.strip()
     
     def _generate_fallback_greeting(self, context: GreetingContext) -> str:
-        """Generate a simple fallback greeting when LLM is unavailable"""
+        """Generate a context-aware fallback greeting when LLM is unavailable"""
         
-        greetings = [
-            f"{context.time_of_day}! M1K3 AI assistant ready with voice and avatar!",
-            f"Hello! M1K3 is online with {context.ai_model} - how can I help?",
-            f"{context.time_of_day}! Your local M1K3 assistant is ready to chat!",
-            f"Welcome! M1K3 AI is loaded and ready for conversation!",
-            f"Hi there! M1K3 with voice synthesis is at your service!"
+        # Base greetings with context awareness
+        base_greetings = [
+            f"{context.time_of_day}! M1K3 is ready to help.",
+            f"{context.time_of_day}! Ready when you are!",
+            f"Hi there! M1K3 at your service.",
+            f"{context.time_of_day}! What can I help with?"
         ]
         
-        # Simple selection based on context
+        # Enhanced greetings based on system context
+        enhanced_greetings = []
+        
+        # Platform-specific greetings
+        if context.platform == "Darwin":
+            enhanced_greetings.append(f"{context.time_of_day}! M1K3 running smoothly on macOS.")
+        elif context.platform == "Linux":
+            enhanced_greetings.append(f"{context.time_of_day}! M1K3 powered by Linux.")
+        
+        # Performance-aware greetings
+        if context.available_memory_gb >= 8:
+            enhanced_greetings.append(f"{context.time_of_day}! M1K3 ready with plenty of resources.")
+        elif context.cpu_cores >= 8:
+            enhanced_greetings.append(f"{context.time_of_day}! M1K3 powered by your multicore system.")
+        
+        # Connectivity-aware greetings
+        if context.connected_devices > 2:
+            enhanced_greetings.append(f"{context.time_of_day}! M1K3 sees your connected devices.")
+        elif context.ble_devices and len(context.ble_devices) > 0:
+            enhanced_greetings.append(f"{context.time_of_day}! M1K3 ready with Bluetooth active.")
+        
+        # Timezone-aware greetings
+        if context.timezone and context.timezone != "GMT":
+            enhanced_greetings.append(f"{context.time_of_day} from {context.timezone}! M1K3 ready.")
+        
+        # AI model-aware greetings
+        if context.ai_model and "Qwen" in context.ai_model:
+            enhanced_greetings.append(f"{context.time_of_day}! M1K3 powered by {context.ai_model}.")
+        
+        # Combine all possible greetings
+        all_greetings = base_greetings + enhanced_greetings
+        
+        # Use true randomness for variety
         import random
-        random.seed(int(context.cpu_usage * context.memory_percent))
-        return random.choice(greetings)
+        return random.choice(all_greetings)
     
     def _create_cache_key(self, context: GreetingContext) -> str:
         """Create a cache key from context (rounded to avoid too many variations)"""
@@ -235,7 +388,7 @@ class LLMGreetingEngine:
 # Utility functions for easy integration
 
 def create_greeting_context(metrics, m1k3_context: dict = None) -> GreetingContext:
-    """Create a GreetingContext from system metrics and M1K3 context"""
+    """Create a GreetingContext from system metrics and M1K3 context with enhanced awareness"""
     
     # Determine time of day
     current_hour = datetime.datetime.now().hour
@@ -247,6 +400,72 @@ def create_greeting_context(metrics, m1k3_context: dict = None) -> GreetingConte
         time_of_day = "Good evening"
     else:
         time_of_day = "Hello"
+    
+    # Enhanced timezone and locale detection
+    timezone = None
+    locale = None
+    try:
+        import locale as locale_module
+        import time
+        timezone = time.tzname[0] if time.tzname else None
+        locale = locale_module.getdefaultlocale()[0] if locale_module.getdefaultlocale()[0] else None
+    except:
+        pass
+    
+    # Enhanced system stats
+    platform = "unknown"
+    cpu_cores = 0
+    available_memory_gb = 0.0
+    disk_usage = 0.0
+    
+    try:
+        import platform as platform_module
+        import psutil
+        platform = platform_module.system()
+        cpu_cores = psutil.cpu_count()
+        
+        # Get available memory in GB
+        memory_info = psutil.virtual_memory()
+        available_memory_gb = memory_info.available / (1024**3)
+        
+        # Get disk usage
+        disk_info = psutil.disk_usage('/')
+        disk_usage = (disk_info.used / disk_info.total) * 100
+    except:
+        pass
+    
+    # BLE device detection
+    ble_devices = []
+    connected_devices = 0
+    network_status = "unknown"
+    
+    try:
+        import psutil
+        # Count network connections as a proxy for connected devices
+        connections = psutil.net_connections()
+        connected_devices = len([c for c in connections if c.status == 'ESTABLISHED'])
+        
+        # Network status
+        net_stats = psutil.net_if_stats()
+        active_interfaces = [name for name, stats in net_stats.items() if stats.isup]
+        if 'en0' in active_interfaces or 'eth0' in active_interfaces:
+            network_status = "connected"
+        elif 'lo0' in active_interfaces or 'lo' in active_interfaces:
+            network_status = "local"
+    except:
+        pass
+    
+    # Try to detect BLE devices (platform-specific)
+    try:
+        if platform == "Darwin":  # macOS
+            import subprocess
+            result = subprocess.run(['system_profiler', 'SPBluetoothDataType'], 
+                                  capture_output=True, text=True, timeout=2)
+            if result.returncode == 0 and 'Connected:' in result.stdout:
+                # Simple count of connected devices
+                ble_devices = ['device'] * result.stdout.count('Connected: Yes')
+    except:
+        pass
     
     # Extract thermal state
     thermal_state = "normal"
@@ -276,7 +495,17 @@ def create_greeting_context(metrics, m1k3_context: dict = None) -> GreetingConte
         voice_enabled=voice_enabled,
         avatar_enabled=avatar_enabled,
         ai_model=ai_model,
-        uptime_hours=getattr(metrics, 'uptime_hours', 0.0)
+        uptime_hours=getattr(metrics, 'uptime_hours', 0.0),
+        # Enhanced context
+        timezone=timezone,
+        locale=locale,
+        connected_devices=connected_devices,
+        ble_devices=ble_devices,
+        network_status=network_status,
+        disk_usage=disk_usage,
+        available_memory_gb=available_memory_gb,
+        cpu_cores=cpu_cores,
+        platform=platform
     )
 
 def generate_llm_greeting(adaptive_ai_engine, metrics, m1k3_context: dict = None, max_length: int = 80) -> str:
