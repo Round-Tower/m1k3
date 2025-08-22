@@ -6,7 +6,7 @@ Manages avatar state and emotion mapping from AI responses
 
 import re
 import time
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 from enum import Enum
 
 class AvatarEmotion(Enum):
