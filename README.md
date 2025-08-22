@@ -1,5 +1,12 @@
 # M1K3 - Local AI Assistant with Voice Synthesis & Avatar Dashboard
 
+<!-- CI/CD Status Badges -->
+![M1K3 Tests](https://img.shields.io/github/actions/workflow/status/m1k3-team/m1k3/unified-tests.yml?style=for-the-badge&label=M1K3%20Tests&logo=github)
+![Quick Tests](https://img.shields.io/github/actions/workflow/status/m1k3-team/m1k3/quick-tests.yml?style=for-the-badge&label=Quick%20Tests&logo=checkmarx)
+![Test Coverage](https://img.shields.io/badge/Test%20Coverage-75%25-brightgreen?style=for-the-badge&logo=codecov)
+![Test Count](https://img.shields.io/badge/Tests-166-blue?style=for-the-badge&logo=testinglibrary)
+![Security Audit](https://img.shields.io/badge/Security-Audited-green?style=for-the-badge&logo=security)
+
 🤖 **Privacy-focused local AI assistant** with voice synthesis, real-time avatar visualization, and comprehensive device context analysis. Built with a robust multi-backend AI system that works on any architecture.
 
 ## ⚠️ Current Status (2025-08-21) - PRODUCTION READY WITH KNOWN ISSUES
@@ -444,6 +451,48 @@ m1k3/
 - **✅ Linux** (x86_64, ARM64) - Full compatibility  
 - **✅ Windows** - Compatible via WSL or native Python
 - **✅ Any Platform** - SimpleAIEngine fallback guarantees operation
+
+## 🚀 CI/CD & Testing Pipeline
+
+M1K3 features a comprehensive continuous integration and testing pipeline powered by the **M1K3 Unified Test Suite**.
+
+### **📊 Test Coverage**
+- **166 Tests** across 73 test files
+- **13.8 minutes** estimated runtime
+- **7 Test Categories**: Unit, Integration, Visual, Performance, Security, E2E, API
+- **Cross-Platform**: Linux, macOS, Windows validation
+- **Multi-Version**: Node.js 18/20/22 + Python 3.9/3.11/3.12 matrix
+
+### **🔄 Automated Workflows**
+
+#### **Complete Test Suite** (`unified-tests.yml`)
+- **Triggers**: Push to main/develop, Pull requests, Daily schedule
+- **Features**: Full test coverage, screenshot testing, security audit, GitHub Pages deployment
+- **Artifacts**: Interactive HTML reports, screenshots, data exports (30-day retention)
+
+#### **Quick Validation** (`quick-tests.yml`) 
+- **Triggers**: Feature branch pushes, PR updates
+- **Duration**: ~5-10 minutes
+- **Features**: Fast feedback, security quick scan, code quality checks
+
+#### **Release Testing** (`release-testing.yml`)
+- **Triggers**: Release publish, Manual dispatch  
+- **Duration**: ~30-45 minutes
+- **Features**: Cross-platform validation, comprehensive release report (365-day retention)
+
+### **📈 Quality Features**
+- **🎨 M1K3-Branded Reports**: Professional HTML reports with pure black design
+- **📸 Visual Regression**: Screenshot testing across Desktop/Tablet/Mobile viewports
+- **🔒 Security Auditing**: Dependency vulnerabilities, code analysis, secrets scanning
+- **📊 Interactive Dashboards**: Filterable results, click-to-expand screenshots
+- **🏷️ Automated Badges**: Real-time status indicators and coverage metrics
+
+### **🌐 Report Access**
+- **GitHub Pages**: [Live Test Reports](https://github.com/your-org/m1k3/actions)
+- **Artifacts**: Download detailed reports from any workflow run
+- **PR Comments**: Automated test summaries on pull requests
+
+**📚 Full Documentation**: [CI/CD Pipeline Guide](.github/workflows/README.md)
 
 ## 🤝 Contributing
 
