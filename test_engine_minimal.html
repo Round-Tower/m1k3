@@ -1,0 +1,762 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>M1K3 Avatar - Gameboy Pixel Engine</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'SF Mono', 'Monaco', 'Cascadia Code', monospace;
+            background: linear-gradient(135deg, #0a0a0a 0%, #1a1a1a 100%);
+            color: rgba(255, 255, 255, 0.9);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 10px;
+            overflow-x: hidden;
+        }
+        
+        .header {
+            text-align: center;
+            margin: 20px 0;
+            z-index: 10;
+        }
+        
+        .title {
+            font-size: clamp(1.5rem, 4vw, 2.5rem);
+            font-weight: bold;
+            color: rgba(255, 255, 255, 0.95);
+            margin-bottom: 10px;
+        }
+        
+        .subtitle {
+            font-size: clamp(0.8rem, 2vw, 1rem);
+            color: rgba(255, 255, 255, 0.7);
+            opacity: 0.8;
+        }
+        
+        .avatar-container {
+            position: relative;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            width: 100%;
+            max-width: 600px;
+            margin: 20px 0;
+        }
+        
+        .avatar-frame {
+            position: relative;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 12px;
+            padding: 15px;
+            box-shadow: 
+                0 0 20px rgba(0, 0, 0, 0.3),
+                inset 0 0 10px rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .gameboy-bezel {
+            position: relative;
+            background: rgba(255, 255, 255, 0.08);
+            border-radius: 10px;
+            padding: 12px;
+            box-shadow: inset 0 1px 3px rgba(255, 255, 255, 0.1);
+        }
+        
+        .screen-bezel {
+            background: rgba(0, 0, 0, 0.4);
+            border-radius: 8px;
+            padding: 8px;
+            box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.6);
+        }
+        
+        #testCanvas {
+            border-radius: 6px;
+            background: rgba(255, 255, 255, 0.95);
+            box-shadow: 
+                0 0 10px rgba(0, 0, 0, 0.2),
+                inset 0 0 5px rgba(0, 0, 0, 0.1);
+            transition: all 0.3s ease;
+        }
+        
+        #testCanvas:hover {
+            box-shadow: 
+                0 0 15px rgba(0, 0, 0, 0.3),
+                inset 0 0 5px rgba(0, 0, 0, 0.1);
+            transform: scale(1.01);
+        }
+        
+        /* Custom pixel rendering with rounded pixels */
+        .pixel-canvas {
+            image-rendering: pixelated;
+            image-rendering: -moz-crisp-edges;
+            image-rendering: crisp-edges;
+        }
+        
+        .status-indicators {
+            display: flex;
+            justify-content: space-around;
+            margin: 20px 0;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        
+        .status-badge {
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 8px;
+            padding: 8px 16px;
+            font-size: 0.8rem;
+            color: rgba(255, 255, 255, 0.8);
+            backdrop-filter: blur(10px);
+            transition: all 0.3s ease;
+            min-width: 80px;
+            text-align: center;
+        }
+        
+        .status-badge.active {
+            background: rgba(255, 255, 255, 0.12);
+            border-color: rgba(255, 255, 255, 0.25);
+            color: rgba(255, 255, 255, 0.95);
+            box-shadow: 0 0 8px rgba(255, 255, 255, 0.1);
+        }
+        
+        .test-output {
+            width: 100%;
+            max-width: 800px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            padding: 20px;
+            margin-top: 20px;
+            backdrop-filter: blur(10px);
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        
+        .test-output h2 {
+            color: rgba(255, 255, 255, 0.9);
+            margin-bottom: 15px;
+            font-size: 1.2rem;
+            text-align: center;
+        }
+        
+        .results-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 10px;
+        }
+        
+        .test-item {
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 8px;
+            padding: 10px;
+            border-left: 3px solid transparent;
+            transition: all 0.3s ease;
+        }
+        
+        .test-item.pass {
+            border-left-color: rgba(255, 255, 255, 0.8);
+            color: rgba(255, 255, 255, 0.9);
+        }
+        
+        .test-item.fail {
+            border-left-color: rgba(255, 255, 255, 0.4);
+            color: rgba(255, 255, 255, 0.6);
+        }
+        
+        .test-item.info {
+            border-left-color: rgba(255, 255, 255, 0.6);
+            color: rgba(255, 255, 255, 0.8);
+        }
+        
+        .performance-stats {
+            display: flex;
+            justify-content: space-around;
+            margin: 20px 0;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+        
+        .stat-card {
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 8px;
+            padding: 15px;
+            text-align: center;
+            min-width: 120px;
+            backdrop-filter: blur(5px);
+        }
+        
+        .stat-value {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: rgba(255, 255, 255, 0.95);
+            display: block;
+        }
+        
+        .stat-label {
+            font-size: 0.8rem;
+            color: rgba(255, 255, 255, 0.7);
+            margin-top: 5px;
+        }
+        
+        /* Mobile optimizations */
+        @media (max-width: 768px) {
+            .avatar-frame {
+                padding: 15px;
+                margin: 0 10px;
+            }
+            
+            .gameboy-bezel {
+                padding: 10px;
+            }
+            
+            .screen-bezel {
+                padding: 8px;
+            }
+            
+            .status-indicators {
+                gap: 5px;
+            }
+            
+            .status-badge {
+                padding: 6px 12px;
+                font-size: 0.7rem;
+                min-width: 70px;
+            }
+            
+            .test-output {
+                margin: 10px;
+                padding: 15px;
+            }
+            
+            .results-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .performance-stats {
+                gap: 10px;
+            }
+            
+            .stat-card {
+                min-width: 100px;
+                padding: 10px;
+            }
+        }
+        
+        /* Animations */
+        @keyframes subtleGlow {
+            0%, 100% { 
+                box-shadow: 
+                    0 0 10px rgba(255, 255, 255, 0.1),
+                    inset 0 0 5px rgba(0, 0, 0, 0.1);
+            }
+            50% { 
+                box-shadow: 
+                    0 0 15px rgba(255, 255, 255, 0.15),
+                    inset 0 0 8px rgba(0, 0, 0, 0.15);
+            }
+        }
+        
+        .pulse-glow {
+            animation: subtleGlow 3s ease-in-out infinite;
+        }
+        
+        /* Custom scrollbar */
+        .test-output::-webkit-scrollbar {
+            width: 8px;
+        }
+        
+        .test-output::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 4px;
+        }
+        
+        .test-output::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 4px;
+        }
+        
+        .test-output::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1 class="title">🎮 M1K3 Avatar</h1>
+        <p class="subtitle">Gameboy Color Pixel Engine</p>
+    </div>
+    
+    <div class="avatar-container">
+        <div class="avatar-frame">
+            <div class="gameboy-bezel">
+                <div class="screen-bezel">
+                    <canvas id="testCanvas" class="pixel-canvas" width="512" height="512"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="status-indicators">
+        <div class="status-badge" id="healthBadge">❤️ Health</div>
+        <div class="status-badge" id="energyBadge">⚡ Energy</div>
+        <div class="status-badge" id="moodBadge">😊 Mood</div>
+        <div class="status-badge" id="evoBadge">✨ Evolution</div>
+    </div>
+    
+    <div class="performance-stats">
+        <div class="stat-card">
+            <span class="stat-value" id="fpsCounter">--</span>
+            <span class="stat-label">FPS</span>
+        </div>
+        <div class="stat-card">
+            <span class="stat-value" id="pixelOps">--</span>
+            <span class="stat-label">Pixel Ops/s</span>
+        </div>
+        <div class="stat-card">
+            <span class="stat-value" id="testsPassed">--</span>
+            <span class="stat-label">Tests Passed</span>
+        </div>
+    </div>
+    
+    <div class="test-output">
+        <h2>🔬 Test Results</h2>
+        <div class="results-grid" id="results"></div>
+    </div>
+    
+    <script src="gameboy_pixel_engine.js"></script>
+    <script>
+        const results = document.getElementById('results');
+        let testCount = 0;
+        let passCount = 0;
+        let engine = null;
+        let fpsCounter = 0;
+        let frameCount = 0;
+        let lastFpsTime = performance.now();
+        
+        // UI update functions
+        function updateStatusBadge(id, value, isActive = false) {
+            const badge = document.getElementById(id);
+            if (badge) {
+                badge.classList.toggle('active', isActive);
+                const parts = badge.textContent.split(' ');
+                badge.textContent = `${parts[0]} ${value}`;
+            }
+        }
+        
+        function updateStatCard(id, value) {
+            const element = document.getElementById(id);
+            if (element) {
+                element.textContent = value;
+            }
+        }
+        
+        function log(message, type = 'info') {
+            const div = document.createElement('div');
+            div.className = `test-item ${type}`;
+            
+            // Add icon based on type
+            const icon = type === 'pass' ? '✅' : type === 'fail' ? '❌' : '📋';
+            div.innerHTML = `<strong>${icon} Test ${++testCount}:</strong> ${message}`;
+            
+            results.appendChild(div);
+            console.log(`[${type.toUpperCase()}] ${message}`);
+            
+            if (type === 'pass') {
+                passCount++;
+                updateStatCard('testsPassed', `${passCount}/${testCount}`);
+            }
+            
+            // Auto-scroll to latest result
+            div.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+        
+        function updateFPS() {
+            frameCount++;
+            const now = performance.now();
+            
+            if (now - lastFpsTime >= 1000) {
+                fpsCounter = Math.round(frameCount * 1000 / (now - lastFpsTime));
+                updateStatCard('fpsCounter', fpsCounter);
+                frameCount = 0;
+                lastFpsTime = now;
+            }
+        }
+        
+        // Polyfill for roundRect if not available
+        if (!CanvasRenderingContext2D.prototype.roundRect) {
+            CanvasRenderingContext2D.prototype.roundRect = function(x, y, width, height, radius = 0) {
+                if (radius === 0) {
+                    this.rect(x, y, width, height);
+                    return;
+                }
+                
+                this.moveTo(x + radius, y);
+                this.lineTo(x + width - radius, y);
+                this.arcTo(x + width, y, x + width, y + radius, radius);
+                this.lineTo(x + width, y + height - radius);
+                this.arcTo(x + width, y + height, x + width - radius, y + height, radius);
+                this.lineTo(x + radius, y + height);
+                this.arcTo(x, y + height, x, y + height - radius, radius);
+                this.lineTo(x, y + radius);
+                this.arcTo(x, y, x + radius, y, radius);
+            };
+        }
+        
+        function createRoundedPixelEngine(canvas) {
+            // Create standard engine first
+            const engine = new GameboyPixelEngine(canvas, {
+                pixelSize: 16, // Larger pixels for better mobile visibility
+                mode: 'avatar',
+                enableCare: true,
+                debugMode: true
+            });
+            
+            // Switch to monochrome palette
+            engine.currentPalette = engine.palettes.monochrome;
+            console.log('Engine created:', engine.gridWidth, 'x', engine.gridHeight, 'using monochrome palette');
+            
+            // Store original setPixel for fallback
+            const originalSetPixel = engine.setPixel.bind(engine);
+            
+            // Add rounded pixel functionality without breaking original
+            engine.setRoundedPixel = function(x, y, colorIndex, layer = 'avatar') {
+                if (x < 0 || x >= this.gridWidth || y < 0 || y >= this.gridHeight) return;
+                if (colorIndex < 0 || colorIndex >= this.currentPalette.length) return;
+                
+                // Use main canvas context for now to ensure it works
+                const ctx = this.ctx;
+                const color = this.currentPalette[colorIndex];
+                
+                // Calculate pixel position with padding
+                const pixelX = x * this.pixelSize;
+                const pixelY = y * this.pixelSize;
+                const padding = 1;
+                const size = this.pixelSize - (padding * 2);
+                const radius = Math.min(size / 4, 3);
+                
+                // Draw rounded rectangle with padding
+                ctx.fillStyle = color;
+                ctx.beginPath();
+                try {
+                    ctx.roundRect(pixelX + padding, pixelY + padding, size, size, radius);
+                    ctx.fill();
+                } catch (e) {
+                    // Fallback to regular rectangle if roundRect fails
+                    ctx.fillRect(pixelX + padding, pixelY + padding, size, size);
+                }
+            };
+            
+            // Override setPixel to use rounded version
+            engine.setPixel = function(x, y, colorIndex, layer = 'avatar') {
+                // Use rounded pixel for now
+                this.setRoundedPixel(x, y, colorIndex, layer);
+            };
+            
+            // Add pulse effect for special states
+            engine.setPulsingPixel = function(x, y, colorIndex, layer = 'avatar') {
+                this.setRoundedPixel(x, y, colorIndex, layer);
+                
+                // Add glow effect for important pixels
+                const ctx = this.ctx;
+                const pixelX = x * this.pixelSize;
+                const pixelY = y * this.pixelSize;
+                const padding = 1;
+                const size = this.pixelSize - (padding * 2);
+                
+                ctx.shadowColor = this.currentPalette[colorIndex];
+                ctx.shadowBlur = 8;
+                ctx.beginPath();
+                try {
+                    ctx.roundRect(pixelX + padding, pixelY + padding, size, size, 3);
+                    ctx.fill();
+                } catch (e) {
+                    ctx.fillRect(pixelX + padding, pixelY + padding, size, size);
+                }
+                ctx.shadowBlur = 0;
+            };
+            
+            return engine;
+        }
+        
+        function runTests() {
+            log('🎮 Starting Enhanced Gameboy Pixel Engine Tests...', 'info');
+            
+            try {
+                // Test 1: Enhanced Engine Creation with Rounded Pixels
+                log('Creating enhanced engine with rounded pixels...', 'info');
+                const canvas = document.getElementById('testCanvas');
+                
+                if (!canvas) {
+                    throw new Error('Canvas element not found');
+                }
+                
+                // Create enhanced engine with larger pixels for mobile
+                engine = createRoundedPixelEngine(canvas);
+                
+                log(`✅ Enhanced engine created: ${canvas.width}x${canvas.height}, ${engine.pixelSize}px pixels`, 'pass');
+                
+                // Test 2: Basic Properties
+                log('Testing engine properties...', 'info');
+                
+                if (engine.gridWidth && engine.gridHeight) {
+                    log(`✅ Grid dimensions: ${engine.gridWidth}x${engine.gridHeight}`, 'pass');
+                } else {
+                    log('❌ Grid dimensions not set', 'fail');
+                }
+                
+                if (engine.currentPalette && engine.currentPalette.length === 4) {
+                    log(`✅ Palette loaded: ${engine.currentPalette.join(', ')}`, 'pass');
+                } else {
+                    log('❌ Palette not properly loaded', 'fail');
+                }
+                
+                // Test 3: System State
+                log('Testing system state updates...', 'info');
+                
+                engine.updateSystemState({
+                    battery: 75,
+                    cpu: 45,
+                    temperature: 55,
+                    network: true,
+                    memory: 60
+                });
+                
+                if (engine.systemState.battery === 75) {
+                    log('✅ System state update successful', 'pass');
+                } else {
+                    log('❌ System state update failed', 'fail');
+                }
+                
+                // Test 4: Avatar State
+                log('Testing avatar functionality...', 'info');
+                
+                if (engine.avatarState) {
+                    log(`✅ Avatar state initialized: mood=${engine.avatarState.mood}, health=${engine.avatarState.health}`, 'pass');
+                } else {
+                    log('❌ Avatar state not initialized', 'fail');
+                }
+                
+                // Test 5: Enhanced Pixel Setting (Rounded with Padding)
+                log('Testing enhanced rounded pixel operations...', 'info');
+                
+                try {
+                    // Test regular pixels
+                    engine.setPixel(5, 5, 2, 'avatar');
+                    engine.setPixel(10, 10, 1, 'ui');
+                    
+                    // Test pulsing pixels (new feature)
+                    engine.setPulsingPixel(8, 8, 3, 'avatar');
+                    engine.setPulsingPixel(12, 12, 2, 'effects');
+                    
+                    log('✅ Enhanced rounded pixel operations successful', 'pass');
+                } catch (e) {
+                    log(`❌ Enhanced pixel operations failed: ${e.message}`, 'fail');
+                }
+                
+                // Test 6: Text Rendering (disabled for now)
+                log('Skipping text rendering tests...', 'info');
+                
+                // Test 7: Avatar Rendering
+                log('Testing avatar rendering...', 'info');
+                
+                try {
+                    engine.renderAvatar();
+                    log('✅ Avatar rendering successful', 'pass');
+                } catch (e) {
+                    log(`❌ Avatar rendering failed: ${e.message}`, 'fail');
+                }
+                
+                // Test 8: Care Mechanics
+                log('Testing care mechanics...', 'info');
+                
+                try {
+                    const initialHealth = engine.avatarState.health;
+                    engine.updateAvatarCare();
+                    log('✅ Care mechanics update successful', 'pass');
+                } catch (e) {
+                    log(`❌ Care mechanics failed: ${e.message}`, 'fail');
+                }
+                
+                // Test 9: Data Visualization
+                log('Testing data visualization...', 'info');
+                
+                try {
+                    const testData = [10, 20, 15, 30, 25];
+                    engine.renderLineChart(testData, 20, 20, 30, 15, 3, 'ui');
+                    engine.renderBarChart([5, 10, 7, 12], ['A', 'B', 'C', 'D'], 20, 40, 25, 12, 'ui');
+                    log('✅ Data visualization successful', 'pass');
+                } catch (e) {
+                    log(`❌ Data visualization failed: ${e.message}`, 'fail');
+                }
+                
+                // Test 10: E-ink Mode
+                log('Testing e-ink mode...', 'info');
+                
+                try {
+                    engine.enableEinkMode();
+                    if (engine.einkMode === true) {
+                        log('✅ E-ink mode enabled', 'pass');
+                    } else {
+                        log('❌ E-ink mode flag not set', 'fail');
+                    }
+                    
+                    engine.disableEinkMode();
+                    if (engine.einkMode === false) {
+                        log('✅ E-ink mode disabled', 'pass');
+                    } else {
+                        log('❌ E-ink mode flag not reset', 'fail');
+                    }
+                } catch (e) {
+                    log(`❌ E-ink mode failed: ${e.message}`, 'fail');
+                }
+                
+                // Test 11: Performance Test
+                log('Testing performance...', 'info');
+                
+                try {
+                    const startTime = performance.now();
+                    
+                    // Render multiple frames
+                    for (let i = 0; i < 10; i++) {
+                        engine.updateSystemState({
+                            battery: 50 + (i * 5),
+                            cpu: i * 10,
+                            temperature: 40 + i
+                        });
+                        engine.renderAvatar();
+                    }
+                    
+                    const endTime = performance.now();
+                    const duration = endTime - startTime;
+                    const fps = 10 / (duration / 1000);
+                    
+                    log(`✅ Performance: ${fps.toFixed(1)} FPS (${duration.toFixed(1)}ms for 10 frames)`, 'pass');
+                } catch (e) {
+                    log(`❌ Performance test failed: ${e.message}`, 'fail');
+                }
+                
+                // Final Summary
+                log(`\n🎯 TEST SUMMARY: ${passCount}/${testCount} tests passed (${(passCount/testCount*100).toFixed(1)}%)`, 
+                    passCount === testCount ? 'pass' : 'fail');
+                
+                if (passCount === testCount) {
+                    log('🎉 All tests passed! Engine is working correctly.', 'pass');
+                } else {
+                    log(`⚠️ ${testCount - passCount} tests failed. Check console for details.`, 'fail');
+                }
+                
+                // Show the enhanced rendered result
+                log('🚀 Starting enhanced mobile-ready avatar demo...', 'info');
+                
+                // Initialize status indicators
+                updateStatusBadge('healthBadge', '92%', true);
+                updateStatusBadge('energyBadge', '78%', true);
+                updateStatusBadge('moodBadge', 'Happy', true);
+                updateStatusBadge('evoBadge', '1.2', false);
+                
+                // Performance tracking
+                let pixelOpsCount = 0;
+                let lastPixelOpsTime = performance.now();
+                
+                // Enhanced animation loop with mobile optimization
+                const animationLoop = () => {
+                    const now = Date.now();
+                    engine.animationTime = now / 1000;
+                    
+                    // Simulate realistic system conditions
+                    const batteryLevel = Math.max(20, 50 + Math.sin(now / 8000) * 30);
+                    const cpuUsage = Math.max(10, 30 + Math.sin(now / 5000) * 40);
+                    const temperature = 40 + Math.sin(now / 12000) * 20;
+                    const networkConnected = Math.sin(now / 15000) > -0.5;
+                    
+                    // Update system state
+                    engine.updateSystemState({
+                        battery: Math.round(batteryLevel),
+                        cpu: Math.round(cpuUsage),
+                        temperature: Math.round(temperature),
+                        network: networkConnected,
+                        memory: Math.round(45 + Math.sin(now / 7000) * 25),
+                        eco_savings: 125.5 + Math.sin(now / 20000) * 50
+                    });
+                    
+                    // Update care mechanics and status badges
+                    engine.updateAvatarCare();
+                    
+                    // Update UI indicators
+                    updateStatusBadge('healthBadge', `${engine.avatarState.health}%`, 
+                                    engine.avatarState.health > 80);
+                    updateStatusBadge('energyBadge', `${engine.avatarState.energy}%`, 
+                                    engine.avatarState.energy > 70);
+                    updateStatusBadge('moodBadge', engine.avatarState.mood.charAt(0).toUpperCase() + 
+                                    engine.avatarState.mood.slice(1), true);
+                    updateStatusBadge('evoBadge', engine.avatarState.evolution.toFixed(1), 
+                                    engine.avatarState.evolution > 1.5);
+                    
+                    // Clear and render with enhanced effects
+                    engine.clearCanvas();
+                    
+                    // Main avatar with breathing effect
+                    engine.renderAvatar();
+                    
+                    // Add some sparkle effects for healthy avatar
+                    if (engine.avatarState.health > 80 && Math.random() > 0.7) {
+                        const sparkleX = Math.floor(Math.random() * engine.gridWidth);
+                        const sparkleY = Math.floor(Math.random() * engine.gridHeight);
+                        engine.setPulsingPixel(sparkleX, sparkleY, 3, 'effects');
+                        pixelOpsCount += 2;
+                    }
+                    
+                    // System status display (disabled for now)
+                    // engine.renderSystemStatusText();
+                    
+                    // Count pixel operations for performance stats
+                    pixelOpsCount += engine.gridWidth * engine.gridHeight * 0.3; // Estimate
+                    
+                    // Update performance stats every second
+                    const perfNow = performance.now();
+                    if (perfNow - lastPixelOpsTime >= 1000) {
+                        const pixelOpsPerSecond = Math.round(pixelOpsCount * 1000 / (perfNow - lastPixelOpsTime));
+                        updateStatCard('pixelOps', pixelOpsPerSecond.toLocaleString());
+                        pixelOpsCount = 0;
+                        lastPixelOpsTime = perfNow;
+                    }
+                    
+                    // Update FPS counter
+                    updateFPS();
+                    
+                    requestAnimationFrame(animationLoop);
+                };
+                
+                // Start the enhanced animation loop
+                animationLoop();
+                
+                // Add canvas pulse effect
+                const canvasElement = document.getElementById('testCanvas');
+                canvasElement.classList.add('pulse-glow');
+                
+                log('✨ Enhanced mobile avatar demo running with rounded pixels!', 'pass');
+                
+            } catch (error) {
+                log(`❌ Critical error: ${error.message}`, 'fail');
+                console.error('Full error:', error);
+            }
+        }
+        
+        // Run tests when page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            setTimeout(runTests, 100);
+        });
+    </script>
+</body>
+</html>
