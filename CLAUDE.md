@@ -7,6 +7,7 @@ Privacy-focused local AI assistant with voice synthesis, web dashboard, and CLI 
 
 ### Core Features
 - **Local AI inference** with TinyLlama-1.1B-Chat (universal compatibility)
+- **RAG (Retrieval-Augmented Generation)** with comprehensive expertise knowledge base (20 categories, 1,341+ documents)
 - **Voice synthesis** with KittenTTS + sidechain compression ⚠️ (speech cutoff bug documented in BUGS.md)
 - **Avatar system** with real-time web dashboard and emotion tracking
 - **Enhanced CLI** with animations, eco-metrics, 8K context visualization
@@ -57,6 +58,11 @@ python m1k3.py --fullscreen
 
 # CLI with avatar dashboard
 python cli.py --with-avatar
+
+# RAG-enhanced with expert knowledge
+python m1k3.py --rag
+python m1k3.py --tui --rag
+python cli.py --rag --with-avatar
 ```
 
 ## Interactive Commands
@@ -90,6 +96,62 @@ python ai_inference.py               # Test AI engine
 - **WebSocket communication** for live updates during conversations
 - **Multi-device access** - available on local network
 - **Auto-start mode**: `python cli.py --with-avatar`
+
+## RAG (Retrieval-Augmented Generation) System
+
+### Advanced Expertise Knowledge Base
+- **20 comprehensive categories** covering technical, educational, security, and entertainment domains
+- **1,341+ expert documents** with professional-grade knowledge across:
+
+#### Technical Expertise (5 categories)
+- **Mathematical Calculations** - Math problems, equations, calculations
+- **Code Debugging** - Programming help, troubleshooting, error resolution  
+- **Technical Explanations** - How systems work, technical concepts
+- **Casual Conversation** - Friendly interactions, greetings, chat
+- **Creative Writing** - Stories, creative content, writing assistance
+
+#### Educational & General Knowledge (9 categories)
+- **Historical Facts** - World history, civilizations, historical events
+- **Science Facts** - Natural phenomena, physics, chemistry, biology
+- **Geography Facts** - World locations, landmarks, geographical features
+- **Movies & TV** - Entertainment industry, film analysis, recommendations
+- **Music Culture** - Musical genres, instruments, cultural impact
+- **Sports & Recreation** - Sports rules, fitness, recreational activities
+- **Food Culture** - World cuisines, cooking techniques, food traditions
+- **Technology Trends** - Modern technology, digital life, innovation
+- **Lifestyle & Wellness** - Health, wellness, self-care, life improvement
+
+#### Advanced Expertise (6 categories) - **NEW**
+- **Device Technology** - Device troubleshooting, setup, optimization (smartphones, computers)
+- **WiFi & Networking** - Network troubleshooting, router configuration, connectivity solutions
+- **Security & Privacy** - Cybersecurity, privacy protection, incident response, threat prevention
+- **Diagnostic & Troubleshooting** - Systematic problem-solving, root cause analysis methods
+- **Educational & Tutoring** - Study techniques, learning methods, academic support
+- **Trivia & Fun Facts** - Educational entertainment, quiz content, interesting science/history facts
+
+### RAG Features
+- **Intent-aware retrieval** - Automatically selects relevant knowledge based on query type
+- **Semantic search** - Uses BAAI/bge-small-en-v1.5 embeddings for intelligent document matching
+- **Context enhancement** - Enriches AI responses with retrieved expert knowledge
+- **100% local processing** - All retrieval and generation happens on your device
+- **Web management interfaces** - HTML dashboards for knowledge exploration and administration
+
+### RAG Usage
+```bash
+# Enable RAG mode
+python m1k3.py --rag --tui
+
+# Example expert queries
+"My iPhone battery drains quickly. What should I check?"          # → Device Technology
+"My WiFi is slow. How can I troubleshoot this?"                  # → WiFi & Networking  
+"How do I protect myself from phishing attacks?"                 # → Security & Privacy
+"What's the best study method for learning mathematics?"          # → Educational Support
+"Tell me an interesting science fact"                             # → Trivia & Facts
+```
+
+### RAG Web Interfaces
+- **Knowledge Viewer**: `rag_knowledge_viewer.html` - Browse and search 1,341+ documents
+- **Admin Panel**: `rag_admin.html` - Manage document generation and system administration
 
 ## Architecture Compatibility
 - **Universal**: Works on x86_64, ARM64, Intel Macs, Linux, any platform

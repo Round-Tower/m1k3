@@ -40,6 +40,13 @@ except ImportError:
     from simple_ai_engine import SimpleAIEngine
     REAL_AI_AVAILABLE = False
 
+# RAG engine import
+try:
+    from m1k3_rag_integration import M1K3RAGIntegratedEngine
+    RAG_ENGINE_AVAILABLE = True
+except ImportError:
+    RAG_ENGINE_AVAILABLE = False
+
 from enhanced_voice_engine import create_voice_engine
 from system_metrics import SystemMonitor
 
@@ -285,12 +292,26 @@ class M1K3TUIApp(App):
     current_emotion = reactive("happy")
     current_state = reactive("idle")
     
-    def __init__(self, voice_enabled: bool = True, **kwargs):
+    def __init__(self, voice_enabled: bool = True, rag_enabled: bool = False, **kwargs):
         super().__init__(**kwargs)
         
-        # Initialize AI engine with error handling
+        # Initialize AI engine with RAG support
+        self.rag_enabled = rag_enabled
         try:
-            if REAL_AI_AVAILABLE:
+            if rag_enabled and RAG_ENGINE_AVAILABLE:
+                kb_path = "knowledge/comprehensive_knowledge_base.json"
+                if os.path.exists(kb_path):
+                    self.ai_engine = M1K3RAGIntegratedEngine(
+                        knowledge_base_path=kb_path,
+                        enable_rag=True,
+                        auto_load=True
+                    )
+                    self.ai_status = "🧠 AI: RAG-Enhanced Ready"
+                else:
+                    self.rag_enabled = False
+                    self.ai_engine = LocalAIEngine() if REAL_AI_AVAILABLE else SimpleAIEngine()
+                    self.ai_status = "⚠️ AI: RAG KB Not Found"
+            elif REAL_AI_AVAILABLE:
                 self.ai_engine = LocalAIEngine()
                 self.ai_status = "✅ AI: LocalAI Ready"
             else:

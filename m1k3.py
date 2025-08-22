@@ -75,6 +75,16 @@ Examples:
         default=8080, 
         help="Avatar server port (default: 8080)"
     )
+    parser.add_argument(
+        "--rag", 
+        action="store_true", 
+        help="Enable RAG (Retrieval-Augmented Generation) with comprehensive knowledge base"
+    )
+    parser.add_argument(
+        "--query", "-q",
+        type=str,
+        help="Single query mode - ask a question and exit"
+    )
     
     args = parser.parse_args()
     
@@ -83,7 +93,7 @@ Examples:
         # Launch Textual TUI
         try:
             from m1k3_tui import M1K3TUIApp
-            app = M1K3TUIApp(voice_enabled=not args.no_voice)
+            app = M1K3TUIApp(voice_enabled=not args.no_voice, rag_enabled=args.rag)
             app.run()
         except ImportError as e:
             print(f"❌ Textual TUI not available: {e}")
@@ -130,6 +140,10 @@ def launch_classic_cli(args):
             cli_args.append("--auto-avatar")
         if args.avatar_port != 8080:
             cli_args.extend(["--avatar-port", str(args.avatar_port)])
+        if args.rag:
+            cli_args.append("--rag")
+        if args.query:
+            cli_args.extend(["--query", args.query])
             
         # Override sys.argv for the CLI
         original_argv = sys.argv

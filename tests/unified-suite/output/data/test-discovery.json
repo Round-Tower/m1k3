@@ -1,31 +1,31 @@
 {
-  "timestamp": "2025-08-22T12:29:12.242Z",
+  "timestamp": "2025-08-22T22:17:28.477Z",
   "summary": {
-    "total_files": 74,
-    "total_tests": 166,
-    "estimated_duration_ms": 848852,
-    "estimated_duration_readable": "14.1m"
+    "total_files": 84,
+    "total_tests": 191,
+    "estimated_duration_ms": 940312,
+    "estimated_duration_readable": "15.7m"
   },
   "categories": {
     "unit": {
-      "count": 29,
-      "test_count": 33,
-      "duration": 72614
+      "count": 30,
+      "test_count": 34,
+      "duration": 74262
     },
     "integration": {
-      "count": 17,
-      "test_count": 60,
-      "duration": 379348
+      "count": 21,
+      "test_count": 79,
+      "duration": 469348
     },
     "visual": {
       "count": 17,
       "test_count": 39,
-      "duration": 348050
+      "duration": 338050
     },
     "performance": {
-      "count": 2,
-      "test_count": 4,
-      "duration": 31240
+      "count": 3,
+      "test_count": 6,
+      "duration": 33240
     },
     "security": {
       "count": 1,
@@ -38,16 +38,17 @@
       "duration": 0
     },
     "api": {
-      "count": 8,
-      "test_count": 16,
-      "duration": 15600
+      "count": 12,
+      "test_count": 19,
+      "duration": 23412
     }
   },
   "frameworks": {
     "playwright": 4,
     "jest/mocha": 6,
-    "unknown": 10,
-    "python-custom": 39,
+    "unknown": 11,
+    "python-custom": 47,
+    "unittest": 1,
     "pytest": 2,
     "html-manual": 13
   },
@@ -56,11 +57,11 @@
     "fast": 1,
     "critical": 1,
     "flaky": 1,
-    "local": 17,
+    "local": 20,
     "visual": 5,
     "ai": 2,
     "voice": 6,
-    "avatar": 1,
+    "avatar": 2,
     "pwa": 6
   },
   "files": [
@@ -318,6 +319,42 @@
       "estimated_duration": 18916
     },
     {
+      "path": "/Users/kevinmurphy/Development/m1k3/test_temperature_investigation.py",
+      "relativePath": "test_temperature_investigation.py",
+      "name": "test_temperature_investigation.py",
+      "extension": ".py",
+      "size": 5347,
+      "modified": "2025-08-22T12:38:29.221Z",
+      "category": "performance",
+      "subcategory": "",
+      "framework": "python-custom",
+      "dependencies": [
+        "sys",
+        "os"
+      ],
+      "testCount": 2,
+      "tags": [],
+      "estimated_duration": 2000
+    },
+    {
+      "path": "/Users/kevinmurphy/Development/m1k3/test_temperature_fix.py",
+      "relativePath": "test_temperature_fix.py",
+      "name": "test_temperature_fix.py",
+      "extension": ".py",
+      "size": 3286,
+      "modified": "2025-08-22T12:42:26.667Z",
+      "category": "unit",
+      "subcategory": "",
+      "framework": "python-custom",
+      "dependencies": [
+        "subprocess",
+        "time"
+      ],
+      "testCount": 1,
+      "tags": [],
+      "estimated_duration": 1648
+    },
+    {
       "path": "/Users/kevinmurphy/Development/m1k3/test_task_classification.py",
       "relativePath": "test_task_classification.py",
       "name": "test_task_classification.py",
@@ -408,6 +445,28 @@
       "testCount": 6,
       "tags": [],
       "estimated_duration": 20000
+    },
+    {
+      "path": "/Users/kevinmurphy/Development/m1k3/test_m1k3_rag_engine.py",
+      "relativePath": "test_m1k3_rag_engine.py",
+      "name": "test_m1k3_rag_engine.py",
+      "extension": ".py",
+      "size": 13782,
+      "modified": "2025-08-22T19:06:39.862Z",
+      "category": "integration",
+      "subcategory": "",
+      "framework": "unittest",
+      "dependencies": [
+        "unittest",
+        "tempfile",
+        "json",
+        "os",
+        "shutil",
+        "pathlib"
+      ],
+      "testCount": 15,
+      "tags": [],
+      "estimated_duration": 30000
     },
     {
       "path": "/Users/kevinmurphy/Development/m1k3/test_m1k3_qwen3.py",
@@ -576,27 +635,6 @@
       "estimated_duration": 30000
     },
     {
-      "path": "/Users/kevinmurphy/Development/m1k3/test_cli_knowledge.py",
-      "relativePath": "test_cli_knowledge.py",
-      "name": "test_cli_knowledge.py",
-      "extension": ".py",
-      "size": 7688,
-      "modified": "2025-08-22T12:20:31.026Z",
-      "category": "unit",
-      "subcategory": "",
-      "framework": "unknown",
-      "dependencies": [
-        "subprocess",
-        "time",
-        "json",
-        "sys",
-        "datetime"
-      ],
-      "testCount": 0,
-      "tags": [],
-      "estimated_duration": 2000
-    },
-    {
       "path": "/Users/kevinmurphy/Development/m1k3/test_cli_greeting.py",
       "relativePath": "test_cli_greeting.py",
       "name": "test_cli_greeting.py",
@@ -651,6 +689,24 @@
         "ai"
       ],
       "estimated_duration": 20000
+    },
+    {
+      "path": "/Users/kevinmurphy/Development/m1k3/test_advanced_expertise.py",
+      "relativePath": "test_advanced_expertise.py",
+      "name": "test_advanced_expertise.py",
+      "extension": ".py",
+      "size": 5353,
+      "modified": "2025-08-22T19:50:22.017Z",
+      "category": "api",
+      "subcategory": "",
+      "framework": "python-custom",
+      "dependencies": [
+        "json",
+        "expanded_synthetic_generator"
+      ],
+      "testCount": 1,
+      "tags": [],
+      "estimated_duration": 2000
     },
     {
       "path": "/Users/kevinmurphy/Development/m1k3/test_adaptive_thinking_integration.py",
@@ -1154,6 +1210,137 @@
       "estimated_duration": 1296
     },
     {
+      "path": "/Users/kevinmurphy/Development/m1k3/tests/websocket/test_websocket_manual.py",
+      "relativePath": "tests/websocket/test_websocket_manual.py",
+      "name": "test_websocket_manual.py",
+      "extension": ".py",
+      "size": 4089,
+      "modified": "2025-08-22T15:02:20.717Z",
+      "category": "api",
+      "subcategory": "",
+      "framework": "python-custom",
+      "dependencies": [
+        "asyncio",
+        "websockets",
+        "json",
+        "time"
+      ],
+      "testCount": 1,
+      "tags": [
+        "local"
+      ],
+      "estimated_duration": 1812
+    },
+    {
+      "path": "/Users/kevinmurphy/Development/m1k3/tests/websocket/test_websocket_context.py",
+      "relativePath": "tests/websocket/test_websocket_context.py",
+      "name": "test_websocket_context.py",
+      "extension": ".py",
+      "size": 6317,
+      "modified": "2025-08-22T13:43:54.669Z",
+      "category": "api",
+      "subcategory": "",
+      "framework": "python-custom",
+      "dependencies": [
+        "asyncio",
+        "json",
+        "websockets",
+        "time",
+        "datetime"
+      ],
+      "testCount": 1,
+      "tags": [
+        "local"
+      ],
+      "estimated_duration": 2000
+    },
+    {
+      "path": "/Users/kevinmurphy/Development/m1k3/tests/integration/test_realtime_context_integration.py",
+      "relativePath": "tests/integration/test_realtime_context_integration.py",
+      "name": "test_realtime_context_integration.py",
+      "extension": ".py",
+      "size": 8201,
+      "modified": "2025-08-22T13:51:28.108Z",
+      "category": "integration",
+      "subcategory": "",
+      "framework": "python-custom",
+      "dependencies": [
+        "asyncio",
+        "time",
+        "datetime",
+        "enhanced_adaptive_model_config",
+        "websocket_context_server"
+      ],
+      "testCount": 2,
+      "tags": [],
+      "estimated_duration": 20000
+    },
+    {
+      "path": "/Users/kevinmurphy/Development/m1k3/tests/integration/test_complete_system_integration.py",
+      "relativePath": "tests/integration/test_complete_system_integration.py",
+      "name": "test_complete_system_integration.py",
+      "extension": ".py",
+      "size": 15937,
+      "modified": "2025-08-22T13:54:49.360Z",
+      "category": "integration",
+      "subcategory": "",
+      "framework": "python-custom",
+      "dependencies": [
+        "json",
+        "time",
+        "datetime",
+        "typing",
+        "enhanced_adaptive_model_config",
+        "decision_explanation_engine",
+        "websocket_context_server",
+        "ai_inference"
+      ],
+      "testCount": 1,
+      "tags": [],
+      "estimated_duration": 20000
+    },
+    {
+      "path": "/Users/kevinmurphy/Development/m1k3/tests/cli/test_cli_knowledge.py",
+      "relativePath": "tests/cli/test_cli_knowledge.py",
+      "name": "test_cli_knowledge.py",
+      "extension": ".py",
+      "size": 7688,
+      "modified": "2025-08-22T12:20:31.026Z",
+      "category": "unit",
+      "subcategory": "",
+      "framework": "unknown",
+      "dependencies": [
+        "subprocess",
+        "time",
+        "json",
+        "sys",
+        "datetime"
+      ],
+      "testCount": 0,
+      "tags": [],
+      "estimated_duration": 2000
+    },
+    {
+      "path": "/Users/kevinmurphy/Development/m1k3/tests/cli/test_cli_integration.py",
+      "relativePath": "tests/cli/test_cli_integration.py",
+      "name": "test_cli_integration.py",
+      "extension": ".py",
+      "size": 5279,
+      "modified": "2025-08-22T14:52:41.211Z",
+      "category": "integration",
+      "subcategory": "",
+      "framework": "python-custom",
+      "dependencies": [
+        "sys",
+        "time",
+        "contextlib",
+        "io"
+      ],
+      "testCount": 1,
+      "tags": [],
+      "estimated_duration": 20000
+    },
+    {
       "path": "/Users/kevinmurphy/Development/m1k3/pwa-deployment/backend/tests/test_model_exporter.py",
       "relativePath": "pwa-deployment/backend/tests/test_model_exporter.py",
       "name": "test_model_exporter.py",
@@ -1321,34 +1508,30 @@
       "estimated_duration": 1568
     },
     {
-      "path": "/Users/kevinmurphy/Development/m1k3/test_engine_minimal.html",
-      "relativePath": "test_engine_minimal.html",
-      "name": "test_engine_minimal.html",
-      "extension": ".html",
-      "size": 28811,
-      "modified": "2025-08-21T21:52:51.990Z",
-      "category": "visual",
+      "path": "/Users/kevinmurphy/Development/m1k3/tests/websocket/websocket_context_server.py",
+      "relativePath": "tests/websocket/websocket_context_server.py",
+      "name": "websocket_context_server.py",
+      "extension": ".py",
+      "size": 11574,
+      "modified": "2025-08-22T13:51:40.386Z",
+      "category": "api",
       "subcategory": "",
-      "framework": "html-manual",
-      "dependencies": [],
+      "framework": "unknown",
+      "dependencies": [
+        "asyncio",
+        "json",
+        "logging",
+        "websockets",
+        "typing",
+        "dataclasses",
+        "datetime",
+        "threading"
+      ],
       "testCount": 0,
-      "tags": [],
-      "estimated_duration": 30000
-    },
-    {
-      "path": "/Users/kevinmurphy/Development/m1k3/test-routes.html",
-      "relativePath": "test-routes.html",
-      "name": "test-routes.html",
-      "extension": ".html",
-      "size": 1122,
-      "modified": "2025-08-22T10:44:40.242Z",
-      "category": "unit",
-      "subcategory": "",
-      "framework": "html-manual",
-      "dependencies": [],
-      "testCount": 0,
-      "tags": [],
-      "estimated_duration": 1222
+      "tags": [
+        "local"
+      ],
+      "estimated_duration": 2000
     },
     {
       "path": "/Users/kevinmurphy/Development/m1k3/tests/test_sound_fix.html",
@@ -1383,6 +1566,23 @@
         "local"
       ],
       "estimated_duration": 2000
+    },
+    {
+      "path": "/Users/kevinmurphy/Development/m1k3/tests/avatar/test-routes.html",
+      "relativePath": "tests/avatar/test-routes.html",
+      "name": "test-routes.html",
+      "extension": ".html",
+      "size": 1122,
+      "modified": "2025-08-22T10:44:40.242Z",
+      "category": "unit",
+      "subcategory": "",
+      "framework": "html-manual",
+      "dependencies": [],
+      "testCount": 0,
+      "tags": [
+        "avatar"
+      ],
+      "estimated_duration": 1222
     },
     {
       "path": "/Users/kevinmurphy/Development/m1k3/simple_working_test.html",
@@ -1443,6 +1643,21 @@
       "testCount": 0,
       "tags": [],
       "estimated_duration": 1913
+    },
+    {
+      "path": "/Users/kevinmurphy/Development/m1k3/tests/unified-suite/output/reports/m1k3-test-report-2025-08-22T12-29-12-618Z.html",
+      "relativePath": "tests/unified-suite/output/reports/m1k3-test-report-2025-08-22T12-29-12-618Z.html",
+      "name": "m1k3-test-report-2025-08-22T12-29-12-618Z.html",
+      "extension": ".html",
+      "size": 94006,
+      "modified": "2025-08-22T12:29:12.620Z",
+      "category": "visual",
+      "subcategory": "",
+      "framework": "html-manual",
+      "dependencies": [],
+      "testCount": 0,
+      "tags": [],
+      "estimated_duration": 20000
     },
     {
       "path": "/Users/kevinmurphy/Development/m1k3/tests/unified-suite/output/reports/m1k3-test-report-2025-08-22T12-24-06-668Z.html",

@@ -12,334 +12,9 @@
     <link rel="stylesheet" href="styles/background-animations.css">
     <link rel="stylesheet" href="styles/avatar-component.css">
     <link rel="stylesheet" href="styles/dashboard-components.css">
+    <link rel="stylesheet" href="styles/dashboard-responsive.css">
     
     <style>
-        /* Base Styles */
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, monospace;
-            background: var(--bg-primary);
-            color: var(--text-primary);
-            line-height: 1.6;
-            overflow: hidden;
-            height: 100vh;
-            -webkit-font-smoothing: antialiased;
-        }
-
-        /* Enhanced Avatar States */
-        .avatar-display.thinking .canvas-container {
-            animation: avatarThink 2s infinite ease-in-out;
-        }
-
-        .avatar-display.pre_thinking .canvas-container {
-            animation: avatarPulse 1s infinite ease-in-out;
-        }
-
-        .avatar-display.generating .canvas-container {
-            animation: avatarGenerate 0.8s infinite ease-in-out;
-        }
-
-        .avatar-display.speaking .canvas-container {
-            animation: avatarSpeak 1s infinite ease-in-out;
-        }
-
-        .avatar-display.error .canvas-container {
-            animation: shake 0.5s infinite;
-            filter: hue-rotate(180deg) brightness(1.2);
-        }
-
-        /* State Overlay Enhancements */
-        .state-overlay {
-            position: absolute;
-            top: var(--space-sm);
-            right: var(--space-sm);
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: var(--space-xs);
-            z-index: var(--z-dropdown);
-            pointer-events: none;
-        }
-
-        .state-icon {
-            font-size: var(--font-xl);
-            filter: drop-shadow(0 0 8px rgba(227, 83, 3, 0.8));
-            animation: stateIconPulse 2s infinite ease-in-out;
-        }
-
-        .progress-bar {
-            width: 60px;
-            height: 6px;
-            background: var(--bg-elevated);
-            border-radius: var(--radius-sm);
-            overflow: hidden;
-            border: 1px solid var(--border-light);
-        }
-
-        .progress-fill {
-            height: 100%;
-            background: linear-gradient(90deg, var(--accent-primary), #FFB366);
-            width: 0%;
-            transition: width var(--duration-normal) var(--ease-out);
-        }
-
-        /* Avatar Status Grid */
-        .avatar-status {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: var(--space-sm);
-            margin-top: var(--space-md);
-        }
-
-        .status-item {
-            background: var(--bg-tertiary);
-            padding: var(--space-sm);
-            border-radius: var(--radius-md);
-            font-size: var(--font-xs);
-            text-align: center;
-            border: 1px solid var(--border-subtle);
-            transition: all var(--duration-normal) var(--ease-in-out);
-            cursor: pointer;
-        }
-
-        .status-item:hover {
-            background: var(--bg-elevated);
-            border-color: var(--border-light);
-            transform: translateY(-1px);
-        }
-
-        .status-item.active {
-            background: var(--accent-primary);
-            color: var(--bg-primary);
-            border-color: var(--accent-primary);
-            box-shadow: var(--shadow-glow);
-        }
-
-        /* Debug Console Styles */
-        .debug-console {
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            width: 400px;
-            max-height: 500px;
-            background: var(--bg-secondary);
-            border: 1px solid var(--border-subtle);
-            border-radius: var(--radius-lg);
-            box-shadow: var(--shadow-strong);
-            z-index: var(--z-modal);
-            display: none;
-            flex-direction: column;
-            backdrop-filter: blur(16px);
-        }
-
-        .debug-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: var(--space-sm) var(--space-md);
-            border-bottom: 1px solid var(--border-subtle);
-            background: var(--bg-tertiary);
-            border-radius: var(--radius-lg) var(--radius-lg) 0 0;
-        }
-
-        .debug-title {
-            font-size: var(--font-sm);
-            font-weight: 600;
-            color: var(--text-primary);
-        }
-
-        .debug-controls {
-            display: flex;
-            gap: var(--space-xs);
-        }
-
-        .debug-btn {
-            background: var(--bg-elevated);
-            border: 1px solid var(--border-subtle);
-            color: var(--text-secondary);
-            padding: var(--space-xs) var(--space-sm);
-            border-radius: var(--radius-sm);
-            font-size: var(--font-xs);
-            cursor: pointer;
-            transition: all var(--duration-fast) var(--ease-in-out);
-        }
-
-        .debug-btn:hover {
-            background: var(--accent-primary);
-            color: var(--bg-primary);
-            border-color: var(--accent-primary);
-        }
-
-        .debug-stats {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: var(--space-xs);
-            padding: var(--space-sm);
-            background: var(--bg-tertiary);
-            border-bottom: 1px solid var(--border-subtle);
-            font-size: var(--font-xs);
-        }
-
-        .debug-stat {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .stat-label {
-            color: var(--text-secondary);
-        }
-
-        .stat-value {
-            color: var(--text-primary);
-            font-weight: 600;
-        }
-
-        .debug-messages {
-            flex: 1;
-            overflow-y: auto;
-            padding: var(--space-sm);
-            max-height: 300px;
-            font-size: var(--font-xs);
-            font-family: monospace;
-        }
-
-        .debug-message {
-            display: flex;
-            gap: var(--space-sm);
-            padding: var(--space-xs) 0;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-        }
-
-        .debug-message:last-child {
-            border-bottom: none;
-        }
-
-        .debug-timestamp {
-            color: var(--text-muted);
-            font-weight: 600;
-            min-width: 60px;
-        }
-
-        .debug-type {
-            min-width: 80px;
-            font-weight: 600;
-        }
-
-        .debug-message.sent .debug-type {
-            color: #FFB366;
-        }
-
-        .debug-message.received .debug-type {
-            color: #00FF85;
-        }
-
-        .debug-message.error .debug-type {
-            color: #FF4500;
-        }
-
-        .debug-message.info .debug-type {
-            color: #00BFFF;
-        }
-
-        .debug-content {
-            color: var(--text-secondary);
-            word-break: break-all;
-            flex: 1;
-        }
-
-        /* Canvas container styling */
-        .canvas-container {
-            position: relative;
-            width: 100%;
-            height: 300px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            background: #000;
-            border-radius: 8px;
-            border: 2px solid #333;
-            overflow: hidden;
-            will-change: transform;
-            transform: translateZ(0);
-        }
-        
-        .avatar-canvas {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            width: 300px;
-            height: 225px; /* Maintain 768:576 aspect ratio */
-            background: #000;
-            image-rendering: pixelated;
-            image-rendering: -moz-crisp-edges;
-            image-rendering: crisp-edges;
-        }
-        
-        #avatarCanvas {
-            z-index: 1; /* Behind particles */
-        }
-        
-        #particleCanvas {
-            z-index: 2; /* In front of avatar */
-            pointer-events: none; /* Allow clicks to pass through */
-            background: transparent; /* Ensure transparency */
-        }
-
-        .message {
-            will-change: transform, opacity;
-        }
-
-        /* Confidence indicators */
-        .confidence-indicator {
-            font-weight: 600;
-            padding: 2px 6px;
-            border-radius: 4px;
-            font-size: var(--font-xs);
-        }
-        
-        .confidence-indicator.high {
-            color: var(--m1k3-green);
-            background: rgba(0, 255, 133, 0.1);
-        }
-        
-        .confidence-indicator.medium {
-            color: #FFB366;
-            background: rgba(255, 179, 102, 0.1);
-        }
-        
-        .confidence-indicator.low {
-            color: var(--m1k3-red);
-            background: rgba(255, 69, 0, 0.1);
-        }
-
-        /* Enhanced status grid for more items */
-        .avatar-status {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: var(--space-sm);
-            margin-top: var(--space-md);
-        }
-        
-        /* Mobile responsive for status items */
-        @media (max-width: 640px) {
-            .avatar-status {
-                grid-template-columns: 1fr;
-                gap: var(--space-xs);
-            }
-            
-            .status-item {
-                font-size: var(--font-xs);
-                padding: var(--space-xs);
-            }
-        }
-
         /* Custom color definitions for M1K3 branding */
         :root {
             --m1k3-orange: #E25303;
@@ -371,15 +46,10 @@
     <div class="dashboard">
         <!-- Header -->
         <div class="header">
-            <div class="title-section">
-                <h1 class="title">M1K3</h1>
-                <div class="subtitle">Avatar Dashboard</div>
-            </div>
-            <div class="header-controls">
-                <div class="connection-status disconnected" id="connectionStatus">
-                    <div class="status-dot"></div>
-                    <span id="connectionText">Disconnected</span>
-                </div>
+            <h1 class="title">M1K3</h1>
+            <div class="status-indicator">
+                <div class="status-dot" id="statusDot"></div>
+                <span id="connectionText">Disconnected</span>
             </div>
         </div>
 
@@ -398,24 +68,34 @@
                 </div>
             </div>
 
-            <div class="avatar-status">
-                <div class="status-item" id="emotionStatus">
-                    <div><span id="currentEmotion">😊 Happy</span></div>
-                </div>
-                <div class="status-item" id="stateStatus">
-                    <div><span id="currentState">💤 Idle</span></div>
-                </div>
-                <div class="status-item" id="intentStatus">
-                    <div><span id="currentIntent">❓ Unknown</span></div>
-                </div>
-                <div class="status-item" id="strategyStatus">
-                    <div><span id="currentStrategy">⚖️ Balanced</span></div>
-                </div>
-                <div class="status-item" id="confidenceStatus">
-                    <div>Confidence: <span id="confidenceIndicator" class="confidence-indicator medium">50.0%</span></div>
-                </div>
-                <div class="status-item" id="generationStatus">
-                    <div>Tokens: <span id="tokenCount">0</span> @ <span id="generationSpeed">0.0 tok/s</span></div>
+            <div class="avatar-stats-overlay">
+                <div class="stats-grid">
+                    <!-- Primary Stats -->
+                    <div class="stat-card" id="emotionStatus">
+                        <div class="stat-value">😊 Happy</div>
+                        <div class="stat-label">Emotion</div>
+                    </div>
+                    <div class="stat-card" id="stateStatus">
+                        <div class="stat-value">Idle</div>
+                        <div class="stat-label">State</div>
+                    </div>
+                    <div class="stat-card" id="confidenceStatus">
+                        <div class="stat-value">95.0%</div>
+                        <div class="stat-label">Confidence</div>
+                    </div>
+                    <!-- Secondary Stats (Contextual) -->
+                    <div class="stat-card" id="systemStatus" style="display: none;">
+                        <div class="stat-value">OK</div>
+                        <div class="stat-label">System</div>
+                    </div>
+                    <div class="stat-card" id="generationStatus" style="display: none;">
+                        <div class="stat-value">128 tok/s</div>
+                        <div class="stat-label">Generation</div>
+                    </div>
+                    <div class="stat-card" id="careStatus" style="display: none;">
+                        <div class="stat-value">⚡️ Energized</div>
+                        <div class="stat-label">Care</div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -751,73 +431,30 @@
         const protocol = new M1K3Protocol();
 
         function handleServerMessage(data) {
-            // Decode message using optimized protocol
             const decoded = protocol.decodeMessage(data);
             console.log('📨 Received:', decoded);
-            
-            // Handle optimized message types
+            updateUnifiedStats(decoded);
+        }
+
+        function updateUnifiedStats(decoded) {
             switch (decoded.type) {
                 case 'system':
-                    updateMetrics(decoded.data);
+                case 'metrics':
+                    updateSystemStats(decoded.data);
                     break;
-                    
                 case 'avatar':
-                    if (decoded.data.emo) {
-                        updateEmotion(decoded.data.emo, decoded.data.int || 50);
-                    }
-                    if (decoded.data.style) {
-                        updateStyle(decoded.data.style, decoded.data.color);
-                    }
-                    break;
-                    
-                case 'care':
-                    // Update care metrics
-                    if (pixelEngine) {
-                        Object.assign(pixelEngine.avatarState, {
-                            health: decoded.data.hp,
-                            energy: decoded.data.nrg,
-                            evolution: decoded.data.evo,
-                            mood: decoded.data.mood
-                        });
-                    }
-                    console.log('🧘 Care metrics updated:', decoded.data);
-                    break;
-                    
-                case 'state':
-                    updateState(decoded.data);
-                    break;
-                    
-                case 'text':
-                    if (pixelEngine) {
-                        pixelEngine.renderAnimatedText(
-                            decoded.data.msg, 
-                            2, 2, 
-                            'normal', 3, 'text',
-                            decoded.data.style || 'normal'
-                        );
-                    }
-                    break;
-                    
-                // Enhanced message types 
-                case 'classification':
-                    updateClassificationDisplay(decoded.data);
-                    break;
-                case 'thinking_phase':
-                    updateThinkingPhase(decoded.data.phase, decoded.data.progress, decoded.data.insight, decoded.data.confidence);
-                    break;
-                case 'generation_stream':
-                    updateGenerationStream(decoded.data.token_count, decoded.data.generation_speed, decoded.data.content_preview);
-                    break;
-                    
-                // Legacy message types for backward compatibility
                 case 'emotion':
-                    updateEmotion(decoded.data.emotion, decoded.data.intensity || 50, decoded.data.message || '', decoded.data.metadata);
+                case 'state':
+                    updateAvatarStats(decoded.type, decoded.data);
                     break;
-                case 'style':
-                    updateStyle(decoded.data.style, decoded.data.color);
-                    break;
+                case 'classification':
+                case 'thinking_phase':
+                case 'generation_stream':
                 case 'progress':
-                    updateProgress(decoded.data.stage, decoded.data.progress, decoded.data.tokens, decoded.data.message);
+                    updateAIStats(decoded.type, decoded.data);
+                    break;
+                case 'care':
+                    updateCareStats(decoded.data);
                     break;
                 case 'chat_ai_chunk':
                     appendToLastMessage(decoded.data.chunk);
@@ -833,47 +470,61 @@
                     showTypingIndicator(false);
                     playSound('message_received');
                     break;
-                case 'metrics':
-                    updateMetrics(decoded.data);
-                    break;
-                case 'sound':
-                    playSound(decoded.data.sound);
-                    break;
-                case 'welcome':
-                    addMessage(decoded.data.message, 'ai');
-                    break;
-                case 'pong':
-                    // Connection alive
-                    break;
-                    
-                case 'avatar_emotion':
-                    // Handle direct avatar emotion updates
-                    if (decoded.data && decoded.data.emotion) {
-                        if (pixelEngine && pixelEngine.setEmotion) {
-                            pixelEngine.setEmotion(decoded.data.emotion, decoded.data.intensity || 50);
-                        }
-                        updateEmotion(decoded.data.emotion, decoded.data.intensity || 50, decoded.data.metadata);
-                        console.log('🎭 Avatar emotion updated:', decoded.data.emotion, decoded.data.intensity);
-                    }
-                    break;
-                    
-                case 'thinking_phase_update':
-                    // Handle thinking phase updates with progress
-                    if (decoded.data) {
-                        console.log('🤔 Thinking phase:', decoded.data.phase, decoded.data.progress + '%');
-                        // Could add visual thinking indicators here
-                    }
-                    break;
-                    
-                case 'generation_stream_update':
-                    // Handle real-time generation progress
-                    if (decoded.data) {
-                        updateProgress('generating', decoded.data.progress, decoded.data.current_token, decoded.data.token);
-                    }
-                    break;
-                    
                 default:
-                    console.log('Unknown message type:', decoded.type);
+                    // Handle other message types like sound, welcome, pong, etc.
+                    break;
+            }
+        }
+
+        function updateSystemStats(data) {
+            const systemCard = document.getElementById('systemStatus');
+            if (systemCard) {
+                systemCard.style.display = 'block';
+                const valueElement = systemCard.querySelector('.stat-value');
+                // Simple summary for now, could be more detailed
+                valueElement.textContent = `CPU: ${data.cpu}% | MEM: ${data.mem}%`;
+            }
+            updateMetrics(data); // Keep old function for detailed updates elsewhere
+        }
+
+        function updateAvatarStats(type, data) {
+            if (type === 'emotion' || data.emo) {
+                updateEmotion(data.emotion || data.emo, data.intensity || data.int || 50);
+            }
+            if (type === 'state' || data.state) {
+                updateState(data.state || data);
+            }
+        }
+
+        function updateAIStats(type, data) {
+            const generationCard = document.getElementById('generationStatus');
+            if (generationCard) generationCard.style.display = 'block';
+
+            if (type === 'classification') {
+                updateClassificationDisplay(data);
+            }
+            if (type === 'thinking_phase' || type === 'progress') {
+                updateThinkingPhase(data.phase || data.stage, data.progress, data.insight, data.confidence);
+            }
+            if (type === 'generation_stream') {
+                updateGenerationStream(data.token_count, data.generation_speed, data.content_preview);
+            }
+        }
+
+        function updateCareStats(data) {
+            const careCard = document.getElementById('careStatus');
+            if (careCard) {
+                careCard.style.display = 'block';
+                const valueElement = careCard.querySelector('.stat-value');
+                valueElement.textContent = `❤️ ${data.hp}% | ⚡️ ${data.nrg}%`;
+            }
+            if (pixelEngine) {
+                Object.assign(pixelEngine.avatarState, {
+                    health: data.hp,
+                    energy: data.nrg,
+                    evolution: data.evo,
+                    mood: data.mood
+                });
             }
         }
 
@@ -1049,6 +700,8 @@
             }
         }
 
+
+
         function generateAvatar() {
             if (pixelEngine) {
                 // Update avatar state with current settings
@@ -1105,12 +758,17 @@
 
         // Additional helper functions
         function updateConnectionStatus(connected) {
-            const statusElement = document.getElementById('connectionStatus');
+            const statusDot = document.getElementById('statusDot');
             const textElement = document.getElementById('connectionText');
             
-            if (statusElement && textElement) {
-                statusElement.className = `connection-status ${connected ? 'connected' : 'disconnected'}`;
-                textElement.textContent = connected ? 'Connected' : 'Disconnected';
+            if (statusDot && textElement) {
+                if (connected) {
+                    statusDot.classList.remove('offline');
+                    textElement.textContent = 'Connected';
+                } else {
+                    statusDot.classList.add('offline');
+                    textElement.textContent = 'Disconnected';
+                }
             }
         }
 
@@ -1118,9 +776,9 @@
             currentEmotion = emotion;
             emotionIntensity = intensity;
             
-            const emotionIndicator = document.getElementById('currentEmotion');
+            const emotionIndicator = document.getElementById('emotionStatus');
             if (emotionIndicator) {
-                emotionIndicator.textContent = `${getEmotionEmoji(emotion)} ${emotion.charAt(0).toUpperCase() + emotion.slice(1)}`;
+                emotionIndicator.querySelector('.stat-value').textContent = `${getEmotionEmoji(emotion)} ${emotion.charAt(0).toUpperCase() + emotion.slice(1)}`;
             }
             
             if (pixelEngine && pixelEngine.setEmotion) {
@@ -1149,108 +807,38 @@
         
         function updateClassificationDisplay(classification) {
             console.log('🧠 Classification:', classification);
-            
-            // Update confidence indicator if available
-            const confidenceElement = document.getElementById('confidenceIndicator');
-            if (confidenceElement) {
+            const confidenceElement = document.getElementById('confidenceStatus');
+            if (confidenceElement && classification.confidence) {
                 const confidence = (classification.confidence * 100).toFixed(1);
-                confidenceElement.textContent = `${confidence}%`;
-                confidenceElement.className = `confidence-indicator ${getConfidenceLevel(classification.confidence)}`;
-            }
-            
-            // Update intent display
-            const intentElement = document.getElementById('currentIntent');
-            if (intentElement) {
-                intentElement.textContent = `${getIntentEmoji(classification.intent)} ${classification.intent}`;
-            }
-            
-            // Update strategy display  
-            const strategyElement = document.getElementById('currentStrategy');
-            if (strategyElement) {
-                strategyElement.textContent = `${getStrategyEmoji(classification.response_strategy)} ${classification.response_strategy}`;
-            }
-            
-            // Update reasoning if available
-            if (classification.reasoning) {
-                const reasoningElement = document.getElementById('currentReasoning');
-                if (reasoningElement) {
-                    reasoningElement.textContent = classification.reasoning;
-                    reasoningElement.title = classification.reasoning; // Tooltip for full text
-                }
+                confidenceElement.querySelector('.stat-value').textContent = `${confidence}%`;
             }
         }
         
         function updateThinkingPhase(phase, progress, insight, confidence) {
             console.log('🤔 Thinking phase:', phase, `${progress}%`);
-            
-            // Update avatar state based on thinking phase
-            updateState(phase);
-            
-            // Update progress indicator
-            const progressBar = document.getElementById('progressBar');
-            const progressFill = document.getElementById('progressFill');
-            
-            if (progressBar && progressFill) {
-                if (progress > 0) {
-                    progressBar.style.display = 'block';
-                    progressFill.style.width = progress + '%';
-                } else {
-                    progressBar.style.display = 'none';
-                }
-            }
-            
-            // Display insight if available
-            if (insight) {
-                const insightElement = document.getElementById('thinkingInsight');
-                if (insightElement) {
-                    insightElement.textContent = insight;
-                }
-            }
-            
-            // Update avatar with thinking phase
-            if (pixelEngine && pixelEngine.avatarState && pixelEngine.renderAvatar) {
-                pixelEngine.avatarState.mood = 'thinking';
-                pixelEngine.avatarState.lastInteraction = Date.now();
-                pixelEngine.renderAvatar();
-                console.log(`🤔 Thinking phase: ${phase} (${progress}%)`);
+            updateState(phase); // Still useful for avatar state changes
+            const generationCard = document.getElementById('generationStatus');
+            if (generationCard) {
+                const valueElement = generationCard.querySelector('.stat-value');
+                valueElement.textContent = `${phase}: ${progress}%`;
             }
         }
         
         function updateGenerationStream(tokenCount, generationSpeed, contentPreview) {
             console.log('⚡ Generation:', `${tokenCount} tokens @ ${generationSpeed.toFixed(1)} tok/s`);
-            
-            // Update generation stats display
-            const tokenCountElement = document.getElementById('tokenCount');
-            if (tokenCountElement) {
-                tokenCountElement.textContent = tokenCount;
-            }
-            
-            const generationSpeedElement = document.getElementById('generationSpeed');  
-            if (generationSpeedElement) {
-                generationSpeedElement.textContent = `${generationSpeed.toFixed(1)} tok/s`;
-            }
-            
-            const contentPreviewElement = document.getElementById('contentPreview');
-            if (contentPreviewElement) {
-                contentPreviewElement.textContent = contentPreview + '...';
-            }
-            
-            // Update avatar with generation activity
-            if (pixelEngine && pixelEngine.avatarState && pixelEngine.renderAvatar) {
-                pixelEngine.avatarState.mood = 'excited';
-                pixelEngine.avatarState.energy = Math.min(100, 50 + generationSpeed * 10);
-                pixelEngine.avatarState.lastInteraction = Date.now();
-                pixelEngine.renderAvatar();
-                console.log(`⚡ Generation activity: ${tokenCount} tokens`);
+            const generationCard = document.getElementById('generationStatus');
+            if (generationCard) {
+                const valueElement = generationCard.querySelector('.stat-value');
+                valueElement.textContent = `${generationSpeed.toFixed(1)} tok/s`;
             }
         }
 
         function updateState(state) {
             currentState = state;
             
-            const stateIndicator = document.getElementById('currentState');
+            const stateIndicator = document.getElementById('stateStatus');
             if (stateIndicator) {
-                stateIndicator.textContent = `${getStateEmoji(state)} ${state.charAt(0).toUpperCase() + state.slice(1)}`;
+                stateIndicator.querySelector('.stat-value').textContent = `${getStateEmoji(state)} ${state.charAt(0).toUpperCase() + state.slice(1)}`;
             }
             
             if (pixelEngine && pixelEngine.setState) {

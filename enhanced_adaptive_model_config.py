@@ -23,6 +23,9 @@ try:
     WEBSOCKET_CONTEXT_AVAILABLE = True
 except ImportError:
     WEBSOCKET_CONTEXT_AVAILABLE = False
+    # Define fallback types for type hints
+    class ContextData:
+        pass
 
 # Fallback to old system if needed
 try:
@@ -72,7 +75,7 @@ class EnhancedAdaptiveModelConfig:
         # Initialize classification engine
         if CONTEXT_CLASSIFICATION_AVAILABLE:
             self.classification_engine = ContextAwareClassificationEngine()
-            self.logger.info("✅ Context-aware classification engine loaded")
+            self.logger.debug("✅ Context-aware classification engine loaded")
         else:
             self.classification_engine = None
             self.logger.warning("⚠️  Context-aware classification not available, using fallback")
@@ -84,12 +87,12 @@ class EnhancedAdaptiveModelConfig:
         
         if self.websocket_enabled:
             self.context_manager = ContextDataManager()
-            self.logger.info("✅ WebSocket context integration enabled")
+            self.logger.debug("✅ WebSocket context integration enabled")
             
         # Legacy fallback
         if LEGACY_FALLBACK_AVAILABLE and not CONTEXT_CLASSIFICATION_AVAILABLE:
             self.legacy_config = LegacyAdaptiveModelConfig()
-            self.logger.info("✅ Legacy fallback configuration loaded")
+            self.logger.debug("✅ Legacy fallback configuration loaded")
         else:
             self.legacy_config = None
             
@@ -114,11 +117,11 @@ class EnhancedAdaptiveModelConfig:
                 
                 # Ensure config is a dictionary - convert if needed
                 if not isinstance(config, dict):
-                    self.logger.error(f"❌ Enhanced classification returned non-dict: {type(config)}")
-                    self.logger.error(f"❌ Actual content: {repr(config)}")
+                    self.logger.debug(f"🔍 Enhanced classification returned non-dict: {type(config)}")
+                    self.logger.debug(f"🔍 Actual content: {repr(config)}")
                     # Convert to fallback config instead of raising exception
                     config = self._get_basic_fallback_config(query, model_name)
-                    self.logger.warning("🔄 Converted to basic fallback configuration")
+                    self.logger.info("🔄 Using basic fallback configuration (non-dict result)")
                 
                 # Add WebSocket data to metadata if available
                 if self.websocket_enabled and isinstance(config, dict):
@@ -139,7 +142,8 @@ class EnhancedAdaptiveModelConfig:
                 return config
                 
             except Exception as e:
-                self.logger.error(f"❌ Enhanced classification failed: {e}")
+                self.logger.debug(f"🔍 Enhanced classification failed: {e}")
+                self.logger.info("🔄 Using basic fallback configuration")
                 # Fall through to legacy system
                 
         # Fallback to legacy system
@@ -244,7 +248,7 @@ class EnhancedAdaptiveModelConfig:
             'classification_engine': 'heuristic'
         }
         
-        self.logger.warning("⚠️  Using basic fallback configuration")
+        self.logger.debug("🔄 Using basic fallback configuration")
         return config
     
     def add_context_data(self, context: ContextData) -> None:

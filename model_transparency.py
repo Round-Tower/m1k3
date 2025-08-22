@@ -53,14 +53,35 @@ class ModelTransparencyEngine:
         self.decisions: List[ModelDecision] = []
         self.current_session_stats: List[ProcessingStats] = []
         self.enable_real_time_display = True
+        self.force_debug_mode = False  # Override for maximum transparency
         
     def set_transparency_level(self, level: TransparencyLevel):
         """Change transparency level dynamically"""
         self.transparency_level = level
         if level == TransparencyLevel.OFF:
             self.enable_real_time_display = False
+            self.force_debug_mode = False
+        elif level == TransparencyLevel.DEBUG:
+            self.enable_real_time_display = True
+            self.force_debug_mode = True
+            print("🔍 DEBUG MODE: Forcing all transparency output")
         else:
             self.enable_real_time_display = True
+            self.force_debug_mode = False
+    
+    def set_debug_mode(self, force_all=True):
+        """Force debug mode with maximum transparency"""
+        self.transparency_level = TransparencyLevel.DEBUG
+        self.enable_real_time_display = True
+        self.force_debug_mode = force_all
+        print(f"🔍 DEBUG MODE ACTIVATED: force_all={force_all}")
+    
+    def _should_show(self, required_level: TransparencyLevel) -> bool:
+        """Check if we should show output based on level or debug mode"""
+        if self.force_debug_mode:
+            print(f"🔍 DEBUG: Force showing output (required: {required_level.name})")
+            return True
+        return self.transparency_level.value >= required_level.value
     
     def log_decision(self, decision_type: str, input_data: str, output_data: str, 
                     reasoning: str = None, confidence: float = None, metadata: Dict = None):
@@ -88,10 +109,10 @@ class ModelTransparencyEngine:
         """Mark start of model processing"""
         start_time = time.time()
         
-        if self.transparency_level.value >= TransparencyLevel.BASIC.value:
+        if self._should_show(TransparencyLevel.BASIC):
             print(f"\n🔍 Starting processing with {model_name} ({backend_type})")
             
-        if self.transparency_level.value >= TransparencyLevel.DETAILED.value:
+        if self._should_show(TransparencyLevel.DETAILED):
             print(f"📋 Parameters: {self._format_parameters(parameters)}")
             
         return start_time
@@ -128,7 +149,7 @@ class ModelTransparencyEngine:
     def show_model_reasoning(self, prompt: str, formatted_prompt: str, task_type: str = None, 
                            parameters: Dict = None):
         """Show how the model is processing the input"""
-        if self.transparency_level.value < TransparencyLevel.DETAILED.value:
+        if not self._should_show(TransparencyLevel.DETAILED):
             return
             
         print(f"\n🧠 Model Processing Analysis:")
@@ -137,12 +158,12 @@ class ModelTransparencyEngine:
         if task_type:
             print(f"🎯 Task Classification: {task_type}")
         
-        if self.transparency_level.value >= TransparencyLevel.FULL.value:
+        if self._should_show(TransparencyLevel.FULL):
             print(f"🔧 Formatted Prompt Preview:")
             preview = formatted_prompt[:300] + "..." if len(formatted_prompt) > 300 else formatted_prompt
             print(f"   {preview.replace(chr(10), chr(10) + '   ')}")
             
-        if parameters and self.transparency_level.value >= TransparencyLevel.DETAILED.value:
+        if parameters and self._should_show(TransparencyLevel.DETAILED):
             print(f"⚙️  Generation Parameters:")
             for key, value in parameters.items():
                 if key not in ['pad_token_id', 'eos_token_id']:  # Skip technical IDs

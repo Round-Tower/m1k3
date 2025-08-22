@@ -44,6 +44,7 @@ class UserIntent(Enum):
     SYSTEM_QUERY = "system_query"
     HELP_REQUEST = "help_request"
     UNCLEAR = "unclear"
+    NEEDS_CLARIFICATION = "needs_clarification"
 
 class ResponseStrategy(Enum):
     """Response generation strategies - how to respond"""
@@ -247,6 +248,23 @@ class IntentClassificationEngine:
                     r'\b(weather|weekend|today)\b'
                 ],
                 {'casual_mode': 0.3, 'social_context': 0.2}
+            ),
+            
+            # Ambiguous or unclear requests needing clarification
+            UserIntent.NEEDS_CLARIFICATION: IntentPattern(
+                UserIntent.NEEDS_CLARIFICATION,
+                [
+                    r'^(that|this|it|them|those)($|\s)',  # Vague pronouns without context
+                    r'\b(something|anything|whatever)\b',   # Vague descriptors
+                    r'^(fix|do|make|change|update)($|\s)',  # Actions without objects
+                    r'\b(the (thing|stuff|error|issue|problem))(?!\s+(is|was|with))', # Vague references
+                    r'^(help|please|can you)($|\s)',       # Very general requests
+                    r'^\w{1,3}$',                          # Very short queries
+                    r'\b(i|you|we)\s+(need|want|should)\s+(to|the)?\s*$', # Incomplete thoughts
+                    r'\?{2,}',                             # Multiple question marks indicating confusion
+                    r'\b(uh|um|er|ah)\b'                   # Hesitation words
+                ],
+                {'low_confidence': 0.4, 'missing_context': 0.5, 'ambiguous_pronouns': 0.3}
             )
         }
         return patterns
@@ -273,7 +291,8 @@ class IntentClassificationEngine:
             UserIntent.RECOMMENDATION_REQUEST: ResponseStrategy.BALANCED,
             UserIntent.SYSTEM_QUERY: ResponseStrategy.STRUCTURED,
             UserIntent.HELP_REQUEST: ResponseStrategy.DETAILED,
-            UserIntent.UNCLEAR: ResponseStrategy.CONVERSATIONAL
+            UserIntent.UNCLEAR: ResponseStrategy.CONVERSATIONAL,
+            UserIntent.NEEDS_CLARIFICATION: ResponseStrategy.CONVERSATIONAL
         }
     
     def add_context_enricher(self, enricher_func):
@@ -326,6 +345,13 @@ class IntentClassificationEngine:
         if best_intent in intent_scores and len(intent_scores) > 1:
             confidence = min(confidence * 1.2, 1.0)
         
+        # Check if clarification is needed (override other intents if confidence is very low)
+        needs_clarification = self._detect_clarification_need(query, best_intent, confidence, intent_scores)
+        if needs_clarification:
+            best_intent = UserIntent.NEEDS_CLARIFICATION
+            confidence = max(confidence, 0.6)  # Give reasonable confidence for clarification
+            reasoning = f"Low confidence ({confidence:.3f}) or ambiguous query detected"
+        
         # Get response strategy
         response_strategy = self.strategy_mappings.get(best_intent, ResponseStrategy.BALANCED)
         
@@ -344,6 +370,39 @@ class IntentClassificationEngine:
             context_factors=context,
             reasoning=reasoning
         )
+    
+    def _detect_clarification_need(self, query: str, best_intent: UserIntent, confidence: float, intent_scores: Dict) -> bool:
+        """Detect if the query needs clarification"""
+        
+        # 1. Very low confidence threshold
+        if confidence < 0.3:
+            return True
+            
+        # 2. Multiple competing intents with similar scores
+        if len(intent_scores) >= 2:
+            sorted_scores = sorted(intent_scores.values(), reverse=True)
+            if len(sorted_scores) >= 2 and sorted_scores[0] - sorted_scores[1] < 0.1:
+                return True
+        
+        # 3. Check for explicit clarification patterns (handled by NEEDS_CLARIFICATION intent)
+        if best_intent == UserIntent.NEEDS_CLARIFICATION:
+            return True
+            
+        # 4. Very short queries that might be ambiguous
+        if len(query.strip()) <= 2:
+            return True
+            
+        # 5. Queries that start with pronouns without context
+        pronouns_without_context = ['that', 'this', 'it', 'them', 'those']
+        first_word = query.strip().split()[0].lower() if query.strip() else ""
+        if first_word in pronouns_without_context:
+            return True
+            
+        # 6. Generic action verbs without objects
+        if query.strip().lower() in ['fix', 'do', 'make', 'change', 'update', 'help']:
+            return True
+            
+        return False
     
     def get_confidence_level(self, confidence: float) -> ConfidenceLevel:
         """Convert confidence score to level"""

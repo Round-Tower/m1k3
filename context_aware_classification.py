@@ -270,7 +270,7 @@ class ContextAwareClassificationEngine:
             **base_config
         )
         
-        self.logger.info(f"🎯 Intent: {intent_classification.intent.value} ({intent_classification.confidence:.3f}) -> {intent_classification.response_strategy.value}")
+        self.logger.debug(f"🎯 Intent: {intent_classification.intent.value} ({intent_classification.confidence:.3f}) -> {intent_classification.response_strategy.value}")
         
         return config.to_dict()
     
