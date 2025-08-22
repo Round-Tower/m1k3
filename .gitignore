@@ -81,3 +81,17 @@ logs/
 *.tmp
 *.temp
 temp/
+
+# Test results and screenshots
+tests/results/*.json
+tests/screenshots/
+screenshots/
+
+# Debug and development files
+debug_*.py
+*_debug.py
+debug_*/
+
+# Classification system cache
+classification_cache/
+*.classification
