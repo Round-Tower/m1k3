@@ -363,8 +363,9 @@ class LocalAIEngine:
                 attention_mask = encoded['attention_mask']
                 
                 with torch.no_grad():
-                    # Adaptive parameters based on model size and type
-                    model_params = self._get_adaptive_generation_params(max_tokens)
+                    # Intelligent adaptive parameters based on task, model capabilities, and confidence
+                    context_messages = [msg["content"] for msg in self.context.messages[-5:] if msg["role"] == "user"]
+                    model_params = self._get_adaptive_generation_params(max_tokens, prompt, context_messages)
                     
                     outputs = self.model.generate(
                         inputs,
@@ -511,31 +512,48 @@ class LocalAIEngine:
             self.user_preferences = {}
         self.user_preferences[key] = value
     
-    def _get_adaptive_generation_params(self, max_tokens: int) -> Dict:
-        """Get anti-hallucination optimized parameters based on model type"""
+    def _get_adaptive_generation_params(self, max_tokens: int, query: str = "", context: list = None) -> Dict:
+        """Get intelligently optimized parameters based on task, model capabilities, and confidence"""
         model_name = getattr(self, '_current_model_name', 'unknown')
         
-        # Import optimized config
+        # Try adaptive configuration first (new intelligent system)
         try:
-            from optimized_inference_config import get_anti_hallucination_params
-            params = get_anti_hallucination_params(model_name, max_tokens)
+            from adaptive_model_config import AdaptiveModelConfig
+            adaptive_config = AdaptiveModelConfig()
+            config_result = adaptive_config.get_optimal_config(query, model_name, context or [])
+            
+            # Filter out metadata to get clean parameters
+            params = {k: v for k, v in config_result.items() if k != '_metadata'}
+            
             # Set tokenizer-specific IDs
             params['pad_token_id'] = self.tokenizer.eos_token_id
             params['eos_token_id'] = self.tokenizer.eos_token_id
+            
+            # Honor max_tokens limit if specified
+            if max_tokens < params.get('max_new_tokens', max_tokens):
+                params['max_new_tokens'] = max_tokens
+            
             return params
+            
         except ImportError:
-            # Fallback to conservative parameters if config not available
-            return {
-                'pad_token_id': self.tokenizer.eos_token_id,
-                'eos_token_id': self.tokenizer.eos_token_id,
-                'do_sample': True,
-                'max_new_tokens': min(max_tokens, 80),
-                'temperature': 0.5,  # Conservative temperature
-                'top_p': 0.8,
-                'top_k': 30,
-                'repetition_penalty': 1.15,
-                'no_repeat_ngram_size': 3,
-            }
+            # Fallback to original anti-hallucination config
+            try:
+                from optimized_inference_config import get_anti_hallucination_params
+                params = get_anti_hallucination_params(model_name, max_tokens)
+                # Set tokenizer-specific IDs
+                params['pad_token_id'] = self.tokenizer.eos_token_id
+                params['eos_token_id'] = self.tokenizer.eos_token_id
+                return params
+            except ImportError:
+                # Ultimate fallback to conservative parameters
+                return {
+                    'pad_token_id': self.tokenizer.eos_token_id,
+                    'eos_token_id': self.tokenizer.eos_token_id,
+                    'do_sample': False,  # Greedy decoding - compatible with all models
+                    'max_new_tokens': min(max_tokens, 80),
+                    'repetition_penalty': 1.15,
+                    'no_repeat_ngram_size': 3,
+                }
     
     def _clean_response(self, response_text: str) -> str:
         """Clean up model response intelligently"""

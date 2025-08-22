@@ -4,7 +4,11 @@ Test script to verify real AI inference is working
 """
 
 import sys
+import os
 from pathlib import Path
+
+# Add parent directory to Python path
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 def test_real_ai():
     """Test the real AI inference engine"""

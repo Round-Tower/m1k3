@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from thinking_mode_engine import ThinkingModeEngine, QueryComplexity
 from thinking_parser import ThinkingContentParser, ReasoningType
 from avatar_controller import AvatarController, AvatarState, AvatarEmotion
+from adaptive_model_config import AdaptiveModelConfig, TaskType, ConfidenceLevel
 
 @dataclass
 class ResponseMetrics:
@@ -23,6 +24,9 @@ class ResponseMetrics:
     confidence_score: float
     avatar_states_used: list
     token_count: int
+    task_type: str = "unknown"
+    adaptive_params_used: bool = False
+    model_name: str = "unknown"
 
 class AdaptiveAIEngine:
     """
@@ -43,6 +47,9 @@ class AdaptiveAIEngine:
             avatar_callback=self._avatar_callback if avatar_controller else None
         )
         self.thinking_parser = ThinkingContentParser()
+        
+        # Initialize adaptive configuration
+        self.adaptive_config = AdaptiveModelConfig()
         
         # User preferences
         self.user_preferences = {
@@ -93,8 +100,13 @@ class AdaptiveAIEngine:
         start_time = time.time()
         self.total_responses += 1
         
+        # Get context for intelligent decision making
+        context_messages = []
+        if hasattr(self.base_ai_engine, 'context') and self.base_ai_engine.context:
+            context_messages = [msg.get("content", "") for msg in getattr(self.base_ai_engine.context, 'messages', [])[-3:]]
+        
         # Determine if thinking mode should be used
-        use_thinking_mode = self._should_use_thinking_mode(query, force_mode)
+        use_thinking_mode = self._should_use_thinking_mode(query, force_mode, context_messages)
         
         # Determine if reasoning should be shown
         should_show_reasoning = self._should_show_reasoning(query, show_reasoning, use_thinking_mode)
@@ -122,8 +134,8 @@ class AdaptiveAIEngine:
                     self.avatar_controller.update_state(AvatarState.ERROR)
                 yield f"Error generating response: {e}"
     
-    def _should_use_thinking_mode(self, query: str, force_mode: Optional[str]) -> bool:
-        """Determine if thinking mode should be used for this query"""
+    def _should_use_thinking_mode(self, query: str, force_mode: Optional[str] = None, context: list = None) -> bool:
+        """Determine if thinking mode should be used for this query using intelligent task classification"""
         
         # Check user force mode
         if force_mode == "direct":
@@ -141,20 +153,92 @@ class AdaptiveAIEngine:
         elif self.user_preferences["thinking_mode"] == "always":
             return True
         
-        # Adaptive mode - assess query complexity
-        complexity = self.thinking_engine.assess_query_complexity(query)
-        
-        threshold_map = {
-            "low": QueryComplexity.SIMPLE,
-            "medium": QueryComplexity.MODERATE,
-            "high": QueryComplexity.COMPLEX
-        }
-        
-        threshold = threshold_map.get(self.user_preferences["complexity_threshold"], QueryComplexity.MODERATE)
-        
-        # Use thinking mode for queries at or above threshold
-        complexity_order = [QueryComplexity.SIMPLE, QueryComplexity.MODERATE, QueryComplexity.COMPLEX]
-        return complexity_order.index(complexity) >= complexity_order.index(threshold)
+        # Use intelligent task-aware thinking mode decision
+        try:
+            # Get context from previous responses if available
+            context_messages = context or []
+            if hasattr(self.base_ai_engine, 'context') and self.base_ai_engine.context:
+                context_messages = [msg.get("content", "") for msg in getattr(self.base_ai_engine.context, 'messages', [])[-3:]]
+            
+            # Get adaptive configuration for this query
+            model_name = getattr(self.base_ai_engine, 'current_model_name', 'unknown')
+            adaptive_config = self.adaptive_config.get_optimal_config(
+                query=query,
+                model_name=model_name, 
+                context=context_messages
+            )
+            
+            # Extract metadata from adaptive config
+            metadata = adaptive_config.get('_metadata', {})
+            task_type_str = metadata.get('task_type', 'conversational')
+            confidence_level_str = metadata.get('confidence_level', 'medium')
+            
+            # Convert strings to enums
+            task_type = None
+            confidence_level = None
+            
+            try:
+                for tt in TaskType:
+                    if tt.value == task_type_str:
+                        task_type = tt
+                        break
+                if task_type is None:
+                    task_type = TaskType.CONVERSATIONAL
+                    
+                for cl in ConfidenceLevel:
+                    if cl.value == confidence_level_str:
+                        confidence_level = cl
+                        break
+                if confidence_level is None:
+                    confidence_level = ConfidenceLevel.MEDIUM
+            except Exception as e:
+                print(f"Error converting task type/confidence level: {e}")
+                task_type = TaskType.CONVERSATIONAL
+                confidence_level = ConfidenceLevel.MEDIUM
+            
+            # Enable thinking mode for tasks that benefit from reasoning
+            thinking_beneficial_tasks = {
+                TaskType.MATHEMATICAL,
+                TaskType.LOGICAL, 
+                TaskType.ANALYTICAL,
+                TaskType.CODING
+            }
+            
+            # Enable thinking mode based on task type and confidence
+            if task_type in thinking_beneficial_tasks:
+                return True
+            
+            # Enable for medium/high confidence complex queries
+            if confidence_level in [ConfidenceLevel.HIGH, ConfidenceLevel.EXPERT]:
+                if task_type in [TaskType.INSTRUCTIONAL, TaskType.CREATIVE]:
+                    return True
+            
+            # Fallback to original complexity assessment
+            complexity = self.thinking_engine.assess_query_complexity(query)
+            threshold_map = {
+                "low": QueryComplexity.SIMPLE,
+                "medium": QueryComplexity.MODERATE,
+                "high": QueryComplexity.COMPLEX
+            }
+            
+            threshold = threshold_map.get(self.user_preferences["complexity_threshold"], QueryComplexity.MODERATE)
+            complexity_order = [QueryComplexity.SIMPLE, QueryComplexity.MODERATE, QueryComplexity.COMPLEX]
+            return complexity_order.index(complexity) >= complexity_order.index(threshold)
+            
+        except Exception as e:
+            print(f"Adaptive thinking mode decision failed, using fallback: {e}")
+            
+            # Fallback to original logic
+            complexity = self.thinking_engine.assess_query_complexity(query)
+            threshold_map = {
+                "low": QueryComplexity.SIMPLE,
+                "medium": QueryComplexity.MODERATE,
+                "high": QueryComplexity.COMPLEX
+            }
+            
+            threshold = threshold_map.get(self.user_preferences["complexity_threshold"], QueryComplexity.MODERATE)
+            complexity_order = [QueryComplexity.SIMPLE, QueryComplexity.MODERATE, QueryComplexity.COMPLEX]
+            return complexity_order.index(complexity) >= complexity_order.index(threshold)
     
     def _should_show_reasoning(self, query: str, show_reasoning: Optional[bool], 
                              using_thinking_mode: bool) -> bool:
@@ -220,7 +304,7 @@ class AdaptiveAIEngine:
             raise  # Let caller handle fallback
     
     def _generate_direct(self, query: str, max_tokens: int, start_time: float) -> Generator[str, None, None]:
-        """Generate response using direct mode"""
+        """Generate response using direct mode with adaptive parameter optimization"""
         
         response_text = ""
         
@@ -228,10 +312,24 @@ class AdaptiveAIEngine:
             self.avatar_controller.update_state(AvatarState.GENERATING)
             self.avatar_controller.update_emotion("", "", force_emotion=AvatarEmotion.HAPPY)
         
-        # Generate using current optimized direct approach
-        for token in self.base_ai_engine.generate_response(query, max_tokens):
-            response_text += token
-            yield token
+        # Use adaptive parameters if base engine supports them
+        try:
+            # Get context for adaptive configuration
+            context_messages = []
+            if hasattr(self.base_ai_engine, 'context') and self.base_ai_engine.context:
+                context_messages = [msg.get("content", "") for msg in getattr(self.base_ai_engine.context, 'messages', [])[-3:]]
+            
+            # Use standard generation - adaptive params are handled internally by the AI engine
+            for token in self.base_ai_engine.generate_response(query, max_tokens):
+                response_text += token
+                yield token
+                    
+        except Exception as e:
+            print(f"Adaptive direct generation failed, using standard: {e}")
+            # Fallback to standard generation
+            for token in self.base_ai_engine.generate_response(query, max_tokens):
+                response_text += token
+                yield token
         
         # Record metrics
         response_time = time.time() - start_time
@@ -245,9 +343,34 @@ class AdaptiveAIEngine:
     def _record_response_metrics(self, query: str, response: str, mode: str, 
                                thinking_enabled: bool, response_time: float,
                                avatar_states: list, reasoning_shown: bool):
-        """Record metrics for analysis and improvement"""
+        """Record metrics for analysis and improvement with adaptive insights"""
         
         complexity = self.thinking_engine.assess_query_complexity(query)
+        
+        # Get adaptive configuration insights
+        task_type = "unknown"
+        adaptive_params_used = False
+        model_name = getattr(self.base_ai_engine, 'current_model_name', 'unknown')
+        
+        try:
+            # Get context for adaptive analysis
+            context_messages = []
+            if hasattr(self.base_ai_engine, 'context') and self.base_ai_engine.context:
+                context_messages = [msg.get("content", "") for msg in getattr(self.base_ai_engine.context, 'messages', [])[-3:]]
+            
+            adaptive_config = self.adaptive_config.get_optimal_config(
+                query=query,
+                model_name=model_name,
+                context=context_messages
+            )
+            
+            # Extract task type from metadata
+            metadata = adaptive_config.get('_metadata', {})
+            task_type = metadata.get('task_type', 'conversational')
+            adaptive_params_used = True
+            
+        except Exception as e:
+            print(f"Failed to get adaptive insights for metrics: {e}")
         
         # Analyze response quality if thinking was used
         reasoning_quality = "n/a"
@@ -269,7 +392,10 @@ class AdaptiveAIEngine:
             reasoning_quality=reasoning_quality,
             confidence_score=confidence_score,
             avatar_states_used=avatar_states,
-            token_count=len(response.split())
+            token_count=len(response.split()),
+            task_type=task_type,
+            adaptive_params_used=adaptive_params_used,
+            model_name=model_name
         )
         
         self.response_metrics.append(metrics)
@@ -286,27 +412,42 @@ class AdaptiveAIEngine:
         return False
     
     def get_performance_stats(self) -> Dict[str, Any]:
-        """Get performance statistics"""
+        """Get performance statistics with adaptive insights"""
         if not self.response_metrics:
             return {"message": "No responses generated yet"}
         
         recent_metrics = self.response_metrics[-20:]  # Last 20 responses
         
         thinking_mode_usage = sum(1 for m in recent_metrics if m.thinking_enabled)
+        adaptive_params_usage = sum(1 for m in recent_metrics if m.adaptive_params_used)
         avg_response_time = sum(m.response_time for m in recent_metrics) / len(recent_metrics)
         avg_confidence = sum(m.confidence_score for m in recent_metrics) / len(recent_metrics)
         
         complexity_counts = {}
+        task_type_counts = {}
         for m in recent_metrics:
             complexity_counts[m.complexity_detected] = complexity_counts.get(m.complexity_detected, 0) + 1
+            task_type_counts[m.task_type] = task_type_counts.get(m.task_type, 0) + 1
+        
+        # Calculate task-specific performance
+        thinking_by_task = {}
+        for m in recent_metrics:
+            if m.task_type not in thinking_by_task:
+                thinking_by_task[m.task_type] = {'total': 0, 'thinking_used': 0}
+            thinking_by_task[m.task_type]['total'] += 1
+            if m.thinking_enabled:
+                thinking_by_task[m.task_type]['thinking_used'] += 1
         
         return {
             "total_responses": self.total_responses,
             "thinking_mode_usage_rate": thinking_mode_usage / len(recent_metrics) * 100,
+            "adaptive_params_usage_rate": adaptive_params_usage / len(recent_metrics) * 100,
             "thinking_mode_success_rate": (self.thinking_mode_successes / max(1, self.total_responses)) * 100,
             "average_response_time": avg_response_time,
             "average_confidence": avg_confidence,
             "complexity_distribution": complexity_counts,
+            "task_type_distribution": task_type_counts,
+            "thinking_by_task_type": thinking_by_task,
             "user_preferences": self.user_preferences.copy()
         }
     
@@ -314,14 +455,47 @@ class AdaptiveAIEngine:
         """Get insights about how the engine would process a query"""
         base_insights = self.thinking_engine.get_thinking_insights(query)
         
-        would_use_thinking = self._should_use_thinking_mode(query, None)
+        # Get context for analysis
+        context_messages = []
+        if hasattr(self.base_ai_engine, 'context') and self.base_ai_engine.context:
+            context_messages = [msg.get("content", "") for msg in getattr(self.base_ai_engine.context, 'messages', [])[-3:]]
+        
+        would_use_thinking = self._should_use_thinking_mode(query, None, context_messages)
         would_show_reasoning = self._should_show_reasoning(query, None, would_use_thinking)
+        
+        # Get adaptive configuration insights
+        adaptive_insights = {}
+        try:
+            model_name = getattr(self.base_ai_engine, 'current_model_name', 'unknown')
+            adaptive_config = self.adaptive_config.get_optimal_config(
+                query=query,
+                model_name=model_name,
+                context=context_messages
+            )
+            
+            # Extract insights from metadata
+            metadata = adaptive_config.get('_metadata', {})
+            task_type_str = metadata.get('task_type', 'conversational')
+            confidence_level_str = metadata.get('confidence_level', 'medium')
+            
+            # Check if reasoning is recommended
+            reasoning_recommended = task_type_str in ['mathematical', 'logical', 'analytical', 'coding']
+            
+            adaptive_insights = {
+                "adaptive_task_type": task_type_str,
+                "adaptive_confidence_level": confidence_level_str,
+                "adaptive_parameters": {k: v for k, v in adaptive_config.items() if k != '_metadata'},
+                "reasoning_recommended": reasoning_recommended
+            }
+        except Exception as e:
+            adaptive_insights = {"adaptive_error": str(e)}
         
         return {
             **base_insights,
             "would_use_thinking_mode": would_use_thinking,
             "would_show_reasoning": would_show_reasoning,
-            "user_preferences": self.user_preferences.copy()
+            "user_preferences": self.user_preferences.copy(),
+            **adaptive_insights
         }
     
     def optimize_for_user(self) -> Dict[str, str]:
