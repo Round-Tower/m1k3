@@ -5,7 +5,10 @@
       "WebSearch",
       "Bash(pip install:*)",
       "Bash(grep:*)",
-      "Bash(chmod:*)"
+      "Bash(chmod:*)",
+      "Bash(open http://localhost:8080/test_engine_minimal.html)",
+      "Bash(lsof:*)",
+      "Bash(open index.html)"
     ],
     "deny": [],
     "ask": []
