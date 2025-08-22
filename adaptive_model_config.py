@@ -283,8 +283,8 @@ class AdaptiveModelConfig:
         )
         
         profiles[(TaskType.MATHEMATICAL, ConfidenceLevel.LOW)] = AdaptiveParameters(
-            max_new_tokens=80, temperature=None, top_p=None, top_k=None,
-            do_sample=False, repetition_penalty=1.2, no_repeat_ngram_size=2, num_beams=1,
+            max_new_tokens=50, temperature=None, top_p=None, top_k=None,
+            do_sample=False, repetition_penalty=1.3, no_repeat_ngram_size=2, num_beams=1,
             enable_thinking_mode=False, show_reasoning=False, quality_threshold=0.6,
             allow_long_responses=False
         )
@@ -542,18 +542,14 @@ class AdaptiveModelConfig:
         }
         
         # Only add sampling parameters if sampling is enabled
-        if params.do_sample:
-            if params.temperature is not None:
-                config['temperature'] = params.temperature
+        if params.do_sample and params.temperature is not None:
+            config['temperature'] = params.temperature
             if params.top_p is not None:
                 config['top_p'] = params.top_p
             if params.top_k is not None:
                 config['top_k'] = params.top_k
-        else:
-            # Explicitly disable sampling parameters to avoid warnings
-            config['temperature'] = None
-            config['top_p'] = None
-            config['top_k'] = None
+        # For deterministic generation (do_sample=False), completely omit temperature/top_p/top_k
+        # This prevents PyTorch warnings and ensures clean deterministic generation
         
         return config
     
