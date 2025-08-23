@@ -14,7 +14,7 @@
 ### 🌟 Core Features
 - **🔒 100% Local AI Inference** with multiple model backends (HuggingFace, GGUF, enhanced fallback)
 - **🧠 RAG (Retrieval-Augmented Generation)** with comprehensive expertise knowledge base (20 categories, 1,341+ documents)
-- **🗣️ Advanced Voice Synthesis** with sidechain compression and professional audio effects ⚠️ (speech cutoff bug)  
+- **🎭 Intelligent Voice Synthesis** with content-aware TTS, automatic content parsing, and voice modulation per content type (thinking, narration, answer, clarification) ⚠️ (speech cutoff bug)  
 - **🧘 Real-Time Avatar Dashboard** with emotion tracking and WebSocket communication
 - **🎨 Multiple Interface Options** - CLI, Modern TUI, Rich full-screen
 - **🌱 Eco-Friendly Metrics** showing energy/water saved vs cloud AI
@@ -49,6 +49,52 @@ python m1k3.py --fullscreen       # Rich-based full-screen interface
 python m1k3.py --fullscreen --no-voice --no-avatar
 python m1k3_rich_tui.py           # Direct Rich TUI launch
 ```
+
+### 🎭 Intelligent Voice Synthesis - Content-Aware TTS
+
+M1K3 features an **advanced intelligent TTS system** that automatically adapts voice characteristics based on content type:
+
+#### **Key Features**
+- **🧠 Automatic Content Parsing**: Recognizes thinking, narration, answers, and questions
+- **🎚️ Content-Specific Voice Modulation**: Each content type has unique voice characteristics
+- **⚙️ Real-Time Processing**: Seamless voice synthesis with natural transitions
+- **🔄 Graceful Fallback**: Falls back to basic synthesis if intelligent TTS fails
+- **📊 Comprehensive Status**: Built-in commands to monitor TTS system
+
+#### **Content Types & Voice Characteristics**
+
+| Content Type | Voice Style | Characteristics |
+|--------------|------------|----------------|
+| **🤔 THINKING** | Contemplative | 0.8x volume, 0.8x speed, -0.1 pitch, subtle reverb |
+| **📖 NARRATION** | Storytelling | 1.1x speed, +0.1 pitch, warmth enhancement |
+| **💡 ANSWER** | Confident | Standard clear voice, authoritative delivery |
+| **❓ CLARIFICATION** | Questioning | 0.9x speed, +0.15 pitch, rising intonation |
+
+#### **Content Recognition Examples**
+```markdown
+<thinking>
+Let me think about this carefully...    # → Soft, contemplative voice
+</thinking>
+
+Here's my analysis: ...                 # → Clear, confident answer voice
+
+*The user looks puzzled.*               # → Warm, expressive narration voice
+
+Could you clarify what you mean?        # → Rising intonation, helpful tone
+```
+
+#### **TTS Commands**
+```bash
+/tts status                             # Show intelligent TTS system status
+voice, mute                             # Toggle voice synthesis on/off
+/profile <name>                         # Set voice profile (natural, broadcast, etc.)
+```
+
+#### **System Integration**
+- **Automatic Processing**: All AI responses automatically parsed for content types
+- **Priority-Based Queuing**: Content processed in optimal order (clarification → answer → narration → thinking)
+- **Inter-Segment Pauses**: Natural pauses between different content types
+- **Effects Integration**: Ready for advanced audio effects (reverb, warmth, pitch modulation)
 
 ### 🧘 Avatar System - Real-Time Web Dashboard
 
@@ -268,10 +314,12 @@ The avatar server automatically detects all network interfaces:
    - Real-time emotion analysis and state management
    - Pixel art visualization with multiple styles
 
-5. **Voice Synthesis** (`enhanced_voice_engine.py`)
-   - KittenML TTS with persona system
-   - 200-character limit to prevent ONNX errors
-   - Graceful fallback to system TTS
+5. **Intelligent Voice Synthesis** (`intelligent_tts_controller.py`, `enhanced_voice_engine.py`)
+   - Content-aware TTS with automatic parsing (thinking, narration, answer, clarification)
+   - Voice modulation per content type with distinct characteristics
+   - KittenML TTS with persona system and professional audio effects
+   - Priority-based job queuing with natural inter-segment pauses
+   - Graceful fallback to basic synthesis
 
 6. **CLI Interfaces** (`cli.py`, `m1k3_tui.py`, `m1k3_rich_tui.py`)
    - Rich animations, eco-metrics, token visualization
@@ -441,10 +489,13 @@ m1k3/
 │   ├── avatar_controller.py       # Emotion analysis and state management
 │   └── m1k3_avatar.html          # Web dashboard interface
 │
-├── 🗣️ Voice & Audio
-│   ├── enhanced_voice_engine.py   # KittenML TTS with personas
-│   ├── sound_manager.py           # 67 categorized sound effects
-│   └── sounds/                    # Audio assets and startup sequences
+├── 🎭 Intelligent Voice & Audio
+│   ├── intelligent_tts_controller.py  # Content-aware TTS orchestration
+│   ├── model_output_parser.py         # Automatic content type recognition
+│   ├── content_specific_effects.py    # Voice modulation per content type
+│   ├── enhanced_voice_engine.py       # KittenML TTS with personas
+│   ├── sound_manager.py               # 67 categorized sound effects
+│   └── sounds/                        # Audio assets and startup sequences
 │
 ├── 📊 System & Metrics
 │   ├── system_metrics.py          # Device analysis and eco-metrics

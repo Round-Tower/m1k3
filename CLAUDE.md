@@ -8,7 +8,7 @@ Privacy-focused local AI assistant with voice synthesis, web dashboard, and CLI 
 ### Core Features
 - **Local AI inference** with TinyLlama-1.1B-Chat (universal compatibility)
 - **RAG (Retrieval-Augmented Generation)** with comprehensive expertise knowledge base (20 categories, 1,341+ documents)
-- **Voice synthesis** with KittenTTS + sidechain compression ⚠️ (speech cutoff bug documented in BUGS.md)
+- **Intelligent voice synthesis** with content-aware TTS, automatic content parsing, and voice modulation per content type (thinking, narration, answer, clarification) ⚠️ (speech cutoff bug documented in BUGS.md)
 - **Avatar system** with real-time web dashboard and emotion tracking
 - **Enhanced CLI** with animations, eco-metrics, 8K context visualization
 - **Model transparency engine** with 5-level debugging system
@@ -80,6 +80,11 @@ tokens, usage     # Display token usage and eco impact
 stats, status     # System statistics
 clear             # Clear conversation context
 quit, exit        # Exit M1K3
+
+# Voice commands
+voice, mute       # Toggle voice synthesis on/off
+/profile <name>   # Set voice profile (natural, broadcast, terminal, etc.)
+/tts status       # Show intelligent TTS system status and voice settings
 
 # Avatar commands  
 avatar start      # Start web dashboard
