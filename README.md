@@ -13,6 +13,7 @@
 
 ### 🌟 Core Features
 - **🔒 100% Local AI Inference** with multiple model backends (HuggingFace, GGUF, enhanced fallback)
+- **🧠 RAG (Retrieval-Augmented Generation)** with comprehensive expertise knowledge base (20 categories, 1,341+ documents)
 - **🗣️ Advanced Voice Synthesis** with sidechain compression and professional audio effects ⚠️ (speech cutoff bug)  
 - **🧘 Real-Time Avatar Dashboard** with emotion tracking and WebSocket communication
 - **🎨 Multiple Interface Options** - CLI, Modern TUI, Rich full-screen
@@ -138,19 +139,27 @@ python --version  # Should be 3.8 or higher
 
 ### Quick Start
 ```bash
-# Clone and navigate to project
-cd /path/to/m1k3
+# Clone repository
+git clone https://github.com/Round-Tower/m1k3.git
+cd m1k3
 
 # Install Python dependencies
 pip install -r requirements.txt
 
-# Test the system (auto-downloads DialoGPT-small if needed)
+# Download AI models (required)
+python download_models.py
+
+# Test the system
 python m1k3.py --no-voice
+
+# Test with RAG expertise system
+python m1k3.py --rag --query "How do I fix slow WiFi?"
 
 # Expected output:
 # ✅ HuggingFace Transformers available
 # 🔧 Backend selection: HF=True, CT=False
 # ✅ Model loaded with HuggingFace Transformers
+# 🎯 M1K3 RAG Engine ready!
 # 💤 Type 'help' for commands or start chatting!
 ```
 
@@ -167,6 +176,12 @@ python model_prepack.py
 
 # Direct AI engine testing
 python ai_inference.py
+
+# Generate RAG knowledge base (optional)
+python generate_comprehensive_kb.py
+
+# Test RAG system validation
+python test_rag_practical.py
 ```
 
 ## 🎮 Interactive Commands
@@ -180,6 +195,14 @@ context, device                   # Comprehensive device context analysis
 animate, demo                     # Animation demonstrations
 clear                            # Clear conversation context
 quit, exit                       # Exit M1K3
+```
+
+### **RAG Commands**
+```bash
+python m1k3.py --rag              # Enable RAG system with knowledge base
+python m1k3.py --rag --query "WiFi troubleshooting"  # Single query with RAG
+python m1k3.py --tui --rag        # TUI interface with RAG enhancement
+python test_rag_practical.py      # Validate RAG system functionality
 ```
 
 ### **Avatar Commands**
@@ -403,7 +426,15 @@ m1k3/
 │   ├── ai_inference.py            # Multi-backend AI engine
 │   ├── local_model_manager.py     # Model discovery and management
 │   ├── simple_ai_engine.py        # Enhanced fallback AI engine
-│   └── model_prepack.py           # Model verification utility
+│   └── download_models.py         # Model downloading with recommendations
+│
+├── 🧠 RAG System
+│   ├── m1k3_rag_engine.py         # RAG engine with semantic search
+│   ├── m1k3_rag_integration.py    # RAG integration with M1K3
+│   ├── expanded_synthetic_generator.py  # Knowledge base generation
+│   ├── generate_comprehensive_kb.py     # Knowledge base builder
+│   ├── rag_knowledge_viewer.html  # Web-based knowledge browser
+│   └── rag_admin.html            # Knowledge base management interface
 │
 ├── 🧘 Avatar System
 │   ├── avatar_server.py           # HTTP + WebSocket server
@@ -418,21 +449,25 @@ m1k3/
 ├── 📊 System & Metrics
 │   ├── system_metrics.py          # Device analysis and eco-metrics
 │   ├── cli_animations.py          # Rich CLI animations and effects
-│   └── download_model.py          # Model downloading with recommendations
+│   └── intent_classification_system.py  # Intent classification for RAG
 │
 ├── 🧪 Testing & Validation
+│   ├── test_rag_practical.py      # RAG system validation (recommended)
+│   ├── test_rag_quick_validation.py    # Fast RAG component testing
 │   ├── test_websocket.py          # WebSocket connectivity testing
 │   ├── test_responses.py          # AI response quality validation
 │   └── test_voice_fix.py          # Voice synthesis error handling
 │
 ├── 📝 Documentation & Config
 │   ├── README.md                  # This comprehensive guide
-│   ├── CLAUDE.md                  # Detailed technical documentation  
+│   ├── CLAUDE.md                  # Detailed technical documentation
+│   ├── SETUP.md                   # Setup and troubleshooting guide
 │   ├── requirements.txt           # Python dependencies
 │   └── Makefile                   # Development shortcuts
 │
 └── 📦 Assets & Models
     ├── models/                    # Downloaded AI models (auto-managed)
+    ├── knowledge/                 # RAG knowledge base (auto-generated)
     ├── sounds/                    # Audio effects and startup sounds
     └── design/                    # Screenshots and design assets
 ```
