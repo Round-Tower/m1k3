@@ -1,5 +1,5 @@
 {
-  "timestamp": "2025-08-22T22:17:28.477Z",
+  "timestamp": "2025-08-23T09:01:21.103Z",
   "summary": {
     "total_files": 84,
     "total_tests": 191,
@@ -60,9 +60,9 @@
     "local": 20,
     "visual": 5,
     "ai": 2,
+    "pwa": 6,
     "voice": 6,
-    "avatar": 2,
-    "pwa": 6
+    "avatar": 2
   },
   "files": [
     {
@@ -748,6 +748,118 @@
       "estimated_duration": 1718
     },
     {
+      "path": "/Users/kevinmurphy/Development/m1k3/pwa-deployment/test_server.py",
+      "relativePath": "pwa-deployment/test_server.py",
+      "name": "test_server.py",
+      "extension": ".py",
+      "size": 7895,
+      "modified": "2025-08-22T00:42:04.021Z",
+      "category": "api",
+      "subcategory": "",
+      "framework": "unknown",
+      "dependencies": [
+        "http",
+        "socketserver",
+        "os",
+        "json",
+        "threading",
+        "time",
+        "webbrowser",
+        "pathlib",
+        "urllib"
+      ],
+      "testCount": 0,
+      "tags": [
+        "pwa",
+        "local"
+      ],
+      "estimated_duration": 2000
+    },
+    {
+      "path": "/Users/kevinmurphy/Development/m1k3/pwa-deployment/test_pwa_integration.py",
+      "relativePath": "pwa-deployment/test_pwa_integration.py",
+      "name": "test_pwa_integration.py",
+      "extension": ".py",
+      "size": 9622,
+      "modified": "2025-08-22T00:44:36.229Z",
+      "category": "integration",
+      "subcategory": "",
+      "framework": "python-custom",
+      "dependencies": [
+        "subprocess",
+        "requests",
+        "json",
+        "time",
+        "sys",
+        "os",
+        "pathlib",
+        "urllib"
+      ],
+      "testCount": 13,
+      "tags": [
+        "pwa",
+        "local"
+      ],
+      "estimated_duration": 20000
+    },
+    {
+      "path": "/Users/kevinmurphy/Development/m1k3/pwa-deployment/test_pipeline_quick.py",
+      "relativePath": "pwa-deployment/test_pipeline_quick.py",
+      "name": "test_pipeline_quick.py",
+      "extension": ".py",
+      "size": 5800,
+      "modified": "2025-08-22T00:53:16.500Z",
+      "category": "integration",
+      "subcategory": "",
+      "framework": "python-custom",
+      "dependencies": [
+        "subprocess",
+        "requests",
+        "json",
+        "time",
+        "sys",
+        "pathlib"
+      ],
+      "testCount": 1,
+      "tags": [
+        "pwa",
+        "local"
+      ],
+      "estimated_duration": 20000
+    },
+    {
+      "path": "/Users/kevinmurphy/Development/m1k3/pwa-deployment/test_complete_pipeline.py",
+      "relativePath": "pwa-deployment/test_complete_pipeline.py",
+      "name": "test_complete_pipeline.py",
+      "extension": ".py",
+      "size": 20867,
+      "modified": "2025-08-22T00:52:51.225Z",
+      "category": "integration",
+      "subcategory": "",
+      "framework": "python-custom",
+      "dependencies": [
+        "subprocess",
+        "requests",
+        "json",
+        "time",
+        "sys",
+        "os",
+        "threading",
+        "tempfile",
+        "shutil",
+        "pathlib",
+        "urllib",
+        "dataclasses",
+        "typing"
+      ],
+      "testCount": 11,
+      "tags": [
+        "pwa",
+        "local"
+      ],
+      "estimated_duration": 20000
+    },
+    {
       "path": "/Users/kevinmurphy/Development/m1k3/tests/test_websocket.py",
       "relativePath": "tests/test_websocket.py",
       "name": "test_websocket.py",
@@ -1078,118 +1190,6 @@
         "local"
       ],
       "estimated_duration": 14742
-    },
-    {
-      "path": "/Users/kevinmurphy/Development/m1k3/pwa-deployment/test_server.py",
-      "relativePath": "pwa-deployment/test_server.py",
-      "name": "test_server.py",
-      "extension": ".py",
-      "size": 7895,
-      "modified": "2025-08-22T00:42:04.021Z",
-      "category": "api",
-      "subcategory": "",
-      "framework": "unknown",
-      "dependencies": [
-        "http",
-        "socketserver",
-        "os",
-        "json",
-        "threading",
-        "time",
-        "webbrowser",
-        "pathlib",
-        "urllib"
-      ],
-      "testCount": 0,
-      "tags": [
-        "pwa",
-        "local"
-      ],
-      "estimated_duration": 2000
-    },
-    {
-      "path": "/Users/kevinmurphy/Development/m1k3/pwa-deployment/test_pwa_integration.py",
-      "relativePath": "pwa-deployment/test_pwa_integration.py",
-      "name": "test_pwa_integration.py",
-      "extension": ".py",
-      "size": 9622,
-      "modified": "2025-08-22T00:44:36.229Z",
-      "category": "integration",
-      "subcategory": "",
-      "framework": "python-custom",
-      "dependencies": [
-        "subprocess",
-        "requests",
-        "json",
-        "time",
-        "sys",
-        "os",
-        "pathlib",
-        "urllib"
-      ],
-      "testCount": 13,
-      "tags": [
-        "pwa",
-        "local"
-      ],
-      "estimated_duration": 20000
-    },
-    {
-      "path": "/Users/kevinmurphy/Development/m1k3/pwa-deployment/test_pipeline_quick.py",
-      "relativePath": "pwa-deployment/test_pipeline_quick.py",
-      "name": "test_pipeline_quick.py",
-      "extension": ".py",
-      "size": 5800,
-      "modified": "2025-08-22T00:53:16.500Z",
-      "category": "integration",
-      "subcategory": "",
-      "framework": "python-custom",
-      "dependencies": [
-        "subprocess",
-        "requests",
-        "json",
-        "time",
-        "sys",
-        "pathlib"
-      ],
-      "testCount": 1,
-      "tags": [
-        "pwa",
-        "local"
-      ],
-      "estimated_duration": 20000
-    },
-    {
-      "path": "/Users/kevinmurphy/Development/m1k3/pwa-deployment/test_complete_pipeline.py",
-      "relativePath": "pwa-deployment/test_complete_pipeline.py",
-      "name": "test_complete_pipeline.py",
-      "extension": ".py",
-      "size": 20867,
-      "modified": "2025-08-22T00:52:51.225Z",
-      "category": "integration",
-      "subcategory": "",
-      "framework": "python-custom",
-      "dependencies": [
-        "subprocess",
-        "requests",
-        "json",
-        "time",
-        "sys",
-        "os",
-        "threading",
-        "tempfile",
-        "shutil",
-        "pathlib",
-        "urllib",
-        "dataclasses",
-        "typing"
-      ],
-      "testCount": 11,
-      "tags": [
-        "pwa",
-        "local"
-      ],
-      "estimated_duration": 20000
     },
     {
       "path": "/Users/kevinmurphy/Development/m1k3/demos/test_completion_final.py",
