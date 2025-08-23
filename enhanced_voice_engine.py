@@ -100,7 +100,10 @@ class VoiceManager:
             pass
         
         try:
-            self.engine.synthesize_and_play(text, background)
+            result = self.engine.synthesize_and_play(text, background)
+            return result if result is not None else True  # Return True if successful synthesis
+        except Exception:
+            return False  # Return False on error
         finally:
             # Always reset voice state when done
             try:
