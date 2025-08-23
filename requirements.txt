@@ -1,22 +1,43 @@
-requests>=2.31.0
-tqdm>=4.65.0
-huggingface-hub>=0.17.0
-ctransformers>=0.2.27
-torch>=2.0.0
-torchaudio>=2.0.0
-transformers>=4.51.0
-sounddevice>=0.4.6
-numpy<2.0,>=1.20.0
-llama-cpp-python>=0.2.0
-websocket-server>=0.6.4
-rich>=13.0.0
-psutil>=5.9.0
-textual>=0.47.0
+# Core dependencies - Python 3.12+ compatible
+requests>=2.32.4
+tqdm>=4.66.4
+huggingface-hub>=0.34.4
 
-# Voice synthesis enhancements
-TTS>=0.22.0
+# AI/ML backends  
+ctransformers>=0.2.27      # GGUF model support (ARM64 optimized)
+torch>=2.2.2               # PyTorch for neural networks
+torchaudio>=2.2.2          # Audio processing for torch
+transformers>=4.55.3       # HuggingFace transformers (primary AI backend)
+
+# Audio processing
+sounddevice>=0.4.6         # Audio input/output
+
+# Data and math
+numpy>=2.3.2               # Numerical computing (Python 3.12+ compatible)
+
+# Disabled dependencies (Python 3.12+ incompatible)
+# llama-cpp-python>=0.2.0  # Compilation fails - use ctransformers instead
+
+# WebSocket and networking
+websocket-server>=0.6.4    # WebSocket server for avatar dashboard
+websocket-client>=1.8.0    # WebSocket client for CLI
+
+# UI and display
+rich>=13.7.1               # Rich terminal output
+psutil>=5.9.0              # System monitoring  
+textual>=5.3.0             # Modern TUI framework
+
+# Voice synthesis enhancements - Python 3.12+ compatible alternatives
+# TTS==0.22.0  # Disabled - not compatible with Python 3.12+
 soundfile>=0.12.1
 kittentts>=0.1.0
+pyttsx3>=2.90    # Local TTS engine (works offline)
+gTTS>=2.5.0      # Google Text-to-Speech (requires internet)
 
 # Audio processing (optional)
-scipy>=1.10.0
+scipy>=1.16.1
+
+# Already listed above in networking section
+
+# Additional dependencies
+diskcache>=5.6.1

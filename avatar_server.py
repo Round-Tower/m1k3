@@ -111,6 +111,9 @@ class AvatarServer:
         self.running = False
         self.clients = []
         
+        # Enhanced client management to identify the CLI backend
+        self.cli_backend_client = None
+
         # Message statistics
         self.message_stats = {
             'total_sent': 0,
@@ -352,6 +355,9 @@ class AvatarServer:
     
     def _client_left(self, client, server):
         """Handle client disconnection"""
+        if client and self.cli_backend_client and client['id'] == self.cli_backend_client['id']:
+            self.cli_backend_client = None
+            self.logger.info("🤖 CLI backend disconnected")
         self._remove_client(client)
         self.logger.info(f"👤 Avatar client disconnected: {client['id']}")
     
@@ -376,6 +382,25 @@ class AvatarServer:
             else:
                 self.logger.debug(f"Received from client {client['id']}: {data}")
             
+            # Handle client identification
+            if message_type == "identify" and data.get("client_type") == "cli_backend":
+                self.cli_backend_client = client
+                self.logger.info(f"🤖 Registered client {client['id']} as CLI backend.")
+                return
+
+            # Intelligent message forwarding
+            # If a CLI backend is connected, route messages intelligently
+            if self.cli_backend_client:
+                # Message from a UI client -> forward to CLI backend
+                if message_type == "chat_user" and client['id'] != self.cli_backend_client['id']:
+                    self._send_raw_message(self.cli_backend_client, message)
+                # Message from the CLI backend -> broadcast to all other clients (the UIs)
+                elif client['id'] == self.cli_backend_client['id']:
+                    self._broadcast_message(message, sender_client=client)
+            else:
+                # No CLI backend connected, just broadcast to all other clients
+                self._broadcast_message(message, sender_client=client)
+
             if message_type == "ping":
                 pong_data = {"type": "pong", "timestamp": time.time()}
                 server.send_message(client, json.dumps(pong_data))
@@ -408,6 +433,20 @@ class AvatarServer:
         except Exception as e:
             self.logger.error(f"Error handling message from client {client['id']}: {e}")
     
+    def _broadcast_message(self, message: str, sender_client=None):
+        """Broadcasts a message to all clients except the sender."""
+        for client in self.clients[:]:
+            if client != sender_client:
+                self._send_raw_message(client, message)
+
+    def _send_raw_message(self, client, message: str):
+        """Sends a raw string message to a client, with error handling."""
+        try:
+            self.websocket_server.send_message(client, message)
+        except Exception as e:
+            self.logger.warning(f"Failed to send message to client {client['id']}: {e}")
+            self._remove_client(client)
+
     def _format_message_for_log(self, data):
         """Format message data for logging"""
         msg_type = data.get('type', 'unknown')

@@ -112,7 +112,8 @@ class GameboyPixelEngine {
     
     clearCanvas(color = this.currentPalette[0]) {
         this.ctx.fillStyle = color;
-        this.ctx.fillRect(0, 0, this.canvasWidth, this.canvasHeight);
+        // Use actual canvas internal dimensions, not CSS dimensions
+        this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
     }
     
     setPixel(x, y, colorIndex, layer = 'main') {
@@ -127,16 +128,21 @@ class GameboyPixelEngine {
         
         const color = this.currentPalette[colorIndex];
         
+        // Calculate scaling factors between CSS size and internal canvas size
+        const scaleX = this.canvas.width / this.canvasWidth;
+        const scaleY = this.canvas.height / this.canvasHeight;
+        
         // Styled pixel rendering with padding and rounded corners
-        const pixelX = x * this.pixelSize;
-        const pixelY = y * this.pixelSize;
-        const padding = 1;
+        const pixelX = x * this.pixelSize * scaleX;
+        const pixelY = y * this.pixelSize * scaleY;
+        const scaledPixelSize = this.pixelSize * Math.min(scaleX, scaleY);
+        const padding = Math.max(1, Math.floor(scaledPixelSize * 0.1));
         
         // Debug first few pixels
-        if (Math.random() < 0.1) { // Log 10% of pixels to avoid spam
-            console.log(`🎨 setPixel: (${x}, ${y}) -> canvas(${pixelX + padding}, ${pixelY + padding}) color=${color} colorIndex=${colorIndex}`);
+        if (Math.random() < 0.01) { // Log 1% of pixels to avoid spam
+            console.log(`🎨 setPixel: (${x}, ${y}) -> canvas(${pixelX + padding}, ${pixelY + padding}) scale(${scaleX.toFixed(2)}, ${scaleY.toFixed(2)}) color=${color}`);
         }
-        const pixelSize = this.pixelSize - (padding * 2); // 4px actual size
+        const pixelSize = scaledPixelSize - (padding * 2);
         const radius = Math.min(pixelSize / 4, 1); // 1px radius
         
         this.ctx.fillStyle = color;
@@ -164,6 +170,36 @@ class GameboyPixelEngine {
     updateSystemState(newState) {
         Object.assign(this.systemState, newState);
         this.updateAvatarCare();
+    }
+    
+    updateDimensions(width, height) {
+        console.log(`🔄 Updating GameboyPixelEngine dimensions to ${width}x${height}`);
+        
+        // Use the CSS dimensions for calculations (not internal canvas resolution)
+        this.canvasWidth = width;
+        this.canvasHeight = height;
+        
+        // Recalculate grid dimensions based on CSS size
+        this.gridWidth = Math.floor(this.canvasWidth / this.pixelSize);
+        this.gridHeight = Math.floor(this.canvasHeight / this.pixelSize);
+        
+        console.log(`📐 New grid: ${this.gridWidth}x${this.gridHeight} (${this.pixelSize}px per cell)`);
+        console.log(`📱 Canvas internal: ${this.canvas.width}x${this.canvas.height}, CSS: ${width}x${height}`);
+        
+        // Store device pixel ratio for proper rendering
+        this.devicePixelRatio = window.devicePixelRatio || 1;
+        
+        // Clear frame cache since dimensions changed
+        this.frameCache.clear();
+        this.dirtyRects = [];
+        
+        // Clear and redraw
+        this.clearCanvas();
+        
+        // Re-render avatar if in avatar mode
+        if (this.mode === 'avatar') {
+            this.renderAvatar();
+        }
     }
     
     updateAvatarCare() {
@@ -289,11 +325,26 @@ class GameboyPixelEngine {
     renderAvatar() {
         console.log('🎭 renderAvatar() called');
         
-        // Center the avatar in the main area (leaving space for bottom metrics)
-        const centerX = Math.floor(this.gridWidth / 2);
-        const centerY = Math.floor((this.gridHeight - 16) / 2); // -16 for metrics strip
+        // Smart centering for both square and rectangular canvases
+        const aspectRatio = this.gridWidth / this.gridHeight;
+        let centerX, centerY;
         
-        console.log(`🎯 Avatar center: (${centerX}, ${centerY})`);
+        if (aspectRatio > 1.5) {
+            // Wide rectangular canvas (mobile landscape) - ensure proper centering
+            centerX = Math.floor(this.gridWidth / 2);
+            centerY = Math.floor(this.gridHeight * 0.5); // Center vertically in wide canvas
+            console.log(`📱 Wide canvas detected: ${this.gridWidth}x${this.gridHeight}, center at (${centerX}, ${centerY})`);
+        } else if (aspectRatio < 0.8) {
+            // Tall rectangular canvas (mobile portrait) - center vertically  
+            centerX = Math.floor(this.gridWidth / 2);
+            centerY = Math.floor((this.gridHeight - 16) / 2); // -16 for metrics strip
+        } else {
+            // Square or near-square canvas (desktop) - standard centering
+            centerX = Math.floor(this.gridWidth / 2);
+            centerY = Math.floor((this.gridHeight - 16) / 2); // -16 for metrics strip
+        }
+        
+        console.log(`🎯 Avatar center: (${centerX}, ${centerY}), aspect ratio: ${aspectRatio.toFixed(2)}, grid: ${this.gridWidth}x${this.gridHeight}`);
         
         // Apply continuous animations (breathing, jitter, etc.)
         this.applyAvatarAnimations(centerX, centerY, this.ctx);

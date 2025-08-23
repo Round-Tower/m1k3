@@ -16,6 +16,14 @@ from enum import Enum
 from typing import Optional
 import argparse
 from dataclasses import asdict
+import json
+
+try:
+    import websocket
+    WEBSOCKET_CLIENT_AVAILABLE = True
+except ImportError:
+    WEBSOCKET_CLIENT_AVAILABLE = False
+    print("⚠️  WebSocket client not available. Run: pip install websocket-client")
 
 # Enable HuggingFace tokenizers parallelism for better performance
 os.environ['TOKENIZERS_PARALLELISM'] = 'true'
@@ -114,6 +122,9 @@ class M1K3CLI:
         self.auto_avatar = auto_avatar
         self.avatar_port = avatar_port
         self.open_browser = open_browser
+        
+        # Websocket bridge
+        self.websocket_monitor = None
         
         # Initialize transparency engine
         self.transparency_enabled = TRANSPARENCY_AVAILABLE
@@ -1537,6 +1548,29 @@ Available styles: robot, organic, crystal, ghost, energy, cute"""
         except Exception as e:
             print(f"Debug: Avatar update error: {e}")
         
+    def handle_user_input_from_websocket(self, message: str):
+        """Handle user input received from the websocket bridge."""
+        print(f"\n🌐 Received from web: \"{message}\"")
+        self.handle_user_input(message)
+        print(f"\n{self.avatar_state.value} > ", end="", flush=True) # Show prompt again
+
+    def start_websocket_bridge(self):
+        """Start the websocket client to monitor the avatar server."""
+        if not WEBSOCKET_CLIENT_AVAILABLE:
+            self.print_with_avatar("Cannot start WebSocket bridge: websocket-client library is not installed.", AvatarState.ERROR)
+            return
+
+        ws_url = f"ws://localhost:{self.avatar_port + 1}" # Default WS port is HTTP+1
+        self.websocket_monitor = WebSocketMonitor(ws_url, self.handle_user_input_from_websocket)
+        self.websocket_monitor.start()
+        self.print_with_avatar(f"🔗 WebSocket bridge connected to {ws_url}", AvatarState.IDLE)
+
+    def stop_websocket_bridge(self):
+        """Stop the websocket client."""
+        if self.websocket_monitor:
+            self.websocket_monitor.stop()
+            self.print_with_avatar("🔌 WebSocket bridge disconnected", AvatarState.IDLE)
+
     def run_interactive(self):
         """Run interactive CLI session with animations."""
         # A cleaner, more structured startup sequence
@@ -1546,6 +1580,9 @@ Available styles: robot, organic, crystal, ghost, energy, cute"""
         # Setup AI engine
         if not self.setup_ai():
             return 1
+        
+        # Start the WebSocket bridge by default in interactive mode
+        self.start_websocket_bridge()
         
         self.sound_manager.play_startup_sequence()
         
@@ -1596,6 +1633,8 @@ Available styles: robot, organic, crystal, ghost, energy, cute"""
             except Exception as e:
                 self.print_with_avatar(f"Unexpected error: {e}", AvatarState.ERROR)
                 
+        # Cleanup before exiting
+        self.stop_websocket_bridge()
         return 0
         
     def run_single_query(self, query: str):

@@ -1,7 +1,7 @@
 /* M1K3 Avatar Component System */
 
 .avatar-container {
-  --avatar-size: 280px;
+  --avatar-size: min(90vw, 85vh, 450px); /* Increased mobile utilization */
   --avatar-glow-color: rgba(227, 83, 3, 0.3);
   
   position: relative;
@@ -220,10 +220,33 @@
   50% { opacity: 0.3; }
 }
 
-/* Responsive Design */
-@media (max-width: 768px) {
+/* Responsive Design - Enhanced for mobile-first dynamic sizing */
+@media (max-width: 480px) {
   .avatar-container {
-    --avatar-size: 220px;
+    /* Allow full width usage on mobile */
+    width: 100%;
+    height: min(90vh, 500px);
+    --avatar-size: min(95vw, 90vh, 500px); /* Keep for backwards compatibility */
+  }
+  
+  .avatar-state-indicator {
+    top: var(--space-xs);
+    right: var(--space-xs);
+    padding: 4px 8px;
+    font-size: 10px;
+  }
+  
+  .state-icon {
+    font-size: 14px;
+  }
+}
+
+@media (min-width: 481px) and (max-width: 768px) {
+  .avatar-container {
+    /* Allow full width usage on tablet */
+    width: 100%;
+    height: min(75vh, 400px);
+    --avatar-size: min(85vw, 75vh, 400px); /* Keep for backwards compatibility */
   }
   
   .avatar-state-indicator {
@@ -234,9 +257,15 @@
   }
 }
 
-@media (max-width: 480px) {
+@media (min-width: 769px) and (max-width: 1200px) {
   .avatar-container {
-    --avatar-size: 180px;
+    --avatar-size: min(50vw, 50vh, 400px); /* Desktop sizing */
+  }
+}
+
+@media (min-width: 1201px) {
+  .avatar-container {
+    --avatar-size: min(40vw, 40vh, 500px); /* Large desktop sizing */
   }
 }
 

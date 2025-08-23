@@ -75,7 +75,7 @@ class DebugConsole {
         const button = document.getElementById('debugToggle');
         
         if (console && button) {
-            console.style.display = this.isVisible ? 'flex' : 'none';
+            console.classList.toggle('visible', this.isVisible);
             button.classList.toggle('active', this.isVisible);
         }
         

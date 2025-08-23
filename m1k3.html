@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>M1K3 Avatar Dashboard</title>
+    <title>M1K3</title>
     
     <!-- Modular CSS Architecture -->
     <link rel="stylesheet" href="styles/design-tokens.css">
@@ -13,6 +13,8 @@
     <link rel="stylesheet" href="styles/avatar-component.css">
     <link rel="stylesheet" href="styles/dashboard-components.css">
     <link rel="stylesheet" href="styles/dashboard-responsive.css">
+    <link rel="stylesheet" href="styles/status-overlay.css">
+    <link rel="stylesheet" href="styles/debug-console.css">
     
     <style>
         /* Custom color definitions for M1K3 branding */
@@ -57,8 +59,8 @@
         <div class="avatar-panel">
             <div class="avatar-container idle" id="avatarDisplay">
                 <div class="canvas-container">
-                    <canvas class="avatar-canvas" id="avatarCanvas" width="768" height="576"></canvas>
-                    <canvas class="avatar-canvas" id="particleCanvas" width="768" height="576"></canvas>
+                    <canvas class="avatar-canvas" id="avatarCanvas"></canvas>
+                    <canvas class="avatar-canvas" id="particleCanvas"></canvas>
                     <div class="state-overlay" id="stateOverlay" style="display:none;">
                         <div class="state-icon" id="stateIcon">💭</div>
                         <div class="progress-bar" id="progressBar" style="display:none;">
@@ -68,64 +70,17 @@
                 </div>
             </div>
 
-            <div class="avatar-stats-overlay">
-                <div class="stats-grid">
-                    <!-- Primary Stats -->
-                    <div class="stat-card" id="emotionStatus">
-                        <div class="stat-value">😊 Happy</div>
-                        <div class="stat-label">Emotion</div>
-                    </div>
-                    <div class="stat-card" id="stateStatus">
-                        <div class="stat-value">Idle</div>
-                        <div class="stat-label">State</div>
-                    </div>
-                    <div class="stat-card" id="confidenceStatus">
-                        <div class="stat-value">95.0%</div>
-                        <div class="stat-label">Confidence</div>
-                    </div>
-                    <!-- Secondary Stats (Contextual) -->
-                    <div class="stat-card" id="systemStatus" style="display: none;">
-                        <div class="stat-value">OK</div>
-                        <div class="stat-label">System</div>
-                    </div>
-                    <div class="stat-card" id="generationStatus" style="display: none;">
-                        <div class="stat-value">128 tok/s</div>
-                        <div class="stat-label">Generation</div>
-                    </div>
-                    <div class="stat-card" id="careStatus" style="display: none;">
-                        <div class="stat-value">⚡️ Energized</div>
-                        <div class="stat-label">Care</div>
-                    </div>
-                </div>
-            </div>
         </div>
 
         <!-- Chat Panel -->
         <div class="chat-panel">
-            <div class="chat-header">
-                <div class="chat-title">Conversation</div>
-                <div class="chat-controls">
-                    <button class="control-button" id="clearChat" title="Clear chat">🗑️</button>
-                    <button class="control-button" id="debugToggle" title="Debug console">🐛</button>
-                </div>
-            </div>
             <div class="chat-messages" id="chatMessages">
                 <div class="message ai">
-                    <div class="message-avatar">🤖</div>
                     <div class="message-content">
                         <div class="message-text">Hello! I'm M1K3, your AI companion. Start chatting to see real-time avatar emotions and animations!</div>
                         <div class="message-time">Just now</div>
                     </div>
                 </div>
-            </div>
-        </div>
-
-        <!-- Controls Panel -->
-        <div class="controls-panel">
-            <div class="volume-control">
-                <span style="font-size: var(--font-lg);">🔊</span>
-                <input type="range" class="volume-slider" id="volumeSlider" min="0" max="100" value="70">
-                <span id="volumeValue" style="min-width: 40px; font-size: var(--font-sm); color: var(--text-secondary);">70%</span>
             </div>
         </div>
 
@@ -148,40 +103,41 @@
             </div>
         </div>
 
-        <!-- Debug Console -->
-        <div class="debug-console" id="debugConsole">
-            <div class="debug-header">
-                <div class="debug-title">🐛 WebSocket Debug Console</div>
-                <div class="debug-controls">
-                    <button class="debug-btn" id="clearDebugLog">Clear</button>
-                    <button class="debug-btn" id="exportDebugLog">Export</button>
-                    <button class="debug-btn" id="closeDebugConsole">✕</button>
-                </div>
+    </div>
+
+    <!-- Debug Console - Positioned at bottom of page -->
+    <div class="debug-console" id="debugConsole">
+        <div class="debug-header">
+            <div class="debug-title">🐛 WebSocket Debug Console</div>
+            <div class="debug-controls">
+                <button class="debug-btn" id="clearDebugLog">Clear</button>
+                <button class="debug-btn" id="exportDebugLog">Export</button>
+                <button class="debug-btn" id="closeDebugConsole">✕</button>
             </div>
-            <div class="debug-stats">
-                <div class="debug-stat">
-                    <span class="stat-label">Messages Sent:</span>
-                    <span class="stat-value" id="debugSentCount">0</span>
-                </div>
-                <div class="debug-stat">
-                    <span class="stat-label">Messages Received:</span>
-                    <span class="stat-value" id="debugReceivedCount">0</span>
-                </div>
-                <div class="debug-stat">
-                    <span class="stat-label">Connection:</span>
-                    <span class="stat-value" id="debugConnectionStatus">Disconnected</span>
-                </div>
-                <div class="debug-stat">
-                    <span class="stat-label">Last Activity:</span>
-                    <span class="stat-value" id="debugLastActivity">Never</span>
-                </div>
+        </div>
+        <div class="debug-stats">
+            <div class="debug-stat">
+                <span class="stat-label">Messages Sent:</span>
+                <span class="stat-value" id="debugSentCount">0</span>
             </div>
-            <div class="debug-messages" id="debugMessages">
-                <div class="debug-message info">
-                    <span class="debug-timestamp">00:00:00</span>
-                    <span class="debug-type">[INFO]</span>
-                    <span class="debug-content">Debug console initialized</span>
-                </div>
+            <div class="debug-stat">
+                <span class="stat-label">Messages Received:</span>
+                <span class="stat-value" id="debugReceivedCount">0</span>
+            </div>
+            <div class="debug-stat">
+                <span class="stat-label">Connection:</span>
+                <span class="stat-value" id="debugConnectionStatus">Disconnected</span>
+            </div>
+            <div class="debug-stat">
+                <span class="stat-label">Last Activity:</span>
+                <span class="stat-value" id="debugLastActivity">Never</span>
+            </div>
+        </div>
+        <div class="debug-messages" id="debugMessages">
+            <div class="debug-message info">
+                <span class="debug-timestamp">00:00:00</span>
+                <span class="debug-type">[INFO]</span>
+                <span class="debug-content">Debug console initialized</span>
             </div>
         </div>
     </div>
@@ -189,6 +145,7 @@
     <!-- Load external JavaScript -->
     <script src="gameboy_pixel_engine.js?v=20250122c"></script>
     <script src="avatar_dashboard.js"></script>
+    <script src="status-overlay.js"></script>
     
     <script>
         // Global state
@@ -201,8 +158,11 @@
         let recognition = null;
         let audioContext = null;
         let soundsEnabled = true;
-        let currentVolume = 70;
         let debugConsole = null;
+        
+        // Event system
+        let eventBus = null;
+        let statusOverlay = null;
 
         // Avatar state
         let currentEmotion = 'happy';
@@ -225,6 +185,18 @@
         let particles = [];
         let animationFrame = null;
         let animationState = { breathing: 0, time: 0 };
+        
+        function createParticle() {
+            const size = Math.random() * 2 + 1;
+            particles.push({
+                x: Math.random() * particleCanvas.width,
+                y: Math.random() * particleCanvas.height,
+                size: size,
+                speed: Math.random() * 0.5 + 0.2,
+                color: `rgba(255, 255, 255, ${Math.random() * 0.5 + 0.2})`,
+                life: Math.random() * 2 + 1
+            });
+        }
         
         // System metrics - synced with GameboyPixelEngine structure
         let systemMetrics = {
@@ -253,33 +225,102 @@
 
         // Initialize everything when DOM loads
         document.addEventListener('DOMContentLoaded', function() {
+            initializeEventSystem();
             initializeDebugConsole();
             initializeCanvas();
             connectWebSocket();
             initializeChat();
             initializeSpeechRecognition();
             initializeAudio();
-            initializeControls();
-            generateAvatar();
+            
+            // Initial canvas resize before generating avatar
+            // Longer delay on mobile to ensure layout stabilization
+            const isMobileDevice = window.innerWidth <= 767;
+            const initDelay = isMobileDevice ? 300 : 100;
+            
+            setTimeout(() => {
+                resizeCanvas();
+                generateAvatar();
+            }, initDelay);
+            
             startAnimation();
             
             console.log('✅ M1K3 Enhanced Dashboard Initialized');
+            
+            // Add test functions to global scope for debugging
+            window.testStatusOverlay = testStatusOverlay;
         });
+        
+        // Test function for status overlay
+        function testStatusOverlay() {
+            if (!eventBus) {
+                console.error('Event bus not initialized');
+                return;
+            }
+            
+            console.log('🧪 Testing status overlay events...');
+            
+            // Test emotion update
+            setTimeout(() => {
+                eventBus.dispatchEvent(new CustomEvent('avatar.emotion', {
+                    detail: { emotion: 'excited', intensity: 85 }
+                }));
+            }, 1000);
+            
+            // Test state update
+            setTimeout(() => {
+                eventBus.dispatchEvent(new CustomEvent('avatar.state', {
+                    detail: { state: 'thinking' }
+                }));
+            }, 2000);
+            
+            // Test system metrics
+            setTimeout(() => {
+                eventBus.dispatchEvent(new CustomEvent('system.metrics', {
+                    detail: { cpu: 75, memory: 60, temperature: 45 }
+                }));
+            }, 3000);
+            
+            // Test AI generation
+            setTimeout(() => {
+                eventBus.dispatchEvent(new CustomEvent('ai.generation', {
+                    detail: { generationSpeed: 42.5, tokenCount: 128 }
+                }));
+            }, 4000);
+            
+            // Test care update
+            setTimeout(() => {
+                eventBus.dispatchEvent(new CustomEvent('care.update', {
+                    detail: { hp: 80, nrg: 65 }
+                }));
+            }, 5000);
+            
+            console.log('✅ Status overlay test sequence started');
+        }
+        
+        function initializeEventSystem() {
+            // Create event bus
+            eventBus = new EventTarget();
+            
+            // Initialize status overlay
+            statusOverlay = new StatusOverlay({
+                position: window.innerWidth <= 768 ? 'floating' : 'embedded',
+                autoHide: window.innerWidth <= 768
+            });
+            
+            // Subscribe status overlay to events
+            statusOverlay.subscribe(eventBus);
+            
+            console.log('📡 Event system initialized');
+        }
 
         function initializeDebugConsole() {
             debugConsole = new DebugConsole();
             
             // Bind debug console events
-            const debugToggle = document.getElementById('debugToggle');
             const clearDebugLog = document.getElementById('clearDebugLog');
             const exportDebugLog = document.getElementById('exportDebugLog');
             const closeDebugConsole = document.getElementById('closeDebugConsole');
-            
-            if (debugToggle) {
-                debugToggle.addEventListener('click', () => {
-                    debugConsole.toggle();
-                });
-            }
             
             if (clearDebugLog) {
                 clearDebugLog.addEventListener('click', () => {
@@ -300,6 +341,35 @@
             }
         }
 
+        function mapMessageToEvent(data) {
+            // Map WebSocket message types to event types
+            switch (data.type) {
+                case 'emotion':
+                case 'avatar_emotion':
+                    return 'avatar.emotion';
+                case 'state':
+                case 'avatar_state':
+                    return 'avatar.state';
+                case 'system_metrics':
+                case 'system':
+                    return 'system.metrics';
+                case 'classification':
+                case 'ai_classification':
+                    return 'ai.classification';
+                case 'thinking_phase':
+                case 'ai_thinking':
+                    return 'ai.thinking';
+                case 'generation_stream':
+                case 'ai_generation':
+                    return 'ai.generation';
+                case 'care_update':
+                case 'care':
+                    return 'care.update';
+                default:
+                    return null;
+            }
+        }
+
         function connectWebSocket() {
             try {
                 websocket = new WebSocket('ws://localhost:8081');
@@ -317,6 +387,16 @@
                     try {
                         const data = JSON.parse(event.data);
                         debugConsole?.logReceived(data);
+                        
+                        // Dispatch event to event bus
+                        if (eventBus) {
+                            const eventType = mapMessageToEvent(data);
+                            if (eventType) {
+                                eventBus.dispatchEvent(new CustomEvent(eventType, { detail: data }));
+                            }
+                        }
+                        
+                        // Still handle via traditional method for backward compatibility
                         handleServerMessage(data);
                     } catch (e) {
                         console.error('Error parsing message:', e);
@@ -528,21 +608,146 @@
             }
         }
 
-        function initializeCanvas() {
-            canvas = document.getElementById('avatarCanvas');
-            if (canvas) {
-                // Set canvas dimensions but don't get context - let GameboyPixelEngine handle it
-                canvas.width = 768;
-                canvas.height = 576;
-                // ctx will be managed by GameboyPixelEngine
+        function resizeCanvas() {
+            const container = document.querySelector('.canvas-container');
+            const avatarContainer = document.querySelector('.avatar-container');
+            
+            if (!container || !canvas) return;
+            
+            // Get device pixel ratio for high-DPI displays
+            const devicePixelRatio = window.devicePixelRatio || 1;
+            const isMobile = window.innerWidth <= 767;
+            
+            // Get actual available dimensions
+            const rect = container.getBoundingClientRect();
+            let availableWidth = rect.width;
+            let availableHeight = rect.height;
+            
+            // Account for CSS padding: mobile has no padding, desktop uses --space-sm (8px)
+            const padding = isMobile ? 0 : 16; // No padding on mobile, 8px * 2 on desktop
+            availableWidth -= padding;
+            availableHeight -= padding;
+            
+            // Calculate optimal canvas size - allow rectangular on mobile for full width
+            let canvasWidth, canvasHeight;
+            
+            if (isMobile) {
+                // On mobile, use full width and maintain reasonable height
+                canvasWidth = Math.floor(availableWidth * 0.98);
+                canvasHeight = Math.floor(availableHeight * 0.98);
+                
+                // Ensure we don't exceed viewport constraints
+                const viewportWidth = window.innerWidth;
+                const viewportHeight = window.innerHeight;
+                const maxMobileWidth = Math.floor(viewportWidth * 0.95);
+                const maxMobileHeight = Math.floor(viewportHeight * 0.65);
+                
+                canvasWidth = Math.min(canvasWidth, maxMobileWidth);
+                canvasHeight = Math.min(canvasHeight, maxMobileHeight);
+                
+                console.log(`📱 Mobile sizing: viewport ${viewportWidth}x${viewportHeight}, canvas ${canvasWidth}x${canvasHeight}`);
+            } else {
+                // Desktop: maintain square aspect ratio
+                const size = Math.min(availableWidth, availableHeight);
+                const finalSize = Math.max(size, 200);
+                canvasWidth = canvasHeight = Math.floor(finalSize);
             }
             
+            // Ensure minimum sizes for readability
+            const minSize = isMobile ? 150 : 200;
+            canvasWidth = Math.max(canvasWidth, minSize);
+            canvasHeight = Math.max(canvasHeight, minSize);
+            
+            console.log(`📐 Resizing canvas to ${canvasWidth}x${canvasHeight} (available: ${availableWidth}x${availableHeight}, mobile: ${isMobile}, DPR: ${devicePixelRatio})`);
+            
+            // Update canvas dimensions - let GameboyPixelEngine handle the context
+            if (canvas) {
+                // Set the CSS size (what users see)
+                canvas.style.width = canvasWidth + 'px';
+                canvas.style.height = canvasHeight + 'px';
+                
+                // For high-DPI displays, use higher internal resolution
+                // But keep it simpler for mobile compatibility
+                const internalWidth = isMobile ? canvasWidth : Math.floor(canvasWidth * Math.min(devicePixelRatio, 2));
+                const internalHeight = isMobile ? canvasHeight : Math.floor(canvasHeight * Math.min(devicePixelRatio, 2));
+                canvas.width = internalWidth;
+                canvas.height = internalHeight;
+                
+                console.log(`🖼️ Canvas: CSS ${canvasWidth}x${canvasHeight}, internal ${internalWidth}x${internalHeight}`);
+            }
+            
+            if (particleCanvas) {
+                // Same treatment for particle canvas
+                particleCanvas.style.width = canvasWidth + 'px';
+                particleCanvas.style.height = canvasHeight + 'px';
+                
+                const internalParticleWidth = isMobile ? canvasWidth : Math.floor(canvasWidth * Math.min(devicePixelRatio, 2));
+                const internalParticleHeight = isMobile ? canvasHeight : Math.floor(canvasHeight * Math.min(devicePixelRatio, 2));
+                particleCanvas.width = internalParticleWidth;
+                particleCanvas.height = internalParticleHeight;
+            }
+            
+            // Reinitialize pixel engine with the CSS size (not internal resolution)
+            if (pixelEngine && pixelEngine.updateDimensions) {
+                pixelEngine.updateDimensions(canvasWidth, canvasHeight);
+            } else if (pixelEngine) {
+                // Fallback: reinitialize avatar
+                generateAvatar();
+            }
+        }
+
+        function initializeCanvas() {
+            canvas = document.getElementById('avatarCanvas');
             particleCanvas = document.getElementById('particleCanvas');
+            
             if (particleCanvas) {
                 particleCtx = particleCanvas.getContext('2d');
-                particleCanvas.width = 768;
-                particleCanvas.height = 576;
             }
+            
+            // Create initial particles
+            if (particleCtx) {
+                for (let i = 0; i < 20; i++) {
+                    createParticle();
+                }
+            }
+            
+            // Set up resize observer for dynamic scaling
+            if (typeof ResizeObserver !== 'undefined') {
+                const resizeObserver = new ResizeObserver(() => {
+                    // Debounce resize calls
+                    clearTimeout(window.canvasResizeTimeout);
+                    window.canvasResizeTimeout = setTimeout(() => {
+                        resizeCanvas();
+                    }, 100);
+                });
+                
+                const container = document.querySelector('.canvas-container');
+                if (container) {
+                    resizeObserver.observe(container);
+                    console.log('📏 ResizeObserver attached to canvas container');
+                }
+            } else {
+                console.warn('ResizeObserver not supported, using window resize');
+            }
+            
+            // Always add window resize listener for mobile orientation changes
+            window.addEventListener('resize', () => {
+                clearTimeout(window.canvasResizeTimeout);
+                window.canvasResizeTimeout = setTimeout(() => {
+                    console.log('🔄 Window resize triggered');
+                    resizeCanvas();
+                }, 150); // Slightly longer delay for mobile
+            });
+            
+            // Specific handling for mobile orientation changes
+            window.addEventListener('orientationchange', () => {
+                console.log('📱 Orientation change detected');
+                setTimeout(() => {
+                    resizeCanvas();
+                }, 300); // Longer delay for orientation change
+            });
+            
+            // Initial canvas sizing will be handled by resizeCanvas()
             
             // Polyfill for roundRect if not available
             if (!CanvasRenderingContext2D.prototype.roundRect) {
@@ -622,7 +827,6 @@
         function initializeChat() {
             const chatInput = document.getElementById('chatInput');
             const sendBtn = document.getElementById('sendButton');
-            const clearBtn = document.getElementById('clearChat');
             
             if (chatInput) {
                 chatInput.addEventListener('keypress', function(e) {
@@ -643,22 +847,6 @@
                 sendBtn.addEventListener('click', sendChatMessage);
             }
             
-            if (clearBtn) {
-                clearBtn.addEventListener('click', function() {
-                    const chatMessages = document.getElementById('chatMessages');
-                    if (chatMessages) {
-                        chatMessages.innerHTML = `
-                            <div class="message ai">
-                                <div class="message-avatar">🤖</div>
-                                <div class="message-content">
-                                    <div class="message-text">Chat cleared! Ready for a new conversation.</div>
-                                    <div class="message-time">${new Date().toLocaleTimeString()}</div>
-                                </div>
-                            </div>
-                        `;
-                    }
-                });
-            }
         }
 
         function initializeSpeechRecognition() {
@@ -685,22 +873,6 @@
         function initializeAudio() {
             // Initialize Web Audio API for sound effects (delayed until user interaction)
         }
-
-        function initializeControls() {
-            const volumeSlider = document.getElementById('volumeSlider');
-            const volumeValue = document.getElementById('volumeValue');
-            
-            if (volumeSlider) {
-                volumeSlider.addEventListener('input', function(e) {
-                    currentVolume = e.target.value;
-                    if (volumeValue) {
-                        volumeValue.textContent = currentVolume + '%';
-                    }
-                });
-            }
-        }
-
-
 
         function generateAvatar() {
             if (pixelEngine) {
@@ -776,6 +948,14 @@
             currentEmotion = emotion;
             emotionIntensity = intensity;
             
+            // Trigger event for StatusOverlay
+            if (eventBus) {
+                eventBus.dispatchEvent(new CustomEvent('avatar.emotion', { 
+                    detail: { emotion, intensity, metadata, message }
+                }));
+            }
+            
+            // Legacy DOM update (for backward compatibility)
             const emotionIndicator = document.getElementById('emotionStatus');
             if (emotionIndicator) {
                 emotionIndicator.querySelector('.stat-value').textContent = `${getEmotionEmoji(emotion)} ${emotion.charAt(0).toUpperCase() + emotion.slice(1)}`;
@@ -836,6 +1016,14 @@
         function updateState(state) {
             currentState = state;
             
+            // Trigger event for StatusOverlay
+            if (eventBus) {
+                eventBus.dispatchEvent(new CustomEvent('avatar.state', { 
+                    detail: { state }
+                }));
+            }
+            
+            // Legacy DOM update (for backward compatibility)
             const stateIndicator = document.getElementById('stateStatus');
             if (stateIndicator) {
                 stateIndicator.querySelector('.stat-value').textContent = `${getStateEmoji(state)} ${state.charAt(0).toUpperCase() + state.slice(1)}`;
@@ -976,10 +1164,6 @@
             const messageDiv = document.createElement('div');
             messageDiv.className = `message ${sender}`;
             
-            const avatar = document.createElement('div');
-            avatar.className = 'message-avatar';
-            avatar.textContent = sender === 'user' ? '👤' : '🤖';
-            
             const content = document.createElement('div');
             content.className = 'message-content';
             
@@ -993,7 +1177,6 @@
             
             content.appendChild(text);
             content.appendChild(time);
-            messageDiv.appendChild(avatar);
             messageDiv.appendChild(content);
             
             chatMessages.appendChild(messageDiv);
@@ -1096,7 +1279,7 @@
         function updateParticles() {
             if (!particleCtx) return;
             
-            particleCtx.clearRect(0, 0, 256, 256);
+            particleCtx.clearRect(0, 0, particleCanvas.width, particleCanvas.height);
             
             particles = particles.filter(particle => {
                 particle.y -= particle.speed;
@@ -1110,6 +1293,10 @@
                 }
                 return false;
             });
+
+            if (Math.random() > 0.95) {
+                createParticle();
+            }
         }
 
         function getEmotionEmoji(emotion) {

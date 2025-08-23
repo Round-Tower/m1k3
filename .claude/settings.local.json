@@ -8,7 +8,8 @@
       "Bash(chmod:*)",
       "Bash(open http://localhost:8080/test_engine_minimal.html)",
       "Bash(lsof:*)",
-      "Bash(open index.html)"
+      "Bash(open index.html)",
+      "Bash(curl:*)"
     ],
     "deny": [],
     "ask": []
