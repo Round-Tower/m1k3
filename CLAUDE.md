@@ -38,8 +38,15 @@ Privacy-focused local AI assistant with voice synthesis, web dashboard, and CLI 
 
 ### Installation
 ```bash
+# Clone repository
+git clone https://github.com/Round-Tower/m1k3.git
+cd m1k3
+
 # Install dependencies
 pip install -r requirements.txt
+
+# Download AI models (required)
+python download_models.py
 
 # Test system
 python m1k3.py --no-voice

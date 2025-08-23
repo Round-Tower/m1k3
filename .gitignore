@@ -64,10 +64,24 @@ env/
 # Local Claude settings
 .claude/settings.local.json
 
-# Model cache (large files)
-models/*.bin
-models/*.safetensors
-models/cache/
+# Models - Large files should be downloaded locally 
+models/
+*.bin
+*.gguf
+*.safetensors
+*.pt
+*.pth
+*.model
+*.onnx
+
+# Node.js dependencies
+node_modules/
+
+# PWA deployment build artifacts (users should build their own)
+pwa-deployment/node_modules/
+pwa-deployment/build/
+pwa-deployment/dist/
+pwa-deployment/__pycache__/
 
 # Audio cache
 audio_cache/
