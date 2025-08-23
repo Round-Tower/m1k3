@@ -47,6 +47,17 @@ from cli_animations import CLIAnimator, AnimationType
 from sound_manager import SoundManager, ContextualSoundManager
 from llm_greeting_engine import LLMGreetingEngine, create_greeting_context
 
+# Intelligent TTS System
+try:
+    from intelligent_tts_controller import create_intelligent_tts_controller
+    from model_output_parser import parse_model_output, ContentType
+    from content_specific_effects import create_content_effects_manager
+    INTELLIGENT_TTS_AVAILABLE = True
+    print("🎭 Intelligent TTS system with content-specific voice effects available")
+except ImportError as e:
+    INTELLIGENT_TTS_AVAILABLE = False
+    print(f"⚠️  Intelligent TTS not available: {e}")
+
 # Model transparency engine
 try:
     from model_transparency import ModelTransparencyEngine, TransparencyLevel, transparency_engine
@@ -165,6 +176,15 @@ class M1K3CLI:
                 print("🎭 Initialized with mock AI engine (demo mode)")
             
         self.voice_engine = create_voice_engine()
+        
+        # Initialize intelligent TTS controller if available
+        if INTELLIGENT_TTS_AVAILABLE:
+            self.intelligent_tts_controller = create_intelligent_tts_controller(self.voice_engine)
+            print("🎭 Intelligent TTS controller initialized with content-specific voice effects")
+        else:
+            self.intelligent_tts_controller = None
+            print("⚠️  Using basic voice synthesis (intelligent TTS unavailable)")
+        
         self.sound_manager = SoundManager()
         self.context_sound_manager = ContextualSoundManager(self.sound_manager)
         self.animator = CLIAnimator()
@@ -183,7 +203,7 @@ class M1K3CLI:
         # Set up AI engine with system context
         self._initialize_ai_context()
     
-    def _safe_voice_synthesis(self, text: str, background: bool = True):
+    def _safe_voice_synthesis(self, text: str, background: bool = True, use_intelligent_tts: bool = False):
         """Safely synthesize voice with text preprocessing to prevent warnings"""
         if not self.voice_enabled or not text or not text.strip():
             return
@@ -197,7 +217,23 @@ class M1K3CLI:
             else:
                 processed_text = text.strip()
             
-            # Synthesize with preprocessed text
+            # Use intelligent TTS for AI responses if available and requested
+            if use_intelligent_tts and self.intelligent_tts_controller and INTELLIGENT_TTS_AVAILABLE:
+                try:
+                    # Process with intelligent TTS for content-specific voice effects
+                    results = self.intelligent_tts_controller.process_text_with_parsing(processed_text)
+                    
+                    if results and any(r.success for r in results):
+                        # Successful intelligent TTS processing
+                        return
+                    else:
+                        # Fall back to basic synthesis if intelligent TTS fails
+                        print("⚠️  Intelligent TTS failed, falling back to basic synthesis")
+                        
+                except Exception as e:
+                    print(f"⚠️  Intelligent TTS error: {e}, falling back to basic synthesis")
+            
+            # Basic voice synthesis (fallback or for non-AI responses)
             self.voice_engine.synthesize_and_play(processed_text, background=background)
             
         except Exception as e:
@@ -591,6 +627,14 @@ class M1K3CLI:
                 self.print_with_avatar(msg, AvatarState.IDLE)
             return
             
+        elif user_input.lower().startswith('/tts'):
+            parts = user_input.split()
+            if len(parts) > 1 and parts[1].lower() == 'status':
+                self.show_tts_status()
+            else:
+                self.print_with_avatar("Usage: /tts status - Show intelligent TTS system status", AvatarState.IDLE)
+            return
+            
         elif user_input.lower() in ['stats', 'status']:
             self.display_system_stats()
             return
@@ -810,7 +854,8 @@ class M1K3CLI:
             if self.voice_enabled and full_response.strip():
                 self.set_avatar_state(AvatarState.SPEAKING)
                 self.send_avatar_update("", "speaking")
-                self._safe_voice_synthesis(full_response.strip())
+                # Use intelligent TTS for AI responses with content-specific voice effects
+                self._safe_voice_synthesis(full_response.strip(), use_intelligent_tts=True)
                 self.set_avatar_state(AvatarState.IDLE)
                 self.send_avatar_update("", "idle")
             
@@ -840,6 +885,7 @@ M1K3 Local AI CLI Commands:
   Voice Commands:
     voice, mute     Toggle voice synthesis on/off
     /profile <name> Set voice profile (natural, assistant, broadcast, terminal)
+    /tts status     Show intelligent TTS system status and voice settings
     
   Enhanced Commands:
     /explain <query>    Show detailed decision explanation for a query
@@ -893,6 +939,45 @@ M1K3 Local AI CLI Commands:
         if self.voice_enabled:
             self._safe_voice_synthesis("Here's what I can do for you")
     
+    def show_tts_status(self):
+        """Show intelligent TTS system status and voice settings"""
+        print("\n🎭 Intelligent TTS System Status:")
+        print("=" * 50)
+        
+        if self.intelligent_tts_controller and INTELLIGENT_TTS_AVAILABLE:
+            status = self.intelligent_tts_controller.get_status()
+            
+            print(f"✅ Intelligent TTS: ACTIVE")
+            print(f"🔊 Voice Engine: {'Available' if status['voice_engine_available'] else 'Not Available'}")
+            print(f"🎚️  Effects Manager: {'Active' if status['effects_manager_available'] else 'Not Available'}")
+            print(f"📋 Queue Size: {status['queue_size']}")
+            
+            print(f"\n🎯 Content-Specific Voice Settings:")
+            for content_type, settings in status['modulations'].items():
+                print(f"   📢 {content_type.upper()}:")
+                print(f"      Volume: {settings['volume']:.1f}x | Speed: {settings['speed']:.1f}x")
+                print(f"      Pitch: {settings['pitch']:+.1f} | Reverb: {settings['reverb']:.1f}")
+                if settings.get('warmth', 0) > 0:
+                    print(f"      Warmth: {settings['warmth']:.1f}")
+            
+            if status['skipped_types']:
+                print(f"\n⏭️  Skipped Content Types: {', '.join(status['skipped_types'])}")
+            else:
+                print(f"\n✅ All content types enabled")
+                
+        else:
+            print(f"❌ Intelligent TTS: UNAVAILABLE")
+            print(f"🔄 Using basic voice synthesis")
+        
+        # Show voice engine details
+        voice_status = self.voice_engine.get_status()
+        print(f"\n🎤 Voice Engine Details:")
+        print(f"   Profile: {voice_status.get('current_profile', 'Unknown')}")
+        print(f"   Voice Enabled: {self.voice_enabled}")
+        
+        if self.voice_enabled:
+            self._safe_voice_synthesis("Intelligent TTS system status displayed", use_intelligent_tts=False)
+
     def display_system_stats(self):
         """Display animated system statistics"""
         self.start_animated_status("Collecting system statistics...", "processing")
