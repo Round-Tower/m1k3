@@ -227,6 +227,249 @@
                 gap: 0.8rem;
             }
         }
+        
+        /* Screensaver Experience Styles */
+        .avatar-screensaver {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: linear-gradient(135deg, #000 0%, #111 25%, #000 75%, #0a0a0a 100%);
+            overflow: hidden;
+            cursor: none;
+            user-select: none;
+            z-index: 1; /* Ensure it's above other content but below loading */
+        }
+        
+        .screensaver-avatar-container {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .screensaver-canvas {
+            border-radius: 30px;
+            background: rgba(0, 0, 0, 0.2);
+            box-shadow: 
+                0 0 50px rgba(255, 255, 255, 0.4),
+                0 0 100px rgba(255, 255, 255, 0.2),
+                0 0 200px rgba(255, 255, 255, 0.1);
+            animation: screensaverGlow 4s ease-in-out infinite alternate;
+            backdrop-filter: blur(10px);
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            z-index: 1; /* Below the particles */
+        }
+        
+        .screensaver-particles {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            opacity: 0.8;
+            z-index: 2; /* Above the avatar canvas */
+        }
+        
+        /* Ambient Info Overlay - Hidden by default */
+        .screensaver-info {
+            position: absolute;
+            top: 2rem;
+            left: 2rem;
+            color: rgba(255, 255, 255, 0.7);
+            font-family: 'SF Mono', 'Monaco', 'Cascadia Code', monospace;
+            font-size: 0.9rem;
+            opacity: 0;
+            transition: opacity 0.5s ease;
+            pointer-events: none;
+            text-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(5px);
+            background: rgba(0, 0, 0, 0.1);
+            padding: 1rem;
+            border-radius: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .screensaver-avatar-container:hover .screensaver-info {
+            opacity: 1;
+        }
+        
+        .screensaver-title {
+            font-size: 1.4rem;
+            font-weight: 900;
+            color: white;
+            margin-bottom: 0.5rem;
+            text-shadow: 0 0 15px rgba(255, 255, 255, 0.8);
+            letter-spacing: 0.1em;
+        }
+        
+        .screensaver-status {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-bottom: 0.5rem;
+        }
+        
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: white;
+            box-shadow: 0 0 8px rgba(255, 255, 255, 0.6);
+            animation: statusPulse 2s ease-in-out infinite;
+        }
+        
+        .status-dot.offline {
+            background: #888;
+            box-shadow: 0 0 8px rgba(136, 136, 136, 0.6);
+        }
+        
+        .screensaver-emotion {
+            font-size: 0.9rem;
+            opacity: 0.8;
+            margin-bottom: 1rem;
+        }
+        
+        .screensaver-navigation {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 0.5rem;
+            margin-top: 1rem;
+        }
+        
+        .nav-button {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            color: rgba(255, 255, 255, 0.9);
+            padding: 0.5rem 0.8rem;
+            border-radius: 8px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-family: inherit;
+            backdrop-filter: blur(5px);
+        }
+        
+        .nav-button:hover {
+            background: rgba(255, 255, 255, 0.2);
+            border-color: rgba(255, 255, 255, 0.5);
+            color: white;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(255, 255, 255, 0.3);
+        }
+        
+        .nav-button:active {
+            transform: translateY(0);
+        }
+        
+        /* Ambient Time Display */
+        .screensaver-time {
+            position: absolute;
+            bottom: 2rem;
+            right: 2rem;
+            color: rgba(255, 255, 255, 0.6);
+            font-family: 'SF Mono', 'Monaco', 'Cascadia Code', monospace;
+            text-align: right;
+            opacity: 0;
+            transition: opacity 0.5s ease;
+            pointer-events: none;
+            text-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+        }
+        
+        .screensaver-avatar-container:hover .screensaver-time {
+            opacity: 1;
+        }
+        
+        .time-display {
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: white;
+            margin-bottom: 0.25rem;
+            text-shadow: 0 0 20px rgba(255, 255, 255, 0.6);
+            letter-spacing: 0.05em;
+        }
+        
+        .date-display {
+            font-size: 1rem;
+            opacity: 0.7;
+        }
+        
+        /* Screensaver Animations */
+        @keyframes screensaverGlow {
+            0% { 
+                box-shadow: 
+                    0 0 50px rgba(255, 255, 255, 0.4),
+                    0 0 100px rgba(255, 255, 255, 0.2),
+                    0 0 200px rgba(255, 255, 255, 0.1);
+                transform: scale(1);
+            }
+            100% { 
+                box-shadow: 
+                    0 0 80px rgba(255, 255, 255, 0.6),
+                    0 0 150px rgba(255, 255, 255, 0.3),
+                    0 0 300px rgba(255, 255, 255, 0.15);
+                transform: scale(1.02);
+            }
+        }
+        
+        @keyframes statusPulse {
+            0%, 100% { 
+                opacity: 1;
+                transform: scale(1);
+            }
+            50% { 
+                opacity: 0.5;
+                transform: scale(0.8);
+            }
+        }
+        
+        /* Cursor and Interaction */
+        .avatar-screensaver {
+            cursor: none;
+        }
+        
+        .avatar-screensaver:active {
+            cursor: pointer;
+        }
+        
+        /* Mobile Responsive Screensaver */
+        @media (max-width: 768px) {
+            .screensaver-info {
+                top: 1rem;
+                left: 1rem;
+                right: 1rem;
+                font-size: 0.8rem;
+                padding: 0.8rem;
+            }
+            
+            .screensaver-time {
+                bottom: 1rem;
+                right: 1rem;
+            }
+            
+            .time-display {
+                font-size: 2rem;
+            }
+            
+            .screensaver-canvas {
+                border-radius: 20px;
+                max-width: 90vw;
+                max-height: 70vh;
+            }
+        }
+        
+        /* Always show info and time on mobile (since hover doesn't work well) */
+        @media (max-width: 768px) {
+            .screensaver-info,
+            .screensaver-time {
+                opacity: 0.8;
+            }
+        }
     </style>
 </head>
 <body>
@@ -249,7 +492,7 @@
     </div>
 
     <!-- Global Loading Overlay with Avatar Hero Animation -->
-    <div class="global-loading-overlay" id="globalLoadingOverlay">
+    <div class="global-loading-overlay" id="globalLoadingOverlay" onclick="dismissLoadingScreen()">
         <div class="loading-hero">
             <div class="avatar-loading-container">
                 <canvas class="loading-avatar-canvas" id="loadingAvatarCanvas" width="384" height="288"></canvas>
@@ -269,49 +512,43 @@
                     <div class="component-status" data-component="avatar_server">🤖 Avatar Server</div>
                     <div class="component-status" data-component="websocket">🌐 WebSocket</div>
                 </div>
+                <div class="loading-hint" style="margin-top: 2rem; font-size: 0.8rem; opacity: 0.6; cursor: pointer;">
+                    Click anywhere to continue to screensaver
+                </div>
             </div>
         </div>
     </div>
 
-    <div class="dashboard" id="mainDashboard" style="display: none;">
-        <!-- Tab Navigation -->
-        <nav class="tab-navigation" id="tabNavigation">
-            <a href="#chat" class="tab-item active" data-tab="chat">
-                <span class="tab-icon">💬</span>
-                <span class="tab-label">Chat</span>
-            </a>
-            <a href="#avatar" class="tab-item" data-tab="avatar">
-                <span class="tab-icon">🤖</span>
-                <span class="tab-label">Avatar</span>
-            </a>
-            <a href="#status" class="tab-item" data-tab="status">
-                <span class="tab-icon">📊</span>
-                <span class="tab-label">Status</span>
-            </a>
-            <a href="#settings" class="tab-item" data-tab="settings">
-                <span class="tab-icon">⚙️</span>
-                <span class="tab-label">Settings</span>
-            </a>
-        </nav>
-
-        <!-- Chat View - Will be lazy loaded -->
-        <div class="view-container chat-view active" id="chatView">
-            <div class="loading-indicator">Loading chat interface...</div>
-        </div>
-
-        <!-- Avatar View - Will be lazy loaded -->
-        <div class="view-container avatar-view" id="avatarView">
-            <div class="loading-indicator">Loading avatar interface...</div>
-        </div>
-
-        <!-- Status View - Will be lazy loaded -->
-        <div class="view-container status-view" id="statusView">
-            <div class="loading-indicator">Loading status dashboard...</div>
-        </div>
-
-        <!-- Settings View - Will be lazy loaded -->
-        <div class="view-container settings-view" id="settingsView">
-            <div class="loading-indicator">Loading settings interface...</div>
+    <!-- Pure Avatar Screensaver Experience -->
+    <div class="avatar-screensaver" id="mainDashboard">
+        <!-- Fullscreen Avatar Container -->
+        <div class="screensaver-avatar-container">
+            <canvas id="avatarCanvas" class="screensaver-canvas"></canvas>
+            <canvas id="particleCanvas" class="screensaver-particles"></canvas>
+            
+            <!-- Minimal Status Overlay (Hidden by default, appears on hover) -->
+            <div class="screensaver-info" id="screensaverInfo">
+                <div class="screensaver-title">M1K3</div>
+                <div class="screensaver-status">
+                    <span class="status-dot" id="statusDot"></span>
+                    <span id="connectionText">Connecting...</span>
+                </div>
+                <div class="screensaver-emotion">
+                    <span id="emotionDisplay">😊 Happy</span>
+                </div>
+                <div class="screensaver-navigation">
+                    <button class="nav-button" onclick="showDashboard()">📊 Dashboard</button>
+                    <button class="nav-button" onclick="showChat()">💬 Chat</button>
+                    <button class="nav-button" onclick="showAvatar()">🤖 Avatar</button>
+                    <button class="nav-button" onclick="showSettings()">⚙️ Settings</button>
+                </div>
+            </div>
+            
+            <!-- Ambient Time Display -->
+            <div class="screensaver-time" id="screensaverTime">
+                <div class="time-display" id="timeDisplay"></div>
+                <div class="date-display" id="dateDisplay"></div>
+            </div>
         </div>
     </div>
 
@@ -408,14 +645,20 @@
         let animationState = { breathing: 0, time: 0 };
         
         function createParticle() {
-            const size = Math.random() * 2 + 1;
+            const size = Math.random() * 3 + 2; // Larger particles (2-5px)
+            
+            // All white particles with varying opacity for depth
+            const opacity = Math.random() * 0.6 + 0.4; // 0.4 to 1.0 opacity
+            const color = `rgba(255, 255, 255, ${opacity})`;
+            
             particles.push({
                 x: Math.random() * particleCanvas.width,
-                y: Math.random() * particleCanvas.height,
+                y: particleCanvas.height + 10, // Start from bottom
                 size: size,
-                speed: Math.random() * 0.5 + 0.2,
-                color: `rgba(255, 255, 255, ${Math.random() * 0.5 + 0.2})`,
-                life: Math.random() * 2 + 1
+                speed: Math.random() * 0.8 + 0.3, // Slightly faster
+                color: color,
+                life: Math.random() * 3 + 2, // Longer lifespan (2-5 seconds)
+                drift: Math.random() * 0.4 - 0.2 // Horizontal drift
             });
         }
         
@@ -574,6 +817,155 @@
         
         // Keep some legacy functions for backward compatibility
         window.testStatusOverlay = testStatusOverlay;
+        
+        // Screensaver time display functionality
+        function initializeScreensaver() {
+            console.log('🚀 initializeScreensaver() called');
+            
+            const timeDisplay = document.getElementById('timeDisplay');
+            const dateDisplay = document.getElementById('dateDisplay');
+            const screensaver = document.getElementById('mainDashboard');
+            
+            console.log('🔍 Elements found:', {
+                timeDisplay: !!timeDisplay,
+                dateDisplay: !!dateDisplay,
+                screensaver: !!screensaver,
+                screensaverVisible: screensaver ? getComputedStyle(screensaver).display : 'N/A'
+            });
+            
+            function updateTime() {
+                const now = new Date();
+                
+                if (timeDisplay) {
+                    timeDisplay.textContent = now.toLocaleTimeString([], { 
+                        hour: '2-digit', 
+                        minute: '2-digit',
+                        second: '2-digit',
+                        hour12: false 
+                    });
+                }
+                
+                if (dateDisplay) {
+                    dateDisplay.textContent = now.toLocaleDateString([], { 
+                        weekday: 'long',
+                        year: 'numeric', 
+                        month: 'long', 
+                        day: 'numeric' 
+                    });
+                }
+            }
+            
+            // Update time immediately and then every second
+            updateTime();
+            setInterval(updateTime, 1000);
+            
+            // Initialize canvas for screensaver
+            setTimeout(() => {
+                console.log('🖼️ Initializing canvas...');
+                initializeCanvas();
+                // Force resize after a brief delay to ensure proper sizing
+                setTimeout(() => {
+                    console.log('📐 Resizing canvas...');
+                    resizeCanvas();
+                    // Start particle animation after canvas is properly sized
+                    setTimeout(() => {
+                        console.log('✨ Starting particle animation...');
+                        startAnimation();
+                        
+                        // Debug: Check canvas state
+                        const avatarCanvas = document.getElementById('avatarCanvas');
+                        const particleCanvas = document.getElementById('particleCanvas');
+                        console.log('🔍 Canvas state:', {
+                            avatarCanvas: {
+                                exists: !!avatarCanvas,
+                                width: avatarCanvas?.width,
+                                height: avatarCanvas?.height,
+                                styleWidth: avatarCanvas?.style.width,
+                                styleHeight: avatarCanvas?.style.height
+                            },
+                            particleCanvas: {
+                                exists: !!particleCanvas,
+                                width: particleCanvas?.width,
+                                height: particleCanvas?.height,
+                                particleCount: particles.length
+                            }
+                        });
+                    }, 50);
+                }, 100);
+            }, 50);
+            
+            // Add fallback to hide loading screen if it gets stuck
+            setTimeout(() => {
+                const loadingOverlay = document.getElementById('globalLoadingOverlay');
+                if (loadingOverlay && !loadingOverlay.classList.contains('hidden')) {
+                    console.log('⏰ Fallback: Force hiding loading screen after 8 seconds');
+                    loadingOverlay.classList.add('hidden');
+                    // Completely remove after transition
+                    setTimeout(() => {
+                        if (loadingOverlay.parentNode) {
+                            loadingOverlay.style.display = 'none';
+                        }
+                    }, 1000);
+                }
+            }, 8000);
+            
+            // Add visual confirmation the screensaver is showing
+            setTimeout(() => {
+                const screensaver = document.getElementById('mainDashboard');
+                if (screensaver) {
+                    const rect = screensaver.getBoundingClientRect();
+                    console.log('🖥️ Screensaver visibility check:', {
+                        display: getComputedStyle(screensaver).display,
+                        visibility: getComputedStyle(screensaver).visibility,
+                        opacity: getComputedStyle(screensaver).opacity,
+                        dimensions: `${rect.width}x${rect.height}`,
+                        position: `${rect.left},${rect.top}`
+                    });
+                }
+            }, 1000);
+            
+            console.log('🕐 Screensaver initialized');
+        }
+        
+        // Initialize screensaver when DOM is ready
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initializeScreensaver);
+        } else {
+            initializeScreensaver();
+        }
+        
+        // Navigation functions for screensaver
+        function showDashboard() {
+            // Here we would implement showing the full dashboard
+            // For now, let's create a modal overlay
+            alert('Dashboard feature - would show full dashboard view');
+        }
+        
+        function showChat() {
+            alert('Chat feature - would show chat interface');
+        }
+        
+        function showAvatar() {
+            alert('Avatar controls - would show avatar customization');
+        }
+        
+        function showSettings() {
+            alert('Settings - would show system settings');
+        }
+        
+        // Function to manually dismiss loading screen
+        function dismissLoadingScreen() {
+            const loadingOverlay = document.getElementById('globalLoadingOverlay');
+            if (loadingOverlay) {
+                console.log('👆 User dismissed loading screen');
+                loadingOverlay.classList.add('hidden');
+                setTimeout(() => {
+                    if (loadingOverlay.parentNode) {
+                        loadingOverlay.style.display = 'none';
+                    }
+                }, 1000);
+            }
+        }
         
         // Test function for status overlay
         function testStatusOverlay() {
@@ -755,7 +1147,7 @@
         }
 
         function resizeCanvas() {
-            const container = document.querySelector('.canvas-container');
+            const container = document.querySelector('.canvas-container') || document.querySelector('.screensaver-avatar-container');
             const avatarContainer = document.querySelector('.avatar-container');
             
             if (!container || !canvas) return;
@@ -769,16 +1161,35 @@
             let availableWidth = rect.width;
             let availableHeight = rect.height;
             
-            // Account for CSS padding: mobile has no padding, desktop uses --space-sm (8px)
-            const padding = isMobile ? 0 : 16; // No padding on mobile, 8px * 2 on desktop
+            // Check if we're in screensaver mode (fullscreen)
+            const isScreensaver = container.classList.contains('screensaver-avatar-container');
+            
+            // Account for CSS padding: screensaver has no padding, regular dashboard uses padding
+            const padding = isScreensaver ? 0 : (isMobile ? 0 : 16);
             availableWidth -= padding;
             availableHeight -= padding;
             
-            // Calculate optimal canvas size - allow rectangular on mobile for full width
+            // Calculate optimal canvas size
             let canvasWidth, canvasHeight;
             
-            if (isMobile) {
-                // On mobile, use full width and maintain reasonable height
+            if (isScreensaver) {
+                // In screensaver mode, make avatar large and centered
+                const screenWidth = window.innerWidth;
+                const screenHeight = window.innerHeight;
+                
+                if (isMobile) {
+                    // Mobile screensaver: use most of screen space
+                    canvasWidth = Math.floor(screenWidth * 0.85);
+                    canvasHeight = Math.floor(screenHeight * 0.6);
+                } else {
+                    // Desktop screensaver: large square avatar
+                    const maxSize = Math.min(screenWidth * 0.6, screenHeight * 0.7);
+                    canvasWidth = canvasHeight = Math.floor(maxSize);
+                }
+                
+                console.log(`🖥️ Screensaver sizing: ${canvasWidth}x${canvasHeight}`);
+            } else if (isMobile) {
+                // Regular mobile dashboard
                 canvasWidth = Math.floor(availableWidth * 0.98);
                 canvasHeight = Math.floor(availableHeight * 0.98);
                 
@@ -793,7 +1204,7 @@
                 
                 console.log(`📱 Mobile sizing: viewport ${viewportWidth}x${viewportHeight}, canvas ${canvasWidth}x${canvasHeight}`);
             } else {
-                // Desktop: maintain square aspect ratio
+                // Desktop dashboard: maintain square aspect ratio
                 const size = Math.min(availableWidth, availableHeight);
                 const finalSize = Math.max(size, 200);
                 canvasWidth = canvasHeight = Math.floor(finalSize);
@@ -840,6 +1251,14 @@
                 // Fallback: reinitialize avatar
                 generateAvatar();
             }
+            
+            // Create initial particles after canvas is properly sized
+            if (particleCtx && particles.length === 0) {
+                console.log('🎨 Creating initial particles after canvas resize');
+                for (let i = 0; i < 30; i++) {
+                    createParticle();
+                }
+            }
         }
 
         function initializeCanvas() {
@@ -850,12 +1269,7 @@
                 particleCtx = particleCanvas.getContext('2d');
             }
             
-            // Create initial particles
-            if (particleCtx) {
-                for (let i = 0; i < 20; i++) {
-                    createParticle();
-                }
-            }
+            // Note: Initial particles will be created after canvas sizing in resizeCanvas()
             
             // Set up resize observer for dynamic scaling
             if (typeof ResizeObserver !== 'undefined') {
@@ -867,7 +1281,7 @@
                     }, 100);
                 });
                 
-                const container = document.querySelector('.canvas-container');
+                const container = document.querySelector('.canvas-container') || document.querySelector('.screensaver-avatar-container');
                 if (container) {
                     resizeObserver.observe(container);
                     console.log('📏 ResizeObserver attached to canvas container');
@@ -1423,24 +1837,43 @@
         }
 
         function updateParticles() {
-            if (!particleCtx) return;
+            if (!particleCtx || !particleCanvas) return;
             
             particleCtx.clearRect(0, 0, particleCanvas.width, particleCanvas.height);
             
             particles = particles.filter(particle => {
+                // Update position with upward movement and horizontal drift
                 particle.y -= particle.speed;
-                particle.life -= 0.01;
+                particle.x += particle.drift;
+                particle.life -= 0.008; // Slower life decay for longer visibility
                 
-                if (particle.life > 0) {
-                    particleCtx.globalAlpha = particle.life;
+                // Keep particles in bounds horizontally
+                if (particle.x < 0) particle.x = particleCanvas.width;
+                if (particle.x > particleCanvas.width) particle.x = 0;
+                
+                if (particle.life > 0 && particle.y > -particle.size) {
+                    // Add subtle white glow effect for all particles
+                    particleCtx.shadowColor = 'rgba(255, 255, 255, 0.6)';
+                    particleCtx.shadowBlur = particle.size * 1.5;
+                    
+                    particleCtx.globalAlpha = Math.min(particle.life, 1);
                     particleCtx.fillStyle = particle.color;
-                    particleCtx.fillRect(particle.x, particle.y, particle.size, particle.size);
+                    
+                    // Draw circular particles instead of squares
+                    particleCtx.beginPath();
+                    particleCtx.arc(particle.x, particle.y, particle.size / 2, 0, Math.PI * 2);
+                    particleCtx.fill();
+                    
+                    // Reset shadow
+                    particleCtx.shadowBlur = 0;
+                    
                     return true;
                 }
                 return false;
             });
 
-            if (Math.random() > 0.95) {
+            // Create new particles more frequently
+            if (Math.random() > 0.92) {
                 createParticle();
             }
         }
