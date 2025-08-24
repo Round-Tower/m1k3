@@ -151,7 +151,7 @@ class AvatarServer:
             self.http_thread.start()
             
             # Start WebSocket server on all interfaces
-            self.websocket_server = WebsocketServer(host='0.0.0.0', port=self.ws_port)
+            self.websocket_server = WebsocketServer(host='0.0.0.0', port=self.ws_port, loglevel=logging.WARNING)
             self.websocket_server.set_fn_new_client(self._new_client)
             self.websocket_server.set_fn_client_left(self._client_left)
             self.websocket_server.set_fn_message_received(self._message_received)
@@ -356,34 +356,57 @@ class AvatarServer:
     
     def _new_client(self, client, server):
         """Handle new WebSocket client connection"""
+        # Handle cases where client is None (should not happen in _new_client, but be safe)
+        if client is None:
+            self.logger.warning("⚠️ _new_client called with None client")
+            return
+            
         self.clients.append(client)
-        client_info = f"{client.get('address', 'unknown')}:{client.get('id', 'unknown')}"
+        
+        # Safe client info extraction
+        client_address = client.get('address', 'unknown') if isinstance(client, dict) else 'unknown'
+        client_id = client.get('id', 'unknown') if isinstance(client, dict) else 'unknown'
+        client_info = f"{client_address}:{client_id}"
+        
         self.logger.info(f"👤 New avatar client connected: {client_info}")
         self.logger.info(f"📊 Total WebSocket clients: {len(self.clients)}")
         
         # Send initial state to new client
-        welcome_data = {
-            "type": "welcome",
-            "message": "Connected to M1K3 Avatar Server",
-            "timestamp": time.time(),
-            "server_instance": id(self)
-        }
-        server.send_message(client, json.dumps(welcome_data))
+        try:
+            welcome_data = {
+                "type": "welcome",
+                "message": "Connected to M1K3 Avatar Server",
+                "timestamp": time.time(),
+                "server_instance": id(self)
+            }
+            server.send_message(client, json.dumps(welcome_data))
+        except Exception as e:
+            self.logger.error(f"❌ Failed to send welcome message to {client_info}: {e}")
     
     def _client_left(self, client, server):
         """Handle client disconnection"""
-        if client and self.cli_backend_client and client['id'] == self.cli_backend_client['id']:
+        # Handle cases where client is None (failed handshake, non-WebSocket requests)
+        if client is None:
+            self.logger.debug("🔌 Non-WebSocket connection attempt or failed handshake")
+            return
+            
+        # Check if this was the CLI backend connection
+        if self.cli_backend_client and client.get('id') == self.cli_backend_client.get('id'):
             self.cli_backend_client = None
             self.logger.info("🤖 CLI backend disconnected")
         
-        client_info = f"{client.get('address', 'unknown')}:{client.get('id', 'unknown')}"
+        # Safe client info extraction
+        client_address = client.get('address', 'unknown') if isinstance(client, dict) else 'unknown'
+        client_id = client.get('id', 'unknown') if isinstance(client, dict) else 'unknown'
+        client_info = f"{client_address}:{client_id}"
+        
         self._remove_client(client)
         self.logger.info(f"👤 Avatar client disconnected: {client_info}")
         self.logger.info(f"📊 Remaining WebSocket clients: {len(self.clients)}")
     
     def _remove_client(self, client):
         """Remove client from list"""
-        if client in self.clients:
+        if client is not None and client in self.clients:
             self.clients.remove(client)
     
     def _message_received(self, client, server, message):
