@@ -13,7 +13,7 @@ transformers>=4.55.3       # HuggingFace transformers (primary AI backend)
 sounddevice>=0.4.6         # Audio input/output
 
 # Data and math
-numpy>=2.3.2               # Numerical computing (Python 3.12+ compatible)
+numpy>=1.26.4,<2.0         # Numerical computing (PyTorch compatibility requires 1.x)
 
 # Disabled dependencies (Python 3.12+ incompatible)
 # llama-cpp-python>=0.2.0  # Compilation fails - use ctransformers instead
@@ -40,4 +40,25 @@ scipy>=1.16.1
 # Already listed above in networking section
 
 # Additional dependencies
-diskcache>=5.6.1
+diskcache>=5.6.1           # Disk-based caching
+
+# =============================================================================
+# PYTHON 3.12+ COMPATIBILITY NOTES
+# =============================================================================
+# 
+# ✅ WORKING: All dependencies above are tested and working on Python 3.12.7
+# ❌ DISABLED: The following packages are not compatible with Python 3.12+
+#    - TTS (Coqui TTS) 0.22.0: Requires Python <3.12
+#    - llama-cpp-python: Compilation fails on current system (use ctransformers)
+#
+# 🔄 ALTERNATIVES PROVIDED:
+#    - TTS → pyttsx3 (offline) + gTTS (online) + kittentts
+#    - llama-cpp-python → ctransformers (GGUF support, ARM64 optimized)
+#
+# ⚠️  KNOWN DEPENDENCY CONFLICTS:
+#    - NumPy 2.x: PyTorch requires NumPy <2.0, so we use numpy>=1.26.4,<2.0
+#    - spaCy ecosystem: Complex dependency chain requires specific versions
+#    - safety packages: May show pydantic version conflicts (non-critical)
+#
+# 📦 INSTALLATION: pip install -r requirements.txt
+# 🧪 TESTING: python cli.py --help  (should load without NumPy warnings)

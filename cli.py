@@ -113,6 +113,72 @@ class AvatarState(Enum):
     LOADING = "⏳"
     SPEAKING = "🔊"
 
+class WebSocketMonitor:
+    """Monitor WebSocket connection and handle incoming messages."""
+    
+    def __init__(self, ws_url: str, message_callback):
+        self.ws_url = ws_url
+        self.message_callback = message_callback
+        self.ws = None
+        self.thread = None
+        self.running = False
+        
+    def start(self):
+        """Start the WebSocket monitor in a separate thread."""
+        if not WEBSOCKET_CLIENT_AVAILABLE:
+            return False
+            
+        self.running = True
+        self.thread = threading.Thread(target=self._run, daemon=True)
+        self.thread.start()
+        return True
+        
+    def stop(self):
+        """Stop the WebSocket monitor."""
+        self.running = False
+        if self.ws:
+            try:
+                self.ws.close()
+            except:
+                pass
+        if self.thread:
+            self.thread.join(timeout=1.0)
+            
+    def _run(self):
+        """Main WebSocket connection loop."""
+        while self.running:
+            try:
+                self.ws = websocket.WebSocket()
+                self.ws.settimeout(5.0)  # 5 second timeout
+                self.ws.connect(self.ws_url)
+                
+                while self.running:
+                    try:
+                        message = self.ws.recv()
+                        if message and self.message_callback:
+                            # Parse the message if it's JSON
+                            try:
+                                data = json.loads(message)
+                                if data.get('type') == 'user_input' and data.get('message'):
+                                    self.message_callback(data['message'])
+                            except json.JSONDecodeError:
+                                # Treat as plain text message
+                                self.message_callback(message)
+                    except websocket.WebSocketTimeoutException:
+                        continue
+                    except websocket.WebSocketException as e:
+                        if self.running:  # Only log if we're still trying to run
+                            print(f"WebSocket error: {e}")
+                        break
+                        
+            except Exception as e:
+                if self.running:  # Only log if we're still trying to run
+                    print(f"WebSocket connection failed: {e}")
+                    
+            # Wait before reconnecting
+            if self.running:
+                time.sleep(5)
+
 class M1K3CLI:
     def __init__(self, voice_enabled: bool = True, auto_avatar: bool = False, avatar_port: int = 8080, open_browser: bool = True, transparency_level: str = "basic", rag_enabled: bool = False):
         # Initialize system monitoring first to gather context
