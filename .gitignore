@@ -61,8 +61,8 @@ env/
 # macOS
 .DS_Store
 
-# Local Claude settings
-.claude/settings.local.json
+# Local Claude settings (commented out - we want to track this)
+# .claude/settings.local.json
 
 # Models - Large files should be downloaded locally 
 models/
@@ -109,3 +109,24 @@ debug_*/
 # Classification system cache
 classification_cache/
 *.classification
+
+# Performance and system analysis data
+performance_data_*.json
+m1k3_full_system_test_*.json
+model_inventory.json
+
+# Demo and test files (keep for reference but don't commit)
+demo_*.py
+*_demo.py
+test_*.py
+*_test.py
+interactive_*.py
+
+# Development and diagnostic files
+*_diagnostic.py
+system_analysis.py
+hardware_insights.py
+startup_profiler.py
+voice_diagnostic.py
+voice_input_processor.py
+voice_truncation_tracker.py
