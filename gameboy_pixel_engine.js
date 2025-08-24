@@ -73,13 +73,16 @@ class GameboyPixelEngine {
         // Single canvas direct rendering (no layers)
         // Removed layer system for cleaner pixel rendering
         
-        // Pixel fonts
-        this.fonts = {
-            tiny: new PixelFont(4, 6),
-            small: new PixelFont(6, 8),
-            normal: new PixelFont(8, 12),
-            large: new PixelFont(12, 16)
+        // Pixel fonts - base sizes for adaptive scaling
+        this.baseFonts = {
+            tiny: { width: 4, height: 6 },
+            small: { width: 6, height: 8 },
+            normal: { width: 8, height: 12 },
+            large: { width: 12, height: 16 }
         };
+        
+        // Initialize fonts with adaptive scaling
+        this.fonts = this.createAdaptiveFonts();
         
         // System state for context-aware rendering
         this.systemState = {
@@ -157,6 +160,59 @@ class GameboyPixelEngine {
         console.log(`🧮 Pixel size calculation: base=${this.basePixelSize}, density=${densityFactor.toFixed(2)}, viewing=${viewingDistanceFactor.toFixed(2)}, dpi=${dpiAdjustment.toFixed(2)}, result=${optimalSize}`);
         
         return optimalSize;
+    }
+    
+    // === ADAPTIVE FONT SCALING SYSTEM ===
+    
+    createAdaptiveFonts() {
+        const fonts = {};
+        const fontScale = this.getFontScalingFactor();
+        
+        for (const [name, baseFont] of Object.entries(this.baseFonts)) {
+            const scaledWidth = Math.max(1, Math.round(baseFont.width * fontScale));
+            const scaledHeight = Math.max(1, Math.round(baseFont.height * fontScale));
+            fonts[name] = new PixelFont(scaledWidth, scaledHeight);
+        }
+        
+        console.log(`📝 Font scaling applied: factor=${fontScale.toFixed(2)}, tiny=${fonts.tiny.charWidth}x${fonts.tiny.charHeight}, normal=${fonts.normal.charWidth}x${fonts.normal.charHeight}`);
+        
+        return fonts;
+    }
+    
+    getFontScalingFactor() {
+        if (!this.adaptiveMode) {
+            return 1.0;
+        }
+        
+        // Base font scaling on pixel size ratio
+        const basePixelRatio = this.pixelSize / this.basePixelSize;
+        
+        // Apply layout mode adjustments to font scaling
+        let layoutFactor = 1.0;
+        switch (this.layoutMode) {
+            case 'mini':
+                layoutFactor = 0.7; // Smaller fonts for compact display
+                break;
+            case 'fullscreen':
+                layoutFactor = 1.3; // Larger fonts for immersive experience
+                break;
+            case 'cinematic':
+                layoutFactor = 1.1; // Slightly larger fonts for wide screens
+                break;
+        }
+        
+        // Calculate final scaling factor
+        let scalingFactor = basePixelRatio * layoutFactor;
+        
+        // Ensure reasonable bounds (fonts shouldn't get too small or too large)
+        scalingFactor = Math.max(0.5, Math.min(2.0, scalingFactor));
+        
+        return scalingFactor;
+    }
+    
+    // Update fonts when pixel size changes
+    updateAdaptiveFonts() {
+        this.fonts = this.createAdaptiveFonts();
     }
     
     // Get optimal grid dimensions for avatar rendering
@@ -324,6 +380,11 @@ class GameboyPixelEngine {
         this.gridWidth = Math.floor(this.containerWidth / this.pixelSize);
         this.gridHeight = Math.floor(this.containerHeight / this.pixelSize);
         
+        // Update adaptive fonts if pixel size changed
+        if (oldPixelSize !== this.pixelSize) {
+            this.updateAdaptiveFonts();
+        }
+        
         console.log(`📐 Adaptive resize: ${oldPixelSize}px → ${this.pixelSize}px pixels`);
         console.log(`🔢 New grid: ${this.gridWidth}x${this.gridHeight} (${this.pixelSize}px per cell)`);
         console.log(`📱 Canvas internal: ${this.canvas.width}x${this.canvas.height}, container: ${width}x${height}`);
@@ -350,9 +411,15 @@ class GameboyPixelEngine {
         console.log(`🎨 Layout mode changed: ${oldMode} → ${newMode}`);
         
         // Recalculate pixel size for new layout mode
+        const oldPixelSize = this.pixelSize;
         this.pixelSize = this.calculateOptimalPixelSize();
         this.gridWidth = Math.floor(this.containerWidth / this.pixelSize);
         this.gridHeight = Math.floor(this.containerHeight / this.pixelSize);
+        
+        // Update adaptive fonts for new layout mode
+        if (oldPixelSize !== this.pixelSize || oldMode !== newMode) {
+            this.updateAdaptiveFonts();
+        }
         
         // Apply layout-specific options
         if (options.palette) {

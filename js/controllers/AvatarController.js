@@ -96,6 +96,20 @@ class AvatarController {
         
         this.stateManager.subscribe('currentState', (state) => {
             this.updateStateDisplay(state);
+            this.updateAvatarTextState(state);
+        });
+        
+        // Listen for AI state updates from WebSocket
+        this.stateManager.eventBus.addEventListener('ai.generation', (event) => {
+            this.updateAITextState(event.detail);
+        });
+        
+        // Listen for system metrics updates
+        this.stateManager.eventBus.addEventListener('websocket.message_received', (event) => {
+            const { data } = event.detail;
+            if (data.type === 'metrics' || data.type === 'system') {
+                this.updateSystemTextState(data.data);
+            }
         });
         
         // Handle window resize with debouncing
@@ -662,6 +676,87 @@ class AvatarController {
     refreshContainer() {
         this.resizeCanvas();
         this.generateAvatar();
+    }
+    
+    // === TEXT STATE INTEGRATION ===
+    
+    // Update avatar text state from WebSocket state changes
+    updateAvatarTextState(state) {
+        if (!this.pixelEngine) return;
+        
+        // Update avatar internal state for text rendering
+        if (this.pixelEngine.avatarState) {
+            // Map AI state to avatar text display
+            const stateMapping = {
+                'idle': { mood: 'happy', displayText: 'Ready' },
+                'thinking': { mood: 'thinking', displayText: 'Processing' },
+                'generating': { mood: 'excited', displayText: 'Creating' },
+                'speaking': { mood: 'happy', displayText: 'Speaking' },
+                'error': { mood: 'sad', displayText: 'Error' }
+            };
+            
+            const mappedState = stateMapping[state] || stateMapping['idle'];
+            this.pixelEngine.avatarState.mood = mappedState.mood;
+            this.pixelEngine.avatarState.displayText = mappedState.displayText;
+            this.pixelEngine.avatarState.lastStateUpdate = Date.now();
+        }
+    }
+    
+    // Update AI text state from WebSocket AI generation events
+    updateAITextState(data) {
+        if (!this.pixelEngine || !this.pixelEngine.systemState) return;
+        
+        // Update system state with latest AI metrics for text display
+        const aiUpdates = {};
+        
+        if (data.type === 'thinking_phase' && data.phase) {
+            aiUpdates.aiPhase = data.phase;
+        }
+        
+        if (data.type === 'generation_stream' && data.tokens_per_second) {
+            aiUpdates.aiSpeed = data.tokens_per_second;
+        }
+        
+        if (data.type === 'progress' && data.percentage !== undefined) {
+            aiUpdates.aiProgress = data.percentage;
+        }
+        
+        // Apply updates to pixel engine system state for text rendering
+        Object.assign(this.pixelEngine.systemState, aiUpdates);
+    }
+    
+    // Update system text state from WebSocket metrics
+    updateSystemTextState(data) {
+        if (!this.pixelEngine || !this.pixelEngine.systemState) return;
+        
+        // Map WebSocket metrics to pixel engine system state
+        const systemUpdates = {};
+        
+        if (data.cpu !== undefined) {
+            systemUpdates.cpu = data.cpu;
+        }
+        
+        if (data.memory !== undefined) {
+            systemUpdates.memory = data.memory;
+        }
+        
+        if (data.battery !== undefined) {
+            systemUpdates.battery = data.battery;
+        }
+        
+        if (data.temperature !== undefined) {
+            systemUpdates.temperature = data.temperature;
+        }
+        
+        if (data.network !== undefined) {
+            systemUpdates.network = data.network;
+            systemUpdates.networkStrength = data.networkStrength || 75;
+        }
+        
+        // Apply updates to pixel engine system state for text rendering
+        Object.assign(this.pixelEngine.systemState, systemUpdates);
+        
+        console.log('📊 System text state updated:', systemUpdates);
     }
 }
 
