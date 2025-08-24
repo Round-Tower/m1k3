@@ -8,6 +8,7 @@ import os
 import sys
 import time
 import json
+import subprocess
 from pathlib import Path
 from typing import Generator, List, Dict, Optional
 from dataclasses import dataclass
@@ -126,6 +127,12 @@ class LocalAIEngine:
         except ImportError:
             pass  # Will fall back to runtime creation
         
+        # Initialize model metadata
+        self.model_metadata = None
+        self._current_model_name = None
+        self.models_dir = Path("models")
+        self.models_dir.mkdir(exist_ok=True)
+        
         # Choose backend: prefer HuggingFace for x86_64 compatibility
         self.use_transformers = TRANSFORMERS_AVAILABLE
         self.use_ctransformers = CTRANSFORMERS_AVAILABLE and not self.use_transformers
@@ -149,13 +156,158 @@ class LocalAIEngine:
         models_dir.mkdir(exist_ok=True)
         return str(models_dir / "tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf")
     
+    def _load_model_metadata(self, model_name: str) -> Optional[Dict]:
+        """Load stored metadata for a model"""
+        try:
+            # Sanitize model name for filename
+            safe_name = model_name.replace("/", "_").replace(":", "_")
+            metadata_file = self.models_dir / f"{safe_name}.json"
+            
+            if metadata_file.exists():
+                with open(metadata_file, 'r', encoding='utf-8') as f:
+                    metadata = json.load(f)
+                    print(f"📋 Loaded metadata for {model_name}")
+                    return metadata
+            else:
+                print(f"⚠️  No metadata file found for {model_name} at {metadata_file}")
+        except Exception as e:
+            print(f"⚠️  Failed to load metadata for {model_name}: {e}")
+        
+        return None
+    
+    def _extract_system_prompt_from_metadata(self, metadata: Dict) -> Optional[str]:
+        """Extract system prompt from model metadata"""
+        if not metadata:
+            return None
+        
+        try:
+            prompts = metadata.get('prompts', {})
+            system_prompt = prompts.get('system')
+            
+            if system_prompt and system_prompt.strip():
+                print(f"🎯 Using model-specific system prompt from metadata")
+                return system_prompt.strip()
+        except Exception as e:
+            print(f"⚠️  Failed to extract system prompt from metadata: {e}")
+        
+        return None
+    
+    def get_model_info_summary(self) -> Dict:
+        """Get a summary of current model information including metadata"""
+        # Use ollama model name for display if available
+        display_name = getattr(self, '_ollama_model_name', self._current_model_name or 'Unknown')
+        inference_model = self._current_model_name or 'Unknown'
+        
+        summary = {
+            'model_name': display_name,
+            'inference_model': inference_model if display_name != inference_model else None,
+            'model_loaded': self.model is not None,
+            'backend': 'HuggingFace' if self.use_transformers else 'ctransformers' if self.use_ctransformers else 'None',
+            'has_metadata': self.model_metadata is not None,
+            'is_ollama_context': hasattr(self, '_ollama_model_name')
+        }
+        
+        if self.model_metadata:
+            model_info = self.model_metadata.get('model_info', {})
+            prompts = self.model_metadata.get('prompts', {})
+            
+            summary.update({
+                'architecture': model_info.get('architecture', 'Unknown'),
+                'parameter_count': model_info.get('parameter_count', 'Unknown'),
+                'context_length': model_info.get('context_length', 'Unknown'),
+                'has_system_prompt': bool(prompts.get('system')),
+                'template_type': prompts.get('template_type', 'Unknown')
+            })
+        
+        return summary
+    
+    def _get_available_ollama_models(self) -> List[str]:
+        """Get list of available ollama models"""
+        try:
+            result = subprocess.run(['ollama', 'list'], capture_output=True, text=True, check=True)
+            models = []
+            lines = result.stdout.strip().split('\n')[1:]  # Skip header
+            for line in lines:
+                if line.strip():
+                    # Extract model name (first column)
+                    model_name = line.split()[0]
+                    models.append(model_name)
+            print(f"🦙 Found {len(models)} ollama models: {', '.join(models)}")
+            return models
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            print("🔍 Ollama not available or no models found")
+            return []
+    
+    def _get_preferred_ollama_model(self) -> Optional[str]:
+        """Get the preferred ollama model based on priority list"""
+        available_models = self._get_available_ollama_models()
+        if not available_models:
+            return None
+        
+        # Priority list - smollm2:135m is now the top choice
+        priority_models = [
+            'smollm2:135m',
+            'smollm2:latest', 
+            'llama3.2:1b',
+            'llama3.2:latest',
+            'tinyllama:latest'
+        ]
+        
+        for preferred in priority_models:
+            if preferred in available_models:
+                print(f"🎯 Selected preferred ollama model: {preferred}")
+                return preferred
+        
+        # Fallback to first available model
+        first_model = available_models[0]
+        print(f"🔄 Using first available ollama model: {first_model}")
+        return first_model
+    
+    def _get_hf_equivalent_for_ollama(self, ollama_model: str) -> Optional[str]:
+        """Get HuggingFace equivalent model for ollama model"""
+        # Mapping of ollama models to compatible HuggingFace models
+        ollama_to_hf_map = {
+            'smollm2:135m': 'microsoft/DialoGPT-small',      # Small, fast conversational model
+            'smollm2:latest': 'microsoft/DialoGPT-small',
+            'llama3.2:1b': 'TinyLlama/TinyLlama-1.1B-Chat-v1.0',
+            'llama3.2:latest': 'TinyLlama/TinyLlama-1.1B-Chat-v1.0',
+            'tinyllama:latest': 'TinyLlama/TinyLlama-1.1B-Chat-v1.0'
+        }
+        
+        hf_model = ollama_to_hf_map.get(ollama_model)
+        if hf_model:
+            # Verify the HuggingFace model is available
+            if self.model_manager and hf_model in self.model_manager.available_models:
+                return hf_model
+            else:
+                # Return it anyway - it might be downloadable
+                return hf_model
+        
+        # Fallback: use a small, reliable model
+        return 'microsoft/DialoGPT-small'
+
     def _get_target_model_name(self) -> Optional[str]:
-        """Get target model name for async loading"""
+        """Get target model name for async loading - prioritizes ollama models"""
         # Check if a specific model is being targeted (for hot loading)
         if hasattr(self, '_target_model_name'):
             return self._target_model_name
         
-        # Try to get recommended model from LocalModelManager
+        # First priority: Check for ollama models (fastest and most efficient)
+        preferred_ollama = self._get_preferred_ollama_model()
+        if preferred_ollama:
+            print(f"🚀 Ollama model detected: {preferred_ollama}")
+            # Store ollama model name for metadata loading
+            self._ollama_model_name = preferred_ollama
+            
+            # Map ollama models to compatible HuggingFace models for loading
+            hf_equivalent = self._get_hf_equivalent_for_ollama(preferred_ollama)
+            if hf_equivalent:
+                print(f"📦 Using HuggingFace equivalent: {hf_equivalent}")
+                return hf_equivalent
+            else:
+                print(f"⚠️  No HuggingFace equivalent found, using fallback selection")
+        
+        # Fallback: Try to get recommended model from LocalModelManager
         try:
             if self.model_manager and self.model_manager.available_models:
                 device_info = self.model_manager.analyze_device()
@@ -164,6 +316,7 @@ class LocalAIEngine:
                     for model_name in device_info.recommended_models:
                         if (model_name in self.model_manager.available_models and 
                             self.model_manager.available_models[model_name].model_type == "hf_transformers"):
+                            print(f"📦 Using cached HuggingFace model: {model_name}")
                             return model_name
         except Exception:
             pass
@@ -211,6 +364,14 @@ class LocalAIEngine:
                     self.tokenizer = result.tokenizer_object
                     self._current_model_name = target_model
                     
+                    # Load metadata - prefer ollama model if available
+                    metadata_model_name = getattr(self, '_ollama_model_name', target_model)
+                    self.model_metadata = self._load_model_metadata(metadata_model_name)
+                    
+                    # Update display name to show ollama model if that's what we're using for context
+                    if hasattr(self, '_ollama_model_name'):
+                        print(f"🎯 Using {self._ollama_model_name} context with {target_model} inference")
+                    
                     print(f"✅ Model loaded via AsyncModelLoader in {result.load_time:.2f}s")
                     return True
                 else:
@@ -223,6 +384,11 @@ class LocalAIEngine:
     def load_model_sync(self) -> bool:
         """Synchronous model loading (original method)"""
         start_time = time.time()
+        
+        # Ensure ollama model is detected and stored before HuggingFace loading
+        if not hasattr(self, '_ollama_model_name'):
+            target = self._get_target_model_name()
+            print(f"🔍 Target model selected for sync loading: {target}")
         
         # Try HuggingFace Transformers first for better x86_64 compatibility
         if self.use_transformers:
@@ -347,6 +513,17 @@ class LocalAIEngine:
                         self.model.generation_config.top_k = None       # Let our parameters override
                     
                     self._current_model_name = best_model
+                    
+                    # Load metadata - prefer ollama model if available  
+                    metadata_model_name = getattr(self, '_ollama_model_name', best_model)
+                    print(f"🔍 Loading metadata from: {metadata_model_name}")
+                    self.model_metadata = self._load_model_metadata(metadata_model_name)
+                    print(f"🔍 Metadata loaded: {self.model_metadata is not None}")
+                    
+                    # Update display name to show ollama model if that's what we're using for context
+                    if hasattr(self, '_ollama_model_name'):
+                        print(f"🎯 Using {self._ollama_model_name} context with {best_model} inference")
+                    
                     # Clear target model name after successful loading
                     if hasattr(self, '_target_model_name'):
                         delattr(self, '_target_model_name')
@@ -358,7 +535,7 @@ class LocalAIEngine:
         
         # Fallback to direct model loading (may trigger downloads)
         print("🔄 No cached models available, trying direct access...")
-        # Reduced candidate list to minimize downloads
+        # Prioritized candidate list - smollm2 would be handled via ollama above
         model_candidates = [
             "microsoft/DialoGPT-small",           # PROVEN: Great conversational model ~350MB
             "distilgpt2",                         # FALLBACK: Universal compatibility ~350MB
@@ -419,6 +596,17 @@ class LocalAIEngine:
                 
                 # Store model name for adaptive parameters
                 self._current_model_name = model_name
+                
+                # Load metadata - prefer ollama model if available
+                metadata_model_name = getattr(self, '_ollama_model_name', model_name)
+                print(f"🔍 Loading metadata from: {metadata_model_name}")
+                self.model_metadata = self._load_model_metadata(metadata_model_name)
+                print(f"🔍 Metadata loaded: {self.model_metadata is not None}")
+                
+                # Update display name to show ollama model if that's what we're using for context
+                if hasattr(self, '_ollama_model_name'):
+                    print(f"🎯 Using {self._ollama_model_name} context with {model_name} inference")
+                
                 return True
                 
             except Exception as e:
@@ -811,6 +999,12 @@ class LocalAIEngine:
 
     def _create_system_prompt(self) -> str:
         """Create a detailed system prompt optimized for the current model template."""
+        
+        # Check if we have a model-specific system prompt from metadata
+        if self.model_metadata:
+            metadata_system_prompt = self._extract_system_prompt_from_metadata(self.model_metadata)
+            if metadata_system_prompt:
+                return metadata_system_prompt
         
         # AI Self-Description
         model_name = getattr(self, '_current_model_name', 'a local language model')

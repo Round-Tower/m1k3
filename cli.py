@@ -343,6 +343,70 @@ class M1K3CLI:
         }
         print(f" {level_map.get(level, '[ ]')}  {message}")
 
+    def _display_model_info_on_startup(self):
+        """Display current model information and system prompt on startup"""
+        try:
+            if not hasattr(self.ai_engine, 'get_model_info_summary'):
+                self._log_startup_message("WARN", "AI engine missing model info method")
+                return
+                
+            # Force metadata loading if we have an ollama model but no metadata yet
+            if (hasattr(self.ai_engine, '_ollama_model_name') and 
+                not self.ai_engine.model_metadata):
+                print("🔄 Loading model metadata for system prompt display...")
+                ollama_model = self.ai_engine._ollama_model_name
+                self.ai_engine.model_metadata = self.ai_engine._load_model_metadata(ollama_model)
+                
+            info = self.ai_engine.get_model_info_summary()
+            
+            
+            print("\n" + "=" * 60)
+            print(f"🤖 M1K3 AI Model Information")
+            print("=" * 60)
+            print(f"📦 Model: {info.get('model_name', 'Unknown')}")
+            
+            # Show inference model if different
+            if info.get('inference_model'):
+                print(f"⚙️  Inference: {info.get('inference_model')}")
+            
+            print(f"🔧 Backend: {info.get('backend', 'Unknown')}")
+            print(f"📊 Architecture: {info.get('architecture', 'Unknown')}")
+            print(f"⚖️  Parameters: {info.get('parameter_count', 'Unknown')}")
+            print(f"📏 Context Length: {info.get('context_length', 'Unknown')}")
+            print(f"🎨 Template Type: {info.get('template_type', 'Unknown')}")
+            
+            # Enhanced system prompt display logic
+            has_system_prompt = info.get('has_system_prompt', False)
+            metadata = self.ai_engine.model_metadata
+            
+            
+            if has_system_prompt and metadata:
+                prompts = metadata.get('prompts', {})
+                system_prompt = prompts.get('system', '')
+                
+                if system_prompt and system_prompt.strip():
+                    print(f"\n🎯 Active System Prompt:")
+                    print("-" * 40)
+                    # Truncate very long prompts for startup display
+                    if len(system_prompt) > 300:
+                        print(f"{system_prompt[:300]}...")
+                        print(f"[Full prompt: {len(system_prompt)} characters]")
+                    else:
+                        print(system_prompt)
+                    print("-" * 40)
+                else:
+                    print(f"\n🎯 System Prompt: [Using M1K3 default - empty metadata]")
+            else:
+                reason = "no metadata" if not metadata else "no system prompt flag"
+                print(f"\n🎯 System Prompt: [Using M1K3 default - {reason}]")
+                
+            print("=" * 60 + "\n")
+                
+        except Exception as e:
+            self._log_startup_message("WARN", f"Could not display model info: {e}")
+            import traceback
+            traceback.print_exc()
+
     def _initialize_ai_context(self):
         """Initialize AI engine with enhanced system context."""
         self._log_startup_message("INFO", "Collecting enhanced device context...")
@@ -451,6 +515,9 @@ class M1K3CLI:
                     self._log_startup_message("INFO", f"Still loading: {', '.join(loading_components)}")
                     print("💡 You can start using M1K3 while components finish loading!")
                 
+                # Now that AI model is loaded, display model information and system prompt
+                self._display_model_info_on_startup()
+                
                 return True
             else:
                 self._log_startup_message("ERROR", "❌ Essential components failed to load")
@@ -493,6 +560,9 @@ class M1K3CLI:
             self._log_startup_message("INFO", "Voice synthesis is disabled.")
             
         self._log_startup_message("OK", "AI Engine is ready!")
+        
+        # Display model information and system prompt (legacy path)
+        self._display_model_info_on_startup()
         
         # Auto-start avatar server if requested
         if self.auto_avatar and AVATAR_AVAILABLE:
@@ -1234,6 +1304,16 @@ M1K3 Local AI CLI Commands:
         print(f"   Memory Usage: {ai_stats['memory_mb']} MB")
         print(f"   Context: {ai_stats['context_tokens']} tokens")
         print(f"   Model: {ai_stats.get('model_name', 'SmolLM-135M')}")
+        
+        # Add model metadata if available
+        if hasattr(self.ai_engine, 'get_model_info_summary'):
+            info = self.ai_engine.get_model_info_summary()
+            if info.get('has_metadata', False):
+                print(f"   Architecture: {info.get('architecture', 'Unknown')}")
+                print(f"   Parameters: {info.get('parameter_count', 'Unknown')}")
+                print(f"   Context Length: {info.get('context_length', 'Unknown')}")
+                print(f"   Template Type: {info.get('template_type', 'Unknown')}")
+                print(f"   Has System Prompt: {'Yes' if info.get('has_system_prompt') else 'No'}")
         
         # Voice engine stats
         print(f"🔊 Voice Engine:")

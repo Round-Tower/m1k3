@@ -154,6 +154,31 @@ class MetricsWidget(Static):
                 table.add_row("🔄 Session Time", session_str)
                 table.add_row("🎯 Tokens", f"{total_tokens:,}")
                 table.add_row("🤖 AI Status", app_instance.ai_status)
+                
+                # Add model metadata if available
+                if hasattr(app_instance.ai_engine, 'get_model_info_summary'):
+                    info = app_instance.ai_engine.get_model_info_summary()
+                    model_name = info.get('model_name', 'Unknown')
+                    if len(model_name) > 25:  # Truncate long model names for TUI
+                        model_name = model_name[:22] + "..."
+                    table.add_row("📦 Model", model_name)
+                    
+                    if info.get('has_metadata', False):
+                        backend = info.get('backend', 'Unknown')
+                        table.add_row("🔧 Backend", backend)
+                        
+                        arch = info.get('architecture', 'Unknown')
+                        if arch != 'Unknown' and len(arch) > 20:
+                            arch = arch[:17] + "..."
+                        table.add_row("📊 Architecture", arch)
+                        
+                        params = info.get('parameter_count', 'Unknown')
+                        table.add_row("⚖️  Parameters", str(params))
+                        
+                        has_system_prompt = info.get('has_system_prompt', False)
+                        prompt_status = "✅ Custom" if has_system_prompt else "🔄 Default"
+                        table.add_row("🎯 System Prompt", prompt_status)
+                
                 table.add_row("🔊 Voice", app_instance.voice_status)
                 table.add_row("👾 Avatar", app_instance.avatar_status)
                 

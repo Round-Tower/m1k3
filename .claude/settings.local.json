@@ -10,7 +10,8 @@
       "Bash(lsof:*)",
       "Bash(open index.html)",
       "Bash(curl:*)",
-      "Bash(open http://localhost:8080)"
+      "Bash(open http://localhost:8080)",
+      "Bash(timeout:*)"
     ],
     "deny": [],
     "ask": []

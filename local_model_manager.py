@@ -66,6 +66,10 @@ class LocalModelManager:
         symlink_models = self._discover_symlinked_models()
         self.available_models.update(symlink_models)
         
+        # 4. Check ollama models (prioritize for performance)
+        ollama_models = self._discover_ollama_models()
+        self.available_models.update(ollama_models)
+        
     def _discover_hf_cached_models(self) -> Dict[str, ModelSpec]:
         """Discover cached HuggingFace models"""
         models = {}
@@ -146,6 +150,80 @@ class LocalModelManager:
         
         return models
     
+    def _discover_ollama_models(self) -> Dict[str, ModelSpec]:
+        """Discover available ollama models"""
+        models = {}
+        
+        try:
+            result = subprocess.run(['ollama', 'list'], capture_output=True, text=True, check=True)
+            lines = result.stdout.strip().split('\n')[1:]  # Skip header
+            
+            for line in lines:
+                if not line.strip():
+                    continue
+                    
+                parts = line.split()
+                if len(parts) >= 3:
+                    model_name = parts[0]
+                    model_id = parts[1] 
+                    size_str = parts[2]
+                    
+                    # Parse size (e.g., "270 MB", "2.0 GB")
+                    try:
+                        size_parts = size_str.split()
+                        if len(size_parts) >= 2:
+                            size_val = float(size_parts[0])
+                            size_unit = size_parts[1].upper()
+                            
+                            # Convert to MB
+                            if size_unit == 'GB':
+                                size_mb = size_val * 1024
+                            elif size_unit == 'MB':
+                                size_mb = size_val
+                            else:
+                                size_mb = 100  # Default fallback
+                        else:
+                            size_mb = 100
+                    except (ValueError, IndexError):
+                        size_mb = 100  # Default fallback
+                    
+                    # Estimate RAM requirement (ollama models are more efficient)
+                    ram_required = int(size_mb * 1.2)  # 20% overhead for ollama
+                    
+                    description, speed = self._analyze_ollama_model_characteristics(model_name, size_mb)
+                    
+                    models[model_name] = ModelSpec(
+                        name=model_name,
+                        path=f"ollama://{model_name}",  # Special path for ollama models
+                        size_mb=size_mb,
+                        ram_required_mb=ram_required,
+                        description=description,
+                        speed_estimate=speed,
+                        model_type="ollama"  # New model type
+                    )
+            
+            print(f"🦙 Discovered {len(models)} ollama models")
+            
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            print("🔍 Ollama not available - skipping ollama model discovery")
+        
+        return models
+    
+    def _analyze_ollama_model_characteristics(self, model_name: str, size_mb: float) -> Tuple[str, str]:
+        """Analyze ollama model characteristics"""
+        name_lower = model_name.lower()
+        
+        if "smollm2:135m" in name_lower or "smollm2" in name_lower:
+            return "SmolLM2 135M - Ultra-fast, optimized for UX development", "~50-100 tokens/sec"
+        elif "llama3.2:1b" in name_lower:
+            return "Llama 3.2 1B - Efficient reasoning model", "~30-60 tokens/sec"
+        elif "tinyllama" in name_lower:
+            return "TinyLlama - Compact conversational model", "~40-80 tokens/sec"
+        elif "llama3.2" in name_lower:
+            return "Llama 3.2 - Advanced reasoning capabilities", "~20-40 tokens/sec"
+        else:
+            return f"Ollama model - Size: {size_mb:.0f}MB", "~20-50 tokens/sec"
+
     def _analyze_model_characteristics(self, model_name: str, size_mb: float) -> Tuple[str, str]:
         """Analyze model characteristics based on name and size"""
         name_lower = model_name.lower()
@@ -232,9 +310,15 @@ class LocalModelManager:
         for name, spec in self.available_models.items():
             ram_req_gb = spec.ram_required_mb / 1024
             if ram_req_gb <= available_ram_gb:
-                # Score based on quality and capabilities (prioritize most powerful models)
-                if "qwen3-0.6b" in name.lower() or "qwen/qwen3-0.6b" in name.lower():
-                    priority = 99   # Highest priority - latest reasoning model, compact and fast
+                # Score based on quality and capabilities (prioritize ollama models for UX development)
+                if "smollm2:135m" in name.lower():
+                    priority = 120  # TOP PRIORITY - Ultra-fast, perfect for UX development
+                elif spec.model_type == "ollama" and "smollm2" in name.lower():
+                    priority = 115  # Very high - Any smollm2 variant
+                elif spec.model_type == "ollama":
+                    priority = 110  # High - Ollama models are optimized and efficient
+                elif "qwen3-0.6b" in name.lower() or "qwen/qwen3-0.6b" in name.lower():
+                    priority = 99   # Highest HF priority - latest reasoning model, compact and fast
                 elif "gemma-2-2b-it" in name.lower():
                     priority = 100  # Very high priority - powerful but larger model
                 elif "gemma" in name.lower():

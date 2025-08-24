@@ -80,6 +80,7 @@ def parse_ollama_show(output):
 
     try:
         base_indent = get_indent(next(line for line in lines if line.strip()))
+        # Debug: Base indent determined as {base_indent}
     except StopIteration:
         logging.warning("Could not determine base indent from lines.")
         return metadata
@@ -87,49 +88,152 @@ def parse_ollama_show(output):
     sections = {}
     current_section = None
     
-    for line in lines:
+    # Enhanced parsing for ollama format: 2-space headers, 4-space content
+    section_indent = 2  # Ollama uses 2 spaces for section headers
+    content_indent = 4  # Ollama uses 4 spaces for content
+    
+    for line_num, line in enumerate(lines):
         if not line.strip():
             continue
         indent = get_indent(line)
-        if indent == base_indent:
-            current_section = line.strip().lower()
+        
+        # Detect new sections - look for 2-space indent
+        if indent == section_indent:
+            section_name = line.strip().lower()
+            # Handle common ollama section headers
+            if section_name.endswith(':'):
+                section_name = section_name[:-1]
+            current_section = section_name
             sections[current_section] = []
-        elif indent > base_indent and current_section:
+            # Debug: Found section '{current_section}' at indent {indent}
+        elif indent == content_indent and current_section:
             sections[current_section].append(line.strip())
+            # Debug: Added content to '{current_section}': {line.strip()[:50]}...
+        elif indent == 0 and line.strip() and current_section is None:
+            # This is the first section without proper header (e.g., "Model" at start)
+            if line.strip().lower() == 'model':
+                current_section = 'model'
+                sections[current_section] = []
+            else:
+                # Handle other content before first section header
+                if 'general' not in sections:
+                    sections['general'] = []
+                sections['general'].append(line.strip())
+        elif current_section is None and line.strip():
+            # Handle content before first section header
+            if 'general' not in sections:
+                sections['general'] = []
+            sections['general'].append(line.strip())
 
+    # Enhanced content processing
     for section, content in sections.items():
         if not content:
             metadata[section] = ""
             continue
         
-        is_kv_section = True
-        temp_data = {}
-        for line in content:
-            parts = re.split(r'\s{2,}', line.strip(), 1)
-            if len(parts) == 2:
-                key, value = parts[0].strip().lower(), parts[1].strip()
-                if key in temp_data:
-                    if not isinstance(temp_data[key], list):
-                        temp_data[key] = [temp_data[key]]
-                    temp_data[key].append(value)
-                else:
-                    temp_data[key] = value
+        # Special handling for different section types
+        if section in ['system', 'template']:
+            # Preserve full text for system prompts and templates
+            # Join content and clean it up
+            system_text = '\n'.join(content).strip()
+            if system_text:
+                metadata[section] = system_text
             else:
-                is_kv_section = False
-                break
-        
-        if is_kv_section:
-            metadata[section] = temp_data
-            continue
-
-        if all(len(line.split()) == 1 for line in content):
-             metadata[section] = [line.strip() for line in content]
-             continue
-
-        metadata[section] = '\n'.join(content)
+                metadata[section] = '\n'.join(content)
+        elif section == 'parameters':
+            # Parse parameters as key-value pairs
+            temp_data = {}
+            for line in content:
+                if ':' in line:
+                    key, value = line.split(':', 1)
+                    key = key.strip().lower()
+                    value = value.strip()
+                    # Handle special parameter types
+                    if key == 'stop':
+                        # Parse stop sequences
+                        if value.startswith('[') and value.endswith(']'):
+                            try:
+                                import ast
+                                temp_data[key] = ast.literal_eval(value)
+                            except:
+                                temp_data[key] = [v.strip('"\' ') for v in value[1:-1].split(',') if v.strip()]
+                        else:
+                            temp_data[key] = [value.strip('"\' ')]
+                    else:
+                        temp_data[key] = value
+                elif '=' in line:
+                    key, value = line.split('=', 1)
+                    temp_data[key.strip().lower()] = value.strip()
+                else:
+                    # Single value parameters
+                    temp_data[line.strip().lower()] = True
+            metadata[section] = temp_data if temp_data else '\n'.join(content)
+        elif section == 'model':
+            # Parse model information as key-value pairs with multiple spaces as separator
+            temp_data = {}
+            for line in content:
+                # Split on multiple spaces (2 or more)
+                parts = re.split(r'\s{2,}', line.strip())
+                if len(parts) >= 2:
+                    key = parts[0].strip().lower().replace(' ', '_')
+                    value = parts[1].strip()
+                    temp_data[key] = value
+                elif line.strip():
+                    # Single value or description
+                    temp_data[line.strip().lower().replace(' ', '_')] = True
+            metadata[section] = temp_data if temp_data else '\n'.join(content)
+        else:
+            # Try key-value parsing for other sections
+            is_kv_section = True
+            temp_data = {}
+            for line in content:
+                # Try multiple spaces first, then other separators
+                found_separator = False
+                
+                # Try multiple spaces (most common in ollama output)
+                parts = re.split(r'\s{2,}', line.strip())
+                if len(parts) >= 2:
+                    key = parts[0].strip().lower().replace(' ', '_')
+                    value = parts[1].strip()
+                    if key in temp_data:
+                        if not isinstance(temp_data[key], list):
+                            temp_data[key] = [temp_data[key]]
+                        temp_data[key].append(value)
+                    else:
+                        temp_data[key] = value
+                    found_separator = True
+                else:
+                    # Try other separators
+                    for sep in [':', '=', '\t']:
+                        if sep in line:
+                            split_parts = line.split(sep, 1)
+                            if len(split_parts) == 2:
+                                key = split_parts[0].strip().lower().replace(' ', '_')
+                                value = split_parts[1].strip()
+                                if key in temp_data:
+                                    if not isinstance(temp_data[key], list):
+                                        temp_data[key] = [temp_data[key]]
+                                    temp_data[key].append(value)
+                                else:
+                                    temp_data[key] = value
+                                found_separator = True
+                                break
+                
+                if not found_separator:
+                    is_kv_section = False
+                    break
+            
+            if is_kv_section and temp_data:
+                metadata[section] = temp_data
+            elif all(len(line.split()) == 1 for line in content):
+                # Single word lines - make a list
+                metadata[section] = [line.strip() for line in content]
+            else:
+                # Full text content
+                metadata[section] = '\n'.join(content)
             
     logging.info(f"Successfully parsed metadata for {len(metadata)} sections.")
-    logging.debug(f"Parsed metadata: {json.dumps(metadata, indent=2)}")
+    logging.debug(f"Parsed metadata: {json.dumps(metadata, indent=2, default=str)}")
     return metadata
 
 def format_metadata(raw_metadata, model_name):
@@ -140,37 +244,111 @@ def format_metadata(raw_metadata, model_name):
         "model_info": {},
         "parameters": {},
         "prompts": {},
-        "license": raw_metadata.get('license', 'N/A')
+        "license": raw_metadata.get('license', 'N/A'),
+        "raw_metadata": raw_metadata  # Preserve original for debugging
     }
 
+    # Enhanced model info extraction
     model_data = raw_metadata.get('model', {})
     if isinstance(model_data, dict):
-        formatted['model_info']['architecture'] = model_data.get('architecture')
-        formatted['model_info']['parameter_count'] = model_data.get('parameters')
-        formatted['model_info']['quantization'] = model_data.get('quantization')
-        try:
-            formatted['model_info']['context_length'] = int(model_data.get('context length'))
-        except (ValueError, TypeError):
-            formatted['model_info']['context_length'] = None
-        try:
-            formatted['model_info']['embedding_length'] = int(model_data.get('embedding length'))
-        except (ValueError, TypeError):
-            formatted['model_info']['embedding_length'] = None
+        # Map various possible field names
+        field_mappings = {
+            'architecture': ['architecture', 'arch', 'model_type'],
+            'parameter_count': ['parameters', 'params', 'parameter_count', 'param_count'],
+            'quantization': ['quantization', 'quant', 'quantization_type'],
+            'context_length': ['context length', 'context_length', 'max_position_embeddings', 'max_context'],
+            'embedding_length': ['embedding length', 'embedding_length', 'hidden_size'],
+            'family': ['family', 'model_family'],
+            'format': ['format', 'model_format']
+        }
+        
+        for target_field, possible_keys in field_mappings.items():
+            value = None
+            for key in possible_keys:
+                if key in model_data:
+                    value = model_data[key]
+                    break
+            
+            if value:
+                if target_field in ['context_length', 'embedding_length', 'parameter_count']:
+                    try:
+                        # Try to extract numeric values
+                        if isinstance(value, str):
+                            # Extract numbers from strings like "2048" or "2.7B"
+                            import re
+                            numbers = re.findall(r'([0-9.]+)([KMGTB]?)', value.upper())
+                            if numbers:
+                                num, unit = numbers[0]
+                                num = float(num)
+                                if unit:
+                                    multipliers = {'K': 1000, 'M': 1000000, 'B': 1000000000, 'T': 1000000000000}
+                                    num *= multipliers.get(unit, 1)
+                                value = int(num)
+                        formatted['model_info'][target_field] = value
+                    except (ValueError, TypeError):
+                        formatted['model_info'][target_field] = str(value)
+                else:
+                    formatted['model_info'][target_field] = value
+    
+    # Add any other model data that wasn't mapped
+    if isinstance(model_data, dict):
+        for key, value in model_data.items():
+            if key.lower() not in ['architecture', 'parameters', 'params', 'quantization', 
+                                 'context length', 'context_length', 'embedding length', 'embedding_length']:
+                formatted['model_info'][f'extra_{key.lower()}'] = value
     
     formatted['model_info']['capabilities'] = raw_metadata.get('capabilities', [])
 
+    # Enhanced parameter extraction
     param_data = raw_metadata.get('parameters', {})
     if isinstance(param_data, dict):
+        # Preserve all parameters
+        for key, value in param_data.items():
+            formatted['parameters'][key] = value
+        
+        # Special handling for stop sequences
         stop_sequences = param_data.get('stop', [])
-        if stop_sequences and not isinstance(stop_sequences, list):
-            stop_sequences = [stop_sequences]
-        formatted['parameters']['stop_sequences'] = [s.strip('"') for s in stop_sequences]
+        if stop_sequences:
+            if not isinstance(stop_sequences, list):
+                stop_sequences = [stop_sequences]
+            formatted['parameters']['stop_sequences'] = [str(s).strip('"\' ') for s in stop_sequences]
+    
+    # Enhanced prompt extraction
+    system_prompt = raw_metadata.get('system', raw_metadata.get('system_prompt', ''))
+    template = raw_metadata.get('template', raw_metadata.get('chat_template', ''))
+    
+    # Clean up system prompts
+    if system_prompt and system_prompt != 'N/A':
+        # Remove common prefixes/suffixes that might be artifacts
+        system_prompt = system_prompt.strip()
+        if system_prompt.startswith('System:'):
+            system_prompt = system_prompt[7:].strip()
+    
+    formatted['prompts']['system'] = system_prompt if system_prompt and system_prompt != 'N/A' else None
+    formatted['prompts']['template'] = template if template and template != 'N/A' else None
+    
+    # Add template format detection
+    if template:
+        template_lower = template.lower()
+        if '<|im_start|>' in template_lower:
+            formatted['prompts']['template_type'] = 'chatml'
+        elif '[inst]' in template_lower:
+            formatted['prompts']['template_type'] = 'llama2'
+        elif '### instruction' in template_lower:
+            formatted['prompts']['template_type'] = 'alpaca'
+        elif 'user:' in template_lower and 'assistant:' in template_lower:
+            formatted['prompts']['template_type'] = 'vicuna'
+        else:
+            formatted['prompts']['template_type'] = 'custom'
 
-    formatted['prompts']['system'] = raw_metadata.get('system', 'N/A')
-    formatted['prompts']['template'] = raw_metadata.get('template', 'N/A')
+    # Add extraction timestamp and ollama version info
+    formatted['metadata'] = {
+        'extracted_at': time.time(),
+        'ollama_version': raw_metadata.get('ollama_version', 'unknown')
+    }
 
     logging.info("Successfully formatted metadata.")
-    logging.debug(f"Formatted metadata: {json.dumps(formatted, indent=2)}")
+    logging.debug(f"Formatted metadata: {json.dumps(formatted, indent=2, default=str)}")
     return formatted
 
 def get_model_metadata(model_name, save_dir='models'):
@@ -225,25 +403,60 @@ def get_model_metadata(model_name, save_dir='models'):
         logging.info(f"Metadata saved to '{file_path}'.")
         print(f"✅ Metadata saved to '{file_path}'")
 
-        print("\n" + "-" * 20 + " Model Metadata " + "-" * 20)
+        print("\n" + "-" * 25 + " Model Metadata " + "-" * 25)
         model_info = formatted_metadata.get('model_info', {})
         parameters = formatted_metadata.get('parameters', {})
         prompts = formatted_metadata.get('prompts', {})
 
-        print(f"Architecture: {model_info.get('architecture', 'N/A')}")
-        print(f"Parameter Count: {model_info.get('parameter_count', 'N/A')}")
-        print(f"System Prompt: {prompts.get('system', 'N/A')}")
-        print(f"Stop Sequences: {parameters.get('stop_sequences', 'N/A')}")
-        print("-" * 58 + "\n")
+        print(f"📋 Model: {formatted_metadata.get('name', 'N/A')}")
+        print(f"🏗️  Architecture: {model_info.get('architecture', 'N/A')}")
+        print(f"📊 Parameter Count: {model_info.get('parameter_count', 'N/A')}")
+        print(f"🔧 Quantization: {model_info.get('quantization', 'N/A')}")
+        print(f"📏 Context Length: {model_info.get('context_length', 'N/A')}")
+        
+        # Display system prompt with truncation for readability
+        system_prompt = prompts.get('system')
+        if system_prompt and system_prompt.strip():
+            if len(system_prompt) > 200:
+                print(f"🤖 System Prompt: {system_prompt[:200]}...")
+                print(f"   [Full system prompt saved to metadata file]")
+            else:
+                print(f"🤖 System Prompt: {system_prompt}")
+        else:
+            print(f"🤖 System Prompt: [None specified]")
+            
+        template_type = prompts.get('template_type', 'unknown')
+        print(f"📝 Chat Template: {template_type}")
+        
+        stop_seqs = parameters.get('stop_sequences', [])
+        if stop_seqs:
+            print(f"🛑 Stop Sequences: {', '.join(stop_seqs[:3])}{'...' if len(stop_seqs) > 3 else ''}")
+        else:
+            print(f"🛑 Stop Sequences: [Default]")
+            
+        # Show additional parameters if present
+        other_params = {k: v for k, v in parameters.items() if k not in ['stop_sequences', 'stop']}
+        if other_params:
+            print(f"⚙️  Parameters: {len(other_params)} custom settings stored")
+            
+        print("-" * 66 + "\n")
 
         return formatted_metadata
     except subprocess.CalledProcessError as e:
-        logging.error(f"Failed to get metadata for '{model_name}'. Subprocess error: {e.stderr}")
-        print(f"\n❌ Failed to get metadata for '{model_name}': {e.stderr}")
+        error_msg = e.stderr if e.stderr else "Unknown subprocess error"
+        logging.error(f"Failed to get metadata for '{model_name}'. Subprocess error: {error_msg}")
+        print(f"\n❌ Failed to get metadata for '{model_name}': {error_msg}")
+        print(f"💡 Make sure the model is pulled with: ollama pull {model_name}")
+        return None
+    except json.JSONDecodeError as e:
+        logging.error(f"Failed to parse JSON metadata for '{model_name}': {e}")
+        print(f"\n❌ Invalid JSON response from ollama show --json")
+        print(f"💡 This might be an older ollama version or corrupted model")
         return None
     except Exception as e:
         logging.error(f"An unexpected error occurred while fetching metadata for '{model_name}'.", exc_info=True)
         print(f"\n❌ An error occurred while fetching metadata: {e}")
+        print(f"💡 Try running: ollama list to verify the model exists")
         return None
 
 def download_model(model_name):
@@ -320,7 +533,7 @@ def main():
     parser.add_argument(
         'model',
         nargs='?',
-        default='dagbs/qwen3-coder:flash',
+        default='smollm2:135m',
         help='The model to pull from Ollama (e.g., "llama3")'
     )
     parser.add_argument(
