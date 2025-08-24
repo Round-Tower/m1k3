@@ -25,6 +25,17 @@ except ImportError:
 # Enable HuggingFace tokenizers parallelism for better performance
 os.environ['TOKENIZERS_PARALLELISM'] = 'true'
 
+# Import SmolLM2 engine and logging
+try:
+    from smollm_engine import SmolLMEngine
+    from model_tiers import ModelTierManager, DeviceTier
+    from prompt_logger import get_prompt_logger
+    SMOLLM_ENGINE_AVAILABLE = True
+    print("🤖 SmolLM2 engine available")
+except ImportError as e:
+    SMOLLM_ENGINE_AVAILABLE = False
+    print(f"⚠️ SmolLM2 engine not available: {e}")
+
 # Import local model manager
 try:
     from local_model_manager import LocalModelManager
@@ -127,11 +138,44 @@ class LocalAIEngine:
         except ImportError:
             pass  # Will fall back to runtime creation
         
-        # Initialize model metadata
+        # Initialize model metadata and logging
         self.model_metadata = None
         self._current_model_name = None
         self.models_dir = Path("models")
+        
+        # Initialize prompt logger
+        if SMOLLM_ENGINE_AVAILABLE:
+            self.logger = get_prompt_logger()
+        else:
+            self.logger = None
         self.models_dir.mkdir(exist_ok=True)
+        
+        # Initialize SmolLM2 engine and tier management
+        self.smollm_engine = None
+        self.tier_manager = None
+        self.device_tier = None
+        if SMOLLM_ENGINE_AVAILABLE:
+            try:
+                self.tier_manager = ModelTierManager()
+                device_capability, _ = self.tier_manager.recommend_models_for_device()
+                self.device_tier = device_capability.tier
+                print(f"🎯 Device tier detected: {self.device_tier.value}")
+                
+                # Initialize SmolLM2 engine for all tiers (can coexist with larger models)
+                self.smollm_engine = SmolLMEngine("smollm_config.json")
+                print(f"🤖 SmolLM2 engine initialized for {self.device_tier.value} tier")
+                
+                # Load metadata for SmolLM2
+                if hasattr(self.smollm_engine, 'backend') and self.smollm_engine.backend:
+                    model_name = "smollm2:135m"  # Default SmolLM2 model name
+                    self.model_metadata = self._load_model_metadata(model_name)
+                    if self.model_metadata:
+                        print(f"📋 Loaded SmolLM2 metadata: {model_name}")
+                    else:
+                        print(f"⚠️ Could not load SmolLM2 metadata for {model_name}")
+            except Exception as e:
+                print(f"⚠️ SmolLM2 initialization failed: {e}")
+                self.smollm_engine = None
         
         # Choose backend: prefer HuggingFace for x86_64 compatibility
         self.use_transformers = TRANSFORMERS_AVAILABLE
@@ -167,11 +211,26 @@ class LocalAIEngine:
                 with open(metadata_file, 'r', encoding='utf-8') as f:
                     metadata = json.load(f)
                     print(f"📋 Loaded metadata for {model_name}")
+                    
+                    # Log metadata search
+                    if self.logger:
+                        self.logger.log_metadata_search(str(metadata_file), True, metadata)
+                    
                     return metadata
             else:
                 print(f"⚠️  No metadata file found for {model_name} at {metadata_file}")
+                
+                # Log failed metadata search
+                if self.logger:
+                    self.logger.log_metadata_search(str(metadata_file), False, None)
+                    
         except Exception as e:
             print(f"⚠️  Failed to load metadata for {model_name}: {e}")
+            
+            # Log error in metadata search
+            if self.logger:
+                self.logger.log_error(f"Failed to load metadata for {model_name}: {e}", 
+                                    {"model_name": model_name, "safe_name": safe_name})
         
         return None
     
@@ -264,27 +323,25 @@ class LocalAIEngine:
         return first_model
     
     def _get_hf_equivalent_for_ollama(self, ollama_model: str) -> Optional[str]:
-        """Get HuggingFace equivalent model for ollama model"""
-        # Mapping of ollama models to compatible HuggingFace models
-        ollama_to_hf_map = {
-            'smollm2:135m': 'microsoft/DialoGPT-small',      # Small, fast conversational model
-            'smollm2:latest': 'microsoft/DialoGPT-small',
+        """Get HuggingFace equivalent model for ollama model - DEPRECATED, use SmolLM2 engine instead"""
+        print(f"⚠️ Using deprecated HF mapping for {ollama_model} - consider SmolLM2 engine")
+        
+        # Check if we should use SmolLM2 engine instead
+        if ollama_model.startswith('smollm2'):
+            return None  # Will trigger SmolLM2 engine usage
+        
+        # Limited mapping for non-SmolLM models
+        legacy_map = {
             'llama3.2:1b': 'TinyLlama/TinyLlama-1.1B-Chat-v1.0',
             'llama3.2:latest': 'TinyLlama/TinyLlama-1.1B-Chat-v1.0',
             'tinyllama:latest': 'TinyLlama/TinyLlama-1.1B-Chat-v1.0'
         }
         
-        hf_model = ollama_to_hf_map.get(ollama_model)
-        if hf_model:
-            # Verify the HuggingFace model is available
-            if self.model_manager and hf_model in self.model_manager.available_models:
-                return hf_model
-            else:
-                # Return it anyway - it might be downloadable
-                return hf_model
+        hf_model = legacy_map.get(ollama_model)
+        if hf_model and self.model_manager and hf_model in self.model_manager.available_models:
+            return hf_model
         
-        # Fallback: use a small, reliable model
-        return 'microsoft/DialoGPT-small'
+        return None  # No mapping, let SmolLM2 engine handle it
 
     def _get_target_model_name(self) -> Optional[str]:
         """Get target model name for async loading - prioritizes ollama models"""
@@ -328,8 +385,20 @@ class LocalAIEngine:
         return Path(self.model_path).exists()
         
     def load_model(self) -> bool:
-        """Load the AI model with fallback strategies"""
-        # Check if async loader is available and try it first
+        """Load the AI model with SmolLM2-first strategy"""
+        print("🔄 Starting model loading with SmolLM2-first strategy...")
+        
+        # Priority 1: Use SmolLM2 engine for supported tiers
+        if self.smollm_engine:
+            print("🤖 Attempting SmolLM2 engine loading...")
+            if self.smollm_engine.load_model():
+                self._current_model_name = "SmolLM2-135M"
+                print(f"✅ SmolLM2 engine loaded successfully - primary inference ready for {self.device_tier.value} tier")
+                return True
+            else:
+                print("⚠️ SmolLM2 engine loading failed, falling back to legacy engines")
+        
+        # Priority 2: Check if async loader is available and try it
         try:
             from async_model_loader import get_async_model_loader
             return self.load_model_async()
@@ -617,9 +686,52 @@ class LocalAIEngine:
         return False
             
     def generate_response(self, prompt: str, max_tokens: int = 512, show_thinking: bool = False) -> Generator[str, None, None]:
-        """Generate streaming response with optional thinking process display"""
+        """Generate streaming response with SmolLM2-first strategy"""
+        
+        # Priority 1: Use SmolLM2 engine if available and loaded
+        if (self.smollm_engine and 
+            hasattr(self.smollm_engine, 'model') and 
+            (self.smollm_engine.model or self.smollm_engine.backend == "ollama")):
+            
+            try:
+                # Use SmolLM2 for generation
+                print("🤖 Using SmolLM2 engine for generation")
+                
+                # Get adaptive parameters and auto-select style based on intent
+                adaptive_params = self._get_adaptive_generation_params(max_tokens, prompt)
+                auto_style = self._determine_auto_style(prompt, adaptive_params)
+                
+                # Apply auto style to SmolLM2
+                if auto_style and hasattr(self.smollm_engine, 'set_response_style'):
+                    self.smollm_engine.set_response_style(auto_style)
+                
+                # Pass session context and adaptive params
+                session_context = getattr(self, 'session_context', {})
+                
+                # Add RAG context if available
+                rag_context = self._get_rag_context(prompt)
+                if rag_context:
+                    session_context = session_context.copy()
+                    session_context['rag_context'] = rag_context
+                
+                # Check if streaming is supported
+                if hasattr(self.smollm_engine, 'stream_generate') and self.smollm_engine.backend == "ollama":
+                    # Stream from SmolLM2 if supported
+                    for token in self.smollm_engine.stream_generate(prompt, session_context, adaptive_params):
+                        yield token
+                else:
+                    # Non-streaming generation
+                    response = self.smollm_engine.generate(prompt, use_context=True, session_context=session_context, adaptive_params=adaptive_params)
+                    yield response
+                return
+                
+            except Exception as e:
+                print(f"⚠️ SmolLM2 generation failed: {e}, falling back to legacy engine")
+                # Continue to legacy engine below
+        
+        # Priority 2: Legacy engine fallback
         if not self.model:
-            yield "Error: Model not loaded"
+            yield "Error: No model loaded (SmolLM2 and legacy engines unavailable)"
             return
             
         try:
@@ -847,6 +959,11 @@ class LocalAIEngine:
     def clear_context(self):
         """Clear conversation context"""
         self.context = ConversationContext()
+        
+        # Also clear SmolLM2 context if available
+        if self.smollm_engine and hasattr(self.smollm_engine, 'clear_context'):
+            self.smollm_engine.clear_context()
+        
         print("Conversation context cleared.")
         
     def get_memory_usage(self) -> Dict[str, str]:
@@ -916,9 +1033,10 @@ class LocalAIEngine:
             # Filter out metadata and None values to get clean parameters
             params = {k: v for k, v in config_result.items() if k != '_metadata' and v is not None}
             
-            # Set tokenizer-specific IDs for proper generation
-            params['pad_token_id'] = self.tokenizer.eos_token_id
-            params['eos_token_id'] = self.tokenizer.eos_token_id
+            # Set tokenizer-specific IDs for proper generation (if tokenizer exists)
+            if self.tokenizer is not None:
+                params['pad_token_id'] = self.tokenizer.eos_token_id
+                params['eos_token_id'] = self.tokenizer.eos_token_id
             
             # Handle generation config conflicts: when do_sample=False, we should not pass
             # sampling parameters at all, as they conflict with the model's generation_config.json.
@@ -942,20 +1060,94 @@ class LocalAIEngine:
             try:
                 from optimized_inference_config import get_anti_hallucination_params
                 params = get_anti_hallucination_params(model_name, max_tokens)
-                # Set tokenizer-specific IDs
-                params['pad_token_id'] = self.tokenizer.eos_token_id
-                params['eos_token_id'] = self.tokenizer.eos_token_id
+                # Set tokenizer-specific IDs (if tokenizer exists)
+                if self.tokenizer is not None:
+                    params['pad_token_id'] = self.tokenizer.eos_token_id
+                    params['eos_token_id'] = self.tokenizer.eos_token_id
                 return params
             except ImportError:
                 # Ultimate fallback to conservative parameters
-                return {
-                    'pad_token_id': self.tokenizer.eos_token_id,
-                    'eos_token_id': self.tokenizer.eos_token_id,
+                fallback_params = {
                     'do_sample': False,  # Greedy decoding - compatible with all models
                     'max_new_tokens': min(max_tokens, 80),
                     'repetition_penalty': 1.15,
                     'no_repeat_ngram_size': 3,
                 }
+    
+    def _determine_auto_style(self, prompt: str, adaptive_params: Dict) -> Optional[str]:
+        """Automatically determine response style based on intent and context"""
+        # Get intent from adaptive params metadata
+        metadata = adaptive_params.get('_metadata', {})
+        intent = metadata.get('intent', 'unknown')
+        response_strategy = metadata.get('response_strategy', 'balanced')
+        
+        # Map intents to response styles
+        intent_to_style = {
+            'factual_query': 'detailed',
+            'technical_explanation': 'detailed', 
+            'casual_conversation': 'default',
+            'code_request': 'coding',
+            'creative_writing': 'creative',
+            'quick_lookup': 'concise',
+            'debugging_help': 'coding',
+            'question_answering': 'detailed'
+        }
+        
+        # Map response strategies to styles
+        strategy_to_style = {
+            'concise': 'concise',
+            'detailed': 'detailed',
+            'technical': 'coding',
+            'creative': 'creative',
+            'balanced': 'default'
+        }
+        
+        # Priority: intent mapping first, then strategy mapping
+        auto_style = intent_to_style.get(intent)
+        if not auto_style:
+            auto_style = strategy_to_style.get(response_strategy)
+        
+        # Simple heuristics for keywords if no intent detected
+        if not auto_style or intent == 'unknown':
+            prompt_lower = prompt.lower()
+            if any(word in prompt_lower for word in ['code', 'program', 'function', 'debug', 'error']):
+                auto_style = 'coding'
+            elif any(word in prompt_lower for word in ['explain', 'what is', 'how does', 'why']):
+                auto_style = 'detailed'
+            elif any(word in prompt_lower for word in ['story', 'creative', 'imagine', 'write']):
+                auto_style = 'creative'
+            elif len(prompt.split()) < 10:  # Short queries
+                auto_style = 'concise'
+            else:
+                auto_style = 'default'
+        
+        if auto_style:
+            print(f"🎨 Auto-selected style: {auto_style} (intent: {intent}, strategy: {response_strategy})")
+        
+        return auto_style
+    
+    def _get_rag_context(self, prompt: str) -> Optional[Dict]:
+        """Get RAG context if available"""
+        # Check if this is a RAG-enabled engine
+        if hasattr(self, 'rag_enabled') and self.rag_enabled:
+            return None  # RAG engine handles retrieval internally
+            
+        # For standard engines, check if we can access RAG functionality
+        try:
+            from m1k3_rag_engine import M1K3RAGEngine
+            if hasattr(self, '_rag_engine') and self._rag_engine:
+                # Retrieve relevant context
+                results = self._rag_engine.retrieve_context(prompt, top_k=3)
+                if results:
+                    return {
+                        'retrieved_docs': results,
+                        'source_count': len(results),
+                        'confidence': results[0].get('score', 0.0) if results else 0.0
+                    }
+        except ImportError:
+            pass
+            
+        return None
     
     def _clean_response(self, response_text: str, show_thinking: bool = False) -> str:
         """Clean up model response using advanced formatting system"""

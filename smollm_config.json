@@ -1,0 +1,138 @@
+{
+  "model_variants": {
+    "ultra_light": {
+      "name": "SmolLM-135M.Q4_K_M",
+      "path": "models/SmolLM-135M.Q4_K_M.gguf",
+      "backend": "gguf",
+      "size_mb": 100,
+      "description": "Ultra-fast GGUF quantized model, minimal memory usage"
+    },
+    "ollama": {
+      "name": "smollm2:135m",
+      "path": "ollama://smollm2:135m",
+      "backend": "ollama",
+      "size_mb": 270,
+      "description": "Ollama-optimized model with GPU acceleration"
+    },
+    "huggingface": {
+      "name": "HuggingFaceTB/SmolLM2-135M-Instruct",
+      "path": "HuggingFaceTB/SmolLM2-135M-Instruct",
+      "backend": "transformers",
+      "size_mb": 270,
+      "description": "Official HuggingFace SmolLM2 model"
+    }
+  },
+  "parameters": {
+    "temperature": 0.7,
+    "top_p": 0.9,
+    "max_tokens": 1024,
+    "repetition_penalty": 1.1,
+    "context_length": 2048,
+    "stop_tokens": ["<|im_end|>", "<|im_start|>"],
+    "system_prompt": "You are M1K3, a helpful AI assistant. Provide clear, informative responses."
+  },
+  "prompt_templates": {
+    "default": {
+      "name": "ChatML",
+      "format": "chatml",
+      "template": "{% for message in messages %}{% if loop.first and messages[0]['role'] != 'system' %}<|im_start|>system\\n{{ system_prompt }}<|im_end|>\\n{% endif %}<|im_start|>{{ message['role'] }}\\n{{ message['content'] }}<|im_end|>\\n{% endfor %}{% if add_generation_prompt %}<|im_start|>assistant\\n{% endif %}"
+    },
+    "concise": {
+      "name": "Concise Assistant",
+      "format": "chatml",
+      "system_override": "You are M1K3, a helpful AI assistant. Give brief, direct answers. Avoid long explanations unless asked.",
+      "parameters": {
+        "max_tokens": 256
+      }
+    },
+    "coding": {
+      "name": "Code Assistant", 
+      "format": "chatml",
+      "system_override": "You are M1K3, an AI coding assistant. Provide working code with clear explanations. Be precise and practical.",
+      "parameters": {
+        "max_tokens": 1024
+      }
+    },
+    "detailed": {
+      "name": "Detailed Assistant",
+      "format": "chatml",
+      "system_override": "You are M1K3, a helpful AI assistant. Provide comprehensive, detailed responses with examples and explanations.",
+      "parameters": {
+        "max_tokens": 2048,
+        "temperature": 0.6
+      }
+    },
+    "creative": {
+      "name": "Creative Assistant",
+      "format": "chatml", 
+      "system_override": "You are M1K3, a creative AI assistant. Be expressive and imaginative while staying helpful.",
+      "parameters": {
+        "temperature": 0.9,
+        "top_p": 0.95,
+        "max_tokens": 1024
+      }
+    }
+  },
+  "optimization": {
+    "small_model_tips": [
+      "Keep prompts short and clear",
+      "Use specific, concrete examples",
+      "Avoid complex multi-step instructions",
+      "Break complex tasks into simple steps",
+      "Use consistent formatting patterns"
+    ],
+    "context_management": {
+      "max_messages": 10,
+      "trim_strategy": "oldest_first",
+      "preserve_system": true,
+      "context_window": 1800
+    },
+    "performance": {
+      "batch_size": 1,
+      "threads": 2,
+      "gpu_layers": 0,
+      "use_mlock": false,
+      "use_mmap": true
+    }
+  },
+  "fallback_hierarchy": [
+    "ultra_light",
+    "ollama", 
+    "huggingface",
+    "simple_ai"
+  ],
+  "device_requirements": {
+    "minimal": {
+      "ram_gb": 1.0,
+      "recommended_variant": "ultra_light",
+      "description": "Minimum viable configuration"
+    },
+    "balanced": {
+      "ram_gb": 2.0,
+      "recommended_variant": "ollama",
+      "description": "Balanced performance and efficiency"
+    },
+    "performance": {
+      "ram_gb": 4.0,
+      "recommended_variant": "huggingface",
+      "description": "Best quality inference"
+    }
+  },
+  "metadata": {
+    "model_family": "SmolLM2",
+    "parameter_count": 135000000,
+    "architecture": "transformer",
+    "context_length": 8192,
+    "vocab_size": 49152,
+    "license": "Apache-2.0",
+    "homepage": "https://huggingface.co/HuggingFaceTB/SmolLM2-135M-Instruct",
+    "optimized_for": ["on-device", "low-latency", "minimal-memory"],
+    "capabilities": [
+      "text-generation",
+      "conversation", 
+      "basic-reasoning",
+      "code-completion",
+      "question-answering"
+    ]
+  }
+}

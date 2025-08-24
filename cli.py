@@ -18,6 +18,14 @@ import argparse
 from dataclasses import asdict
 import json
 
+# Import our new model management CLI
+try:
+    from cli_model_commands import ModelCLI
+    MODEL_CLI_AVAILABLE = True
+except ImportError as e:
+    MODEL_CLI_AVAILABLE = False
+    print(f"⚠️  Enhanced model CLI not available: {e}")
+
 try:
     import websocket
     WEBSOCKET_CLIENT_AVAILABLE = True
@@ -186,6 +194,15 @@ class M1K3CLI:
     def __init__(self, voice_enabled: bool = True, auto_avatar: bool = False, avatar_port: int = 8080, open_browser: bool = True, transparency_level: str = "basic", rag_enabled: bool = False):
         # Initialize system monitoring first to gather context
         self.system_monitor = SystemMonitor()
+        
+        # Initialize enhanced model management CLI
+        self.model_cli = None
+        if MODEL_CLI_AVAILABLE:
+            try:
+                self.model_cli = ModelCLI()
+                print("🤖 Enhanced model management CLI available")
+            except Exception as e:
+                print(f"⚠️  Could not initialize model CLI: {e}")
         
         # Avatar configuration
         self.auto_avatar = auto_avatar
@@ -425,12 +442,23 @@ class M1K3CLI:
         # Convert to dict and add additional CLI-specific context
         session_context = asdict(enhanced_context) if enhanced_context else {}
         
-        # Add CLI-specific information
+        # Initialize user preferences if not exists
+        if not hasattr(self, 'user_preferences'):
+            self.user_preferences = {
+                'response_length': 'balanced',
+                'technical_level': 'intermediate',
+                'preferred_styles': {},
+                'topic_interests': {},
+                'correction_count': 0
+            }
+        
+        # Add CLI-specific information including preferences
         session_context.update({
             'interface_type': 'CLI',
             'transparency_mode': getattr(self, 'transparency_level', 'basic'),
             'animation_enabled': True,
-            'sound_enabled': hasattr(self, 'sound_manager') and self.sound_manager is not None
+            'sound_enabled': hasattr(self, 'sound_manager') and self.sound_manager is not None,
+            'user_preferences': self.user_preferences
         })
         
         if hasattr(self.ai_engine, 'set_session_context'):
@@ -651,16 +679,17 @@ class M1K3CLI:
             "/explain": self.handle_explain_command,
             "/classify": self.handle_classify_command,
             "/model": self.handle_model_command,
-            "/models": self.list_available_models,
+            "/models": self.handle_models_command,
             "/performance": self.handle_performance_command,
             "/perf": self.handle_performance_command,
+            "/style": self.handle_style_command,
             "/exit": lambda: setattr(self, 'running', False)
         }
         
         if command in action_map:
             print(f"Executing action: {command}")
             # Pass the full command for commands that need it
-            if command in ["/sound", "/transparency", "/explain", "/classify", "/model", "/performance", "/perf"]:
+            if command in ["/sound", "/transparency", "/explain", "/classify", "/model", "/models", "/performance", "/perf", "/style"]:
                 action_map[command](user_input)
             else:
                 action_map[command]()
@@ -1082,6 +1111,15 @@ class M1K3CLI:
             
             self.context_sound_manager.play_response_sound(full_response, user_input)
             
+            # Learn from this interaction
+            current_style = None
+            if (hasattr(self.ai_engine, 'smollm_engine') and 
+                self.ai_engine.smollm_engine and 
+                hasattr(self.ai_engine.smollm_engine, 'get_current_style')):
+                current_style = self.ai_engine.smollm_engine.get_current_style()
+            
+            self._learn_from_interaction(user_input, full_response, current_style)
+            
             # Transparency analysis and completion tracking
             if TRANSPARENCY_AVAILABLE and transparency_start_time:
                 # Analyze response quality
@@ -1182,6 +1220,14 @@ M1K3 Local AI CLI Commands:
   Enhanced Commands:
     /explain <query>    Show detailed decision explanation for a query
     /classify <query>   Show intent classification for a query
+    
+  Response Style Commands:
+    /style status       Show current response style and available options
+    /style default      Balanced, informative responses (1024 tokens)
+    /style concise      Brief, direct answers (256 tokens)
+    /style detailed     Comprehensive explanations (2048 tokens)
+    /style coding       Code-focused responses with explanations (1024 tokens)
+    /style creative     Expressive, imaginative answers (1024 tokens)
     
   Model Management Commands:
     /models             List all available models for hot loading
@@ -2345,6 +2391,50 @@ Available styles: robot, organic, crystal, ghost, energy, cute"""
             self.stop_animated_status()
             self.print_with_avatar(f"❌ Error listing models: {e}", AvatarState.ERROR)
 
+    def handle_models_command(self, user_input: str = ""):
+        """Handle enhanced model management commands"""
+        if not self.model_cli:
+            # Fallback to old method if enhanced CLI not available
+            self.list_available_models()
+            return
+        
+        parts = user_input.strip().split()
+        
+        if len(parts) < 2:
+            # Default to list command
+            self.model_cli.cmd_models_list()
+            print("\n💡 Available commands:")
+            print("  /models list       - List all models with status")
+            print("  /models recommend  - Get model recommendations") 
+            print("  /models health     - Check model health")
+            print("  /models info <name> - Show detailed model info")
+            print("  /models download <name> - Download a new model")
+            print("  /models cleanup    - Clean up broken downloads")
+            return
+        
+        command = parts[1].lower()
+        
+        try:
+            if command == "list":
+                self.model_cli.cmd_models_list()
+            elif command == "recommend":
+                self.model_cli.cmd_models_recommend()
+            elif command == "health":
+                self.model_cli.cmd_models_health()
+            elif command == "info" and len(parts) > 2:
+                model_name = " ".join(parts[2:])
+                self.model_cli.cmd_models_info(model_name)
+            elif command == "download" and len(parts) > 2:
+                model_name = " ".join(parts[2:])
+                self.model_cli.cmd_models_download(model_name)
+            elif command == "cleanup":
+                self.model_cli.cmd_models_cleanup()
+            else:
+                self.print_with_avatar("❌ Unknown models command", AvatarState.ERROR)
+                self.print_with_avatar("💡 Available: list, recommend, health, info, download, cleanup", AvatarState.IDLE)
+        except Exception as e:
+            self.print_with_avatar(f"❌ Error in models command: {e}", AvatarState.ERROR)
+
     def handle_model_command(self, user_input: str = ""):
         """Handle model switching commands"""
         parts = user_input.strip().split()
@@ -2688,6 +2778,126 @@ Available styles: robot, organic, crystal, ghost, energy, cute"""
             self.print_with_avatar("❌ Performance monitoring not available", AvatarState.ERROR)
         except Exception as e:
             self.print_with_avatar(f"❌ Performance command error: {e}", AvatarState.ERROR)
+    
+    def handle_style_command(self, user_input: str = ""):
+        """Handle response style commands"""
+        parts = user_input.strip().split()
+        command = parts[1] if len(parts) > 1 else "status"
+        
+        # Check if SmolLM2 engine is available
+        if not (hasattr(self.ai_engine, 'smollm_engine') and self.ai_engine.smollm_engine):
+            self.print_with_avatar("❌ Response styles are only available with SmolLM2 engine", AvatarState.ERROR)
+            return
+            
+        engine = self.ai_engine.smollm_engine
+        
+        if command == "status":
+            current = engine.get_current_style()
+            templates = engine.config_data.get("prompt_templates", {})
+            available = list(templates.keys())
+            
+            self.print_with_avatar(f"🎨 Current style: {current}", AvatarState.IDLE)
+            self.print_with_avatar(f"📋 Available styles: {', '.join(available)}", AvatarState.IDLE)
+            
+            if current in templates:
+                template = templates[current]
+                self.print_with_avatar(f"📝 Description: {template.get('name', current)}", AvatarState.IDLE)
+                
+        elif command in ["default", "concise", "detailed", "coding", "creative"]:
+            if engine.set_response_style(command):
+                self.print_with_avatar(f"✅ Response style changed to: {command}", AvatarState.IDLE)
+                self.sound_manager.play_contextual_sound("success")
+            else:
+                self.print_with_avatar(f"❌ Failed to set style: {command}", AvatarState.ERROR)
+                
+        else:
+            self.print_with_avatar("Usage: /style [status|default|concise|detailed|coding|creative]", AvatarState.IDLE)
+            self.print_with_avatar("  status   - Show current response style", AvatarState.IDLE)
+            self.print_with_avatar("  default  - Balanced, informative responses", AvatarState.IDLE)
+            self.print_with_avatar("  concise  - Brief, direct answers", AvatarState.IDLE)
+            self.print_with_avatar("  detailed - Comprehensive explanations", AvatarState.IDLE)
+            self.print_with_avatar("  coding   - Code-focused responses", AvatarState.IDLE)
+            self.print_with_avatar("  creative - Expressive, imaginative answers", AvatarState.IDLE)
+    
+    def _learn_from_interaction(self, user_input: str, response: str, style_used: str = None):
+        """Learn from user interactions to improve future responses"""
+        # Update topic interests based on keywords
+        self._update_topic_interests(user_input)
+        
+        # Learn preferred styles for certain types of queries
+        if style_used:
+            self._update_style_preferences(user_input, style_used)
+            
+        # Analyze response length preference
+        self._analyze_response_length_preference(user_input, response)
+    
+    def _update_topic_interests(self, user_input: str):
+        """Track topics the user asks about frequently"""
+        # Extract topics from input
+        topics = []
+        input_lower = user_input.lower()
+        
+        # Technical topics
+        if any(word in input_lower for word in ['python', 'code', 'programming', 'function']):
+            topics.append('programming')
+        if any(word in input_lower for word in ['machine learning', 'ai', 'neural', 'model']):
+            topics.append('ai_ml')
+        if any(word in input_lower for word in ['data', 'database', 'sql', 'analysis']):
+            topics.append('data')
+        
+        # General topics
+        if any(word in input_lower for word in ['history', 'historical', 'past', 'ancient']):
+            topics.append('history')
+        if any(word in input_lower for word in ['science', 'physics', 'chemistry', 'biology']):
+            topics.append('science')
+        if any(word in input_lower for word in ['creative', 'story', 'write', 'imagine']):
+            topics.append('creative')
+        
+        # Update interest counts
+        for topic in topics:
+            if topic in self.user_preferences['topic_interests']:
+                self.user_preferences['topic_interests'][topic] += 1
+            else:
+                self.user_preferences['topic_interests'][topic] = 1
+                
+    def _update_style_preferences(self, user_input: str, style_used: str):
+        """Learn which styles work well for different query types"""
+        # Create a simple query signature
+        query_type = self._classify_query_type(user_input)
+        
+        if query_type not in self.user_preferences['preferred_styles']:
+            self.user_preferences['preferred_styles'][query_type] = {}
+            
+        if style_used in self.user_preferences['preferred_styles'][query_type]:
+            self.user_preferences['preferred_styles'][query_type][style_used] += 1
+        else:
+            self.user_preferences['preferred_styles'][query_type][style_used] = 1
+            
+    def _classify_query_type(self, user_input: str) -> str:
+        """Simple classification of query type for preference learning"""
+        input_lower = user_input.lower()
+        
+        if any(word in input_lower for word in ['what is', 'explain', 'how does']):
+            return 'explanation'
+        elif any(word in input_lower for word in ['code', 'program', 'function', 'debug']):
+            return 'coding'
+        elif any(word in input_lower for word in ['story', 'creative', 'imagine']):
+            return 'creative'
+        elif '?' in user_input and len(user_input.split()) < 10:
+            return 'quick_question'
+        else:
+            return 'general'
+            
+    def _analyze_response_length_preference(self, user_input: str, response: str):
+        """Analyze if user prefers longer or shorter responses"""
+        # Simple heuristic: if user asks follow-up questions immediately,
+        # they might want more detail
+        response_length = len(response.split())
+        
+        if response_length < 50:
+            self.user_preferences['recent_short_responses'] = getattr(self.user_preferences, 'recent_short_responses', 0) + 1
+        elif response_length > 200:
+            self.user_preferences['recent_long_responses'] = getattr(self.user_preferences, 'recent_long_responses', 0) + 1
     
     def _show_performance_summary(self, perf_monitor):
         """Show performance summary"""
