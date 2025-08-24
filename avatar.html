@@ -180,9 +180,14 @@
         }
         
         #avatarCanvas {
+            width: 100%;
+            height: 100%;
+            max-width: 100%;
+            max-height: 100%;
             border-radius: 15px;
             background: rgba(0, 0, 0, 0.2);
             box-shadow: 0 0 30px rgba(226, 83, 3, 0.3);
+            object-fit: contain;
         }
         
         .preset-buttons {
@@ -256,10 +261,13 @@
             <div class="control-group">
                 <label class="control-label">Container Size</label>
                 <div class="preset-buttons">
-                    <button class="btn" onclick="setContainerSize(300, 300)">Small</button>
-                    <button class="btn" onclick="setContainerSize(500, 400)">Medium</button>
+                    <button class="btn" onclick="setContainerSize(400, 300)">Small</button>
+                    <button class="btn" onclick="setContainerSize(600, 450)">Medium</button>
                     <button class="btn" onclick="setContainerSize(800, 600)">Large</button>
-                    <button class="btn" onclick="setContainerSize(1200, 300)">Wide</button>
+                    <button class="btn" onclick="setContainerSize(1200, 400)">Wide</button>
+                </div>
+                <div class="control-row" style="margin-top: 0.5rem;">
+                    <button class="btn" onclick="resizeToFillContainer()" style="width: 100%;">📏 Fill Container</button>
                 </div>
                 <div class="control-row" style="margin-top: 0.5rem;">
                     <input class="size-input" id="widthInput" placeholder="Width" onchange="updateCustomSize()">
@@ -313,7 +321,7 @@
         <!-- Avatar Display -->
         <div class="avatar-display">
             <div class="canvas-container">
-                <canvas id="avatarCanvas" width="600" height="450"></canvas>
+                <canvas id="avatarCanvas"></canvas>
             </div>
         </div>
         
@@ -421,6 +429,20 @@
                 return;
             }
             
+            // Set canvas to fill the container
+            const container = canvas.parentElement;
+            const containerRect = container.getBoundingClientRect();
+            const width = Math.floor(containerRect.width);
+            const height = Math.floor(containerRect.height);
+            
+            // Set canvas dimensions to fill container
+            canvas.width = width;
+            canvas.height = height;
+            canvas.style.width = width + 'px';
+            canvas.style.height = height + 'px';
+            
+            addDebugLog(`📐 Canvas initialized at ${width}×${height}`, 'info');
+            
             try {
                 pixelEngine = new GameboyPixelEngine(canvas, {
                     basePixelSize: 8,
@@ -447,6 +469,11 @@
                 addDebugLog('✅ Avatar engine initialized', 'info');
                 updateAdaptiveInfo();
                 
+                // Auto-resize to fill container after initialization
+                setTimeout(() => {
+                    resizeToFillContainer();
+                }, 100);
+                
             } catch (error) {
                 addDebugLog(`❌ Failed to initialize avatar engine: ${error.message}`, 'error');
                 console.error(error);
@@ -471,8 +498,12 @@
         
         function setContainerSize(width, height) {
             const canvas = document.getElementById('avatarCanvas');
-            if (!canvas) return;
+            const container = canvas?.parentElement;
+            if (!canvas || !container) return;
             
+            // Set canvas internal and display dimensions
+            canvas.width = width;
+            canvas.height = height;
             canvas.style.width = width + 'px';
             canvas.style.height = height + 'px';
             
@@ -482,7 +513,7 @@
             
             if (pixelEngine) {
                 pixelEngine.updateDimensions(width, height, { layoutMode: currentLayoutMode });
-                addDebugLog(`📐 Container resized to ${width}×${height}`, 'info');
+                addDebugLog(`📐 Canvas resized to ${width}×${height}`, 'info');
                 updateAdaptiveInfo();
             }
         }
@@ -494,6 +525,19 @@
             if (width && height && width > 100 && height > 100 && width <= 2000 && height <= 2000) {
                 setContainerSize(width, height);
             }
+        }
+        
+        function resizeToFillContainer() {
+            const canvas = document.getElementById('avatarCanvas');
+            const container = canvas?.parentElement;
+            if (!canvas || !container) return;
+            
+            const containerRect = container.getBoundingClientRect();
+            const width = Math.floor(containerRect.width - 20); // Leave some margin
+            const height = Math.floor(containerRect.height - 20); // Leave some margin
+            
+            setContainerSize(width, height);
+            addDebugLog(`📏 Canvas resized to fill container: ${width}×${height}`, 'info');
         }
         
         function setEmotion(emotion) {
@@ -634,7 +678,23 @@
         window.addEventListener('resize', () => {
             if (pixelEngine) {
                 setTimeout(() => {
-                    updateAdaptiveInfo();
+                    // Auto-resize canvas to fill container when window resizes
+                    const canvas = document.getElementById('avatarCanvas');
+                    const container = canvas?.parentElement;
+                    if (canvas && container) {
+                        const containerRect = container.getBoundingClientRect();
+                        const width = Math.floor(containerRect.width);
+                        const height = Math.floor(containerRect.height);
+                        
+                        canvas.width = width;
+                        canvas.height = height;
+                        canvas.style.width = width + 'px';
+                        canvas.style.height = height + 'px';
+                        
+                        pixelEngine.updateDimensions(width, height, { layoutMode: currentLayoutMode });
+                        addDebugLog(`📐 Auto-resized to ${width}×${height} on window resize`, 'info');
+                        updateAdaptiveInfo();
+                    }
                 }, 100);
             }
         });
