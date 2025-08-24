@@ -1,12 +1,16 @@
 {
-  "default_profile": "broadcast",
+  "default_profile": "assistant",
   "global_settings": {
     "sample_rate": 24000,
     "chunk_size": 300,
     "text_overlap_words": 1,
     "inter_chunk_silence": 0.03,
     "speed_optimization": true,
-    "quality_tier": "balanced"
+    "quality_tier": "balanced",
+    "narration_mode": "skip",
+    "enable_ssml": true,
+    "enable_content_analysis": true,
+    "log_processing_steps": true
   },
   "voice_profiles": {
     "natural": {
@@ -45,7 +49,7 @@
     "broadcast": {
       "name": "Broadcast",
       "description": "Radio-quality voice with professional sound and sidechain compression.",
-      "kitten_voice": "expr-voice-2-m",
+      "kitten_voice": "expr-voice-4-f",
       "effects_pipeline": [
         {
           "module": "IntercomEffect",
@@ -140,6 +144,25 @@
           "module": "NormalizationEffect",
           "config": {
             "level": 0.8
+          }
+        }
+      ]
+    },
+    "debug": {
+      "name": "Debug",
+      "description": "Raw KittenTTS output for debugging - no effects processing",
+      "kitten_voice": "expr-voice-2-m",
+      "effects_pipeline": []
+    },
+    "minimal": {
+      "name": "Minimal",
+      "description": "Minimal processing - normalization only for clean baseline",
+      "kitten_voice": "expr-voice-2-m",
+      "effects_pipeline": [
+        {
+          "module": "NormalizationEffect",
+          "config": {
+            "level": 0.9
           }
         }
       ]

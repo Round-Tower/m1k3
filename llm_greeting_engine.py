@@ -188,7 +188,8 @@ class LLMGreetingEngine:
         context_str = ", ".join(context_parts)
         capabilities_str = ", ".join(capabilities)
         
-        prompt = f"""Generate a brief, friendly greeting for M1K3 AI assistant. Time: {context.time_of_day.lower()}. Keep it under 60 characters and natural. Just the greeting, nothing else."""
+        # Create an exciting, inspiring prompt!
+        prompt = f"""Generate an exciting, enthusiastic greeting for M1K3 AI assistant! Make it inspiring and spark joy! Time: {context.time_of_day.lower()}. Maximum 50 characters. Be energetic and positive! Just the greeting text, nothing else."""
         
         return prompt
     
@@ -335,42 +336,57 @@ class LLMGreetingEngine:
     def _generate_fallback_greeting(self, context: GreetingContext) -> str:
         """Generate a context-aware fallback greeting when LLM is unavailable"""
         
-        # Base greetings with context awareness
+        # EXCITING greetings that spark joy!
         base_greetings = [
-            f"{context.time_of_day}! M1K3 is ready to help.",
-            f"{context.time_of_day}! Ready when you are!",
-            f"Hi there! M1K3 at your service.",
-            f"{context.time_of_day}! What can I help with?"
+            f"{context.time_of_day}! Let's create something amazing!",
+            f"{context.time_of_day}! Ready to rock your world!",
+            f"Hey! M1K3 is fired up and ready!",
+            f"{context.time_of_day}! Let's make magic happen!",
+            f"Welcome back! Ready for an adventure?",
+            f"{context.time_of_day}! Your AI companion is excited!",
+            f"Hello! Let's turn ideas into reality!",
+            f"{context.time_of_day}! Time to unleash creativity!"
         ]
         
-        # Enhanced greetings based on system context
+        # Enhanced EXCITING greetings based on system context
         enhanced_greetings = []
         
-        # Platform-specific greetings
+        # Platform-specific exciting greetings
         if context.platform == "Darwin":
-            enhanced_greetings.append(f"{context.time_of_day}! M1K3 running smoothly on macOS.")
+            enhanced_greetings.append(f"{context.time_of_day}! macOS + M1K3 = Pure power!")
+            enhanced_greetings.append(f"Apple Silicon meets AI brilliance!")
         elif context.platform == "Linux":
-            enhanced_greetings.append(f"{context.time_of_day}! M1K3 powered by Linux.")
+            enhanced_greetings.append(f"{context.time_of_day}! Linux power unleashed!")
+            enhanced_greetings.append(f"Open source AI at your command!")
         
-        # Performance-aware greetings
-        if context.available_memory_gb >= 8:
-            enhanced_greetings.append(f"{context.time_of_day}! M1K3 ready with plenty of resources.")
+        # Performance-aware exciting greetings
+        if context.available_memory_gb >= 16:
+            enhanced_greetings.append(f"{context.time_of_day}! {context.available_memory_gb:.0f}GB RAM ready to fly!")
+            enhanced_greetings.append(f"Massive memory, limitless possibilities!")
         elif context.cpu_cores >= 8:
-            enhanced_greetings.append(f"{context.time_of_day}! M1K3 powered by your multicore system.")
+            enhanced_greetings.append(f"{context.time_of_day}! {context.cpu_cores} cores of pure power!")
+            enhanced_greetings.append(f"Multicore mastery activated!")
         
-        # Connectivity-aware greetings
+        # Connectivity-aware exciting greetings
         if context.connected_devices > 2:
-            enhanced_greetings.append(f"{context.time_of_day}! M1K3 sees your connected devices.")
+            enhanced_greetings.append(f"Network synergy achieved! Let's go!")
         elif context.ble_devices and len(context.ble_devices) > 0:
-            enhanced_greetings.append(f"{context.time_of_day}! M1K3 ready with Bluetooth active.")
+            enhanced_greetings.append(f"Bluetooth connected, possibilities endless!")
         
-        # Timezone-aware greetings
-        if context.timezone and context.timezone != "GMT":
-            enhanced_greetings.append(f"{context.time_of_day} from {context.timezone}! M1K3 ready.")
+        # Battery-aware motivational greetings
+        if context.battery_level and context.battery_level > 80:
+            enhanced_greetings.append(f"Full power mode! Nothing can stop us!")
+            enhanced_greetings.append(f"Battery charged, ambitions unlimited!")
         
-        # AI model-aware greetings
-        if context.ai_model and "Qwen" in context.ai_model:
-            enhanced_greetings.append(f"{context.time_of_day}! M1K3 powered by {context.ai_model}.")
+        # Voice-enabled excitement
+        if context.voice_enabled:
+            enhanced_greetings.append(f"Voice ready! Let's have a conversation!")
+            enhanced_greetings.append(f"Speaking mode activated! Hello world!")
+        
+        # Avatar excitement
+        if context.avatar_enabled:
+            enhanced_greetings.append(f"Avatar online! Visual magic awaits!")
+            enhanced_greetings.append(f"Your AI companion is visually alive!")
         
         # Combine all possible greetings
         all_greetings = base_greetings + enhanced_greetings

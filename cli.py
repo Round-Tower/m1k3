@@ -409,12 +409,61 @@ class M1K3CLI:
         self.animator.stop_animation()
         
     def setup_ai(self) -> bool:
-        """Initialize AI engine and voice with animations."""
-        self._log_startup_message("INFO", "Initializing AI Engine...")
+        """Initialize AI engine and voice with fast parallel loading."""
+        
+        # Try fast parallel initialization first
+        try:
+            return self.setup_ai_parallel()
+        except ImportError:
+            print("⚠️  Fast startup not available, using legacy initialization...")
+            return self.setup_ai_legacy()
+        except Exception as e:
+            print(f"⚠️  Fast startup failed ({e}), using legacy initialization...")
+            return self.setup_ai_legacy()
+    
+    def setup_ai_parallel(self) -> bool:
+        """Fast parallel initialization using FastStartupManager"""
+        from fast_startup_manager import fast_initialize_m1k3
+        from performance_monitor import get_performance_monitor, PerformanceEventType
+        
+        # Start performance monitoring
+        perf_monitor = get_performance_monitor()
+        
+        with perf_monitor.measure("m1k3_startup", PerformanceEventType.STARTUP):
+            self._log_startup_message("INFO", "🚀 Starting fast parallel initialization...")
+            
+            # Initialize with progress display
+            success, results = fast_initialize_m1k3(self, show_progress=True)
+            
+            if success:
+                self._log_startup_message("OK", "✅ Fast initialization completed!")
+                
+                # Show what's ready and what's still loading
+                ready_components = [name for name, result in results.items() 
+                                  if result.status.value == "ready"]
+                loading_components = [name for name, result in results.items() 
+                                    if result.status.value == "loading"]
+                
+                if ready_components:
+                    self._log_startup_message("OK", f"Ready: {', '.join(ready_components)}")
+                
+                if loading_components:
+                    self._log_startup_message("INFO", f"Still loading: {', '.join(loading_components)}")
+                    print("💡 You can start using M1K3 while components finish loading!")
+                
+                return True
+            else:
+                self._log_startup_message("ERROR", "❌ Essential components failed to load")
+                return False
+    
+    def setup_ai_legacy(self) -> bool:
+        """Legacy sequential initialization (fallback)"""
+        self._log_startup_message("INFO", "Initializing AI Engine (legacy mode)...")
         
         # Check if model exists
         if not self.ai_engine.is_model_available():
             self.start_animated_status("Downloading SmolLM-135M model...", "loading")
+            from download_model import download_model
             model_path = download_model()
             self.stop_animated_status()
             
@@ -531,13 +580,17 @@ class M1K3CLI:
             "/transparency": self.handle_transparency_command,
             "/explain": self.handle_explain_command,
             "/classify": self.handle_classify_command,
+            "/model": self.handle_model_command,
+            "/models": self.list_available_models,
+            "/performance": self.handle_performance_command,
+            "/perf": self.handle_performance_command,
             "/exit": lambda: setattr(self, 'running', False)
         }
         
         if command in action_map:
             print(f"Executing action: {command}")
             # Pass the full command for commands that need it
-            if command in ["/sound", "/transparency", "/explain", "/classify"]:
+            if command in ["/sound", "/transparency", "/explain", "/classify", "/model", "/performance", "/perf"]:
                 action_map[command](user_input)
             else:
                 action_map[command]()
@@ -646,6 +699,9 @@ class M1K3CLI:
     def handle_user_input(self, user_input: str):
         """Process user input and generate AI response."""
         
+        # Track query start time for session statistics
+        query_start_time = time.time()
+        
         # Send pre-thinking state - user just submitted input
         self.send_avatar_update(user_input, "pre_thinking")
         
@@ -663,6 +719,14 @@ class M1K3CLI:
         
         # Legacy command handling for backward compatibility
         if user_input.lower() in ['quit', 'exit', 'q']:
+            # Save session statistics before exit
+            if hasattr(self, 'stats_tracker') and self.stats_tracker:
+                try:
+                    self.stats_tracker.save_stats()
+                    print("\n📊 Session statistics saved successfully!")
+                except Exception as e:
+                    print(f"\n⚠️  Could not save statistics: {e}")
+            
             goodbye_msg = "Goodbye!"
             self.print_with_avatar(goodbye_msg, AvatarState.IDLE)
             if self.voice_enabled:
@@ -717,6 +781,19 @@ class M1K3CLI:
             
         elif user_input.lower() in ['stats', 'status']:
             self.display_system_stats()
+            
+            # Also display session statistics if available
+            if hasattr(self, 'stats_tracker') and self.stats_tracker:
+                print("\n📊 SESSION STATISTICS")
+                print("─" * 40)
+                print(self.stats_tracker.get_formatted_stats_display(
+                    max_tokens=getattr(self.ai_engine, 'max_tokens', 8192)
+                ))
+                
+                # Show an exciting insight
+                insight = self.stats_tracker.get_exciting_insight()
+                print(f"\n💡 INSIGHT: {insight}")
+            
             return
             
         elif user_input.lower() in ['context', 'device']:
@@ -727,11 +804,50 @@ class M1K3CLI:
             self.display_token_stats()
             return
             
+        elif user_input.lower() in ['session', 'session-stats']:
+            # Display detailed session statistics
+            if hasattr(self, 'stats_tracker') and self.stats_tracker:
+                print("\n📈 DETAILED SESSION STATISTICS")
+                print("═" * 50)
+                
+                stats_summary = self.stats_tracker.get_stats_summary()
+                
+                print(f"🕰️  Session Duration: {stats_summary['duration']}")
+                print(f"💬 Queries Processed: {stats_summary['queries']}")
+                print(f"📊 Tokens Generated: {stats_summary['tokens']}")
+                print(f"⚡ Avg Response Time: {stats_summary['avg_response_time']:.2f}s")
+                print(f"🌊 Water Saved: {stats_summary['water_saved_ml']:.0f}ml")
+                print(f"🔋 Energy Saved: {stats_summary['energy_saved_wh']:.0f}Wh")
+                print(f"🌱 CO₂ Prevented: {stats_summary['co2_saved_g']:.0f}g")
+                print(f"🎆 Features Used: {stats_summary['features_used']}")
+                print(f"🏆 Achievements: {stats_summary['achievements']}")
+                
+                # Show hardware insight
+                try:
+                    from hardware_insights import generate_hardware_insight
+                    metrics = self.system_monitor.collect_metrics()
+                    hardware_insight = generate_hardware_insight(metrics)
+                    print(f"\n💻 HARDWARE INSIGHT: {hardware_insight}")
+                except:
+                    pass
+                
+                # Show exciting insight
+                insight = self.stats_tracker.get_exciting_insight()
+                print(f"\n💡 SESSION INSIGHT: {insight}")
+                
+            else:
+                print("\n⚠️  Session statistics not available")
+            return
+            
         elif user_input.lower() in ['animate', 'demo']:
             self.demo_animations()
             return
             
         elif user_input.lower().startswith('avatar'):
+            # Record avatar feature usage
+            if hasattr(self, 'stats_tracker') and self.stats_tracker:
+                self.stats_tracker.record_feature_use("avatar")
+            
             self.handle_avatar_command(user_input)
             return
             
@@ -743,6 +859,11 @@ class M1K3CLI:
         self.start_animated_status("Thinking...", "thinking")
         self.send_avatar_update(user_input, "thinking")
         self.sound_manager.play_thinking_ambient()
+        
+        # Record AI feature usage
+        if hasattr(self, 'stats_tracker') and self.stats_tracker:
+            self.stats_tracker.record_feature_use("ai")
+        
         time.sleep(0.1)  # Brief visual feedback
         self.stop_animated_status()
         
@@ -930,10 +1051,30 @@ class M1K3CLI:
             # Display eco-friendly metrics and token usage
             self._display_post_response_metrics()
             
+            # Record session statistics for successful query
+            if hasattr(self, 'stats_tracker') and self.stats_tracker:
+                response_time = time.time() - query_start_time
+                self.stats_tracker.record_query(response_time=response_time, tokens=token_count)
+                
+                # Check for new achievements
+                try:
+                    from session_stats import AchievementSystem
+                    unlocked = AchievementSystem.check_achievements(self.stats_tracker)
+                    if unlocked:
+                        print(f"\n🏆 Achievement{'s' if len(unlocked) > 1 else ''} unlocked: {', '.join([AchievementSystem.format_achievement(a) for a in unlocked[:2]])}")
+                        self.sound_manager.play_success_sequence("minor")
+                except:
+                    pass
+            
             # Synthesize voice in background
             if self.voice_enabled and full_response.strip():
                 self.set_avatar_state(AvatarState.SPEAKING)
                 self.send_avatar_update("", "speaking")
+                
+                # Record voice feature usage
+                if hasattr(self, 'stats_tracker') and self.stats_tracker:
+                    self.stats_tracker.record_feature_use("voice")
+                
                 # Use intelligent TTS for AI responses with content-specific voice effects
                 self._safe_voice_synthesis(full_response.strip(), use_intelligent_tts=True)
                 self.set_avatar_state(AvatarState.IDLE)
@@ -956,6 +1097,7 @@ M1K3 Local AI CLI Commands:
     <message>       Send message to AI
     clear, reset    Clear conversation context  
     stats, status   Show system statistics with animations
+    session         Show detailed session statistics and insights
     context, device Show comprehensive device context
     tokens, usage   Show token usage and eco impact
     animate, demo   Demonstrate animation capabilities
@@ -970,6 +1112,22 @@ M1K3 Local AI CLI Commands:
   Enhanced Commands:
     /explain <query>    Show detailed decision explanation for a query
     /classify <query>   Show intent classification for a query
+    
+  Model Management Commands:
+    /models             List all available models for hot loading
+    /model <name>       Switch to specific model (e.g., /model gemma-2-2b-it)
+    /model recommend    Switch to best recommended model for your system
+    /model interactive  Interactive model selection menu
+    /model status       Show current model information
+    
+  Performance Commands:
+    /performance        Show performance summary (alias: /perf)
+    /perf summary       Performance overview with key metrics
+    /perf stats         Detailed statistics by operation type
+    /perf system        Current system performance metrics
+    /perf export        Export performance data to JSON file
+    /perf clear         Clear performance history
+    /perf baseline      Set performance baselines for regression detection
     
   Avatar Commands:
     avatar start    Start the avatar web server
@@ -1110,34 +1268,121 @@ M1K3 Local AI CLI Commands:
     def display_system_diagnostics(self, context_summary):
         """Display comprehensive system diagnostics and M1K3 capabilities"""
         try:
-            metrics = self.system_monitor
+            metrics = self.system_monitor.collect_metrics()
             
-            # Compact multi-line context display
-            print(f"🔍 Context: {metrics.cpu_model} | Cores: {metrics.cpu_cores}c/{metrics.cpu_threads}", end="")
+            print("\n📊 SYSTEM DIAGNOSTICS")
+            print("─" * 72)
+            
+            # Hardware line - complete and detailed
+            hardware_parts = []
+            if metrics.cpu_model:
+                hardware_parts.append(f"{metrics.cpu_model}")
+            if metrics.cpu_cores and metrics.cpu_threads:
+                hardware_parts.append(f"{metrics.cpu_cores} cores")
             if metrics.gpu_info:
-                print(f" | GPU: {metrics.gpu_info}", end="")
+                hardware_parts.append(metrics.gpu_info)
             if metrics.memory_total_gb:
-                print(f" | RAM: {metrics.memory_total_gb:.0f}GB", end="")
-            print(f" | OS: {metrics.os_name} {metrics.os_version}", end="")
+                hardware_parts.append(f"{metrics.memory_total_gb:.0f}GB RAM")
+            
+            print(f"🖥️  Hardware: {' | '.join(hardware_parts)}")
+            
+            # System line
+            system_parts = []
+            if metrics.os_name and metrics.os_version:
+                system_parts.append(f"{metrics.os_name} {metrics.os_version}")
             if metrics.timezone:
-                print(f" | TZ: {metrics.timezone}", end="")
-            print(f" | Lo...")  # Truncated for space
+                system_parts.append(f"{metrics.timezone}")
+                if metrics.timezone_offset is not None:
+                    sign = "+" if metrics.timezone_offset >= 0 else ""
+                    system_parts.append(f"(UTC{sign}{metrics.timezone_offset})")
+            if metrics.locale_info:
+                system_parts.append(metrics.locale_info)
             
-            # M1K3 Capabilities Summary (single line)
+            print(f"🌍 System: {' | '.join(system_parts)}")
+            
+            # Status line with emojis
+            status_parts = []
+            if metrics.battery_percent is not None:
+                battery_emoji = "🔋" if not metrics.battery_plugged else "⚡"
+                status_parts.append(f"{battery_emoji} Battery {metrics.battery_percent}% ({metrics.battery_status()})")
+            if metrics.cpu_temp is not None:
+                status_parts.append(f"🌡️ CPU {metrics.cpu_temp:.0f}°C ({metrics.thermal_status()})")
+            if metrics.disk_usage_percent is not None:
+                status_parts.append(f"💾 Disk {metrics.disk_usage_percent:.0f}%")
+            
+            print(f"🔋 Status: {' | '.join(status_parts)}")
+            
+            # Performance line
+            perf_status = metrics.performance_status()
+            cpu_usage = metrics.cpu_usage or 0
+            mem_usage = metrics.memory_percent or 0
+            print(f"🎯 Performance: {perf_status.title()} load ({cpu_usage:.0f}% CPU, {mem_usage:.0f}% RAM)")
+            
+            # Capabilities with better detection
             capabilities = []
-            
-            # AI Backend Status
-            try:
-                if hasattr(self.ai_engine, 'backend_name'):
-                    capabilities.append(f"🤖 AI: {self.ai_engine.backend_name}")
-                else:
-                    capabilities.append("🤖 AI: Local")
-            except:
-                capabilities.append("🤖 AI: Available")
-            
-            # Voice Status
+            if metrics.has_microphone:
+                capabilities.append("🎤 Audio")
             if self.voice_enabled:
-                capabilities.append("🗣️ Voice")
+                capabilities.append("🔊 Voice")
+            if metrics.has_wifi:
+                capabilities.append("📶 WiFi")
+            if metrics.has_ethernet:
+                capabilities.append("🌐 Ethernet")
+            if metrics.display_count:
+                if metrics.display_count > 1:
+                    capabilities.append(f"🖥️ Display x{metrics.display_count}")
+                else:
+                    capabilities.append("🖥️ Display")
+            
+            if capabilities:
+                print(f"✨ Capabilities: {' | '.join(capabilities)}")
+            
+            print("\n🤖 AI ENGINE")
+            print("─" * 72)
+            
+            # AI Backend details
+            ai_parts = []
+            model_name = "Local AI"
+            backend_name = "Unknown"
+            
+            try:
+                if hasattr(self.ai_engine, '_current_model_name'):
+                    model_name = self.ai_engine._current_model_name
+                elif hasattr(self.ai_engine, 'model_name'):
+                    model_name = self.ai_engine.model_name
+                    
+                if hasattr(self.ai_engine, 'backend_name'):
+                    backend_name = self.ai_engine.backend_name
+                elif hasattr(self.ai_engine, 'use_transformers') and self.ai_engine.use_transformers:
+                    backend_name = "HuggingFace"
+                elif hasattr(self.ai_engine, 'use_ctransformers') and self.ai_engine.use_ctransformers:
+                    backend_name = "ctransformers"
+            except:
+                pass
+            
+            # Get context window size
+            context_size = "8K"
+            if hasattr(self.ai_engine, 'max_tokens'):
+                context_size = f"{self.ai_engine.max_tokens/1000:.0f}K"
+            
+            print(f"Model: {model_name} | Backend: {backend_name} | Context: {context_size} tokens")
+            
+            # Features line
+            features = []
+            if self.voice_enabled:
+                features.append("✅ Voice Synthesis")
+            if AVATAR_AVAILABLE:
+                if is_avatar_server_running():
+                    features.append("✅ Avatar (Live!)")
+                else:
+                    features.append("✅ Avatar")
+            if hasattr(self.ai_engine, 'rag_enabled') and self.ai_engine.rag_enabled:
+                features.append("✅ RAG")
+            if self.websocket_bridge:
+                features.append("✅ WebSocket")
+            
+            if features:
+                print(f"Features: {' | '.join(features)}")
             
             # Avatar Status
             if AVATAR_AVAILABLE and self.avatar_controller:
@@ -1693,6 +1938,17 @@ Available styles: robot, organic, crystal, ghost, energy, cute"""
         
         print("-" * 60)
         
+        # Initialize session statistics
+        try:
+            from session_stats import get_stats_tracker, AchievementSystem
+            self.stats_tracker = get_stats_tracker()
+            
+            # Check for first boot achievement
+            unlocked = AchievementSystem.check_achievements(self.stats_tracker)
+            self.stats_tracker.unlock_achievement("first_boot")
+        except:
+            self.stats_tracker = None
+        
         # Generate dynamic greeting - try LLM first, fallback to rule-based
         try:
             metrics = self.system_monitor.collect_metrics()
@@ -1701,18 +1957,41 @@ Available styles: robot, organic, crystal, ghost, energy, cute"""
             # Try LLM-powered greeting if AI engine is available
             greeting = self._generate_intelligent_greeting(metrics, m1k3_context)
             
-            print(f"💬 {greeting}")
+            print(f"\n💬 {greeting}")
             
-            # Display the new compact diagnostics
+            # Display the enhanced diagnostics
             self.display_system_diagnostics(None)
             
-            print("-" * 60)
-            print("Type '/help' for a list of commands or start chatting below.")
+            # Display session statistics
+            if self.stats_tracker:
+                print("\n📈 SESSION STATISTICS")
+                print("─" * 72)
+                print(self.stats_tracker.get_formatted_stats_display(
+                    max_tokens=getattr(self.ai_engine, 'max_tokens', 8192)
+                ))
+                
+                # Get and display an exciting insight
+                insight = self.stats_tracker.get_exciting_insight()
+                print(f"\n💡 INSIGHT: {insight}")
+                
+                # Display achievements if any
+                if self.stats_tracker.current_stats.achievements_unlocked:
+                    print("\n🏆 ACHIEVEMENTS UNLOCKED")
+                    print("─" * 72)
+                    achievements_display = []
+                    for ach_id in self.stats_tracker.current_stats.achievements_unlocked[:3]:
+                        achievements_display.append(AchievementSystem.format_achievement(ach_id))
+                    print(" | ".join(achievements_display))
             
-            # Speak the greeting if voice is enabled
+            print("\n" + "═" * 72)
+            print("Type '/help' for commands or start chatting below.")
+            
+            # Speak the greeting if voice is enabled - with excitement!
             if self.voice_enabled:
-                self.start_animated_status("Speaking greeting...", "speaking")
-                self.voice_engine.synthesize_and_play(greeting, background=False)
+                self.start_animated_status("🎤 Speaking exciting greeting...", "speaking")
+                # Add enthusiasm to the voice!
+                excited_greeting = greeting + "! Let's create something amazing!"
+                self.voice_engine.synthesize_and_play(excited_greeting, background=False)
                 self.stop_animated_status()
                 
         except Exception as e:
@@ -1906,6 +2185,564 @@ Available styles: robot, organic, crystal, ghost, energy, cute"""
             self.print_with_avatar("❌ Intent classification engine not available", AvatarState.ERROR)
         except Exception as e:
             self.print_with_avatar(f"❌ Classification failed: {e}", AvatarState.ERROR)
+
+    def list_available_models(self):
+        """List all available models for hot loading"""
+        self.start_animated_status("Discovering available models...", "processing")
+        
+        try:
+            from local_model_manager import LocalModelManager
+            manager = LocalModelManager()
+            device = manager.analyze_device()
+            
+            self.stop_animated_status()
+            
+            print("\n📦 Available Models for Hot Loading:")
+            print("=" * 60)
+            
+            if not manager.available_models:
+                self.print_with_avatar("❌ No models found locally", AvatarState.ERROR)
+                self.print_with_avatar("💡 Download models first with: python download_gemma.py", AvatarState.IDLE)
+                return
+            
+            # Get current model name
+            current_model = getattr(self.ai_engine, '_current_model_name', 'Unknown')
+            
+            # Group by model type
+            hf_models = [(name, spec) for name, spec in manager.available_models.items() if spec.model_type == "hf_transformers"]
+            gguf_models = [(name, spec) for name, spec in manager.available_models.items() if spec.model_type == "gguf"]
+            
+            model_count = 0
+            
+            if hf_models:
+                print("\n🤗 HuggingFace Transformers Models:")
+                for name, spec in sorted(hf_models, key=lambda x: x[1].size_mb):
+                    model_count += 1
+                    ram_req_gb = spec.ram_required_mb / 1024
+                    
+                    # Show current model
+                    status = "🔵 CURRENT" if name == current_model else "✅ Available"
+                    if name in device.recommended_models and name != current_model:
+                        status = "⭐ RECOMMENDED"
+                    if ram_req_gb > device.available_ram_gb:
+                        status = "⚠️  High RAM"
+                    
+                    print(f"   {model_count}. {status}")
+                    print(f"      📦 {name}")
+                    print(f"      💾 Size: {spec.size_mb:.1f}MB | RAM: {ram_req_gb:.1f}GB")
+                    print(f"      📝 {spec.description}")
+                    print(f"      ⚡ Speed: {spec.speed_estimate}")
+                    print()
+            
+            if gguf_models:
+                print("🔧 GGUF Quantized Models:")
+                for name, spec in sorted(gguf_models, key=lambda x: x[1].size_mb):
+                    model_count += 1
+                    ram_req_gb = spec.ram_required_mb / 1024
+                    
+                    status = "🔵 CURRENT" if name == current_model else "✅ Available"
+                    if ram_req_gb > device.available_ram_gb:
+                        status = "⚠️  High RAM"
+                    
+                    print(f"   {model_count}. {status} {name}")
+                    print(f"      💾 Size: {spec.size_mb:.1f}MB | RAM: {ram_req_gb:.1f}GB")
+                    print(f"      📝 {spec.description}")
+                    print()
+            
+            print(f"💡 Usage:")
+            print(f"   /model <model_name>     Switch to specific model")
+            print(f"   /model recommend        Switch to best recommended model")
+            print(f"   /model status           Show current model info")
+            
+            if self.voice_enabled:
+                model_count_text = f"Found {len(manager.available_models)} models available for hot loading"
+                self._safe_voice_synthesis(model_count_text)
+        
+        except ImportError:
+            self.stop_animated_status()
+            self.print_with_avatar("❌ Local model manager not available", AvatarState.ERROR)
+        except Exception as e:
+            self.stop_animated_status()
+            self.print_with_avatar(f"❌ Error listing models: {e}", AvatarState.ERROR)
+
+    def handle_model_command(self, user_input: str = ""):
+        """Handle model switching commands"""
+        parts = user_input.strip().split()
+        
+        if len(parts) < 2:
+            self.print_with_avatar("Usage: /model <model_name|recommend|status>", AvatarState.IDLE)
+            self.print_with_avatar("Example: /model google/gemma-2-2b-it", AvatarState.IDLE)
+            self.print_with_avatar("Use /models to see all available models", AvatarState.IDLE)
+            return
+        
+        command = parts[1].lower()
+        
+        if command == "status":
+            self._show_current_model_status()
+        elif command == "recommend":
+            self._switch_to_recommended_model()
+        elif command == "interactive" or command == "select":
+            self._interactive_model_selection()
+        else:
+            # Try to switch to specific model
+            model_name = " ".join(parts[1:])  # Join in case model name has spaces
+            self._switch_to_model(model_name)
+
+    def _show_current_model_status(self):
+        """Show current model status"""
+        current_model = getattr(self.ai_engine, '_current_model_name', 'Unknown')
+        backend_type = "HuggingFace" if getattr(self.ai_engine, 'use_transformers', False) else "ctransformers"
+        
+        print("\n🤖 Current AI Model Status:")
+        print("=" * 40)
+        print(f"📦 Model: {current_model}")
+        print(f"🔧 Backend: {backend_type}")
+        
+        # Get memory usage
+        try:
+            ai_stats = self.ai_engine.get_memory_usage()
+            print(f"💾 Memory: {ai_stats['memory_mb']}")
+            print(f"📝 Context: {ai_stats['context_tokens']} tokens")
+        except:
+            pass
+        
+        print(f"✅ Status: Loaded and ready")
+        
+        if self.voice_enabled:
+            self._safe_voice_synthesis(f"Currently using {current_model.split('/')[-1]} model")
+
+    def _switch_to_recommended_model(self):
+        """Switch to the best recommended model"""
+        try:
+            from local_model_manager import LocalModelManager
+            manager = LocalModelManager()
+            device = manager.analyze_device()
+            
+            if not device.recommended_models:
+                self.print_with_avatar("❌ No recommended models available", AvatarState.ERROR)
+                return
+            
+            best_model = device.recommended_models[0]
+            self._switch_to_model(best_model)
+            
+        except Exception as e:
+            self.print_with_avatar(f"❌ Error finding recommended model: {e}", AvatarState.ERROR)
+
+    def _switch_to_model(self, model_name: str):
+        """Switch to a specific model"""
+        current_model = getattr(self.ai_engine, '_current_model_name', 'Unknown')
+        
+        if model_name == current_model:
+            self.print_with_avatar(f"🔵 Already using {model_name}", AvatarState.IDLE)
+            return
+        
+        try:
+            from local_model_manager import LocalModelManager
+            manager = LocalModelManager()
+            
+            # Find exact or partial model name match
+            matched_model = None
+            for available_name in manager.available_models.keys():
+                if model_name.lower() == available_name.lower():
+                    matched_model = available_name
+                    break
+                elif model_name.lower() in available_name.lower():
+                    matched_model = available_name
+                    break
+            
+            if not matched_model:
+                self.print_with_avatar(f"❌ Model '{model_name}' not found locally", AvatarState.ERROR)
+                self.print_with_avatar("💡 Use /models to see available models", AvatarState.IDLE)
+                return
+            
+            # Check RAM requirements
+            spec = manager.available_models[matched_model]
+            ram_req_gb = spec.ram_required_mb / 1024
+            device = manager.analyze_device()
+            
+            if ram_req_gb > device.available_ram_gb:
+                self.print_with_avatar(f"⚠️  Warning: {matched_model} requires {ram_req_gb:.1f}GB RAM", AvatarState.ERROR)
+                self.print_with_avatar(f"Available: {device.available_ram_gb:.1f}GB", AvatarState.ERROR)
+                # Continue anyway - user knows best
+            
+            # Start hot loading process
+            self.print_with_avatar(f"🔄 Hot loading {matched_model}...", AvatarState.LOADING)
+            self.start_animated_status("Switching models...", "processing")
+            
+            # Attempt to switch model using new method
+            success = self._perform_model_switch(matched_model, spec)
+            
+            self.stop_animated_status()
+            
+            if success:
+                self.print_with_avatar(f"✅ Successfully switched to {matched_model}", AvatarState.IDLE)
+                self.print_with_avatar(f"📏 Model size: {spec.size_mb:.1f}MB", AvatarState.IDLE)
+                
+                if self.voice_enabled:
+                    model_short_name = matched_model.split('/')[-1].replace('-it', '').replace('-instruct', '')
+                    self._safe_voice_synthesis(f"Now using {model_short_name} model")
+            else:
+                self.print_with_avatar(f"❌ Failed to switch to {matched_model}", AvatarState.ERROR)
+                self.print_with_avatar(f"🔄 Staying with current model: {current_model}", AvatarState.IDLE)
+        
+        except Exception as e:
+            self.stop_animated_status()
+            self.print_with_avatar(f"❌ Error switching model: {e}", AvatarState.ERROR)
+
+    def _perform_model_switch(self, model_name: str, model_spec) -> bool:
+        """Perform the actual model switch with memory management"""
+        try:
+            # Add switch_model method to AI engine if it doesn't exist
+            if not hasattr(self.ai_engine, 'switch_model'):
+                self._add_switch_model_method()
+            
+            # Preserve conversation context
+            old_context = self.ai_engine.context.messages.copy() if self.ai_engine.context else []
+            
+            # Perform the switch
+            success = self.ai_engine.switch_model(model_name)
+            
+            # Restore conversation context if switch was successful
+            if success and old_context:
+                self.ai_engine.context.messages = old_context
+                # Recalculate token count
+                total_chars = sum(len(msg["content"]) for msg in old_context)
+                self.ai_engine.context.current_tokens = total_chars // 4
+            
+            return success
+        
+        except Exception as e:
+            print(f"❌ Model switch failed: {e}")
+            return False
+
+    def _add_switch_model_method(self):
+        """Dynamically add switch_model method to AI engine"""
+        def switch_model(engine_self, model_name: str) -> bool:
+            """Dynamically added method to switch models"""
+            try:
+                import gc
+                import torch
+                
+                # Clear current model from memory
+                if hasattr(engine_self, 'model') and engine_self.model is not None:
+                    del engine_self.model
+                    engine_self.model = None
+                
+                if hasattr(engine_self, 'tokenizer') and engine_self.tokenizer is not None:
+                    del engine_self.tokenizer
+                    engine_self.tokenizer = None
+                
+                # Clear GPU cache if using CUDA
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+                
+                # Force garbage collection
+                gc.collect()
+                
+                # Set the new model name for _try_huggingface_model to find
+                engine_self._target_model_name = model_name
+                
+                # Try to load the new model using existing HuggingFace loading logic
+                success = engine_self._try_huggingface_model()
+                
+                if success:
+                    engine_self._current_model_name = model_name
+                
+                return success
+            
+            except Exception as e:
+                print(f"Switch model error: {e}")
+                return False
+        
+        # Add the method to the AI engine instance
+        import types
+        self.ai_engine.switch_model = types.MethodType(switch_model, self.ai_engine)
+
+    def _interactive_model_selection(self):
+        """Interactive model selection interface"""
+        try:
+            from local_model_manager import LocalModelManager
+            manager = LocalModelManager()
+            device = manager.analyze_device()
+            
+            if not manager.available_models:
+                self.print_with_avatar("❌ No models found locally", AvatarState.ERROR)
+                self.print_with_avatar("💡 Download models first with: python download_gemma.py", AvatarState.IDLE)
+                return
+            
+            current_model = getattr(self.ai_engine, '_current_model_name', 'Unknown')
+            
+            # Show available models with numbers
+            print("\n🎯 Interactive Model Selection")
+            print("=" * 50)
+            
+            # Group and display models
+            hf_models = [(name, spec) for name, spec in manager.available_models.items() if spec.model_type == "hf_transformers"]
+            gguf_models = [(name, spec) for name, spec in manager.available_models.items() if spec.model_type == "gguf"]
+            
+            model_options = []
+            option_number = 1
+            
+            if hf_models:
+                print("\n🤗 HuggingFace Transformers Models:")
+                for name, spec in sorted(hf_models, key=lambda x: x[1].size_mb):
+                    ram_req_gb = spec.ram_required_mb / 1024
+                    
+                    # Show status
+                    status = "🔵 CURRENT" if name == current_model else "✅ Available"
+                    if name in device.recommended_models and name != current_model:
+                        status = "⭐ RECOMMENDED"
+                    if ram_req_gb > device.available_ram_gb:
+                        status = "⚠️  High RAM"
+                    
+                    print(f"   {option_number}. {status}")
+                    print(f"      📦 {name}")
+                    print(f"      💾 Size: {spec.size_mb:.1f}MB | RAM: {ram_req_gb:.1f}GB")
+                    print(f"      📝 {spec.description}")
+                    print(f"      ⚡ Speed: {spec.speed_estimate}")
+                    print()
+                    
+                    model_options.append((name, spec))
+                    option_number += 1
+            
+            if gguf_models:
+                print("🔧 GGUF Quantized Models:")
+                for name, spec in sorted(gguf_models, key=lambda x: x[1].size_mb):
+                    ram_req_gb = spec.ram_required_mb / 1024
+                    
+                    status = "🔵 CURRENT" if name == current_model else "✅ Available"
+                    if ram_req_gb > device.available_ram_gb:
+                        status = "⚠️  High RAM"
+                    
+                    print(f"   {option_number}. {status} {name}")
+                    print(f"      💾 Size: {spec.size_mb:.1f}MB | RAM: {ram_req_gb:.1f}GB")
+                    print(f"      📝 {spec.description}")
+                    print()
+                    
+                    model_options.append((name, spec))
+                    option_number += 1
+            
+            # Show device info
+            print(f"💻 Your System: {device.available_ram_gb:.1f}GB RAM available")
+            if device.recommended_models:
+                print(f"🎯 Recommended: {', '.join(device.recommended_models[:2])}")
+            
+            # Get user selection
+            print(f"\n❓ Select a model to load (1-{len(model_options)}) or 'c' to cancel:")
+            
+            try:
+                # Read user input
+                user_choice = input("➤ ").strip()
+                
+                if user_choice.lower() in ['c', 'cancel', 'quit', 'q']:
+                    self.print_with_avatar("❌ Model selection cancelled", AvatarState.IDLE)
+                    return
+                
+                # Parse choice
+                choice_num = int(user_choice)
+                if 1 <= choice_num <= len(model_options):
+                    selected_model, selected_spec = model_options[choice_num - 1]
+                    
+                    # Confirm selection
+                    ram_req_gb = selected_spec.ram_required_mb / 1024
+                    print(f"\n📦 Selected: {selected_model}")
+                    print(f"💾 Size: {selected_spec.size_mb:.1f}MB")
+                    print(f"💭 RAM needed: {ram_req_gb:.1f}GB")
+                    print(f"📝 {selected_spec.description}")
+                    
+                    if selected_model == current_model:
+                        self.print_with_avatar(f"🔵 Already using {selected_model}", AvatarState.IDLE)
+                        return
+                    
+                    # Ask for confirmation
+                    confirm = input("\n❓ Proceed with model switch? (y/N): ").strip().lower()
+                    if confirm in ['y', 'yes', 'ok', '1']:
+                        print(f"\n🚀 Switching to {selected_model}...")
+                        self._switch_to_model(selected_model)
+                    else:
+                        self.print_with_avatar("❌ Model switch cancelled", AvatarState.IDLE)
+                else:
+                    self.print_with_avatar(f"❌ Invalid selection. Choose 1-{len(model_options)}", AvatarState.ERROR)
+                    
+            except ValueError:
+                self.print_with_avatar("❌ Invalid input. Please enter a number.", AvatarState.ERROR)
+            except KeyboardInterrupt:
+                self.print_with_avatar("\n❌ Selection interrupted", AvatarState.ERROR)
+            
+        except ImportError:
+            self.print_with_avatar("❌ Local model manager not available", AvatarState.ERROR)
+        except Exception as e:
+            self.print_with_avatar(f"❌ Error in model selection: {e}", AvatarState.ERROR)
+
+    def handle_performance_command(self, user_input: str = ""):
+        """Handle performance monitoring commands"""
+        parts = user_input.strip().split()
+        command = parts[1] if len(parts) > 1 else "summary"
+        
+        try:
+            from performance_monitor import get_performance_monitor
+            perf_monitor = get_performance_monitor()
+            
+            if command == "summary":
+                self._show_performance_summary(perf_monitor)
+            elif command == "stats":
+                self._show_detailed_performance_stats(perf_monitor)
+            elif command == "system":
+                self._show_system_performance(perf_monitor)
+            elif command == "export":
+                self._export_performance_data(perf_monitor)
+            elif command == "clear":
+                self._clear_performance_data(perf_monitor)
+            elif command == "baseline":
+                self._set_performance_baseline(parts)
+            else:
+                self.print_with_avatar("Usage: /performance [summary|stats|system|export|clear|baseline]", AvatarState.IDLE)
+                self.print_with_avatar("  summary  - Show performance overview", AvatarState.IDLE)
+                self.print_with_avatar("  stats    - Detailed performance statistics", AvatarState.IDLE)
+                self.print_with_avatar("  system   - Current system performance", AvatarState.IDLE)
+                self.print_with_avatar("  export   - Export performance data to file", AvatarState.IDLE)
+                self.print_with_avatar("  clear    - Clear performance history", AvatarState.IDLE)
+                self.print_with_avatar("  baseline - Set performance baselines", AvatarState.IDLE)
+        
+        except ImportError:
+            self.print_with_avatar("❌ Performance monitoring not available", AvatarState.ERROR)
+        except Exception as e:
+            self.print_with_avatar(f"❌ Performance command error: {e}", AvatarState.ERROR)
+    
+    def _show_performance_summary(self, perf_monitor):
+        """Show performance summary"""
+        summary = perf_monitor.get_performance_summary()
+        
+        print("\n📊 M1K3 Performance Summary")
+        print("=" * 50)
+        
+        overall = summary.get('overall_stats', {})
+        print(f"📈 Total Events: {overall.get('total_events', 0)}")
+        print(f"⚡ Avg Duration: {overall.get('average_duration', 0):.3f}s")
+        print(f"✅ Success Rate: {overall.get('success_rate', 0):.1f}%")
+        print(f"🚀 Events/sec: {overall.get('events_per_second', 0):.2f}")
+        
+        if overall.get('memory_growth_mb', 0) != 0:
+            print(f"💾 Memory Growth: {overall.get('memory_growth_mb', 0):.1f}MB")
+        
+        # Show by event type
+        by_type = summary.get('by_event_type', {})
+        if by_type:
+            print(f"\n📋 By Event Type:")
+            for event_type, stats in by_type.items():
+                print(f"   {event_type}: {stats['total_events']} events, "
+                      f"avg: {stats['average_duration']:.3f}s, "
+                      f"success: {stats['success_rate']:.1f}%")
+        
+        # Show recent events
+        recent = summary.get('recent_events', [])
+        if recent:
+            print(f"\n🕐 Recent Events:")
+            for event in recent[-5:]:
+                status = "✅" if event['success'] else "❌"
+                print(f"   {status} {event['name']}: {event['duration']:.3f}s")
+        
+        # Show regressions
+        regressions = summary.get('regressions_detected', 0)
+        if regressions > 0:
+            print(f"\n⚠️  Performance Regressions Detected: {regressions}")
+        
+        if self.voice_enabled:
+            self._safe_voice_synthesis(f"Performance summary: {overall.get('total_events', 0)} events tracked")
+    
+    def _show_detailed_performance_stats(self, perf_monitor):
+        """Show detailed performance statistics"""
+        from performance_monitor import PerformanceEventType
+        
+        print("\n📊 Detailed Performance Statistics")
+        print("=" * 60)
+        
+        for event_type in PerformanceEventType:
+            stats = perf_monitor.get_stats(event_type=event_type)
+            if stats.total_events > 0:
+                print(f"\n🔹 {event_type.value.upper()}:")
+                print(f"   Events: {stats.total_events}")
+                print(f"   Avg: {stats.average_duration:.3f}s")
+                print(f"   Min: {stats.min_duration:.3f}s")
+                print(f"   Max: {stats.max_duration:.3f}s")
+                print(f"   Median: {stats.median_duration:.3f}s")
+                print(f"   95th percentile: {stats.p95_duration:.3f}s")
+                print(f"   Success rate: {stats.success_rate:.1f}%")
+    
+    def _show_system_performance(self, perf_monitor):
+        """Show current system performance"""
+        system_perf = perf_monitor.get_system_performance()
+        
+        print("\n💻 Current System Performance")
+        print("=" * 40)
+        
+        if 'error' in system_perf:
+            print(f"❌ Error getting system info: {system_perf['error']}")
+            return
+        
+        print(f"🖥️  CPU Usage: {system_perf.get('system_cpu_percent', 0):.1f}%")
+        print(f"💾 Memory Usage: {system_perf.get('system_memory_percent', 0):.1f}%")
+        print(f"🆓 Available RAM: {system_perf.get('system_memory_available_gb', 0):.1f}GB")
+        print(f"💽 Disk Usage: {system_perf.get('system_disk_percent', 0):.1f}%")
+        print(f"📊 M1K3 Memory: {system_perf.get('process_memory_mb', 0):.1f}MB")
+        print(f"⚡ M1K3 CPU: {system_perf.get('process_cpu_percent', 0):.1f}%")
+        print(f"🧵 Active Threads: {system_perf.get('active_threads', 0)}")
+        
+        # Memory usage assessment
+        process_memory = system_perf.get('process_memory_mb', 0)
+        if process_memory > 4000:
+            print("⚠️  High memory usage detected")
+        elif process_memory > 2000:
+            print("ℹ️  Moderate memory usage")
+        else:
+            print("✅ Memory usage looks good")
+    
+    def _export_performance_data(self, perf_monitor):
+        """Export performance data"""
+        try:
+            filepath = perf_monitor.export_performance_data()
+            self.print_with_avatar(f"📄 Performance data exported to: {filepath}", AvatarState.IDLE)
+            if self.voice_enabled:
+                self._safe_voice_synthesis("Performance data exported successfully")
+        except Exception as e:
+            self.print_with_avatar(f"❌ Export failed: {e}", AvatarState.ERROR)
+    
+    def _clear_performance_data(self, perf_monitor):
+        """Clear performance data"""
+        try:
+            # Clear events
+            perf_monitor.events.clear()
+            perf_monitor._stats_cache.clear()
+            perf_monitor._cache_invalidated = True
+            
+            self.print_with_avatar("🗑️  Performance data cleared", AvatarState.IDLE)
+            if self.voice_enabled:
+                self._safe_voice_synthesis("Performance data cleared")
+        except Exception as e:
+            self.print_with_avatar(f"❌ Clear failed: {e}", AvatarState.ERROR)
+    
+    def _set_performance_baseline(self, parts):
+        """Set performance baselines"""
+        if len(parts) < 4:
+            self.print_with_avatar("Usage: /performance baseline <event_name> <duration_seconds>", AvatarState.IDLE)
+            self.print_with_avatar("Example: /performance baseline model_load 3.5", AvatarState.IDLE)
+            return
+        
+        try:
+            event_name = parts[2]
+            duration = float(parts[3])
+            
+            from performance_monitor import set_baseline
+            set_baseline(event_name, duration)
+            
+            self.print_with_avatar(f"✅ Baseline set: {event_name} = {duration}s", AvatarState.IDLE)
+            if self.voice_enabled:
+                self._safe_voice_synthesis(f"Baseline set for {event_name}")
+                
+        except ValueError:
+            self.print_with_avatar("❌ Invalid duration. Please use a number.", AvatarState.ERROR)
+        except Exception as e:
+            self.print_with_avatar(f"❌ Failed to set baseline: {e}", AvatarState.ERROR)
 
 def main():
     parser = argparse.ArgumentParser(description="M1K3 Local AI CLI with Voice")

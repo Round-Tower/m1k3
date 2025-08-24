@@ -267,14 +267,46 @@ class IntelligentTTSController:
             return False
         
         try:
-            # For now, use standard synthesis (effects integration comes next)
-            # TODO: Apply content-specific effects to audio after synthesis
-            success = self.voice_engine.synthesize_and_play(segment.text, background=False)
-            return success
+            # Handle different synthesis modes
+            if segment.synthesis_mode == "SKIP":
+                print(f"🔇 Skipping synthesis for {segment.content_type.value}: '{segment.text}'")
+                return True
+                
+            elif segment.synthesis_mode == "PAUSE":
+                print(f"⏸️  Inserting pause for {segment.content_type.value}")
+                # Insert pause - could be implemented as silent audio or timing delay
+                import time
+                pause_duration = self._calculate_pause_duration(segment)
+                time.sleep(pause_duration)
+                return True
+                
+            elif segment.synthesis_mode == "WHISPER":
+                print(f"🤫 Whispering {segment.content_type.value}: '{segment.text}'")
+                # For now, just synthesize normally - could apply whisper effects later
+                success = self.voice_engine.synthesize_and_play(segment.text, background=False)
+                return success
+                
+            else:  # NORMAL mode
+                print(f"🗣️  Synthesizing {segment.content_type.value}: '{segment.text}'")
+                success = self.voice_engine.synthesize_and_play(segment.text, background=False)
+                return success
+                
         except Exception as e:
             # Log the exception for debugging
             print(f"🐛 Voice synthesis error: {e}")
             return False
+    
+    def _calculate_pause_duration(self, segment: ContentSegment) -> float:
+        """Calculate appropriate pause duration for a segment"""
+        # Base pause duration on content length and type
+        base_duration = 0.5  # 500ms base
+        
+        if segment.content_type == ContentType.NARRATION:
+            # Narration pauses tend to be longer
+            content_length = len(segment.original_markers or segment.text)
+            return min(base_duration + (content_length * 0.05), 2.0)  # Max 2 seconds
+        
+        return base_duration
     
     def _calculate_inter_segment_pause(self, content_type: ContentType) -> float:
         """Calculate appropriate pause duration between segments"""
