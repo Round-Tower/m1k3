@@ -89,6 +89,9 @@ class WebSocketManager {
             }
         });
         
+        // Mark WebSocket component as ready
+        this.stateManager.setComponentReady('websocket');
+        
         // Notify components
         this.stateManager.eventBus.dispatchEvent(new CustomEvent('websocket.connected', {
             detail: { timestamp: Date.now() }

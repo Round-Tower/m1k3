@@ -81,8 +81,7 @@ class GameboyPixelEngine {
             large: { width: 12, height: 16 }
         };
         
-        // Initialize fonts with adaptive scaling
-        this.fonts = this.createAdaptiveFonts();
+        // Fonts will be initialized after pixel size calculation (see init())
         
         // System state for context-aware rendering
         this.systemState = {
@@ -285,6 +284,10 @@ class GameboyPixelEngine {
     }
     
     init() {
+        // Initialize adaptive fonts after pixel size has been calculated
+        this.fonts = this.createAdaptiveFonts();
+        console.log('📝 Adaptive fonts initialized');
+        
         this.clearCanvas();
         this.startAnimationLoop();
     }

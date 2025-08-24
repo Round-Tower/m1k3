@@ -52,6 +52,16 @@ class M1K3App {
             // Setup global event handlers
             this.setupGlobalHandlers();
             
+            // Simulate AI model and voice model readiness (since these are external to the web interface)
+            // In a real system, these would be signaled by the Python backend
+            setTimeout(() => {
+                this.stateManager.setComponentReady('ai_model');
+            }, 100);
+            
+            setTimeout(() => {
+                this.stateManager.setComponentReady('voice_model');  
+            }, 200);
+            
             // Mark as initialized
             this.isInitialized = true;
             this.stateManager.set('startTime', this.startTime);
@@ -230,6 +240,7 @@ class M1K3App {
         this.stateManager.eventBus.addEventListener('app.component_ready', (event) => {
             const { component } = event.detail;
             const progress = this.stateManager.getLoadingProgress();
+            const readyComponents = Array.from(this.stateManager.state.app.readyComponents);
             
             let statusText = `${component} ready...`;
             switch (component) {
@@ -239,6 +250,7 @@ class M1K3App {
                 case 'websocket': statusText = 'Communication bridge active 🌐'; break;
             }
             
+            console.log(`🔄 Component ready: ${component} (${progress}%) - Ready: [${readyComponents.join(', ')}]`);
             this.updateLoadingProgress(progress, statusText, component);
         });
         
@@ -249,6 +261,16 @@ class M1K3App {
             await new Promise(resolve => setTimeout(resolve, 1000)); // Let user see completion
             await this.hideLoadingOverlay();
         });
+        
+        // Fallback timeout to hide loading even if components don't signal ready
+        setTimeout(async () => {
+            if (this.loadingOverlay && !this.loadingOverlay.classList.contains('hidden')) {
+                console.warn('⚠️ Loading timeout reached, forcing overlay hide');
+                this.updateLoadingProgress(100, 'Starting with available components...');
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                await this.hideLoadingOverlay();
+            }
+        }, 10000); // 10 second timeout
         
         // Listen for component errors
         this.stateManager.eventBus.addEventListener('app.component_error', (event) => {

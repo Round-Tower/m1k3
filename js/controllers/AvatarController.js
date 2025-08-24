@@ -40,6 +40,9 @@ class AvatarController {
         this.restoreFromState();
         this.startParticleSystem();
         
+        // Mark avatar server component as ready
+        this.stateManager.setComponentReady('avatar_server');
+        
         console.log('🤖 Avatar interface ready');
     }
     
