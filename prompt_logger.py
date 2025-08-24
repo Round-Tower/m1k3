@@ -116,10 +116,10 @@ class PromptLogger:
         # Show formatted prompt with clear boundaries
         self._write_to_console("┌─ START FORMATTED PROMPT ─┐")
         
-        # Truncate very long prompts for console display
+        # Show more of the prompt for SmolLM2 debugging
         display_prompt = formatted_prompt
-        if len(formatted_prompt) > 500:
-            display_prompt = formatted_prompt[:250] + "\n...[truncated]...\n" + formatted_prompt[-250:]
+        if len(formatted_prompt) > 1000:
+            display_prompt = formatted_prompt[:500] + "\n...[truncated]...\n" + formatted_prompt[-300:]
         
         for line in display_prompt.split('\n'):
             self._write_to_console(f"│ {line}")

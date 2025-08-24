@@ -44,15 +44,30 @@ class ResponseFormatter:
             r'First, let me(.*?)(?=\n\n|\Z)',
         ]
         
-        # Response cleanup patterns
+        # Response cleanup patterns (enhanced for SmolLM2)
         self.cleanup_patterns = [
+            # Standard cleanup
             (r'<\|endoftext\|>', ''),
             (r'</s>', ''),
             (r'<\|im_end\|>', ''),
-            (r'### User:.*$', ''),  # Remove leaked user prompts
-            (r'### Assistant:.*?(?=\w)', ''),  # Remove duplicate assistant markers
-            (r'Human:.*$', ''),  # Remove leaked human prompts
-            (r'Assistant:\s*', ''),  # Remove duplicate assistant prefixes
+            
+            # SmolLM2-specific cleanup
+            (r'<\|im_start\|>assistant\s*', ''),  # Remove ChatML assistant tags
+            (r'<\|im_start\|>\w+\s*', ''),       # Remove other ChatML tags
+            (r'### User:.*$', ''),                # Remove leaked user prompts
+            (r'### Assistant:.*?(?=\w)', ''),     # Remove duplicate assistant markers
+            (r'Human:.*$', ''),                   # Remove leaked human prompts
+            (r'Assistant:\s*', ''),               # Remove duplicate assistant prefixes
+            
+            # SmolLM2 repetition patterns
+            (r'\b(The user asked|The question is|Looking at this)\b.*?\n', ''),  # Meta commentary
+            (r'\b(I need to|Let me|I should)\b.*?(?=\n\n|\Z)', ''),  # Thinking patterns
+            (r'^\s*(Okay,?\s*)?[Ss]o,?\s*', ''),  # Remove "Okay, so" sentence starters
+            
+            # Improve articulation
+            (r'\s+([.!?])', r'\1'),              # Fix spacing before punctuation
+            (r'([.!?])\s*([a-z])', r'\1 \2'),    # Ensure space after punctuation
+            (r'\s+', ' '),                       # Normalize whitespace
         ]
         
         # Paragraph detection patterns
@@ -140,6 +155,223 @@ class ResponseFormatter:
             return None, response
         
         return thinking_content, remaining_content
+    
+    def improve_articulation_smollm2(self, response: str) -> str:
+        """Apply SmolLM2-specific articulation improvements"""
+        
+        # Split into sentences for better processing
+        sentences = re.split(r'([.!?]+)', response)
+        improved_sentences = []
+        
+        i = 0
+        while i < len(sentences) - 1:
+            sentence = sentences[i].strip()
+            punctuation = sentences[i + 1] if i + 1 < len(sentences) else ''
+            
+            if sentence:
+                # Improve sentence structure
+                sentence = self._improve_sentence_structure(sentence)
+                
+                # Fix common SmolLM2 articulation issues
+                sentence = self._fix_common_issues(sentence)
+                
+                # Add improved sentence with punctuation
+                improved_sentences.append(sentence + punctuation)
+            
+            i += 2
+        
+        # Join and apply final improvements
+        improved = ' '.join(improved_sentences)
+        improved = self._apply_paragraph_structure(improved)
+        
+        return improved.strip()
+    
+    def _improve_sentence_structure(self, sentence: str) -> str:
+        """Improve individual sentence structure"""
+        sentence = sentence.strip()
+        
+        if not sentence:
+            return sentence
+        
+        # Capitalize first word
+        sentence = sentence[0].upper() + sentence[1:] if len(sentence) > 1 else sentence.upper()
+        
+        # Fix common transition issues
+        transitions = {
+            r'^and\s+': 'Additionally, ',
+            r'^but\s+': 'However, ',
+            r'^so\s+': 'Therefore, ',
+            r'^because\s+': 'Since ',
+        }
+        
+        for pattern, replacement in transitions.items():
+            sentence = re.sub(pattern, replacement, sentence, flags=re.IGNORECASE)
+        
+        # Improve passive voice where appropriate
+        sentence = re.sub(r'\b(it can be|this can be) (\w+ed)\b', r'you can \2 it', sentence)
+        
+        return sentence
+    
+    def _fix_common_issues(self, sentence: str) -> str:
+        """Fix common SmolLM2 articulation issues"""
+        
+        # Remove redundant phrases
+        redundant_patterns = [
+            r'\b(in order to|in order for)\b',  # Replace with just "to"
+            r'\bthat is to say\b',               # Often unnecessary
+            r'\bas a matter of fact\b',          # Wordy
+            r'\bthe fact that\b',                # Often redundant
+        ]
+        
+        replacements = ['to', '', '', '']
+        
+        for pattern, replacement in zip(redundant_patterns, replacements):
+            sentence = re.sub(pattern, replacement, sentence, flags=re.IGNORECASE)
+        
+        # Fix double conjunctions
+        sentence = re.sub(r'\b(and|but|or)\s+(and|but|or)\b', r'\1', sentence, flags=re.IGNORECASE)
+        
+        # Improve word choice for clarity
+        improvements = {
+            r'\butilize\b': 'use',
+            r'\bfacilitate\b': 'help',
+            r'\bcommence\b': 'start',
+            r'\bterminate\b': 'end',
+            r'\bascertain\b': 'find out',
+        }
+        
+        for wordy, simple in improvements.items():
+            sentence = re.sub(wordy, simple, sentence, flags=re.IGNORECASE)
+        
+        return sentence
+    
+    def _apply_paragraph_structure(self, text: str) -> str:
+        """Apply better paragraph structure to multi-sentence responses"""
+        
+        # Split into sentences
+        sentences = re.split(r'([.!?]+)', text)
+        structured_text = ""
+        sentence_count = 0
+        
+        i = 0
+        while i < len(sentences) - 1:
+            sentence = sentences[i].strip()
+            punctuation = sentences[i + 1] if i + 1 < len(sentences) else ''
+            
+            if sentence:
+                if sentence_count > 0:
+                    # Add appropriate spacing
+                    if sentence_count % 3 == 0:  # New paragraph every 3 sentences
+                        structured_text += "\n\n"
+                    else:
+                        structured_text += " "
+                
+                structured_text += sentence + punctuation
+                sentence_count += 1
+            
+            i += 2
+        
+        return structured_text
+    
+    def determine_response_type(self, response: str) -> ResponseType:
+        """Determine the type of response for appropriate formatting"""
+        
+        if not response or len(response.strip()) < 10:
+            return ResponseType.ERROR_RESPONSE
+        
+        # Check for thinking patterns
+        if any(pattern in response.lower() for pattern in ['let me think', 'i need to', 'analyzing']):
+            return ResponseType.WITH_THINKING
+        
+        # Check for code content
+        if '```' in response or 'def ' in response or 'import ' in response:
+            return ResponseType.CODE_HEAVY
+        
+        # Check for conversational markers
+        conversational_markers = ['hello', 'hi there', 'how can i help', 'nice to meet']
+        if any(marker in response.lower() for marker in conversational_markers):
+            return ResponseType.CONVERSATIONAL
+        
+        return ResponseType.CLEAN_ANSWER
+    
+    def calculate_confidence_score(self, response: str) -> float:
+        """Calculate confidence score based on response quality indicators"""
+        
+        if not response:
+            return 0.0
+        
+        score = 0.5  # Base score
+        
+        # Length factor (optimal around 50-200 words)
+        word_count = len(response.split())
+        if 50 <= word_count <= 200:
+            score += 0.2
+        elif 20 <= word_count < 50 or 200 < word_count <= 300:
+            score += 0.1
+        
+        # Grammar indicators
+        if response[0].isupper():  # Proper capitalization
+            score += 0.1
+        if response.endswith(('.', '!', '?')):  # Proper ending
+            score += 0.1
+        
+        # Clarity indicators
+        if not any(phrase in response.lower() for phrase in ['i think', 'maybe', 'possibly', 'perhaps']):
+            score += 0.1  # Confident tone
+        
+        # Structure indicators
+        if '\n' in response:  # Has structure
+            score += 0.05
+        
+        return min(1.0, score)
+    
+    def apply_context_aware_formatting(self, response: str, system_context: Dict) -> str:
+        """Apply formatting based on system context"""
+        
+        device_tier = system_context.get('device_tier', 'unknown')
+        system_load = system_context.get('system_load_status', 'unknown')
+        
+        # For low-end devices or high load, simplify formatting
+        if device_tier == 'minimal' or system_load == 'high-load':
+            # Keep it simple - just basic cleanup
+            return response.strip()
+        
+        # For better devices, enhance formatting
+        if device_tier in ['balanced', 'high-performance']:
+            # Apply better paragraph structure
+            return self._apply_paragraph_structure(response)
+        
+        return response
+    
+    def format_response(self, response: str, show_thinking: bool = False, model_name: str = None) -> FormattedResponse:
+        """Format response with comprehensive processing"""
+        
+        # Clean the response
+        cleaned = self.clean_response(response)
+        
+        # Extract thinking content
+        thinking_content, final_answer = self.extract_thinking_content(cleaned)
+        
+        # Determine response type
+        response_type = self.determine_response_type(cleaned)
+        
+        # Calculate confidence
+        confidence_score = self.calculate_confidence_score(cleaned)
+        
+        # Format based on whether to show thinking
+        if show_thinking and thinking_content:
+            content = f"**Thinking:** {thinking_content}\n\n**Answer:** {final_answer}"
+        else:
+            content = final_answer if final_answer else cleaned
+        
+        return FormattedResponse(
+            content=content,
+            response_type=response_type,
+            has_thinking=thinking_content is not None,
+            thinking_content=thinking_content,
+            final_answer=final_answer or cleaned,
+            confidence_score=confidence_score
+        )
     
     def clean_response(self, response: str) -> str:
         """Apply intelligent response cleanup"""
@@ -332,6 +564,46 @@ class ResponseFormatter:
         
         return token
 
+
+# Enhanced SmolLM2 functions
+def format_ai_response_smollm2(raw_response: str, system_context: Optional[Dict] = None) -> FormattedResponse:
+    """Enhanced response formatting specifically for SmolLM2 with dynamic context awareness"""
+    
+    formatter = ResponseFormatter()
+    
+    # Apply SmolLM2-specific articulation improvements
+    cleaned = formatter.improve_articulation_smollm2(raw_response)
+    
+    # Standard cleanup
+    cleaned = formatter.clean_response(cleaned)
+    
+    # Extract thinking content
+    thinking_content, final_answer = formatter.extract_thinking_content(cleaned)
+    
+    # Determine response type
+    response_type = formatter.determine_response_type(cleaned)
+    
+    # Calculate confidence score based on clarity and completeness
+    confidence_score = formatter.calculate_confidence_score(cleaned)
+    
+    # Apply context-aware formatting if system context is provided
+    if system_context:
+        cleaned = formatter.apply_context_aware_formatting(cleaned, system_context)
+    
+    return FormattedResponse(
+        content=cleaned,
+        response_type=response_type,
+        has_thinking=thinking_content is not None,
+        thinking_content=thinking_content,
+        final_answer=final_answer or cleaned,
+        confidence_score=confidence_score
+    )
+
+def clean_ai_response_smollm2(response: str) -> str:
+    """Quick SmolLM2-specific response cleanup with articulation improvements"""
+    formatter = ResponseFormatter()
+    cleaned = formatter.improve_articulation_smollm2(response)
+    return formatter.clean_response(cleaned)
 
 # Convenience functions
 def format_ai_response(response: str, show_thinking: bool = False, model_name: str = None) -> str:

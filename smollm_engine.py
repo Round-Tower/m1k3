@@ -14,6 +14,15 @@ from typing import Optional, Dict, List, Generator
 from dataclasses import dataclass
 from prompt_logger import get_prompt_logger
 
+# Import system context builder for dynamic stats
+try:
+    from system_context_builder import SystemContextBuilder
+    CONTEXT_BUILDER_AVAILABLE = True
+    print("✅ System context builder available")
+except ImportError:
+    CONTEXT_BUILDER_AVAILABLE = False
+    print("⚠️ System context builder not available")
+
 # Try to import required libraries
 try:
     from ctransformers import AutoModelForCausalLM as CTAutoModel
@@ -62,6 +71,14 @@ class SmolLMEngine:
         
         # Initialize logger
         self.logger = get_prompt_logger()
+        
+        # Initialize system context builder for dynamic stats
+        if CONTEXT_BUILDER_AVAILABLE:
+            self.context_builder = SystemContextBuilder()
+            print("✅ Dynamic system context enabled")
+        else:
+            self.context_builder = None
+            print("⚠️ Dynamic system context disabled")
         
         print("🤖 SmolLM2 Engine initialized")
         print(f"📁 Models directory: {self.models_dir}")
@@ -148,26 +165,33 @@ class SmolLMEngine:
         
         # Priority 1: GGUF (fastest, smallest memory)
         if self.is_gguf_available():
+            self.backend = "gguf"  # Set backend before loading
             if self._load_gguf_model():
                 print("✅ SmolLM2 loaded via GGUF (ultra-fast)")
                 self._log_model_info("gguf")
                 return True
+            else:
+                self.backend = None  # Reset on failure
         
         # Priority 2: Ollama (if running)
         if self.is_ollama_available():
-            self.backend = "ollama"
+            self.backend = "ollama"  # Set backend before validation
             print("✅ SmolLM2 ready via Ollama API")
             self._log_model_info("ollama")
             return True
         
         # Priority 3: HuggingFace transformers (fallback)
         if self.is_transformers_available():
+            self.backend = "transformers"  # Set backend before loading
             if self._load_transformers_model():
                 print("✅ SmolLM2 loaded via HuggingFace transformers")
                 self._log_model_info("transformers")
                 return True
+            else:
+                self.backend = None  # Reset on failure
         
         print("❌ No SmolLM2 backend available")
+        self.backend = None
         return False
     
     def _load_gguf_model(self) -> bool:
@@ -185,7 +209,7 @@ class SmolLMEngine:
                 threads=2,
                 gpu_layers=0  # CPU only for compatibility
             )
-            self.backend = "gguf"
+            # Backend is set in load_model() before calling this
             return True
         except Exception as e:
             print(f"❌ GGUF loading failed: {e}")
@@ -208,7 +232,7 @@ class SmolLMEngine:
             if not hasattr(self.tokenizer, 'chat_template') or not self.tokenizer.chat_template:
                 self.tokenizer.chat_template = self._get_chatml_template()
             
-            self.backend = "transformers"
+            # Backend is set in load_model() before calling this
             return True
         except Exception as e:
             print(f"❌ Transformers loading failed: {e}")
@@ -286,6 +310,12 @@ class SmolLMEngine:
             response = "Error: No backend available"
         
         generation_time = time.time() - start_time
+        
+        # Update context builder metrics if available
+        if self.context_builder:
+            self.context_builder.record_response_time(generation_time)
+            if use_context:
+                self.context_builder.increment_message_count()
         
         # Log raw response
         self.logger.log_raw_response(response, generation_time)
@@ -408,63 +438,82 @@ class SmolLMEngine:
                 print(f"🎯 Adaptive param: {config_key} = {adaptive_params[param]}")
     
     def _build_enhanced_system_prompt(self, session_context: Optional[Dict] = None) -> str:
-        """Build system prompt with context enrichment"""
+        """Build system prompt with dynamic context enrichment"""
         base_prompt = self.config.system_prompt
         
-        if not session_context:
-            return base_prompt
+        # Get dynamic system context if available
+        if self.context_builder:
+            try:
+                # Calculate context tokens estimate
+                context_used = sum(len(msg.get('content', '')) for msg in self.context_messages) // 4
+                context_max = self.config.context_length
+                
+                # Build dynamic context summary
+                context_data = self.context_builder.build_context_summary(
+                    backend=self.backend or "unknown",
+                    model_name="SmolLM2-135M",
+                    context_used=context_used,
+                    context_max=context_max
+                )
+                
+                # Format the base prompt with dynamic context
+                try:
+                    enhanced_prompt = base_prompt.format(**context_data)
+                    print(f"✨ Dynamic context injected ({context_data.get('device_tier')} tier, {context_data.get('system_load_status')} load)")
+                except (KeyError, ValueError) as e:
+                    print(f"⚠️ Template formatting failed: {e}")
+                    
+                    # Find which keys are missing (debug only)
+                    import re
+                    template_keys = re.findall(r'\{(\w+)\}', base_prompt)
+                    missing_keys = [key for key in template_keys if key not in context_data]
+                    
+                    if missing_keys:
+                        print(f"🔍 Missing template keys: {missing_keys}")
+                    
+                    # If formatting fails, use base prompt with appended context
+                    context_summary = f"Device: {context_data.get('platform', 'unknown')} ({context_data.get('device_tier', 'unknown')} tier)"
+                    enhanced_prompt = f"{base_prompt}\n\n[Dynamic Context: {context_summary}]"
+                    
+            except Exception as e:
+                print(f"⚠️ Error building dynamic context: {e}")
+                enhanced_prompt = base_prompt
+        else:
+            enhanced_prompt = base_prompt
+            
+        # Add session context if provided (legacy support)
+        if session_context:
+            context_parts = self._build_legacy_context(session_context)
+            if context_parts:
+                enhanced_prompt += f"\n\nSession Context: {' | '.join(context_parts)}"
         
-        # Add device context
-        device_info = []
-        if 'device_tier' in session_context:
-            device_info.append(f"Running on {session_context['device_tier']} tier hardware")
-        if 'platform' in session_context:
-            device_info.append(f"Platform: {session_context['platform']}")
+        return enhanced_prompt
+    
+    def _build_legacy_context(self, session_context: Dict) -> List[str]:
+        """Build legacy session context (for backwards compatibility)"""
+        context_parts = []
         
         # Add interface context
-        interface_info = []
         if 'interface_type' in session_context:
-            interface_info.append(f"Interface: {session_context['interface_type']}")
+            context_parts.append(f"Interface: {session_context['interface_type']}")
         if 'transparency_mode' in session_context:
-            interface_info.append(f"Transparency: {session_context['transparency_mode']}")
+            context_parts.append(f"Transparency: {session_context['transparency_mode']}")
             
         # Add user preferences
         prefs = session_context.get('user_preferences', {})
-        pref_info = []
         if prefs.get('response_length'):
-            pref_info.append(f"Preferred response length: {prefs['response_length']}")
+            context_parts.append(f"Response length: {prefs['response_length']}")
         if prefs.get('technical_level'):
-            pref_info.append(f"Technical level: {prefs['technical_level']}")
+            context_parts.append(f"Technical level: {prefs['technical_level']}")
             
         # Add RAG context
-        rag_info = []
         rag_context = session_context.get('rag_context', {})
         if rag_context:
             retrieved_docs = rag_context.get('retrieved_docs', [])
             if retrieved_docs:
-                rag_info.append(f"Retrieved {len(retrieved_docs)} relevant documents")
-                # Add key information from top documents
-                for i, doc in enumerate(retrieved_docs[:2]):  # Top 2 docs
-                    content = doc.get('content', '')[:200]  # First 200 chars
-                    if content:
-                        rag_info.append(f"Doc {i+1}: {content}...")
-            
-        # Combine context
-        context_parts = []
-        if device_info:
-            context_parts.append("Device: " + ", ".join(device_info))
-        if interface_info:
-            context_parts.append("Interface: " + ", ".join(interface_info))
-        if pref_info:
-            context_parts.append("User preferences: " + ", ".join(pref_info))
-        if rag_info:
-            context_parts.append("Knowledge: " + " | ".join(rag_info))
-            
-        if context_parts:
-            enhanced_prompt = f"{base_prompt}\n\nContext: {' | '.join(context_parts)}"
-            return enhanced_prompt
-            
-        return base_prompt
+                context_parts.append(f"Retrieved {len(retrieved_docs)} relevant documents")
+        
+        return context_parts
     
     def _smart_context_trim(self):
         """Smart context trimming with importance-based retention"""
@@ -547,6 +596,45 @@ class SmolLMEngine:
             
         return importance
     
+    def get_current_system_prompt(self, include_context_preview: bool = True) -> Dict:
+        """Get the current system prompt with dynamic context"""
+        base_prompt = self.config.system_prompt
+        
+        # Get current enhanced prompt
+        enhanced_prompt = self._build_enhanced_system_prompt()
+        
+        # Build context summary for display
+        context_info = {}
+        if self.context_builder and include_context_preview:
+            try:
+                context_data = self.context_builder.build_context_summary(
+                    backend=self.backend or "unknown",
+                    model_name="SmolLM2-135M",
+                    context_used=len(self.context_messages) * 50,  # Rough estimate
+                    context_max=self.config.context_length
+                )
+                context_info = {
+                    "device_tier": context_data.get("device_tier", "unknown"),
+                    "platform": context_data.get("platform", "unknown"),
+                    "architecture": context_data.get("architecture", "unknown"),
+                    "system_load": context_data.get("system_load_status", "unknown"),
+                    "optimization_mode": context_data.get("optimization_mode", "unknown"),
+                    "cpu_cores": context_data.get("cpu_cores", "unknown"),
+                    "ram_available": context_data.get("ram_available_gb", "unknown"),
+                    "tokens_per_sec": context_data.get("tokens_per_sec", "calculating")
+                }
+            except Exception as e:
+                print(f"⚠️ Error getting context preview: {e}")
+        
+        return {
+            "template_prompt": base_prompt,
+            "enhanced_prompt": enhanced_prompt,
+            "is_dynamic": self.context_builder is not None,
+            "context_info": context_info,
+            "current_style": self.current_style,
+            "prompt_length": len(enhanced_prompt)
+        }
+    
     def get_model_info(self) -> Dict:
         """Get current model information"""
         return {
@@ -562,7 +650,8 @@ class SmolLMEngine:
                 "gguf": self.is_gguf_available(),
                 "ollama": self.is_ollama_available(),
                 "transformers": self.is_transformers_available()
-            }
+            },
+            "has_dynamic_context": self.context_builder is not None
         }
     
     def _log_model_info(self, backend: str):

@@ -392,17 +392,71 @@ class M1K3CLI:
             print(f"📏 Context Length: {info.get('context_length', 'Unknown')}")
             print(f"🎨 Template Type: {info.get('template_type', 'Unknown')}")
             
-            # Enhanced system prompt display logic
-            has_system_prompt = info.get('has_system_prompt', False)
+            # Enhanced system prompt display logic - show ACTUAL runtime prompt
+            # Check if SmolLM2 engine is available for dynamic context
+            if (hasattr(self.ai_engine, 'smollm_engine') and 
+                self.ai_engine.smollm_engine and 
+                hasattr(self.ai_engine.smollm_engine, 'get_current_system_prompt')):
+                
+                try:
+                    prompt_info = self.ai_engine.smollm_engine.get_current_system_prompt()
+                    enhanced_prompt = prompt_info.get('enhanced_prompt', '')
+                    is_dynamic = prompt_info.get('is_dynamic', False)
+                    context_info = prompt_info.get('context_info', {})
+                    
+                    if enhanced_prompt and enhanced_prompt.strip():
+                        # Dynamic context indicator
+                        if is_dynamic:
+                            device_tier = context_info.get('device_tier', 'unknown')
+                            platform = context_info.get('platform', 'unknown')
+                            print(f"\n🎯 Active System Prompt (Dynamic Context - {device_tier} tier, {platform}):")
+                        else:
+                            print(f"\n🎯 Active System Prompt (Static):")
+                        
+                        print("-" * 40)
+                        
+                        # Show context preview if dynamic
+                        if is_dynamic and context_info:
+                            print(f"📊 Context Preview:")
+                            print(f"   Platform: {context_info.get('platform', 'unknown')} ({context_info.get('architecture', 'unknown')})")
+                            print(f"   Hardware: {context_info.get('cpu_cores', 'unknown')} cores, {context_info.get('ram_available', 'unknown')}GB RAM")
+                            print(f"   Performance: {context_info.get('tokens_per_sec', 'calculating')} tok/s, {context_info.get('optimization_mode', 'unknown')} mode")
+                            print("-" * 40)
+                        
+                        # Truncate very long prompts for startup display
+                        if len(enhanced_prompt) > 400:
+                            print(f"{enhanced_prompt[:400]}...")
+                            print(f"[Full prompt: {len(enhanced_prompt)} characters]")
+                        else:
+                            print(enhanced_prompt)
+                        print("-" * 40)
+                    else:
+                        print(f"\n🎯 System Prompt: [Error getting enhanced prompt]")
+                        
+                except Exception as e:
+                    print(f"\n🎯 System Prompt: [Error loading dynamic prompt: {e}]")
+                    # Fallback to metadata display
+                    self._display_metadata_prompt()
+            else:
+                # Fallback for non-SmolLM2 or unavailable dynamic context
+                self._display_metadata_prompt()
+                
+            print("=" * 60 + "\n")
+                
+        except Exception as e:
+            self._log_startup_message("WARN", f"Could not display model info: {e}")
+            import traceback
+    
+    def _display_metadata_prompt(self):
+        """Fallback method to display metadata-based prompt"""
+        try:
             metadata = self.ai_engine.model_metadata
-            
-            
-            if has_system_prompt and metadata:
+            if metadata:
                 prompts = metadata.get('prompts', {})
                 system_prompt = prompts.get('system', '')
                 
                 if system_prompt and system_prompt.strip():
-                    print(f"\n🎯 Active System Prompt:")
+                    print(f"\n🎯 System Prompt (From Metadata):")
                     print("-" * 40)
                     # Truncate very long prompts for startup display
                     if len(system_prompt) > 300:
@@ -414,14 +468,9 @@ class M1K3CLI:
                 else:
                     print(f"\n🎯 System Prompt: [Using M1K3 default - empty metadata]")
             else:
-                reason = "no metadata" if not metadata else "no system prompt flag"
-                print(f"\n🎯 System Prompt: [Using M1K3 default - {reason}]")
-                
-            print("=" * 60 + "\n")
-                
+                print(f"\n🎯 System Prompt: [Using M1K3 default - no metadata]")
         except Exception as e:
-            self._log_startup_message("WARN", f"Could not display model info: {e}")
-            import traceback
+            print(f"\n🎯 System Prompt: [Error loading metadata: {e}]")
             traceback.print_exc()
 
     def _initialize_ai_context(self):
