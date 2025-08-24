@@ -60,6 +60,173 @@
             animation-iteration-count: 1 !important;
             transition-duration: 0.01ms !important;
         }
+        
+        /* Global Loading Overlay Styles */
+        .global-loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: linear-gradient(135deg, #000 0%, #111 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+            transition: opacity 0.8s ease-out, transform 0.8s ease-out;
+        }
+        
+        .global-loading-overlay.hidden {
+            opacity: 0;
+            transform: scale(0.95);
+            pointer-events: none;
+        }
+        
+        .loading-hero {
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 2rem;
+            max-width: 600px;
+            padding: 2rem;
+        }
+        
+        .avatar-loading-container {
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .loading-avatar-canvas {
+            border-radius: 20px;
+            background: rgba(0, 0, 0, 0.3);
+            box-shadow: 0 0 30px rgba(226, 83, 3, 0.3);
+            animation: avatarGlow 3s ease-in-out infinite alternate;
+        }
+        
+        .loading-progress-ring {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            animation: ringRotate 4s linear infinite;
+        }
+        
+        .progress-ring-fill {
+            transform-origin: 50% 50%;
+            transform: rotate(-90deg);
+            transition: stroke-dashoffset 0.5s ease-in-out;
+        }
+        
+        .loading-status {
+            color: white;
+            max-width: 400px;
+        }
+        
+        .loading-title {
+            font-size: 2.5rem;
+            font-weight: bold;
+            margin-bottom: 1rem;
+            color: var(--accent-primary);
+            text-shadow: 0 0 10px rgba(226, 83, 3, 0.5);
+            animation: titlePulse 2s ease-in-out infinite;
+        }
+        
+        .loading-progress-text {
+            font-size: 1.2rem;
+            margin-bottom: 2rem;
+            opacity: 0.9;
+            min-height: 1.5rem;
+        }
+        
+        .loading-components {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 1rem;
+            width: 100%;
+        }
+        
+        .component-status {
+            padding: 0.8rem 1rem;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            font-size: 0.9rem;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .component-status::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(226, 83, 3, 0.3), transparent);
+            transition: left 0.5s ease;
+        }
+        
+        .component-status.loading::before {
+            left: 100%;
+        }
+        
+        .component-status.ready {
+            background: rgba(0, 255, 133, 0.1);
+            border-color: rgba(0, 255, 133, 0.3);
+            color: #00FF85;
+        }
+        
+        .component-status.error {
+            background: rgba(255, 69, 0, 0.1);
+            border-color: rgba(255, 69, 0, 0.3);
+            color: #FF4500;
+        }
+        
+        @keyframes avatarGlow {
+            0% { box-shadow: 0 0 30px rgba(226, 83, 3, 0.3); }
+            100% { box-shadow: 0 0 50px rgba(226, 83, 3, 0.6), 0 0 100px rgba(226, 83, 3, 0.2); }
+        }
+        
+        @keyframes ringRotate {
+            0% { transform: translate(-50%, -50%) rotate(0deg); }
+            100% { transform: translate(-50%, -50%) rotate(360deg); }
+        }
+        
+        @keyframes titlePulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+        }
+        
+        /* Mobile responsive loading */
+        @media (max-width: 768px) {
+            .loading-hero {
+                padding: 1rem;
+                gap: 1.5rem;
+            }
+            
+            .loading-title {
+                font-size: 2rem;
+            }
+            
+            .loading-avatar-canvas {
+                width: 256px;
+                height: 192px;
+            }
+            
+            .loading-progress-ring svg {
+                width: 150px;
+                height: 150px;
+            }
+            
+            .loading-components {
+                grid-template-columns: 1fr;
+                gap: 0.8rem;
+            }
+        }
     </style>
 </head>
 <body>
@@ -81,7 +248,32 @@
         <div class="gradient-orb orb-1" style="opacity: 0.3;"></div>
     </div>
 
-    <div class="dashboard">
+    <!-- Global Loading Overlay with Avatar Hero Animation -->
+    <div class="global-loading-overlay" id="globalLoadingOverlay">
+        <div class="loading-hero">
+            <div class="avatar-loading-container">
+                <canvas class="loading-avatar-canvas" id="loadingAvatarCanvas" width="384" height="288"></canvas>
+                <div class="loading-progress-ring">
+                    <svg class="progress-ring" width="200" height="200">
+                        <circle class="progress-ring-track" cx="100" cy="100" r="90" stroke="rgba(255,255,255,0.1)" stroke-width="8" fill="none"/>
+                        <circle class="progress-ring-fill" id="progressRingFill" cx="100" cy="100" r="90" stroke="var(--accent-primary)" stroke-width="8" fill="none" stroke-dasharray="565.48" stroke-dashoffset="565.48"/>
+                    </svg>
+                </div>
+            </div>
+            <div class="loading-status">
+                <h2 class="loading-title">M1K3 Awakening...</h2>
+                <div class="loading-progress-text" id="loadingProgressText">Initializing systems</div>
+                <div class="loading-components" id="loadingComponents">
+                    <div class="component-status" data-component="ai_model">🧠 AI Engine</div>
+                    <div class="component-status" data-component="voice_model">🎤 Voice System</div>
+                    <div class="component-status" data-component="avatar_server">🤖 Avatar Server</div>
+                    <div class="component-status" data-component="websocket">🌐 WebSocket</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="dashboard" id="mainDashboard" style="display: none;">
         <!-- Tab Navigation -->
         <nav class="tab-navigation" id="tabNavigation">
             <a href="#chat" class="tab-item active" data-tab="chat">
@@ -255,126 +447,13 @@
         // Tab Management System
         let currentTab = 'chat';
         
-        function initializeTabSystem() {
-            const tabItems = document.querySelectorAll('.tab-item');
-            const viewContainers = document.querySelectorAll('.view-container');
-            
-            // Tab switching
-            tabItems.forEach(tab => {
-                tab.addEventListener('click', (e) => {
-                    e.preventDefault();
-                    const targetTab = tab.getAttribute('data-tab');
-                    switchTab(targetTab);
-                });
-            });
-            
-            // Initialize emotion buttons
-            const emotionButtons = document.querySelectorAll('.emotion-button');
-            emotionButtons.forEach(btn => {
-                btn.addEventListener('click', () => {
-                    emotionButtons.forEach(b => b.classList.remove('active'));
-                    btn.classList.add('active');
-                    const emotion = btn.getAttribute('data-emotion');
-                    updateEmotion(emotion, 70);
-                    updateMiniAvatar(emotion);
-                });
-            });
-            
-            // Initialize avatar controls
-            initializeAvatarControls();
-            initializeSettings();
-            
-            console.log('✅ Tab system initialized');
-        }
+        // Legacy initializeTabSystem removed - now handled by M1K3App and NavigationManager
         
-        function switchTab(tabName) {
-            if (tabName === currentTab) return;
-            
-            // Update tab items
-            document.querySelectorAll('.tab-item').forEach(tab => {
-                tab.classList.remove('active');
-                if (tab.getAttribute('data-tab') === tabName) {
-                    tab.classList.add('active');
-                }
-            });
-            
-            // Update view containers
-            document.querySelectorAll('.view-container').forEach(view => {
-                view.classList.remove('active');
-            });
-            
-            const targetView = document.getElementById(tabName + 'View');
-            if (targetView) {
-                targetView.classList.add('active');
-            }
-            
-            currentTab = tabName;
-            
-            // Handle tab-specific initialization
-            if (tabName === 'avatar') {
-                setTimeout(() => {
-                    resizeCanvas();
-                    generateAvatar();
-                }, 100);
-            }
-        }
+        // Legacy switchTab removed - now handled by NavigationManager
         
-        function initializeAvatarControls() {
-            const styleSelect = document.getElementById('styleSelect');
-            const intensitySlider = document.getElementById('intensitySlider');
-            const intensityValue = document.getElementById('intensityValue');
-            
-            if (styleSelect) {
-                styleSelect.addEventListener('change', (e) => {
-                    updateStyle(e.target.value, currentColor);
-                });
-            }
-            
-            if (intensitySlider && intensityValue) {
-                intensitySlider.addEventListener('input', (e) => {
-                    const intensity = parseInt(e.target.value);
-                    intensityValue.textContent = intensity + '%';
-                    emotionIntensity = intensity;
-                    if (pixelEngine && pixelEngine.avatarState) {
-                        pixelEngine.avatarState.health = intensity;
-                        pixelEngine.renderAvatar();
-                    }
-                });
-            }
-        }
+        // Legacy initializeAvatarControls removed - now handled by AvatarController
         
-        function initializeSettings() {
-            const toggleSwitches = document.querySelectorAll('.toggle-switch');
-            
-            toggleSwitches.forEach(toggle => {
-                toggle.addEventListener('click', () => {
-                    toggle.classList.toggle('active');
-                    
-                    // Handle specific settings
-                    if (toggle.id === 'voiceToggle') {
-                        soundsEnabled = toggle.classList.contains('active');
-                    } else if (toggle.id === 'debugToggle') {
-                        if (debugConsole) {
-                            if (toggle.classList.contains('active')) {
-                                debugConsole.visible = true;
-                                document.getElementById('debugConsole').style.display = 'flex';
-                            } else {
-                                debugConsole.visible = false;
-                                document.getElementById('debugConsole').style.display = 'none';
-                            }
-                        }
-                    }
-                });
-            });
-            
-            // Theme selector
-            const themeSelect = document.getElementById('themeSelect');
-            if (themeSelect) {
-                themeSelect.addEventListener('change', (e) => {
-                    document.documentElement.className = 'theme-' + e.target.value;
-                });
-            }
-        }
+        // Legacy initializeSettings removed - now handled by SettingsController
         
         function updateMiniAvatar(emotion) {
             const miniAvatarEmoji = document.getElementById('miniAvatarEmoji');
@@ -394,34 +473,7 @@
             }
         }
         
-        function initializeChatControls() {
-            const clearChatBtn = document.getElementById('clearChatBtn');
-            const voiceToggleBtn = document.getElementById('voiceToggleBtn');
-            
-            if (clearChatBtn) {
-                clearChatBtn.addEventListener('click', () => {
-                    const chatMessages = document.getElementById('chatMessages');
-                    if (chatMessages) {
-                        chatMessages.innerHTML = `
-                            <div class="message ai">
-                                <div class="message-content">
-                                    <div class="message-text">Chat cleared. How can I help you?</div>
-                                    <div class="message-time">Just now</div>
-                                </div>
-                            </div>
-                        `;
-                    }
-                });
-            }
-            
-            if (voiceToggleBtn) {
-                voiceToggleBtn.addEventListener('click', () => {
-                    soundsEnabled = !soundsEnabled;
-                    voiceToggleBtn.textContent = soundsEnabled ? '🔊 Voice' : '🔇 Voice';
-                    voiceToggleBtn.style.opacity = soundsEnabled ? '1' : '0.6';
-                });
-            }
-        }
+        // Legacy initializeChatControls removed - now handled by ChatController
         
         function updateStatusMetrics() {
             // Update status view with real data
@@ -464,6 +516,61 @@
         // Legacy initialization - now handled by M1K3App
         // The new modular system will initialize automatically
         console.log('🔄 M1K3 Legacy compatibility layer loaded');
+        
+        // Bridge function to connect external component loading to StateManager
+        function notifyComponentReady(componentName) {
+            if (window.m1k3App && window.m1k3App.stateManager) {
+                window.m1k3App.stateManager.setComponentReady(componentName);
+            } else {
+                // Queue the notification for when StateManager is ready
+                if (!window._queuedComponentNotifications) {
+                    window._queuedComponentNotifications = [];
+                }
+                window._queuedComponentNotifications.push(['ready', componentName]);
+            }
+        }
+        
+        function notifyComponentLoading(componentName) {
+            if (window.m1k3App && window.m1k3App.stateManager) {
+                window.m1k3App.stateManager.setComponentLoading(componentName);
+            } else {
+                if (!window._queuedComponentNotifications) {
+                    window._queuedComponentNotifications = [];
+                }
+                window._queuedComponentNotifications.push(['loading', componentName]);
+            }
+        }
+        
+        function notifyComponentError(componentName, error) {
+            if (window.m1k3App && window.m1k3App.stateManager) {
+                window.m1k3App.stateManager.setComponentError(componentName, error);
+            } else {
+                if (!window._queuedComponentNotifications) {
+                    window._queuedComponentNotifications = [];
+                }
+                window._queuedComponentNotifications.push(['error', componentName, error]);
+            }
+        }
+        
+        // Process queued notifications when app is ready
+        function processQueuedNotifications() {
+            if (window._queuedComponentNotifications && window.m1k3App && window.m1k3App.stateManager) {
+                window._queuedComponentNotifications.forEach(([type, componentName, error]) => {
+                    switch (type) {
+                        case 'ready':
+                            window.m1k3App.stateManager.setComponentReady(componentName);
+                            break;
+                        case 'loading':
+                            window.m1k3App.stateManager.setComponentLoading(componentName);
+                            break;
+                        case 'error':
+                            window.m1k3App.stateManager.setComponentError(componentName, error);
+                            break;
+                    }
+                });
+                window._queuedComponentNotifications = [];
+            }
+        }
         
         // Keep some legacy functions for backward compatibility
         window.testStatusOverlay = testStatusOverlay;
@@ -587,84 +694,7 @@
             }
         }
 
-        function connectWebSocket() {
-            try {
-                websocket = new WebSocket('ws://localhost:8081');
-                
-                websocket.onopen = function(event) {
-                    console.log('✅ Connected to M1K3 Avatar Server');
-                    isConnected = true;
-                    updateConnectionStatus(true);
-                    playSound('connect');
-                    debugConsole?.logConnection('Connected');
-                    
-                    // Send identification message to help with debugging
-                    sendMessage({
-                        type: 'client_identify', 
-                        client_type: 'web_avatar',
-                        timestamp: Date.now(),
-                        user_agent: navigator.userAgent
-                    });
-                };
-                
-                websocket.onmessage = function(event) {
-                    try {
-                        const data = JSON.parse(event.data);
-                        debugConsole?.logReceived(data);
-                        
-                        // Dispatch event to event bus
-                        if (eventBus) {
-                            const eventType = mapMessageToEvent(data);
-                            if (eventType) {
-                                eventBus.dispatchEvent(new CustomEvent(eventType, { detail: data }));
-                            }
-                        }
-                        
-                        // Still handle via traditional method for backward compatibility
-                        handleServerMessage(data);
-                    } catch (e) {
-                        console.error('Error parsing message:', e);
-                        debugConsole?.logError(`Parse error: ${e.message}`);
-                    }
-                };
-                
-                websocket.onclose = function(event) {
-                    console.log(`🔌 Disconnected from M1K3 Avatar Server (code: ${event.code}, reason: ${event.reason})`);
-                    isConnected = false;
-                    updateConnectionStatus(false);
-                    debugConsole?.logConnection(`Disconnected: ${event.code} - ${event.reason}`);
-                    
-                    if (reconnectTimer) clearTimeout(reconnectTimer);
-                    if (event.code !== 1000) { // Only reconnect if not a normal closure
-                        console.log('🔄 Will attempt reconnection in 3 seconds...');
-                        reconnectTimer = setTimeout(connectWebSocket, 3000);
-                    }
-                };
-                
-                websocket.onerror = function(error) {
-                    console.error('WebSocket error:', error);
-                    debugConsole?.logError(`WebSocket error: ${error.message || error}`);
-                };
-                
-            } catch (e) {
-                console.error('❌ Failed to connect to WebSocket:', e);
-                debugConsole?.logError(`Connection failed: ${e.message}`);
-                if (reconnectTimer) clearTimeout(reconnectTimer);
-                console.log('🔄 Will retry connection in 5 seconds...');
-                reconnectTimer = setTimeout(connectWebSocket, 5000);
-            }
-        }
-
-        function sendMessage(data) {
-            if (websocket && websocket.readyState === WebSocket.OPEN) {
-                websocket.send(JSON.stringify(data));
-                debugConsole?.logSent(data);
-                console.log('📤 Sent to server:', data.type || 'unknown');
-            } else {
-                console.warn('⚠️  WebSocket not connected, message not sent:', data);
-                debugConsole?.logError(`Cannot send message - WebSocket not open: ${JSON.stringify(data)}`);
-            }
-        }
+        // Legacy WebSocket functions removed - now handled by WebSocketManager
 
         // Legacy protocol decoder removed - now handled by WebSocketManager
 

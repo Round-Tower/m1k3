@@ -132,13 +132,35 @@ class AvatarController {
         // Initialize GameboyPixelEngine if available
         if (typeof GameboyPixelEngine !== 'undefined') {
             try {
+                // Detect layout mode based on container
+                const container = document.querySelector('.canvas-container');
+                const rect = container ? container.getBoundingClientRect() : this.canvas.getBoundingClientRect();
+                const aspectRatio = rect.width / rect.height;
+                let layoutMode = 'auto';
+                
+                // Determine optimal layout mode
+                if (rect.width < 200 || rect.height < 200) {
+                    layoutMode = 'mini';
+                } else if (aspectRatio > 1.8) {
+                    layoutMode = 'cinematic';  
+                } else if (rect.width > 600 && rect.height > 600) {
+                    layoutMode = 'fullscreen';
+                }
+                
                 this.pixelEngine = new GameboyPixelEngine(this.canvas, {
-                    pixelSize: 12,
+                    basePixelSize: 8, // Changed from fixed pixelSize
+                    minPixelSize: 2,
+                    maxPixelSize: 16,
                     mode: 'avatar',
+                    layoutMode: layoutMode,
+                    adaptiveMode: true,
+                    aspectRatioMode: 'adaptive',
                     enableCare: true,
                     enableEInk: false,
                     debugMode: false
                 });
+                
+                console.log(`🎨 Adaptive avatar initialized: layout=${layoutMode}, container=${rect.width}x${rect.height}, aspect=${aspectRatio.toFixed(2)}`);
                 
                 // Set initial palette
                 this.pixelEngine.currentPalette = this.pixelEngine.palettes.monochrome;
@@ -288,22 +310,29 @@ class AvatarController {
         availableWidth -= padding;
         availableHeight -= padding;
         
-        // Calculate optimal canvas size
-        let canvasWidth, canvasHeight;
+        // Enhanced canvas sizing with full container utilization
+        let canvasWidth = Math.floor(availableWidth * 0.95);
+        let canvasHeight = Math.floor(availableHeight * 0.95);
         
+        // No longer force square aspect ratio - use full available space!
         if (isMobile) {
-            canvasWidth = Math.floor(availableWidth * 0.98);
-            canvasHeight = Math.floor(availableHeight * 0.98);
-            
             const maxMobileWidth = Math.floor(window.innerWidth * 0.95);
             const maxMobileHeight = Math.floor(window.innerHeight * 0.65);
             
             canvasWidth = Math.min(canvasWidth, maxMobileWidth);
             canvasHeight = Math.min(canvasHeight, maxMobileHeight);
-        } else {
-            const size = Math.min(availableWidth, availableHeight);
-            const finalSize = Math.max(size, 200);
-            canvasWidth = canvasHeight = Math.floor(finalSize);
+        }
+        
+        // Determine layout mode based on new dimensions
+        const aspectRatio = canvasWidth / canvasHeight;
+        let layoutMode = 'auto';
+        
+        if (canvasWidth < 200 || canvasHeight < 200) {
+            layoutMode = 'mini';
+        } else if (aspectRatio > 1.8) {
+            layoutMode = 'cinematic';
+        } else if (canvasWidth > 600 && canvasHeight > 600) {
+            layoutMode = 'fullscreen';
         }
         
         // Ensure minimum sizes
@@ -334,12 +363,12 @@ class AvatarController {
             this.particleCanvas.height = internalHeight;
         }
         
-        // Update pixel engine dimensions
+        // Update pixel engine dimensions with layout mode
         if (this.pixelEngine && this.pixelEngine.updateDimensions) {
-            this.pixelEngine.updateDimensions(canvasWidth, canvasHeight);
+            this.pixelEngine.updateDimensions(canvasWidth, canvasHeight, { layoutMode });
         }
         
-        console.log(`🤖 Canvas resized to ${canvasWidth}x${canvasHeight}`);
+        console.log(`🤖 Adaptive canvas resized to ${canvasWidth}x${canvasHeight} (${aspectRatio.toFixed(2)} aspect, ${layoutMode} mode)`);
         this.needsResize = false;
     }
     
@@ -366,6 +395,12 @@ class AvatarController {
             
             // Render avatar
             this.pixelEngine.renderAvatar();
+            
+            // Log adaptive info for debugging (occasionally)
+            if (Math.random() < 0.05) { // 5% chance to avoid spam
+                const layoutInfo = this.pixelEngine.getLayoutInfo();
+                console.log('🎨 Avatar adaptive info:', layoutInfo);
+            }
         } else {
             // Fallback rendering
             this.renderFallbackAvatar();
@@ -591,6 +626,42 @@ class AvatarController {
         if (this.pixelEngine && this.pixelEngine.stopAnimationLoop) {
             this.pixelEngine.stopAnimationLoop();
         }
+    }
+    
+    // === ADVANCED LAYOUT MODE CONTROLS ===
+    
+    // Switch layout mode dynamically
+    switchLayoutMode(newMode, options = {}) {
+        if (this.pixelEngine && this.pixelEngine.setLayoutMode) {
+            this.pixelEngine.setLayoutMode(newMode, options);
+            console.log(`🎨 Avatar layout mode switched to: ${newMode}`);
+        }
+    }
+    
+    // Get current adaptive information
+    getAdaptiveInfo() {
+        if (this.pixelEngine && this.pixelEngine.getLayoutInfo) {
+            return this.pixelEngine.getLayoutInfo();
+        }
+        return null;
+    }
+    
+    // Cycle through layout modes for testing
+    cycleLayoutModes() {
+        const modes = ['auto', 'mini', 'fullscreen', 'cinematic'];
+        const currentMode = this.pixelEngine ? this.pixelEngine.layoutMode : 'auto';
+        const currentIndex = modes.indexOf(currentMode);
+        const nextIndex = (currentIndex + 1) % modes.length;
+        const nextMode = modes[nextIndex];
+        
+        this.switchLayoutMode(nextMode);
+        return nextMode;
+    }
+    
+    // Force container refresh for testing
+    refreshContainer() {
+        this.resizeCanvas();
+        this.generateAvatar();
     }
 }
 

@@ -23,6 +23,9 @@ class NavigationManager {
         this.setupSwipeGestures();
         this.setupKeyboardNavigation();
         
+        // Hide all views initially
+        this.hideAllViews();
+        
         // Initialize with current tab from state
         const currentTab = this.stateManager.get('currentTab');
         await this.switchToTab(currentTab, false); // Don't animate initial load
@@ -209,8 +212,13 @@ class NavigationManager {
     async showView(tabName, animate) {
         let viewElement = document.getElementById(tabName + 'View');
         
-        // Lazy load view if it doesn't exist
-        if (!viewElement) {
+        // Check if view needs content (contains only loading indicator)
+        if (viewElement && viewElement.querySelector('.loading-indicator')) {
+            const content = await this.loadViewContent(tabName);
+            viewElement.innerHTML = content;
+            console.log(`🧭 Populated ${tabName} view with content`);
+        } else if (!viewElement) {
+            // Create new view if it doesn't exist
             await this.createView(tabName);
             viewElement = document.getElementById(tabName + 'View');
         }
@@ -295,6 +303,16 @@ class NavigationManager {
         if (controller && typeof controller.cleanup === 'function') {
             controller.cleanup();
         }
+    }
+    
+    // Hide all views initially
+    hideAllViews() {
+        const allViews = document.querySelectorAll('.view-container');
+        allViews.forEach(view => {
+            view.style.display = 'none';
+            view.classList.remove('active');
+        });
+        console.log('🧭 All views hidden for proper initialization');
     }
     
     // Handle tab-specific initialization logic

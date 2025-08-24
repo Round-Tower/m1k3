@@ -18,6 +18,11 @@ class M1K3App {
         this.isInitialized = false;
         this.isShuttingDown = false;
         
+        // Loading state management
+        this.loadingOverlay = null;
+        this.loadingAvatarEngine = null;
+        this.loadingProgressRing = null;
+        
         console.log(`🚀 M1K3 Application v${this.version} initializing...`);
     }
     
@@ -29,6 +34,9 @@ class M1K3App {
         }
         
         try {
+            // Initialize loading state first
+            await this.initializeLoadingState();
+            
             // Initialize core modules
             await this.initializeCore();
             
@@ -62,12 +70,153 @@ class M1K3App {
         }
     }
     
+    // Initialize loading state and avatar hero animation
+    async initializeLoadingState() {
+        console.log('🎭 Initializing loading state with avatar hero...');
+        
+        // Get loading overlay elements
+        this.loadingOverlay = document.getElementById('globalLoadingOverlay');
+        const loadingCanvas = document.getElementById('loadingAvatarCanvas');
+        this.loadingProgressRing = document.getElementById('progressRingFill');
+        
+        if (!this.loadingOverlay || !loadingCanvas || !this.loadingProgressRing) {
+            console.warn('⚠️ Loading overlay elements not found');
+            return;
+        }
+        
+        // Initialize avatar engine for loading animation
+        if (typeof GameboyPixelEngine !== 'undefined') {
+            try {
+                this.loadingAvatarEngine = new GameboyPixelEngine(loadingCanvas, {
+                    basePixelSize: 6, // Smaller base for loading screen
+                    minPixelSize: 3,
+                    maxPixelSize: 12,
+                    mode: 'avatar',
+                    layoutMode: 'fullscreen', // Use fullscreen mode for loading
+                    adaptiveMode: true,
+                    enableCare: true,
+                    enableEInk: false,
+                    debugMode: false
+                });
+                
+                // Set up loading avatar with thinking state
+                this.loadingAvatarEngine.setAvatar({
+                    emotion: 'thinking',
+                    style: 'robot',
+                    color: '#E25303',
+                    intensity: 50
+                });
+                
+                this.loadingAvatarEngine.startAnimationLoop();
+                console.log('🎭 Loading avatar engine initialized');
+                
+            } catch (error) {
+                console.warn('⚠️ Failed to initialize loading avatar engine:', error);
+            }
+        }
+        
+        // Set initial progress
+        this.updateLoadingProgress(0, 'Awakening M1K3...');
+    }
+    
+    // Update loading progress and avatar state
+    updateLoadingProgress(percentage, statusText, component = null) {
+        // Update progress ring
+        if (this.loadingProgressRing) {
+            const circumference = 2 * Math.PI * 90; // radius = 90
+            const offset = circumference - (percentage / 100) * circumference;
+            this.loadingProgressRing.style.strokeDashoffset = offset;
+        }
+        
+        // Update status text
+        const progressText = document.getElementById('loadingProgressText');
+        if (progressText && statusText) {
+            progressText.textContent = statusText;
+        }
+        
+        // Update component status
+        if (component) {
+            const componentElement = document.querySelector(`[data-component="${component}"]`);
+            if (componentElement) {
+                componentElement.classList.add('ready');
+            }
+        }
+        
+        // Update avatar emotion based on progress
+        if (this.loadingAvatarEngine) {
+            let emotion = 'thinking';
+            let intensity = 50 + (percentage * 0.5); // 50-100%
+            
+            if (percentage >= 75) {
+                emotion = 'excited';
+                intensity = 80;
+            } else if (percentage >= 50) {
+                emotion = 'happy';
+                intensity = 70;
+            }
+            
+            this.loadingAvatarEngine.setAvatar({
+                emotion,
+                style: 'robot',
+                color: '#E25303',
+                intensity
+            });
+        }
+        
+        console.log(`🎭 Loading progress: ${percentage}% - ${statusText}`);
+    }
+    
+    // Hide loading overlay with smooth transition
+    async hideLoadingOverlay() {
+        if (!this.loadingOverlay) return;
+        
+        console.log('🎭 Hiding loading overlay...');
+        
+        // Final avatar celebration
+        if (this.loadingAvatarEngine) {
+            this.loadingAvatarEngine.setAvatar({
+                emotion: 'love',
+                style: 'robot',
+                color: '#00FF85',
+                intensity: 100
+            });
+            
+            // Let celebration animation play briefly
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            
+            // Stop loading avatar animation
+            this.loadingAvatarEngine.stopAnimationLoop();
+        }
+        
+        // Smooth transition out
+        this.loadingOverlay.classList.add('hidden');
+        
+        // Show main dashboard
+        const mainDashboard = document.getElementById('mainDashboard');
+        if (mainDashboard) {
+            mainDashboard.style.display = 'block';
+        }
+        
+        // Clean up after animation completes
+        setTimeout(() => {
+            if (this.loadingOverlay) {
+                this.loadingOverlay.style.display = 'none';
+            }
+        }, 800);
+    }
+    
     // Initialize core modules
     async initializeCore() {
         console.log('🔧 Initializing core modules...');
+        this.updateLoadingProgress(10, 'Initializing state management...');
         
         // Initialize state management
         this.stateManager = new StateManager();
+        
+        // Set up loading progress listeners
+        this.setupLoadingProgressListeners();
+        
+        this.updateLoadingProgress(20, 'Initializing navigation...');
         
         // Initialize navigation manager
         this.navigationManager = new NavigationManager(this.stateManager);
@@ -75,9 +224,47 @@ class M1K3App {
         console.log('✅ Core modules initialized');
     }
     
+    // Setup loading progress listeners
+    setupLoadingProgressListeners() {
+        // Listen for component loading events from external systems
+        this.stateManager.eventBus.addEventListener('app.component_ready', (event) => {
+            const { component } = event.detail;
+            const progress = this.stateManager.getLoadingProgress();
+            
+            let statusText = `${component} ready...`;
+            switch (component) {
+                case 'ai_model': statusText = 'AI brain connected ✨'; break;
+                case 'voice_model': statusText = 'Voice synthesis ready 🎤'; break;
+                case 'avatar_server': statusText = 'Avatar system online 🤖'; break;
+                case 'websocket': statusText = 'Communication bridge active 🌐'; break;
+            }
+            
+            this.updateLoadingProgress(progress, statusText, component);
+        });
+        
+        // Listen for app ready event
+        this.stateManager.eventBus.addEventListener('app.ready', async () => {
+            await new Promise(resolve => setTimeout(resolve, 500)); // Brief pause
+            this.updateLoadingProgress(100, 'M1K3 is ready! 🚀');
+            await new Promise(resolve => setTimeout(resolve, 1000)); // Let user see completion
+            await this.hideLoadingOverlay();
+        });
+        
+        // Listen for component errors
+        this.stateManager.eventBus.addEventListener('app.component_error', (event) => {
+            const { component, error } = event.detail;
+            const componentElement = document.querySelector(`[data-component="${component}"]`);
+            if (componentElement) {
+                componentElement.classList.add('error');
+            }
+            console.warn(`⚠️ Component ${component} failed:`, error);
+        });
+    }
+    
     // Initialize view controllers
     async initializeControllers() {
         console.log('🎮 Initializing controllers...');
+        this.updateLoadingProgress(30, 'Creating interface controllers...');
         
         // Create controller instances
         const ChatController = window.ChatController;
@@ -111,6 +298,7 @@ class M1K3App {
     // Initialize navigation system
     async initializeNavigation() {
         console.log('🧭 Initializing navigation...');
+        this.updateLoadingProgress(40, 'Setting up navigation system...');
         
         await this.navigationManager.initialize();
         
@@ -120,6 +308,7 @@ class M1K3App {
     // Initialize WebSocket connection
     async initializeWebSocket() {
         console.log('🌐 Initializing WebSocket connection...');
+        this.updateLoadingProgress(50, 'Establishing communication bridge...');
         
         this.webSocketManager = new WebSocketManager(this.stateManager);
         await this.webSocketManager.initialize();
@@ -440,10 +629,46 @@ document.addEventListener('DOMContentLoaded', async () => {
         // Make app instance available globally for debugging
         window.m1k3App = m1k3App;
         
+        // Process any queued component notifications
+        if (typeof window.processQueuedNotifications === 'function') {
+            window.processQueuedNotifications();
+        }
+        
         // Add global helper functions for debugging
         window.switchTab = (tab) => m1k3App.switchTab(tab);
         window.getAppStats = () => m1k3App.getStats();
         window.restartApp = () => m1k3App.restart();
+        
+        // Add adaptive avatar debugging functions
+        window.getAvatarInfo = () => {
+            const avatarController = m1k3App.controllers.get('avatar');
+            return avatarController ? avatarController.getAdaptiveInfo() : null;
+        };
+        
+        window.cycleAvatarModes = () => {
+            const avatarController = m1k3App.controllers.get('avatar');
+            if (avatarController) {
+                const newMode = avatarController.cycleLayoutModes();
+                console.log(`🎨 Switched to layout mode: ${newMode}`);
+                return newMode;
+            }
+        };
+        
+        window.setAvatarMode = (mode, options = {}) => {
+            const avatarController = m1k3App.controllers.get('avatar');
+            if (avatarController) {
+                avatarController.switchLayoutMode(mode, options);
+                console.log(`🎨 Avatar layout mode set to: ${mode}`);
+            }
+        };
+        
+        window.refreshAvatar = () => {
+            const avatarController = m1k3App.controllers.get('avatar');
+            if (avatarController) {
+                avatarController.refreshContainer();
+                console.log('🎨 Avatar container refreshed');
+            }
+        };
         
     } catch (error) {
         console.error('❌ Failed to start M1K3 Application:', error);

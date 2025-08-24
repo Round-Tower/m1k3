@@ -21,12 +21,25 @@ class GameboyPixelEngine {
         this.ctx.imageSmoothingEnabled = false;
         console.log('🔧 Image smoothing disabled');
         
-        // Configuration
-        this.pixelSize = options.pixelSize || 8;
+        // Configuration with adaptive scaling
+        this.basePixelSize = options.pixelSize || 8;
+        this.minPixelSize = options.minPixelSize || 2;
+        this.maxPixelSize = options.maxPixelSize || 16;
         this.canvasWidth = canvas.width;
         this.canvasHeight = canvas.height;
-        this.gridWidth = Math.floor(this.canvasWidth / this.pixelSize);
-        this.gridHeight = Math.floor(this.canvasHeight / this.pixelSize);
+        this.containerWidth = canvas.style.width ? parseInt(canvas.style.width) : canvas.width;
+        this.containerHeight = canvas.style.height ? parseInt(canvas.style.height) : canvas.height;
+        this.devicePixelRatio = window.devicePixelRatio || 1;
+        
+        // Adaptive pixel size calculation
+        this.pixelSize = this.calculateOptimalPixelSize();
+        this.gridWidth = Math.floor(this.containerWidth / this.pixelSize);
+        this.gridHeight = Math.floor(this.containerHeight / this.pixelSize);
+        
+        // Container adaptation settings
+        this.adaptiveMode = options.adaptiveMode !== false; // Default: true
+        this.layoutMode = options.layoutMode || 'auto'; // auto, fullscreen, mini, cinematic
+        this.aspectRatioMode = options.aspectRatioMode || 'adaptive'; // fixed, adaptive, stretch
         
         console.log(`📐 Canvas: ${this.canvasWidth}x${this.canvasHeight}px`);
         console.log(`🔢 Grid: ${this.gridWidth}x${this.gridHeight} (${this.pixelSize}px per cell)`);
@@ -101,6 +114,120 @@ class GameboyPixelEngine {
         this.init();
     }
     
+    // === ADAPTIVE PIXEL SCALING SYSTEM ===
+    
+    calculateOptimalPixelSize() {
+        if (!this.adaptiveMode) {
+            return this.basePixelSize;
+        }
+        
+        // Calculate viewing distance factor (larger screens = further viewing distance)
+        const screenDiagonal = Math.sqrt(this.containerWidth * this.containerWidth + this.containerHeight * this.containerHeight);
+        const viewingDistanceFactor = Math.max(0.5, Math.min(2.0, screenDiagonal / 400));
+        
+        // Calculate pixel density based on container size and device pixel ratio
+        const containerArea = this.containerWidth * this.containerHeight;
+        const densityFactor = Math.sqrt(containerArea) / 300; // Base 300px reference
+        
+        // Adjust for device pixel ratio (high-DPI screens can use smaller pixels)
+        const dpiAdjustment = Math.max(0.7, Math.min(1.5, this.devicePixelRatio / 2));
+        
+        // Calculate optimal pixel size
+        let optimalSize = this.basePixelSize * densityFactor * viewingDistanceFactor * dpiAdjustment;
+        
+        // Apply layout mode adjustments
+        switch (this.layoutMode) {
+            case 'mini':
+                optimalSize *= 0.6; // Smaller pixels for compact display
+                break;
+            case 'fullscreen':
+                optimalSize *= 1.4; // Larger pixels for immersive experience  
+                break;
+            case 'cinematic':
+                optimalSize *= 1.2; // Medium-large pixels for wide screens
+                break;
+        }
+        
+        // Ensure pixel size stays within bounds
+        optimalSize = Math.max(this.minPixelSize, Math.min(this.maxPixelSize, optimalSize));
+        
+        // Round to nearest 0.5 for crisp rendering
+        optimalSize = Math.round(optimalSize * 2) / 2;
+        
+        console.log(`🧮 Pixel size calculation: base=${this.basePixelSize}, density=${densityFactor.toFixed(2)}, viewing=${viewingDistanceFactor.toFixed(2)}, dpi=${dpiAdjustment.toFixed(2)}, result=${optimalSize}`);
+        
+        return optimalSize;
+    }
+    
+    // Get optimal grid dimensions for avatar rendering
+    getOptimalAvatarDimensions() {
+        const aspectRatio = this.containerWidth / this.containerHeight;
+        let avatarWidth, avatarHeight;
+        
+        // Determine optimal avatar size based on container shape
+        if (aspectRatio > 1.5) {
+            // Wide container - utilize width more efficiently
+            avatarWidth = Math.floor(this.gridWidth * 0.4); // 40% of width
+            avatarHeight = Math.floor(this.gridHeight * 0.8); // 80% of height
+        } else if (aspectRatio < 0.8) {
+            // Tall container - utilize height more efficiently  
+            avatarWidth = Math.floor(this.gridWidth * 0.8);  // 80% of width
+            avatarHeight = Math.floor(this.gridHeight * 0.4); // 40% of height
+        } else {
+            // Square-ish container - balanced utilization
+            const utilization = Math.min(0.7, Math.max(0.5, Math.min(this.gridWidth, this.gridHeight) / 32));
+            avatarWidth = Math.floor(this.gridWidth * utilization);
+            avatarHeight = Math.floor(this.gridHeight * utilization);
+        }
+        
+        return { width: avatarWidth, height: avatarHeight, aspectRatio };
+    }
+    
+    // Dynamic positioning based on container shape and layout mode
+    calculateAvatarPosition() {
+        const { width: avatarWidth, height: avatarHeight, aspectRatio } = this.getOptimalAvatarDimensions();
+        let centerX, centerY;
+        
+        switch (this.layoutMode) {
+            case 'fullscreen':
+                centerX = Math.floor(this.gridWidth / 2);
+                centerY = Math.floor(this.gridHeight / 2);
+                break;
+                
+            case 'mini':
+                centerX = Math.floor(this.gridWidth / 2);
+                centerY = Math.floor(this.gridHeight / 2);
+                break;
+                
+            case 'cinematic':
+                // Off-center positioning for cinematic feel
+                centerX = Math.floor(this.gridWidth * 0.35);
+                centerY = Math.floor(this.gridHeight / 2);
+                break;
+                
+            default: // 'auto'
+                if (aspectRatio > 1.8) {
+                    // Ultra-wide - position avatar left-of-center
+                    centerX = Math.floor(this.gridWidth * 0.3);
+                    centerY = Math.floor(this.gridHeight / 2);
+                } else if (aspectRatio > 1.5) {
+                    // Wide - position avatar slightly left
+                    centerX = Math.floor(this.gridWidth * 0.4);
+                    centerY = Math.floor(this.gridHeight / 2);
+                } else if (aspectRatio < 0.6) {
+                    // Very tall - position avatar upper portion
+                    centerX = Math.floor(this.gridWidth / 2);
+                    centerY = Math.floor(this.gridHeight * 0.35);
+                } else {
+                    // Standard positioning
+                    centerX = Math.floor(this.gridWidth / 2);
+                    centerY = Math.floor((this.gridHeight - 16) / 2); // Account for status area
+                }
+        }
+        
+        return { centerX, centerY, avatarWidth, avatarHeight };
+    }
+    
     init() {
         this.clearCanvas();
         this.startAnimationLoop();
@@ -172,22 +299,35 @@ class GameboyPixelEngine {
         this.updateAvatarCare();
     }
     
-    updateDimensions(width, height) {
+    updateDimensions(width, height, options = {}) {
         console.log(`🔄 Updating GameboyPixelEngine dimensions to ${width}x${height}`);
         
-        // Use the CSS dimensions for calculations (not internal canvas resolution)
-        this.canvasWidth = width;
+        // Update container dimensions
+        this.containerWidth = width;
+        this.containerHeight = height;
+        this.canvasWidth = width;  // Keep for backward compatibility
         this.canvasHeight = height;
         
-        // Recalculate grid dimensions based on CSS size
-        this.gridWidth = Math.floor(this.canvasWidth / this.pixelSize);
-        this.gridHeight = Math.floor(this.canvasHeight / this.pixelSize);
-        
-        console.log(`📐 New grid: ${this.gridWidth}x${this.gridHeight} (${this.pixelSize}px per cell)`);
-        console.log(`📱 Canvas internal: ${this.canvas.width}x${this.canvas.height}, CSS: ${width}x${height}`);
-        
-        // Store device pixel ratio for proper rendering
+        // Update device pixel ratio
         this.devicePixelRatio = window.devicePixelRatio || 1;
+        
+        // Update layout mode if provided
+        if (options.layoutMode) {
+            this.layoutMode = options.layoutMode;
+        }
+        
+        // Recalculate optimal pixel size for new dimensions
+        const oldPixelSize = this.pixelSize;
+        this.pixelSize = this.calculateOptimalPixelSize();
+        
+        // Recalculate grid dimensions with new pixel size
+        this.gridWidth = Math.floor(this.containerWidth / this.pixelSize);
+        this.gridHeight = Math.floor(this.containerHeight / this.pixelSize);
+        
+        console.log(`📐 Adaptive resize: ${oldPixelSize}px → ${this.pixelSize}px pixels`);
+        console.log(`🔢 New grid: ${this.gridWidth}x${this.gridHeight} (${this.pixelSize}px per cell)`);
+        console.log(`📱 Canvas internal: ${this.canvas.width}x${this.canvas.height}, container: ${width}x${height}`);
+        console.log(`🎨 Layout mode: ${this.layoutMode}, aspect ratio: ${(width/height).toFixed(2)}`);
         
         // Clear frame cache since dimensions changed
         this.frameCache.clear();
@@ -200,6 +340,54 @@ class GameboyPixelEngine {
         if (this.mode === 'avatar') {
             this.renderAvatar();
         }
+    }
+    
+    // Dynamic layout mode switching
+    setLayoutMode(newMode, options = {}) {
+        const oldMode = this.layoutMode;
+        this.layoutMode = newMode;
+        
+        console.log(`🎨 Layout mode changed: ${oldMode} → ${newMode}`);
+        
+        // Recalculate pixel size for new layout mode
+        this.pixelSize = this.calculateOptimalPixelSize();
+        this.gridWidth = Math.floor(this.containerWidth / this.pixelSize);
+        this.gridHeight = Math.floor(this.containerHeight / this.pixelSize);
+        
+        // Apply layout-specific options
+        if (options.palette) {
+            this.currentPalette = this.palettes[options.palette] || this.currentPalette;
+        }
+        
+        if (options.animationSpeed) {
+            this.animationSpeed = options.animationSpeed;
+        }
+        
+        // Clear cache and re-render
+        this.frameCache.clear();
+        this.clearCanvas();
+        
+        if (this.mode === 'avatar') {
+            this.renderAvatar();
+        }
+        
+        return this;
+    }
+    
+    // Get current layout info for debugging/UI
+    getLayoutInfo() {
+        const { centerX, centerY, avatarWidth, avatarHeight } = this.calculateAvatarPosition();
+        
+        return {
+            layoutMode: this.layoutMode,
+            pixelSize: this.pixelSize,
+            gridSize: `${this.gridWidth}x${this.gridHeight}`,
+            containerSize: `${this.containerWidth}x${this.containerHeight}`,
+            aspectRatio: (this.containerWidth / this.containerHeight).toFixed(2),
+            avatarPosition: `${centerX},${centerY}`,
+            avatarSize: `${avatarWidth}x${avatarHeight}`,
+            utilizationPercent: Math.round((avatarWidth * avatarHeight) / (this.gridWidth * this.gridHeight) * 100)
+        };
     }
     
     updateAvatarCare() {
@@ -323,28 +511,14 @@ class GameboyPixelEngine {
     }
     
     renderAvatar() {
-        console.log('🎭 renderAvatar() called');
+        console.log('🎭 renderAvatar() called with adaptive positioning');
         
-        // Smart centering for both square and rectangular canvases
-        const aspectRatio = this.gridWidth / this.gridHeight;
-        let centerX, centerY;
+        // Use new adaptive positioning system
+        const { centerX, centerY, avatarWidth, avatarHeight } = this.calculateAvatarPosition();
+        const aspectRatio = this.containerWidth / this.containerHeight;
         
-        if (aspectRatio > 1.5) {
-            // Wide rectangular canvas (mobile landscape) - ensure proper centering
-            centerX = Math.floor(this.gridWidth / 2);
-            centerY = Math.floor(this.gridHeight * 0.5); // Center vertically in wide canvas
-            console.log(`📱 Wide canvas detected: ${this.gridWidth}x${this.gridHeight}, center at (${centerX}, ${centerY})`);
-        } else if (aspectRatio < 0.8) {
-            // Tall rectangular canvas (mobile portrait) - center vertically  
-            centerX = Math.floor(this.gridWidth / 2);
-            centerY = Math.floor((this.gridHeight - 16) / 2); // -16 for metrics strip
-        } else {
-            // Square or near-square canvas (desktop) - standard centering
-            centerX = Math.floor(this.gridWidth / 2);
-            centerY = Math.floor((this.gridHeight - 16) / 2); // -16 for metrics strip
-        }
-        
-        console.log(`🎯 Avatar center: (${centerX}, ${centerY}), aspect ratio: ${aspectRatio.toFixed(2)}, grid: ${this.gridWidth}x${this.gridHeight}`);
+        console.log(`🎯 Adaptive avatar positioning: center(${centerX}, ${centerY}), size(${avatarWidth}x${avatarHeight})`);
+        console.log(`📐 Container: ${this.containerWidth}x${this.containerHeight}, aspect ratio: ${aspectRatio.toFixed(2)}, layout: ${this.layoutMode}`);
         
         // Apply continuous animations (breathing, jitter, etc.)
         this.applyAvatarAnimations(centerX, centerY, this.ctx);
@@ -355,24 +529,29 @@ class GameboyPixelEngine {
         const actualCenterX = centerX + Math.floor(jitterX);
         const actualCenterY = centerY + Math.floor(jitterY);
         
-        // Avatar body based on evolution level with breathing
-        const baseSize = Math.floor(8 + this.avatarState.evolution * 2); // Larger for high res
+        // Avatar body with adaptive sizing based on available space
+        const maxAvatarSize = Math.min(avatarWidth, avatarHeight) * 0.6; // Use 60% of available space
+        const baseSize = Math.max(6, Math.min(maxAvatarSize, 8 + this.avatarState.evolution * 2));
         const breathScale = this.avatarState.breathScale || 1.0;
         const size = Math.floor(baseSize * breathScale);
         
-        console.log(`🔮 Avatar size: ${size}, evolution: ${this.avatarState.evolution}, mood: ${this.avatarState.mood}`);
+        // Scale avatar features based on pixel density
+        const featureScale = Math.max(0.5, Math.min(2.0, this.pixelSize / 8));
+        const scaledSize = Math.floor(size * featureScale);
         
-        this.renderAvatarBody(actualCenterX, actualCenterY, size, this.ctx);
+        console.log(`🔮 Adaptive avatar: size=${scaledSize} (base=${size}), pixel scale=${featureScale.toFixed(2)}, evolution=${this.avatarState.evolution}, mood=${this.avatarState.mood}`);
         
-        // Eyes with blinking animation
+        this.renderAvatarBody(actualCenterX, actualCenterY, scaledSize, this.ctx);
+        
+        // Eyes with blinking animation (scaled)
         if (this.shouldBlink()) {
-            this.renderAvatarEyes(actualCenterX, actualCenterY, 'closed', this.ctx);
+            this.renderAvatarEyes(actualCenterX, actualCenterY, 'closed', this.ctx, featureScale);
         } else {
-            this.renderAvatarEyes(actualCenterX, actualCenterY, this.avatarState.mood, this.ctx);
+            this.renderAvatarEyes(actualCenterX, actualCenterY, this.avatarState.mood, this.ctx, featureScale);
         }
         
-        // Mouth based on mood
-        this.renderAvatarMouth(actualCenterX, actualCenterY, this.avatarState.mood, this.ctx);
+        // Mouth based on mood (scaled)
+        this.renderAvatarMouth(actualCenterX, actualCenterY, this.avatarState.mood, this.ctx, featureScale);
         
         // Status indicators (but not system metrics - those go in bottom strip)
         this.renderAvatarStatus(this.ctx);

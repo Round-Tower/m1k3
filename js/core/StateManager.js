@@ -7,6 +7,14 @@ class StateManager {
             currentTab: 'chat',
             isConnected: false,
             websocket: null,
+            // App initialization state
+            app: {
+                isInitializing: true,
+                isReady: false,
+                loadingComponents: new Set(),
+                readyComponents: new Set(),
+                errorComponents: new Set()
+            },
             currentEmotion: 'happy',
             currentState: 'idle',
             emotionIntensity: 70,
@@ -130,6 +138,59 @@ class StateManager {
                 }
             });
         }
+    }
+    
+    // Loading state management methods
+    setComponentLoading(componentName) {
+        this.state.app.loadingComponents.add(componentName);
+        this.state.app.readyComponents.delete(componentName);
+        this.state.app.errorComponents.delete(componentName);
+        this.eventBus.dispatchEvent(new CustomEvent('app.component_loading', {
+            detail: { component: componentName }
+        }));
+    }
+    
+    setComponentReady(componentName) {
+        this.state.app.loadingComponents.delete(componentName);
+        this.state.app.readyComponents.add(componentName);
+        this.state.app.errorComponents.delete(componentName);
+        this.eventBus.dispatchEvent(new CustomEvent('app.component_ready', {
+            detail: { component: componentName }
+        }));
+        
+        // Check if all essential components are ready
+        this.checkAppReady();
+    }
+    
+    setComponentError(componentName, error) {
+        this.state.app.loadingComponents.delete(componentName);
+        this.state.app.readyComponents.delete(componentName);
+        this.state.app.errorComponents.add(componentName);
+        this.eventBus.dispatchEvent(new CustomEvent('app.component_error', {
+            detail: { component: componentName, error }
+        }));
+    }
+    
+    checkAppReady() {
+        const essentialComponents = ['ai_model', 'voice_model', 'avatar_server', 'websocket'];
+        const readyComponents = Array.from(this.state.app.readyComponents);
+        const allEssentialReady = essentialComponents.every(comp => readyComponents.includes(comp));
+        
+        if (allEssentialReady && this.state.app.isInitializing) {
+            this.state.app.isInitializing = false;
+            this.state.app.isReady = true;
+            this.eventBus.dispatchEvent(new CustomEvent('app.ready', {
+                detail: { readyComponents: readyComponents }
+            }));
+        }
+    }
+    
+    getLoadingProgress() {
+        const essentialComponents = ['ai_model', 'voice_model', 'avatar_server', 'websocket'];
+        const readyCount = essentialComponents.filter(comp => 
+            this.state.app.readyComponents.has(comp)
+        ).length;
+        return Math.round((readyCount / essentialComponents.length) * 100);
     }
     
     // Reset state to initial values
