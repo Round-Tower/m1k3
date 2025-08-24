@@ -63,13 +63,16 @@ python m1k3.py --tui
 # Rich full-screen
 python m1k3.py --fullscreen
 
-# CLI with avatar dashboard
-python cli.py --with-avatar
+# CLI with avatar dashboard (default behavior)
+python cli.py
+
+# CLI without avatar dashboard
+python cli.py --no-avatar
 
 # RAG-enhanced with expert knowledge
 python m1k3.py --rag
 python m1k3.py --tui --rag
-python cli.py --rag --with-avatar
+python cli.py --rag
 ```
 
 ## Interactive Commands
@@ -107,7 +110,7 @@ python ai_inference.py               # Test AI engine
 - **6 avatar styles** (Robot, Organic, Crystal, Ghost, Energy, Cute)  
 - **WebSocket communication** for live updates during conversations
 - **Multi-device access** - available on local network
-- **Auto-start mode**: `python cli.py --with-avatar`
+- **Avatar server**: Starts automatically with CLI (use `--no-avatar` to disable)
 
 ## RAG (Retrieval-Augmented Generation) System
 

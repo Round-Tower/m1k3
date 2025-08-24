@@ -2751,9 +2751,9 @@ def main():
     parser.add_argument("--model", default="SmolLM-135M-Q4_K_M", help="Model to download")
     parser.add_argument("--no-voice", action="store_true", help="Disable voice synthesis")
     parser.add_argument("--test-voice", action="store_true", help="Test voice synthesis only")
-    parser.add_argument("--with-avatar", action="store_true", help="Auto-start avatar server and open browser")
+    parser.add_argument("--no-avatar", action="store_true", help="Disable auto-start of avatar server (avatar server starts by default)")
     parser.add_argument("--avatar-port", type=int, default=8080, help="Avatar server HTTP port (default: 8080)")
-    parser.add_argument("--no-browser", action="store_true", help="Don't auto-open browser with --with-avatar")
+    parser.add_argument("--no-browser", action="store_true", help="Don't auto-open browser when starting avatar server")
     parser.add_argument("--transparency", choices=["off", "basic", "detailed", "full", "debug"], default="basic", help="Set model transparency level for development (default: basic)")
     parser.add_argument("--rag", action="store_true", help="Enable RAG (Retrieval-Augmented Generation) with comprehensive knowledge base")
     
@@ -2781,7 +2781,7 @@ def main():
             return 1
             
     voice_enabled = not args.no_voice
-    auto_avatar = args.with_avatar
+    auto_avatar = not args.no_avatar  # Avatar server starts by default unless --no-avatar is specified
     avatar_port = args.avatar_port
     open_browser = not args.no_browser
     transparency_level = args.transparency
