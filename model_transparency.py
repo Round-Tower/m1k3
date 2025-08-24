@@ -161,7 +161,7 @@ class ModelTransparencyEngine:
         if self._should_show(TransparencyLevel.FULL):
             print(f"🔧 Formatted Prompt Preview:")
             preview = formatted_prompt[:300] + "..." if len(formatted_prompt) > 300 else formatted_prompt
-            print(f"   {preview.replace(chr(10), chr(10) + '   ')}")
+            print(f"/n {preview} /n")
             
         if parameters and self._should_show(TransparencyLevel.DETAILED):
             print(f"⚙️  Generation Parameters:")

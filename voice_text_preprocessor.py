@@ -5,6 +5,11 @@ Cleans text for voice synthesis to prevent phonemizer warnings
 """
 
 import re
+import logging
+
+# Configure logging for voice preprocessing
+logger = logging.getLogger('voice_preprocessor')
+logger.setLevel(logging.INFO)
 
 
 class VoiceTextPreprocessor:
@@ -66,13 +71,17 @@ class VoiceTextPreprocessor:
             return f"{parts[0]} point {parts[1]}"
         return number
     
-    def preprocess_for_voice(self, text: str, max_length: int = 200) -> str:
+    def preprocess_for_voice(self, text: str, max_length: int = 200, 
+                           preserve_narration: bool = False,
+                           narration_mode: str = "remove") -> str:
         """
         Preprocess text to make it voice-synthesis friendly
         
         Args:
             text: Input text to preprocess
             max_length: Maximum length for voice synthesis (to prevent ONNX errors)
+            preserve_narration: If True, keep narration markers intact
+            narration_mode: How to handle narration - "remove", "pause", "preserve"
         
         Returns:
             Preprocessed text safe for voice synthesis
@@ -83,15 +92,29 @@ class VoiceTextPreprocessor:
         # Start with cleaned text
         cleaned = text.strip()
         
-        # Apply all preprocessing patterns
-        for pattern, replacement in self.problematic_patterns:
+        # Handle narration markers before other preprocessing
+        cleaned = self._handle_narration(cleaned, preserve_narration, narration_mode)
+        
+        # Apply all preprocessing patterns (excluding asterisks if preserving narration)
+        patterns_to_use = self.problematic_patterns
+        if preserve_narration or narration_mode == "preserve":
+            # Skip the pattern that removes brackets and symbols containing asterisks
+            patterns_to_use = [(p, r) for p, r in self.problematic_patterns 
+                             if not (isinstance(p, str) and '*' in p)]
+        
+        for pattern, replacement in patterns_to_use:
             if callable(replacement):
                 cleaned = re.sub(pattern, replacement, cleaned, flags=re.IGNORECASE)
             else:
                 cleaned = re.sub(pattern, replacement, cleaned, flags=re.IGNORECASE)
         
         # Remove any remaining special characters that might cause issues
-        cleaned = re.sub(r'[^\w\s.,!?;:-]', '', cleaned)
+        # But preserve asterisks if we're in preserve mode
+        if preserve_narration or narration_mode == "preserve":
+            # Remove special chars but keep asterisks
+            cleaned = re.sub(r'[^\w\s.,!?;:*-]', '', cleaned)
+        else:
+            cleaned = re.sub(r'[^\w\s.,!?;:-]', '', cleaned)
         
         # Normalize whitespace
         cleaned = re.sub(r'\s+', ' ', cleaned).strip()
@@ -129,6 +152,64 @@ class VoiceTextPreprocessor:
             return False
         
         return True
+    
+    def _handle_narration(self, text: str, preserve_narration: bool, narration_mode: str) -> str:
+        """
+        Handle narration markers based on configuration
+        
+        Args:
+            text: Input text with potential narration markers
+            preserve_narration: Legacy parameter for backward compatibility
+            narration_mode: "remove", "pause", "preserve"
+            
+        Returns:
+            Text with narration handled according to mode
+        """
+        # Find all narration segments
+        narration_pattern = r'\*(.*?)\*'
+        narration_matches = list(re.finditer(narration_pattern, text, re.DOTALL))
+        
+        if not narration_matches:
+            return text  # No narration found
+        
+        # Log narration detection
+        logger.info(f"Found {len(narration_matches)} narration segments in text")
+        
+        # Handle based on mode
+        if preserve_narration or narration_mode == "preserve":
+            logger.info("Preserving narration markers intact")
+            return text
+            
+        elif narration_mode == "pause":
+            logger.info("Converting narration to pause markers")
+            # Replace narration with pause indicators (for future SSML processing)
+            result = text
+            for match in reversed(narration_matches):  # Reverse to maintain positions
+                narration_content = match.group(1).strip()
+                logger.debug(f"Converting narration to pause: '{narration_content}'")
+                # For now, replace with a pause marker that could be processed later
+                result = result[:match.start()] + " <pause/> " + result[match.end():]
+            return result
+            
+        elif narration_mode == "remove":
+            logger.info("Removing narration markers and content")
+            # Remove narration entirely but preserve spacing
+            result = text
+            for match in reversed(narration_matches):  # Reverse to maintain positions
+                narration_content = match.group(1).strip()
+                logger.debug(f"Removing narration: '{narration_content}'")
+                # Replace with appropriate spacing
+                before_space = " " if match.start() > 0 and text[match.start()-1] != " " else ""
+                after_space = " " if match.end() < len(text) and text[match.end()] != " " else ""
+                result = result[:match.start()] + before_space + after_space + result[match.end():]
+            
+            # Clean up extra whitespace
+            result = re.sub(r'\s+', ' ', result).strip()
+            return result
+        
+        else:
+            logger.warning(f"Unknown narration_mode: {narration_mode}, defaulting to remove")
+            return self._handle_narration(text, preserve_narration, "remove")
 
 
 # Convenience function for easy integration

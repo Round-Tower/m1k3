@@ -9,7 +9,8 @@
       "Bash(open http://localhost:8080/test_engine_minimal.html)",
       "Bash(lsof:*)",
       "Bash(open index.html)",
-      "Bash(curl:*)"
+      "Bash(curl:*)",
+      "Bash(open http://localhost:8080)"
     ],
     "deny": [],
     "ask": []

@@ -148,6 +148,27 @@ class LocalAIEngine:
         models_dir = Path("models")
         models_dir.mkdir(exist_ok=True)
         return str(models_dir / "tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf")
+    
+    def _get_target_model_name(self) -> Optional[str]:
+        """Get target model name for async loading"""
+        # Check if a specific model is being targeted (for hot loading)
+        if hasattr(self, '_target_model_name'):
+            return self._target_model_name
+        
+        # Try to get recommended model from LocalModelManager
+        try:
+            if self.model_manager and self.model_manager.available_models:
+                device_info = self.model_manager.analyze_device()
+                if device_info.recommended_models:
+                    # Return first HF transformers model from recommendations
+                    for model_name in device_info.recommended_models:
+                        if (model_name in self.model_manager.available_models and 
+                            self.model_manager.available_models[model_name].model_type == "hf_transformers"):
+                            return model_name
+        except Exception:
+            pass
+        
+        return None
         
     def is_model_available(self) -> bool:
         """Check if model file exists"""
@@ -155,6 +176,52 @@ class LocalAIEngine:
         
     def load_model(self) -> bool:
         """Load the AI model with fallback strategies"""
+        # Check if async loader is available and try it first
+        try:
+            from async_model_loader import get_async_model_loader
+            return self.load_model_async()
+        except ImportError:
+            # Fallback to synchronous loading
+            return self.load_model_sync()
+        except Exception as e:
+            print(f"⚠️  Async loading failed ({e}), using sync loading...")
+            return self.load_model_sync()
+    
+    def load_model_async(self) -> bool:
+        """Load model using async model loader for better performance"""
+        from async_model_loader import get_async_model_loader
+        from performance_monitor import get_performance_monitor, PerformanceEventType
+        
+        perf_monitor = get_performance_monitor()
+        
+        with perf_monitor.measure("ai_model_async_load", PerformanceEventType.MODEL_LOAD):
+            loader = get_async_model_loader()
+            
+            # Register this engine with the loader for updates
+            loader.register_ai_engine(self)
+            
+            # Try to get recommended model
+            target_model = self._get_target_model_name()
+            if target_model:
+                print(f"🎯 Loading target model: {target_model}")
+                result = loader.get_model_sync(target_model, timeout=30.0)
+                
+                if result and result.status.value == "loaded":
+                    self.model = result.model_object
+                    self.tokenizer = result.tokenizer_object
+                    self._current_model_name = target_model
+                    
+                    print(f"✅ Model loaded via AsyncModelLoader in {result.load_time:.2f}s")
+                    return True
+                else:
+                    print(f"❌ Failed to load {target_model} via AsyncModelLoader")
+                    return self.load_model_sync()
+            else:
+                # No specific target, use traditional loading
+                return self.load_model_sync()
+    
+    def load_model_sync(self) -> bool:
+        """Synchronous model loading (original method)"""
         start_time = time.time()
         
         # Try HuggingFace Transformers first for better x86_64 compatibility
@@ -203,27 +270,37 @@ class LocalAIEngine:
     def _try_huggingface_model(self) -> bool:
         """Try to load a compatible HuggingFace model from local cache"""
         
+        # Check if a specific model is being targeted (for hot loading)
+        target_model = getattr(self, '_target_model_name', None)
+        
         # First, try to use cached models from LocalModelManager
         if self.model_manager and self.model_manager.available_models:
             print("📦 Using LocalModelManager for cached models...")
             
-            # Get the best available cached HF model using LocalModelManager's logic
+            # If a specific model is targeted, try to use it
             best_model = None
-            device_info = self.model_manager.analyze_device()
+            if target_model and target_model in self.model_manager.available_models:
+                if self.model_manager.available_models[target_model].model_type == "hf_transformers":
+                    best_model = target_model
+                    print(f"🎯 Targeting specific model: {best_model}")
             
-            # Use recommended models from LocalModelManager, filter for HF transformers
-            for recommended_model in device_info.recommended_models:
-                if (recommended_model in self.model_manager.available_models and 
-                    self.model_manager.available_models[recommended_model].model_type == "hf_transformers"):
-                    best_model = recommended_model
-                    break
-            
-            # Fallback: find any HF transformers model if no recommendations
+            # If no specific target, get the best available cached HF model using LocalModelManager's logic
             if not best_model:
-                for model_name, spec in self.model_manager.available_models.items():
-                    if spec.model_type == "hf_transformers":
-                        best_model = model_name
+                device_info = self.model_manager.analyze_device()
+                
+                # Use recommended models from LocalModelManager, filter for HF transformers
+                for recommended_model in device_info.recommended_models:
+                    if (recommended_model in self.model_manager.available_models and 
+                        self.model_manager.available_models[recommended_model].model_type == "hf_transformers"):
+                        best_model = recommended_model
                         break
+                
+                # Fallback: find any HF transformers model if no recommendations
+                if not best_model:
+                    for model_name, spec in self.model_manager.available_models.items():
+                        if spec.model_type == "hf_transformers":
+                            best_model = model_name
+                            break
             
             if best_model:
                 print(f"🎯 Best cached HF model: {best_model}")
@@ -270,6 +347,9 @@ class LocalAIEngine:
                         self.model.generation_config.top_k = None       # Let our parameters override
                     
                     self._current_model_name = best_model
+                    # Clear target model name after successful loading
+                    if hasattr(self, '_target_model_name'):
+                        delattr(self, '_target_model_name')
                     return True
                         
                 except Exception as e:

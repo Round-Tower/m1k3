@@ -35,6 +35,8 @@ class ContentSegment:
     confidence: float = 1.0
     start_pos: int = 0
     end_pos: int = 0
+    synthesis_mode: str = "NORMAL"  # NORMAL, SKIP, PAUSE, WHISPER
+    original_markers: Optional[str] = None  # Preserve original formatting markers
     
     def __post_init__(self):
         """Clean up text after initialization"""
@@ -108,27 +110,23 @@ class ModelOutputParser:
             return ParsedContent(segments=[])
         
         segments = []
-        remaining_text = text.strip()
         
-        # First pass: Extract explicit thinking blocks
-        segments.extend(self._extract_thinking_blocks(remaining_text))
+        # NEW APPROACH: Parse all segments from original text, then organize by position
+        # This preserves the original positions and prevents segments from being lost
         
-        # Remove thinking blocks from remaining text
-        for pattern in self.thinking_patterns:
-            remaining_text = re.sub(pattern, '', remaining_text, flags=re.DOTALL | re.IGNORECASE)
+        # Extract all segment types from original text
+        thinking_segments = self._extract_thinking_blocks(text)
+        narration_segments = self._extract_narration_from_original(text)
+        clarification_segments = self._extract_clarifications_from_original(text)
         
-        # Second pass: Extract narration elements
-        narration_segments, remaining_text = self._extract_narration(remaining_text)
-        segments.extend(narration_segments)
+        # Combine all special segments
+        all_special_segments = thinking_segments + narration_segments + clarification_segments
         
-        # Third pass: Identify clarification requests
-        clarification_segments, remaining_text = self._extract_clarifications(remaining_text)
-        segments.extend(clarification_segments)
+        # Extract answer content from parts NOT covered by special segments
+        answer_segments = self._extract_answers_from_remaining(text, all_special_segments)
         
-        # Fourth pass: Everything else is answer content
-        if remaining_text.strip():
-            answer_segments = self._extract_answers(remaining_text)
-            segments.extend(answer_segments)
+        # Combine all segments
+        segments = all_special_segments + answer_segments
         
         # Sort segments by their original position in text
         segments.sort(key=lambda s: s.start_pos)
@@ -226,6 +224,125 @@ class ModelOutputParser:
         remaining_text = ' '.join(remaining_sentences)
         return segments, remaining_text.strip()
     
+    def _extract_narration_from_original(self, text: str) -> List[ContentSegment]:
+        """Extract narration segments preserving original positions"""
+        segments = []
+        
+        # Find asterisk-style narration
+        narration_pattern = r'\*(.*?)\*'
+        
+        for match in re.finditer(narration_pattern, text, re.DOTALL):
+            narration_content = match.group(1).strip()
+            
+            # Accept if: more than 1 word OR looks like narration OR contains action words
+            if (len(narration_content.split()) > 1 or 
+                self._looks_like_narration(narration_content) or
+                self._contains_action_words(narration_content)):
+                segments.append(ContentSegment(
+                    content_type=ContentType.NARRATION,
+                    text=narration_content,
+                    confidence=0.8,
+                    start_pos=match.start(),
+                    end_pos=match.end()
+                ))
+        
+        return segments
+    
+    def _extract_clarifications_from_original(self, text: str) -> List[ContentSegment]:
+        """Extract clarification requests preserving original positions"""
+        segments = []
+        
+        # Split into sentences and analyze each
+        sentences = self._split_into_sentences(text)
+        current_pos = 0
+        
+        for sentence in sentences:
+            # Find this sentence's position in original text
+            sentence_start = text.find(sentence, current_pos)
+            if sentence_start == -1:
+                continue
+            sentence_end = sentence_start + len(sentence)
+            current_pos = sentence_end
+            
+            is_clarification = False
+            confidence = 0.0
+            
+            # Check for explicit question marks
+            if '?' in sentence:
+                confidence += 0.4
+                
+                # Check for clarification patterns
+                for pattern in self.clarification_patterns:
+                    if re.search(pattern, sentence, re.IGNORECASE):
+                        confidence += 0.3
+                        break
+                
+                # Check for clarification indicators
+                sentence_lower = sentence.lower()
+                for indicator in self.clarification_indicators:
+                    if indicator in sentence_lower:
+                        confidence += 0.3
+                        break
+                
+                # If confidence is high enough, mark as clarification
+                if confidence >= 0.6:
+                    is_clarification = True
+            
+            if is_clarification:
+                segments.append(ContentSegment(
+                    content_type=ContentType.CLARIFICATION,
+                    text=sentence.strip(),
+                    confidence=confidence,
+                    start_pos=sentence_start,
+                    end_pos=sentence_end
+                ))
+        
+        return segments
+    
+    def _extract_answers_from_remaining(self, text: str, special_segments: List[ContentSegment]) -> List[ContentSegment]:
+        """Extract answer content from parts not covered by special segments"""
+        segments = []
+        
+        # Create a list of ranges covered by special segments
+        covered_ranges = [(seg.start_pos, seg.end_pos) for seg in special_segments]
+        covered_ranges.sort()
+        
+        # Find uncovered text ranges
+        uncovered_ranges = []
+        last_end = 0
+        
+        for start, end in covered_ranges:
+            if start > last_end:
+                uncovered_ranges.append((last_end, start))
+            last_end = max(last_end, end)
+        
+        # Add final range if text continues after last special segment
+        if last_end < len(text):
+            uncovered_ranges.append((last_end, len(text)))
+        
+        # Extract content from uncovered ranges
+        for start_pos, end_pos in uncovered_ranges:
+            range_text = text[start_pos:end_pos].strip()
+            
+            if range_text:
+                # Clean up the text (remove narration markers that might have been left)
+                cleaned_text = re.sub(r'\*+', '', range_text)  # Remove stray asterisks
+                # DON'T remove SSML tags here - they need to be processed by the SSML converter
+                cleaned_text = cleaned_text.strip()
+                
+                if cleaned_text:
+                    confidence = self._calculate_answer_confidence(cleaned_text)
+                    
+                    segments.append(ContentSegment(
+                        content_type=ContentType.ANSWER,
+                        text=cleaned_text,
+                        confidence=confidence,
+                        start_pos=start_pos,
+                        end_pos=end_pos
+                    ))
+        
+        return segments
+    
     def _extract_answers(self, text: str) -> List[ContentSegment]:
         """Extract answer content from remaining text"""
         segments = []
@@ -287,6 +404,20 @@ class ModelOutputParser:
         
         text_lower = text.lower()
         return any(indicator in text_lower for indicator in narration_indicators)
+    
+    def _contains_action_words(self, text: str) -> bool:
+        """Check if text contains action words typical of narration"""
+        action_words = [
+            'starts', 'begins', 'speaks', 'says', 'continues', 'stops',
+            'waves', 'points', 'gestures', 'moves', 'turns', 'looks',
+            'pauses', 'waits', 'smiles', 'laughs', 'nods', 'shakes',
+            'enters', 'exits', 'approaches', 'retreats', 'sits', 'stands',
+            'opens', 'closes', 'shows', 'demonstrates', 'explains'
+        ]
+        
+        text_lower = text.lower()
+        text_words = text_lower.split()
+        return any(action_word in text_words for action_word in action_words)
     
     def _split_into_sentences(self, text: str) -> List[str]:
         """Split text into sentences"""
