@@ -25,6 +25,41 @@
             --m1k3-red: #FF4500;
             --m1k3-blue: #00BFFF;
         }
+        
+        /* Loading indicator for lazy-loaded views */
+        .loading-indicator {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+            height: 100%;
+            min-height: 200px;
+            color: var(--text-secondary);
+            font-size: var(--font-base);
+            gap: var(--space-md);
+            opacity: 0.8;
+        }
+        
+        .loading-indicator::before {
+            content: '';
+            width: 40px;
+            height: 40px;
+            border: 3px solid var(--border-subtle);
+            border-top-color: var(--accent-primary);
+            border-radius: 50%;
+            animation: loadingSpinner 1s linear infinite;
+        }
+        
+        @keyframes loadingSpinner {
+            to { transform: rotate(360deg); }
+        }
+        
+        /* Performance optimization: reduce animations when not needed */
+        .no-animations * {
+            animation-duration: 0.01ms !important;
+            animation-iteration-count: 1 !important;
+            transition-duration: 0.01ms !important;
+        }
     </style>
 </head>
 <body>
@@ -67,285 +102,24 @@
             </a>
         </nav>
 
-        <!-- Chat View -->
+        <!-- Chat View - Will be lazy loaded -->
         <div class="view-container chat-view active" id="chatView">
-            <!-- Chat Header with Mini Avatar -->
-            <div class="chat-header">
-                <div class="chat-header-left">
-                    <div class="mini-avatar" id="miniAvatar">
-                        <span id="miniAvatarEmoji">😊</span>
-                    </div>
-                    <div>
-                        <div class="chat-title">M1K3</div>
-                        <div class="chat-subtitle" id="connectionStatus">
-                            <span class="status-dot" id="statusDot"></span>
-                            <span id="connectionText">Disconnected</span>
-                        </div>
-                    </div>
-                </div>
-                <div class="chat-header-right">
-                    <button class="header-button" id="clearChatBtn">Clear</button>
-                    <button class="header-button" id="voiceToggleBtn">🔊 Voice</button>
-                </div>
-            </div>
-
-            <!-- Chat Messages -->
-            <div class="chat-panel">
-                <div class="chat-messages" id="chatMessages">
-                    <div class="message ai">
-                        <div class="message-content">
-                            <div class="message-text">Hello! I'm M1K3, your AI companion. How can I assist you today?</div>
-                            <div class="message-time">Just now</div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Chat Input -->
-            <div class="chat-input-panel">
-                <div class="input-group">
-                    <textarea 
-                        class="chat-input" 
-                        id="chatInput" 
-                        placeholder="Type your message here... (Enter to send, Shift+Enter for new line)"
-                        rows="1"></textarea>
-                    <div class="input-actions">
-                        <button class="action-button voice-button" id="voiceButton" title="Hold to record">
-                            🎤
-                        </button>
-                        <button class="action-button primary" id="sendButton" title="Send message">
-                            ➤
-                        </button>
-                    </div>
-                </div>
-            </div>
+            <div class="loading-indicator">Loading chat interface...</div>
         </div>
 
-        <!-- Avatar View -->
+        <!-- Avatar View - Will be lazy loaded -->
         <div class="view-container avatar-view" id="avatarView">
-            <div class="avatar-main">
-                <div class="avatar-container idle" id="avatarDisplay">
-                    <div class="canvas-container">
-                        <canvas class="avatar-canvas" id="avatarCanvas"></canvas>
-                        <canvas class="avatar-canvas" id="particleCanvas"></canvas>
-                        <div class="state-overlay" id="stateOverlay" style="display:none;">
-                            <div class="state-icon" id="stateIcon">💭</div>
-                            <div class="progress-bar" id="progressBar" style="display:none;">
-                                <div class="progress-fill" id="progressFill"></div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            
-            <div class="avatar-controls">
-                <div class="control-section">
-                    <h3 class="control-title">Emotions</h3>
-                    <div class="emotion-grid">
-                        <button class="emotion-button active" data-emotion="happy">😊</button>
-                        <button class="emotion-button" data-emotion="sad">😢</button>
-                        <button class="emotion-button" data-emotion="angry">😠</button>
-                        <button class="emotion-button" data-emotion="surprised">😲</button>
-                        <button class="emotion-button" data-emotion="love">😍</button>
-                        <button class="emotion-button" data-emotion="thinking">🤔</button>
-                        <button class="emotion-button" data-emotion="sleepy">😴</button>
-                        <button class="emotion-button" data-emotion="excited">🤩</button>
-                    </div>
-                </div>
-                
-                <div class="control-section">
-                    <h3 class="control-title">Style</h3>
-                    <select id="styleSelect" class="setting-control">
-                        <option value="robot">Robot</option>
-                        <option value="organic">Organic</option>
-                        <option value="crystal">Crystal</option>
-                        <option value="ghost">Ghost</option>
-                        <option value="energy">Energy</option>
-                        <option value="cute">Cute</option>
-                    </select>
-                </div>
-                
-                <div class="control-section">
-                    <h3 class="control-title">Intensity</h3>
-                    <input type="range" id="intensitySlider" min="0" max="100" value="70" class="setting-control">
-                    <div class="metric-value" id="intensityValue">70%</div>
-                </div>
-            </div>
+            <div class="loading-indicator">Loading avatar interface...</div>
         </div>
 
-        <!-- Status View -->
+        <!-- Status View - Will be lazy loaded -->
         <div class="view-container status-view" id="statusView">
-            <div class="status-card">
-                <div class="status-card-header">
-                    <h3 class="status-card-title">Connection</h3>
-                    <div class="status-indicator online" id="statusIndicator">
-                        <span class="status-dot"></span>
-                        <span>Online</span>
-                    </div>
-                </div>
-                <div class="status-metrics">
-                    <div class="metric-row">
-                        <span class="metric-label">WebSocket</span>
-                        <span class="metric-value" id="wsStatus">Disconnected</span>
-                    </div>
-                    <div class="metric-row">
-                        <span class="metric-label">Messages Sent</span>
-                        <span class="metric-value" id="msgSent">0</span>
-                    </div>
-                    <div class="metric-row">
-                        <span class="metric-label">Messages Received</span>
-                        <span class="metric-value" id="msgReceived">0</span>
-                    </div>
-                </div>
-            </div>
-            
-            <div class="status-card">
-                <div class="status-card-header">
-                    <h3 class="status-card-title">System Metrics</h3>
-                </div>
-                <div class="status-metrics">
-                    <div class="metric-row">
-                        <span class="metric-label">CPU Usage</span>
-                        <span class="metric-value" id="cpuUsage">0%</span>
-                    </div>
-                    <div class="metric-row">
-                        <span class="metric-label">Memory</span>
-                        <span class="metric-value" id="memUsage">0%</span>
-                    </div>
-                    <div class="metric-row">
-                        <span class="metric-label">Temperature</span>
-                        <span class="metric-value" id="temperature">25°C</span>
-                    </div>
-                    <div class="metric-row">
-                        <span class="metric-label">Battery</span>
-                        <span class="metric-value" id="battery">100%</span>
-                    </div>
-                </div>
-            </div>
-            
-            <div class="status-card">
-                <div class="status-card-header">
-                    <h3 class="status-card-title">AI Generation</h3>
-                </div>
-                <div class="status-metrics">
-                    <div class="metric-row">
-                        <span class="metric-label">Current State</span>
-                        <span class="metric-value" id="aiState">Idle</span>
-                    </div>
-                    <div class="metric-row">
-                        <span class="metric-label">Generation Speed</span>
-                        <span class="metric-value" id="genSpeed">0 tok/s</span>
-                    </div>
-                    <div class="metric-row">
-                        <span class="metric-label">Token Count</span>
-                        <span class="metric-value" id="tokenCount">0</span>
-                    </div>
-                    <div class="metric-row">
-                        <span class="metric-label">Confidence</span>
-                        <span class="metric-value" id="confidence">0%</span>
-                    </div>
-                </div>
-            </div>
-            
-            <div class="status-card">
-                <div class="status-card-header">
-                    <h3 class="status-card-title">Care Stats</h3>
-                </div>
-                <div class="status-metrics">
-                    <div class="metric-row">
-                        <span class="metric-label">Health</span>
-                        <span class="metric-value" id="healthStat">100%</span>
-                    </div>
-                    <div class="metric-row">
-                        <span class="metric-label">Energy</span>
-                        <span class="metric-value" id="energyStat">100%</span>
-                    </div>
-                    <div class="metric-row">
-                        <span class="metric-label">Mood</span>
-                        <span class="metric-value" id="moodStat">Happy</span>
-                    </div>
-                    <div class="metric-row">
-                        <span class="metric-label">Evolution</span>
-                        <span class="metric-value" id="evolutionStat">Level 1</span>
-                    </div>
-                </div>
-            </div>
+            <div class="loading-indicator">Loading status dashboard...</div>
         </div>
 
-        <!-- Settings View -->
+        <!-- Settings View - Will be lazy loaded -->
         <div class="view-container settings-view" id="settingsView">
-            <div class="settings-section">
-                <h2 class="settings-title">Voice Settings</h2>
-                <div class="settings-group">
-                    <div class="setting-item">
-                        <span class="setting-label">Enable Voice Synthesis</span>
-                        <div class="setting-control">
-                            <div class="toggle-switch active" id="voiceToggle"></div>
-                        </div>
-                    </div>
-                    <div class="setting-item">
-                        <span class="setting-label">Voice Profile</span>
-                        <div class="setting-control">
-                            <select id="voiceProfile">
-                                <option value="natural">Natural</option>
-                                <option value="broadcast">Broadcast</option>
-                                <option value="terminal">Terminal</option>
-                                <option value="robotic">Robotic</option>
-                            </select>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            
-            <div class="settings-section">
-                <h2 class="settings-title">Interface</h2>
-                <div class="settings-group">
-                    <div class="setting-item">
-                        <span class="setting-label">Enable Animations</span>
-                        <div class="setting-control">
-                            <div class="toggle-switch active" id="animToggle"></div>
-                        </div>
-                    </div>
-                    <div class="setting-item">
-                        <span class="setting-label">Show Debug Console</span>
-                        <div class="setting-control">
-                            <div class="toggle-switch" id="debugToggle"></div>
-                        </div>
-                    </div>
-                    <div class="setting-item">
-                        <span class="setting-label">Theme</span>
-                        <div class="setting-control">
-                            <select id="themeSelect">
-                                <option value="pure-black">Pure Black</option>
-                                <option value="dark">Dark</option>
-                                <option value="midnight">Midnight</option>
-                            </select>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            
-            <div class="settings-section">
-                <h2 class="settings-title">Performance</h2>
-                <div class="settings-group">
-                    <div class="setting-item">
-                        <span class="setting-label">Enable Particle Effects</span>
-                        <div class="setting-control">
-                            <div class="toggle-switch active" id="particleToggle"></div>
-                        </div>
-                    </div>
-                    <div class="setting-item">
-                        <span class="setting-label">Avatar Frame Rate</span>
-                        <div class="setting-control">
-                            <select id="fpsSelect">
-                                <option value="30">30 FPS</option>
-                                <option value="60">60 FPS</option>
-                                <option value="auto">Auto</option>
-                            </select>
-                        </div>
-                    </div>
-                </div>
-            </div>
+            <div class="loading-indicator">Loading settings interface...</div>
         </div>
     </div>
 
@@ -391,7 +165,18 @@
     <script src="avatar_dashboard.js"></script>
     <script src="status-overlay.js"></script>
     
+    <!-- Load new modular architecture -->
+    <script src="js/core/StateManager.js"></script>
+    <script src="js/core/NavigationManager.js"></script>
+    <script src="js/core/WebSocketManager.js"></script>
+    <script src="js/controllers/ChatController.js"></script>
+    <script src="js/controllers/AvatarController.js"></script>
+    <script src="js/controllers/StatusController.js"></script>
+    <script src="js/controllers/SettingsController.js"></script>
+    <script src="js/M1K3App.js"></script>
+    
     <script>
+    // Legacy support for existing functionality
         // Global state
         let websocket = null;
         let isConnected = false;
@@ -676,40 +461,12 @@
             }
         }
 
-        // Initialize everything when DOM loads
-        document.addEventListener('DOMContentLoaded', function() {
-            initializeEventSystem();
-            initializeTabSystem();
-            initializeChatControls();
-            initializeDebugConsole();
-            initializeCanvas();
-            connectWebSocket();
-            initializeChat();
-            initializeSpeechRecognition();
-            initializeAudio();
-            
-            // Initial canvas resize before generating avatar
-            // Longer delay on mobile to ensure layout stabilization
-            const isMobileDevice = window.innerWidth <= 767;
-            const initDelay = isMobileDevice ? 300 : 100;
-            
-            setTimeout(() => {
-                resizeCanvas();
-                generateAvatar();
-            }, initDelay);
-            
-            startAnimation();
-            
-            // Update status metrics every 5 seconds
-            setInterval(updateStatusMetrics, 5000);
-            updateStatusMetrics();
-            
-            console.log('✅ M1K3 Enhanced Dashboard with Tabs Initialized');
-            
-            // Add test functions to global scope for debugging
-            window.testStatusOverlay = testStatusOverlay;
-            window.switchTab = switchTab;
-        });
+        // Legacy initialization - now handled by M1K3App
+        // The new modular system will initialize automatically
+        console.log('🔄 M1K3 Legacy compatibility layer loaded');
+        
+        // Keep some legacy functions for backward compatibility
+        window.testStatusOverlay = testStatusOverlay;
         
         // Test function for status overlay
         function testStatusOverlay() {
@@ -909,125 +666,11 @@
             }
         }
 
-        // Optimized Protocol Decoder (from original)
-        class M1K3Protocol {
-            constructor() {
-                this.MessageType = {
-                    SYSTEM_UPDATE: 1,
-                    AVATAR_UPDATE: 2,
-                    CARE_UPDATE: 3,
-                    STATE_CHANGE: 4,
-                    TEXT_DISPLAY: 5,
-                    PING: 6,
-                    ERROR: 7
-                };
-                
-                this.stateMap = {
-                    'i': 'idle',
-                    't': 'thinking',
-                    'g': 'generating', 
-                    's': 'speaking',
-                    'e': 'error',
-                    'l': 'listening'
-                };
-            }
-            
-            decodeMessage(data) {
-                try {
-                    // Handle binary system updates
-                    if (data instanceof ArrayBuffer && data.byteLength === 11) {
-                        return this.decodeSystemBinary(data);
-                    }
-                    
-                    // Handle JSON messages - data is already a parsed object from websocket.onmessage
-                    const msg = typeof data === 'string' ? JSON.parse(data) : data;
-                    
-                    // Route optimized messages
-                    switch (msg.type) {
-                        case this.MessageType.SYSTEM_UPDATE:
-                            return { type: 'system', data: msg };
-                        case this.MessageType.AVATAR_UPDATE:
-                            return { type: 'avatar', data: msg };
-                        case this.MessageType.CARE_UPDATE:
-                            return { type: 'care', data: msg };
-                        case this.MessageType.STATE_CHANGE:
-                            return { type: 'state', data: this.stateMap[msg.s] || msg.s };
-                        case this.MessageType.TEXT_DISPLAY:
-                            return { type: 'text', data: msg };
-                        default:
-                            return { type: msg.type || 'unknown', data: msg };
-                    }
-                } catch (error) {
-                    console.error('Protocol decode error:', error);
-                    return { type: 'error', error: error.message };
-                }
-            }
-            
-            decodeSystemBinary(buffer) {
-                const view = new DataView(buffer);
-                return {
-                    type: 'system',
-                    data: {
-                        bat: view.getUint8(1),
-                        cpu: view.getUint8(2),
-                        mem: view.getUint8(3),
-                        temp: view.getUint8(4),
-                        net: view.getUint8(5),
-                        wifi: view.getUint8(6),
-                        eco: view.getFloat32(7, false)
-                    }
-                };
-            }
-        }
-        
-        // Initialize protocol decoder
-        const protocol = new M1K3Protocol();
+        // Legacy protocol decoder removed - now handled by WebSocketManager
 
-        function handleServerMessage(data) {
-            const decoded = protocol.decodeMessage(data);
-            console.log('📨 Received:', decoded);
-            updateUnifiedStats(decoded);
-        }
+        // Legacy message handling removed - now handled by WebSocketManager and controllers
 
-        function updateUnifiedStats(decoded) {
-            switch (decoded.type) {
-                case 'system':
-                case 'metrics':
-                    updateSystemStats(decoded.data);
-                    break;
-                case 'avatar':
-                case 'emotion':
-                case 'state':
-                    updateAvatarStats(decoded.type, decoded.data);
-                    break;
-                case 'classification':
-                case 'thinking_phase':
-                case 'generation_stream':
-                case 'progress':
-                    updateAIStats(decoded.type, decoded.data);
-                    break;
-                case 'care':
-                    updateCareStats(decoded.data);
-                    break;
-                case 'chat_ai_chunk':
-                    appendToLastMessage(decoded.data.chunk);
-                    break;
-                case 'chat_user':
-                    addMessage(decoded.data.message, 'user');
-                    break;
-                case 'chat_ai_start':
-                    addMessage('', 'ai');
-                    showTypingIndicator(true);
-                    break;
-                case 'chat_ai_complete':
-                    showTypingIndicator(false);
-                    playSound('message_received');
-                    break;
-                default:
-                    // Handle other message types like sound, welcome, pong, etc.
-                    break;
-            }
-        }
+        // Legacy unified stats removed - now handled by individual controllers
 
         function updateSystemStats(data) {
             const systemCard = document.getElementById('systemStatus');
