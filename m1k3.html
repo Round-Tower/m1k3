@@ -13,6 +13,7 @@
     <link rel="stylesheet" href="styles/avatar-component.css">
     <link rel="stylesheet" href="styles/dashboard-components.css">
     <link rel="stylesheet" href="styles/dashboard-responsive.css">
+    <link rel="stylesheet" href="styles/navigation.css">
     <link rel="stylesheet" href="styles/status-overlay.css">
     <link rel="stylesheet" href="styles/debug-console.css">
     
@@ -46,63 +47,306 @@
     </div>
 
     <div class="dashboard">
-        <!-- Header -->
-        <div class="header">
-            <h1 class="title">M1K3</h1>
-            <div class="status-indicator">
-                <div class="status-dot" id="statusDot"></div>
-                <span id="connectionText">Disconnected</span>
-            </div>
-        </div>
+        <!-- Tab Navigation -->
+        <nav class="tab-navigation" id="tabNavigation">
+            <a href="#chat" class="tab-item active" data-tab="chat">
+                <span class="tab-icon">💬</span>
+                <span class="tab-label">Chat</span>
+            </a>
+            <a href="#avatar" class="tab-item" data-tab="avatar">
+                <span class="tab-icon">🤖</span>
+                <span class="tab-label">Avatar</span>
+            </a>
+            <a href="#status" class="tab-item" data-tab="status">
+                <span class="tab-icon">📊</span>
+                <span class="tab-label">Status</span>
+            </a>
+            <a href="#settings" class="tab-item" data-tab="settings">
+                <span class="tab-icon">⚙️</span>
+                <span class="tab-label">Settings</span>
+            </a>
+        </nav>
 
-        <!-- Avatar Panel -->
-        <div class="avatar-panel">
-            <div class="avatar-container idle" id="avatarDisplay">
-                <div class="canvas-container">
-                    <canvas class="avatar-canvas" id="avatarCanvas"></canvas>
-                    <canvas class="avatar-canvas" id="particleCanvas"></canvas>
-                    <div class="state-overlay" id="stateOverlay" style="display:none;">
-                        <div class="state-icon" id="stateIcon">💭</div>
-                        <div class="progress-bar" id="progressBar" style="display:none;">
-                            <div class="progress-fill" id="progressFill"></div>
+        <!-- Chat View -->
+        <div class="view-container chat-view active" id="chatView">
+            <!-- Chat Header with Mini Avatar -->
+            <div class="chat-header">
+                <div class="chat-header-left">
+                    <div class="mini-avatar" id="miniAvatar">
+                        <span id="miniAvatarEmoji">😊</span>
+                    </div>
+                    <div>
+                        <div class="chat-title">M1K3</div>
+                        <div class="chat-subtitle" id="connectionStatus">
+                            <span class="status-dot" id="statusDot"></span>
+                            <span id="connectionText">Disconnected</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="chat-header-right">
+                    <button class="header-button" id="clearChatBtn">Clear</button>
+                    <button class="header-button" id="voiceToggleBtn">🔊 Voice</button>
+                </div>
+            </div>
+
+            <!-- Chat Messages -->
+            <div class="chat-panel">
+                <div class="chat-messages" id="chatMessages">
+                    <div class="message ai">
+                        <div class="message-content">
+                            <div class="message-text">Hello! I'm M1K3, your AI companion. How can I assist you today?</div>
+                            <div class="message-time">Just now</div>
                         </div>
                     </div>
                 </div>
             </div>
 
-        </div>
-
-        <!-- Chat Panel -->
-        <div class="chat-panel">
-            <div class="chat-messages" id="chatMessages">
-                <div class="message ai">
-                    <div class="message-content">
-                        <div class="message-text">Hello! I'm M1K3, your AI companion. Start chatting to see real-time avatar emotions and animations!</div>
-                        <div class="message-time">Just now</div>
+            <!-- Chat Input -->
+            <div class="chat-input-panel">
+                <div class="input-group">
+                    <textarea 
+                        class="chat-input" 
+                        id="chatInput" 
+                        placeholder="Type your message here... (Enter to send, Shift+Enter for new line)"
+                        rows="1"></textarea>
+                    <div class="input-actions">
+                        <button class="action-button voice-button" id="voiceButton" title="Hold to record">
+                            🎤
+                        </button>
+                        <button class="action-button primary" id="sendButton" title="Send message">
+                            ➤
+                        </button>
                     </div>
                 </div>
             </div>
         </div>
 
-        <!-- Chat Input Panel -->
-        <div class="chat-input-panel">
-            <div class="input-group">
-                <textarea 
-                    class="chat-input" 
-                    id="chatInput" 
-                    placeholder="Type your message here... (Enter to send, Shift+Enter for new line)"
-                    rows="1"></textarea>
-                <div class="input-actions">
-                    <button class="action-button voice-button" id="voiceButton" title="Hold to record">
-                        🎤
-                    </button>
-                    <button class="action-button primary" id="sendButton" title="Send message">
-                        ➤
-                    </button>
+        <!-- Avatar View -->
+        <div class="view-container avatar-view" id="avatarView">
+            <div class="avatar-main">
+                <div class="avatar-container idle" id="avatarDisplay">
+                    <div class="canvas-container">
+                        <canvas class="avatar-canvas" id="avatarCanvas"></canvas>
+                        <canvas class="avatar-canvas" id="particleCanvas"></canvas>
+                        <div class="state-overlay" id="stateOverlay" style="display:none;">
+                            <div class="state-icon" id="stateIcon">💭</div>
+                            <div class="progress-bar" id="progressBar" style="display:none;">
+                                <div class="progress-fill" id="progressFill"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="avatar-controls">
+                <div class="control-section">
+                    <h3 class="control-title">Emotions</h3>
+                    <div class="emotion-grid">
+                        <button class="emotion-button active" data-emotion="happy">😊</button>
+                        <button class="emotion-button" data-emotion="sad">😢</button>
+                        <button class="emotion-button" data-emotion="angry">😠</button>
+                        <button class="emotion-button" data-emotion="surprised">😲</button>
+                        <button class="emotion-button" data-emotion="love">😍</button>
+                        <button class="emotion-button" data-emotion="thinking">🤔</button>
+                        <button class="emotion-button" data-emotion="sleepy">😴</button>
+                        <button class="emotion-button" data-emotion="excited">🤩</button>
+                    </div>
+                </div>
+                
+                <div class="control-section">
+                    <h3 class="control-title">Style</h3>
+                    <select id="styleSelect" class="setting-control">
+                        <option value="robot">Robot</option>
+                        <option value="organic">Organic</option>
+                        <option value="crystal">Crystal</option>
+                        <option value="ghost">Ghost</option>
+                        <option value="energy">Energy</option>
+                        <option value="cute">Cute</option>
+                    </select>
+                </div>
+                
+                <div class="control-section">
+                    <h3 class="control-title">Intensity</h3>
+                    <input type="range" id="intensitySlider" min="0" max="100" value="70" class="setting-control">
+                    <div class="metric-value" id="intensityValue">70%</div>
                 </div>
             </div>
         </div>
 
+        <!-- Status View -->
+        <div class="view-container status-view" id="statusView">
+            <div class="status-card">
+                <div class="status-card-header">
+                    <h3 class="status-card-title">Connection</h3>
+                    <div class="status-indicator online" id="statusIndicator">
+                        <span class="status-dot"></span>
+                        <span>Online</span>
+                    </div>
+                </div>
+                <div class="status-metrics">
+                    <div class="metric-row">
+                        <span class="metric-label">WebSocket</span>
+                        <span class="metric-value" id="wsStatus">Disconnected</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Messages Sent</span>
+                        <span class="metric-value" id="msgSent">0</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Messages Received</span>
+                        <span class="metric-value" id="msgReceived">0</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="status-card">
+                <div class="status-card-header">
+                    <h3 class="status-card-title">System Metrics</h3>
+                </div>
+                <div class="status-metrics">
+                    <div class="metric-row">
+                        <span class="metric-label">CPU Usage</span>
+                        <span class="metric-value" id="cpuUsage">0%</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Memory</span>
+                        <span class="metric-value" id="memUsage">0%</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Temperature</span>
+                        <span class="metric-value" id="temperature">25°C</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Battery</span>
+                        <span class="metric-value" id="battery">100%</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="status-card">
+                <div class="status-card-header">
+                    <h3 class="status-card-title">AI Generation</h3>
+                </div>
+                <div class="status-metrics">
+                    <div class="metric-row">
+                        <span class="metric-label">Current State</span>
+                        <span class="metric-value" id="aiState">Idle</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Generation Speed</span>
+                        <span class="metric-value" id="genSpeed">0 tok/s</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Token Count</span>
+                        <span class="metric-value" id="tokenCount">0</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Confidence</span>
+                        <span class="metric-value" id="confidence">0%</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="status-card">
+                <div class="status-card-header">
+                    <h3 class="status-card-title">Care Stats</h3>
+                </div>
+                <div class="status-metrics">
+                    <div class="metric-row">
+                        <span class="metric-label">Health</span>
+                        <span class="metric-value" id="healthStat">100%</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Energy</span>
+                        <span class="metric-value" id="energyStat">100%</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Mood</span>
+                        <span class="metric-value" id="moodStat">Happy</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Evolution</span>
+                        <span class="metric-value" id="evolutionStat">Level 1</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Settings View -->
+        <div class="view-container settings-view" id="settingsView">
+            <div class="settings-section">
+                <h2 class="settings-title">Voice Settings</h2>
+                <div class="settings-group">
+                    <div class="setting-item">
+                        <span class="setting-label">Enable Voice Synthesis</span>
+                        <div class="setting-control">
+                            <div class="toggle-switch active" id="voiceToggle"></div>
+                        </div>
+                    </div>
+                    <div class="setting-item">
+                        <span class="setting-label">Voice Profile</span>
+                        <div class="setting-control">
+                            <select id="voiceProfile">
+                                <option value="natural">Natural</option>
+                                <option value="broadcast">Broadcast</option>
+                                <option value="terminal">Terminal</option>
+                                <option value="robotic">Robotic</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="settings-section">
+                <h2 class="settings-title">Interface</h2>
+                <div class="settings-group">
+                    <div class="setting-item">
+                        <span class="setting-label">Enable Animations</span>
+                        <div class="setting-control">
+                            <div class="toggle-switch active" id="animToggle"></div>
+                        </div>
+                    </div>
+                    <div class="setting-item">
+                        <span class="setting-label">Show Debug Console</span>
+                        <div class="setting-control">
+                            <div class="toggle-switch" id="debugToggle"></div>
+                        </div>
+                    </div>
+                    <div class="setting-item">
+                        <span class="setting-label">Theme</span>
+                        <div class="setting-control">
+                            <select id="themeSelect">
+                                <option value="pure-black">Pure Black</option>
+                                <option value="dark">Dark</option>
+                                <option value="midnight">Midnight</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="settings-section">
+                <h2 class="settings-title">Performance</h2>
+                <div class="settings-group">
+                    <div class="setting-item">
+                        <span class="setting-label">Enable Particle Effects</span>
+                        <div class="setting-control">
+                            <div class="toggle-switch active" id="particleToggle"></div>
+                        </div>
+                    </div>
+                    <div class="setting-item">
+                        <span class="setting-label">Avatar Frame Rate</span>
+                        <div class="setting-control">
+                            <select id="fpsSelect">
+                                <option value="30">30 FPS</option>
+                                <option value="60">60 FPS</option>
+                                <option value="auto">Auto</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 
     <!-- Debug Console - Positioned at bottom of page -->
@@ -222,10 +466,221 @@
                 ecoSavings: metrics.eco_savings || metrics.ecoSavings || 0
             };
         }
+        
+        // Tab Management System
+        let currentTab = 'chat';
+        
+        function initializeTabSystem() {
+            const tabItems = document.querySelectorAll('.tab-item');
+            const viewContainers = document.querySelectorAll('.view-container');
+            
+            // Tab switching
+            tabItems.forEach(tab => {
+                tab.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    const targetTab = tab.getAttribute('data-tab');
+                    switchTab(targetTab);
+                });
+            });
+            
+            // Initialize emotion buttons
+            const emotionButtons = document.querySelectorAll('.emotion-button');
+            emotionButtons.forEach(btn => {
+                btn.addEventListener('click', () => {
+                    emotionButtons.forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    const emotion = btn.getAttribute('data-emotion');
+                    updateEmotion(emotion, 70);
+                    updateMiniAvatar(emotion);
+                });
+            });
+            
+            // Initialize avatar controls
+            initializeAvatarControls();
+            initializeSettings();
+            
+            console.log('✅ Tab system initialized');
+        }
+        
+        function switchTab(tabName) {
+            if (tabName === currentTab) return;
+            
+            // Update tab items
+            document.querySelectorAll('.tab-item').forEach(tab => {
+                tab.classList.remove('active');
+                if (tab.getAttribute('data-tab') === tabName) {
+                    tab.classList.add('active');
+                }
+            });
+            
+            // Update view containers
+            document.querySelectorAll('.view-container').forEach(view => {
+                view.classList.remove('active');
+            });
+            
+            const targetView = document.getElementById(tabName + 'View');
+            if (targetView) {
+                targetView.classList.add('active');
+            }
+            
+            currentTab = tabName;
+            
+            // Handle tab-specific initialization
+            if (tabName === 'avatar') {
+                setTimeout(() => {
+                    resizeCanvas();
+                    generateAvatar();
+                }, 100);
+            }
+        }
+        
+        function initializeAvatarControls() {
+            const styleSelect = document.getElementById('styleSelect');
+            const intensitySlider = document.getElementById('intensitySlider');
+            const intensityValue = document.getElementById('intensityValue');
+            
+            if (styleSelect) {
+                styleSelect.addEventListener('change', (e) => {
+                    updateStyle(e.target.value, currentColor);
+                });
+            }
+            
+            if (intensitySlider && intensityValue) {
+                intensitySlider.addEventListener('input', (e) => {
+                    const intensity = parseInt(e.target.value);
+                    intensityValue.textContent = intensity + '%';
+                    emotionIntensity = intensity;
+                    if (pixelEngine && pixelEngine.avatarState) {
+                        pixelEngine.avatarState.health = intensity;
+                        pixelEngine.renderAvatar();
+                    }
+                });
+            }
+        }
+        
+        function initializeSettings() {
+            const toggleSwitches = document.querySelectorAll('.toggle-switch');
+            
+            toggleSwitches.forEach(toggle => {
+                toggle.addEventListener('click', () => {
+                    toggle.classList.toggle('active');
+                    
+                    // Handle specific settings
+                    if (toggle.id === 'voiceToggle') {
+                        soundsEnabled = toggle.classList.contains('active');
+                    } else if (toggle.id === 'debugToggle') {
+                        if (debugConsole) {
+                            if (toggle.classList.contains('active')) {
+                                debugConsole.visible = true;
+                                document.getElementById('debugConsole').style.display = 'flex';
+                            } else {
+                                debugConsole.visible = false;
+                                document.getElementById('debugConsole').style.display = 'none';
+                            }
+                        }
+                    }
+                });
+            });
+            
+            // Theme selector
+            const themeSelect = document.getElementById('themeSelect');
+            if (themeSelect) {
+                themeSelect.addEventListener('change', (e) => {
+                    document.documentElement.className = 'theme-' + e.target.value;
+                });
+            }
+        }
+        
+        function updateMiniAvatar(emotion) {
+            const miniAvatarEmoji = document.getElementById('miniAvatarEmoji');
+            const miniAvatar = document.getElementById('miniAvatar');
+            
+            if (miniAvatarEmoji) {
+                miniAvatarEmoji.textContent = getEmotionEmoji(emotion);
+            }
+            
+            if (miniAvatar) {
+                // Add thinking animation for thinking state
+                if (emotion === 'thinking') {
+                    miniAvatar.classList.add('thinking');
+                } else {
+                    miniAvatar.classList.remove('thinking');
+                }
+            }
+        }
+        
+        function initializeChatControls() {
+            const clearChatBtn = document.getElementById('clearChatBtn');
+            const voiceToggleBtn = document.getElementById('voiceToggleBtn');
+            
+            if (clearChatBtn) {
+                clearChatBtn.addEventListener('click', () => {
+                    const chatMessages = document.getElementById('chatMessages');
+                    if (chatMessages) {
+                        chatMessages.innerHTML = `
+                            <div class="message ai">
+                                <div class="message-content">
+                                    <div class="message-text">Chat cleared. How can I help you?</div>
+                                    <div class="message-time">Just now</div>
+                                </div>
+                            </div>
+                        `;
+                    }
+                });
+            }
+            
+            if (voiceToggleBtn) {
+                voiceToggleBtn.addEventListener('click', () => {
+                    soundsEnabled = !soundsEnabled;
+                    voiceToggleBtn.textContent = soundsEnabled ? '🔊 Voice' : '🔇 Voice';
+                    voiceToggleBtn.style.opacity = soundsEnabled ? '1' : '0.6';
+                });
+            }
+        }
+        
+        function updateStatusMetrics() {
+            // Update status view with real data
+            const elements = {
+                wsStatus: document.getElementById('wsStatus'),
+                msgSent: document.getElementById('msgSent'),
+                msgReceived: document.getElementById('msgReceived'),
+                cpuUsage: document.getElementById('cpuUsage'),
+                memUsage: document.getElementById('memUsage'),
+                temperature: document.getElementById('temperature'),
+                battery: document.getElementById('battery'),
+                aiState: document.getElementById('aiState'),
+                genSpeed: document.getElementById('genSpeed'),
+                tokenCount: document.getElementById('tokenCount'),
+                confidence: document.getElementById('confidence'),
+                healthStat: document.getElementById('healthStat'),
+                energyStat: document.getElementById('energyStat'),
+                moodStat: document.getElementById('moodStat'),
+                evolutionStat: document.getElementById('evolutionStat')
+            };
+            
+            // Update with current values
+            if (elements.wsStatus) elements.wsStatus.textContent = isConnected ? 'Connected' : 'Disconnected';
+            if (elements.msgSent && debugConsole) elements.msgSent.textContent = debugConsole.sentCount;
+            if (elements.msgReceived && debugConsole) elements.msgReceived.textContent = debugConsole.receivedCount;
+            if (elements.cpuUsage) elements.cpuUsage.textContent = systemMetrics.cpu + '%';
+            if (elements.memUsage) elements.memUsage.textContent = systemMetrics.memory + '%';
+            if (elements.temperature) elements.temperature.textContent = systemMetrics.temperature + '°C';
+            if (elements.battery) elements.battery.textContent = systemMetrics.battery + '%';
+            if (elements.aiState) elements.aiState.textContent = currentState.charAt(0).toUpperCase() + currentState.slice(1);
+            if (elements.moodStat) elements.moodStat.textContent = currentEmotion.charAt(0).toUpperCase() + currentEmotion.slice(1);
+            
+            // Update pixelEngine care stats
+            if (pixelEngine && pixelEngine.avatarState) {
+                if (elements.healthStat) elements.healthStat.textContent = Math.round(pixelEngine.avatarState.health) + '%';
+                if (elements.energyStat) elements.energyStat.textContent = Math.round(pixelEngine.avatarState.energy) + '%';
+            }
+        }
 
         // Initialize everything when DOM loads
         document.addEventListener('DOMContentLoaded', function() {
             initializeEventSystem();
+            initializeTabSystem();
+            initializeChatControls();
             initializeDebugConsole();
             initializeCanvas();
             connectWebSocket();
@@ -245,10 +700,15 @@
             
             startAnimation();
             
-            console.log('✅ M1K3 Enhanced Dashboard Initialized');
+            // Update status metrics every 5 seconds
+            setInterval(updateStatusMetrics, 5000);
+            updateStatusMetrics();
+            
+            console.log('✅ M1K3 Enhanced Dashboard with Tabs Initialized');
             
             // Add test functions to global scope for debugging
             window.testStatusOverlay = testStatusOverlay;
+            window.switchTab = switchTab;
         });
         
         // Test function for status overlay
