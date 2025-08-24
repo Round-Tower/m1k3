@@ -375,12 +375,19 @@
                 websocket = new WebSocket('ws://localhost:8081');
                 
                 websocket.onopen = function(event) {
-                    console.log('Connected to M1K3 Avatar Server');
+                    console.log('✅ Connected to M1K3 Avatar Server');
                     isConnected = true;
                     updateConnectionStatus(true);
                     playSound('connect');
                     debugConsole?.logConnection('Connected');
-                    sendMessage({type: 'ping'});
+                    
+                    // Send identification message to help with debugging
+                    sendMessage({
+                        type: 'client_identify', 
+                        client_type: 'web_avatar',
+                        timestamp: Date.now(),
+                        user_agent: navigator.userAgent
+                    });
                 };
                 
                 websocket.onmessage = function(event) {
@@ -405,13 +412,16 @@
                 };
                 
                 websocket.onclose = function(event) {
-                    console.log('Disconnected from M1K3 Avatar Server');
+                    console.log(`🔌 Disconnected from M1K3 Avatar Server (code: ${event.code}, reason: ${event.reason})`);
                     isConnected = false;
                     updateConnectionStatus(false);
-                    debugConsole?.logConnection('Disconnected');
+                    debugConsole?.logConnection(`Disconnected: ${event.code} - ${event.reason}`);
                     
                     if (reconnectTimer) clearTimeout(reconnectTimer);
-                    reconnectTimer = setTimeout(connectWebSocket, 3000);
+                    if (event.code !== 1000) { // Only reconnect if not a normal closure
+                        console.log('🔄 Will attempt reconnection in 3 seconds...');
+                        reconnectTimer = setTimeout(connectWebSocket, 3000);
+                    }
                 };
                 
                 websocket.onerror = function(error) {
@@ -420,9 +430,10 @@
                 };
                 
             } catch (e) {
-                console.error('Failed to connect to WebSocket:', e);
+                console.error('❌ Failed to connect to WebSocket:', e);
                 debugConsole?.logError(`Connection failed: ${e.message}`);
                 if (reconnectTimer) clearTimeout(reconnectTimer);
+                console.log('🔄 Will retry connection in 5 seconds...');
                 reconnectTimer = setTimeout(connectWebSocket, 5000);
             }
         }
@@ -431,7 +442,9 @@
             if (websocket && websocket.readyState === WebSocket.OPEN) {
                 websocket.send(JSON.stringify(data));
                 debugConsole?.logSent(data);
+                console.log('📤 Sent to server:', data.type || 'unknown');
             } else {
+                console.warn('⚠️  WebSocket not connected, message not sent:', data);
                 debugConsole?.logError(`Cannot send message - WebSocket not open: ${JSON.stringify(data)}`);
             }
         }

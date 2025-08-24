@@ -148,9 +148,11 @@ class WebSocketMonitor:
         """Main WebSocket connection loop."""
         while self.running:
             try:
+                print(f"🔌 WebSocketMonitor attempting connection to {self.ws_url}")
                 self.ws = websocket.WebSocket()
                 self.ws.settimeout(5.0)  # 5 second timeout
                 self.ws.connect(self.ws_url)
+                print(f"✅ WebSocketMonitor connected successfully to {self.ws_url}")
                 
                 while self.running:
                     try:
@@ -168,15 +170,16 @@ class WebSocketMonitor:
                         continue
                     except websocket.WebSocketException as e:
                         if self.running:  # Only log if we're still trying to run
-                            print(f"WebSocket error: {e}")
+                            print(f"❌ WebSocket error: {e}")
                         break
                         
             except Exception as e:
                 if self.running:  # Only log if we're still trying to run
-                    print(f"WebSocket connection failed: {e}")
+                    print(f"❌ WebSocket connection failed: {e}")
                     
             # Wait before reconnecting
             if self.running:
+                print(f"🔄 WebSocketMonitor will retry connection in 5 seconds...")
                 time.sleep(5)
 
 class M1K3CLI:
@@ -1546,6 +1549,41 @@ M1K3 Local AI CLI Commands:
             send_avatar_emotion('happy', 50, "Test complete!")
             self.print_with_avatar("✅ Avatar emotion test complete", AvatarState.IDLE)
         
+        elif command in ['debug', 'diag', 'diagnostics']:
+            if not is_avatar_server_running():
+                self.print_with_avatar("❌ Avatar server not running. Use 'avatar start' first.", AvatarState.ERROR)
+                return
+            
+            self.print_with_avatar("🔍 Avatar System Diagnostics", AvatarState.IDLE)
+            
+            # Get server status
+            from avatar_server import get_avatar_server
+            server = get_avatar_server()
+            
+            print(f"🔧 Server Instance ID: {id(server)}")
+            print(f"🏃 Server Running: {server.is_running()}")
+            print(f"👥 Connected WebSocket Clients: {len(server.clients)}")
+            print(f"🌐 HTTP Port: {server.http_port}")
+            print(f"🔌 WebSocket Port: {server.ws_port}")
+            
+            if server.clients:
+                print(f"📋 Client Details:")
+                for i, client in enumerate(server.clients):
+                    client_info = f"{client.get('address', 'unknown')}:{client.get('id', 'unknown')}"
+                    print(f"   {i+1}. {client_info}")
+            
+            # Test message sending
+            print(f"🧪 Testing message sending...")
+            send_avatar_emotion('happy', 75, "Debug test message")
+            send_avatar_state('debug')
+            
+            # WebSocket bridge status
+            if hasattr(self, 'websocket_monitor') and self.websocket_monitor:
+                print(f"🔗 WebSocket Bridge: Running")
+                print(f"🎯 Bridge URL: {self.websocket_monitor.ws_url}")
+            else:
+                print(f"🔗 WebSocket Bridge: Not initialized")
+        
         else:
             help_msg = """🧘 Avatar Commands:
   avatar start     - Start the avatar web server
@@ -1554,6 +1592,7 @@ M1K3 Local AI CLI Commands:
   avatar emotion <emotion> [intensity] - Set avatar emotion (0-100)
   avatar style <style> [color] - Set avatar style and color
   avatar test      - Test all avatar emotions
+  avatar debug     - Show detailed WebSocket diagnostics
   
 Available emotions: happy, sad, angry, surprised, love, thinking, sleepy, excited
 Available styles: robot, organic, crystal, ghost, energy, cute"""

@@ -201,8 +201,15 @@ class AvatarServer:
     
     def send_emotion_update(self, emotion, intensity=50, message="", metadata=None):
         """Send enhanced emotion update with classification metadata to all connected clients"""
-        if not self.running or not self.clients:
+        if not self.running:
+            self.logger.debug(f"🔴 Cannot send emotion update: server not running")
             return
+        
+        if not self.clients:
+            self.logger.warning(f"⚠️  Emotion update dropped: no WebSocket clients connected (emotion={emotion}, intensity={intensity})")
+            return
+        
+        self.logger.debug(f"📤 Sending emotion update to {len(self.clients)} clients: {emotion} ({intensity}%)")
         
         data = {
             "type": "emotion",
@@ -235,8 +242,15 @@ class AvatarServer:
     
     def send_state_update(self, state):
         """Send state update to all connected clients"""
-        if not self.running or not self.clients:
+        if not self.running:
+            self.logger.debug(f"🔴 Cannot send state update: server not running")
             return
+        
+        if not self.clients:
+            self.logger.warning(f"⚠️  State update dropped: no WebSocket clients connected (state={state})")
+            return
+        
+        self.logger.debug(f"📤 Sending state update to {len(self.clients)} clients: {state}")
         
         data = {
             "type": "state",
@@ -343,13 +357,16 @@ class AvatarServer:
     def _new_client(self, client, server):
         """Handle new WebSocket client connection"""
         self.clients.append(client)
-        self.logger.info(f"👤 New avatar client connected: {client['id']}")
+        client_info = f"{client.get('address', 'unknown')}:{client.get('id', 'unknown')}"
+        self.logger.info(f"👤 New avatar client connected: {client_info}")
+        self.logger.info(f"📊 Total WebSocket clients: {len(self.clients)}")
         
         # Send initial state to new client
         welcome_data = {
             "type": "welcome",
             "message": "Connected to M1K3 Avatar Server",
-            "timestamp": time.time()
+            "timestamp": time.time(),
+            "server_instance": id(self)
         }
         server.send_message(client, json.dumps(welcome_data))
     
@@ -358,8 +375,11 @@ class AvatarServer:
         if client and self.cli_backend_client and client['id'] == self.cli_backend_client['id']:
             self.cli_backend_client = None
             self.logger.info("🤖 CLI backend disconnected")
+        
+        client_info = f"{client.get('address', 'unknown')}:{client.get('id', 'unknown')}"
         self._remove_client(client)
-        self.logger.info(f"👤 Avatar client disconnected: {client['id']}")
+        self.logger.info(f"👤 Avatar client disconnected: {client_info}")
+        self.logger.info(f"📊 Remaining WebSocket clients: {len(self.clients)}")
     
     def _remove_client(self, client):
         """Remove client from list"""
@@ -756,6 +776,7 @@ def get_avatar_server():
     global _avatar_server
     if _avatar_server is None:
         _avatar_server = AvatarServer(verbose=True)  # Enable verbose logging for debugging
+        print(f"🔧 Created new avatar server instance: {id(_avatar_server)}")
     return _avatar_server
 
 def start_avatar_server():
@@ -776,11 +797,13 @@ def is_avatar_server_running():
 def send_avatar_emotion(emotion, intensity=50, message="", metadata=None):
     """Send enhanced emotion update to avatar with classification metadata"""
     server = get_avatar_server()
+    print(f"🔄 send_avatar_emotion() called: server={id(server)}, clients={len(server.clients)}, running={server.running}")
     server.send_emotion_update(emotion, intensity, message, metadata)
 
 def send_avatar_state(state):
     """Send state update to avatar"""
     server = get_avatar_server()
+    print(f"🔄 send_avatar_state() called: server={id(server)}, clients={len(server.clients)}, running={server.running}")
     server.send_state_update(state)
 
 def send_avatar_progress(stage, progress, tokens=0, message=""):
