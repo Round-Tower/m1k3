@@ -1403,6 +1403,10 @@ class M1K3CLI:
             # Send post-response completion state
             self.send_avatar_update("Response complete", "post_response")
             
+            # Add assistant response to context for eco metrics and conversation history
+            if full_response.strip() and hasattr(self.ai_engine, 'context'):
+                self.ai_engine.context.add_message("assistant", full_response.strip())
+            
             # Display eco-friendly metrics and token usage
             self._display_post_response_metrics(token_count, estimated_max_tokens)
             
@@ -2554,8 +2558,21 @@ Available styles: robot, organic, crystal, ghost, energy, cute"""
         )
         print(token_display)
         
-        # Get and display eco metrics
+        # Get and display eco metrics - use session stats if AI engine shows zero
         eco_metrics = self.ai_engine.get_eco_metrics()
+        
+        # Fallback to session tracker if AI engine eco metrics are zero (check multiple formats)
+        energy_value = eco_metrics.get("energy_saved_kwh", "0.00")
+        if (hasattr(self, 'stats_tracker') and self.stats_tracker and 
+            energy_value in ["0.00", "0.0", "0"]):
+            stats = self.stats_tracker.current_stats
+            eco_metrics = {
+                "energy_saved_kwh": f"{stats.energy_saved_wh / 1000:.4f}",  # Convert Wh to kWh (4 decimal places)
+                "water_saved_gallons": f"{stats.water_saved_ml / 3785:.3f}",  # Convert ml to gallons  
+                "co2_saved_grams": f"{stats.co2_saved_g:.0f}",
+                "data_transmitted": "0 bytes"  # Always 0 for local processing
+            }
+        
         self.animator.animate_eco_metrics(
             eco_metrics["energy_saved_kwh"],
             eco_metrics["water_saved_gallons"], 
