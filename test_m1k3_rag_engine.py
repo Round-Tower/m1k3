@@ -14,8 +14,8 @@ from pathlib import Path
 
 # Import the modules we'll be testing
 try:
-    from m1k3_rag_engine import M1K3RAGEngine, RAGDocument, EmbeddingEngine, KnowledgeBase
-    from intent_classification_system import UserIntent, IntentClassification
+    from src.rag.m1k3_rag_engine import M1K3RAGEngine, RAGDocument, EmbeddingEngine, KnowledgeBase
+    from src.utils.intent_classification_system import UserIntent, IntentClassification
 except ImportError:
     # These will be created as we develop
     pass
@@ -294,7 +294,7 @@ class TestRAGIntegration(unittest.TestCase):
     
     def test_intent_classification_integration(self):
         """Test RAG works with existing intent classification"""
-        from intent_classification_system import IntentClassificationEngine
+        from src.utils.intent_classification_system import IntentClassificationEngine
         
         # This should work with existing system
         intent_engine = IntentClassificationEngine()

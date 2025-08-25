@@ -15,7 +15,7 @@ from dataclasses import dataclass
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 try:
-    from voice_engine import create_voice_engine
+    from src.engines.voice.voice_engine import create_voice_engine
     VOICE_ENGINE_AVAILABLE = True
 except ImportError:
     VOICE_ENGINE_AVAILABLE = False

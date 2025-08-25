@@ -5,8 +5,8 @@ Showcases voice synthesis and dynamic greetings
 """
 
 import time
-from system_metrics import SystemMonitor, generate_dynamic_greeting
-from simple_voice_engine import create_voice_engine
+from src.utils.performance.system_metrics import SystemMonitor, generate_dynamic_greeting
+from src.engines.voice.simple_voice_engine import create_voice_engine
 
 def run_demo():
     print("🎬 M1K3 Voice & Greeting Demo")

@@ -69,7 +69,7 @@ def test_ai_inference_integration():
                 self._current_model_name = "TinyLlama/TinyLlama-1.1B-Chat-v1.0"
             
             def _get_adaptive_generation_params(self, max_tokens: int, query: str = "", context: list = None):
-                """Copy of the fixed method from ai_inference.py"""
+                """Copy of the fixed method from src.engines.ai.ai_inference.py"""
                 model_name = getattr(self, '_current_model_name', 'unknown')
                 
                 # Try adaptive configuration first (new intelligent system)

@@ -52,7 +52,7 @@ def test_greeting_integration():
             print("⚠️  LLM enhancement not successful, using rule-based greeting")
         
         # Show comparison with original system
-        from system_metrics import generate_dynamic_greeting
+        from src.utils.performance.system_metrics import generate_dynamic_greeting
         original_greeting = generate_dynamic_greeting(metrics, m1k3_context)
         
         print(f"\n📊 Comparison:")

@@ -20,7 +20,7 @@ import json
 
 # Import our new model management CLI
 try:
-    from cli_model_commands import ModelCLI
+    from src.cli.cli_model_commands import ModelCLI
     MODEL_CLI_AVAILABLE = True
 except ImportError as e:
     MODEL_CLI_AVAILABLE = False
@@ -38,36 +38,36 @@ os.environ['TOKENIZERS_PARALLELISM'] = 'true'
 
 # Try to import the real AI engine first, fall back to mock if not available
 try:
-    from ai_inference import LocalAIEngine
+    from src.engines.ai.ai_inference import LocalAIEngine
     REAL_AI_AVAILABLE = True
     print("🧠 Using real AI inference engine")
 except ImportError as e:
     print(f"⚠️  Real AI engine not available: {e}")
     print("🔄 Falling back to mock AI engine")
-    from simple_ai_engine import SimpleAIEngine
+    from src.engines.ai.simple_ai_engine import SimpleAIEngine
     REAL_AI_AVAILABLE = False
 
 # Try to import RAG engine for enhanced capabilities
 try:
-    from m1k3_rag_integration import M1K3RAGIntegratedEngine
+    from src.rag.m1k3_rag_integration import M1K3RAGIntegratedEngine
     RAG_ENGINE_AVAILABLE = True
     print("🧠 RAG (Retrieval-Augmented Generation) engine available")
 except ImportError as e:
     RAG_ENGINE_AVAILABLE = False
     print(f"⚠️  RAG engine not available: {e}")
 
-from download_model import download_model
-from voice_engine import create_voice_engine
-from system_metrics import SystemMonitor
-from cli_animations import CLIAnimator, AnimationType
+from src.models.loaders.download_model import download_model
+from src.engines.voice.voice_engine import create_voice_engine
+from src.utils.performance.system_metrics import SystemMonitor
+from src.cli.cli_animations import CLIAnimator, AnimationType
 from sound_manager import SoundManager, ContextualSoundManager
 from llm_greeting_engine import LLMGreetingEngine, create_greeting_context
 
 # Intelligent TTS System
 try:
-    from intelligent_tts_controller import create_intelligent_tts_controller
-    from model_output_parser import parse_model_output, ContentType
-    from content_specific_effects import create_content_effects_manager
+    from src.tts.controllers.intelligent_tts_controller import create_intelligent_tts_controller
+    from src.utils.model_output_parser import parse_model_output, ContentType
+    from src.tts.effects.content_specific_effects import create_content_effects_manager
     INTELLIGENT_TTS_AVAILABLE = True
     print("🎭 Intelligent TTS system with content-specific voice effects available")
 except ImportError as e:
@@ -76,7 +76,7 @@ except ImportError as e:
 
 # Model transparency engine
 try:
-    from model_transparency import ModelTransparencyEngine, TransparencyLevel, transparency_engine
+    from src.engines.ai.model_transparency import ModelTransparencyEngine, TransparencyLevel, transparency_engine
     TRANSPARENCY_AVAILABLE = True
     print("✅ Model transparency engine available")
 except ImportError:
@@ -101,13 +101,13 @@ except ImportError:
 
 # Avatar system imports
 try:
-    from avatar_server import (
+    from src.avatar.avatar_server import (
         start_avatar_server, stop_avatar_server, is_avatar_server_running,
         send_avatar_emotion, send_avatar_state, send_avatar_progress, get_avatar_server_status,
         send_chat_ai_start, send_chat_ai_chunk, send_chat_ai_complete, send_sound_trigger, send_metrics_update,
         send_classification_update, send_thinking_phase_update, send_generation_stream_update
     )
-    from avatar_controller import AvatarController, AvatarEmotion, AvatarState as AvatarServerState
+    from src.avatar.avatar_controller import AvatarController, AvatarEmotion, AvatarState as AvatarServerState
     AVATAR_AVAILABLE = True
 except ImportError as e:
     print(f"⚠️  Avatar system not available: {e}")
@@ -714,8 +714,8 @@ class M1K3CLI:
     
     def setup_ai_parallel(self) -> bool:
         """Fast parallel initialization using FastStartupManager"""
-        from fast_startup_manager import fast_initialize_m1k3
-        from performance_monitor import get_performance_monitor, PerformanceEventType
+        from src.models.loaders.fast_startup_manager import fast_initialize_m1k3
+        from src.utils.performance.performance_monitor import get_performance_monitor, PerformanceEventType
         
         # Start performance monitoring
         perf_monitor = get_performance_monitor()
@@ -757,7 +757,7 @@ class M1K3CLI:
         # Check if model exists
         if not self.ai_engine.is_model_available():
             self.start_animated_status("Downloading SmolLM-135M model...", "loading")
-            from download_model import download_model
+            from src.models.loaders.download_model import download_model
             model_path = download_model()
             self.stop_animated_status()
             
@@ -1137,7 +1137,7 @@ class M1K3CLI:
                 
                 # Show hardware insight
                 try:
-                    from hardware_insights import generate_hardware_insight
+                    from src.utils.performance.hardware_insights import generate_hardware_insight
                     metrics = self.system_monitor.collect_metrics()
                     hardware_insight = generate_hardware_insight(metrics)
                     print(f"\n💻 HARDWARE INSIGHT: {hardware_insight}")
@@ -1380,7 +1380,7 @@ class M1K3CLI:
                 
                 # Check for new achievements
                 try:
-                    from session_stats import AchievementSystem
+                    from src.utils.logging.session_stats import AchievementSystem
                     unlocked = AchievementSystem.check_achievements(self.stats_tracker)
                     if unlocked:
                         print(f"\n🏆 Achievement{'s' if len(unlocked) > 1 else ''} unlocked: {', '.join([AchievementSystem.format_achievement(a) for a in unlocked[:2]])}")
@@ -1808,7 +1808,7 @@ class M1K3CLI:
             
             # Model Information
             try:
-                from local_model_manager import LocalModelManager
+                from src.engines.ai.local_model_manager import LocalModelManager
                 manager = LocalModelManager()
                 model_count = len(manager.available_models)
                 if model_count > 0:
@@ -1878,7 +1878,7 @@ class M1K3CLI:
         
         # Get model count
         try:
-            from local_model_manager import LocalModelManager
+            from src.engines.ai.local_model_manager import LocalModelManager
             manager = LocalModelManager()
             context['model_count'] = len(manager.available_models)
         except:
@@ -1940,7 +1940,7 @@ class M1K3CLI:
         # Debug logging in debug mode
         debug_mode = False
         try:
-            from model_transparency import transparency_engine, TransparencyLevel
+            from src.engines.ai.model_transparency import transparency_engine, TransparencyLevel
             if transparency_engine and transparency_engine.transparency_level == TransparencyLevel.DEBUG:
                 debug_mode = True
                 print(f"🔍 [CLI GREETING] Starting greeting generation")
@@ -2233,7 +2233,7 @@ class M1K3CLI:
             style = parts[2] if len(parts) > 2 else "robot"
             color = parts[3] if len(parts) > 3 else "#E25303"
             
-            from avatar_server import get_avatar_server
+            from src.avatar.avatar_server import get_avatar_server
             server = get_avatar_server()
             server.send_style_update(style, color)
             self.print_with_avatar(f"✨ Avatar style set to {style} with color {color}", AvatarState.IDLE)
@@ -2262,7 +2262,7 @@ class M1K3CLI:
             self.print_with_avatar("🔍 Avatar System Diagnostics", AvatarState.IDLE)
             
             # Get server status
-            from avatar_server import get_avatar_server
+            from src.avatar.avatar_server import get_avatar_server
             server = get_avatar_server()
             
             print(f"🔧 Server Instance ID: {id(server)}")
@@ -2400,7 +2400,7 @@ Available styles: robot, organic, crystal, ghost, energy, cute"""
         
         # Initialize session statistics
         try:
-            from session_stats import get_stats_tracker, AchievementSystem
+            from src.utils.logging.session_stats import get_stats_tracker, AchievementSystem
             self.stats_tracker = get_stats_tracker()
             
             # Check for first boot achievement
@@ -2613,7 +2613,7 @@ Available styles: robot, organic, crystal, ghost, energy, cute"""
     def handle_classify_command(self, user_input: str = ""):
         """Handle /classify command for intent classification"""
         try:
-            from intent_classification_system import IntentClassificationEngine
+            from src.utils.intent_classification_system import IntentClassificationEngine
             
             parts = user_input.strip().split(" ", 1)
             if len(parts) < 2:
@@ -2651,7 +2651,7 @@ Available styles: robot, organic, crystal, ghost, energy, cute"""
         self.start_animated_status("Discovering available models...", "processing")
         
         try:
-            from local_model_manager import LocalModelManager
+            from src.engines.ai.local_model_manager import LocalModelManager
             manager = LocalModelManager()
             device = manager.analyze_device()
             
@@ -2818,7 +2818,7 @@ Available styles: robot, organic, crystal, ghost, energy, cute"""
     def _switch_to_recommended_model(self):
         """Switch to the best recommended model"""
         try:
-            from local_model_manager import LocalModelManager
+            from src.engines.ai.local_model_manager import LocalModelManager
             manager = LocalModelManager()
             device = manager.analyze_device()
             
@@ -2841,7 +2841,7 @@ Available styles: robot, organic, crystal, ghost, energy, cute"""
             return
         
         try:
-            from local_model_manager import LocalModelManager
+            from src.engines.ai.local_model_manager import LocalModelManager
             manager = LocalModelManager()
             
             # Find exact or partial model name match
@@ -2965,7 +2965,7 @@ Available styles: robot, organic, crystal, ghost, energy, cute"""
     def _interactive_model_selection(self):
         """Interactive model selection interface"""
         try:
-            from local_model_manager import LocalModelManager
+            from src.engines.ai.local_model_manager import LocalModelManager
             manager = LocalModelManager()
             device = manager.analyze_device()
             
@@ -3084,7 +3084,7 @@ Available styles: robot, organic, crystal, ghost, energy, cute"""
         command = parts[1] if len(parts) > 1 else "summary"
         
         try:
-            from performance_monitor import get_performance_monitor
+            from src.utils.performance.performance_monitor import get_performance_monitor
             perf_monitor = get_performance_monitor()
             
             if command == "summary":
@@ -3276,7 +3276,7 @@ Available styles: robot, organic, crystal, ghost, energy, cute"""
     
     def _show_detailed_performance_stats(self, perf_monitor):
         """Show detailed performance statistics"""
-        from performance_monitor import PerformanceEventType
+        from src.utils.performance.performance_monitor import PerformanceEventType
         
         print("\n📊 Detailed Performance Statistics")
         print("=" * 60)
@@ -3356,7 +3356,7 @@ Available styles: robot, organic, crystal, ghost, energy, cute"""
             event_name = parts[2]
             duration = float(parts[3])
             
-            from performance_monitor import set_baseline
+            from src.utils.performance.performance_monitor import set_baseline
             set_baseline(event_name, duration)
             
             self.print_with_avatar(f"✅ Baseline set: {event_name} = {duration}s", AvatarState.IDLE)
@@ -3394,7 +3394,7 @@ def main():
             return 1
     
     if args.test_voice:
-        from voice_engine import create_voice_engine
+        from src.engines.voice.voice_engine import create_voice_engine
         engine = create_voice_engine()
         if engine.load_model():
             print("🔊 Testing voice synthesis...")

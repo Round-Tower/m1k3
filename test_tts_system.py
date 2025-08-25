@@ -16,9 +16,9 @@ def test_tts_system():
     try:
         # Test imports
         print("1. Testing imports...")
-        from model_output_parser import parse_model_output, ContentType
-        from intelligent_tts_controller import create_intelligent_tts_controller
-        from content_specific_effects import create_content_effects_manager
+        from src.utils.model_output_parser import parse_model_output, ContentType
+        from src.tts.controllers.intelligent_tts_controller import create_intelligent_tts_controller
+        from src.tts.effects.content_specific_effects import create_content_effects_manager
         print("   ✅ All modules imported successfully")
         
         # Test parser

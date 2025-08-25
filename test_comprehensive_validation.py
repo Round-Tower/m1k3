@@ -90,7 +90,7 @@ def test_complete_adaptive_system():
             def generate_response(self, query, max_tokens):
                 yield "Mock response"
         
-        from adaptive_ai_engine import AdaptiveAIEngine
+        from src.engines.ai.adaptive_ai_engine import AdaptiveAIEngine
         
         # Mock thinking engine
         import thinking_mode_engine
@@ -98,7 +98,7 @@ def test_complete_adaptive_system():
             def __init__(self, base_engine, avatar_callback=None):
                 self.base_engine = base_engine
             def assess_query_complexity(self, query):
-                from thinking_mode_engine import QueryComplexity
+                from src.utils.thinking_mode_engine import QueryComplexity
                 return QueryComplexity.MODERATE
             def generate_with_thinking(self, query, max_tokens, show_reasoning=False):
                 yield "Thinking response"
@@ -170,7 +170,7 @@ def test_complete_adaptive_system():
         
         try:
             # Test with real AI engine if available
-            from ai_inference import LocalAIEngine
+            from src.engines.ai.ai_inference import LocalAIEngine
             real_engine = LocalAIEngine()
             
             print(f"   🔧 Testing with real AI engine...")

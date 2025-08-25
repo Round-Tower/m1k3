@@ -58,8 +58,8 @@ def test_rag_practical():
     # Test 2: RAG Engine Initialization
     print("\n🧠 2. Testing RAG Engine...")
     try:
-        from m1k3_rag_engine import M1K3RAGEngine, RAGDocument
-        from intent_classification_system import IntentClassificationEngine, UserIntent
+        from src.rag.m1k3_rag_engine import M1K3RAGEngine, RAGDocument
+        from src.utils.intent_classification_system import IntentClassificationEngine, UserIntent
         
         start_time = time.time()
         rag_engine = M1K3RAGEngine(knowledge_base_path='knowledge/comprehensive_knowledge_base.json')
@@ -135,7 +135,7 @@ def test_rag_practical():
     # Test 4: Integration Components
     print("\n🔗 4. Testing Integration...")
     try:
-        from m1k3_rag_integration import M1K3RAGIntegratedEngine
+        from src.rag.m1k3_rag_integration import M1K3RAGIntegratedEngine
         
         integrated_engine = M1K3RAGIntegratedEngine(
             knowledge_base_path='knowledge/comprehensive_knowledge_base.json',

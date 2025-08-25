@@ -14,7 +14,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Import will fail initially - that's expected in TDD!
 try:
-    from content_specific_effects import (
+    from src.tts.effects.content_specific_effects import (
         ThinkingEffect,
         NarrationEffect, 
         ClarificationEffect,
@@ -22,8 +22,8 @@ try:
         AnswerEffect,
         ContentEffectsManager
     )
-    from intelligent_tts_controller import ContentTypeModulation
-    from model_output_parser import ContentType
+    from src.tts.controllers.intelligent_tts_controller import ContentTypeModulation
+    from src.utils.model_output_parser import ContentType
     MODULES_AVAILABLE = True
 except ImportError:
     MODULES_AVAILABLE = False

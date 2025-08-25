@@ -42,7 +42,7 @@ class TestRAGQuickValidation(unittest.TestCase):
     def test_rag_engine_basic_initialization(self):
         """Test basic RAG engine initialization"""
         try:
-            from m1k3_rag_engine import M1K3RAGEngine
+            from src.rag.m1k3_rag_engine import M1K3RAGEngine
             engine = M1K3RAGEngine(knowledge_base_path=self.kb_path)
             self.assertIsNotNone(engine)
             self.assertIsNotNone(engine.knowledge_base)
@@ -55,7 +55,7 @@ class TestRAGQuickValidation(unittest.TestCase):
     def test_intent_classification_basic(self):
         """Test basic intent classification"""
         try:
-            from intent_classification_system import IntentClassificationEngine
+            from src.utils.intent_classification_system import IntentClassificationEngine
             engine = IntentClassificationEngine()
             
             # Test simple classification
@@ -71,8 +71,8 @@ class TestRAGQuickValidation(unittest.TestCase):
     def test_embedding_engine_basic(self):
         """Test basic embedding engine functionality"""
         try:
-            from m1k3_rag_engine import EmbeddingEngine, RAGDocument
-            from intent_classification_system import UserIntent
+            from src.rag.m1k3_rag_engine import EmbeddingEngine, RAGDocument
+            from src.utils.intent_classification_system import UserIntent
             
             engine = EmbeddingEngine()
             self.assertIsNotNone(engine)
@@ -96,7 +96,7 @@ class TestRAGQuickValidation(unittest.TestCase):
     def test_rag_integration_basic(self):
         """Test basic RAG integration"""
         try:
-            from m1k3_rag_integration import M1K3RAGIntegratedEngine
+            from src.rag.m1k3_rag_integration import M1K3RAGIntegratedEngine
             
             engine = M1K3RAGIntegratedEngine(
                 knowledge_base_path=self.kb_path,
@@ -172,7 +172,7 @@ class TestRAGPerformanceBasic(unittest.TestCase):
     def test_rag_engine_load_time(self):
         """Test RAG engine loads within reasonable time"""
         try:
-            from m1k3_rag_engine import M1K3RAGEngine
+            from src.rag.m1k3_rag_engine import M1K3RAGEngine
             
             start_time = time.time()
             engine = M1K3RAGEngine(knowledge_base_path=self.kb_path)

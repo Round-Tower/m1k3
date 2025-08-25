@@ -13,7 +13,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 try:
     from enhanced_voice_engine import create_voice_engine
-    from model_output_parser import parse_model_output, ContentType
+    from src.utils.model_output_parser import parse_model_output, ContentType
     COMPONENTS_AVAILABLE = True
 except ImportError as e:
     print(f"❌ Required components not available: {e}")

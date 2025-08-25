@@ -12,8 +12,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 try:
     from enhanced_voice_engine import create_voice_engine
-    from intelligent_tts_controller import create_intelligent_tts_controller
-    from model_output_parser import parse_model_output
+    from src.tts.controllers.intelligent_tts_controller import create_intelligent_tts_controller
+    from src.utils.model_output_parser import parse_model_output
     COMPONENTS_AVAILABLE = True
 except ImportError as e:
     print(f"❌ Required components not available: {e}")
@@ -153,7 +153,7 @@ def demo_modulation_settings():
     
     print("🔧 Default modulation parameters:")
     
-    from model_output_parser import ContentType
+    from src.utils.model_output_parser import ContentType
     
     demo_text = "This is a test of the voice modulation system."
     

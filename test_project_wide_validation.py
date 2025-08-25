@@ -47,9 +47,9 @@ def test_ai_system():
     print("-" * 50)
     
     try:
-        from ai_inference import LocalAIEngine
-        from adaptive_ai_engine import AdaptiveAIEngine
-        from simple_ai_engine import SimpleAIEngine
+        from src.engines.ai.ai_inference import LocalAIEngine
+        from src.engines.ai.adaptive_ai_engine import AdaptiveAIEngine
+        from src.engines.ai.simple_ai_engine import SimpleAIEngine
         
         # Test LocalAIEngine
         print("   🤖 Testing LocalAIEngine...")
@@ -154,7 +154,7 @@ def test_model_management():
     print("-" * 50)
     
     try:
-        from local_model_manager import LocalModelManager
+        from src.engines.ai.local_model_manager import LocalModelManager
         
         manager = LocalModelManager()
         device = manager.analyze_device()
@@ -196,7 +196,7 @@ def test_interface_systems():
         print("   ✅ TUI modules load")
         
         # Test avatar controller
-        from avatar_controller import AvatarController, AvatarState, AvatarEmotion
+        from src.avatar.avatar_controller import AvatarController, AvatarState, AvatarEmotion
         controller = AvatarController()
         controller.update_state(AvatarState.IDLE)
         print("   ✅ Avatar controller working")
@@ -213,8 +213,8 @@ def test_integration():
     print("-" * 50)
     
     try:
-        from ai_inference import LocalAIEngine
-        from adaptive_ai_engine import AdaptiveAIEngine
+        from src.engines.ai.ai_inference import LocalAIEngine
+        from src.engines.ai.adaptive_ai_engine import AdaptiveAIEngine
         
         # Create integrated system
         base_engine = LocalAIEngine()

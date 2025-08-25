@@ -31,7 +31,7 @@ def test_all_systems():
     # Test 2: AI Engine
     console.print("[bold]🧠 Testing AI Engine[/bold]")
     try:
-        from ai_inference import LocalAIEngine
+        from src.engines.ai.ai_inference import LocalAIEngine
         ai = LocalAIEngine()
         results.append(("AI Engine", "✅", "LocalAIEngine ready"))
     except Exception as e:
@@ -50,8 +50,8 @@ def test_all_systems():
     # Test 4: Avatar Integration
     console.print("[bold]🧘 Testing Avatar Integration[/bold]")
     try:
-        from avatar_server import is_avatar_server_running
-        from avatar_controller import AvatarController
+        from src.avatar.avatar_server import is_avatar_server_running
+        from src.avatar.avatar_controller import AvatarController
         avatar = AvatarController()
         results.append(("Avatar System", "✅", "Avatar controller ready"))
     except Exception as e:
@@ -60,7 +60,7 @@ def test_all_systems():
     # Test 5: System Monitoring
     console.print("[bold]📊 Testing System Monitoring[/bold]")
     try:
-        from system_metrics import SystemMonitor
+        from src.utils.performance.system_metrics import SystemMonitor
         monitor = SystemMonitor()
         metrics = monitor.collect_metrics()
         results.append(("System Monitor", "✅", f"Monitoring {metrics.os_name}"))
@@ -70,7 +70,7 @@ def test_all_systems():
     # Test 6: Textual TUI
     console.print("[bold]✨ Testing Textual TUI[/bold]")
     try:
-        from m1k3_tui import M1K3TUIApp
+        from src.cli.m1k3_tui import M1K3TUIApp
         app = M1K3TUIApp(voice_enabled=False)
         results.append(("Textual TUI", "✅", "Full-screen interface ready"))
     except Exception as e:
@@ -79,7 +79,7 @@ def test_all_systems():
     # Test 7: Rich TUI  
     console.print("[bold]🎨 Testing Rich TUI[/bold]")
     try:
-        from m1k3_rich_tui import M1K3RichTUI
+        from src.cli.m1k3_rich_tui import M1K3RichTUI
         tui = M1K3RichTUI(voice_enabled=False, avatar_enabled=False)
         results.append(("Rich TUI", "✅", "Lightweight interface ready"))
     except Exception as e:
@@ -96,7 +96,7 @@ def test_all_systems():
     # Test 9: CLI Animations
     console.print("[bold]🎭 Testing CLI Animations[/bold]")
     try:
-        from cli_animations import CLIAnimator, AnimationType
+        from src.cli.cli_animations import CLIAnimator, AnimationType
         animator = CLIAnimator()
         results.append(("Animations", "✅", "Visual effects available"))
     except Exception as e:
@@ -106,7 +106,7 @@ def test_all_systems():
     console.print("[bold]🔗 Testing WebSocket Integration[/bold]")
     try:
         import websockets
-        from avatar_server import send_avatar_emotion
+        from src.avatar.avatar_server import send_avatar_emotion
         results.append(("WebSocket", "✅", "Real-time communication ready"))
     except Exception as e:
         results.append(("WebSocket", "❌", str(e)))

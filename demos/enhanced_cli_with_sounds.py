@@ -7,7 +7,7 @@ M1K3 CLI with contextual sound effects and startup sequences
 import time
 import random
 from sound_manager import SoundManager, ContextualSoundManager
-from turbo_voice_engine import TurboVoiceEngineWithEffects
+from src.engines.voice.turbo_voice_engine import TurboVoiceEngineWithEffects
 from wireless_scanner import WirelessScanner, AdvancedWirelessCapabilities
 
 class EnhancedM1K3CLI:

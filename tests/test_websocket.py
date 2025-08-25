@@ -67,7 +67,7 @@ async def send_test_emotions():
     await asyncio.sleep(2)
     
     # Use the avatar server API to send messages
-    from avatar_server import get_avatar_server
+    from src.avatar.avatar_server import get_avatar_server
     server = get_avatar_server()
     
     # Check if we have connected clients

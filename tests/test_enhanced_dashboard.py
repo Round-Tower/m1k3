@@ -5,7 +5,7 @@ Test Enhanced M1K3 Avatar Dashboard
 
 import time
 import threading
-from avatar_server import start_avatar_server, stop_avatar_server, get_avatar_server_status, send_chat_ai_start, send_chat_ai_chunk, send_chat_ai_complete
+from src.avatar.avatar_server import start_avatar_server, stop_avatar_server, get_avatar_server_status, send_chat_ai_start, send_chat_ai_chunk, send_chat_ai_complete
 
 def test_enhanced_dashboard():
     print("🧪 Testing Enhanced M1K3 Avatar Dashboard")

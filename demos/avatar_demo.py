@@ -6,8 +6,8 @@ Demonstrates the avatar system working with M1K3
 
 import time
 import threading
-from avatar_server import start_avatar_server, stop_avatar_server, send_avatar_emotion, send_avatar_state, get_avatar_server_status
-from avatar_controller import AvatarController, AvatarEmotion
+from src.avatar.avatar_server import start_avatar_server, stop_avatar_server, send_avatar_emotion, send_avatar_state, get_avatar_server_status
+from src.avatar.avatar_controller import AvatarController, AvatarEmotion
 
 def demo_avatar_integration():
     print("🎭 M1K3 Avatar Integration Demo")
@@ -67,7 +67,7 @@ def demo_avatar_integration():
         
         for style, color in zip(styles, colors):
             print(f"   Switching to: {style} ({color})")
-            from avatar_server import get_avatar_server
+            from src.avatar.avatar_server import get_avatar_server
             server = get_avatar_server()
             server.send_style_update(style, color)
             send_avatar_emotion("happy", 60, f"Now I'm a {style}!")

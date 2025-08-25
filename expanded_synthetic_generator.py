@@ -13,8 +13,8 @@ from pathlib import Path
 import hashlib
 
 # Import M1K3 components
-from m1k3_rag_engine import RAGDocument, KnowledgeBase, M1K3RAGEngine
-from intent_classification_system import UserIntent
+from src.rag.m1k3_rag_engine import RAGDocument, KnowledgeBase, M1K3RAGEngine
+from src.utils.intent_classification_system import UserIntent
 from synthetic_document_generator import DocumentTemplate, SyntheticDocumentGenerator
 
 class ExpandedSyntheticGenerator(SyntheticDocumentGenerator):

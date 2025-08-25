@@ -5,7 +5,7 @@ Validates model loading, reasoning, and avatar integration
 """
 
 import time
-from ai_inference import LocalAIEngine
+from src.engines.ai.ai_inference import LocalAIEngine
 
 def test_qwen3_reasoning():
     """Test Qwen3 reasoning capabilities vs current model"""

@@ -4,7 +4,7 @@ Test M1K3 AI responses with common questions
 """
 
 import sys
-from ai_inference import LocalAIEngine
+from src.engines.ai.ai_inference import LocalAIEngine
 
 def test_ai_responses():
     """Test the AI engine with various questions"""

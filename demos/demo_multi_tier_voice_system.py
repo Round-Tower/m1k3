@@ -17,7 +17,7 @@ def test_multi_tier_system():
     print("="*80)
     
     try:
-        from multi_tier_voice_engine import MultiTierVoiceEngine, VoiceQuality
+        from src.engines.voice.multi_tier_voice_engine import MultiTierVoiceEngine, VoiceQuality
         from sound_manager import SoundManager
         
         print("🚀 Loading multi-tier voice system...")
@@ -180,7 +180,7 @@ def quick_tier_test():
     print("-" * 60)
     
     try:
-        from multi_tier_voice_engine import MultiTierVoiceEngine
+        from src.engines.voice.multi_tier_voice_engine import MultiTierVoiceEngine
         
         engine = MultiTierVoiceEngine()
         if not engine.initialize():

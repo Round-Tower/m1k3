@@ -12,9 +12,9 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 try:
     from enhanced_voice_engine import create_voice_engine
-    from intelligent_tts_controller import create_intelligent_tts_controller
-    from content_specific_effects import create_content_effects_manager
-    from model_output_parser import parse_model_output, ContentType
+    from src.tts.controllers.intelligent_tts_controller import create_intelligent_tts_controller
+    from src.tts.effects.content_specific_effects import create_content_effects_manager
+    from src.utils.model_output_parser import parse_model_output, ContentType
     COMPONENTS_AVAILABLE = True
 except ImportError as e:
     print(f"❌ Required components not available: {e}")

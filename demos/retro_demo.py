@@ -12,8 +12,8 @@ import os
 warnings.filterwarnings("ignore")
 os.environ['PYTHONWARNINGS'] = 'ignore'
 
-from system_metrics import SystemMonitor, generate_dynamic_greeting
-from hybrid_voice_engine import create_voice_engine
+from src.utils.performance.system_metrics import SystemMonitor, generate_dynamic_greeting
+from src.engines.voice.hybrid_voice_engine import create_voice_engine
 
 def retro_demo():
     print("🎮 M1K3 PlayStation 1 Voice Demo")

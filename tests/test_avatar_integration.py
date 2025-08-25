@@ -5,8 +5,8 @@ Test M1K3 Avatar Integration
 
 import time
 import threading
-from avatar_server import start_avatar_server, stop_avatar_server, send_avatar_emotion, send_avatar_state
-from avatar_controller import AvatarController
+from src.avatar.avatar_server import start_avatar_server, stop_avatar_server, send_avatar_emotion, send_avatar_state
+from src.avatar.avatar_controller import AvatarController
 
 def test_avatar_integration():
     print("🧪 Testing M1K3 Avatar Integration")

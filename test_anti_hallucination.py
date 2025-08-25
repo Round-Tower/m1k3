@@ -5,7 +5,7 @@ Validates improved parameters reduce confused/rambling responses
 """
 
 import time
-from ai_inference import LocalAIEngine
+from src.engines.ai.ai_inference import LocalAIEngine
 
 def test_anti_hallucination_optimizations():
     print("🧪 M1K3 Anti-Hallucination Optimization Test")

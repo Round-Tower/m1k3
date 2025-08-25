@@ -12,7 +12,7 @@ import requests
 from pathlib import Path
 from typing import Optional, Dict, List, Generator
 from dataclasses import dataclass
-from prompt_logger import get_prompt_logger
+from src.utils.logging.prompt_logger import get_prompt_logger
 
 # Import system context builder for dynamic stats
 try:

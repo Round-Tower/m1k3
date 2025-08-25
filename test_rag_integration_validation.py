@@ -57,7 +57,7 @@ class TestRAGEngineValidation(unittest.TestCase):
     
     def test_knowledge_base_loading_speed(self):
         """Test knowledge base loads within reasonable time"""
-        from m1k3_rag_engine import M1K3RAGEngine
+        from src.rag.m1k3_rag_engine import M1K3RAGEngine
         
         start_time = time.time()
         engine = M1K3RAGEngine(knowledge_base_path=self.kb_path)
@@ -69,8 +69,8 @@ class TestRAGEngineValidation(unittest.TestCase):
     
     def test_embedding_engine_functionality(self):
         """Test embedding engine can process queries"""
-        from m1k3_rag_engine import EmbeddingEngine, RAGDocument
-        from intent_classification_system import UserIntent
+        from src.rag.m1k3_rag_engine import EmbeddingEngine, RAGDocument
+        from src.utils.intent_classification_system import UserIntent
         
         engine = EmbeddingEngine()
         
@@ -91,7 +91,7 @@ class TestRAGEngineValidation(unittest.TestCase):
     
     def test_intent_classification_integration(self):
         """Test intent classification works with various query types"""
-        from intent_classification_system import IntentClassificationEngine, UserIntent
+        from src.utils.intent_classification_system import IntentClassificationEngine, UserIntent
         
         engine = IntentClassificationEngine()
         
@@ -127,8 +127,8 @@ class TestRAGResponseQuality(unittest.TestCase):
     
     def test_context_retrieval_relevance(self):
         """Test that retrieved context is relevant to queries"""
-        from m1k3_rag_engine import M1K3RAGEngine
-        from intent_classification_system import IntentClassificationEngine
+        from src.rag.m1k3_rag_engine import M1K3RAGEngine
+        from src.utils.intent_classification_system import IntentClassificationEngine
         
         rag_engine = M1K3RAGEngine(knowledge_base_path=self.kb_path)
         rag_engine.load_knowledge_base()
@@ -161,8 +161,8 @@ class TestRAGResponseQuality(unittest.TestCase):
     
     def test_context_formatting_structure(self):
         """Test that context is properly formatted for AI consumption"""
-        from m1k3_rag_engine import M1K3RAGEngine
-        from intent_classification_system import IntentClassificationEngine
+        from src.rag.m1k3_rag_engine import M1K3RAGEngine
+        from src.utils.intent_classification_system import IntentClassificationEngine
         
         rag_engine = M1K3RAGEngine(knowledge_base_path=self.kb_path)
         rag_engine.load_knowledge_base()
@@ -199,8 +199,8 @@ class TestRAGPerformanceValidation(unittest.TestCase):
     
     def test_search_performance(self):
         """Test search performance with various query types"""
-        from m1k3_rag_engine import M1K3RAGEngine
-        from intent_classification_system import IntentClassificationEngine
+        from src.rag.m1k3_rag_engine import M1K3RAGEngine
+        from src.utils.intent_classification_system import IntentClassificationEngine
         
         rag_engine = M1K3RAGEngine(knowledge_base_path=self.kb_path)
         rag_engine.load_knowledge_base()
@@ -242,8 +242,8 @@ class TestRAGPerformanceValidation(unittest.TestCase):
         """Test that RAG system doesn't leak memory"""
         import psutil
         import os
-        from m1k3_rag_engine import M1K3RAGEngine
-        from intent_classification_system import IntentClassificationEngine
+        from src.rag.m1k3_rag_engine import M1K3RAGEngine
+        from src.utils.intent_classification_system import IntentClassificationEngine
         
         process = psutil.Process(os.getpid())
         initial_memory = process.memory_info().rss / 1024 / 1024  # MB
@@ -276,7 +276,7 @@ class TestRAGErrorHandling(unittest.TestCase):
     
     def test_missing_knowledge_base_handling(self):
         """Test graceful handling of missing knowledge base"""
-        from m1k3_rag_engine import M1K3RAGEngine
+        from src.rag.m1k3_rag_engine import M1K3RAGEngine
         
         # Test with non-existent knowledge base
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -299,8 +299,8 @@ class TestRAGErrorHandling(unittest.TestCase):
         if not os.path.exists('knowledge/comprehensive_knowledge_base.json'):
             self.skipTest("Knowledge base not found")
         
-        from m1k3_rag_engine import M1K3RAGEngine
-        from intent_classification_system import IntentClassificationEngine
+        from src.rag.m1k3_rag_engine import M1K3RAGEngine
+        from src.utils.intent_classification_system import IntentClassificationEngine
         
         rag_engine = M1K3RAGEngine(knowledge_base_path='knowledge/comprehensive_knowledge_base.json')
         rag_engine.load_knowledge_base()
@@ -324,7 +324,7 @@ class TestRAGErrorHandling(unittest.TestCase):
     
     def test_malformed_documents_handling(self):
         """Test handling of malformed documents in knowledge base"""
-        from m1k3_rag_engine import KnowledgeBase
+        from src.rag.m1k3_rag_engine import KnowledgeBase
         
         # Create a temporary knowledge base with malformed data
         with tempfile.TemporaryDirectory() as temp_dir:

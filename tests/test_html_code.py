@@ -3,7 +3,7 @@
 Test HTML code question with M1K3 AI
 """
 
-from ai_inference import LocalAIEngine
+from src.engines.ai.ai_inference import LocalAIEngine
 
 def test_html_code():
     print("🌐 Testing HTML Code Question\n" + "="*50)

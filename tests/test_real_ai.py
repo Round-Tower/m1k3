@@ -16,7 +16,7 @@ def test_real_ai():
     print("=" * 50)
     
     try:
-        from ai_inference import LocalAIEngine
+        from src.engines.ai.ai_inference import LocalAIEngine
         print("✅ Successfully imported LocalAIEngine")
         
         # Check if model exists

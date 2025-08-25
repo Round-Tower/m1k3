@@ -92,7 +92,7 @@ Examples:
     if args.tui:
         # Launch Textual TUI
         try:
-            from m1k3_tui import M1K3TUIApp
+            from src.cli.m1k3_tui import M1K3TUIApp
             app = M1K3TUIApp(voice_enabled=not args.no_voice, rag_enabled=args.rag)
             app.run()
         except ImportError as e:
@@ -108,7 +108,7 @@ Examples:
     elif args.fullscreen:
         # Launch Rich full-screen interface
         try:
-            from m1k3_rich_tui import launch_rich_tui
+            from src.cli.m1k3_rich_tui import launch_rich_tui
             launch_rich_tui(
                 voice_enabled=not args.no_voice,
                 avatar_enabled=not args.no_avatar,

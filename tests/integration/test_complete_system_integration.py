@@ -12,7 +12,7 @@ from typing import Dict, List, Any
 from enhanced_adaptive_model_config import EnhancedAdaptiveModelConfig
 from decision_explanation_engine import DecisionExplainerEngine
 from websocket_context_server import ContextData
-from ai_inference import LocalAIEngine
+from src.engines.ai.ai_inference import LocalAIEngine
 
 class SystemIntegrationTest:
     """Comprehensive test of the enhanced AI system"""

@@ -3,7 +3,7 @@
 Quick test of Qwen3 with optimized parameters
 """
 
-from ai_inference import LocalAIEngine
+from src.engines.ai.ai_inference import LocalAIEngine
 
 def test_quick_responses():
     print("🧪 Quick Qwen3 Parameter Test")

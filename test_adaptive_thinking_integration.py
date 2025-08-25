@@ -7,7 +7,7 @@ import sys
 import os
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-from adaptive_ai_engine import AdaptiveAIEngine
+from src.engines.ai.adaptive_ai_engine import AdaptiveAIEngine
 from adaptive_model_config import TaskType, ConfidenceLevel
 
 class MockAIEngine:
@@ -30,7 +30,7 @@ class MockThinkingEngine:
         self.base_engine = base_engine
         
     def assess_query_complexity(self, query):
-        from thinking_mode_engine import QueryComplexity
+        from src.utils.thinking_mode_engine import QueryComplexity
         if any(word in query.lower() for word in ["calculate", "solve", "proof", "algorithm"]):
             return QueryComplexity.COMPLEX
         elif any(word in query.lower() for word in ["explain", "how", "why", "compare"]):

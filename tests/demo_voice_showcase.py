@@ -147,7 +147,7 @@ def test_audio_effects_pipeline():
     print("-" * 50)
     
     try:
-        from audio_effects import IntercomEffect, CompressionEffect, NormalizationEffect
+        from src.tts.effects.audio_effects import IntercomEffect, CompressionEffect, NormalizationEffect
         import numpy as np
         
         print("✅ Importing audio effects...")
@@ -187,8 +187,8 @@ def test_unified_pipeline():
     print("-" * 50)
     
     try:
-        from unified_voice_engine import UnifiedVoiceEngine
-        from text_processors import smart_text_chunking
+        from src.engines.voice.unified_voice_engine import UnifiedVoiceEngine
+        from src.utils.text_processors import smart_text_chunking
         
         print("✅ Testing unified voice engine...")
         

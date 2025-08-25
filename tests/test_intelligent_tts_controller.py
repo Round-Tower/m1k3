@@ -14,13 +14,13 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Import will fail initially - that's expected in TDD!
 try:
-    from intelligent_tts_controller import (
+    from src.tts.controllers.intelligent_tts_controller import (
         IntelligentTTSController, 
         TTSJob, 
         TTSStatus, 
         ContentTypeModulation
     )
-    from model_output_parser import ContentType, ContentSegment, ParsedContent
+    from src.utils.model_output_parser import ContentType, ContentSegment, ParsedContent
     MODULES_AVAILABLE = True
 except ImportError:
     MODULES_AVAILABLE = False

@@ -102,7 +102,7 @@ class LLMGreetingEngine:
         # Check if we're in debug mode for thinking display
         show_thinking_mode = False
         try:
-            from model_transparency import transparency_engine, TransparencyLevel
+            from src.engines.ai.model_transparency import transparency_engine, TransparencyLevel
             if transparency_engine and transparency_engine.transparency_level == TransparencyLevel.DEBUG:
                 show_thinking_mode = True
         except:
@@ -239,7 +239,7 @@ class LLMGreetingEngine:
         # Debug logging in debug mode
         debug_mode = False
         try:
-            from model_transparency import transparency_engine, TransparencyLevel
+            from src.engines.ai.model_transparency import transparency_engine, TransparencyLevel
             if transparency_engine and transparency_engine.transparency_level == TransparencyLevel.DEBUG:
                 debug_mode = True
                 print(f"🔍 [GREETING DEBUG] Raw LLM response: '{llm_response[:200]}...'")
@@ -605,7 +605,7 @@ def generate_llm_greeting(adaptive_ai_engine, metrics, m1k3_context: dict = None
 
 if __name__ == "__main__":
     # Test the greeting engine
-    from system_metrics import SystemMonitor
+    from src.utils.performance.system_metrics import SystemMonitor
     
     # Create test context
     monitor = SystemMonitor()

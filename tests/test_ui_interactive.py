@@ -9,7 +9,7 @@ import threading
 import json
 import random
 from datetime import datetime
-from avatar_server import (
+from src.avatar.avatar_server import (
     get_avatar_server, send_avatar_emotion, send_avatar_state, send_avatar_progress,
     send_chat_ai_start, send_chat_ai_chunk, send_chat_ai_complete, 
     send_sound_trigger, send_metrics_update

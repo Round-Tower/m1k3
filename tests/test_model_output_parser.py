@@ -11,7 +11,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Import will fail initially - that's expected in TDD!
 try:
-    from model_output_parser import ModelOutputParser, ContentType, ParsedContent, ContentSegment
+    from src.utils.model_output_parser import ModelOutputParser, ContentType, ParsedContent, ContentSegment
 except ImportError:
     # This is expected in TDD - we write tests first!
     pytest.skip("model_output_parser.py not yet implemented", allow_module_level=True)

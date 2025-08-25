@@ -14,7 +14,7 @@ from typing import Dict, List, Tuple, Optional
 os.environ['TOKENIZERS_PARALLELISM'] = 'true'
 
 try:
-    from local_model_manager import LocalModelManager
+    from src.engines.ai.local_model_manager import LocalModelManager
     from transformers import AutoTokenizer, AutoModelForCausalLM
     import torch
     DEPS_AVAILABLE = True

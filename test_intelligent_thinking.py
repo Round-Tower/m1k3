@@ -5,10 +5,10 @@ Demonstrates how M1K3 can leverage thinking modes while maintaining quality
 """
 
 import time
-from ai_inference import LocalAIEngine
-from adaptive_ai_engine import AdaptiveAIEngine
-from avatar_controller import AvatarController
-from thinking_quality_assurance import ThinkingQualityAssurance
+from src.engines.ai.ai_inference import LocalAIEngine
+from src.engines.ai.adaptive_ai_engine import AdaptiveAIEngine
+from src.avatar.avatar_controller import AvatarController
+from src.utils.thinking_quality_assurance import ThinkingQualityAssurance
 
 def test_intelligent_thinking_system():
     print("🧠 M1K3 Intelligent Thinking Mode Test Suite")
@@ -250,7 +250,7 @@ def test_individual_components():
     print("=" * 50)
     
     # Test thinking mode engine complexity detection
-    from thinking_mode_engine import ThinkingModeEngine
+    from src.utils.thinking_mode_engine import ThinkingModeEngine
     
     engine = ThinkingModeEngine(None)
     
@@ -271,7 +271,7 @@ def test_individual_components():
     print()
     
     # Test thinking parser
-    from thinking_parser import ThinkingContentParser
+    from src.utils.thinking_parser import ThinkingContentParser
     
     parser = ThinkingContentParser()
     

@@ -11,8 +11,8 @@ import io
 # Import M1K3 components
 try:
     from cli import M1K3CLI
-    from avatar_controller import AvatarController
-    from avatar_server import send_avatar_emotion, send_classification_update, is_avatar_server_running, start_avatar_server, stop_avatar_server
+    from src.avatar.avatar_controller import AvatarController
+    from src.avatar.avatar_server import send_avatar_emotion, send_classification_update, is_avatar_server_running, start_avatar_server, stop_avatar_server
     print("✅ All imports successful")
 except Exception as e:
     print(f"❌ Import error: {e}")

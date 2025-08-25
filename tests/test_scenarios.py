@@ -11,7 +11,7 @@ import time
 import random
 import sys
 import argparse
-from avatar_server import (
+from src.avatar.avatar_server import (
     send_avatar_emotion, send_avatar_state, send_avatar_progress,
     send_chat_ai_start, send_chat_ai_chunk, send_chat_ai_complete, 
     send_sound_trigger, send_metrics_update

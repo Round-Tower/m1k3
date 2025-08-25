@@ -19,7 +19,7 @@ def debug_cutoff_analysis():
     
     try:
         from enhanced_voice_engine import create_voice_engine
-        from kittentts_manager import KittenTTSManager
+        from src.tts.controllers.kittentts_manager import KittenTTSManager
         
         print("🚀 Loading components for analysis...")
         engine = create_voice_engine()
@@ -38,7 +38,7 @@ def debug_cutoff_analysis():
         
         print(f"\n🔍 STEP 1: TEXT CHUNKING ANALYSIS")
         print("-" * 60)
-        from text_processors import smart_text_chunking
+        from src.utils.text_processors import smart_text_chunking
         chunks = smart_text_chunking(test_phrase, chunk_size=300)
         print(f"   Chunks created: {len(chunks)}")
         for i, chunk in enumerate(chunks):

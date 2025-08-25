@@ -12,7 +12,7 @@ def test_textual_tui():
     console = Console()
     
     try:
-        from m1k3_tui import M1K3TUIApp
+        from src.cli.m1k3_tui import M1K3TUIApp
         console.print("✅ Textual TUI imports successfully")
         
         # Test initialization
@@ -37,7 +37,7 @@ def test_rich_tui():
     console = Console()
     
     try:
-        from m1k3_rich_tui import M1K3RichTUI, launch_rich_tui
+        from src.cli.m1k3_rich_tui import M1K3RichTUI, launch_rich_tui
         console.print("✅ Rich TUI imports successfully")
         
         # Test initialization

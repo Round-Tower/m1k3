@@ -17,7 +17,7 @@ def test_all_kitten_voices():
     print("="*80)
     
     try:
-        from kittentts_manager import KittenTTSManager
+        from src.tts.controllers.kittentts_manager import KittenTTSManager
         from enhanced_voice_engine import create_voice_engine
         
         print("🚀 Loading KittenTTS manager...")

@@ -15,10 +15,10 @@ def test_llm_greeting():
     
     try:
         # Import required modules
-        from system_metrics import SystemMonitor
+        from src.utils.performance.system_metrics import SystemMonitor
         from llm_greeting_engine import generate_llm_greeting, create_greeting_context
-        from ai_inference import LocalAIEngine
-        from adaptive_ai_engine import AdaptiveAIEngine
+        from src.engines.ai.ai_inference import LocalAIEngine
+        from src.engines.ai.adaptive_ai_engine import AdaptiveAIEngine
         
         print("✅ All modules imported successfully")
         
@@ -99,7 +99,7 @@ def test_fallback_greeting():
     print("=" * 50)
     
     try:
-        from system_metrics import SystemMonitor, generate_dynamic_greeting
+        from src.utils.performance.system_metrics import SystemMonitor, generate_dynamic_greeting
         
         monitor = SystemMonitor()
         metrics = monitor.collect_metrics()

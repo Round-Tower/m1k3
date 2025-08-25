@@ -4,7 +4,7 @@ Test Gemma 2B integration with M1K3 AI system
 """
 
 import time
-from ai_inference import LocalAIEngine
+from src.engines.ai.ai_inference import LocalAIEngine
 
 def test_gemma_2b_integration():
     print("🧪 Testing Gemma 2B Integration")

@@ -10,7 +10,7 @@ import os
 def test_transparency_import():
     """Test that transparency module imports correctly"""
     try:
-        from model_transparency import ModelTransparencyEngine, TransparencyLevel, transparency_engine
+        from src.engines.ai.model_transparency import ModelTransparencyEngine, TransparencyLevel, transparency_engine
         print("✅ Transparency module imports successfully")
         return True
     except ImportError as e:
@@ -80,7 +80,7 @@ def test_transparency_commands():
 def test_ai_inference_transparency():
     """Test transparency integration with AI inference"""
     try:
-        from ai_inference import LocalAIEngine, TRANSPARENCY_AVAILABLE as AI_TRANSPARENCY
+        from src.engines.ai.ai_inference import LocalAIEngine, TRANSPARENCY_AVAILABLE as AI_TRANSPARENCY
         
         if not AI_TRANSPARENCY:
             print("⚠️ Transparency not available in AI inference (expected if module not found)")

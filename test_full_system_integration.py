@@ -14,7 +14,7 @@ def test_ai_inference_generation():
     print("=" * 60)
     
     try:
-        from ai_inference import LocalAIEngine
+        from src.engines.ai.ai_inference import LocalAIEngine
         
         print("🔧 Creating LocalAIEngine...")
         engine = LocalAIEngine()
@@ -68,8 +68,8 @@ def test_adaptive_ai_engine():
     print("=" * 60)
     
     try:
-        from ai_inference import LocalAIEngine
-        from adaptive_ai_engine import AdaptiveAIEngine
+        from src.engines.ai.ai_inference import LocalAIEngine
+        from src.engines.ai.adaptive_ai_engine import AdaptiveAIEngine
         
         # Create base AI engine
         base_engine = LocalAIEngine()

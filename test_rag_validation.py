@@ -14,9 +14,9 @@ from unittest.mock import patch, Mock
 
 # Import M1K3 components
 try:
-    from m1k3_rag_engine import M1K3RAGEngine, RAGDocument, EmbeddingEngine, KnowledgeBase
-    from intent_classification_system import UserIntent, IntentClassificationEngine
-    from m1k3_rag_integration import M1K3RAGIntegratedEngine
+    from src.rag.m1k3_rag_engine import M1K3RAGEngine, RAGDocument, EmbeddingEngine, KnowledgeBase
+    from src.utils.intent_classification_system import UserIntent, IntentClassificationEngine
+    from src.rag.m1k3_rag_integration import M1K3RAGIntegratedEngine
 except ImportError as e:
     print(f"⚠️ Import error: {e}")
     raise
