@@ -312,9 +312,9 @@ class M1K3CLICore:
         if self.system_monitor:
             try:
                 metrics = self.system_monitor.collect_metrics()
-                print(f"💾 RAM: {metrics.get('memory_usage', 0):.1f}% | "
-                      f"⚡ CPU: {metrics.get('cpu_usage', 0):.1f}% | "
-                      f"🖥️  Platform: {metrics.get('platform', 'Unknown')}")
+                print(f"💾 RAM: {metrics.memory_percent or 0:.1f}% | "
+                      f"⚡ CPU: {metrics.cpu_usage or 0:.1f}% | "
+                      f"🖥️  Platform: {metrics.os_name or 'Unknown'}")
             except Exception as e:
                 log_debug(f"Error displaying system metrics: {e}")
         
