@@ -189,10 +189,13 @@ class M1K3CLICore:
                 
                 if avatar_components and AvatarController:
                     self.avatar_controller = AvatarController()
-                    # Start avatar server
+                    # Start avatar server with custom port
                     start_server = avatar_components['start_avatar_server']
-                    start_server(port=self.avatar_port, open_browser=self.open_browser)
-                    log_info(f"✅ Avatar system started on port {self.avatar_port}")
+                    success = start_server(port=self.avatar_port, open_browser=self.open_browser)
+                    if success:
+                        log_info(f"✅ Avatar system started on port {self.avatar_port}")
+                    else:
+                        log_error(f"❌ Failed to start avatar server on port {self.avatar_port}")
                 else:
                     log_warning("Avatar components not complete")
             except Exception as e:

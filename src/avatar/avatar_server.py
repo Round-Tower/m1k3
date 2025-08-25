@@ -794,89 +794,112 @@ class AvatarServer:
 # Global server instance
 _avatar_server = None
 
-def get_avatar_server():
+def get_avatar_server(http_port=8080, ws_port=8081, verbose=True):
     """Get or create the global avatar server instance"""
     global _avatar_server
     if _avatar_server is None:
-        _avatar_server = AvatarServer(verbose=True)  # Enable verbose logging for debugging
-        print(f"🔧 Created new avatar server instance: {id(_avatar_server)}")
+        _avatar_server = AvatarServer(http_port=http_port, ws_port=ws_port, verbose=verbose)
+        print(f"🔧 Created new avatar server instance: {id(_avatar_server)}, HTTP:{http_port}, WS:{ws_port}")
     return _avatar_server
 
-def start_avatar_server():
-    """Start the avatar server"""
-    server = get_avatar_server()
-    return server.start()
+def start_avatar_server(port=8080, ws_port=None, open_browser=True, verbose=True):
+    """Start the avatar server with configurable ports"""
+    # Calculate WebSocket port if not provided (HTTP port + 1)
+    if ws_port is None:
+        ws_port = port + 1
+    
+    server = get_avatar_server(http_port=port, ws_port=ws_port, verbose=verbose)
+    success = server.start()
+    
+    # Open browser if requested and server started successfully
+    if success and open_browser:
+        import webbrowser
+        import time
+        # Small delay to ensure server is ready
+        def open_browser_delayed():
+            time.sleep(1)
+            try:
+                webbrowser.open(f"http://localhost:{port}")
+                print(f"🌐 Opened avatar dashboard in browser: http://localhost:{port}")
+            except Exception as e:
+                print(f"⚠️  Could not open browser: {e}")
+        
+        import threading
+        browser_thread = threading.Thread(target=open_browser_delayed, daemon=True)
+        browser_thread.start()
+    
+    return success
 
 def stop_avatar_server():
     """Stop the avatar server"""
-    server = get_avatar_server()
+    server = get_avatar_server()  # Uses default ports
     server.stop()
 
 def is_avatar_server_running():
     """Check if avatar server is running"""
-    server = get_avatar_server()
+    server = get_avatar_server()  # Uses default ports
     return server.is_running()
 
 def send_avatar_emotion(emotion, intensity=50, message="", metadata=None):
     """Send enhanced emotion update to avatar with classification metadata"""
-    server = get_avatar_server()
+    server = get_avatar_server()  # Uses default ports
     print(f"🔄 send_avatar_emotion() called: server={id(server)}, clients={len(server.clients)}, running={server.running}")
     server.send_emotion_update(emotion, intensity, message, metadata)
 
 def send_avatar_state(state):
     """Send state update to avatar"""
-    server = get_avatar_server()
+    server = get_avatar_server()  # Uses default ports
     print(f"🔄 send_avatar_state() called: server={id(server)}, clients={len(server.clients)}, running={server.running}")
     server.send_state_update(state)
 
 def send_avatar_progress(stage, progress, tokens=0, message=""):
     """Send progress update to avatar"""
-    server = get_avatar_server()
+    server = get_avatar_server()  # Uses default ports
     server.send_progress_update(stage, progress, tokens, message)
 
 def get_avatar_server_status():
     """Get avatar server status"""
-    server = get_avatar_server()
+    server = get_avatar_server()  # Uses default ports
     return server.get_status()
 
 def send_chat_ai_start():
     """Notify clients that AI is starting to respond"""
-    server = get_avatar_server()
+    server = get_avatar_server()  # Uses default ports
     server.send_chat_ai_start()
 
 def send_chat_ai_chunk(chunk):
     """Send AI response chunk to clients"""
-    server = get_avatar_server()
+    server = get_avatar_server()  # Uses default ports
     server.send_chat_ai_chunk(chunk)
 
 def send_chat_ai_complete():
     """Notify clients that AI response is complete"""
-    server = get_avatar_server()
+    server = get_avatar_server()  # Uses default ports
     server.send_chat_ai_complete()
 
 def send_sound_trigger(sound_name):
     """Trigger a sound effect on all clients"""
-    server = get_avatar_server()
+    server = get_avatar_server()  # Uses default ports
     server.send_sound_trigger(sound_name)
 
 def send_metrics_update(metrics_data):
     """Send real-time metrics update to avatar"""
-    server = get_avatar_server()
+    server = get_avatar_server()  # Uses default ports
     server.send_metrics_update(metrics_data)
 
 def send_classification_update(classification_data):
     """Send AI classification results to avatar"""
-    server = get_avatar_server()
+    server = get_avatar_server()  # Uses default ports
     server.send_classification_update(classification_data)
 
 def send_thinking_phase_update(phase, progress=0, insight="", confidence=0.7):
     """Send AI thinking phase updates to avatar"""
-    server = get_avatar_server()
+    server = get_avatar_server()  # Uses default ports
     server.send_thinking_phase_update(phase, progress, insight, confidence)
 
 def send_generation_stream_update(token_count, generation_speed, content_preview=""):
     """Send real-time generation streaming updates to avatar"""
-    server = get_avatar_server()
+    server = get_avatar_server()  # Uses default ports
     server.send_generation_stream_update(token_count, generation_speed, content_preview)
 
 if __name__ == "__main__":
