@@ -92,8 +92,8 @@ class AvatarHTTPHandler(SimpleHTTPRequestHandler):
     
     def do_GET(self):
         if self.path == '/':
-            # Default to avatar.html instead of m1k3.html
-            self.path = '/avatar.html'
+            # Default to main M1K3 interface
+            self.path = '/m1k3.html'
         return super().do_GET()
     
     def log_message(self, format, *args):
