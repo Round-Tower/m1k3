@@ -85,12 +85,15 @@ class AvatarHTTPHandler(SimpleHTTPRequestHandler):
     """Custom HTTP handler for serving avatar files"""
     
     def __init__(self, *args, **kwargs):
-        # Set the directory to serve from
-        super().__init__(*args, directory=os.path.dirname(__file__), **kwargs)
+        # Set the directory to serve from - use web/static directory
+        project_root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+        web_static_dir = os.path.join(project_root, 'web', 'static')
+        super().__init__(*args, directory=web_static_dir, **kwargs)
     
     def do_GET(self):
         if self.path == '/':
-            self.path = '/m1k3.html'
+            # Default to avatar.html instead of m1k3.html
+            self.path = '/avatar.html'
         return super().do_GET()
     
     def log_message(self, format, *args):
