@@ -129,4 +129,6 @@ hardware_insights.py
 startup_profiler.py
 voice_diagnostic.py
 voice_input_processor.py
-voice_truncation_tracker.py
+voice_truncation_tracker.py# Large model files - download separately
+models/SmolLM-135M.Q4_K_M.gguf
+pwa-deployment/frontend/models/embeddings-tiny/model.onnx
