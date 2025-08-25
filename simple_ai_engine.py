@@ -75,7 +75,7 @@ class SimpleAIEngine:
         """Get default model path"""
         models_dir = Path("models")
         models_dir.mkdir(exist_ok=True)
-        return str(models_dir / "tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf")  # Use TinyLlama model
+        return str(models_dir / "SmolLM-135M.Q4_K_M.gguf")  # Use SmolLM model
         
     def _get_default_system_context(self) -> str:
         """Get comprehensive system context for AI personality"""

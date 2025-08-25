@@ -198,7 +198,7 @@ class LocalAIEngine:
         """Get default model path"""
         models_dir = Path("models")
         models_dir.mkdir(exist_ok=True)
-        return str(models_dir / "tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf")
+        return str(models_dir / "SmolLM-135M.Q4_K_M.gguf")
     
     def _load_model_metadata(self, model_name: str) -> Optional[Dict]:
         """Load stored metadata for a model"""
