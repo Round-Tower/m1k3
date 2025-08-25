@@ -72,7 +72,7 @@ def handle_download_only(model_name: str) -> int:
         log_info(f"Downloading {model_name}...")
         print(f"Downloading {model_name}...")
         
-        model_path = download_model()  # Use default model
+        model_path = download_model(model_name)
         if model_path:
             print(f"Model downloaded successfully: {model_path}")
             log_info(f"Model downloaded: {model_path}")
