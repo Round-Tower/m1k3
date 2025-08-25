@@ -86,7 +86,7 @@ class IntelligentTTSController:
             ContentType.THINKING: ContentTypeModulation(
                 volume_multiplier=0.8,
                 speed_multiplier=0.85,
-                pitch_adjustment=-0.1,
+                pitch_adjustment=0.0,  # Fixed: never go below 0 for pitch
                 reverb_amount=0.2,
                 warmth_factor=0.0
             ),
@@ -245,6 +245,12 @@ class IntelligentTTSController:
         """Synthesize audio for a content segment with content-specific effects"""
         if not self.voice_engine:
             # No voice engine available
+            print(f"❌ Voice synthesis failed: No voice engine available for {segment.content_type.value}")
+            return False
+        
+        # Check if voice engine is enabled (for UnifiedVoiceEngine)
+        if hasattr(self.voice_engine, 'voice_enabled') and not self.voice_engine.voice_enabled:
+            print(f"❌ Voice synthesis failed: Voice engine disabled for {segment.content_type.value}")
             return False
         
         try:

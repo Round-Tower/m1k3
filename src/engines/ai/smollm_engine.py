@@ -67,7 +67,7 @@ class SmolLMEngine:
         self.current_model_name = "smollm2:135m"  # Default model name
         
         # Initialize adaptive prompting system
-        self.adaptive_formatter = AdaptivePromptFormatter(profiles_path or "model_profiles.json")
+        self.adaptive_formatter = AdaptivePromptFormatter(profiles_path or "config/model_profiles.json")
         self.model_profile = None
         self.optimal_format = None
         
@@ -121,7 +121,11 @@ class SmolLMEngine:
         
         # Detect model profile
         profile_name = self.adaptive_formatter.detect_model_profile(self.current_model_name)
-        self.model_profile = self.adaptive_formatter.profiles.get(profile_name)
+        try:
+            self.model_profile = self.adaptive_formatter.profiles.get(profile_name) if self.adaptive_formatter.profiles else None
+        except AttributeError as e:
+            print(f"⚠️ Error accessing profiles: {e}")
+            self.model_profile = None
         
         # Determine optimal format
         if self.config.force_format:
@@ -305,7 +309,7 @@ class SmolLMEngine:
                 )
                 
                 # Only add context for models that can handle it
-                if self.model_profile and self.model_profile.context_strategy in ["structured", "technical"]:
+                if self.model_profile and self.model_profile.context_strategy in ["structured", "technical"] and context_data:
                     context_summary = f"Device: {context_data.get('platform', 'unknown')} ({context_data.get('device_tier', 'unknown')} tier)"
                     base_prompt += f"\\n\\n[Context: {context_summary}]"
                     
@@ -419,9 +423,17 @@ class SmolLMEngine:
             )
             
             if response.status_code == 200:
-                return response.json().get("response", "").strip()
+                try:
+                    json_data = response.json()
+                    if json_data and isinstance(json_data, dict):
+                        response_text = json_data.get("response", "").strip()
+                        return response_text
+                    else:
+                        return f"Error: Invalid JSON response from Ollama API: {json_data}"
+                except (ValueError, TypeError) as json_error:
+                    return f"Error: Failed to parse Ollama response - {json_error}"
             else:
-                return f"Error: Ollama API returned {response.status_code}"
+                return f"Error: Ollama API returned {response.status_code}: {response.text}"
                 
         except Exception as e:
             return f"Error: Ollama generation failed - {e}"

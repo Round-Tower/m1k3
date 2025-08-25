@@ -133,7 +133,7 @@ class ThinkingEffect(ContentAwareEffect):
             "volume_reduction": 0.2,     # Reduce volume by 20%
             "speed_reduction": 0.15,     # Reduce speed by 15%
             "reverb_amount": 0.15,       # Add subtle reverb
-            "pitch_adjustment": -0.05,   # Slightly lower pitch
+            "pitch_adjustment": 0.0,     # Fixed: never go below 0 for pitch
             "softness_factor": 0.3       # Add softness/warmth
         }
         

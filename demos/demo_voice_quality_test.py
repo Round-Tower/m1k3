@@ -17,59 +17,53 @@ def test_all_kitten_voices():
     print("="*80)
     
     try:
-        from src.tts.controllers.kittentts_manager import KittenTTSManager
-        from enhanced_voice_engine import create_voice_engine
+        from src.engines.voice.voice_engine import create_voice_engine
         
-        print("🚀 Loading KittenTTS manager...")
-        manager = KittenTTSManager()
+        print("🚀 Loading voice engine...")
+        engine = create_voice_engine()
         
-        if not manager.load_model():
-            print("❌ Failed to load KittenTTS model")
+        if not engine.load_model():
+            print("❌ Failed to load voice model")
             return 1
             
-        print("✅ KittenTTS loaded successfully!")
+        print("✅ Voice engine loaded successfully!")
         
         # Test phrase designed to highlight speech quality issues
         test_phrase = "The sophisticated speech synthesis system successfully processes text with smooth, natural sound quality."
         
         print(f"\n📝 Test phrase: \"{test_phrase}\"")
-        print(f"🎯 Listening for: clarity, smoothness, naturalness, and absence of lisp/artifacts")
+        print(f"🎯 Listening for: clarity, smoothness, naturalness, and absence of cutoffs")
         
-        available_voices = manager.get_available_voices()
-        print(f"\n🎤 Testing {len(available_voices)} available voices:")
+        # Test different voice profiles
+        profiles = ["natural", "assistant", "broadcast", "terminal", "debug", "minimal"]
+        print(f"\n🎤 Testing {len(profiles)} voice profiles:")
         
-        voice_ratings = {}
-        
-        for i, voice in enumerate(available_voices, 1):
-            print(f"\n{i}. Testing Voice: {voice}")
+        for i, profile in enumerate(profiles, 1):
+            print(f"\n{i}. Testing Profile: {profile}")
             print("-" * 50)
             
-            # Set the voice
-            manager.set_voice(voice)
+            # Set the profile
+            success = engine.set_profile(profile)
+            if not success:
+                print(f"   ❌ Failed to set profile {profile}")
+                continue
+            
+            profile_info = engine.get_current_profile()
             
             # Generate and play
-            print(f"   🔊 Speaking with {voice}...")
-            manager.generate(test_phrase)  # Generate to test
+            print(f"   🔊 Speaking with {profile} profile...")
+            print(f"   📊 Settings: Speed {profile_info.get('speed_multiplier', 1.0):.2f}x, "
+                  f"Pitch {profile_info.get('pitch_adjustment', 0.0):+.2f}, "
+                  f"Volume {profile_info.get('volume_multiplier', 1.0):.2f}")
             
-            # Get user feedback
-            print(f"   🎧 Listen carefully to the voice quality...")
-            time.sleep(1)
+            success = engine.synthesize_and_play(test_phrase, background=False)
             
-            # Voice characteristics
-            voice_type = "Male" if "-m" in voice else "Female"
-            voice_num = voice.split("-")[2]
-            
-            print(f"   📊 Voice Info: {voice_type}, Version {voice_num}")
-            
-            # Note known quality characteristics
-            if voice in ['expr-voice-2-f', 'expr-voice-2-m', 'expr-voice-4-f']:
-                quality_note = "🌟 Reported as cleaner in community feedback"
+            if success:
+                print(f"   ✅ Synthesis completed successfully")
             else:
-                quality_note = "⚡ Standard quality"
-                
-            print(f"   🎯 Quality Note: {quality_note}")
+                print(f"   ❌ Synthesis failed")
             
-            time.sleep(2)
+            time.sleep(1)
         
         print("\n📊 VOICE QUALITY SUMMARY")
         print("="*80)
@@ -112,7 +106,7 @@ def interactive_voice_comparison():
     print("-" * 50)
     
     try:
-        from enhanced_voice_engine import create_voice_engine
+        from src.engines.voice.voice_engine import create_voice_engine
         
         engine = create_voice_engine()
         if not engine.load_model():

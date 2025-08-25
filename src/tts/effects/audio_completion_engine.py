@@ -25,10 +25,10 @@ class AudioCompletionEngine:
     
     def __init__(self, sample_rate: int = 24000):
         self.sample_rate = sample_rate
-        self.truncation_threshold = 0.01  # Much lower threshold - catches more cases
+        self.truncation_threshold = 0.02  # Slightly higher threshold to reduce false positives
         self.kitten_mode = True  # Assume KittenTTS always needs completion
-        self.analysis_window = 1200  # Larger analysis window for better detection
-        self.force_completion = True  # Always apply completion regardless of detection
+        self.analysis_window = 800  # Smaller analysis window for efficiency
+        self.force_completion = False  # Only apply when actually detected - was causing too much padding
         
     def detect_truncation(self, audio: np.ndarray) -> Tuple[bool, float]:
         """
@@ -105,16 +105,16 @@ class AudioCompletionEngine:
         if len(audio) == 0:
             return audio
             
-        # Determine completion length based on truncation severity
+        # Determine completion length based on truncation severity (optimized for faster, more natural speech)
         if self.kitten_mode:
-            # KittenTTS always needs substantial completion
-            base_completion_ms = 800  # Much more aggressive for KittenTTS
-            severity_multiplier = min(confidence * 3.0, 2.0)  # Even more aggressive multiplier
-            max_completion_ms = 1200  # Much longer maximum for KittenTTS
+            # KittenTTS needs minimal completion - most "truncation" is natural speech ending
+            base_completion_ms = 150  # Reduced from 800ms - was adding too much padding
+            severity_multiplier = min(confidence * 1.5, 1.0)  # Reduced multiplier
+            max_completion_ms = 300  # Reduced from 1200ms - was causing long pauses
         else:
-            base_completion_ms = 250  
-            severity_multiplier = min(confidence * 2, 1.0)
-            max_completion_ms = 500
+            base_completion_ms = 100  # Also reduced for other engines
+            severity_multiplier = min(confidence * 1.2, 0.8)
+            max_completion_ms = 250  # Reduced maximum
         
         completion_ms = min(base_completion_ms * (1 + severity_multiplier), max_completion_ms)
         completion_samples = int(completion_ms * self.sample_rate / 1000)

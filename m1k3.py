@@ -136,6 +136,8 @@ def launch_classic_cli(args):
         cli_args = []
         if args.no_voice:
             cli_args.append("--no-voice")
+        if args.no_avatar:
+            cli_args.append("--no-avatar")
         if args.auto_avatar:
             cli_args.append("--auto-avatar")
         if args.avatar_port != 8080:

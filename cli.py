@@ -274,6 +274,11 @@ class M1K3CLI:
             
         self.voice_engine = create_voice_engine()
         
+        # Ensure voice engine is properly loaded before passing to intelligent TTS
+        if self.voice_engine and hasattr(self.voice_engine, 'load_model'):
+            if not self.voice_engine.load_model():
+                print("⚠️  Voice engine failed to load, intelligent TTS may be limited")
+        
         # Initialize intelligent TTS controller and effects manager if available
         if INTELLIGENT_TTS_AVAILABLE:
             self.intelligent_tts_controller = create_intelligent_tts_controller(self.voice_engine)

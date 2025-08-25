@@ -147,6 +147,16 @@
         "pattern": "*chat*",
         "profile": "chat_optimized",
         "confidence": 0.8
+      },
+      {
+        "pattern": "vicuna*",
+        "profile": "chat_optimized",
+        "confidence": 0.9
+      },
+      {
+        "pattern": "openchat*",
+        "profile": "chat_optimized", 
+        "confidence": 0.9
       }
     ],
     "fallback_profile": "instruction_tuned",

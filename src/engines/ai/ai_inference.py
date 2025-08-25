@@ -731,6 +731,16 @@ class LocalAIEngine:
         
         # Priority 2: Legacy engine fallback
         if not self.model:
+            # Try SimpleAI engine as final fallback
+            try:
+                from .simple_ai_engine import SimpleAIEngine
+                print("🔄 Falling back to SimpleAI engine...")
+                simple_engine = SimpleAIEngine()
+                for token in simple_engine.generate_response(prompt, max_tokens):
+                    yield token
+                return
+            except ImportError:
+                pass
             yield "Error: No model loaded (SmolLM2 and legacy engines unavailable)"
             return
             
@@ -1076,6 +1086,10 @@ class LocalAIEngine:
     
     def _determine_auto_style(self, prompt: str, adaptive_params: Dict) -> Optional[str]:
         """Automatically determine response style based on intent and context"""
+        # Handle None adaptive_params
+        if adaptive_params is None:
+            adaptive_params = {}
+            
         # Get intent from adaptive params metadata
         metadata = adaptive_params.get('_metadata', {})
         intent = metadata.get('intent', 'unknown')

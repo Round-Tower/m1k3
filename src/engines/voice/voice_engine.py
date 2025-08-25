@@ -30,49 +30,49 @@ class VoiceEngine:
         self.loading = False
         self.current_profile = "natural"
         
-        # Voice profiles with different characteristics
+        # Voice profiles with different characteristics (optimized for better conversational speed)
         self.profiles = {
             "natural": {
                 "description": "Default conversational voice",
-                "speed_multiplier": 1.0,
+                "speed_multiplier": 1.2,  # Increased from 1.0 for more natural pace
                 "pitch_adjustment": 0.0,
                 "volume_multiplier": 1.0,
-                "pause_duration": 0.1
+                "pause_duration": 0.08  # Reduced from 0.1 for better flow
             },
             "assistant": {
                 "description": "Professional AI assistant tone", 
-                "speed_multiplier": 0.95,
+                "speed_multiplier": 1.15,  # Increased from 0.95 - was too slow
                 "pitch_adjustment": 0.05,
                 "volume_multiplier": 0.9,
-                "pause_duration": 0.15
+                "pause_duration": 0.12  # Reduced from 0.15 
             },
             "broadcast": {
                 "description": "Clear, announcer-style voice",
-                "speed_multiplier": 0.85,
+                "speed_multiplier": 1.1,  # Increased from 0.85 - was too slow
                 "pitch_adjustment": 0.1,
                 "volume_multiplier": 1.1,
-                "pause_duration": 0.2
+                "pause_duration": 0.15  # Reduced from 0.2
             },
             "terminal": {
                 "description": "Technical, system-style voice",
-                "speed_multiplier": 1.1,
-                "pitch_adjustment": -0.05,
+                "speed_multiplier": 1.3,  # Increased from 1.1 for efficiency
+                "pitch_adjustment": 0.0,  # Fixed: never go below 0 for pitch
                 "volume_multiplier": 0.85,
-                "pause_duration": 0.05
+                "pause_duration": 0.04  # Reduced from 0.05
             },
             "debug": {
                 "description": "Fast, minimal voice for debugging",
-                "speed_multiplier": 1.3,
-                "pitch_adjustment": -0.1,
+                "speed_multiplier": 1.5,  # Increased from 1.3 for faster debugging
+                "pitch_adjustment": 0.0,  # Fixed: never go below 0 for pitch
                 "volume_multiplier": 0.8,
                 "pause_duration": 0.02
             },
             "minimal": {
                 "description": "Basic synthesis with minimal processing",
-                "speed_multiplier": 1.0,
+                "speed_multiplier": 1.25,  # Increased from 1.0 for efficiency
                 "pitch_adjustment": 0.0,
                 "volume_multiplier": 0.9,
-                "pause_duration": 0.05
+                "pause_duration": 0.04  # Reduced from 0.05
             }
         }
         
