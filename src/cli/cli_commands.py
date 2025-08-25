@@ -83,13 +83,13 @@ class CLICommandHandler:
         ))
         
         self._register_command(Command(
-            name="/profile", aliases=[], description="Set voice profile",
+            name="profile", aliases=[], description="Set voice profile",
             category=CommandCategory.VOICE, handler=self.handle_voice_profile,
             requires_args=True
         ))
         
         self._register_command(Command(
-            name="/tts", aliases=[], description="Show TTS system status",
+            name="tts", aliases=[], description="Show TTS system status",
             category=CommandCategory.VOICE, handler=self.handle_tts_status,
             requires_args=True
         ))
@@ -132,7 +132,7 @@ class CLICommandHandler:
         # Handle special slash commands
         if user_input.startswith('/'):
             parts = user_input.split(' ', 1)
-            command_name = parts[0]
+            command_name = parts[0][1:]  # Strip the leading slash
             args = parts[1].split() if len(parts) > 1 else []
             return command_name, args
         
@@ -286,7 +286,7 @@ class CLICommandHandler:
     def handle_voice_profile(self, args: List[str]) -> bool:
         """Handle voice profile command"""
         if not args:
-            print("⚠️ Voice profile name required. Usage: /profile <name>")
+            print("⚠️ Voice profile name required. Usage: profile <name> or /profile <name>")
             return True
         
         profile_name = args[0]
@@ -309,7 +309,7 @@ class CLICommandHandler:
             else:
                 print("⚠️ TTS status information not available")
         else:
-            print("⚠️ Usage: /tts status")
+            print("⚠️ Usage: tts status or /tts status")
         return True
     
     def handle_avatar(self, args: List[str]) -> bool:
