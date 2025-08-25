@@ -63,6 +63,7 @@ class M1K3CLICore:
         self.system_monitor = None
         self.avatar_controller = None
         self.stats_tracker = None
+        self.model_cli = None
         
         # Setup signal handlers
         self._setup_signal_handlers()
@@ -100,6 +101,7 @@ class M1K3CLICore:
             self._setup_avatar_system()
             self._setup_sound_system()
             self._setup_monitoring()
+            self._setup_model_cli()
             
             # Initialize command handler and AI processor
             self.command_handler = CLICommandHandler(self)
@@ -228,6 +230,19 @@ class M1K3CLICore:
                     log_error(f"System monitoring setup failed: {e}")
         else:
             log_warning("System monitoring not available")
+    
+    def _setup_model_cli(self):
+        """Setup model management CLI"""
+        if self.initializer.is_component_available('model_cli'):
+            ModelCLI = self.initializer.get_component('model_cli')
+            if ModelCLI:
+                try:
+                    self.model_cli = ModelCLI()
+                    log_info("✅ Model management CLI loaded")
+                except Exception as e:
+                    log_error(f"Model CLI setup failed: {e}")
+        else:
+            log_warning("Model CLI not available")
     
     def run_interactive(self) -> int:
         """Run interactive CLI session"""

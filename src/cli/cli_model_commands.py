@@ -21,6 +21,50 @@ class ModelCLI:
     def __init__(self, models_dir: Path = None):
         self.monitor = DynamicModelMonitor(models_dir)
         self.models_dir = models_dir or Path("models")
+    
+    def handle_command(self, args: List[str]) -> bool:
+        """Handle command from CLI with string arguments"""
+        if not args:
+            print("❌ No model command specified")
+            print("💡 Use: model <command>")
+            print("📋 Available commands: list, recommend, health, info, cleanup, download")
+            return True
+        
+        command = args[0].lower()
+        command_args = args[1:] if len(args) > 1 else []
+        
+        command_map = {
+            'list': self.cmd_models_list,
+            'recommend': self.cmd_models_recommend, 
+            'health': self.cmd_models_health,
+            'cleanup': self.cmd_models_cleanup,
+        }
+        
+        if command in command_map:
+            try:
+                command_map[command](command_args)
+                return True
+            except Exception as e:
+                print(f"❌ Error executing model command '{command}': {e}")
+                return True
+        elif command == 'info':
+            if command_args:
+                self.cmd_models_info(command_args[0])
+            else:
+                print("❌ Model name required for info command")
+                print("💡 Use: model info <model_name>")
+            return True
+        elif command == 'download':
+            if command_args:
+                self.cmd_models_download(command_args[0])
+            else:
+                print("❌ Model name required for download command") 
+                print("💡 Use: model download <model_name>")
+            return True
+        else:
+            print(f"❌ Unknown model command: {command}")
+            print("📋 Available commands: list, recommend, health, info, cleanup, download")
+            return True
         
     def cmd_models_list(self, args=None) -> None:
         """List all available models with status"""
