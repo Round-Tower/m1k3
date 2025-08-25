@@ -11,7 +11,8 @@
       "Bash(open index.html)",
       "Bash(curl:*)",
       "Bash(open http://localhost:8080)",
-      "Bash(timeout:*)"
+      "Bash(timeout:*)",
+      "Bash(rm:*)"
     ],
     "deny": [],
     "ask": []

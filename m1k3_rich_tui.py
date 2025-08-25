@@ -33,7 +33,7 @@ except ImportError:
     from simple_ai_engine import SimpleAIEngine
     REAL_AI_AVAILABLE = False
 
-from enhanced_voice_engine import create_voice_engine
+from voice_engine import create_voice_engine
 from system_metrics import SystemMonitor
 
 try:

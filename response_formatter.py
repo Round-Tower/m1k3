@@ -59,10 +59,10 @@ class ResponseFormatter:
             (r'Human:.*$', ''),                   # Remove leaked human prompts
             (r'Assistant:\s*', ''),               # Remove duplicate assistant prefixes
             
-            # SmolLM2 repetition patterns
-            (r'\b(The user asked|The question is|Looking at this)\b.*?\n', ''),  # Meta commentary
-            (r'\b(I need to|Let me|I should)\b.*?(?=\n\n|\Z)', ''),  # Thinking patterns
-            (r'^\s*(Okay,?\s*)?[Ss]o,?\s*', ''),  # Remove "Okay, so" sentence starters
+            # SmolLM2 repetition patterns - more selective to preserve content
+            (r'^\s*The user asked about\b.*?\n', ''),  # Only remove meta commentary at start of response
+            (r'^\s*Looking at this question\b.*?\n', ''),  # Only remove question analysis at start
+            (r'^\s*(Okay,?\s*)?[Ss]o,?\s*(?=the\s|this\s)', ''),  # Only remove "Okay, so" before articles
             
             # Improve articulation
             (r'\s+([.!?])', r'\1'),              # Fix spacing before punctuation
@@ -103,11 +103,11 @@ class ResponseFormatter:
         
         # Look for common thinking indicators at start of sentences
         thinking_indicators = [
-            r'^(Okay, so|Let me|First|I need to|The user asked)',
-            r'^(So the user|Looking at this|To answer this)',
-            r'^(This question|The question|From what I understand)',
-            r'\b(The user\'s message is|If the response doesn\'t meet|we need to inform them)',
-            r'\b(Okay, let me|I should|Let me think|I need to consider)'
+            r'^(The user asked about|The user is asking about|Let me think about this specific)',
+            r'^(Looking at this specific question|This question is specifically asking)',
+            r'^(From what I understand about the user\'s question)',
+            r'\b(The user\'s message is specifically asking|we need to specifically inform them)',
+            r'^(I need to carefully consider the user\'s question|Let me analyze this specific query)'
         ]
         
         # Split by sentences for better analysis
@@ -151,7 +151,11 @@ class ResponseFormatter:
             return thinking_content, remaining_content
         
         # If the thinking content is minimal or the remaining content is too short, keep original
-        if not remaining_content or len(remaining_content) < 30:
+        if not remaining_content or len(remaining_content) < 50:  # Increased threshold
+            return None, response
+        
+        # If we removed too much (>70% of content), keep original
+        if thinking_content and len(thinking_content) / len(response) > 0.7:
             return None, response
         
         return thinking_content, remaining_content
@@ -374,8 +378,9 @@ class ResponseFormatter:
         )
     
     def clean_response(self, response: str) -> str:
-        """Apply intelligent response cleanup"""
+        """Apply intelligent response cleanup with safeguards"""
         
+        original_length = len(response.strip())
         cleaned = response
         
         # Apply cleanup patterns
@@ -386,6 +391,10 @@ class ResponseFormatter:
         cleaned = re.sub(r'\n\s*\n\s*\n', '\n\n', cleaned)  # Max 2 newlines
         cleaned = re.sub(r'[ \t]+', ' ', cleaned)  # Normalize spaces
         cleaned = cleaned.strip()
+        
+        # If we removed too much content (>80%), return original
+        if original_length > 50 and len(cleaned) < original_length * 0.2:
+            return response.strip()
         
         return cleaned
     

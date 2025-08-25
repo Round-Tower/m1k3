@@ -1,0 +1,132 @@
+{
+  "model_detection": {
+    "passed": 5,
+    "total": 5,
+    "details": [
+      {
+        "model": "smollm2:135m",
+        "expected": "small_creative",
+        "detected": "small_creative",
+        "passed": true
+      },
+      {
+        "model": "llama3.2:latest",
+        "expected": "instruction_tuned",
+        "detected": "instruction_tuned",
+        "passed": true
+      },
+      {
+        "model": "codellama:7b",
+        "expected": "code_specialized",
+        "detected": "code_specialized",
+        "passed": true
+      },
+      {
+        "model": "neural-chat:7b",
+        "expected": "chat_optimized",
+        "detected": "chat_optimized",
+        "passed": true
+      },
+      {
+        "model": "unknown-model:1b",
+        "expected": "instruction_tuned",
+        "detected": "instruction_tuned",
+        "passed": true
+      }
+    ]
+  },
+  "format_generation": {
+    "passed": 3,
+    "total": 3,
+    "formats": {
+      "smollm2:135m": {
+        "expected": "simple",
+        "detected": "simple",
+        "correct": true,
+        "prompt_length": 57,
+        "sample_prompt": "You are a helpful assistant.\\n\\nWhat is machine learning?"
+      },
+      "llama3.2:latest": {
+        "expected": "chatml",
+        "detected": "chatml",
+        "correct": true,
+        "prompt_length": 155,
+        "sample_prompt": "<|im_start|>system\\nYou are an expert physics teacher.<|im_end|>\\n<|im_start|>user\\nExplain quantum computing in detail.<|im_end|>\\n<|im_start|>assistant\\n"
+      },
+      "codellama:7b": {
+        "expected": "code",
+        "detected": "code",
+        "correct": true,
+        "prompt_length": 105,
+        "sample_prompt": "# Task: You are a coding assistant.\\n\\n## Input:\\nWrite a Python function to sort a list.\\n\\n## Response:"
+      }
+    }
+  },
+  "system_prompt_optimization": {
+    "optimizations": [
+      {
+        "model": "smollm2:135m",
+        "profile": "small_creative",
+        "original_length": 536,
+        "optimized_length": 64,
+        "max_allowed": 200,
+        "within_limits": true,
+        "optimization_ratio": 0.11940298507462686
+      },
+      {
+        "model": "llama3.2:latest",
+        "profile": "instruction_tuned",
+        "original_length": 536,
+        "optimized_length": 536,
+        "max_allowed": 1000,
+        "within_limits": true,
+        "optimization_ratio": 1.0
+      },
+      {
+        "model": "codellama:7b",
+        "profile": "code_specialized",
+        "original_length": 536,
+        "optimized_length": 536,
+        "max_allowed": 800,
+        "within_limits": true,
+        "optimization_ratio": 1.0
+      }
+    ]
+  },
+  "response_quality": {
+    "tests": [
+      {
+        "model": "smollm2:135m",
+        "optimal_format": "simple",
+        "adaptive_response": {
+          "text": "The capital of France is Paris.\n\nPlease note that I can use more specific phrases for certain items in my responses if you provide additional context ...",
+          "length": 326,
+          "relevant": true
+        },
+        "chatml_response": {
+          "text": "The capital of France is Paris.",
+          "length": 31,
+          "relevant": true
+        }
+      },
+      {
+        "model": "llama3.2:latest",
+        "optimal_format": "chatml",
+        "adaptive_response": {
+          "text": "The capital of France is Paris.",
+          "length": 31,
+          "relevant": true
+        },
+        "chatml_response": {
+          "text": "The capital of France is Paris.",
+          "length": 31,
+          "relevant": true
+        }
+      }
+    ],
+    "models_tested": [
+      "smollm2:135m",
+      "llama3.2:latest"
+    ]
+  }
+}

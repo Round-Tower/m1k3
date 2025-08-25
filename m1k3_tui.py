@@ -47,7 +47,7 @@ try:
 except ImportError:
     RAG_ENGINE_AVAILABLE = False
 
-from enhanced_voice_engine import create_voice_engine
+from voice_engine import create_voice_engine
 from system_metrics import SystemMonitor
 
 try:

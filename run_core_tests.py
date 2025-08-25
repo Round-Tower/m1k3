@@ -66,7 +66,7 @@ def main():
     print("-" * 60)
     
     validation_tests = [
-        ("python -c \"from enhanced_voice_engine import create_voice_engine; print('✅ Voice engine import OK')\"", "Voice Engine Import"),
+        ("python -c \"from voice_engine import create_voice_engine; print('✅ Voice engine import OK')\"", "Voice Engine Import"),
         ("python -c \"from ai_inference import LocalAIEngine; print('✅ AI engine import OK')\"", "AI Engine Import"),
         ("python -c \"from avatar_controller import AvatarController; print('✅ Avatar controller import OK')\"", "Avatar System Import"),
         ("python -c \"from sound_manager import SoundManager; print('✅ Sound manager import OK')\"", "Sound System Import"),

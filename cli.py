@@ -57,7 +57,7 @@ except ImportError as e:
     print(f"⚠️  RAG engine not available: {e}")
 
 from download_model import download_model
-from enhanced_voice_engine import create_voice_engine
+from voice_engine import create_voice_engine
 from system_metrics import SystemMonitor
 from cli_animations import CLIAnimator, AnimationType
 from sound_manager import SoundManager, ContextualSoundManager
@@ -3109,7 +3109,7 @@ def main():
             return 1
     
     if args.test_voice:
-        from enhanced_voice_engine import create_voice_engine
+        from voice_engine import create_voice_engine
         engine = create_voice_engine()
         if engine.load_model():
             print("🔊 Testing voice synthesis...")
