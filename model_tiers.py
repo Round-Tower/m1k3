@@ -67,7 +67,7 @@ class ModelTierManager:
             ),
             DeviceTier.BALANCED: ModelTierConfig(
                 tier=DeviceTier.BALANCED,
-                primary_models=["smollm2:135m", "SmolLM-135M.Q4_K_M"],
+                primary_models=["gemma3:270m", "smollm2:135m", "SmolLM-135M.Q4_K_M"],
                 fallback_models=["tinyllama-1.1b-chat-v1.0.Q4_K_M", "microsoft/DialoGPT-small"],
                 max_context=2048,
                 recommended_params={
@@ -75,11 +75,11 @@ class ModelTierManager:
                     "max_tokens": 512,
                     "top_p": 0.9
                 },
-                description="Balanced performance with SmolLM2 + fallbacks"
+                description="Balanced performance with Gemma3 + fallbacks"
             ),
             DeviceTier.PERFORMANCE: ModelTierConfig(
                 tier=DeviceTier.PERFORMANCE,
-                primary_models=["llama3.2:1b", "smollm2:135m", "TinyLlama/TinyLlama-1.1B-Chat-v1.0"],
+                primary_models=["gemma3:270m", "llama3.2:1b", "smollm2:135m", "TinyLlama/TinyLlama-1.1B-Chat-v1.0"],
                 fallback_models=["SmolLM-135M.Q4_K_M"],
                 max_context=4096,
                 recommended_params={
@@ -91,7 +91,7 @@ class ModelTierManager:
             ),
             DeviceTier.WORKSTATION: ModelTierConfig(
                 tier=DeviceTier.WORKSTATION,
-                primary_models=["llama3.2:latest", "Qwen/Qwen2.5-1.5B-Instruct", "microsoft/Phi-3-mini-4k-instruct"],
+                primary_models=["gemma3:270m", "llama3.2:latest", "Qwen/Qwen2.5-1.5B-Instruct", "microsoft/Phi-3-mini-4k-instruct"],
                 fallback_models=["llama3.2:1b", "smollm2:135m"],
                 max_context=8192,
                 recommended_params={

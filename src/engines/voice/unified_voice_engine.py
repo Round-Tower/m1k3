@@ -52,12 +52,12 @@ class UnifiedVoiceEngine:
         # Intercom effects: the main differentiator between profiles
         self.profiles = {
             "natural": {
-                "description": "Default conversational voice - clean and natural",
-                "effects": ["formant_correction", "compression", "normalization"]  # Standard quality processing
+                "description": "Default conversational voice with light intercom enhancement",
+                "effects": ["light_intercom", "formant_correction", "compression", "normalization"]  # Now with intercom
             },
             "assistant": {
-                "description": "Professional AI assistant tone with subtle branding", 
-                "effects": ["light_intercom", "formant_correction", "compression", "normalization"]  # Subtle M1K3 branding
+                "description": "Professional AI assistant tone with medium intercom", 
+                "effects": ["medium_intercom", "formant_correction", "compression", "normalization"]  # Enhanced intercom
             },
             "broadcast": {
                 "description": "Clear, announcer-style voice with strong intercom effect",
