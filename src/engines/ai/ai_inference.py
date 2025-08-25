@@ -280,6 +280,37 @@ class LocalAIEngine:
         
         return summary
     
+    def get_context_length(self) -> int:
+        """Get the context length for the current model"""
+        # Check SmolLM2 engine first
+        if hasattr(self, 'smollm_engine') and self.smollm_engine and hasattr(self.smollm_engine, 'config'):
+            return getattr(self.smollm_engine.config, 'context_length', 2048)
+        
+        # Check model metadata
+        if self.model_metadata:
+            model_info = self.model_metadata.get('model_info', {})
+            context_length = model_info.get('context_length')
+            if isinstance(context_length, int):
+                return context_length
+            elif isinstance(context_length, str) and context_length.isdigit():
+                return int(context_length)
+        
+        # Model-specific defaults
+        display_name = self.get_model_display_name().lower()
+        if 'smollm' in display_name or 'smol-lm' in display_name:
+            return 2048
+        elif 'tinyllama' in display_name or 'tiny-llama' in display_name:
+            return 2048
+        elif 'llama' in display_name:
+            return 4096
+        elif 'qwen' in display_name:
+            return 8192
+        elif 'gemma' in display_name:
+            return 8192
+        
+        # Default fallback
+        return 2048
+    
     def _get_available_ollama_models(self) -> List[str]:
         """Get list of available ollama models"""
         try:

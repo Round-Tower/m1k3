@@ -1104,8 +1104,18 @@ class M1K3CLI:
             if hasattr(self, 'stats_tracker') and self.stats_tracker:
                 print("\n📊 SESSION STATISTICS")
                 print("─" * 40)
+                
+                # Get actual context length for statistics display
+                try:
+                    if hasattr(self.ai_engine, 'get_context_length'):
+                        max_tokens_for_stats = self.ai_engine.get_context_length()
+                    else:
+                        max_tokens_for_stats = getattr(self.ai_engine, 'max_tokens', 2048)
+                except Exception:
+                    max_tokens_for_stats = 2048
+                    
                 print(self.stats_tracker.get_formatted_stats_display(
-                    max_tokens=getattr(self.ai_engine, 'max_tokens', 8192)
+                    max_tokens=max_tokens_for_stats
                 ))
                 
                 # Show an exciting insight
@@ -1200,7 +1210,19 @@ class M1K3CLI:
             response_started = False
             full_response = ""
             token_count = 0
-            estimated_max_tokens = 150  # TinyLlama default
+            
+            # Get actual context length from AI engine instead of hardcoded value
+            estimated_max_tokens = 150  # Fallback default
+            try:
+                if hasattr(self.ai_engine, 'get_context_length'):
+                    estimated_max_tokens = self.ai_engine.get_context_length()
+                elif hasattr(self.ai_engine, 'smollm_engine') and self.ai_engine.smollm_engine and hasattr(self.ai_engine.smollm_engine, 'config'):
+                    estimated_max_tokens = getattr(self.ai_engine.smollm_engine.config, 'context_length', 2048)
+                elif hasattr(self.ai_engine, 'max_tokens'):
+                    estimated_max_tokens = self.ai_engine.max_tokens
+            except Exception:
+                estimated_max_tokens = 2048  # Better default for modern models
+                
             transparency_start_time = None
             
             # Initialize transparency tracking
@@ -1323,6 +1345,12 @@ class M1K3CLI:
             print()  # Final newline
             self.set_avatar_state(AvatarState.IDLE)
             
+            # Improve token count estimation for non-streaming responses
+            if token_count == 1 and len(full_response) > 10:
+                # Rough estimation: ~4 characters per token for English text
+                estimated_tokens = max(1, len(full_response) // 4)
+                token_count = estimated_tokens
+            
             # Notify avatar dashboard that AI response is complete
             if AVATAR_AVAILABLE and is_avatar_server_running():
                 send_chat_ai_complete()
@@ -1376,7 +1404,7 @@ class M1K3CLI:
             self.send_avatar_update("Response complete", "post_response")
             
             # Display eco-friendly metrics and token usage
-            self._display_post_response_metrics()
+            self._display_post_response_metrics(token_count, estimated_max_tokens)
             
             # Record session statistics for successful query
             if hasattr(self, 'stats_tracker') and self.stats_tracker:
@@ -2431,8 +2459,18 @@ Available styles: robot, organic, crystal, ghost, energy, cute"""
             if self.stats_tracker:
                 print("\n📈 SESSION STATISTICS")
                 print("─" * 72)
+                
+                # Get actual context length for statistics display
+                try:
+                    if hasattr(self.ai_engine, 'get_context_length'):
+                        max_tokens_for_stats = self.ai_engine.get_context_length()
+                    else:
+                        max_tokens_for_stats = getattr(self.ai_engine, 'max_tokens', 2048)
+                except Exception:
+                    max_tokens_for_stats = 2048
+                    
                 print(self.stats_tracker.get_formatted_stats_display(
-                    max_tokens=getattr(self.ai_engine, 'max_tokens', 8192)
+                    max_tokens=max_tokens_for_stats
                 ))
                 
                 # Get and display an exciting insight
@@ -2498,15 +2536,21 @@ Available styles: robot, organic, crystal, ghost, energy, cute"""
         """Animate context trimming process"""
         self.animator.animate_context_trimming(messages_removed)
     
-    def _display_post_response_metrics(self):
+    def _display_post_response_metrics(self, token_count=None, max_tokens=None):
         """Display token usage and eco metrics after response"""
-        # Get current token usage
-        token_usage = self.ai_engine.get_token_usage()
+        # Use provided token count or fall back to engine token usage
+        if token_count is not None and max_tokens is not None:
+            current_tokens = token_count
+            max_token_limit = max_tokens
+        else:
+            token_usage = self.ai_engine.get_token_usage()
+            current_tokens = token_usage["current_tokens"]
+            max_token_limit = token_usage["max_tokens"]
         
         # Display animated token bar
         token_display = self.animator.animate_token_bar(
-            token_usage["current_tokens"], 
-            token_usage["max_tokens"]
+            current_tokens, 
+            max_token_limit
         )
         print(token_display)
         
