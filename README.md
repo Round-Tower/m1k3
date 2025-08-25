@@ -7,14 +7,15 @@
 ![Test Count](https://img.shields.io/badge/Tests-166-blue?style=for-the-badge&logo=testinglibrary)
 ![Security Audit](https://img.shields.io/badge/Security-Audited-green?style=for-the-badge&logo=security)
 
-🤖 **Privacy-focused local AI assistant** with voice synthesis, real-time avatar visualization, and comprehensive device context analysis. Built with a robust multi-backend AI system that works on any architecture.
+🤖 **Optimized privacy-focused local AI assistant** with SmolLM2 & KittenTTS integration, real-time avatar visualization, and 90% smaller repository size. Built with efficient multi-backend AI system that works on any architecture.
 
-## ⚠️ Current Status (2025-08-21) - PRODUCTION READY WITH KNOWN ISSUES
+## ✅ Current Status (2025-08-25) - PRODUCTION READY & OPTIMIZED
 
 ### 🌟 Core Features
-- **🔒 100% Local AI Inference** with multiple model backends (HuggingFace, GGUF, enhanced fallback)
+- **🎯 SmolLM2-135M AI Engine** - Ultra-efficient 135M parameter model with adaptive prompting
+- **🐱 KittenTTS Voice Synthesis** - High-quality content-aware voice with 8 profiles and audio completion
 - **🧠 RAG (Retrieval-Augmented Generation)** with comprehensive expertise knowledge base (20 categories, 1,341+ documents)
-- **🎭 Intelligent Voice Synthesis** with content-aware TTS, automatic content parsing, and voice modulation per content type (thinking, narration, answer, clarification) ⚠️ (speech cutoff bug)  
+- **⚡ Repository Optimization** - 90% size reduction (6GB → 453MB) with GitHub compliance
 - **🧘 Real-Time Avatar Dashboard** with emotion tracking and WebSocket communication
 - **🎨 Multiple Interface Options** - CLI, Modern TUI, Rich full-screen
 - **🌱 Eco-Friendly Metrics** showing energy/water saved vs cloud AI
@@ -126,18 +127,18 @@ python cli.py --with-avatar       # CLI with avatar integration
 
 ## 🤖 AI Architecture - Multi-Backend System
 
-### **🥇 Primary Backend: HuggingFace Transformers**
-- **Library**: `transformers` + `torch` + `accelerate`
-- **Primary Model**: TinyLlama/TinyLlama-1.1B-Chat-v1.0 (~1.1GB)
-- **Fallback Models**: Qwen/Qwen2.5-0.5B-Instruct, microsoft/DialoGPT-small, distilgpt2
+### **🥇 Primary Backend: SmolLM2 Engine**
+- **Library**: Multi-backend SmolLM2 with adaptive prompting
+- **Primary Model**: SmolLM2-135M via Ollama API
+- **GGUF Fallback**: SmolLM-135M.Q4_K_M.gguf (101MB, downloaded separately)
 - **Compatibility**: Universal (x86_64, ARM64, any platform)
-- **Performance**: Fast loading (~2-4s), excellent response quality
+- **Performance**: Ultra-fast loading (<3s), optimized for efficiency
 
-### **🥈 Secondary Backend: ctransformers (GGUF)**
-- **Library**: `ctransformers`
-- **Model**: TinyLlama-1.1B-Chat-v1.0.Q4_K_M.gguf (637MB)
-- **Compatibility**: ARM64 native (Apple Silicon optimized)
-- **Performance**: Quantized inference, Metal GPU acceleration
+### **🥈 Secondary Backend: KittenTTS Voice Synthesis**
+- **Library**: `kittentts` with intelligent content parsing
+- **Features**: Content-aware voice modulation, 8 voice profiles
+- **Performance**: High-quality synthesis with audio completion
+- **Integration**: Seamless CLI and avatar system integration
 
 ### **🥉 Fallback Backend: SimpleAIEngine**
 - **Library**: Built-in enhanced mock with 8K context
@@ -147,30 +148,36 @@ python cli.py --with-avatar       # CLI with avatar integration
 
 ### **Backend Selection Logic**
 ```
-1. Try HuggingFace Transformers (universal compatibility)
-   ├─ Success: Use best available model (TinyLlama/DialoGPT)
-   └─ Fail: Continue to step 2
+1. Try SmolLM2 Engine (primary)
+   ├─ Ollama API: SmolLM2-135M (preferred)
+   ├─ GGUF Fallback: SmolLM-135M.Q4_K_M.gguf
+   └─ HuggingFace: HuggingFaceTB/SmolLM2-135M-Instruct
 
-2. Try ctransformers (if ARM64 + GGUF exists)
-   ├─ Success: Use quantized GGUF model
-   └─ Fail: Continue to step 3
+2. KittenTTS Voice Synthesis (parallel)
+   ├─ Content-aware parsing and voice modulation
+   ├─ Audio completion for truncation fixes
+   └─ System TTS fallback if unavailable
 
-3. Use SimpleAIEngine (guaranteed fallback)
+3. SimpleAIEngine (guaranteed fallback)
    └─ Always works: Enhanced context-aware responses
 ```
 
 ## 📦 Available AI Models
 
-### **🤗 HuggingFace Models** (Auto-discovered from cache)
-- **microsoft/DialoGPT-small** (350MB) - Primary conversational model
-- **TinyLlama/TinyLlama-1.1B-Chat-v1.0** (1.1GB) - Instruction-tuned chat model
-- **microsoft/Phi-3-mini-4k-instruct** (3.9GB) - Advanced reasoning model
-- **google/gemma-2-2b-it** (3.1GB) - Google instruction model
-- **distilgpt2** (350MB) - Lightweight general model
+### **🎯 SMOL Models (Primary)**
+- **SmolLM2-135M** via Ollama API - Primary inference engine
+- **SmolLM-135M.Q4_K_M.gguf** (101MB) - Quantized GGUF fallback
+- **HuggingFaceTB/SmolLM2-135M-Instruct** - HuggingFace transformers fallback
 
-### **⚡ GGUF Quantized Models** (Optimized for Apple Silicon)
-- **tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf** (637MB) - Recommended primary
-- **SmolLM-135M.Q4_K_M.gguf** (100MB) - Ultra-lightweight option
+### **🐱 Kitten Models (Voice)**
+- **KittenTTS nano-0.1** - Lightweight, high-quality voice synthesis
+- **8 Voice Profiles** - expr-voice-2-m/f, expr-voice-3-m/f, expr-voice-4-m/f, expr-voice-5-m/f
+- **Content-Aware TTS** - Automatic parsing for thinking, narration, answers, clarification
+
+### **⚡ Repository Optimization** 
+- **Total Size**: 453MB (90% reduction from 6.0GB)
+- **Large Models**: Downloaded separately via `download_models.py`
+- **GitHub Compliant**: All files under size limits for easy cloning
 
 ## 🛠️ Installation & Setup
 
@@ -185,26 +192,26 @@ python --version  # Should be 3.8 or higher
 
 ### Quick Start
 ```bash
-# Clone repository
+# Clone repository (now only 453MB!)
 git clone https://github.com/Round-Tower/m1k3.git
 cd m1k3
 
 # Install Python dependencies
 pip install -r requirements.txt
 
-# Download AI models (required)
+# Download required models (SmolLM2 + Kitten)
 python download_models.py
 
-# Test the system
+# Test the system with SmolLM2
 python m1k3.py --no-voice
 
 # Test with RAG expertise system
 python m1k3.py --rag --query "How do I fix slow WiFi?"
 
 # Expected output:
-# ✅ HuggingFace Transformers available
-# 🔧 Backend selection: HF=True, CT=False
-# ✅ Model loaded with HuggingFace Transformers
+# 🤖 SmolLM2 engine available
+# ✅ SmolLM2 ready via Ollama API
+# 🎭 Intelligent TTS system available
 # 🎯 M1K3 RAG Engine ready!
 # 💤 Type 'help' for commands or start chatting!
 ```
@@ -364,21 +371,30 @@ Avatar Updates: Real-time WebSocket (60fps animations)
 
 ### **Compatibility Matrix**
 ```
-Architecture | HuggingFace | ctransformers | SimpleAI | Status
-x86_64       | ✅ Primary  | ❌ Skipped    | ✅ Fallback | ✅ Working
-ARM64        | ✅ Primary  | ✅ Secondary  | ✅ Fallback | ✅ Working  
-Any Platform | ✅ Primary  | ⚠️  Variable  | ✅ Fallback | ✅ Working
+Architecture | SmolLM2 | KittenTTS | SimpleAI | Status
+x86_64       | ✅ Primary | ✅ Available | ✅ Fallback | ✅ Working
+ARM64        | ✅ Primary | ✅ Available | ✅ Fallback | ✅ Working  
+Any Platform | ✅ Primary | ✅ Available | ✅ Fallback | ✅ Working
 ```
 
 ### **Resource Usage**
 ```
-Memory Usage: ~200MB-2GB (depending on model)
-Disk Space: ~500MB-5GB (model cache + dependencies)
-CPU Usage: Moderate during inference, idle otherwise
+Memory Usage: ~200MB-1GB (SmolLM2 optimized)
+Disk Space: ~500MB (repository + models, 90% reduction!)
+CPU Usage: Low during inference (SmolLM2 efficiency)
 Network: 0 bytes (fully offline after initial setup)
 ```
 
 ## 🚧 Recent Major Updates
+
+### **🎯 Repository Optimization & SMOL/Kitten Models (2025-08-25)**
+- ✅ **90% size reduction**: 6.0GB → 453MB repository
+- ✅ **SmolLM2-135M integration**: Primary AI backend with adaptive prompting
+- ✅ **KittenTTS implementation**: High-quality voice synthesis with content parsing
+- ✅ **Git history cleanup**: Removed large models from version history
+- ✅ **GitHub compliant**: All files under size limits for easy distribution
+- ✅ **Model download system**: Essential models downloaded separately
+- ✅ **CLI fixes**: Updated all hardcoded model references
 
 ### **Avatar System Integration (2025-08-21)**
 - ✅ Real-time web dashboard with emotion tracking
@@ -386,12 +402,6 @@ Network: 0 bytes (fully offline after initial setup)
 - ✅ Pixel art visualization with 6 avatar styles
 - ✅ Network multi-access on all interfaces
 - ✅ Fixed JavaScript errors and WebSocket connectivity
-
-### **Architecture Compatibility (2025-01-21)**
-- ✅ Solved x86_64/ARM64 incompatibility with multi-backend system
-- ✅ Universal compatibility across all platforms
-- ✅ Intelligent backend selection with automatic fallbacks
-- ✅ Performance optimization for Rosetta environments
 
 ### **Enhanced Capabilities**
 - ✅ Upgraded from 2K to 8K token context window
@@ -597,4 +607,4 @@ MIT License - Built for privacy-focused local AI development and experimentation
 
 **🤖 M1K3** - Your comprehensive local AI companion with voice synthesis, real-time avatar visualization, and complete privacy. Powered by open-source models and designed for universal compatibility and optimal performance.
 
-*Latest Update: 2025-08-21 - Avatar Dashboard & WebSocket Integration Complete*
+*Latest Update: 2025-08-25 - Repository Optimization Complete (90% size reduction) - SMOL & Kitten Models Integration*
