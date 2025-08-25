@@ -129,6 +129,11 @@
         "confidence": 0.9
       },
       {
+        "pattern": "gemma*",
+        "profile": "instruction_tuned",
+        "confidence": 0.95
+      },
+      {
         "pattern": "llama3*",
         "profile": "instruction_tuned", 
         "confidence": 0.95
