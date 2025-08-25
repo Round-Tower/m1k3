@@ -33,6 +33,14 @@ class GreetingContext:
     available_memory_gb: float = 0.0
     cpu_cores: int = 0
     platform: str = "unknown"
+    # Eco/Environmental metrics for sustainability-focused greetings
+    energy_saved_kwh: float = 0.0
+    water_saved_ml: float = 0.0
+    co2_saved_g: float = 0.0
+    privacy_score: str = "100% Local"
+    data_transmitted_bytes: int = 0
+    total_responses: int = 0
+    session_eco_impact: bool = False  # Flag to highlight eco achievements
     
 class LLMGreetingEngine:
     """
@@ -174,6 +182,29 @@ class LLMGreetingEngine:
             elif ble_count > 2:
                 context_parts.append(f"{ble_count} Bluetooth devices nearby")
         
+        # Environmental Impact & Sustainability Context
+        eco_highlights = []
+        if context.energy_saved_kwh > 0:
+            if context.energy_saved_kwh >= 1.0:
+                eco_highlights.append(f"saved {context.energy_saved_kwh:.1f}kWh energy")
+            else:
+                eco_highlights.append(f"saved {context.energy_saved_kwh*1000:.0f}Wh energy")
+        
+        if context.water_saved_ml > 0:
+            if context.water_saved_ml >= 1000:
+                eco_highlights.append(f"conserved {context.water_saved_ml/1000:.1f}L water")
+            else:
+                eco_highlights.append(f"conserved {context.water_saved_ml:.0f}ml water")
+        
+        if context.co2_saved_g > 0:
+            if context.co2_saved_g >= 1000:
+                eco_highlights.append(f"prevented {context.co2_saved_g/1000:.1f}kg CO2")
+            else:
+                eco_highlights.append(f"prevented {context.co2_saved_g:.0f}g CO2")
+        
+        if context.data_transmitted_bytes == 0 and context.total_responses > 0:
+            eco_highlights.append("100% private processing")
+        
         # Platform and capabilities
         capabilities = []
         if context.voice_enabled:
@@ -187,9 +218,18 @@ class LLMGreetingEngine:
         
         context_str = ", ".join(context_parts)
         capabilities_str = ", ".join(capabilities)
+        eco_str = ", ".join(eco_highlights) if eco_highlights else ""
         
-        # Create an exciting, inspiring prompt!
-        prompt = f"""Generate an exciting, enthusiastic greeting for M1K3 AI assistant! Make it inspiring and spark joy! Time: {context.time_of_day.lower()}. Maximum 50 characters. Be energetic and positive! Just the greeting text, nothing else."""
+        # Create an eco-aware, exciting, inspiring prompt!
+        if eco_highlights and context.session_eco_impact:
+            # Eco-focused greeting when there are environmental achievements
+            prompt = f"""Generate an exciting, enthusiastic eco-focused greeting for M1K3 AI assistant! Highlight environmental benefits: {eco_str}. Time: {context.time_of_day.lower()}. Maximum 50 characters. Be energetic, positive, and sustainability-focused! Include eco emojis like 🌱🔋💧. Just the greeting text, nothing else."""
+        elif eco_highlights:
+            # Include eco context in regular greeting  
+            prompt = f"""Generate an exciting, enthusiastic greeting for M1K3 AI assistant! Mention eco benefits: {eco_str}. Time: {context.time_of_day.lower()}. Maximum 50 characters. Be energetic and positive! Include a green emoji. Just the greeting text, nothing else."""
+        else:
+            # Standard greeting with sustainability undertone
+            prompt = f"""Generate an exciting, enthusiastic greeting for M1K3 AI assistant! Emphasize local, private, eco-friendly AI. Time: {context.time_of_day.lower()}. Maximum 50 characters. Be energetic and positive! Just the greeting text, nothing else."""
         
         return prompt
     
@@ -501,6 +541,18 @@ def create_greeting_context(metrics, m1k3_context: dict = None) -> GreetingConte
         voice_enabled = m1k3_context.get('voice_enabled', True)
         avatar_enabled = m1k3_context.get('avatar_enabled', True)
     
+    # Extract eco metrics if available
+    eco_metrics = m1k3_context.get('eco_metrics', {}) if m1k3_context else {}
+    energy_saved = eco_metrics.get('energy_saved_kwh', 0.0)
+    water_saved = eco_metrics.get('water_saved_ml', 0.0)  
+    co2_saved = eco_metrics.get('co2_saved_g', 0.0)
+    privacy_score = eco_metrics.get('privacy_score', '100% Local')
+    data_transmitted = eco_metrics.get('data_transmitted_bytes', 0)
+    total_responses = eco_metrics.get('total_responses', 0)
+    
+    # Determine if we should highlight eco achievements
+    session_eco_impact = (energy_saved > 0.1 or water_saved > 50 or co2_saved > 10)
+
     return GreetingContext(
         time_of_day=time_of_day,
         cpu_usage=metrics.cpu_usage,
@@ -521,7 +573,15 @@ def create_greeting_context(metrics, m1k3_context: dict = None) -> GreetingConte
         disk_usage=disk_usage,
         available_memory_gb=available_memory_gb,
         cpu_cores=cpu_cores,
-        platform=platform
+        platform=platform,
+        # Eco/Environmental context
+        energy_saved_kwh=energy_saved,
+        water_saved_ml=water_saved,
+        co2_saved_g=co2_saved,
+        privacy_score=privacy_score,
+        data_transmitted_bytes=data_transmitted,
+        total_responses=total_responses,
+        session_eco_impact=session_eco_impact
     )
 
 def generate_llm_greeting(adaptive_ai_engine, metrics, m1k3_context: dict = None, max_length: int = 80) -> str:

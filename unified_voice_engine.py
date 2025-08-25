@@ -43,8 +43,39 @@ class UnifiedVoiceEngine:
         self.effects_pipeline: List[AudioEffect] = []
         self.completion_engine = AudioCompletionEngine(sample_rate=self.sample_rate)
         self.chunk_size = 300
-        self.inter_chunk_silence = 0.03  # Reduced from 0.1 for speed
+        self.inter_chunk_silence = 0.02  # Optimized for speed
         self.current_voice = None  # Will be set by voice profile
+        self.current_profile = "natural"
+        
+        # Voice profiles with audio effect configurations
+        # Standard effects: compression, normalization, formant_correction for quality
+        # Intercom effects: the main differentiator between profiles
+        self.profiles = {
+            "natural": {
+                "description": "Default conversational voice - clean and natural",
+                "effects": ["formant_correction", "compression", "normalization"]  # Standard quality processing
+            },
+            "assistant": {
+                "description": "Professional AI assistant tone with subtle branding", 
+                "effects": ["light_intercom", "formant_correction", "compression", "normalization"]  # Subtle M1K3 branding
+            },
+            "broadcast": {
+                "description": "Clear, announcer-style voice with strong intercom effect",
+                "effects": ["heavy_intercom", "formant_correction", "compression", "normalization"]  # Radio/PA style
+            },
+            "terminal": {
+                "description": "Technical, system-style voice with medium intercom",
+                "effects": ["medium_intercom", "formant_correction", "compression", "normalization"]  # System announcements
+            },
+            "debug": {
+                "description": "Fast, minimal voice for debugging - no effects for speed",
+                "effects": []  # No processing for maximum speed
+            },
+            "minimal": {
+                "description": "Basic synthesis with minimal processing - no effects",
+                "effects": []  # No effects for compatibility/fallback
+            }
+        }
 
     def load_model(self) -> bool:
         """Loads the necessary models for the pipeline."""
@@ -55,6 +86,8 @@ class UnifiedVoiceEngine:
         if self.kitten_manager.load_model():
             self.is_loaded = True
             self.voice_enabled = True
+            # Initialize effects pipeline with default profile
+            self._configure_effects_pipeline()
             return True
         
         # Fallback to simple system TTS
@@ -62,6 +95,8 @@ class UnifiedVoiceEngine:
         if self.fallback_engine.load_model():
             self.is_loaded = True
             self.voice_enabled = True
+            # Initialize effects pipeline with default profile
+            self._configure_effects_pipeline()
             return True
             
         print("❌ All voice engines failed to load.")
@@ -99,53 +134,88 @@ class UnifiedVoiceEngine:
         
         return padded
 
+    def _synthesis_fast_path(self, text: str):
+        """Fast-path synthesis for short text with minimal processing"""
+        try:
+            import sounddevice as sd
+            
+            # Generate audio directly without chunking
+            raw_audio = self.kitten_manager.generate(text, voice=self.current_voice)
+            if raw_audio is None:
+                print("⚠️  Fast-path TTS generation failed.")
+                return False
+            
+            # Minimal padding - just enough to prevent cutoff
+            pre_padding = np.zeros(int(0.02 * self.sample_rate), dtype=np.float32)  # 20ms
+            end_padding = np.zeros(int(0.08 * self.sample_rate), dtype=np.float32)  # 80ms
+            processed_audio = np.concatenate([pre_padding, raw_audio, end_padding])
+            
+            # Apply effects pipeline if configured
+            for effect in self.effects_pipeline:
+                processed_audio = effect.apply(processed_audio, self.sample_rate)
+            
+            # Play immediately
+            sd.play(processed_audio, samplerate=self.sample_rate)
+            sd.wait()
+            
+            return True
+            
+        except Exception as e:
+            print(f"❌ Fast-path synthesis failed: {e}")
+            return False
+
     def synthesize_and_play(self, text: str, background: bool = True):
         """Synthesizes and plays audio in a background thread."""
         if not self.voice_enabled:
-            return
+            return False
 
         if background:
             thread = threading.Thread(target=self._synthesis_worker, args=(text,), daemon=True)
             thread.start()
+            return True
         else:
-            self._synthesis_worker(text)
+            return self._synthesis_worker(text)
 
     def _synthesis_worker(self, text: str):
         """The core synthesis and playback logic."""
         # Fallback if KittenTTS is not available
         if not self.kitten_manager.is_available():
-            self.fallback_engine.synthesize_and_play(text, background=False)
-            return
+            return self.fallback_engine.synthesize_and_play(text, background=False)
+
+        # Fast-path for short text (under 100 chars) - skip chunking and minimal processing
+        if len(text) < 100:
+            return self._synthesis_fast_path(text)
 
         # 1. Text Processing with anti-truncation padding
         # Add padding to help prevent model-level truncation
         padded_text = self._add_truncation_padding(text)
         chunks = self.text_chunker(padded_text, chunk_size=self.chunk_size)
         
-        # 2. TTS Synthesis with voice selection and truncation fixing
+        # 2. TTS Synthesis with voice selection and smart truncation fixing
         audio_chunks = []
         for i, chunk in enumerate(chunks):
             raw_audio = self.kitten_manager.generate(chunk, voice=self.current_voice)
             if raw_audio is not None:
-                # Fix truncation in each chunk with debug label
-                fixed_audio, fix_info = self.completion_engine.fix_audio(raw_audio, f"chunk_{i+1}")
-                audio_chunks.append(fixed_audio)
+                # Smart completion engine usage for speed optimization
+                if i == len(chunks) - 1 and len(chunk) > 50:
+                    # Only apply to final chunk of longer text to prevent cutoff
+                    fixed_audio, fix_info = self.completion_engine.fix_audio(raw_audio, f"final_chunk")
+                    audio_chunks.append(fixed_audio)
+                else:
+                    # Skip completion engine for intermediate chunks and very short text
+                    audio_chunks.append(raw_audio)
         
         if not audio_chunks:
             print("⚠️  TTS generation failed for all chunks.")
-            return
+            return False
             
         # Combine chunks with minimal silence for faster speech
         silence = np.zeros(int(self.inter_chunk_silence * self.sample_rate), dtype=np.float32)
         full_audio = np.concatenate([np.concatenate([chunk, silence]) for chunk in audio_chunks[:-1]] + [audio_chunks[-1]])
         
-        # MULTI-LEVEL FIX: Check combined audio for truncation
-        final_audio_fixed, final_fix_info = self.completion_engine.fix_audio(full_audio, "combined_audio")
-        full_audio = final_audio_fixed
-        
-        # Add enhanced padding for clean playback
-        pre_padding = np.zeros(int(0.05 * self.sample_rate), dtype=np.float32)  # 50ms pre-padding
-        end_padding = np.zeros(int(0.3 * self.sample_rate), dtype=np.float32)  # Increased to 300ms
+        # Add optimized padding for clean playback (reduced for speed)
+        pre_padding = np.zeros(int(0.03 * self.sample_rate), dtype=np.float32)  # 30ms pre-padding  
+        end_padding = np.zeros(int(0.15 * self.sample_rate), dtype=np.float32)  # Reduced to 150ms
         full_audio = np.concatenate([pre_padding, full_audio, end_padding])
 
         # 3. Audio Effects Pipeline
@@ -153,17 +223,8 @@ class UnifiedVoiceEngine:
         for effect in self.effects_pipeline:
             processed_audio = effect.apply(processed_audio, self.sample_rate)
         
-        # 4. POST-EFFECTS TRUNCATION CHECK: Final safety check
-        post_effects_fixed, post_fix_info = self.completion_engine.fix_audio(processed_audio, "post_effects")
-        processed_audio = post_effects_fixed
-        
-        # Enhanced final padding based on truncation analysis
-        base_final_padding = 0.1  # 100ms base
-        if post_fix_info.get('applied_fix', False):
-            # If we had to fix post-effects, add extra padding
-            base_final_padding = 0.2  # 200ms for problematic audio
-        
-        final_padding = np.zeros(int(base_final_padding * self.sample_rate), dtype=np.float32)
+        # 4. Add minimal final padding for clean completion
+        final_padding = np.zeros(int(0.05 * self.sample_rate), dtype=np.float32)  # 50ms final padding
         processed_audio = np.concatenate([processed_audio, final_padding])
             
         # 5. Hardware-Aware Playback
@@ -192,19 +253,90 @@ class UnifiedVoiceEngine:
                 import time
                 time.sleep(audio_duration + 0.5)
             
-            # Additional completion verification delay
+            # Minimal completion verification delay (optimized for speed)
             import time
-            time.sleep(0.3)  # Increased from 0.1s to 0.3s for better completion
+            time.sleep(0.1)  # Reduced from 0.3s to 0.1s for better performance
             
-            # Optional: Verify no audio is still playing
-            try:
-                if sd.query_devices(sd.default.device['output']):
-                    time.sleep(0.1)  # Brief additional wait if device is still active
-            except:
-                pass
+            return True
             
         except Exception as e:
             print(f"❌ Audio playback failed: {e}")
+            return False
+
+    def set_profile(self, profile_name: str) -> bool:
+        """Set the voice profile and configure audio effects pipeline"""
+        if profile_name in self.profiles:
+            self.current_profile = profile_name
+            
+            # Configure effects pipeline based on profile
+            self._configure_effects_pipeline()
+            
+            print(f"🎭 UnifiedVoiceEngine profile set to: {profile_name}")
+            print(f"🎵 Effects pipeline: {[e.get_name() for e in self.effects_pipeline]}")
+            return True
+        return False
+    
+    def _configure_effects_pipeline(self):
+        """Configure the audio effects pipeline based on current profile"""
+        from audio_effects import IntercomEffect, CompressionEffect, NormalizationEffect, FormantCorrectionEffect
+        
+        # Clear existing pipeline
+        self.effects_pipeline = []
+        
+        # Get effects list for current profile
+        profile_effects = self.profiles[self.current_profile].get("effects", [])
+        
+        # Create effect instances based on profile configuration
+        for effect_name in profile_effects:
+            if effect_name == "light_intercom":
+                # Subtle intercom for assistant branding
+                effect = IntercomEffect({"low_freq": 400, "high_freq": 3000})
+                self.effects_pipeline.append(effect)
+                
+            elif effect_name == "medium_intercom":
+                # Standard intercom for terminal/system voice
+                effect = IntercomEffect({"low_freq": 350, "high_freq": 3200})
+                self.effects_pipeline.append(effect)
+                
+            elif effect_name == "heavy_intercom":
+                # Strong intercom for broadcast announcements
+                effect = IntercomEffect({"low_freq": 300, "high_freq": 3400})
+                self.effects_pipeline.append(effect)
+                
+            elif effect_name == "compression":
+                # Audio compression for consistency
+                effect = CompressionEffect({"threshold": 0.7, "ratio": 0.4})
+                self.effects_pipeline.append(effect)
+                
+            elif effect_name == "normalization":
+                # Volume normalization
+                effect = NormalizationEffect({"level": 0.85})
+                self.effects_pipeline.append(effect)
+                
+            elif effect_name == "formant_correction":
+                # Formant correction for clarity
+                effect = FormantCorrectionEffect({"shift_factor": 0.97})
+                self.effects_pipeline.append(effect)
+
+    def get_current_profile(self) -> dict:
+        """Get current voice profile settings"""
+        return self.profiles.get(self.current_profile, self.profiles["natural"])
+        
+    def set_voice_enabled(self, enabled: bool):
+        """Enable or disable voice output"""
+        self.voice_enabled = enabled
+    
+    def get_status(self) -> dict:
+        """Get voice engine status"""
+        return {
+            "available": self.voice_enabled,
+            "loaded": self.is_loaded,
+            "enabled": self.voice_enabled,
+            "loading": False,
+            "model": "UnifiedVoiceEngine",
+            "current_profile": self.current_profile,
+            "available_profiles": list(self.profiles.keys())
+        }
 
 if __name__ == "__main__":
     print("Testing Unified Voice Engine...")

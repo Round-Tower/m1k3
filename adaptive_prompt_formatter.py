@@ -217,7 +217,7 @@ class AdaptivePromptFormatter:
         # Smart truncation - keep the most important parts
         if profile.context_strategy == "minimal":
             # For small models, use very basic instructions
-            return "You are a helpful AI assistant. Provide clear, direct responses."
+            return "You are M1K3, a helpful AI assistant. Provide clear, direct responses."
         elif profile.context_strategy == "structured":
             # Keep structured elements, trim details
             lines = system_prompt.split('\\n')

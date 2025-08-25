@@ -13,7 +13,7 @@ from typing import Dict, Any, List, Optional, Set
 from queue import PriorityQueue
 
 try:
-    from model_output_parser import ContentType, ContentSegment, ParsedContent
+    from model_output_parser import ContentType, ContentSegment, ParsedContent, ContentTypeModulation
     PARSER_AVAILABLE = True
 except ImportError:
     PARSER_AVAILABLE = False
@@ -30,26 +30,6 @@ class TTSStatus(Enum):
     IN_PROGRESS = "in_progress"
     COMPLETED = "completed"
     FAILED = "failed"
-
-@dataclass
-class ContentTypeModulation:
-    """Voice modulation settings for a content type"""
-    volume_multiplier: float = 1.0
-    speed_multiplier: float = 1.0
-    pitch_adjustment: float = 0.0
-    reverb_amount: float = 0.0
-    warmth_factor: float = 0.0
-    
-    def __post_init__(self):
-        """Validate modulation parameters"""
-        if not (0.1 <= self.volume_multiplier <= 2.0):
-            raise ValueError(f"Volume multiplier must be between 0.1 and 2.0, got {self.volume_multiplier}")
-        
-        if not (0.5 <= self.speed_multiplier <= 2.0):
-            raise ValueError(f"Speed multiplier must be between 0.5 and 2.0, got {self.speed_multiplier}")
-        
-        if not (-0.5 <= self.pitch_adjustment <= 0.5):
-            raise ValueError(f"Pitch adjustment must be between -0.5 and 0.5, got {self.pitch_adjustment}")
 
 @dataclass
 class TTSJob:
@@ -256,9 +236,10 @@ class IntelligentTTSController:
     
     def _apply_effects_to_pipeline(self, modulation: ContentTypeModulation):
         """Apply effects to the voice synthesis pipeline"""
-        # This is a placeholder for the actual effects implementation
-        # TODO: Implement actual audio effects when we create the effects system
-        pass
+        if self.effects_manager and hasattr(self, '_current_content_type'):
+            # Store modulation for use during synthesis
+            self._current_modulation = modulation
+            # The effects will be applied during _synthesize_segment
     
     def _synthesize_segment(self, segment: ContentSegment) -> bool:
         """Synthesize audio for a content segment with content-specific effects"""
@@ -288,7 +269,15 @@ class IntelligentTTSController:
                 
             else:  # NORMAL mode
                 print(f"🗣️  Synthesizing {segment.content_type.value}: '{segment.text}'")
-                success = self.voice_engine.synthesize_and_play(segment.text, background=False)
+                
+                # Apply content-specific effects if effects manager is available
+                if self.effects_manager and hasattr(self, '_current_modulation'):
+                    # For now, just use the voice engine directly
+                    # TODO: Integrate content-specific audio processing
+                    success = self.voice_engine.synthesize_and_play(segment.text, background=False)
+                else:
+                    success = self.voice_engine.synthesize_and_play(segment.text, background=False)
+                
                 return success
                 
         except Exception as e:

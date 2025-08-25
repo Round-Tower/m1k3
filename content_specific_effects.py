@@ -11,8 +11,7 @@ from dataclasses import dataclass
 import warnings
 
 try:
-    from model_output_parser import ContentType
-    from intelligent_tts_controller import ContentTypeModulation
+    from model_output_parser import ContentType, ContentTypeModulation
     DEPENDENCIES_AVAILABLE = True
 except ImportError:
     DEPENDENCIES_AVAILABLE = False
@@ -177,20 +176,20 @@ class ThinkingEffect(ContentAwareEffect):
     
     def _apply_pitch_shift(self, audio: np.ndarray, shift_semitones: float,
                           sample_rate: int) -> np.ndarray:
-        """Apply pitch shift (simplified implementation)"""
-        if abs(shift_semitones) < 0.1:
+        """Apply pitch shift (pitch-up only to avoid distortion)"""
+        if shift_semitones <= 0.1:  # Only apply pitch increases
             return audio
         
-        # Simple pitch shift using time stretching approximation
-        # This is a basic implementation - could be enhanced with better algorithms
-        shift_factor = 2 ** (shift_semitones / 12)
-        
-        if shift_factor < 1.0:
-            # Lower pitch - add low-pass filtering effect
-            processed = self._apply_lowpass_filter(audio, sample_rate)
+        # For thinking content, we want slightly higher perceived pitch
+        # Use high-frequency emphasis for pitch-up effect without artifacts
+        if len(audio) > 1:
+            # Create high-frequency emphasis through differentiation
+            high_freq_emphasis = np.diff(audio, prepend=audio[0])
+            # Apply emphasis based on semitone shift, capped to avoid artifacts
+            emphasis_strength = min(abs(shift_semitones) * 0.02, 0.1)  # Cap at 10%
+            processed = audio + high_freq_emphasis * emphasis_strength
         else:
-            # Higher pitch - add high-pass filtering effect
-            processed = self._apply_highpass_filter(audio, sample_rate)
+            processed = audio
         
         return processed
     
@@ -616,15 +615,13 @@ class ContentEffectsManager:
         if modulation.volume_multiplier != 1.0:
             processed = processed * modulation.volume_multiplier
         
-        # Apply pitch adjustment (simplified)
-        if abs(modulation.pitch_adjustment) > 0.01:
-            # Simple pitch adjustment using filtering
-            if modulation.pitch_adjustment < 0:
-                # Lower pitch - apply low-pass
-                processed = self._apply_simple_lowpass(processed, sample_rate)
-            else:
-                # Higher pitch - apply high-pass
-                processed = self._apply_simple_highpass(processed, sample_rate)
+        # Apply pitch adjustment (pitch-up only to avoid distortion)
+        if modulation.pitch_adjustment > 0.01:  # Only apply pitch increases
+            # Higher pitch - use high-frequency emphasis for brighter sound
+            if len(processed) > 1:
+                high_freq_emphasis = np.diff(processed, prepend=processed[0])
+                emphasis_strength = min(modulation.pitch_adjustment * 0.2, 0.1)  # Cap at 10%
+                processed = processed + high_freq_emphasis * emphasis_strength
         
         # Prevent clipping
         max_val = np.max(np.abs(processed))

@@ -17,7 +17,7 @@ def get_anti_hallucination_params(model_name: str, max_tokens: int = 150) -> dic
         'do_sample': True,
     }
     
-    model_lower = model_name.lower()
+    model_lower = (model_name or "").lower()
     
     if 'qwen3-0.6b' in model_lower or 'qwen/qwen3-0.6b' in model_lower:
         # Qwen3-0.6B: Use greedy decoding to avoid thinking mode and hallucinations
@@ -101,12 +101,12 @@ def get_optimized_prompt_format(model_name: str, prompt: str, context_history: l
     """
     Get optimized prompt formatting to reduce hallucinations
     """
-    model_lower = model_name.lower()
+    model_lower = (model_name or "").lower()
     
     # Clear, direct instruction format
     if 'qwen3' in model_lower:
         # Qwen3 with thinking mode suppression
-        system_msg = "You are a helpful AI assistant. Give direct, concise answers only. Do not show your thinking process. Do not use <think> tags. Answer in one short sentence."
+        system_msg = "You are M1K3, a helpful AI assistant. Give direct, concise answers only. Do not show your thinking process. Do not use <think> tags. Answer in one short sentence."
         
         # Use simple format to avoid triggering thinking mode
         return f"User: {prompt}\n\nAssistant:"
@@ -118,7 +118,7 @@ def get_optimized_prompt_format(model_name: str, prompt: str, context_history: l
     
     elif 'phi-3' in model_lower:
         # Phi-3 format with reasoning constraint
-        system_msg = "You are a precise AI assistant. Give accurate, direct answers without speculation."
+        system_msg = "You are M1K3, a precise AI assistant. Give accurate, direct answers without speculation."
         return f"<|system|>{system_msg}<|end|>\n<|user|>{prompt}<|end|>\n<|assistant|>"
     
     else:

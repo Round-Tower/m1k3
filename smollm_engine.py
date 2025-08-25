@@ -280,7 +280,7 @@ class SmolLMEngine:
             if len(base_prompt) > self.model_profile.max_system_prompt_length:
                 # Smart truncation based on profile strategy
                 if self.model_profile.context_strategy == "minimal":
-                    base_prompt = "You are a helpful AI assistant. Provide clear, direct responses."
+                    base_prompt = "You are M1K3, a helpful AI assistant. Provide clear, direct responses."
                 elif self.model_profile.context_strategy == "structured":
                     # Keep essential parts
                     lines = base_prompt.split('\\n')

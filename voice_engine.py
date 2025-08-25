@@ -143,11 +143,17 @@ class VoiceEngine:
                     indices = np.linspace(0, len(audio) - 1, new_length)
                     audio = np.interp(indices, np.arange(len(audio)), audio)
             
-            # Apply pitch adjustment (simple frequency domain)
+            # Apply pitch adjustment (pitch-up only to avoid distortion)
             pitch_adj = profile.get("pitch_adjustment", 0.0)
-            if pitch_adj != 0.0:
-                # Simple pitch shift by slight amplitude scaling
-                audio = audio * (1 + pitch_adj * 0.2)
+            if pitch_adj > 0.0:  # Only apply pitch increases to avoid distortion
+                # Use simple high-frequency emphasis for pitch-up effect
+                # This creates a brighter, higher-perceived pitch without artifacts
+                if len(audio) > 1:
+                    # Create high-frequency emphasis through differentiation
+                    high_freq_emphasis = np.diff(audio, prepend=audio[0])
+                    # Apply emphasis proportional to pitch adjustment
+                    emphasis_strength = min(pitch_adj * 0.3, 0.15)  # Cap at 15% emphasis
+                    audio = audio + high_freq_emphasis * emphasis_strength
             
             # Apply volume control
             volume_mult = profile.get("volume_multiplier", 1.0)
@@ -316,7 +322,13 @@ class MockVoiceEngine:
 def create_voice_engine() -> VoiceEngine:
     """Factory function to create appropriate voice engine"""
     if VOICE_AVAILABLE:
-        return VoiceEngine()
+        # Use the optimized UnifiedVoiceEngine for better performance
+        try:
+            from unified_voice_engine import UnifiedVoiceEngine
+            return UnifiedVoiceEngine()
+        except ImportError:
+            # Fallback to basic VoiceEngine if UnifiedVoiceEngine not available
+            return VoiceEngine()
     else:
         return MockVoiceEngine()
 

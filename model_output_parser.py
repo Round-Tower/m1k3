@@ -20,12 +20,32 @@ class ContentType(Enum):
     def priority(self) -> int:
         """Priority for voice synthesis ordering (lower = higher priority)"""
         priority_map = {
-            ContentType.CLARIFICATION: 1,
-            ContentType.ANSWER: 2, 
-            ContentType.NARRATION: 3,
-            ContentType.THINKING: 4
+            ContentType.THINKING: 1,        # Thinking comes first
+            ContentType.NARRATION: 2,       # Then narration/context
+            ContentType.ANSWER: 3,          # Then the main answer
+            ContentType.CLARIFICATION: 4    # Finally any clarifying questions
         }
         return priority_map[self]
+
+@dataclass
+class ContentTypeModulation:
+    """Voice modulation settings for a content type"""
+    volume_multiplier: float = 1.0
+    speed_multiplier: float = 1.0
+    pitch_adjustment: float = 0.0
+    reverb_amount: float = 0.0
+    warmth_factor: float = 0.0
+    
+    def __post_init__(self):
+        """Validate modulation parameters"""
+        if not (0.1 <= self.volume_multiplier <= 2.0):
+            raise ValueError(f"Volume multiplier must be between 0.1 and 2.0, got {self.volume_multiplier}")
+        
+        if not (0.5 <= self.speed_multiplier <= 2.0):
+            raise ValueError(f"Speed multiplier must be between 0.5 and 2.0, got {self.speed_multiplier}")
+        
+        if not (-0.5 <= self.pitch_adjustment <= 0.5):
+            raise ValueError(f"Pitch adjustment must be between -0.5 and 0.5, got {self.pitch_adjustment}")
 
 @dataclass
 class ContentSegment:

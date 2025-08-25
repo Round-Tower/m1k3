@@ -274,10 +274,18 @@ class M1K3CLI:
             
         self.voice_engine = create_voice_engine()
         
-        # Initialize intelligent TTS controller if available
+        # Initialize intelligent TTS controller and effects manager if available
         if INTELLIGENT_TTS_AVAILABLE:
             self.intelligent_tts_controller = create_intelligent_tts_controller(self.voice_engine)
-            print("🎭 Intelligent TTS controller initialized with content-specific voice effects")
+            
+            # Ensure effects manager is properly connected
+            if hasattr(self.intelligent_tts_controller, 'effects_manager') and self.intelligent_tts_controller.effects_manager:
+                print("🎭 Intelligent TTS controller initialized with content-specific voice effects")
+                # Test content type support
+                effects_info = self.intelligent_tts_controller.effects_manager.get_effect_info()
+                print(f"   • Content effects available: {len(effects_info)} types")
+            else:
+                print("🎭 Intelligent TTS controller initialized (effects manager limited)")
         else:
             self.intelligent_tts_controller = None
             print("⚠️  Using basic voice synthesis (intelligent TTS unavailable)")
@@ -290,6 +298,9 @@ class M1K3CLI:
         self.voice_enabled = voice_enabled
         self.show_context = False  # Show detailed system context
         
+        # Initialize command registry for comprehensive help system
+        self._initialize_command_registry()
+        
         # Initialize avatar controller if available
         if AVATAR_AVAILABLE:
             self.avatar_controller = AvatarController()
@@ -299,6 +310,145 @@ class M1K3CLI:
         
         # Set up AI engine with system context
         self._initialize_ai_context()
+    
+    def _initialize_command_registry(self):
+        """Initialize the comprehensive command registry for help system"""
+        self.command_registry = {
+            "/help": {
+                "handler": self.show_command_help,
+                "description": "Show comprehensive command help",
+                "usage": "/help [command]",
+                "examples": ["/help", "/help /profile", "/help /model"],
+                "takes_args": True
+            },
+            "/stats": {
+                "handler": self.display_system_stats,
+                "description": "Show system statistics with animations",
+                "usage": "/stats",
+                "aliases": ["stats", "status"]
+            },
+            "/context": {
+                "handler": self.display_device_context,
+                "description": "Show comprehensive device context",
+                "usage": "/context",
+                "aliases": ["context", "device"]
+            },
+            "/tokens": {
+                "handler": self.display_token_stats,
+                "description": "Show token usage and eco impact",
+                "usage": "/tokens",
+                "aliases": ["tokens", "usage"]
+            },
+            "/clear": {
+                "handler": self.ai_engine.clear_context,
+                "description": "Clear conversation context",
+                "usage": "/clear",
+                "aliases": ["clear", "reset"]
+            },
+            "/demo": {
+                "handler": self.demo_animations,
+                "description": "Demonstrate animation capabilities",
+                "usage": "/demo",
+                "aliases": ["animate", "demo"]
+            },
+            "/sound": {
+                "handler": self.handle_sound_command,
+                "description": "Control sound settings and effects",
+                "usage": "/sound <action>",
+                "examples": ["/sound status", "/sound toggle", "/sound volume 0.8"],
+                "takes_args": True
+            },
+            "/transparency": {
+                "handler": self.handle_transparency_command,
+                "description": "Control AI transparency and debugging",
+                "usage": "/transparency <level>",
+                "examples": ["/transparency status", "/transparency basic", "/transparency debug"],
+                "takes_args": True
+            },
+            "/explain": {
+                "handler": self.handle_explain_command,
+                "description": "Show detailed decision explanation for a query",
+                "usage": "/explain <query>",
+                "examples": ["/explain What is quantum computing?"],
+                "takes_args": True
+            },
+            "/classify": {
+                "handler": self.handle_classify_command,
+                "description": "Show intent classification for a query",
+                "usage": "/classify <query>",
+                "examples": ["/classify How do I cook pasta?"],
+                "takes_args": True
+            },
+            "/model": {
+                "handler": self.handle_model_command,
+                "description": "Switch AI models or show model info",
+                "usage": "/model <action|name>",
+                "examples": ["/model status", "/model recommend", "/model gemma-2-2b-it"],
+                "takes_args": True
+            },
+            "/models": {
+                "handler": self.handle_models_command,
+                "description": "List all available models for hot loading",
+                "usage": "/models",
+                "examples": ["/models"]
+            },
+            "/performance": {
+                "handler": self.handle_performance_command,
+                "description": "Show performance metrics and analysis",
+                "usage": "/performance [action]",
+                "examples": ["/performance", "/perf stats", "/perf export"],
+                "aliases": ["/perf"],
+                "takes_args": True
+            },
+            "/perf": {
+                "handler": self.handle_performance_command,
+                "description": "Show performance metrics (alias for /performance)",
+                "usage": "/perf [action]",
+                "examples": ["/perf", "/perf summary", "/perf clear"],
+                "takes_args": True
+            },
+            "/style": {
+                "handler": self.handle_style_command,
+                "description": "Control AI response style and formatting",
+                "usage": "/style <style_name>",
+                "examples": ["/style status", "/style concise", "/style detailed"],
+                "takes_args": True
+            },
+            "/profile": {
+                "handler": self.handle_profile_command,
+                "description": "Set voice profile for TTS synthesis",
+                "usage": "/profile <profile_name>",
+                "examples": ["/profile natural", "/profile broadcast", "/profile terminal"],
+                "takes_args": True
+            },
+            "//profile": {
+                "handler": self.handle_profile_command,
+                "description": "Set voice profile (double slash variant)",
+                "usage": "//profile <profile_name>",
+                "examples": ["//profile assistant"],
+                "takes_args": True
+            },
+            "/avatar": {
+                "handler": self._handle_avatar_slash_command,
+                "description": "Control avatar system and emotions",
+                "usage": "/avatar <action>",
+                "examples": ["/avatar start", "/avatar emotion happy", "/avatar test"],
+                "takes_args": True
+            },
+            "/tts": {
+                "handler": self._handle_tts_slash_command,
+                "description": "Control text-to-speech system",
+                "usage": "/tts <action>",
+                "examples": ["/tts status"],
+                "takes_args": True
+            },
+            "/exit": {
+                "handler": lambda: setattr(self, 'running', False),
+                "description": "Exit M1K3 CLI",
+                "usage": "/exit",
+                "aliases": ["quit", "exit", "q"]
+            }
+        }
     
     def _safe_voice_synthesis(self, text: str, background: bool = True, use_intelligent_tts: bool = False):
         """Safely synthesize voice with text preprocessing to prevent warnings"""
@@ -714,44 +864,57 @@ class M1K3CLI:
         
     def _handle_action_command(self, user_input: str) -> bool:
         """Handle special action commands starting with /."""
-        command = user_input.split()[0].lower()
+        parts = user_input.split()
+        command = parts[0].lower()
+        args = parts[1:] if len(parts) > 1 else []
         
-        action_map = {
-            "/help": self.show_help,
-            "/stats": self.display_system_stats,
-            "/context": self.display_device_context,
-            "/tokens": self.display_token_stats,
-            "/clear": self.ai_engine.clear_context,
-            "/demo": self.demo_animations,
-            "/sound": self.handle_sound_command,
-            "/transparency": self.handle_transparency_command,
-            "/explain": self.handle_explain_command,
-            "/classify": self.handle_classify_command,
-            "/model": self.handle_model_command,
-            "/models": self.handle_models_command,
-            "/performance": self.handle_performance_command,
-            "/perf": self.handle_performance_command,
-            "/style": self.handle_style_command,
-            "/exit": lambda: setattr(self, 'running', False)
-        }
-        
-        if command in action_map:
-            print(f"Executing action: {command}")
-            # Pass the full command for commands that need it
-            if command in ["/sound", "/transparency", "/explain", "/classify", "/model", "/models", "/performance", "/perf", "/style"]:
-                action_map[command](user_input)
+        if command in self.command_registry:
+            cmd_info = self.command_registry[command]
+            print(f"🔧 Executing: {command}")
+            
+            # Pass arguments to commands that need them
+            if cmd_info.get("takes_args", False):
+                cmd_info["handler"](user_input)
             else:
-                action_map[command]()
+                cmd_info["handler"]()
             return True
             
-        # Handle avatar commands specifically
+        # Handle avatar commands specifically (for backward compatibility)
         if command.startswith("/avatar"):
             avatar_command = user_input.replace("/", "")
             self.handle_avatar_command(avatar_command)
             return True
 
-        return False
+        # Command not found - show helpful message
+        print(f"❌ Unknown command: {command}")
+        print(f"💡 Try '/help' to see all available commands")
+        return True
 
+    def handle_profile_command(self, user_input: str = ""):
+        """Handle voice profile commands"""
+        parts = user_input.split()
+        
+        if len(parts) > 1:
+            profile_name = parts[1].strip()
+            print(f"🎯 Setting voice profile to: {profile_name}")
+            
+            if self.voice_engine.set_profile(profile_name):
+                self.sound_manager.play_success_sequence("minor")
+                msg = f"✅ Voice profile set to '{profile_name}'"
+                self.print_with_avatar(msg, AvatarState.IDLE)
+                
+                if self.voice_enabled:
+                    self.voice_engine.synthesize_and_play(f"Voice profile set to {profile_name}", background=False)
+            else:
+                available_profiles = ', '.join(self.voice_engine.profiles.keys())
+                msg = f"❌ Unknown profile '{profile_name}'. Available: {available_profiles}"
+                self.print_with_avatar(msg, AvatarState.ERROR)
+                self.sound_manager.play_contextual_sound("error")
+        else:
+            available_profiles = ', '.join(self.voice_engine.profiles.keys())
+            msg = f"📋 Please specify a profile. Available: {available_profiles}"
+            self.print_with_avatar(msg, AvatarState.IDLE)
+            
     def handle_sound_command(self, user_input: str = ""):
         """Handle sound-related commands"""
         parts = user_input.lower().split()
@@ -903,7 +1066,9 @@ class M1K3CLI:
                 self.voice_engine.synthesize_and_play("Voice enabled")
             return
             
-        elif user_input.lower().startswith(('/profile', 'persona', 'character')):
+        # NOTE: Profile commands are now handled in _handle_action_command() via /profile
+        # This section kept for legacy 'persona' and 'character' commands
+        elif user_input.lower().startswith(('persona', 'character')):
             parts = user_input.split()
             if len(parts) > 1:
                 profile_name = parts[1].strip()
@@ -1000,7 +1165,7 @@ class M1K3CLI:
             return
             
         elif user_input.lower() in ['help', 'h']:
-            self.show_help()
+            self.show_command_help()
             return
             
         # Generate AI response with minimal delay
@@ -1245,102 +1410,174 @@ class M1K3CLI:
             if self.voice_enabled:
                 self._safe_voice_synthesis(error_msg)
             
-    def show_help(self):
-        """Display help information"""
-        help_text = """
-M1K3 Local AI CLI Commands:
-  
-  Chat Commands:
-    <message>       Send message to AI
-    clear, reset    Clear conversation context  
-    stats, status   Show system statistics with animations
-    session         Show detailed session statistics and insights
-    context, device Show comprehensive device context
-    tokens, usage   Show token usage and eco impact
-    animate, demo   Demonstrate animation capabilities
-    help, h         Show this help
-    quit, q         Exit application
-    
-  Voice Commands:
-    voice, mute     Toggle voice synthesis on/off
-    /profile <name> Set voice profile (natural, assistant, broadcast, terminal)
-    /tts status     Show intelligent TTS system status and voice settings
-    
-  Enhanced Commands:
-    /explain <query>    Show detailed decision explanation for a query
-    /classify <query>   Show intent classification for a query
-    
-  Response Style Commands:
-    /style status       Show current response style and available options
-    /style default      Balanced, informative responses (1024 tokens)
-    /style concise      Brief, direct answers (256 tokens)
-    /style detailed     Comprehensive explanations (2048 tokens)
-    /style coding       Code-focused responses with explanations (1024 tokens)
-    /style creative     Expressive, imaginative answers (1024 tokens)
-    
-  Model Management Commands:
-    /models             List all available models for hot loading
-    /model <name>       Switch to specific model (e.g., /model gemma-2-2b-it)
-    /model recommend    Switch to best recommended model for your system
-    /model interactive  Interactive model selection menu
-    /model status       Show current model information
-    
-  Performance Commands:
-    /performance        Show performance summary (alias: /perf)
-    /perf summary       Performance overview with key metrics
-    /perf stats         Detailed statistics by operation type
-    /perf system        Current system performance metrics
-    /perf export        Export performance data to JSON file
-    /perf clear         Clear performance history
-    /perf baseline      Set performance baselines for regression detection
-    
-  Avatar Commands:
-    avatar start    Start the avatar web server
-    avatar stop     Stop the avatar web server
-    avatar status   Show avatar server and emotion status
-    avatar emotion <emotion> [intensity] - Set avatar emotion (0-100)
-    avatar style <style> [color] - Set avatar style and color
-    avatar test     Test all avatar emotions
-    
-  Transparency Commands (Dev/Debug):
-    /transparency status    Show current transparency level
-    /transparency off       Disable model transparency
-    /transparency basic     Basic transparency (generation stats)
-    /transparency detailed  Detailed transparency (parameters, progress)  
-    /transparency full      Full transparency (processing analysis)
-    /transparency debug     Debug transparency (maximum detail)
-    /transparency summary   Show session transparency summary
-    /transparency export    Export transparency data
-    
-  Optimized Personas:
-    assistant      Clean, clear voice with light processing (default)
-    natural        Pure, unprocessed voice with maximum clarity
-    pa_system      Public address system voice with gentle filtering
-    broadcast      Radio-quality voice with professional sound  
-    terminal       Retro computer terminal voice
-    
-  Avatar States:
-    💤 Idle        Ready for input
-    ⏳ Loading     Starting up or downloading
-    🤔 Thinking    Processing your input  
-    ⚡ Generating  Streaming AI response
-    🔊 Speaking    Voice synthesis active
-    ❌ Error       Something went wrong
-    
-  Features:
-    • High-quality voice synthesis with faster, natural pacing
-    • Rich CLI animations and visual effects
-    • Comprehensive device context collection (privacy-focused)
-    • Real-time system monitoring and statistics
-    • Dynamic system-aware greetings based on device state
-    • Hardware capability detection and display
-    • Animated status indicators and progress bars
-    • Context-aware conversations with streaming responses
-"""
-        print(help_text)
+    def show_command_help(self, user_input: str = ""):
+        """Display comprehensive command help with optional specific command details"""
+        parts = user_input.split()
+        
+        # If specific command requested, show detailed help for that command
+        if len(parts) > 1:
+            target_command = parts[1].lower()
+            if target_command in self.command_registry:
+                self._show_specific_command_help(target_command)
+                return
+            else:
+                print(f"❌ Unknown command: {target_command}")
+                print("🔍 Available commands:")
+                # Show available command list
+                for category, commands in {
+                    "💬 Core": ["/help", "/clear", "/exit"],
+                    "📊 System": ["/stats", "/context", "/tokens"],
+                    "🎤 Voice": ["/profile", "/tts", "/sound"],
+                    "🤖 AI": ["/model", "/models", "/style", "/explain"],
+                    "👾 Avatar": ["/avatar"], 
+                    "⚡ Performance": ["/performance", "/perf"],
+                    "🔍 Debug": ["/transparency"]
+                }.items():
+                    cmd_list = [cmd for cmd in commands if cmd in self.command_registry]
+                    if cmd_list:
+                        print(f"  {category}: {', '.join(cmd_list)}")
+                print(f"\n💡 Try '/help <command>' for specific help")
+                return
+        
+        # Show comprehensive command overview
+        print("\n" + "🚀 M1K3 LOCAL AI CLI - COMPREHENSIVE COMMAND REFERENCE" + "\n")
+        print("=" * 72)
+        
+        # Group commands by category
+        categories = {
+            "💬 Core Chat Commands": ["/help", "/clear", "/exit"],
+            "📊 System & Stats": ["/stats", "/context", "/tokens", "/demo"],
+            "🎤 Voice & Audio": ["/profile", "/tts", "/sound"],
+            "🤖 AI Control": ["/model", "/models", "/style", "/explain", "/classify"],
+            "👾 Avatar System": ["/avatar"],
+            "⚡ Performance": ["/performance", "/perf"],
+            "🔍 Debug & Dev": ["/transparency"]
+        }
+        
+        for category, commands in categories.items():
+            print(f"\n{category}")
+            print("─" * 40)
+            for cmd in commands:
+                if cmd in self.command_registry:
+                    cmd_info = self.command_registry[cmd]
+                    usage = cmd_info.get("usage", cmd)
+                    description = cmd_info.get("description", "No description")
+                    print(f"  {usage:<20} {description}")
+                    
+                    # Show aliases if they exist
+                    if "aliases" in cmd_info:
+                        aliases = ", ".join(cmd_info["aliases"])
+                        print(f"    Aliases: {aliases}")
+        
+        # Legacy commands section
+        print(f"\n📝 Legacy Commands (still supported)")
+        print("─" * 40)
+        legacy_commands = [
+            ("clear, reset", "Clear conversation context"),
+            ("stats, status", "Show system statistics"),
+            ("context, device", "Show device context"),  
+            ("tokens, usage", "Show token usage"),
+            ("voice, mute", "Toggle voice synthesis"),
+            ("quit, exit, q", "Exit application"),
+            ("help, h", "Show help (this screen)"),
+            ("animate, demo", "Demonstrate animations")
+        ]
+        
+        for cmd, desc in legacy_commands:
+            print(f"  {cmd:<20} {desc}")
+        
+        print(f"\n🎯 QUICK TIPS")
+        print("─" * 40)
+        print("  • Use '/help <command>' for detailed help on specific commands")
+        print("  • Most commands have short aliases (e.g., '/perf' for '/performance')")
+        print("  • All commands support tab completion and are case-insensitive")
+        print("  • Use '//profile' if '/profile' conflicts with your shell")
+        print("  • Avatar commands work with both '/avatar' and 'avatar' syntax")
+        
+        print(f"\n🌟 VOICE PROFILES")
+        print("─" * 40)
+        if hasattr(self, 'voice_engine') and self.voice_engine:
+            profiles = getattr(self.voice_engine, 'profiles', {})
+            for profile_name, profile_info in profiles.items():
+                desc = profile_info.get('description', 'Voice profile')
+                print(f"  {profile_name:<15} {desc}")
+        else:
+            print("  Voice engine not available")
+            
+        print("=" * 72)
+        print("💡 Type any message to chat with M1K3, or use commands above")
         
         if self.voice_enabled:
-            self._safe_voice_synthesis("Here's what I can do for you")
+            self._safe_voice_synthesis("Here's everything I can do for you!")
+    
+    def _show_specific_command_help(self, command: str):
+        """Show detailed help for a specific command"""
+        cmd_info = self.command_registry[command]
+        
+        print(f"\n🔧 COMMAND HELP: {command}")
+        print("=" * 50)
+        print(f"📝 Description: {cmd_info.get('description', 'No description')}")
+        print(f"💡 Usage: {cmd_info.get('usage', command)}")
+        
+        if "examples" in cmd_info:
+            print(f"🎯 Examples:")
+            for example in cmd_info["examples"]:
+                print(f"  {example}")
+        
+        if "aliases" in cmd_info:
+            print(f"🔗 Aliases: {', '.join(cmd_info['aliases'])}")
+            
+        if command == "/avatar":
+            print(f"\n🎭 Avatar Actions:")
+            avatar_actions = [
+                "start - Start avatar web server",
+                "stop - Stop avatar web server", 
+                "status - Show server and emotion status",
+                "emotion <name> [intensity] - Set emotion (happy, sad, angry, etc.)",
+                "style <name> [color] - Set avatar style",
+                "test - Test all emotions"
+            ]
+            for action in avatar_actions:
+                print(f"  {action}")
+                
+        elif command == "/model":
+            print(f"\n🤖 Model Actions:")
+            model_actions = [
+                "status - Show current model info",
+                "recommend - Switch to best model for your system",
+                "interactive - Interactive model selection",
+                "<model_name> - Switch to specific model"
+            ]
+            for action in model_actions:
+                print(f"  {action}")
+                
+        elif command == "/style":
+            print(f"\n✍️ Style Options:")
+            style_options = [
+                "status - Show current style",
+                "default - Balanced responses (1024 tokens)",
+                "concise - Brief answers (256 tokens)", 
+                "detailed - Comprehensive (2048 tokens)",
+                "coding - Code-focused (1024 tokens)",
+                "creative - Imaginative (1024 tokens)"
+            ]
+            for option in style_options:
+                print(f"  {option}")
+        
+        print("=" * 50)
+    
+    def _handle_avatar_slash_command(self, user_input: str):
+        """Handle /avatar commands specifically"""
+        avatar_command = user_input.replace("/", "")
+        self.handle_avatar_command(avatar_command)
+    
+    def _handle_tts_slash_command(self, user_input: str):
+        """Handle /tts commands specifically"""
+        parts = user_input.split()
+        if len(parts) > 1 and parts[1].lower() == 'status':
+            self.show_tts_status()
+        else:
+            print("Usage: /tts status - Show intelligent TTS system status")
     
     def show_tts_status(self):
         """Show intelligent TTS system status and voice settings"""
@@ -1647,7 +1884,55 @@ M1K3 Local AI CLI Commands:
         except:
             pass
         
+        # Get eco metrics from AI engine
+        try:
+            if hasattr(self.ai_engine, 'get_eco_metrics'):
+                eco_metrics = self.ai_engine.get_eco_metrics()
+                
+                # Convert to standardized format for greeting system
+                context['eco_metrics'] = {
+                    'energy_saved_kwh': float(eco_metrics.get('energy_saved_kwh', '0').replace(' kWh', '')),
+                    'water_saved_ml': self._parse_water_saved(eco_metrics.get('water_saved_gallons', '0')),
+                    'co2_saved_g': float(eco_metrics.get('co2_saved_grams', '0').replace('g', '')),
+                    'privacy_score': eco_metrics.get('privacy_score', '100% Local'),
+                    'data_transmitted_bytes': int(eco_metrics.get('data_transmitted', '0 bytes').replace(' bytes', '')),
+                    'total_responses': int(eco_metrics.get('responses_count', 0))
+                }
+            else:
+                # Default eco context for systems without metrics
+                context['eco_metrics'] = {
+                    'energy_saved_kwh': 0.0,
+                    'water_saved_ml': 0.0,
+                    'co2_saved_g': 0.0,
+                    'privacy_score': '100% Local',
+                    'data_transmitted_bytes': 0,
+                    'total_responses': 0
+                }
+        except Exception as e:
+            print(f"🔍 [DEBUG] Eco metrics collection failed: {e}")
+            context['eco_metrics'] = {
+                'energy_saved_kwh': 0.0,
+                'water_saved_ml': 0.0,
+                'co2_saved_g': 0.0,
+                'privacy_score': '100% Local',
+                'data_transmitted_bytes': 0,
+                'total_responses': 0
+            }
+        
         return context
+    
+    def _parse_water_saved(self, water_str: str) -> float:
+        """Convert water saved string to ml"""
+        try:
+            if 'gallons' in water_str:
+                gallons = float(water_str.replace(' gallons', ''))
+                return gallons * 3785.41  # Convert gallons to ml
+            elif 'ml' in water_str:
+                return float(water_str.replace(' ml', ''))
+            else:
+                return 0.0
+        except:
+            return 0.0
 
     def _generate_intelligent_greeting(self, metrics, m1k3_context: dict) -> str:
         """Generate an intelligent greeting using the improved LLMGreetingEngine"""
