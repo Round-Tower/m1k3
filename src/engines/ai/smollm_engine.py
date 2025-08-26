@@ -64,7 +64,7 @@ class SmolLMEngine:
         self.tokenizer = None
         self.backend = None
         self.context_messages = []
-        self.current_model_name = "smollm2:135m"  # Default model name
+        self.current_model_name = "gemma3:270m"  # Default model name
         
         # Initialize adaptive prompting system
         self.adaptive_formatter = AdaptivePromptFormatter(profiles_path or "config/model_profiles.json")
@@ -73,8 +73,8 @@ class SmolLMEngine:
         
         # Model paths
         self.models_dir = Path("models")
-        self.gguf_path = self.models_dir / "SmolLM-135M.Q4_K_M.gguf"
-        self.ollama_model = "smollm2:135m"
+        self.gguf_path = self.models_dir / "SmolLM-135M.Q4_K_M.gguf"  # Keep as fallback
+        self.ollama_model = "gemma3:270m"
         
         # Initialize logger
         self.logger = get_prompt_logger()
@@ -85,7 +85,7 @@ class SmolLMEngine:
         else:
             self.context_builder = None
         
-        print("🤖 SmolLM2 Engine with Adaptive Prompting initialized")
+        print("🤖 M1K3 Engine with Adaptive Prompting initialized")
         self._detect_model_profile()
     
     def _load_config(self, config_path: Optional[str] = None) -> SmolLMConfig:
@@ -172,7 +172,7 @@ class SmolLMEngine:
     
     def load_model(self) -> bool:
         """Load SmolLM2 model with best available backend"""
-        print("🔄 Loading SmolLM2 model...")
+        print("🔄 Loading M1K3 model...")
         
         # Priority 1: GGUF (fastest, smallest memory)
         if self.is_gguf_available():
@@ -186,7 +186,7 @@ class SmolLMEngine:
         # Priority 2: Ollama (if running)
         if self.is_ollama_available():
             self.backend = "ollama"
-            print("✅ SmolLM2 ready via Ollama API")
+            print(f"✅ {self.current_model_name} ready via Ollama API")
             return True
         
         # Priority 3: HuggingFace transformers (fallback)
@@ -303,7 +303,7 @@ class SmolLMEngine:
             try:
                 context_data = self.context_builder.build_context_summary(
                     backend=self.backend or "unknown",
-                    model_name="SmolLM2-135M",
+                    model_name=self.current_model_name,
                     context_used=len(self.context_messages) * 50,
                     context_max=self.config.context_length
                 )
@@ -581,7 +581,7 @@ class SmolLMEngine:
 
 def test_smollm_engine():
     """Test the SmolLM2 engine with adaptive prompting"""
-    print("🧪 Testing SmolLM2 Engine with Adaptive Prompting")
+    print("🧪 Testing M1K3 Engine with Adaptive Prompting")
     print("=" * 50)
     
     engine = SmolLMEngine()
