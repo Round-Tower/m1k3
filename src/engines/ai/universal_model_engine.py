@@ -45,8 +45,10 @@ class UniversalModelEngine:
         self.is_loading = False
         
         # Template and formatting systems
+        # Use relative path from project root
+        profiles_path = Path(__file__).parent.parent.parent.parent / "config" / "model_profiles.json"
         self.prompt_formatter = AdaptivePromptFormatter(
-            profiles_path=str(Path(__file__).parent.parent.parent / "config" / "model_profiles.json")
+            profiles_path=str(profiles_path)
         )
         self.template_manager = ModelTemplateManager()
         
