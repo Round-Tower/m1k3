@@ -9,8 +9,21 @@ torch>=2.2.2               # PyTorch for neural networks
 torchaudio>=2.2.2          # Audio processing for torch
 transformers>=4.55.3       # HuggingFace transformers (primary AI backend)
 
-# Audio processing
-sounddevice>=0.4.6         # Audio input/output
+# Audio processing and Speech-to-Text (STT)
+sounddevice>=0.4.6         # Audio input/output (required for all STT engines)
+
+# STT Engines (in priority order for minimal footprint)
+# 1. macOS Native (0MB) - requires: pip install pyobjc-framework-Speech pyobjc-framework-AVFoundation
+# 2. Vosk (54MB) - lightweight offline STT with good accuracy
+vosk>=0.3.45               # Lightweight offline speech recognition (primary choice)
+
+# 3. Web Speech API (0MB) - fallback for cloud-based recognition
+SpeechRecognition>=3.10.1  # Speech-to-text wrapper for multiple backends
+pyaudio>=0.2.11            # Audio interface (required for SpeechRecognition)
+
+# 4. Whisper (500MB+) - Optional high-quality STT (only if explicitly requested)
+# openai-whisper>=20231117   # High-quality local speech recognition (disabled by default)
+# Uncomment above line only if you need maximum accuracy and don't mind the large footprint
 
 # Data and math
 numpy>=1.26.4,<2.0         # Numerical computing (PyTorch compatibility requires 1.x)

@@ -31,7 +31,9 @@ class M1K3CLICore:
     
     def __init__(self, voice_enabled: bool = True, auto_avatar: bool = False, 
                  avatar_port: int = 8080, open_browser: bool = True, 
-                 transparency_level: str = "basic", rag_enabled: bool = False):
+                 transparency_level: str = "basic", rag_enabled: bool = False,
+                 stt_engine: str = "auto", stt_model: str = "vosk-model-small-en-us-0.15",
+                 stt_language: str = "en-US"):
         
         # Setup logging first
         setup_cli_logging()
@@ -44,6 +46,9 @@ class M1K3CLICore:
         self.open_browser = open_browser
         self.transparency_level = transparency_level
         self.rag_enabled = rag_enabled
+        self.stt_engine = stt_engine
+        self.stt_model = stt_model
+        self.stt_language = stt_language
         
         # State
         self.state = CLIState.STARTING
@@ -64,6 +69,7 @@ class M1K3CLICore:
         self.avatar_controller = None
         self.stats_tracker = None
         self.model_cli = None
+        self.stt_manager = None
         
         # Setup signal handlers
         self._setup_signal_handlers()
@@ -105,6 +111,7 @@ class M1K3CLICore:
             
             # Setup other components
             self._setup_voice_engine()
+            self._setup_stt_engine()
             self._setup_avatar_system()
             self._setup_sound_system()
             self._setup_monitoring()
@@ -184,6 +191,71 @@ class M1K3CLICore:
                     log_error(f"Voice engine setup failed: {e}")
         else:
             log_warning("Voice engine not available")
+    
+    def _setup_stt_engine(self):
+        """Setup speech-to-text engine"""
+        if self.stt_engine == "none":
+            log_info("STT disabled by user")
+            self.stt_manager = None
+            return
+        
+        try:
+            from ..engines.stt.stt_manager import STTManager
+            
+            # Set environment variables for STT configuration
+            import os
+            if self.stt_engine != "auto":
+                os.environ['M1K3_STT_ENGINE'] = self.stt_engine
+            if self.stt_engine == "whisper":
+                os.environ['M1K3_USE_WHISPER'] = 'true'
+            
+            self.stt_manager = STTManager()
+            
+            # Apply specific engine selection if not auto
+            if self.stt_engine != "auto" and self.stt_manager.is_available():
+                available_engines = self.stt_manager.get_available_engines()
+                
+                if self.stt_engine in available_engines:
+                    success = self.stt_manager.switch_engine(self.stt_engine)
+                    if success:
+                        log_info(f"✅ STT engine set to: {self.stt_engine}")
+                    else:
+                        log_warning(f"Failed to switch to {self.stt_engine}, using default")
+                else:
+                    log_warning(f"STT engine '{self.stt_engine}' not available. Available: {available_engines}")
+            
+            # Apply model/language configuration
+            if self.stt_manager.is_available():
+                current_engine = self.stt_manager.current_engine
+                
+                # Set model for Vosk/Whisper engines
+                if hasattr(current_engine, 'set_model') and self.stt_model:
+                    if self.stt_manager.current_engine_name in ['vosk', 'whisper']:
+                        current_engine.set_model(self.stt_model)
+                
+                # Set language/locale
+                if hasattr(current_engine, 'set_locale') and self.stt_language:
+                    current_engine.set_locale(self.stt_language)
+                elif hasattr(current_engine, 'locale') and self.stt_language:
+                    current_engine.locale = self.stt_language
+                
+                log_info(f"✅ STT engine loaded: {self.stt_manager.current_engine_name}")
+                
+                # Setup STT callbacks
+                self.stt_manager.on_speech_detected = self._handle_speech_input
+                self.stt_manager.on_listening_start = self._handle_listening_start
+                self.stt_manager.on_listening_stop = self._handle_listening_stop
+                self.stt_manager.on_error = self._handle_stt_error
+                
+            else:
+                log_warning("STT engine loaded but no backends available")
+                self.stt_manager = None
+        except ImportError as e:
+            log_warning(f"STT engine not available: {e}")
+            self.stt_manager = None
+        except Exception as e:
+            log_error(f"STT engine setup failed: {e}")
+            self.stt_manager = None
     
     def _setup_avatar_system(self):
         """Setup avatar system if enabled"""
@@ -351,6 +423,11 @@ class M1K3CLICore:
         if self.voice_enabled and self.voice_engine:
             print("🔊 Voice: Enabled")
         
+        if self.stt_manager and self.stt_manager.is_available():
+            engine_info = self.stt_manager.get_engine_info()
+            current_engine = engine_info.get("current_engine", "unknown")
+            print(f"🎤 STT: Enabled ({current_engine})")
+        
         if self.auto_avatar:
             print(f"👤 Avatar: http://localhost:{self.avatar_port}")
         
@@ -365,16 +442,75 @@ class M1K3CLICore:
                 log_debug(f"Startup sounds failed: {e}")
     
     def _get_user_input(self) -> Optional[str]:
-        """Get user input with prompt"""
+        """Get user input with prompt (text or voice)"""
         try:
-            prompt = "💬 You: "
-            user_input = input(prompt).strip()
+            # Check if user wants voice input
+            if self.stt_manager and self.stt_manager.is_available():
+                prompt = "💬 You (type or press ENTER for voice): "
+            else:
+                prompt = "💬 You: "
+            
+            # Get text input with timeout for voice mode
+            print(prompt, end="", flush=True)
+            
+            # Simple input for now - we'll add voice activation later
+            user_input = input().strip()
+            
+            # If empty input and STT available, use voice
+            if not user_input and self.stt_manager and self.stt_manager.is_available():
+                print("🎤 Listening... (speak now)")
+                print(f"🔧 DEBUG: Using {self.stt_manager.current_engine_name} engine")
+                voice_result = self.stt_manager.listen_once(timeout=15.0)
+                if voice_result:
+                    user_input = voice_result.text
+                    print(f"🔊 Heard: {user_input}")
+                else:
+                    print("⚠️ No speech detected or recognition failed")
+                    return None
+            
             return user_input if user_input else None
+            
         except (KeyboardInterrupt, EOFError):
             raise
         except Exception as e:
             log_error(f"Error getting user input: {e}")
             return None
+    
+    def _handle_speech_input(self, stt_result):
+        """Handle speech input from STT engine"""
+        try:
+            if stt_result and stt_result.text:
+                log_info(f"Speech detected: {stt_result.text}")
+                print(f"🔊 Heard: {stt_result.text}")
+                # Process the speech input as if it were typed
+                if not self._process_user_input(stt_result.text):
+                    return
+        except Exception as e:
+            log_error(f"Error handling speech input: {e}")
+    
+    def _handle_listening_start(self):
+        """Handle STT listening start"""
+        try:
+            print("🎤 Listening...")
+            if self.avatar_controller:
+                from ..avatar.avatar_controller import AvatarEmotion
+                self.avatar_controller.update_emotion("", "listening", force_emotion=AvatarEmotion.THINKING)
+        except Exception as e:
+            log_debug(f"Error handling listening start: {e}")
+    
+    def _handle_listening_stop(self):
+        """Handle STT listening stop"""
+        try:
+            if self.avatar_controller:
+                from ..avatar.avatar_controller import AvatarEmotion
+                self.avatar_controller.update_emotion("", "listening_done", force_emotion=AvatarEmotion.HAPPY)
+        except Exception as e:
+            log_debug(f"Error handling listening stop: {e}")
+    
+    def _handle_stt_error(self, error_message: str):
+        """Handle STT errors"""
+        log_error(f"STT Error: {error_message}")
+        print(f"⚠️ Voice recognition error: {error_message}")
     
     def _process_user_input(self, user_input: str) -> bool:
         """Process user input (returns False to exit)"""
@@ -477,6 +613,10 @@ class M1K3CLICore:
             # Stop AI processor
             if self.ai_processor:
                 self.ai_processor.stop_processing()
+            
+            # Stop STT engine
+            if self.stt_manager:
+                self.stt_manager.cleanup()
             
             # Stop avatar server
             if self.auto_avatar and self.initializer and self.initializer.is_component_available('avatar'):

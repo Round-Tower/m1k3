@@ -11,6 +11,7 @@ Privacy-focused local AI assistant with voice synthesis, web dashboard, and CLI 
 - **Intelligent voice synthesis** with content-aware TTS, automatic content parsing, and voice modulation per content type (thinking, narration, answer, clarification) ⚠️ (speech cutoff bug documented in BUGS.md)
 - **Avatar system** with real-time web dashboard and emotion tracking
 - **Enhanced CLI** with animations, eco-metrics, 8K context visualization
+- **Speech-to-Text (STT) system** with multi-engine fallbacks (macOS Native, Vosk, Web Speech, Whisper)
 - **Model transparency engine** with 5-level debugging system
 - **PWA deployment** with device-adaptive AI (2GB→8GB+ RAM) and Docker containers
 - **CI/CD pipeline** with 166 tests across 74 files (92.3% success rate)
@@ -94,7 +95,49 @@ avatar start      # Start web dashboard
 avatar status     # Show server status
 avatar emotion <emotion> [intensity]  # Set emotion (0-100)
 avatar test       # Test all emotions
+
+# Speech-to-Text commands
+# Press ENTER in CLI for voice input
+stt status        # Show current STT engine and status
+stt test          # Test microphone and speech recognition
+stt engine <name> # Switch STT engine (native, vosk, web, whisper)  
+stt calibrate     # Recalibrate microphone sensitivity
 ```
+
+## Speech-to-Text (STT) System
+
+### Multi-Engine Architecture
+- **macOS Native**: SFSpeechRecognizer (0MB, private, on-device)
+- **Vosk**: Offline ML model (54MB, good accuracy, cross-platform)  
+- **Web Speech**: SpeechRecognition library (0MB, cloud-based)
+- **Whisper**: OpenAI model (1GB+, excellent quality, optional)
+
+### Voice Input Usage
+```bash
+# Enable specific STT engine
+python cli.py --stt-engine native    # macOS Native (private)
+python cli.py --stt-engine vosk      # Offline (54MB)
+python cli.py --stt-engine web       # Cloud-based (0MB)
+python cli.py --stt-engine none      # Disable voice input
+
+# In CLI, press ENTER to activate voice input
+💬 You (type or press ENTER for voice): [ENTER]
+🎤 Listening... (speak now)
+```
+
+### Diagnostic Tools
+```bash
+python audio_level_test.py           # Test microphone audio levels  
+python stt_diagnostics.py            # Test all STT engines
+python check_speech_permissions.py   # Verify macOS permissions
+```
+
+### Features
+- **Automatic Fallbacks**: Tries backup engines when primary fails
+- **Permission Management**: Automatic macOS authorization prompts
+- **Audio Monitoring**: Real-time level verification and feedback
+- **Clean State Management**: Proper resource cleanup between attempts
+- **Comprehensive Diagnostics**: Easy troubleshooting with detailed feedback
 
 ## Model Management
 ```bash

@@ -113,6 +113,23 @@ class CLICommandHandler:
             examples=["profile natural", "/profile broadcast", "profile debug"]
         ))
         
+        # STT commands
+        self._register_command(Command(
+            name="stt", aliases=["speech"], 
+            description="Control speech-to-text settings and status",
+            category=CommandCategory.VOICE, handler=self.handle_stt,
+            usage="stt [status|engine <name>|continuous|calibrate|test]",
+            examples=["stt", "stt status", "stt engine web_speech", "stt test"]
+        ))
+        
+        self._register_command(Command(
+            name="listen", aliases=["🎤"], 
+            description="Start voice listening mode for next input",
+            category=CommandCategory.VOICE, handler=self.handle_listen,
+            usage="listen",
+            examples=["listen", "🎤"]
+        ))
+        
         self._register_command(Command(
             name="tts", aliases=[], 
             description="Show intelligent TTS system status and voice settings",
@@ -347,6 +364,126 @@ class CLICommandHandler:
         else:
             print("⚠️ Voice control not available")
         return True
+    
+    def handle_stt(self, args: List[str]) -> bool:
+        """Handle STT (speech-to-text) commands"""
+        if not hasattr(self.cli, 'stt_manager') or not self.cli.stt_manager:
+            print("⚠️ Speech-to-text not available")
+            return True
+        
+        stt_manager = self.cli.stt_manager
+        
+        if not args or args[0] == "status":
+            # Show STT status
+            engine_info = stt_manager.get_engine_info()
+            print("🎤 Speech-to-Text Status:")
+            print(f"   Available: {engine_info.get('available', False)}")
+            print(f"   Current Engine: {engine_info.get('current_engine', 'None')}")
+            print(f"   Available Engines: {', '.join(engine_info.get('available_engines', []))}")
+            print(f"   Status: {engine_info.get('status', 'Unknown')}")
+            print(f"   Language: {engine_info.get('language', 'Unknown')}")
+            print(f"   Continuous Listening: {engine_info.get('continuous_listening', False)}")
+            print(f"   Confidence Threshold: {engine_info.get('confidence_threshold', 0.5):.2f}")
+            return True
+        
+        command = args[0].lower()
+        
+        if command == "engine" and len(args) > 1:
+            # Switch STT engine
+            engine_name = args[1]
+            available_engines = stt_manager.get_available_engines()
+            if engine_name in available_engines:
+                success = stt_manager.switch_engine(engine_name)
+                if success:
+                    print(f"🔄 Switched to {engine_name} STT engine")
+                else:
+                    print(f"❌ Failed to switch to {engine_name}")
+            else:
+                print(f"❌ Engine '{engine_name}' not available. Available: {', '.join(available_engines)}")
+        
+        elif command == "continuous":
+            # Toggle continuous listening
+            success = stt_manager.toggle_continuous_listening()
+            if success:
+                status = "started" if stt_manager.continuous_listening else "stopped"
+                print(f"🎤 Continuous listening {status}")
+            else:
+                print("❌ Failed to toggle continuous listening")
+        
+        elif command == "calibrate":
+            # Calibrate microphone (for web speech engine)
+            current_engine = stt_manager.current_engine
+            if hasattr(current_engine, 'calibrate_microphone'):
+                success = current_engine.calibrate_microphone()
+                if success:
+                    print("✅ Microphone calibrated")
+                else:
+                    print("❌ Microphone calibration failed")
+            else:
+                print("⚠️ Current engine doesn't support calibration")
+        
+        elif command == "test":
+            # Test microphone access
+            current_engine = stt_manager.current_engine
+            engine_name = stt_manager.current_engine_name
+            
+            print(f"🧪 Testing STT engine: {engine_name}")
+            
+            # Test microphone access
+            if hasattr(current_engine, 'test_microphone_access'):
+                mic_success = current_engine.test_microphone_access()
+                if not mic_success:
+                    print("❌ STT test failed - microphone access issue")
+                    return True
+            else:
+                print("⚠️ Microphone test not supported by current engine")
+            
+            # Test basic recognition
+            print("🎤 Testing speech recognition - say 'hello test'...")
+            try:
+                result = stt_manager.listen_once(timeout=5.0, phrase_timeout=2.0)
+                if result and result.text:
+                    print(f"✅ STT test successful!")
+                    print(f"   Heard: '{result.text}'")
+                    print(f"   Confidence: {result.confidence:.2f}")
+                    print(f"   Engine: {result.engine}")
+                else:
+                    print("⚠️ STT test completed but no speech was recognized")
+                    print("💡 Try speaking louder or closer to microphone")
+            except Exception as e:
+                print(f"❌ STT test failed: {e}")
+        
+        else:
+            print(f"❌ Unknown STT command: {command}")
+            print("Usage: stt [status|engine <name>|continuous|calibrate|test]")
+        
+        return True
+    
+    def handle_listen(self, args: List[str]) -> bool:
+        """Handle listen command - activate voice input for next response"""
+        if not hasattr(self.cli, 'stt_manager') or not self.cli.stt_manager:
+            print("⚠️ Speech-to-text not available")
+            return True
+        
+        stt_manager = self.cli.stt_manager
+        if not stt_manager.is_available():
+            print("⚠️ STT engine not available")
+            return True
+        
+        print("🎤 Listening for voice input... (speak now)")
+        try:
+            result = stt_manager.listen_once(timeout=10.0, phrase_timeout=2.0)
+            if result and result.text:
+                print(f"🔊 Heard: {result.text}")
+                # Process the voice input as if it were typed
+                return self.cli._process_user_input(result.text)
+            else:
+                print("⚠️ No speech detected or recognition failed")
+                return True
+        except Exception as e:
+            log_error(f"Voice listening failed: {e}")
+            print(f"❌ Voice listening error: {e}")
+            return True
     
     def handle_voice_profile(self, args: List[str]) -> bool:
         """Handle voice profile command"""

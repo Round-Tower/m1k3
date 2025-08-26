@@ -14,6 +14,7 @@
 ### 🌟 Core Features
 - **🎯 SmolLM2-135M AI Engine** - Ultra-efficient 135M parameter model with adaptive prompting
 - **🐱 KittenTTS Voice Synthesis** - High-quality content-aware voice with 8 profiles and audio completion
+- **🎤 Speech-to-Text (STT) System** - Multi-engine voice input with automatic fallbacks (macOS Native, Vosk, Web Speech)
 - **🧠 RAG (Retrieval-Augmented Generation)** with comprehensive expertise knowledge base (20 categories, 1,341+ documents)
 - **⚡ Repository Optimization** - 90% size reduction (6GB → 453MB) with GitHub compliance
 - **🧘 Real-Time Avatar Dashboard** with emotion tracking and WebSocket communication
@@ -89,6 +90,28 @@ Could you clarify what you mean?        # → Rising intonation, helpful tone
 /tts status                             # Show intelligent TTS system status
 voice, mute                             # Toggle voice synthesis on/off
 /profile <name>                         # Set voice profile (natural, broadcast, etc.)
+```
+
+#### **STT (Speech-to-Text) Commands**
+```bash
+# Voice Input - Press ENTER to activate voice input in CLI
+💬 You (type or press ENTER for voice): [ENTER]  # Activates voice listening
+
+# STT Management Commands
+stt status                              # Show current STT engine and status
+stt test                               # Test microphone and speech recognition
+stt engine <name>                      # Switch STT engine (native, vosk, web, whisper)
+stt engines                            # List available STT engines
+stt calibrate                          # Recalibrate microphone sensitivity
+```
+
+#### **STT Engine Options**
+```bash
+python cli.py --stt-engine native      # Use macOS native STT (0MB, private)
+python cli.py --stt-engine vosk        # Use Vosk offline STT (54MB)
+python cli.py --stt-engine web         # Use Web Speech API (0MB, cloud)
+python cli.py --stt-engine whisper     # Use Whisper STT (1GB+, excellent quality)
+python cli.py --stt-engine none        # Disable voice input
 ```
 
 #### **System Integration**

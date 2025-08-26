@@ -36,6 +36,19 @@ def main():
     parser.add_argument("--rag", action="store_true", 
                        help="Enable RAG (Retrieval-Augmented Generation) with comprehensive knowledge base")
     
+    # Speech-to-Text (STT) options
+    stt_group = parser.add_argument_group('Speech Recognition Options')
+    stt_group.add_argument("--stt-engine", 
+                          choices=["auto", "native", "vosk", "web", "whisper", "none"],
+                          default="auto",
+                          help="Speech recognition engine: auto (smart default), native (macOS only), vosk (offline), web (cloud), whisper (heavy), none (disable)")
+    stt_group.add_argument("--stt-model", 
+                          default="vosk-model-small-en-us-0.15",
+                          help="STT model name (for Vosk/Whisper engines)")
+    stt_group.add_argument("--stt-lang", 
+                          default="en-US",
+                          help="Speech recognition language (default: en-US)")
+    
     args = parser.parse_args()
     
     # Handle special modes
@@ -52,7 +65,10 @@ def main():
         avatar_port=args.avatar_port,
         open_browser=not args.no_browser,
         transparency_level=args.transparency,
-        rag_enabled=args.rag
+        rag_enabled=args.rag,
+        stt_engine=args.stt_engine,
+        stt_model=args.stt_model,
+        stt_language=args.stt_lang
     )
     
     # Run in appropriate mode
