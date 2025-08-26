@@ -47,9 +47,12 @@ class VoskSTTEngine(STTEngine):
         self.continuous_callback: Optional[Callable[[STTResult], None]] = None
         self.stop_continuous = threading.Event()
         
-        # Voice activity detection settings
-        self.silence_threshold = 0.01
-        self.min_speech_duration = 0.5  # Minimum seconds of speech
+        # Shutdown signal (can be set by CLI core for force termination)
+        self.force_shutdown = None
+        
+        # Voice activity detection settings (more sensitive thresholds)
+        self.silence_threshold = 0.003  # Lowered from 0.01 to detect quieter speech
+        self.min_speech_duration = 0.3  # Minimum seconds of speech (reduced)
         self.max_silence_duration = 2.0  # Max seconds of silence before stopping
         
         # Model settings
@@ -222,8 +225,15 @@ class VoskSTTEngine(STTEngine):
             ):
                 start_time = time.time()
                 while time.time() - start_time < timeout:
+                    # Check for force shutdown signal
+                    if self.force_shutdown and self.force_shutdown.is_set():
+                        print("🛑 Audio recording interrupted by shutdown signal")
+                        return None
+                    
                     if not audio_buffer:
-                        sd.sleep(100)  # Wait 100ms
+                        # Use time.sleep instead of sd.sleep for interruptibility
+                        import time
+                        time.sleep(0.1)  # Wait 100ms
                         continue
                     
                     # Check if we have enough audio and silence to stop
@@ -231,7 +241,9 @@ class VoskSTTEngine(STTEngine):
                         time.time() - last_speech_time > phrase_timeout):
                         break
                     
-                    sd.sleep(100)
+                    # Use time.sleep instead of sd.sleep for interruptibility
+                    import time
+                    time.sleep(0.1)  # 100ms
             
             if not audio_buffer:
                 print("⚠️ No audio recorded")
@@ -263,11 +275,25 @@ class VoskSTTEngine(STTEngine):
             self.status = STTStatus.PROCESSING
             
             print("🧠 Transcribing audio...")
+            print(f"   📊 Audio data: {len(audio_data)} samples, dtype: {audio_data.dtype}")
+            print(f"   📊 Audio range: {audio_data.min():.6f} to {audio_data.max():.6f}")
             
             # Convert to int16 for Vosk (it expects 16-bit audio)
             if audio_data.dtype != np.int16:
-                # Normalize and convert to int16
-                audio_data = (audio_data * 32767).astype(np.int16)
+                # Normalize and convert to int16 with extra amplification
+                max_val = np.max(np.abs(audio_data))
+                if max_val > 0:
+                    # Normalize to use full range, apply gain boost, then convert
+                    normalized = audio_data / max_val
+                    # Apply 3x gain boost for quiet speech (but prevent clipping)
+                    gained = np.clip(normalized * 3.0, -1.0, 1.0)
+                    audio_data = (gained * 32767).astype(np.int16)
+                    print(f"   🔧 Normalized with 3x gain and converted to int16 (max was: {max_val:.6f})")
+                else:
+                    print("   ⚠️ Audio data is silent, converting to int16 anyway")
+                    audio_data = (audio_data * 32767).astype(np.int16)
+            
+            print(f"   📊 Final audio: {len(audio_data)} samples, range: {audio_data.min()} to {audio_data.max()}")
             
             # Process audio in chunks for streaming-like behavior
             chunk_size = int(self.sample_rate * 0.1)  # 100ms chunks
@@ -287,11 +313,14 @@ class VoskSTTEngine(STTEngine):
             
             # Get final result
             final_json = self.recognizer.FinalResult()
+            print(f"   📋 Vosk final result JSON: {final_json}")
             final_result = json.loads(final_json)
+            print(f"   📋 Parsed final result: {final_result}")
             
             transcription_time = time.time() - start_time
             
             text = final_result.get('text', '').strip()
+            print(f"   📝 Extracted text: '{text}'")
             
             # Calculate confidence from word-level confidence if available
             confidence = 0.8  # Default confidence

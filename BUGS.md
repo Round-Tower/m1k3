@@ -47,7 +47,84 @@ Created **Audio Completion Engine** that:
 
 ## 🐛 Active Bugs
 
-Currently no active bugs reported.
+### UnifiedVoiceEngine Synthesis Issues - ✅ FIXED  
+**Status**: RESOLVED ✅  
+**Reported**: 2025-08-26  
+**Fixed**: 2025-08-26  
+**Severity**: High - Prevented voice synthesis functionality  
+
+**Description**:  
+UnifiedVoiceEngine was experiencing multiple issues preventing proper voice synthesis:
+- KittenManager instantiation error (trying to call instance as constructor)
+- Poor error handling causing crashes instead of graceful fallbacks
+- Missing fallback logic when TTS components failed
+- Audio effects pipeline failures breaking synthesis
+
+**Root Causes Fixed**:
+1. **KittenManager Instance Error**: Fixed incorrect `KittenManager()` call - KittenManager is already a singleton instance
+2. **Missing Error Handling**: Added comprehensive try/catch blocks throughout synthesis pipeline
+3. **Failed Chunk Recovery**: Added fallback to SimpleVoiceEngine when chunk generation fails
+4. **Effects Pipeline Failures**: Added graceful degradation when audio effects are unavailable
+
+**Solution Implemented**:
+- Fixed KittenManager singleton usage pattern
+- Added robust error handling with fallback chains
+- Enhanced input validation (empty text, disabled state checks)
+- Improved effects pipeline with availability detection
+- Added comprehensive diagnostic logging
+
+**Files Modified**:
+- `src/engines/voice/unified_voice_engine.py` - Complete error handling overhaul
+- `test_voice_engine_fix.py` - Comprehensive verification test suite
+
+**Verification Results**:
+- ✅ Engine initialization working correctly
+- ✅ All voice profiles loading (natural, debug, minimal, etc.)  
+- ✅ Short text synthesis (fast path) working
+- ✅ Long text synthesis (chunked path) working
+- ✅ Audio completion engine preventing cutoffs
+- ✅ Effects pipeline functioning with graceful fallbacks
+
+---
+
+### macOS Native STT Recognition Task Stuck in Starting State
+**Status**: Under Investigation 🔍  
+**Reported**: 2025-08-26  
+**Severity**: High - Prevents native STT functionality  
+
+**Description**:  
+macOS SFSpeechRecognizer creates recognition tasks successfully but they remain stuck in "Starting" state (0) instead of progressing to "Running" state (1). Delegate callbacks are never triggered despite proper PyObjC protocol implementation.
+
+**Symptoms**:
+- ✅ Audio levels detected correctly (0.1000 vs 0.0000 - no audio levels bug)
+- ✅ Delegate methods properly implemented with correct PyObjC naming
+- ✅ Recognition task created successfully 
+- ❌ Task state never progresses from "Starting (0)" to "Running (1)"
+- ❌ Zero delegate callbacks received (`callback_count: 0`)
+- ❌ No speech detection or recognition results
+
+**Investigation Progress**:
+- ✅ Fixed all SFSpeechRecognitionTaskDelegate method signatures
+- ✅ Added comprehensive diagnostic logging and failure analysis
+- ✅ Implemented retry logic with state reset between attempts
+- ✅ Confirmed microphone permissions and hardware detection working
+- ⚠️ PyObjC bridge appears to create delegate correctly but SFSpeechRecognizer doesn't invoke methods
+
+**Workaround**: ✅ **IMPLEMENTED** - Vosk STT engine promoted to primary engine (54MB footprint)  
+**Status**: Production system now uses reliable Vosk instead of problematic macOS native
+
+**Files Involved**:
+- `src/engines/stt/macos_stt_engine.py` - Enhanced with diagnostics and retry logic
+- `src/engines/stt/stt_manager.py` - Modified to prioritize Vosk over macOS native  
+- `test_stt_fixes.py` - Comprehensive test suite for validation
+- `test_vosk_cli.py` - Verification that Vosk is primary engine
+- `test_vosk_recognition.py` - Test script for actual speech recognition
+
+**Next Steps**:
+1. Test with actual speech input vs ambient noise
+2. Investigate additional SFSpeechRecognizer configuration requirements  
+3. Check if audio session properties need specific settings
+4. Consider alternative PyObjC delegate implementation approaches
 
 ---
 

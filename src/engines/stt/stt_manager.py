@@ -102,28 +102,14 @@ class STTManager:
         """Initialize all available STT engines in priority order (reliability first)"""
         print("🎤 Initializing STT engines...")
         
-        # Priority 1: macOS Native (zero footprint, on-device, fast)
-        try:
-            from .macos_stt_engine import MacOSSTTEngine
-            macos_engine = MacOSSTTEngine()
-            if macos_engine.initialize():
-                self.engines["macos_native"] = macos_engine
-                print("✅ macOS Native STT engine loaded (0MB footprint)")
-                if not self.current_engine or self._engine_explicitly_requested("macos_native") or self._engine_explicitly_requested("native"):
-                    self.current_engine = macos_engine
-                    self.current_engine_name = "macos_native"
-        except ImportError as e:
-            print(f"⚠️ macOS Native STT not available: {e}")
-        except Exception as e:
-            print(f"⚠️ macOS Native STT initialization failed: {e}")
-        
-        # Priority 2: Vosk (lightweight offline, good accuracy)
+        # Priority 1: Vosk (lightweight offline, reliable)
+        # NOTE: Temporarily prioritized over macOS Native due to delegate callback issues
         try:
             from .vosk_stt_engine import VoskSTTEngine
             vosk_engine = VoskSTTEngine()
             if vosk_engine.initialize():
                 self.engines["vosk"] = vosk_engine
-                print("✅ Vosk STT engine loaded (54MB footprint)")
+                print("✅ Vosk STT engine loaded (54MB footprint) - PRIMARY")
                 if not self.current_engine or self._engine_explicitly_requested("vosk"):
                     self.current_engine = vosk_engine
                     self.current_engine_name = "vosk"
@@ -131,6 +117,22 @@ class STTManager:
             print(f"⚠️ Vosk STT not available: {e}")
         except Exception as e:
             print(f"⚠️ Vosk STT initialization failed: {e}")
+        
+        # Priority 2: macOS Native (currently has delegate callback issues - see BUGS.md)
+        try:
+            from .macos_stt_engine import MacOSSTTEngine
+            macos_engine = MacOSSTTEngine()
+            if macos_engine.initialize():
+                self.engines["macos_native"] = macos_engine
+                print("✅ macOS Native STT engine loaded (0MB footprint) - FALLBACK")
+                # Only use if explicitly requested or if no other engine available
+                if not self.current_engine and (self._engine_explicitly_requested("macos_native") or self._engine_explicitly_requested("native")):
+                    self.current_engine = macos_engine
+                    self.current_engine_name = "macos_native"
+        except ImportError as e:
+            print(f"⚠️ macOS Native STT not available: {e}")
+        except Exception as e:
+            print(f"⚠️ macOS Native STT initialization failed: {e}")
         
         # Priority 3: Web Speech (cloud-based fallback)
         try:

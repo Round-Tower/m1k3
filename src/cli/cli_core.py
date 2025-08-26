@@ -4,6 +4,7 @@ CLI Core Module
 Main CLI loop and coordination logic for M1K3 CLI
 """
 
+import os
 import sys
 import time
 import signal
@@ -33,7 +34,11 @@ class M1K3CLICore:
                  avatar_port: int = 8080, open_browser: bool = True, 
                  transparency_level: str = "basic", rag_enabled: bool = False,
                  stt_engine: str = "auto", stt_model: str = "vosk-model-small-en-us-0.15",
-                 stt_language: str = "en-US"):
+                 stt_language: str = "en-US", voice_first: bool = False, 
+                 force_internal_mic: bool = False,
+                 streaming_enabled: bool = False, conversation_mode: bool = False, 
+                 chunk_size: int = 20, chunk_timeout: float = 0.5, response_delay: float = 0.2,
+                 enable_interruptions: bool = True):
         
         # Setup logging first
         setup_cli_logging()
@@ -49,6 +54,16 @@ class M1K3CLICore:
         self.stt_engine = stt_engine
         self.stt_model = stt_model
         self.stt_language = stt_language
+        self.voice_first = voice_first
+        self.force_internal_mic = force_internal_mic
+        
+        # Streaming configuration
+        self.streaming_enabled = streaming_enabled
+        self.conversation_mode = conversation_mode
+        self.chunk_size = chunk_size
+        self.chunk_timeout = chunk_timeout
+        self.response_delay = response_delay
+        self.enable_interruptions = enable_interruptions
         
         # State
         self.state = CLIState.STARTING
@@ -71,23 +86,47 @@ class M1K3CLICore:
         self.model_cli = None
         self.stt_manager = None
         
+        # Streaming components
+        self.streaming_tts = None
+        self.conversation_flow = None
+        
         # Setup signal handlers
         self._setup_signal_handlers()
         
         log_info("M1K3 CLI Core initialized")
     
     def _setup_signal_handlers(self):
-        """Setup signal handlers for graceful shutdown"""
+        """Setup signal handlers for graceful shutdown with forced termination fallback"""
         self.signal_received = False  # Flag to prevent duplicate messages
+        self.force_shutdown = threading.Event()  # Emergency shutdown flag
         
         def signal_handler(signum, frame):
-            if not self.signal_received:  # Only log once
-                log_info(f"Received signal {signum}, initiating shutdown")
+            if not self.signal_received:  # First signal - graceful shutdown
+                log_info(f"Received signal {signum}, initiating graceful shutdown")
                 self.signal_received = True
-                print(f"\n📡 Shutting down gracefully...")
+                print(f"\n📡 Shutting down gracefully... (Press Ctrl+C again to force quit)")
                 
-            self.shutdown_requested = True
-            self.running = False  # Immediate stop flag
+                self.shutdown_requested = True
+                self.running = False  # Immediate stop flag
+                
+                # Set force shutdown event for audio operations
+                self.force_shutdown.set()
+                
+                # Start emergency shutdown timer
+                def emergency_shutdown():
+                    time.sleep(3.0)  # Give 3 seconds for graceful shutdown
+                    if self.running or not self._is_fully_shutdown():
+                        print("\n⚠️ Force terminating application...")
+                        log_warning("Force terminating due to hanging shutdown")
+                        os._exit(1)  # Force immediate termination
+                
+                emergency_thread = threading.Thread(target=emergency_shutdown, daemon=True)
+                emergency_thread.start()
+                
+            else:  # Second signal - immediate forced termination
+                print(f"\n🚨 Force shutdown requested!")
+                log_warning("Immediate termination requested")
+                os._exit(1)  # Force immediate termination
         
         signal.signal(signal.SIGINT, signal_handler)
         signal.signal(signal.SIGTERM, signal_handler)
@@ -112,6 +151,7 @@ class M1K3CLICore:
             # Setup other components
             self._setup_voice_engine()
             self._setup_stt_engine()
+            self._setup_streaming_components()
             self._setup_avatar_system()
             self._setup_sound_system()
             self._setup_monitoring()
@@ -183,6 +223,9 @@ class M1K3CLICore:
                 try:
                     self.voice_engine = create_voice_engine()
                     if self.voice_engine and self.voice_engine.load_model():
+                        # Wire up force shutdown signal
+                        if hasattr(self.voice_engine, 'force_shutdown'):
+                            self.voice_engine.force_shutdown = self.force_shutdown
                         log_info("✅ Voice engine loaded")
                     else:
                         log_warning("Voice engine failed to load model")
@@ -241,6 +284,31 @@ class M1K3CLICore:
                 
                 log_info(f"✅ STT engine loaded: {self.stt_manager.current_engine_name}")
                 
+                # Wire up force shutdown signal to the current STT engine
+                if hasattr(self.stt_manager, 'current_engine') and self.stt_manager.current_engine:
+                    if hasattr(self.stt_manager.current_engine, 'force_shutdown'):
+                        self.stt_manager.current_engine.force_shutdown = self.force_shutdown
+                        log_debug("Force shutdown signal wired to STT engine")
+                
+                # Configure force internal microphone option for Bluetooth workarounds
+                if self.force_internal_mic:
+                    log_info("🎤 Force internal microphone enabled (Bluetooth workaround)")
+                    print("🎤 Force internal microphone mode enabled")
+                    print("   💡 This will attempt to use the internal microphone instead of Bluetooth")
+                    
+                    # Apply to macOS STT engine if available
+                    if (hasattr(self.stt_manager, 'current_engine') and 
+                        self.stt_manager.current_engine and
+                        self.stt_manager.current_engine_name == "macos_native"):
+                        
+                        if hasattr(self.stt_manager.current_engine, 'force_internal_mic'):
+                            self.stt_manager.current_engine.force_internal_mic = True
+                            log_debug("Internal microphone mode configured for macOS STT")
+                        else:
+                            log_warning("macOS STT engine doesn't support force internal microphone")
+                    else:
+                        log_debug("Force internal mic applied to non-macOS engine (may not be relevant)")
+                
                 # Setup STT callbacks
                 self.stt_manager.on_speech_detected = self._handle_speech_input
                 self.stt_manager.on_listening_start = self._handle_listening_start
@@ -256,6 +324,81 @@ class M1K3CLICore:
         except Exception as e:
             log_error(f"STT engine setup failed: {e}")
             self.stt_manager = None
+    
+    def _setup_streaming_components(self):
+        """Setup streaming TTS and conversation flow components"""
+        log_info("🚀 Setting up streaming components")
+        
+        # Setup Streaming TTS if enabled
+        if self.streaming_enabled or self.conversation_mode:
+            if self.initializer.is_component_available('streaming_tts'):
+                create_streaming_tts_engine = self.initializer.get_component('create_streaming_tts_engine')
+                if create_streaming_tts_engine:
+                    try:
+                        self.streaming_tts = create_streaming_tts_engine(
+                            voice_engine=self.voice_engine,
+                            chunk_size=self.chunk_size,
+                            chunk_timeout=self.chunk_timeout
+                        )
+                        log_info("✅ Streaming TTS engine initialized")
+                    except Exception as e:
+                        log_error(f"Streaming TTS setup failed: {e}")
+                        self.streaming_tts = None
+                else:
+                    log_warning("Streaming TTS component not available")
+            else:
+                log_warning("Streaming TTS not available in initializer")
+        
+        # Setup Conversation Flow Manager if enabled
+        if self.conversation_mode:
+            if self.initializer.is_component_available('conversation_flow'):
+                ConversationFlowManager = self.initializer.get_component('conversation_flow_manager')
+                if ConversationFlowManager:
+                    try:
+                        self.conversation_flow = ConversationFlowManager(
+                            stt_manager=self.stt_manager,
+                            streaming_tts=self.streaming_tts,
+                            ai_engine=self.ai_engine
+                        )
+                        
+                        # Configure conversation flow settings
+                        self.conversation_flow.enable_interruptions = self.enable_interruptions
+                        self.conversation_flow.response_delay = self.response_delay
+                        
+                        # Setup callbacks
+                        self.conversation_flow.on_state_change = self._handle_conversation_state_change
+                        self.conversation_flow.on_turn_start = self._handle_conversation_turn_start
+                        self.conversation_flow.on_turn_complete = self._handle_conversation_turn_complete
+                        self.conversation_flow.on_interruption = self._handle_conversation_interruption
+                        
+                        log_info("✅ Conversation flow manager initialized")
+                        
+                        # Show streaming status
+                        if self.streaming_enabled:
+                            log_info("🎵 Streaming mode enabled - real-time TTS synthesis active")
+                        if self.conversation_mode:
+                            log_info("💬 Conversation mode enabled - natural turn-taking active")
+                            
+                    except Exception as e:
+                        log_error(f"Conversation flow setup failed: {e}")
+                        self.conversation_flow = None
+                else:
+                    log_warning("Conversation flow component not available")
+            else:
+                log_warning("Conversation flow not available in initializer")
+        
+        # Log final streaming status
+        streaming_active = self.streaming_tts is not None
+        conversation_active = self.conversation_flow is not None
+        
+        if streaming_active and conversation_active:
+            log_info("🎊 Full streaming experience active!")
+        elif streaming_active:
+            log_info("🚀 Streaming TTS active")
+        elif conversation_active:
+            log_info("💬 Conversation flow active")
+        else:
+            log_info("💭 Using traditional response mode")
     
     def _setup_avatar_system(self):
         """Setup avatar system if enabled"""
@@ -337,7 +480,24 @@ class M1K3CLICore:
         self.running = True
         self.state = CLIState.READY
         
+        # Start conversation flow if enabled
+        if self.conversation_mode and self.conversation_flow:
+            log_info("Starting conversation flow manager")
+            if self.conversation_flow.start_conversation():
+                log_info("✅ Conversation flow active - natural turn-taking enabled")
+            else:
+                log_warning("Failed to start conversation flow, falling back to standard mode")
+                self.conversation_mode = False
+        
         log_info("CLI ready for user input")
+        
+        # Voice-first mode announcement
+        if self.voice_first and self.stt_manager and self.stt_manager.is_available():
+            print("🎤 VOICE-FIRST MODE ENABLED")
+            print(f"   - Primary engine: {self.stt_manager.current_engine_name}")
+            print(f"   - Voice input will be used by default for all interactions")
+            print(f"   - You can still type instead if speech recognition fails")
+            print()
         
         try:
             while self.running and not self.shutdown_requested:
@@ -444,23 +604,58 @@ class M1K3CLICore:
     def _get_user_input(self) -> Optional[str]:
         """Get user input with prompt (text or voice)"""
         try:
-            # Check if user wants voice input
-            if self.stt_manager and self.stt_manager.is_available():
+            # Voice-first mode: automatically start with voice input
+            if self.voice_first and self.stt_manager and self.stt_manager.is_available():
+                print("🎤 Voice-first mode: Listening... (speak now or type to override)")
+                print(f"🔧 DEBUG: Using {self.stt_manager.current_engine_name} engine")
+                
+                # Check for shutdown before potentially blocking voice input
+                if self.shutdown_requested:
+                    return None
+                
+                voice_result = self.stt_manager.listen_once(timeout=15.0)
+                
+                # Check for shutdown after voice input
+                if self.shutdown_requested:
+                    return None
+                    
+                if voice_result:
+                    user_input = voice_result.text
+                    print(f"🔊 Heard: {user_input}")
+                    return user_input
+                else:
+                    print("⚠️ No speech detected, falling back to text input")
+                    # Fall through to text input
+            
+            # Standard mode or fallback: prompt for text with optional voice
+            if self.stt_manager and self.stt_manager.is_available() and not self.voice_first:
                 prompt = "💬 You (type or press ENTER for voice): "
             else:
                 prompt = "💬 You: "
             
-            # Get text input with timeout for voice mode
+            # Get text input - make it interruptible 
             print(prompt, end="", flush=True)
             
-            # Simple input for now - we'll add voice activation later
+            # Check for shutdown before blocking input
+            if self.shutdown_requested:
+                return None
+                
             user_input = input().strip()
             
-            # If empty input and STT available, use voice
-            if not user_input and self.stt_manager and self.stt_manager.is_available():
+            # If empty input and STT available (standard mode), use voice
+            if not user_input and self.stt_manager and self.stt_manager.is_available() and not self.voice_first:
+                # Check for shutdown before voice input
+                if self.shutdown_requested:
+                    return None
+                    
                 print("🎤 Listening... (speak now)")
                 print(f"🔧 DEBUG: Using {self.stt_manager.current_engine_name} engine")
                 voice_result = self.stt_manager.listen_once(timeout=15.0)
+                
+                # Check for shutdown after voice input
+                if self.shutdown_requested:
+                    return None
+                    
                 if voice_result:
                     user_input = voice_result.text
                     print(f"🔊 Heard: {user_input}")
@@ -512,6 +707,70 @@ class M1K3CLICore:
         log_error(f"STT Error: {error_message}")
         print(f"⚠️ Voice recognition error: {error_message}")
     
+    # Streaming and Conversation Flow Callbacks
+    def _handle_conversation_state_change(self, new_state):
+        """Handle conversation flow state changes"""
+        try:
+            log_debug(f"Conversation state: {new_state.value}")
+            
+            # Update avatar based on conversation state
+            if self.avatar_controller:
+                from ..avatar.avatar_controller import AvatarEmotion
+                
+                state_emotion_map = {
+                    "waiting": AvatarEmotion.HAPPY,
+                    "listening": AvatarEmotion.THINKING,
+                    "processing": AvatarEmotion.THINKING,
+                    "speaking": AvatarEmotion.EXCITED,
+                    "interrupted": AvatarEmotion.SURPRISED,
+                    "error": AvatarEmotion.SAD
+                }
+                
+                emotion = state_emotion_map.get(new_state.value, AvatarEmotion.HAPPY)
+                self.avatar_controller.update_emotion("", f"conversation_{new_state.value}", 
+                                                     force_emotion=emotion)
+        except Exception as e:
+            log_error(f"Error handling conversation state change: {e}")
+    
+    def _handle_conversation_turn_start(self, turn):
+        """Handle conversation turn start"""
+        try:
+            turn_type = turn.turn_type.value
+            content_preview = turn.content[:50] + "..." if len(turn.content) > 50 else turn.content
+            
+            log_info(f"Turn started: {turn_type} - '{content_preview}'")
+            
+            # Visual feedback
+            if turn_type == "user_speech":
+                print(f"👤 You: {turn.content}")
+            elif turn_type == "ai_response":
+                print(f"🤖 Assistant: ", end="", flush=True)
+                
+        except Exception as e:
+            log_error(f"Error handling conversation turn start: {e}")
+    
+    def _handle_conversation_turn_complete(self, turn):
+        """Handle conversation turn completion"""
+        try:
+            turn_type = turn.turn_type.value
+            log_debug(f"Turn completed: {turn_type}")
+            
+            if turn_type == "ai_response":
+                print()  # New line after AI response
+                
+        except Exception as e:
+            log_error(f"Error handling conversation turn complete: {e}")
+    
+    def _handle_conversation_interruption(self, turn):
+        """Handle user interruption of AI speech"""
+        try:
+            log_info("User interruption detected")
+            print("\n🚫 [Interrupted]")
+            print(f"👤 You: {turn.content}")
+            
+        except Exception as e:
+            log_error(f"Error handling conversation interruption: {e}")
+    
     def _process_user_input(self, user_input: str) -> bool:
         """Process user input (returns False to exit)"""
         try:
@@ -527,15 +786,25 @@ class M1K3CLICore:
             
             # Otherwise, process as AI query
             else:
-                response = self.ai_processor.process_full_response_pipeline(
-                    user_input, 
-                    use_rag=self.rag_enabled,
-                    enable_voice=self.voice_enabled,
-                    enable_avatar=self.auto_avatar
-                )
-                
-                if response:
-                    print(f"\n🤖 M1K3: {response}\n")
+                # Use conversation flow if enabled, otherwise use standard processing
+                if self.conversation_mode and self.conversation_flow:
+                    # Conversation flow handles AI response processing internally
+                    # Just simulate user input for now - the conversation flow will handle the rest
+                    log_debug("Processing through conversation flow")
+                else:
+                    # Standard AI processing with optional streaming
+                    if self.streaming_enabled and self.streaming_tts:
+                        response = self._process_streaming_ai_response(user_input)
+                    else:
+                        response = self.ai_processor.process_full_response_pipeline(
+                            user_input, 
+                            use_rag=self.rag_enabled,
+                            enable_voice=self.voice_enabled,
+                            enable_avatar=self.auto_avatar
+                        )
+                        
+                        if response:
+                            print(f"\n🤖 M1K3: {response}\n")
                 
             self.state = CLIState.READY
             return True
@@ -545,6 +814,45 @@ class M1K3CLICore:
             print(f"❌ Error: {str(e)}")
             self.state = CLIState.READY
             return True
+    
+    def _process_streaming_ai_response(self, user_input: str) -> str:
+        """Process AI response with streaming TTS"""
+        try:
+            log_info("Processing with streaming TTS")
+            
+            # Generate AI response
+            if self.rag_enabled and self.rag_engine:
+                ai_response = self.rag_engine.generate_response(user_input)
+            else:
+                ai_response = self.ai_engine.generate_response(user_input)
+            
+            print(f"\n🤖 M1K3: ", end="", flush=True)
+            
+            # Handle streaming vs non-streaming response
+            if hasattr(ai_response, '__iter__') and not isinstance(ai_response, str):
+                # Streaming response
+                response_text = ""
+                for chunk in self.streaming_tts.process_token_stream(ai_response):
+                    # Print tokens as they're processed
+                    print(chunk.text, end=" ", flush=True)
+                    response_text += chunk.text + " "
+                
+                print("\n")  # New line after streaming complete
+                return response_text.strip()
+            else:
+                # Non-streaming response - use streaming TTS anyway
+                response_text = ai_response if ai_response else ""
+                print(response_text)
+                
+                if self.streaming_tts and response_text:
+                    self.streaming_tts.add_text_chunk(response_text)
+                
+                return response_text
+                
+        except Exception as e:
+            log_error(f"Error in streaming AI response: {e}")
+            print(f"❌ Streaming error: {e}")
+            return ""
     
     def toggle_voice(self) -> bool:
         """Toggle voice synthesis on/off"""
@@ -605,52 +913,99 @@ class M1K3CLICore:
         return False
     
     def _cleanup(self):
-        """Cleanup resources before exit"""
+        """Cleanup resources before exit with timeouts and emergency fallback"""
         log_info("🧹 Cleaning up CLI resources")
         self.state = CLIState.SHUTTING_DOWN
         
+        cleanup_tasks = []
+        
         try:
+            # Define cleanup tasks with timeouts
+            def safe_cleanup(name: str, cleanup_func, timeout: float = 2.0):
+                """Execute cleanup function with timeout"""
+                try:
+                    import concurrent.futures
+                    with concurrent.futures.ThreadPoolExecutor() as executor:
+                        future = executor.submit(cleanup_func)
+                        try:
+                            future.result(timeout=timeout)
+                            log_info(f"✅ {name} cleaned up")
+                            return True
+                        except concurrent.futures.TimeoutError:
+                            log_warning(f"⚠️ {name} cleanup timed out after {timeout}s")
+                            return False
+                except Exception as e:
+                    log_error(f"❌ {name} cleanup failed: {e}")
+                    return False
+            
+            # Stop audio operations first (highest priority)
+            if self.force_shutdown:
+                self.force_shutdown.set()
+                log_debug("Force shutdown signal activated")
+            
             # Stop AI processor
             if self.ai_processor:
-                self.ai_processor.stop_processing()
+                safe_cleanup("AI processor", 
+                           lambda: self.ai_processor.stop_processing(), timeout=1.0)
             
-            # Stop STT engine
+            # Stop STT engine with timeout
             if self.stt_manager:
-                self.stt_manager.cleanup()
+                safe_cleanup("STT manager", 
+                           lambda: self.stt_manager.cleanup(), timeout=2.0)
             
-            # Stop avatar server
+            # Stop streaming components with timeout
+            if self.conversation_flow:
+                def cleanup_conversation():
+                    self.conversation_flow.stop_conversation()
+                    self.conversation_flow.cleanup()
+                safe_cleanup("Conversation flow", cleanup_conversation, timeout=2.0)
+            
+            if self.streaming_tts:
+                def cleanup_streaming():
+                    self.streaming_tts.stop_streaming()
+                    self.streaming_tts.cleanup()
+                safe_cleanup("Streaming TTS", cleanup_streaming, timeout=2.0)
+            
+            # Stop avatar server with timeout
             if self.auto_avatar and self.initializer and self.initializer.is_component_available('avatar'):
                 avatar_components = self.initializer.get_component('avatar_server')
                 if avatar_components:
                     stop_server = avatar_components['stop_avatar_server']
-                    stop_server()
-                    log_info("Avatar server stopped")
+                    safe_cleanup("Avatar server", stop_server, timeout=1.5)
             
-            # Cleanup voice engine
+            # Cleanup voice engine with timeout
             if self.voice_engine and hasattr(self.voice_engine, 'cleanup'):
-                self.voice_engine.cleanup()
-                log_info("Voice engine cleaned up")
+                safe_cleanup("Voice engine", 
+                           lambda: self.voice_engine.cleanup(), timeout=1.0)
             
-            # Cleanup AI engines
+            # Cleanup AI engines with timeout
             if self.ai_engine and hasattr(self.ai_engine, 'cleanup'):
-                self.ai_engine.cleanup()
-                log_info("AI engine cleaned up")
+                safe_cleanup("AI engine", 
+                           lambda: self.ai_engine.cleanup(), timeout=1.0)
             
             if self.rag_engine and hasattr(self.rag_engine, 'cleanup'):
-                self.rag_engine.cleanup()
-                log_info("RAG engine cleaned up")
+                safe_cleanup("RAG engine", 
+                           lambda: self.rag_engine.cleanup(), timeout=1.0)
             
             # Shutdown model monitor background thread
             if self.model_cli and hasattr(self.model_cli, 'monitor'):
                 if hasattr(self.model_cli.monitor, 'shutdown'):
-                    self.model_cli.monitor.shutdown()
-                    log_info("Model monitor shutdown")
+                    safe_cleanup("Model monitor", 
+                               lambda: self.model_cli.monitor.shutdown(), timeout=1.0)
             
+            # Final cleanup
             self.running = False
-            log_info("CLI cleanup complete")
+            log_info("✅ CLI cleanup complete")
             
         except Exception as e:
-            log_error(f"Error during cleanup: {e}")
+            log_error(f"❌ Error during cleanup: {e}")
+            # Emergency cleanup - force all audio operations to stop
+            try:
+                import sounddevice as sd
+                sd.stop()
+                sd._terminate()
+            except:
+                pass
     
     def get_state(self) -> CLIState:
         """Get current CLI state"""
@@ -659,3 +1014,52 @@ class M1K3CLICore:
     def is_running(self) -> bool:
         """Check if CLI is running"""
         return self.running and not self.shutdown_requested
+    
+    def _is_fully_shutdown(self) -> bool:
+        """Check if all components have fully shut down"""
+        try:
+            # Check for active threads (excluding daemon threads and main thread)
+            active_threads = [t for t in threading.enumerate() 
+                             if t.is_alive() and not t.daemon and t != threading.main_thread()]
+            
+            # Check for active audio operations
+            has_active_audio = False
+            try:
+                import sounddevice as sd
+                # Check if sounddevice has active streams
+                if hasattr(sd, '_streams') and sd._streams:
+                    has_active_audio = any(stream.active for stream in sd._streams.values())
+            except (ImportError, AttributeError):
+                pass
+            
+            # Check component states
+            components_active = []
+            if self.stt_manager and hasattr(self.stt_manager, 'is_listening'):
+                if self.stt_manager.is_listening():
+                    components_active.append("STT Manager")
+            
+            if self.conversation_flow and hasattr(self.conversation_flow, 'is_active'):
+                if self.conversation_flow.is_active():
+                    components_active.append("Conversation Flow")
+            
+            if self.streaming_tts and hasattr(self.streaming_tts, 'is_streaming'):
+                if self.streaming_tts.is_streaming():
+                    components_active.append("Streaming TTS")
+            
+            is_shutdown = (
+                not self.running and 
+                self.shutdown_requested and
+                len(active_threads) == 0 and
+                not has_active_audio and
+                len(components_active) == 0
+            )
+            
+            if not is_shutdown:
+                log_debug(f"Shutdown incomplete - Active threads: {len(active_threads)}, "
+                         f"Active audio: {has_active_audio}, Active components: {components_active}")
+            
+            return is_shutdown
+            
+        except Exception as e:
+            log_error(f"Error checking shutdown status: {e}")
+            return False  # Assume not shutdown if we can't determine state

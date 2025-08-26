@@ -171,6 +171,36 @@ class CLIInitializer:
             log_warning("⚠️  Voice text preprocessor not available")
             self.component_status['voice_preprocessor'] = ComponentStatus.NOT_AVAILABLE
         
+        # STT (Speech-to-Text) System
+        try:
+            from src.engines.stt.stt_manager import STTManager
+            self.components['stt_manager'] = STTManager
+            self.component_status['stt_manager'] = ComponentStatus.AVAILABLE
+            log_info("🎤 STT Manager with multi-engine support loaded")
+        except ImportError as e:
+            log_warning(f"⚠️  STT Manager not available: {e}")
+            self.component_status['stt_manager'] = ComponentStatus.NOT_AVAILABLE
+        
+        # Streaming TTS Engine
+        try:
+            from src.engines.tts.streaming_tts_engine import create_streaming_tts_engine
+            self.components['create_streaming_tts_engine'] = create_streaming_tts_engine
+            self.component_status['streaming_tts'] = ComponentStatus.AVAILABLE
+            log_info("🚀 Streaming TTS engine for real-time synthesis loaded")
+        except ImportError as e:
+            log_warning(f"⚠️  Streaming TTS not available: {e}")
+            self.component_status['streaming_tts'] = ComponentStatus.NOT_AVAILABLE
+        
+        # Conversation Flow Manager
+        try:
+            from conversation_flow_manager import ConversationFlowManager
+            self.components['conversation_flow_manager'] = ConversationFlowManager
+            self.component_status['conversation_flow'] = ComponentStatus.AVAILABLE
+            log_info("💬 Conversation Flow Manager for natural turn-taking loaded")
+        except ImportError as e:
+            log_warning(f"⚠️  Conversation Flow Manager not available: {e}")
+            self.component_status['conversation_flow'] = ComponentStatus.NOT_AVAILABLE
+        
         return True
     
     def import_avatar_components(self):
