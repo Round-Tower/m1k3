@@ -26,8 +26,14 @@ class ModelCLI:
         """Handle command from CLI with string arguments"""
         if not args:
             print("❌ No model command specified")
-            print("💡 Use: model <command>")
-            print("📋 Available commands: list, recommend, health, info, cleanup, download")
+            print("\n🤖 Available Model Commands:")
+            print("  • list                     - Show all available models (Ollama, HuggingFace, GGUF)")
+            print("  • recommend                - Get model recommendations for your device")
+            print("  • health                   - Check health and integrity of installed models")
+            print("  • info <model>             - Get detailed information about a specific model")
+            print("  • cleanup                  - Remove broken or duplicate model files")
+            print("  • download <model>         - Download a new model")
+            print("\n💡 Examples: 'model list', 'model recommend', 'model info llama3.2:1b'")
             return True
         
         command = args[0].lower()
@@ -69,7 +75,7 @@ class ModelCLI:
     def cmd_models_list(self, args=None) -> None:
         """List all available models with status"""
         print("🔍 Refreshing model inventory...")
-        self.monitor.scan_all_models()
+        self.monitor.scan_all_models(silent=False, cleanup=False)
         
         if not self.monitor.monitor_data:
             print("❌ No models found")
@@ -132,7 +138,7 @@ class ModelCLI:
         
         if not recommendations:
             print("❌ No suitable models found for your system")
-            print("💡 Try downloading a lightweight model like smollm2:135m")
+            print("💡 Try downloading a lightweight model like gemma3:270m")
             return
         
         print("\n" + "="*60)
@@ -235,7 +241,7 @@ class ModelCLI:
             print("💡 Usage: models info <model_name>")
             return
         
-        self.monitor.scan_all_models()
+        self.monitor.scan_all_models(silent=True, cleanup=False)
         
         if model_name not in self.monitor.monitor_data:
             print(f"❌ Model '{model_name}' not found")
@@ -314,8 +320,8 @@ class ModelCLI:
         """Clean up broken or incomplete model downloads"""
         print("🧹 Scanning for cleanup opportunities...")
         
-        # This will print cleanup candidates
-        self.monitor._cleanup_orphaned_models()
+        # Scan with cleanup enabled to show cleanup candidates
+        self.monitor.scan_all_models(silent=False, cleanup=True)
         
         print("\n💡 Cleanup candidates identified above")
         print("🔧 To manually clean up:")
@@ -332,7 +338,7 @@ class ModelCLI:
             print("❌ Please specify a model name")
             print("💡 Usage: models download <model_name>")
             print("📋 Examples:")
-            print("  models download smollm2:135m")
+            print("  models download gemma3:270m")
             print("  models download llama3.2:1b")
             return
         
@@ -350,7 +356,7 @@ class ModelCLI:
             
             print(f"✅ Successfully downloaded {model_name} via Ollama")
             print("🔄 Refreshing model inventory...")
-            self.monitor.scan_all_models()
+            self.monitor.scan_all_models(silent=False, cleanup=False)
             
             # Show info about the new model
             if model_name in self.monitor.monitor_data:

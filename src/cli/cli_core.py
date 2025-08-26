@@ -72,9 +72,16 @@ class M1K3CLICore:
     
     def _setup_signal_handlers(self):
         """Setup signal handlers for graceful shutdown"""
+        self.signal_received = False  # Flag to prevent duplicate messages
+        
         def signal_handler(signum, frame):
-            log_info(f"Received signal {signum}, initiating shutdown")
+            if not self.signal_received:  # Only log once
+                log_info(f"Received signal {signum}, initiating shutdown")
+                self.signal_received = True
+                print(f"\n📡 Shutting down gracefully...")
+                
             self.shutdown_requested = True
+            self.running = False  # Immediate stop flag
         
         signal.signal(signal.SIGINT, signal_handler)
         signal.signal(signal.SIGTERM, signal_handler)
@@ -403,6 +410,64 @@ class M1K3CLICore:
             self.state = CLIState.READY
             return True
     
+    def toggle_voice(self) -> bool:
+        """Toggle voice synthesis on/off"""
+        self.voice_enabled = not self.voice_enabled
+        status = "enabled" if self.voice_enabled else "disabled"
+        print(f"🔊 Voice synthesis {status}")
+        log_info(f"Voice synthesis {status}")
+        
+        # Also update voice engine if available
+        if self.voice_engine and hasattr(self.voice_engine, 'voice_enabled'):
+            self.voice_engine.voice_enabled = self.voice_enabled
+        
+        return True
+    
+    def set_voice_profile(self, profile_name: str) -> bool:
+        """Set voice profile for TTS"""
+        if not self.voice_engine:
+            return False
+        
+        if hasattr(self.voice_engine, 'set_profile'):
+            success = self.voice_engine.set_profile(profile_name)
+            if success:
+                log_info(f"Voice profile changed to: {profile_name}")
+                return True
+            else:
+                # Show available profiles
+                if hasattr(self.voice_engine, 'profiles'):
+                    available = ', '.join(self.voice_engine.profiles.keys())
+                    print(f"⚠️ Available profiles: {available}")
+                return False
+        return False
+    
+    def show_tts_status(self) -> bool:
+        """Show TTS system status and settings"""
+        if not self.voice_engine:
+            print("⚠️ Voice engine not available")
+            return False
+        
+        if hasattr(self.voice_engine, 'get_status'):
+            status = self.voice_engine.get_status()
+            print(f"\n🎤 Voice Engine Status:")
+            print(f"  Available: {'✅' if status.get('available', False) else '❌'}")
+            print(f"  Loaded: {'✅' if status.get('loaded', False) else '❌'}")
+            print(f"  Enabled: {'✅' if status.get('enabled', False) else '❌'}")
+            print(f"  Model: {status.get('model', 'Unknown')}")
+            print(f"  Profile: {status.get('current_profile', 'natural')}")
+            
+            if hasattr(self.voice_engine, 'profiles'):
+                print(f"\n🎭 Available Profiles:")
+                for name, config in self.voice_engine.profiles.items():
+                    current = "👆" if name == status.get('current_profile') else "  "
+                    desc = config.get('description', 'No description')
+                    print(f"  {current} {name}: {desc}")
+            
+            return True
+        
+        print("⚠️ TTS status not available")
+        return False
+    
     def _cleanup(self):
         """Cleanup resources before exit"""
         log_info("🧹 Cleaning up CLI resources")
@@ -434,6 +499,12 @@ class M1K3CLICore:
             if self.rag_engine and hasattr(self.rag_engine, 'cleanup'):
                 self.rag_engine.cleanup()
                 log_info("RAG engine cleaned up")
+            
+            # Shutdown model monitor background thread
+            if self.model_cli and hasattr(self.model_cli, 'monitor'):
+                if hasattr(self.model_cli.monitor, 'shutdown'):
+                    self.model_cli.monitor.shutdown()
+                    log_info("Model monitor shutdown")
             
             self.running = False
             log_info("CLI cleanup complete")

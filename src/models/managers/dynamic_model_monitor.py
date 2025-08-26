@@ -67,29 +67,35 @@ class DynamicModelMonitor:
     
     def _start_background_monitor(self):
         """Start background monitoring thread"""
+        self.shutdown_monitor = False
+        
         def monitor_loop():
-            while True:
+            while not self.shutdown_monitor:
                 try:
                     if time.time() - self.last_scan > self.scan_interval:
-                        self.scan_all_models()
+                        # Use silent mode for background scans, no cleanup
+                        self.scan_all_models(silent=True, cleanup=False)
                         self.last_scan = time.time()
                     
-                    # Health checks less frequently
-                    if time.time() - getattr(self, 'last_health_check', 0) > self.health_check_interval:
-                        self.run_health_checks()
-                        self.last_health_check = time.time()
-                        
+                    # Health checks less frequently (but not during background monitoring)
+                    # Skip health checks in background to avoid console spam
+                    
                     time.sleep(10)  # Check every 10 seconds
                 except Exception as e:
-                    print(f"Monitor error: {e}")
+                    # Silently log errors in background mode
                     time.sleep(30)  # Wait longer on error
         
         monitor_thread = threading.Thread(target=monitor_loop, daemon=True)
         monitor_thread.start()
     
-    def scan_all_models(self) -> Dict[str, ModelMetrics]:
+    def shutdown(self):
+        """Shutdown the background monitor"""
+        self.shutdown_monitor = True
+    
+    def scan_all_models(self, silent: bool = False, cleanup: bool = False) -> Dict[str, ModelMetrics]:
         """Comprehensive model discovery and analysis"""
-        print("🔍 Scanning for models...")
+        if not silent:
+            print("🔍 Scanning for models...")
         
         all_models = {}
         
@@ -109,8 +115,9 @@ class DynamicModelMonitor:
         other_models = self._scan_other_model_formats()
         all_models.update(other_models)
         
-        # 5. Clean up orphaned models
-        self._cleanup_orphaned_models()
+        # 5. Clean up orphaned models (only when explicitly requested)
+        if cleanup:
+            self._cleanup_orphaned_models()
         
         self.monitor_data = all_models
         self._save_monitor_data()

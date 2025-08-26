@@ -34,6 +34,8 @@ class Command:
     category: CommandCategory
     handler: Callable
     requires_args: bool = False
+    usage: Optional[str] = None
+    examples: Optional[List[str]] = None
 
 
 class CLICommandHandler:
@@ -50,69 +52,104 @@ class CLICommandHandler:
         """Register all available commands"""
         log_debug("Registering CLI commands")
         
+        # Help commands
+        self._register_command(Command(
+            name="help", aliases=["h", "?"], 
+            description="Show this help or get detailed help for a command",
+            category=CommandCategory.HELP, handler=self.handle_help,
+            usage="help [command]",
+            examples=["help", "help model", "help avatar"]
+        ))
+        
+        # Session commands
+        self._register_command(Command(
+            name="quit", aliases=["exit", "q"], 
+            description="Exit M1K3 CLI safely",
+            category=CommandCategory.SESSION, handler=self.handle_quit,
+            usage="quit",
+            examples=["quit", "exit", "q"]
+        ))
+        
+        self._register_command(Command(
+            name="clear", aliases=["cls"], 
+            description="Clear conversation history and reset AI context",
+            category=CommandCategory.SESSION, handler=self.handle_clear,
+            usage="clear",
+            examples=["clear", "cls"]
+        ))
+        
         # System commands
         self._register_command(Command(
-            name="help", aliases=["h", "?"], description="Show available commands",
-            category=CommandCategory.HELP, handler=self.handle_help
+            name="stats", aliases=["status"], 
+            description="Show system resources (RAM, CPU, disk) and AI engine status",
+            category=CommandCategory.SYSTEM, handler=self.handle_stats,
+            usage="stats",
+            examples=["stats", "status"]
         ))
         
         self._register_command(Command(
-            name="quit", aliases=["exit", "q"], description="Exit M1K3",
-            category=CommandCategory.SESSION, handler=self.handle_quit
-        ))
-        
-        self._register_command(Command(
-            name="clear", aliases=["cls"], description="Clear conversation context",
-            category=CommandCategory.SESSION, handler=self.handle_clear
-        ))
-        
-        self._register_command(Command(
-            name="stats", aliases=["status"], description="Show system statistics",
-            category=CommandCategory.SYSTEM, handler=self.handle_stats
-        ))
-        
-        self._register_command(Command(
-            name="tokens", aliases=["usage"], description="Display token usage and eco impact",
-            category=CommandCategory.SYSTEM, handler=self.handle_tokens
+            name="tokens", aliases=["usage"], 
+            description="Show token usage, context window, and environmental savings",
+            category=CommandCategory.SYSTEM, handler=self.handle_tokens,
+            usage="tokens",
+            examples=["tokens", "usage"]
         ))
         
         # Voice commands
         self._register_command(Command(
-            name="voice", aliases=["mute"], description="Toggle voice synthesis",
-            category=CommandCategory.VOICE, handler=self.handle_voice
+            name="voice", aliases=["mute"], 
+            description="Toggle voice synthesis on/off for AI responses",
+            category=CommandCategory.VOICE, handler=self.handle_voice,
+            usage="voice",
+            examples=["voice", "mute"]
         ))
         
         self._register_command(Command(
-            name="profile", aliases=[], description="Set voice profile",
+            name="profile", aliases=[], 
+            description="Set voice profile: natural (light intercom), assistant (medium), broadcast (heavy), terminal (medium), debug (none), minimal (none)",
             category=CommandCategory.VOICE, handler=self.handle_voice_profile,
-            requires_args=True
+            requires_args=True,
+            usage="profile <name>",
+            examples=["profile natural", "/profile broadcast", "profile debug"]
         ))
         
         self._register_command(Command(
-            name="tts", aliases=[], description="Show TTS system status",
+            name="tts", aliases=[], 
+            description="Show intelligent TTS system status and voice settings",
             category=CommandCategory.VOICE, handler=self.handle_tts_status,
-            requires_args=True
+            requires_args=True,
+            usage="tts status",
+            examples=["tts status", "/tts status"]
         ))
         
         # Avatar commands
         self._register_command(Command(
-            name="avatar", aliases=[], description="Avatar system commands",
+            name="avatar", aliases=[], 
+            description="Control web avatar: start server, set emotions, test animations",
             category=CommandCategory.AVATAR, handler=self.handle_avatar,
-            requires_args=True
+            requires_args=True,
+            usage="avatar <start|status|emotion|test>",
+            examples=["avatar start", "avatar status", "avatar emotion happy 80", "avatar test"]
         ))
         
-        # Model commands
+        # Model commands  
         self._register_command(Command(
-            name="model", aliases=[], description="Model management commands",
+            name="model", aliases=[], 
+            description="Switch AI models, view available models, get recommendations",
             category=CommandCategory.MODEL, handler=self.handle_model,
-            requires_args=True
+            requires_args=True,
+            usage="model <list|switch|recommend|download>",
+            examples=["model list", "model switch gemma3:270m", "model recommend", "model download gemma3:270m"]
         ))
         
         # Performance commands
         self._register_command(Command(
-            name="performance", aliases=["perf"], description="Performance monitoring",
+            name="performance", aliases=["perf"], 
+            description="Monitor inference speed, memory usage, and system performance",
             category=CommandCategory.PERFORMANCE, handler=self.handle_performance,
-            requires_args=True
+            requires_args=True,
+            usage="performance <monitor|stats|benchmark>",
+            examples=["performance monitor", "performance stats", "perf benchmark"]
         ))
         
         log_debug(f"Registered {len(self.commands)} commands")
@@ -180,36 +217,64 @@ class CLICommandHandler:
     def handle_help(self, args: List[str]) -> bool:
         """Handle help command"""
         if args and args[0] in self.commands:
-            # Show help for specific command
+            # Show detailed help for specific command
             command = self.commands[args[0]]
             print(f"\n📖 Help for '{command.name}':")
-            print(f"Description: {command.description}")
-            print(f"Category: {command.category.value}")
+            print("=" * 40)
+            print(f"📝 Description: {command.description}")
+            print(f"📂 Category: {command.category.value}")
+            
             if command.aliases:
-                print(f"Aliases: {', '.join(command.aliases)}")
+                print(f"🏷️  Aliases: {', '.join(command.aliases)}")
+            
+            if command.usage:
+                print(f"📋 Usage: {command.usage}")
+            
+            if command.examples:
+                print(f"💡 Examples:")
+                for example in command.examples:
+                    print(f"   • {example}")
+            
+            print("=" * 40)
             return True
         
-        # Show general help
+        # Show enhanced general help
         print("\n📖 M1K3 CLI Commands:")
-        print("=" * 50)
+        print("=" * 70)
         
         # Group commands by category
-        categories = {}
-        for command in self.commands.values():
-            category = command.category.value
-            if category not in categories:
-                categories[category] = []
-            categories[category].append(command)
+        categories = {
+            CommandCategory.HELP: [],
+            CommandCategory.SESSION: [],
+            CommandCategory.SYSTEM: [],
+            CommandCategory.VOICE: [],
+            CommandCategory.AVATAR: [],
+            CommandCategory.MODEL: [],
+            CommandCategory.PERFORMANCE: []
+        }
         
-        # Display commands by category
+        for command in self.commands.values():
+            if command.category in categories:
+                categories[command.category].append(command)
+        
+        # Display commands by category with enhanced formatting
         for category, commands in categories.items():
-            print(f"\n{category.upper()}:")
+            if not commands:
+                continue
+                
+            print(f"\n🔧 {category.value.upper()}:")
             for command in commands:
                 aliases_str = f" ({', '.join(command.aliases)})" if command.aliases else ""
-                print(f"  {command.name}{aliases_str} - {command.description}")
+                # Show first example as a hint
+                hint = f" → Try: {command.examples[0]}" if command.examples else ""
+                print(f"  • {command.name}{aliases_str}")
+                print(f"    {command.description}{hint}")
         
-        print("\nType 'help <command>' for detailed help on a specific command.")
-        print("=" * 50)
+        print(f"\n💡 Quick Tips:")
+        print(f"  • Type 'help <command>' for detailed usage and examples")
+        print(f"  • Use aliases for faster typing (e.g., 'q' instead of 'quit')")
+        print(f"  • Slash commands also work: /profile natural, /tts status")
+        print("=" * 70)
         return True
     
     def handle_quit(self, args: List[str]) -> bool:
@@ -316,7 +381,12 @@ class CLICommandHandler:
         """Handle avatar command"""
         if not args:
             print("⚠️ Avatar command requires arguments")
-            print("Available: start, status, emotion <name> [intensity], test")
+            print("\n🤖 Available Avatar Commands:")
+            print("  • start                    - Launch web avatar dashboard")  
+            print("  • status                   - Check avatar server status")
+            print("  • emotion <name> [0-100]   - Set emotion (happy, sad, angry, surprised, love, thinking, sleepy, excited)")
+            print("  • test                     - Test all avatar emotions")
+            print("\n💡 Examples: 'avatar start', 'avatar emotion happy 80', 'avatar test'")
             return True
         
         subcommand = args[0].lower()
