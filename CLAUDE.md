@@ -58,13 +58,13 @@ python m1k3.py --no-voice
 # Classic CLI
 python m1k3.py
 
-# Modern TUI (recommended) 
+# Modern TUI 
 python m1k3.py --tui
 
 # Rich full-screen
 python m1k3.py --fullscreen
 
-# CLI with avatar dashboard (default behavior)
+# CLI with avatar dashboard (recommended)
 python cli.py
 
 # CLI without avatar dashboard
