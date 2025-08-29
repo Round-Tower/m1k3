@@ -63,6 +63,11 @@ class StreamingTTSEngine:
         self.chunk_timeout = chunk_timeout
         self.buffer_size = buffer_size
         
+        # VibeVoice-specific settings
+        self.vibevoice_mode = False  # Enable for long-form content
+        self.long_form_threshold = 1000  # Characters threshold for long-form mode
+        self.continuous_mode = False  # For 90-minute continuous synthesis
+        
         # Streaming state
         self.state = StreamingState.IDLE
         self.is_streaming = False
@@ -503,6 +508,111 @@ class StreamingTTSEngine:
                 break
         
         print("🧹 Streaming TTS cleaned up")
+    
+    def enable_vibevoice_mode(self, continuous: bool = False):
+        """Enable VibeVoice mode for long-form synthesis"""
+        self.vibevoice_mode = True
+        self.continuous_mode = continuous
+        
+        if continuous:
+            # Adjust settings for 90-minute continuous synthesis
+            self.chunk_size = 100  # Larger chunks for efficiency
+            self.chunk_timeout = 2.0  # Longer timeout for quality
+            self.buffer_size = 50  # Smaller buffer to manage memory
+            print("🎬 VibeVoice continuous mode enabled (up to 90 minutes)")
+        else:
+            # Standard long-form mode
+            self.chunk_size = 50
+            self.chunk_timeout = 1.0
+            print("📚 VibeVoice long-form mode enabled")
+    
+    def disable_vibevoice_mode(self):
+        """Disable VibeVoice mode and return to standard streaming"""
+        self.vibevoice_mode = False
+        self.continuous_mode = False
+        
+        # Reset to standard streaming settings
+        self.chunk_size = 20
+        self.chunk_timeout = 0.5
+        self.buffer_size = 100
+        print("🔄 Returned to standard streaming mode")
+    
+    def process_long_form_content(self, content: str, speakers: Optional[List[str]] = None) -> bool:
+        """Process long-form content using VibeVoice capabilities"""
+        if not self.vibevoice_mode:
+            print("⚠️ VibeVoice mode not enabled for long-form content")
+            return False
+            
+        if not self.voice_engine:
+            print("⚠️ No voice engine configured")
+            return False
+            
+        try:
+            # Check if voice engine supports VibeVoice
+            if hasattr(self.voice_engine, 'vibevoice_manager'):
+                vibevoice = self.voice_engine.vibevoice_manager
+                
+                if len(content) > self.long_form_threshold or self.continuous_mode:
+                    print(f"🎬 Processing long-form content ({len(content)} chars)")
+                    
+                    # Use VibeVoice long-form generation
+                    audio_chunks = vibevoice.generate_long_form(content, speakers=speakers)
+                    
+                    if audio_chunks:
+                        # Create speech chunks for the streaming pipeline
+                        for i, audio in enumerate(audio_chunks):
+                            chunk = SpeechChunk(
+                                text=f"Long-form chunk {i+1}",
+                                audio_data=audio,
+                                chunk_id=self.chunk_counter + i,
+                                is_complete=(i == len(audio_chunks) - 1),
+                                timestamp=time.time()
+                            )
+                            
+                            if self.on_chunk_ready:
+                                self.on_chunk_ready(chunk)
+                        
+                        self.chunk_counter += len(audio_chunks)
+                        return True
+                    else:
+                        print("⚠️ VibeVoice long-form generation failed")
+                        return False
+                else:
+                    # Use standard VibeVoice generation
+                    audio = vibevoice.generate(content, speakers=speakers)
+                    if audio is not None:
+                        chunk = SpeechChunk(
+                            text=content[:100] + "..." if len(content) > 100 else content,
+                            audio_data=audio,
+                            chunk_id=self.chunk_counter,
+                            is_complete=True,
+                            timestamp=time.time()
+                        )
+                        
+                        if self.on_chunk_ready:
+                            self.on_chunk_ready(chunk)
+                        
+                        self.chunk_counter += 1
+                        return True
+            else:
+                print("⚠️ Voice engine does not support VibeVoice")
+                return False
+                
+        except Exception as e:
+            print(f"❌ Long-form content processing failed: {e}")
+            return False
+    
+    def get_vibevoice_status(self) -> Dict[str, Any]:
+        """Get VibeVoice streaming status"""
+        return {
+            "vibevoice_mode": self.vibevoice_mode,
+            "continuous_mode": self.continuous_mode,
+            "long_form_threshold": self.long_form_threshold,
+            "chunk_size": self.chunk_size,
+            "chunk_timeout": self.chunk_timeout,
+            "supports_90min": self.continuous_mode,
+            "supports_multi_speaker": self.vibevoice_mode
+        }
 
 
 def create_streaming_tts_engine(voice_engine=None, **kwargs) -> StreamingTTSEngine:

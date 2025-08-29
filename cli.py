@@ -36,11 +36,41 @@ def main():
     parser.add_argument("--rag", action="store_true", 
                        help="Enable RAG (Retrieval-Augmented Generation) with comprehensive knowledge base")
     
+    # VibeVoice TTS options
+    tts_group = parser.add_argument_group('VibeVoice TTS Options')
+    tts_group.add_argument("--tts-engine", 
+                          choices=["auto", "vibevoice", "kitten", "fallback"],
+                          default="auto",
+                          help="Text-to-Speech engine: auto (smart default), vibevoice (Microsoft's frontier TTS), kitten (lightweight), fallback (system)")
+    tts_group.add_argument("--vibevoice-model",
+                          choices=["1.5B", "7B"],
+                          default="1.5B",
+                          help="VibeVoice model variant: 1.5B (64K context, 90min), 7B (32K context, 45min)")
+    tts_group.add_argument("--multi-speaker", 
+                          action="store_true",
+                          help="Enable multi-speaker conversation mode (up to 4 speakers)")
+    tts_group.add_argument("--continuous-mode",
+                          action="store_true", 
+                          help="Enable continuous synthesis mode (up to 90 minutes)")
+    tts_group.add_argument("--speakers",
+                          nargs="+",
+                          default=["Alice"],
+                          help="Specify speaker names for multi-speaker mode (e.g., --speakers Alice Bob)")
+    tts_group.add_argument("--voice-profile",
+                          choices=["natural", "assistant", "broadcast", "terminal", "debug", "minimal", 
+                                  "conversational", "narrative", "assistant_duo"],
+                          default="natural",
+                          help="Voice profile: natural/assistant/broadcast/terminal/debug/minimal (KittenTTS) or conversational/narrative/assistant_duo (VibeVoice)")
+    tts_group.add_argument("--vibevoice-quality",
+                          choices=["fast", "balanced", "quality"],
+                          default="balanced", 
+                          help="VibeVoice generation quality: fast (5 steps), balanced (7 steps), quality (10 steps)")
+    
     # Speech-to-Text (STT) options
     stt_group = parser.add_argument_group('Speech Recognition Options')
     stt_group.add_argument("--stt-engine", 
                           choices=["auto", "native", "vosk", "web", "whisper", "none"],
-                          default="auto",
+                          default="web",
                           help="Speech recognition engine: auto (smart default), native (macOS only), vosk (offline), web (cloud), whisper (heavy), none (disable)")
     stt_group.add_argument("--stt-model", 
                           default="vosk-model-small-en-us-0.15",
@@ -128,7 +158,14 @@ def main():
         chunk_size=args.chunk_size,
         chunk_timeout=args.chunk_timeout,
         response_delay=args.response_delay,
-        enable_interruptions=args.enable_interruptions
+        enable_interruptions=args.enable_interruptions,
+        # TTS/VibeVoice options
+        tts_engine=args.tts_engine,
+        vibevoice_model=args.vibevoice_model,
+        vibevoice_quality=args.vibevoice_quality,
+        voice_profile=args.voice_profile,
+        speakers=args.speakers,
+        multi_speaker=args.multi_speaker
     )
     
     # Run in appropriate mode

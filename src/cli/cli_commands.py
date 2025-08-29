@@ -139,6 +139,16 @@ class CLICommandHandler:
             examples=["tts status", "/tts status"]
         ))
         
+        # VibeVoice commands
+        self._register_command(Command(
+            name="vibevoice", aliases=["vv"], 
+            description="Control VibeVoice TTS: status, quality modes, speaker settings",
+            category=CommandCategory.VOICE, handler=self.handle_vibevoice,
+            requires_args=True,
+            usage="vibevoice <status|quality <fast|balanced|quality>|speakers <names>|load|test>",
+            examples=["vibevoice status", "vibevoice quality fast", "vibevoice speakers Alice Bob", "vibevoice test"]
+        ))
+        
         # Avatar commands
         self._register_command(Command(
             name="avatar", aliases=[], 
@@ -514,6 +524,52 @@ class CLICommandHandler:
             print("⚠️ Usage: tts status or /tts status")
         return True
     
+    def handle_vibevoice(self, args: List[str]) -> bool:
+        """Handle VibeVoice command"""
+        if not args:
+            print("🎤 VibeVoice - Microsoft's Frontier Text-to-Speech")
+            print("=" * 50)
+            print("📋 Available Commands:")
+            print("  • status                   - Show VibeVoice system status")
+            print("  • quality <mode>           - Set generation quality: fast, balanced, quality")
+            print("  • speakers <names>         - Set speaker names (e.g., Alice Bob Carol)")
+            print("  • load [variant]           - Load VibeVoice model (1.5B or 7B)")
+            print("  • test [quality]           - Test VibeVoice generation")
+            print()
+            print("💡 Examples:")
+            print("  vibevoice status           - Check current settings")
+            print("  vibevoice quality fast     - Switch to fast mode (5 DDPM steps)")
+            print("  vibevoice speakers Alice Bob - Set two speakers")
+            print("  vibevoice test balanced    - Test with balanced quality")
+            return True
+        
+        subcommand = args[0].lower()
+        
+        if subcommand == "status":
+            self._show_vibevoice_status()
+        elif subcommand == "quality":
+            if len(args) < 2:
+                print("⚠️ Usage: vibevoice quality <fast|balanced|quality>")
+            else:
+                self._set_vibevoice_quality(args[1])
+        elif subcommand == "speakers":
+            if len(args) < 2:
+                print("⚠️ Usage: vibevoice speakers <names...>")
+                print("💡 Available speakers: Alice, Bob, Carol, Dave, Andrew, Maya, Carter, Frank, Mary, Samuel")
+            else:
+                self._set_vibevoice_speakers(args[1:])
+        elif subcommand == "load":
+            variant = args[1] if len(args) > 1 else "1.5B"
+            self._load_vibevoice_model(variant)
+        elif subcommand == "test":
+            quality = args[1] if len(args) > 1 else None
+            self._test_vibevoice(quality)
+        else:
+            print(f"⚠️ Unknown VibeVoice command: {subcommand}")
+            print("💡 Use 'vibevoice' to see available commands")
+        
+        return True
+    
     def handle_avatar(self, args: List[str]) -> bool:
         """Handle avatar command"""
         if not args:
@@ -579,6 +635,188 @@ class CLICommandHandler:
         else:
             print("⚠️ Performance monitoring not available")
         return True
+    
+    # VibeVoice helper methods
+    def _show_vibevoice_status(self):
+        """Show VibeVoice system status"""
+        try:
+            from src.tts.controllers.vibevoice_manager import VibeVoiceManager
+            
+            print("🎤 VibeVoice System Status")
+            print("=" * 40)
+            
+            manager = VibeVoiceManager()
+            
+            # Check availability
+            if manager.is_available():
+                print("✅ Status: Available")
+                
+                # Show device info
+                if hasattr(manager, 'device'):
+                    device_info = {
+                        "cuda": "🚀 NVIDIA CUDA",
+                        "mps": "⚡ Apple Silicon MPS", 
+                        "cpu": "💻 CPU"
+                    }
+                    print(f"🖥️  Device: {device_info.get(manager.device, manager.device)}")
+                
+                # Get performance info
+                if hasattr(manager, 'get_performance_info'):
+                    perf_info = manager.get_performance_info()
+                    print(f"🎯 Quality Mode: {perf_info['generation_quality']}")
+                    print(f"🔢 DDPM Steps: {perf_info['ddpm_steps']}")
+                    print(f"⚙️  CFG Scale: {perf_info['cfg_scale']}")
+                    print(f"🔄 Model Loaded: {'Yes' if perf_info['model_loaded'] else 'No'}")
+                
+                # Show current speakers
+                if hasattr(manager, 'current_speakers'):
+                    speakers = ", ".join(manager.current_speakers)
+                    print(f"🗣️  Current Speakers: {speakers}")
+                
+                # Show availability info
+                avail_info = manager.get_availability_info()
+                if avail_info.get('repository_path'):
+                    print(f"📁 Repository: {avail_info['repository_path']}")
+                
+            else:
+                print("❌ Status: Not Available")
+                print("💡 Use 'vibevoice load' to load the model")
+                
+        except ImportError:
+            print("❌ VibeVoice not installed or not available")
+        except Exception as e:
+            print(f"❌ Error getting VibeVoice status: {e}")
+    
+    def _set_vibevoice_quality(self, quality: str):
+        """Set VibeVoice generation quality"""
+        try:
+            from src.tts.controllers.vibevoice_manager import VibeVoiceManager
+            
+            manager = VibeVoiceManager()
+            valid_qualities = ["fast", "balanced", "quality"]
+            
+            if quality not in valid_qualities:
+                print(f"❌ Invalid quality mode: {quality}")
+                print(f"💡 Valid options: {', '.join(valid_qualities)}")
+                return
+                
+            if manager.set_generation_quality(quality):
+                # Show the change
+                perf_info = manager.get_performance_info()
+                print(f"✅ Quality set to '{quality}'")
+                print(f"   DDPM Steps: {perf_info['ddpm_steps']}")
+                print(f"   CFG Scale: {perf_info['cfg_scale']}")
+            else:
+                print(f"❌ Failed to set quality to {quality}")
+                
+        except ImportError:
+            print("❌ VibeVoice not available")
+        except Exception as e:
+            print(f"❌ Error setting quality: {e}")
+    
+    def _set_vibevoice_speakers(self, speakers: List[str]):
+        """Set VibeVoice speakers"""
+        try:
+            from src.tts.controllers.vibevoice_manager import VibeVoiceManager
+            
+            manager = VibeVoiceManager()
+            if manager.set_speakers(speakers):
+                current = ", ".join(manager.current_speakers)
+                print(f"✅ Speakers set to: {current}")
+            else:
+                print("❌ Failed to set speakers")
+                
+        except ImportError:
+            print("❌ VibeVoice not available")
+        except Exception as e:
+            print(f"❌ Error setting speakers: {e}")
+    
+    def _load_vibevoice_model(self, variant: str):
+        """Load VibeVoice model"""
+        try:
+            from src.tts.controllers.vibevoice_manager import VibeVoiceManager
+            
+            manager = VibeVoiceManager()
+            print(f"🔄 Loading VibeVoice {variant} model...")
+            
+            if manager.load_model(variant):
+                print("✅ VibeVoice model loaded successfully!")
+                # Show status after loading
+                self._show_vibevoice_status()
+            else:
+                print("❌ Failed to load VibeVoice model")
+                
+        except ImportError:
+            print("❌ VibeVoice not available")
+        except Exception as e:
+            print(f"❌ Error loading model: {e}")
+    
+    def _test_vibevoice(self, quality: str = None):
+        """Test VibeVoice generation"""
+        try:
+            from src.tts.controllers.vibevoice_manager import VibeVoiceManager
+            import time
+            
+            manager = VibeVoiceManager()
+            
+            if not manager.is_available():
+                print("❌ VibeVoice not available. Use 'vibevoice load' first.")
+                return
+            
+            print("🧪 Testing VibeVoice generation...")
+            test_text = "Hello! This is a VibeVoice test. The system is working correctly."
+            
+            start_time = time.time()
+            audio = manager.generate(test_text, ["Alice"], quality=quality)
+            generation_time = time.time() - start_time
+            
+            if audio is not None:
+                duration = len(audio) / manager.sample_rate
+                rtf = generation_time / duration if duration > 0 else 0
+                quality_used = quality or manager.generation_quality
+                
+                print(f"✅ Test completed!")
+                print(f"   Quality: {quality_used}")
+                print(f"   Duration: {duration:.1f} seconds")
+                print(f"   Generation Time: {generation_time:.1f} seconds")
+                print(f"   RTF: {rtf:.1f}x")
+                
+                # Try to play the audio if possible
+                try:
+                    import tempfile
+                    import subprocess
+                    import platform
+                    
+                    with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp_file:
+                        if manager.save_audio(audio, tmp_file.name):
+                            print("🔊 Playing test audio...")
+                            
+                            system = platform.system()
+                            if system == "Darwin":  # macOS
+                                subprocess.run(["afplay", tmp_file.name], check=True)
+                            elif system == "Windows":
+                                subprocess.run(["powershell", "-c", f"(New-Object Media.SoundPlayer '{tmp_file.name}').PlaySync()"], check=True)
+                            else:  # Linux
+                                players = ["paplay", "aplay", "play"]
+                                for player in players:
+                                    try:
+                                        subprocess.run([player, tmp_file.name], check=True, 
+                                                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                                        break
+                                    except:
+                                        continue
+                            
+                            print("✅ Audio test completed!")
+                except Exception as audio_error:
+                    print(f"⚠️ Audio generated but playback failed: {audio_error}")
+                    
+            else:
+                print("❌ Test failed - no audio generated")
+                
+        except ImportError:
+            print("❌ VibeVoice not available")
+        except Exception as e:
+            print(f"❌ Test error: {e}")
     
     def get_command_list(self) -> List[str]:
         """Get list of all available commands"""

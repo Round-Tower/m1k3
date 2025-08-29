@@ -38,7 +38,11 @@ class M1K3CLICore:
                  force_internal_mic: bool = False,
                  streaming_enabled: bool = False, conversation_mode: bool = False, 
                  chunk_size: int = 20, chunk_timeout: float = 0.5, response_delay: float = 0.2,
-                 enable_interruptions: bool = True):
+                 enable_interruptions: bool = True,
+                 # TTS/VibeVoice parameters
+                 tts_engine: str = "auto", vibevoice_model: str = "1.5B", 
+                 vibevoice_quality: str = "balanced", voice_profile: str = "natural",
+                 speakers: list = None, multi_speaker: bool = False):
         
         # Setup logging first
         setup_cli_logging()
@@ -56,6 +60,14 @@ class M1K3CLICore:
         self.stt_language = stt_language
         self.voice_first = voice_first
         self.force_internal_mic = force_internal_mic
+        
+        # TTS/VibeVoice configuration
+        self.tts_engine = tts_engine
+        self.vibevoice_model = vibevoice_model
+        self.vibevoice_quality = vibevoice_quality
+        self.voice_profile = voice_profile
+        self.speakers = speakers or ["Alice"]
+        self.multi_speaker = multi_speaker
         
         # Streaming configuration
         self.streaming_enabled = streaming_enabled
@@ -222,18 +234,151 @@ class M1K3CLICore:
             if create_voice_engine:
                 try:
                     self.voice_engine = create_voice_engine()
-                    if self.voice_engine and self.voice_engine.load_model():
-                        # Wire up force shutdown signal
-                        if hasattr(self.voice_engine, 'force_shutdown'):
-                            self.voice_engine.force_shutdown = self.force_shutdown
-                        log_info("✅ Voice engine loaded")
+                    if self.voice_engine:
+                        # Configure TTS engine preference
+                        self._configure_voice_engine()
+                        
+                        # Load the appropriate model
+                        load_success = self._load_voice_model()
+                        if load_success:
+                            # Enable voice synthesis on the engine
+                            if hasattr(self.voice_engine, 'set_voice_enabled'):
+                                self.voice_engine.set_voice_enabled(True)
+                                log_debug("Voice engine enabled for synthesis")
+                            
+                            # Wire up force shutdown signal
+                            if hasattr(self.voice_engine, 'force_shutdown'):
+                                self.voice_engine.force_shutdown = self.force_shutdown
+                            log_info("✅ Voice engine loaded")
+                        else:
+                            log_warning("Voice engine failed to load model")
+                            self.voice_engine = None
                     else:
-                        log_warning("Voice engine failed to load model")
+                        log_warning("Voice engine creation failed")
                         self.voice_engine = None
                 except Exception as e:
                     log_error(f"Voice engine setup failed: {e}")
         else:
             log_warning("Voice engine not available")
+    
+    def _configure_voice_engine(self):
+        """Configure the voice engine based on CLI arguments"""
+        try:
+            # Determine the TTS engine to use
+            engine_preference = self._determine_tts_engine()
+            
+            # Set engine preference
+            if hasattr(self.voice_engine, 'set_engine_preference'):
+                success = self.voice_engine.set_engine_preference(engine_preference)
+                if success:
+                    log_info(f"✅ TTS engine preference set to: {engine_preference}")
+                else:
+                    log_warning(f"Failed to set TTS engine to {engine_preference}")
+            
+            # Configure VibeVoice settings if using VibeVoice
+            if engine_preference == "vibevoice":
+                self._configure_vibevoice_settings()
+            
+            # Set voice profile
+            if hasattr(self.voice_engine, 'set_profile'):
+                profile_success = self.voice_engine.set_profile(self.voice_profile)
+                if profile_success:
+                    log_debug(f"Voice profile set to: {self.voice_profile}")
+            
+        except Exception as e:
+            log_error(f"Voice engine configuration failed: {e}")
+    
+    def _determine_tts_engine(self) -> str:
+        """Determine which TTS engine to use based on CLI arguments"""
+        if self.tts_engine == "vibevoice":
+            return "vibevoice"
+        elif self.tts_engine == "kitten":
+            return "kitten"
+        elif self.tts_engine == "fallback":
+            return "fallback"
+        else:  # auto
+            # Auto-detection logic: prefer VibeVoice if available, fallback to kitten
+            from src.tts.controllers.vibevoice_manager import VibeVoiceManager
+            try:
+                vv_manager = VibeVoiceManager()
+                if vv_manager.is_available():
+                    log_info("Auto-detected: Using VibeVoice (available and preferred)")
+                    return "vibevoice"
+                else:
+                    log_info("Auto-detected: Using KittenTTS (VibeVoice not available)")
+                    return "kitten"
+            except Exception:
+                log_info("Auto-detected: Using KittenTTS (fallback)")
+                return "kitten"
+    
+    def _configure_vibevoice_settings(self):
+        """Configure VibeVoice-specific settings"""
+        try:
+            from src.tts.controllers.vibevoice_manager import VibeVoiceManager
+            
+            vv_manager = VibeVoiceManager()
+            
+            # Set generation quality
+            if vv_manager.set_generation_quality(self.vibevoice_quality):
+                log_info(f"✅ VibeVoice quality set to: {self.vibevoice_quality}")
+            
+            # Set speakers
+            if self.multi_speaker or len(self.speakers) > 1:
+                if vv_manager.set_speakers(self.speakers):
+                    speakers_str = ", ".join(self.speakers)
+                    log_info(f"✅ VibeVoice speakers set to: {speakers_str}")
+            
+            log_info(f"✅ VibeVoice configured: {self.vibevoice_model} model, {self.vibevoice_quality} quality")
+            
+        except Exception as e:
+            log_error(f"VibeVoice configuration failed: {e}")
+    
+    def _load_voice_model(self) -> bool:
+        """Load the voice model based on the selected TTS engine"""
+        try:
+            # Determine which engine is being used
+            engine_preference = self._determine_tts_engine()
+            
+            if engine_preference == "vibevoice":
+                # Load VibeVoice with specific variant
+                log_info(f"Loading VibeVoice model: {self.vibevoice_model}")
+                from src.tts.controllers.vibevoice_manager import VibeVoiceManager
+                
+                vv_manager = VibeVoiceManager(model_name=self.vibevoice_model)
+                if vv_manager.load_model():
+                    log_info("✅ VibeVoice model loaded successfully")
+                    
+                    # Configure VibeVoice-specific settings
+                    self._configure_vibevoice_settings()
+                    
+                    # Set up the unified voice engine to use VibeVoice
+                    if hasattr(self.voice_engine, 'set_engine_preference'):
+                        self.voice_engine.set_engine_preference("vibevoice")
+                    
+                    # Load the base unified voice engine so is_loaded is set correctly
+                    if hasattr(self.voice_engine, 'load_model'):
+                        base_loaded = self.voice_engine.load_model()
+                        if not base_loaded:
+                            log_warning("Base voice engine failed to load, but VibeVoice is working")
+                    
+                    return True
+                else:
+                    log_error("❌ Failed to load VibeVoice model, falling back to KittenTTS")
+                    return self.voice_engine.load_model()
+            
+            else:
+                # Use standard loading for KittenTTS or fallback engines
+                log_info(f"Loading {engine_preference} voice engine")
+                return self.voice_engine.load_model()
+                
+        except Exception as e:
+            log_error(f"Voice model loading failed: {e}")
+            log_info("Attempting fallback to standard voice engine loading")
+            try:
+                return self.voice_engine.load_model()
+            except Exception as fallback_error:
+                log_error(f"Fallback voice loading also failed: {fallback_error}")
+                return False
     
     def _setup_stt_engine(self):
         """Setup speech-to-text engine"""

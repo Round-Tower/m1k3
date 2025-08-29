@@ -47,6 +47,13 @@ kittentts>=0.1.0
 pyttsx3>=2.90    # Local TTS engine (works offline)
 gTTS>=2.5.0      # Google Text-to-Speech (requires internet)
 
+# VibeVoice - Microsoft's frontier open-source TTS (optional, requires CUDA GPU)
+# Uncomment below for VibeVoice support (recommended for advanced users with NVIDIA GPU)
+# diffusers>=0.21.0           # Required for VibeVoice diffusion models
+# accelerate>=0.20.0          # GPU acceleration for transformers
+# librosa>=0.10.0             # Audio processing utilities
+# gradio>=4.0.0               # Optional: for VibeVoice demo interface
+
 # Audio processing (optional)
 scipy>=1.16.1
 

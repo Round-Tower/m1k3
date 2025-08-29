@@ -8,7 +8,8 @@ Privacy-focused local AI assistant with voice synthesis, web dashboard, and CLI 
 ### Core Features
 - **Local AI inference** with TinyLlama-1.1B-Chat (universal compatibility)
 - **RAG (Retrieval-Augmented Generation)** with comprehensive expertise knowledge base (20 categories, 1,341+ documents)
-- **Intelligent voice synthesis** with content-aware TTS, automatic content parsing, and voice modulation per content type (thinking, narration, answer, clarification) ⚠️ (speech cutoff bug documented in BUGS.md)
+- **Advanced voice synthesis** with multi-engine TTS: VibeVoice (90-minute continuous, multi-speaker), KittenTTS (fast), and system fallbacks
+- **VibeVoice integration** - Microsoft's frontier TTS with 90-minute continuous synthesis, multi-speaker conversations, and state-of-the-art quality
 - **Avatar system** with real-time web dashboard and emotion tracking
 - **Enhanced CLI** with animations, eco-metrics, 8K context visualization
 - **Speech-to-Text (STT) system** with multi-engine fallbacks (macOS Native, Vosk, Web Speech, Whisper)
@@ -74,6 +75,13 @@ python cli.py --no-avatar
 python m1k3.py --rag
 python m1k3.py --tui --rag
 python cli.py --rag
+
+# VibeVoice TTS Options (NEW)
+python cli.py --tts-engine vibevoice                                    # Basic VibeVoice
+python cli.py --tts-engine vibevoice --multi-speaker --speakers Alice Bob    # Multi-speaker conversation
+python cli.py --tts-engine vibevoice --continuous-mode --voice-profile narrative    # 90-minute continuous synthesis
+python cli.py --tts-engine vibevoice --voice-profile conversational     # Multi-speaker dialogue mode
+python cli.py --tts-engine vibevoice --vibevoice-model 7B               # Use larger 7B model
 ```
 
 ## Interactive Commands
@@ -89,6 +97,14 @@ quit, exit        # Exit M1K3
 voice, mute       # Toggle voice synthesis on/off
 /profile <name>   # Set voice profile (natural, broadcast, terminal, etc.)
 /tts status       # Show intelligent TTS system status and voice settings
+/tts engine <name>  # Switch TTS engine (vibevoice, kitten, fallback)
+
+# VibeVoice commands (NEW)
+/vibevoice status    # Show VibeVoice availability and model info
+/vibevoice speakers <names>  # Set speakers (e.g., Alice Bob Carol Dave)
+/vibevoice model <variant>   # Switch model (1.5B, 7B)
+/vibevoice continuous        # Enable 90-minute continuous mode
+/vibevoice multi-speaker     # Enable multi-speaker conversation
 
 # Avatar commands  
 avatar start      # Start web dashboard
@@ -103,6 +119,81 @@ stt test          # Test microphone and speech recognition
 stt engine <name> # Switch STT engine (native, vosk, web, whisper)  
 stt calibrate     # Recalibrate microphone sensitivity
 ```
+
+## VibeVoice Text-to-Speech System (NEW)
+
+### Overview
+M1K3 now integrates **Microsoft's VibeVoice**, a frontier open-source TTS model that revolutionizes voice synthesis with unprecedented capabilities:
+
+- **90-minute continuous speech** generation (vs typical 30-second limits)  
+- **Multi-speaker conversations** with up to 4 simultaneous speakers
+- **Ultra-efficient processing** with 3200x compression at 7.5 tokens/second
+- **State-of-the-art quality** using VALL-E architecture and diffusion models
+- **100% local processing** - no cloud dependencies (MIT licensed)
+
+### Model Variants
+- **VibeVoice-1.5B** (Default): 64K context, 90-minute generation, ~4GB RAM
+- **VibeVoice-7B** (Advanced): 32K context, 45-minute generation, ~16GB RAM
+
+### Voice Profiles
+```bash
+# KittenTTS Profiles (fast, lightweight)
+natural          # Default conversational voice with light effects
+assistant        # Professional AI assistant tone
+broadcast        # Clear announcer-style voice
+terminal         # Technical system voice
+debug           # Minimal processing for speed
+minimal         # Basic synthesis only
+
+# VibeVoice Profiles (advanced, high-quality) 
+conversational   # Multi-speaker dialogue (2-4 speakers)
+narrative        # Long-form storytelling (up to 90 minutes)
+assistant_duo    # AI assistant with user voice simulation
+```
+
+### Setup and Installation
+```bash
+# 1. Install VibeVoice dependencies (optional - will fallback to KittenTTS if not available)
+pip install diffusers>=0.21.0 accelerate>=0.20.0 librosa>=0.10.0 gradio>=4.0.0
+
+# 2. Clone VibeVoice repository
+git clone https://github.com/microsoft/VibeVoice.git ~/VibeVoice
+
+# 3. Download models (automatic on first use)
+huggingface-cli download microsoft/VibeVoice-1.5B
+
+# 4. Optional: Docker setup with NVIDIA GPU support
+./setup_vibevoice_docker.sh
+./run_vibevoice_docker.sh
+```
+
+### Usage Examples
+```bash
+# Basic VibeVoice usage
+python cli.py --tts-engine vibevoice "Tell me a long story about AI"
+
+# Multi-speaker conversation
+python cli.py --tts-engine vibevoice --multi-speaker --speakers Alice Bob Carol
+
+# 90-minute continuous synthesis (perfect for audiobooks, lectures)
+python cli.py --tts-engine vibevoice --continuous-mode --voice-profile narrative
+
+# Interactive VibeVoice commands
+/vibevoice status              # Check availability and model info
+/vibevoice speakers Alice Bob  # Set conversation speakers
+/vibevoice continuous          # Enable long-form mode
+```
+
+### Hardware Requirements
+- **Optimal**: NVIDIA GPU with 4GB+ VRAM (real-time generation)
+- **Minimum**: CPU with 8GB+ RAM (slower generation, short text only)  
+- **Storage**: ~4-10GB for models and dependencies
+
+### Integration Benefits
+- **Seamless fallback**: Automatically uses KittenTTS if VibeVoice unavailable
+- **Streaming compatible**: Works with existing StreamingTTSEngine
+- **Profile system**: Integrated with M1K3's voice profile architecture
+- **Command integration**: Full CLI and interactive command support
 
 ## Speech-to-Text (STT) System
 
