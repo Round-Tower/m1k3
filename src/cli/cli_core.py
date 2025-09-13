@@ -144,41 +144,271 @@ class M1K3CLICore:
         signal.signal(signal.SIGTERM, signal_handler)
     
     def initialize(self) -> bool:
-        """Initialize all CLI components"""
-        log_info("🚀 Initializing M1K3 CLI")
+        """Initialize CLI components with async optimization"""
+        log_info("🚀 Initializing M1K3 CLI (Optimized)")
         self.state = CLIState.STARTING
         
         try:
-            # Initialize components
-            self.initializer = initialize_cli_components()
-            if not self.initializer:
-                log_error("Failed to initialize components")
-                return False
+            # Import performance optimization
+            from ..utils.performance.startup_optimizer import get_startup_optimizer, create_performance_context
+            from ..engines.ai.async_model_loader import get_async_loader, ModelLoadTask, LoadingPriority
             
-            # Setup AI engines
-            if not self._setup_ai_engines():
-                log_error("Failed to setup AI engines")
-                return False
+            self.optimizer = get_startup_optimizer()
+            self.async_loader = get_async_loader()
             
-            # Setup other components
-            self._setup_voice_engine()
-            self._setup_stt_engine()
-            self._setup_streaming_components()
-            self._setup_avatar_system()
-            self._setup_sound_system()
-            self._setup_monitoring()
-            self._setup_model_cli()
+            # Phase 1: Critical initialization (must complete before UI)
+            with create_performance_context("critical_initialization"):
+                if not self._initialize_critical_components():
+                    log_error("Failed to initialize critical components")
+                    return False
             
-            # Initialize command handler and AI processor
-            self.command_handler = CLICommandHandler(self)
-            self.ai_processor = CLIAIResponseProcessor(self)
+            # Phase 2: Start async loading of heavy components
+            self._start_async_loading()
+            
+            # Phase 3: Initialize UI-ready components
+            with create_performance_context("ui_initialization"):
+                self._initialize_ui_components()
+            
+            # Wait for critical models to be ready (with timeout)
+            if not self.async_loader.wait_for_critical(timeout=5.0):
+                log_warning("⚠️ Critical models not ready, using fallbacks")
             
             self.state = CLIState.READY
-            log_info("✅ CLI initialization complete")
+            self.optimizer.set_phase(self.optimizer.StartupPhase.READY)
+            log_info("✅ CLI initialization complete (optimized)")
             return True
             
         except Exception as e:
             log_error(f"Initialization failed: {e}")
+            self.state = CLIState.ERROR
+            return False
+    
+    def _initialize_critical_components(self) -> bool:
+        """Initialize only critical components needed for basic functionality"""
+        log_info("🔧 Initializing critical components")
+        
+        # Initialize basic component loader
+        self.initializer = initialize_cli_components()
+        if not self.initializer:
+            return False
+        
+        # Setup minimal AI engine (fast fallback if needed)
+        if not self._setup_minimal_ai():
+            return False
+        
+        # Initialize command handler (lightweight)
+        self.command_handler = CLICommandHandler(self)
+        self.ai_processor = CLIAIResponseProcessor(self)
+        
+        log_info("✅ Critical components ready")
+        return True
+    
+    def _start_async_loading(self):
+        """Start async loading of heavy components"""
+        log_info("⚡ Starting async loading")
+        
+        # Register model loading tasks
+        self._register_ai_models()
+        self._register_voice_models()
+        self._register_optional_models()
+        
+        # Start async loading
+        self.async_loader.start_loading()
+        
+        # Register callbacks for when models are ready
+        self.async_loader.register_completion_callback(self._on_critical_models_ready)
+    
+    def _initialize_ui_components(self):
+        """Initialize UI and non-critical components"""
+        log_info("🎨 Initializing UI components")
+        
+        # These can start while models load in background
+        self._setup_sound_system()
+        self._setup_avatar_system()  
+        self._setup_monitoring()
+        self._setup_model_cli()
+        
+        log_info("✅ UI components ready")
+    
+    def _register_ai_models(self):
+        """Register AI models for async loading"""
+        from ..engines.ai.async_model_loader import ModelLoadTask, LoadingPriority
+        
+        # Critical: Simple/fallback AI (loads first)
+        self.async_loader.register_model(ModelLoadTask(
+            name="simple_ai",
+            priority=LoadingPriority.CRITICAL,
+            loader_func=self._load_simple_ai,
+            estimated_time=0.5
+        ))
+        
+        # High: Primary AI engine
+        self.async_loader.register_model(ModelLoadTask(
+            name="primary_ai", 
+            priority=LoadingPriority.HIGH,
+            loader_func=self._load_primary_ai,
+            estimated_time=5.0
+        ))
+        
+        # Medium: RAG engine (if enabled)
+        if self.rag_enabled:
+            self.async_loader.register_model(ModelLoadTask(
+                name="rag_engine",
+                priority=LoadingPriority.MEDIUM,
+                loader_func=self._load_rag_engine,
+                estimated_time=3.0
+            ))
+    
+    def _register_voice_models(self):
+        """Register voice models for async loading"""
+        from ..engines.ai.async_model_loader import ModelLoadTask, LoadingPriority
+        
+        if not self.voice_enabled:
+            return
+        
+        # High priority: Basic TTS
+        self.async_loader.register_model(ModelLoadTask(
+            name="basic_tts",
+            priority=LoadingPriority.HIGH,
+            loader_func=self._load_basic_tts,
+            estimated_time=1.0
+        ))
+        
+        # Medium: Advanced TTS (VibeVoice, etc.)
+        self.async_loader.register_model(ModelLoadTask(
+            name="advanced_tts",
+            priority=LoadingPriority.MEDIUM,
+            loader_func=self._load_advanced_tts,
+            estimated_time=8.0
+        ))
+    
+    def _register_optional_models(self):
+        """Register optional/enhancement models"""
+        from ..engines.ai.async_model_loader import ModelLoadTask, LoadingPriority
+        
+        # Low priority: Advanced features
+        self.async_loader.register_model(ModelLoadTask(
+            name="enhancements",
+            priority=LoadingPriority.LOW,
+            loader_func=self._load_enhancements,
+            estimated_time=2.0
+        ))
+    
+    def _setup_minimal_ai(self) -> bool:
+        """Setup minimal AI for immediate functionality"""
+        try:
+            # Use simple/mock AI for immediate response capability
+            if self.initializer.is_component_available('simple_ai_engine'):
+                SimpleAIEngine = self.initializer.get_component('simple_ai_engine')
+                self.ai_engine = SimpleAIEngine()
+                log_info("✅ Minimal AI engine ready")
+                return True
+            else:
+                log_error("❌ No AI engine available")
+                return False
+        except Exception as e:
+            log_error(f"Failed to setup minimal AI: {e}")
+            return False
+    
+    def _load_simple_ai(self):
+        """Load simple AI engine"""
+        if self.initializer.is_component_available('simple_ai_engine'):
+            SimpleAIEngine = self.initializer.get_component('simple_ai_engine')
+            return SimpleAIEngine()
+        return None
+    
+    def _load_primary_ai(self):
+        """Load primary AI engine"""
+        try:
+            if self.initializer.is_component_available('local_ai_engine'):
+                LocalAIEngine = self.initializer.get_component('local_ai_engine')
+                return LocalAIEngine()
+        except Exception as e:
+            log_warning(f"Primary AI loading failed: {e}")
+        return None
+    
+    def _load_rag_engine(self):
+        """Load RAG engine"""
+        try:
+            if self.initializer.is_component_available('rag_engine'):
+                M1K3RAGIntegratedEngine = self.initializer.get_component('rag_engine')
+                return M1K3RAGIntegratedEngine()
+        except Exception as e:
+            log_warning(f"RAG engine loading failed: {e}")
+        return None
+    
+    def _load_basic_tts(self):
+        """Load basic TTS engine"""
+        try:
+            self._setup_voice_engine()
+            return self.voice_engine
+        except Exception as e:
+            log_warning(f"Basic TTS loading failed: {e}")
+        return None
+    
+    def _load_advanced_tts(self):
+        """Load advanced TTS features"""
+        try:
+            # Setup streaming TTS if available
+            self._setup_streaming_components()
+            return True
+        except Exception as e:
+            log_warning(f"Advanced TTS loading failed: {e}")
+        return None
+    
+    def _load_enhancements(self):
+        """Load enhancement features"""
+        try:
+            # Setup STT
+            self._setup_stt_engine()
+            return True
+        except Exception as e:
+            log_warning(f"Enhancement loading failed: {e}")
+        return None
+    
+    def _on_critical_models_ready(self, models: dict):
+        """Callback when critical models are ready"""
+        log_info("🎯 Critical models loaded, upgrading AI engine")
+        
+        # Upgrade to primary AI if available
+        if "primary_ai" in models and models["primary_ai"]:
+            self.ai_engine = models["primary_ai"]
+            log_info("✅ Upgraded to primary AI engine")
+        
+        # Setup RAG if available
+        if "rag_engine" in models and models["rag_engine"]:
+            self.rag_engine = models["rag_engine"]
+            log_info("✅ RAG engine ready")
+        
+        # Update optimizer
+        if hasattr(self, 'optimizer'):
+            self.optimizer.set_phase(self.optimizer.StartupPhase.LOADING_SECONDARY)
+    
+    def _initialize_minimal_for_query(self) -> bool:
+        """Minimal initialization for single query mode"""
+        log_info("🚀 Minimal initialization for single query")
+        self.state = CLIState.STARTING
+        
+        try:
+            # Absolutely minimal - just get a working AI engine
+            self.initializer = initialize_cli_components()
+            if not self.initializer:
+                return False
+            
+            # Setup only minimal AI
+            if not self._setup_minimal_ai():
+                return False
+            
+            # Minimal command processing
+            self.command_handler = CLICommandHandler(self)
+            self.ai_processor = CLIAIResponseProcessor(self)
+            
+            self.state = CLIState.READY
+            log_info("✅ Minimal initialization complete")
+            return True
+            
+        except Exception as e:
+            log_error(f"Minimal initialization failed: {e}")
             self.state = CLIState.ERROR
             return False
     
@@ -675,7 +905,8 @@ class M1K3CLICore:
         """Run single query mode"""
         log_info(f"Running single query: {query[:50]}...")
         
-        if not self.initialize():
+        # For single queries, use minimal initialization
+        if not self._initialize_minimal_for_query():
             log_error("Failed to initialize CLI")
             return 1
         
