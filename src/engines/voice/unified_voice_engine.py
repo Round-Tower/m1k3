@@ -118,13 +118,27 @@ class UnifiedVoiceEngine:
             
         # Try loading engines in preference order
         if self.preferred_engine == "vibevoice":
-            if self.vibevoice_manager.is_available() and self.vibevoice_manager.load_model():
-                self.is_loaded = True
-                self.voice_enabled = True
-                self.preferred_engine = "vibevoice"
-                print("✅ VibeVoice engine loaded successfully")
-                self._configure_effects_pipeline()
-                return True
+            # Check if VibeVoice is available and not too slow
+            if self.vibevoice_manager.is_available():
+                print("🔄 Attempting VibeVoice loading...")
+                start_time = time.time()
+                
+                if self.vibevoice_manager.load_model():
+                    load_time = time.time() - start_time
+                    
+                    # Skip VibeVoice if it takes too long (>10 seconds)
+                    if load_time > 120.0:
+                        print(f"⚠️ VibeVoice loading too slow ({load_time:.1f}s), skipping to KittenTTS")
+                        self.preferred_engine = "kitten"
+                    else:
+                        self.is_loaded = True
+                        self.voice_enabled = True
+                        self.preferred_engine = "vibevoice"
+                        print(f"✅ VibeVoice engine loaded successfully ({load_time:.1f}s)")
+                        self._configure_effects_pipeline()
+                        return True
+                else:
+                    print("🔄 VibeVoice loading failed, trying KittenTTS...")
             else:
                 print("🔄 VibeVoice not available, trying KittenTTS...")
                 

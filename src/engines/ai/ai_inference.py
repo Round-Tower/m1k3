@@ -26,6 +26,7 @@ except ImportError:
 os.environ['TOKENIZERS_PARALLELISM'] = 'true'
 
 # Import Universal Model Engine and logging
+SMOLLM_ENGINE_AVAILABLE = False  # Ensure flag exists
 try:
     from .universal_model_engine import UniversalModelEngine
     from model_tiers import ModelTierManager, DeviceTier
@@ -170,6 +171,9 @@ class LocalAIEngine:
                 device_capability, _ = self.tier_manager.recommend_models_for_device()
                 self.device_tier = device_capability.tier
                 print(f"🎯 Device tier detected: {self.device_tier.value}")
+                
+                # Log all available models
+                self._log_available_models()
                 
                 # Initialize Universal Model Engine (preferred) or SmolLM2 engine (fallback)
                 if UNIVERSAL_ENGINE_AVAILABLE:
@@ -333,6 +337,54 @@ class LocalAIEngine:
         # Default fallback
         return 2048
     
+    def _log_available_models(self):
+        """Log comprehensive information about all available models"""
+        print("\n📊 MODEL DISCOVERY REPORT")
+        print("=" * 50)
+        
+        # Ollama models
+        ollama_models = self._get_available_ollama_models()
+        if ollama_models:
+            print(f"🦙 Ollama Models ({len(ollama_models)}):")
+            for i, model in enumerate(ollama_models, 1):
+                print(f"   {i:2d}. {model}")
+        else:
+            print("🦙 Ollama Models: None available")
+        
+        # Cached models from LocalModelManager
+        if self.model_manager and self.model_manager.available_models:
+            cached_models = list(self.model_manager.available_models.keys())
+            print(f"\n📦 Cached Models ({len(cached_models)}):")
+            for i, model in enumerate(cached_models, 1):
+                model_info = self.model_manager.available_models[model]
+                model_type = model_info.model_type
+                print(f"   {i:2d}. {model} ({model_type})")
+        else:
+            print("\n📦 Cached Models: None available")
+        
+        # Available backends
+        print(f"\n🔧 Available Backends:")
+        print(f"   • HuggingFace Transformers: {'✅' if TRANSFORMERS_AVAILABLE else '❌'}")
+        print(f"   • ctransformers: {'✅' if CTRANSFORMERS_AVAILABLE else '❌'}")
+        print(f"   • Universal Engine: {'✅' if UNIVERSAL_ENGINE_AVAILABLE else '❌'}")
+        print(f"   • SmolLM Engine: {'✅' if SMOLLM_ENGINE_AVAILABLE else '❌'}")
+        
+        # Device capabilities
+        if self.tier_manager:
+            try:
+                device_info = self.tier_manager.analyze_device()
+                print(f"\n💻 Device Analysis:")
+                print(f"   • Tier: {device_info.tier.value}")
+                print(f"   • CPU Cores: {device_info.cpu_cores}")
+                print(f"   • Memory: {device_info.total_ram_gb:.1f}GB")
+                print(f"   • Platform: {device_info.platform}")
+                if device_info.recommended_models:
+                    print(f"   • Recommended: {', '.join(device_info.recommended_models[:3])}")
+            except Exception as e:
+                print(f"\n💻 Device Analysis: Error - {e}")
+        
+        print("=" * 50)
+
     def _get_available_ollama_models(self) -> List[str]:
         """Get list of available ollama models"""
         try:
@@ -344,10 +396,8 @@ class LocalAIEngine:
                     # Extract model name (first column)
                     model_name = line.split()[0]
                     models.append(model_name)
-            print(f"🦙 Found {len(models)} ollama models: {', '.join(models)}")
             return models
         except (subprocess.CalledProcessError, FileNotFoundError):
-            print("🔍 Ollama not available or no models found")
             return []
     
     def _get_preferred_ollama_model(self) -> Optional[str]:
@@ -827,13 +877,23 @@ class LocalAIEngine:
             try:
                 from .simple_ai_engine import SimpleAIEngine
                 print("🔄 Falling back to SimpleAI engine...")
-                simple_engine = SimpleAIEngine()
-                for token in simple_engine.generate_response(prompt, max_tokens):
-                    yield token
-                return
+                simple_engine = SimpleAIEngine(auto_load=True)  # Ensure auto-load is enabled
+                if simple_engine.model_loaded:
+                    print("✅ SimpleAI engine loaded successfully")
+                    for token in simple_engine.generate_response(prompt, max_tokens):
+                        yield token
+                    return
+                else:
+                    print("❌ SimpleAI engine failed to load")
             except ImportError:
-                pass
-            yield "Error: No model loaded (SmolLM2 and legacy engines unavailable)"
+                print("❌ SimpleAI engine not available")
+            except Exception as e:
+                print(f"❌ SimpleAI engine error: {e}")
+            
+            # If all engines fail, provide a helpful error message
+            error_msg = "Error: Model not loaded"
+            print(f"❌ {error_msg}")
+            yield error_msg
             return
             
         try:
