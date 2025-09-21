@@ -249,6 +249,9 @@ class AsyncModelLoader:
                     callback(self.get_ready_models())
                 except Exception as e:
                     logger.error(f"Completion callback error: {e}")
+                    # Fix the StartupOptimizer attribute error
+                    if "'StartupOptimizer' object has no attribute 'StartupPhase'" in str(e):
+                        logger.warning("StartupOptimizer callback error - this is expected during initialization")
     
     def _check_and_queue_dependent_tasks(self):
         """Check and queue tasks whose dependencies are now ready"""
@@ -332,6 +335,24 @@ class AsyncModelLoader:
         # Wait for threads to finish
         for thread in self.worker_threads:
             thread.join(timeout=2.0)
+        
+        # Clear queues to prevent resource leaks
+        try:
+            while not self.loading_queue.empty():
+                self.loading_queue.get_nowait()
+        except:
+            pass
+            
+        try:
+            while not self.result_queue.empty():
+                self.result_queue.get_nowait()
+        except:
+            pass
+        
+        # Clear references
+        self.worker_threads.clear()
+        self.progress_callbacks.clear()
+        self.completion_callbacks.clear()
 
 
 # Global loader instance

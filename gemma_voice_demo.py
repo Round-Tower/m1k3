@@ -65,7 +65,7 @@ def main():
     try:
         from src.engines.voice.voice_engine import create_voice_engine
         voice_engine = create_voice_engine()
-        voice_engine.set_engine_preference("vibevoice") # Explicitly prefer VibeVoice for this demo
+        voice_engine.set_engine_preference("kitten") # Explicitly prefer KittenTTS for this demo
         if not voice_engine.load_model():
             print("❌ Voice model could not be loaded. Exiting.")
             return

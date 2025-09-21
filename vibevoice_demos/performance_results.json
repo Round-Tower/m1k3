@@ -1,0 +1,26 @@
+[
+  {
+    "test": 1,
+    "text_length": 29,
+    "generation_time": 0.0028829574584960938,
+    "audio_duration": 1.45,
+    "realtime_factor": 502.9557393317896,
+    "chars_per_second": 10059.114786635791
+  },
+  {
+    "test": 2,
+    "text_length": 84,
+    "generation_time": 0.0021598339080810547,
+    "audio_duration": 4.2,
+    "realtime_factor": 1944.593972844685,
+    "chars_per_second": 38891.879456893694
+  },
+  {
+    "test": 3,
+    "text_length": 211,
+    "generation_time": 0.005250215530395508,
+    "audio_duration": 10.55,
+    "realtime_factor": 2009.4413151083058,
+    "chars_per_second": 40188.82630216611
+  }
+]

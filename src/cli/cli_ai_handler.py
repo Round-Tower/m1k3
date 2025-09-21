@@ -31,6 +31,13 @@ class CLIAIResponseProcessor:
         self.current_state = ResponseProcessingState.IDLE
         self.response_callbacks: Dict[str, Callable] = {}
         self.processing_thread: Optional[threading.Thread] = None
+    
+    def update_engines(self, voice_engine=None, rag_engine=None):
+        """Update engine references when they become available"""
+        if voice_engine is not None:
+            self.cli.voice_engine = voice_engine
+        if rag_engine is not None:
+            self.cli.rag_engine = rag_engine
         
     def set_state(self, state: ResponseProcessingState):
         """Set the current processing state"""

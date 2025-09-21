@@ -58,8 +58,8 @@ class UnifiedVoiceEngine:
         # Intercom effects: the main differentiator between profiles
         self.profiles = {
             "natural": {
-                "description": "Default conversational voice with light intercom enhancement",
-                "effects": ["light_intercom", "formant_correction", "compression", "normalization"],
+                "description": "Default conversational voice with medium intercom enhancement",
+                "effects": ["medium_intercom", "formant_correction", "compression", "normalization"],
                 "preferred_engine": "kitten"
             },
             "assistant": {
@@ -117,7 +117,9 @@ class UnifiedVoiceEngine:
             self.preferred_engine = preferred_engine
             
         # Try loading engines in preference order
-        if self.preferred_engine == "vibevoice":
+        # VibeVoice is currently broken due to bugs in the external library.
+        # Forcing fallback to KittenTTS until VibeVoice is fixed.
+        if self.preferred_engine == "vibevoice" and False: # Temporarily disable VibeVoice
             # Check if VibeVoice is available and not too slow
             if self.vibevoice_manager.is_available():
                 print("🔄 Attempting VibeVoice loading...")

@@ -95,18 +95,34 @@ class CLIInitializer:
         try:
             from src.engines.ai.ai_inference import LocalAIEngine
             self.components['local_ai_engine'] = LocalAIEngine
+            self.component_status['local_ai_engine'] = ComponentStatus.AVAILABLE
             self.component_status['real_ai'] = ComponentStatus.AVAILABLE
             log_info("🧠 Using real AI inference engine")
+            
+            # Always also load simple AI as fallback
+            try:
+                from src.engines.ai.simple_ai_engine import SimpleAIEngine
+                self.components['simple_ai_engine'] = SimpleAIEngine
+                self.component_status['simple_ai_engine'] = ComponentStatus.AVAILABLE
+                self.component_status['simple_ai'] = ComponentStatus.AVAILABLE
+                log_debug("✅ Simple AI also available as fallback")
+            except ImportError as e2:
+                log_warning(f"⚠️  Simple AI fallback not available: {e2}")
+                self.component_status['simple_ai_engine'] = ComponentStatus.NOT_AVAILABLE
+                self.component_status['simple_ai'] = ComponentStatus.NOT_AVAILABLE
+                
         except ImportError as e:
             log_warning(f"⚠️  Real AI engine not available: {e}")
             log_info("🔄 Falling back to mock AI engine")
             try:
                 from src.engines.ai.simple_ai_engine import SimpleAIEngine
                 self.components['simple_ai_engine'] = SimpleAIEngine
+                self.component_status['simple_ai_engine'] = ComponentStatus.AVAILABLE
                 self.component_status['real_ai'] = ComponentStatus.NOT_AVAILABLE
                 self.component_status['simple_ai'] = ComponentStatus.AVAILABLE
             except ImportError as e2:
                 log_error(f"❌ Simple AI engine not available: {e2}")
+                self.component_status['simple_ai_engine'] = ComponentStatus.NOT_AVAILABLE
                 self.component_status['simple_ai'] = ComponentStatus.NOT_AVAILABLE
         
         # Try to import RAG engine

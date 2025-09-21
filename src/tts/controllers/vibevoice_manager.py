@@ -256,33 +256,54 @@ class VibeVoiceManager:
             
             self.processor = VibeVoiceProcessor.from_pretrained(
                 self.model_name,
+                language_model_pretrained_name=self.model_name, # Force it to use its own tokenizer
                 trust_remote_code=True
             )
             
             # Load VibeVoice model
             print("   Loading model...")
             
-            # Use appropriate dtype based on device capabilities
+            # Use optimized settings based on device capabilities
             if torch.cuda.is_available():
                 dtype = torch.bfloat16
                 device_map = 'cuda'
                 attn_impl = 'flash_attention_2'
+                load_kwargs = {
+                    'torch_dtype': dtype,
+                    'device_map': device_map,
+                    'attn_implementation': attn_impl,
+                    'low_cpu_mem_usage': True,
+                    'use_safetensors': True
+                }
             elif hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
                 dtype = torch.float16  # MPS doesn't support bfloat16
                 device_map = 'mps'
                 attn_impl = 'sdpa'
+                load_kwargs = {
+                    'torch_dtype': dtype,
+                    'device_map': device_map,
+                    'attn_implementation': attn_impl,
+                    'low_cpu_mem_usage': True,
+                    'use_safetensors': True
+                }
+                # Enable MPS optimizations
+                torch.backends.mps.allow_tf32 = True
             else:
                 dtype = torch.float32  # CPU fallback
                 device_map = 'cpu'
                 attn_impl = 'sdpa'
+                load_kwargs = {
+                    'torch_dtype': dtype,
+                    'device_map': device_map,
+                    'attn_implementation': attn_impl,
+                    'low_cpu_mem_usage': True
+                }
             
             print(f"   Using dtype: {dtype}, device: {device_map}")
             
             self.model = VibeVoiceForConditionalGenerationInference.from_pretrained(
                 self.model_name,
-                torch_dtype=dtype,
-                device_map=device_map,
-                attn_implementation=attn_impl
+                **load_kwargs
             )
             
             # Set model to evaluation mode
@@ -376,6 +397,13 @@ class VibeVoiceManager:
                 print("❌ Could not find voice samples for speakers")
                 return None
             
+            # Validate voice samples count matches speakers count
+            if len(voice_samples) != len(speakers):
+                print(f"⚠️  Voice samples count ({len(voice_samples)}) doesn't match speakers count ({len(speakers)})")
+                # Adjust speakers to match available voice samples
+                speakers = speakers[:len(voice_samples)]
+                print(f"🔄 Adjusted speakers to: {speakers}")
+            
             # Format text with speaker labels (VibeVoice expects specific format)
             formatted_text = self._format_text_with_speakers(text, speakers)
             
@@ -393,8 +421,17 @@ class VibeVoiceManager:
             
             # Generate audio using VibeVoice
             cfg_scale = self.cfg_scales[current_quality]
+            
+            # Move inputs to device to avoid meta tensor issues
+            device_inputs = {}
+            for key, value in inputs.items():
+                if hasattr(value, 'to'):
+                    device_inputs[key] = value.to(self.device)
+                else:
+                    device_inputs[key] = value
+            
             outputs = self.model.generate(
-                **inputs,
+                **device_inputs,
                 max_new_tokens=None,
                 cfg_scale=cfg_scale,
                 tokenizer=self.processor.tokenizer,
@@ -471,6 +508,12 @@ class VibeVoiceManager:
         if "Speaker " in text and ":" in text:
             return text
             
+        # Ensure we don't exceed the maximum number of speakers
+        max_speakers = min(len(speakers), self.max_speakers)
+        if len(speakers) > max_speakers:
+            speakers = speakers[:max_speakers]
+            print(f"⚠️  Limited to {max_speakers} speakers (max supported)")
+            
         # For single speaker, add Speaker 1 label
         if len(speakers) == 1:
             return f"Speaker 1: {text}"
@@ -482,8 +525,13 @@ class VibeVoiceManager:
         
         for i, sentence in enumerate(sentences):
             if sentence.strip():
+                # Ensure speaker_num doesn't exceed available speakers
                 speaker_num = (i % len(speakers)) + 1
-                formatted_parts.append(f"Speaker {speaker_num}: {sentence.strip()}")
+                if speaker_num <= len(speakers):
+                    formatted_parts.append(f"Speaker {speaker_num}: {sentence.strip()}")
+                else:
+                    # Fallback to Speaker 1 if we exceed available speakers
+                    formatted_parts.append(f"Speaker 1: {sentence.strip()}")
         
         return '. '.join(formatted_parts)
 

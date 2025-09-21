@@ -12,7 +12,17 @@
       "Bash(curl:*)",
       "Bash(open http://localhost:8080)",
       "Bash(timeout:*)",
-      "Bash(rm:*)"
+      "Bash(rm:*)",
+      "WebFetch(domain:github.com)",
+      "Bash(git add:*)",
+      "Bash(.specify/scripts/bash/create-new-feature.sh:*)",
+      "Bash(find:*)",
+      "Bash(time python:*)",
+      "Bash(open http://localhost:8080/realtime_dashboard.html)",
+      "Bash(open http://localhost:8080/static/js/test/integration-tests.html)",
+      "WebFetch(domain:localhost)",
+      "Bash(open http://localhost:8082/realtime_dashboard.html)",
+      "Bash(npx playwright test:*)"
     ],
     "deny": [],
     "ask": []
