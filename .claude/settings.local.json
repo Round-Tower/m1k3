@@ -12,7 +12,8 @@
       "Bash(curl:*)",
       "Bash(open http://localhost:8080)",
       "Bash(timeout:*)",
-      "Bash(rm:*)"
+      "Bash(rm:*)",
+      "Bash(git merge:*)"
     ],
     "deny": [],
     "ask": []
