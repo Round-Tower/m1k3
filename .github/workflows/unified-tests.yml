@@ -21,20 +21,25 @@ jobs:
     
     steps:
       - name: 📥 Checkout Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
       
       - name: 🐍 Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python-version }}
+          cache: 'pip'
+          cache-dependency-path: |
+            requirements.txt
+            tests/unified-suite/requirements.txt
       
       - name: 📦 Set up Node.js ${{ matrix.node-version }}
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: ${{ matrix.node-version }}
           cache: 'npm'
+          cache-dependency-path: tests/unified-suite/package-lock.json
       
       - name: 🔧 Install Python Dependencies
         run: |
@@ -185,10 +190,10 @@ jobs:
     
     steps:
       - name: 📥 Checkout Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
       
       - name: 📦 Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: '20.x'
       
@@ -204,7 +209,7 @@ jobs:
           npm run report
       
       - name: 📄 Setup Pages
-        uses: actions/configure-pages@v4
+        uses: actions/configure-pages@v5
       
       - name: 🏗️ Build Pages Site
         run: |
@@ -234,7 +239,7 @@ jobs:
           echo '</ul></body></html>' >> _site/index.html
       
       - name: 📤 Upload Pages Artifact
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@v4
         with:
           path: ./_site
       

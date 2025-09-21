@@ -28,10 +28,10 @@ jobs:
         
     steps:
     - name: 📥 Checkout repository
-      uses: actions/checkout@v4
+      uses: actions/checkout@v5
       
     - name: 📦 Setup Node.js
-      uses: actions/setup-node@v4
+      uses: actions/setup-node@v5
       with:
         node-version: ${{ matrix.node-version }}
         cache: 'npm'
@@ -62,7 +62,7 @@ jobs:
         node run-tests.js --categories="$CATEGORIES" --headless --url=http://localhost:8003
         
     - name: 📊 Upload test results
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       if: always()
       with:
         name: visual-test-results
@@ -74,7 +74,7 @@ jobs:
         
     - name: 📋 Comment PR with results
       if: github.event_name == 'pull_request'
-      uses: actions/github-script@v6
+      uses: actions/github-script@v7
       with:
         script: |
           const fs = require('fs');
@@ -129,10 +129,10 @@ jobs:
     
     steps:
     - name: 📥 Checkout repository
-      uses: actions/checkout@v4
+      uses: actions/checkout@v5
       
     - name: 📦 Setup Node.js
-      uses: actions/setup-node@v4
+      uses: actions/setup-node@v5
       with:
         node-version: 18.x
         
@@ -159,7 +159,7 @@ jobs:
         node run-journey-tests.js --headless --url=http://localhost:8003
         
     - name: 📊 Upload journey results
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       if: always()
       with:
         name: journey-test-results

@@ -1,0 +1,232 @@
+name: Security Scanning
+
+on:
+  pull_request:
+    branches: [ main, master, develop ]
+  push:
+    branches: [ main, master, develop ]
+  schedule:
+    # Run security scans daily at 3 AM UTC
+    - cron: '0 3 * * *'
+
+jobs:
+  dependency-review:
+    name: 🔒 Dependency Security Review
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    
+    steps:
+      - name: 📥 Checkout Code
+        uses: actions/checkout@v5
+        
+      - name: 🛡️ Dependency Review
+        uses: actions/dependency-review-action@v4
+        with:
+          # Fail the action if vulnerabilities with severity >= medium are found
+          fail-on-severity: medium
+          # Allow licenses that are commonly used in open source
+          allow-licenses: GPL-3.0, MIT, Apache-2.0, BSD-2-Clause, BSD-3-Clause, ISC, MPL-2.0
+          # Deny licenses that are problematic
+          deny-licenses: AGPL-1.0, AGPL-3.0
+          # Comment on PR with results
+          comment-summary-in-pr: true
+
+  codeql-analysis:
+    name: 🔍 CodeQL Security Analysis
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+      
+    strategy:
+      matrix:
+        language: [ 'python', 'javascript' ]
+        
+    steps:
+      - name: 📥 Checkout Code
+        uses: actions/checkout@v5
+        
+      - name: 🔧 Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+          
+      - name: 🏗️ Autobuild
+        uses: github/codeql-action/autobuild@v3
+        
+      - name: 🔍 Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:${{ matrix.language }}"
+
+  npm-audit:
+    name: 📦 NPM Security Audit
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: 📥 Checkout Code
+        uses: actions/checkout@v5
+        
+      - name: 📦 Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: '20.x'
+          cache: 'npm'
+          
+      - name: 📋 Install Dependencies
+        run: |
+          # Check multiple package.json locations
+          for dir in . tests/unified-suite tests/screenshots web; do
+            if [ -f "$dir/package.json" ]; then
+              echo "🔍 Installing dependencies in $dir"
+              cd "$dir"
+              npm ci --audit=false
+              cd - > /dev/null
+            fi
+          done
+          
+      - name: 🛡️ Run NPM Audit
+        run: |
+          echo "## 📦 NPM Security Audit Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          for dir in . tests/unified-suite tests/screenshots web; do
+            if [ -f "$dir/package.json" ]; then
+              echo "### 📁 Directory: $dir" >> $GITHUB_STEP_SUMMARY
+              cd "$dir"
+              
+              # Run audit and capture results
+              if npm audit --audit-level=moderate; then
+                echo "✅ No moderate or higher vulnerabilities found" >> $GITHUB_STEP_SUMMARY
+              else
+                echo "⚠️ Vulnerabilities detected - review required" >> $GITHUB_STEP_SUMMARY
+                npm audit --audit-level=low >> audit-results.txt 2>&1 || true
+                echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+                head -20 audit-results.txt >> $GITHUB_STEP_SUMMARY
+                echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+              fi
+              
+              cd - > /dev/null
+              echo "" >> $GITHUB_STEP_SUMMARY
+            fi
+          done
+
+  python-security:
+    name: 🐍 Python Security Scan
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: 📥 Checkout Code
+        uses: actions/checkout@v5
+        
+      - name: 🐍 Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          
+      - name: 📋 Install Security Tools
+        run: |
+          python -m pip install --upgrade pip
+          pip install safety bandit semgrep
+          
+      - name: 🔒 Safety Check (Dependencies)
+        run: |
+          echo "## 🐍 Python Security Scan Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 🔒 Safety Check (Dependency Vulnerabilities)" >> $GITHUB_STEP_SUMMARY
+          
+          if [ -f "requirements.txt" ]; then
+            if safety check -r requirements.txt --json > safety-results.json; then
+              echo "✅ No known vulnerabilities in Python dependencies" >> $GITHUB_STEP_SUMMARY
+            else
+              echo "⚠️ Vulnerabilities found in Python dependencies" >> $GITHUB_STEP_SUMMARY
+              echo "\`\`\`json" >> $GITHUB_STEP_SUMMARY
+              head -20 safety-results.json >> $GITHUB_STEP_SUMMARY
+              echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+            fi
+          else
+            echo "ℹ️ No requirements.txt found" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+      - name: 🕵️ Bandit Security Linter
+        run: |
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 🕵️ Bandit Security Linter" >> $GITHUB_STEP_SUMMARY
+          
+          if bandit -r . -f json -o bandit-results.json; then
+            echo "✅ No security issues found by Bandit" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "⚠️ Security issues detected by Bandit" >> $GITHUB_STEP_SUMMARY
+            echo "\`\`\`json" >> $GITHUB_STEP_SUMMARY
+            head -30 bandit-results.json >> $GITHUB_STEP_SUMMARY
+            echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+      - name: 📤 Upload Security Reports
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: security-scan-results
+          path: |
+            safety-results.json
+            bandit-results.json
+          retention-days: 30
+
+  secrets-scan:
+    name: 🔑 Secrets Detection
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: 📥 Checkout Code
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          
+      - name: 🔑 TruffleHog Secrets Scan
+        uses: trufflesecurity/trufflehog@main
+        with:
+          path: ./
+          base: main
+          head: HEAD
+          extra_args: --debug --only-verified
+
+  security-summary:
+    name: 📊 Security Summary
+    runs-on: ubuntu-latest
+    needs: [dependency-review, codeql-analysis, npm-audit, python-security, secrets-scan]
+    if: always()
+    
+    steps:
+      - name: 📊 Generate Security Summary
+        run: |
+          echo "## 🛡️ M1K3 Security Scan Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Scan Date:** $(date -u '+%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_STEP_SUMMARY
+          echo "**Trigger:** ${{ github.event_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Branch:** ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          # Check job results
+          echo "### 📋 Scan Results" >> $GITHUB_STEP_SUMMARY
+          echo "| Security Check | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|---|---|" >> $GITHUB_STEP_SUMMARY
+          echo "| 🔒 Dependency Review | ${{ needs.dependency-review.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| 🔍 CodeQL Analysis | ${{ needs.codeql-analysis.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| 📦 NPM Audit | ${{ needs.npm-audit.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| 🐍 Python Security | ${{ needs.python-security.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| 🔑 Secrets Scan | ${{ needs.secrets-scan.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          # Overall status
+          if [[ "${{ needs.dependency-review.result }}" == "success" && 
+                "${{ needs.codeql-analysis.result }}" == "success" && 
+                "${{ needs.npm-audit.result }}" == "success" && 
+                "${{ needs.python-security.result }}" == "success" && 
+                "${{ needs.secrets-scan.result }}" == "success" ]]; then
+            echo "### ✅ Overall Status: PASS" >> $GITHUB_STEP_SUMMARY
+            echo "All security scans completed successfully with no critical issues detected." >> $GITHUB_STEP_SUMMARY
+          else
+            echo "### ⚠️ Overall Status: REVIEW REQUIRED" >> $GITHUB_STEP_SUMMARY
+            echo "One or more security scans detected issues that require review." >> $GITHUB_STEP_SUMMARY
+          fi
