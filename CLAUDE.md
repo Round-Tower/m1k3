@@ -344,11 +344,19 @@ docker-compose up --build
 
 ## CI/CD Pipeline  
 - **166 tests across 74 files**: Complete coverage validation
-- **4 GitHub Actions workflows**: Unified tests, quick tests, release testing, badges
+- **5 GitHub Actions workflows**: Unified tests, quick tests, release testing, badges, repository visualization
+- **Repository structure visualization**: Automated SVG diagrams with GitHub repo-visualizer
 - **Visual regression testing**: Screenshot comparison across viewports
 - **Multi-platform matrix**: Ubuntu/macOS/Windows × Node.js × Python
 - **Automated reporting**: HTML dashboards with GitHub Pages deployment
 - **Security scanning**: Dependency vulnerabilities and code analysis
+
+### Repository Visualization
+- **Automated SVG generation**: Weekly structure diagrams using GitHub repo-visualizer
+- **Smart exclusions**: Filters out build artifacts, dependencies, and temporary files
+- **Metadata tracking**: Generation timestamps, file sizes, and visual element counts
+- **GitHub Pages integration**: Published diagrams at `docs/repo-structure.svg`
+- **PR integration**: Automatic comments with visualization updates on pull requests
 
 ## Privacy & Environmental Impact
 - **100% local processing** - No data sent to cloud services
