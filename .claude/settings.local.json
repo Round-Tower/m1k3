@@ -13,7 +13,8 @@
       "Bash(open http://localhost:8080)",
       "Bash(timeout:*)",
       "Bash(rm:*)",
-      "Bash(git merge:*)"
+      "Bash(git merge:*)",
+      "Bash(git commit:*)"
     ],
     "deny": [],
     "ask": []
