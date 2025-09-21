@@ -34,7 +34,7 @@ class VoiceEngine:
         self.profiles = {
             "natural": {
                 "description": "Default conversational voice",
-                "speed_multiplier": 1.2,  # Increased from 1.0 for more natural pace
+                "speed_multiplier": 1.3,  # Increased from 1.25 for a faster, more professional pace
                 "pitch_adjustment": 0.0,
                 "volume_multiplier": 1.0,
                 "pause_duration": 0.08  # Reduced from 0.1 for better flow

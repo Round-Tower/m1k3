@@ -4,9 +4,16 @@ Test Gemma 2B integration with M1K3 AI system
 """
 
 import time
+import pytest
+from src.engines.ai import ai_inference
 from src.engines.ai.ai_inference import LocalAIEngine
 
-def test_gemma_2b_integration():
+def test_gemma_2b_integration(monkeypatch):
+    # Mock the availability flags to ensure the test runs in a consistent environment
+    monkeypatch.setattr(ai_inference, "UNIVERSAL_ENGINE_AVAILABLE", True)
+    monkeypatch.setattr(ai_inference, "SMOLLM_ENGINE_AVAILABLE", True)
+    monkeypatch.setattr(ai_inference, "CTRANSFORMERS_AVAILABLE", True)
+    monkeypatch.setattr(ai_inference, "TRANSFORMERS_AVAILABLE", True)
     print("🧪 Testing Gemma 2B Integration")
     print("=" * 50)
     
@@ -25,20 +32,24 @@ def test_gemma_2b_integration():
     start_time = time.time()
     try:
         engine = LocalAIEngine()
+        model_loaded = engine.load_model() # Explicitly load the model
         load_time = time.time() - start_time
         
-        if engine.model:
-            model_name = getattr(engine, '_current_model_name', 'Unknown')
+        # Success is when the loader returns true, and either the legacy model is loaded
+        # or the new Universal Engine is loaded and ready.
+        is_successful_load = model_loaded and \
+            (engine.model is not None or (hasattr(engine, 'universal_engine') and engine.universal_engine and engine.universal_engine.engine_loaded))
+
+        if is_successful_load:
+            model_name = engine.universal_engine.current_model_name if engine.universal_engine and engine.universal_engine.engine_loaded else getattr(engine, '_current_model_name', 'Unknown')
             print(f"✅ Model loaded: {model_name}")
             print(f"⏱️  Load time: {load_time:.2f} seconds")
             print(f"🧠 Backend: {'HF Transformers' if engine.use_transformers else 'ctransformers'}")
         else:
-            print("❌ Model loading failed")
-            return False
+            assert False, "Model loading failed"
             
     except Exception as e:
-        print(f"❌ Error loading model: {e}")
-        return False
+        assert False, f"An exception occurred during model loading: {e}"
     
     print()
     
@@ -128,8 +139,6 @@ def test_gemma_2b_integration():
     print(f"   Model: {model_name}")
     print(f"   Backend: {'HuggingFace Transformers' if engine.use_transformers else 'ctransformers'}")
     print(f"   Load Time: {load_time:.2f}s")
-    
-    return True
 
 if __name__ == "__main__":
     success = test_gemma_2b_integration()

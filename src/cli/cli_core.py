@@ -82,12 +82,39 @@ class M1K3CLICore:
         self.running = False
         self.shutdown_requested = False
         
-        # Components
-        self.initializer: Optional[CLIInitializer] = None
-        self.command_handler: Optional[CLICommandHandler] = None
-        self.ai_processor: Optional[CLIAIResponseProcessor] = None
+        # Initialize ComponentManager and pass it the CLI config
+        from cli.component_manager import ComponentManager
+        self.component_manager = ComponentManager()
+        self.component_manager.set_cli_config({
+            "voice_enabled": voice_enabled,
+            "auto_avatar": auto_avatar,
+            "avatar_port": avatar_port,
+            "open_browser": open_browser,
+            "transparency_level": transparency_level,
+            "rag_enabled": rag_enabled,
+            "stt_engine": stt_engine,
+            "stt_model": stt_model,
+            "stt_language": stt_language,
+            "voice_first": voice_first,
+            "force_internal_mic": force_internal_mic,
+            "streaming_enabled": streaming_enabled,
+            "conversation_mode": conversation_mode,
+            "chunk_size": chunk_size,
+            "chunk_timeout": chunk_timeout,
+            "response_delay": response_delay,
+            "enable_interruptions": enable_interruptions,
+            "tts_engine": tts_engine,
+            "vibevoice_model": vibevoice_model,
+            "vibevoice_quality": vibevoice_quality,
+            "voice_profile": voice_profile,
+            "speakers": speakers,
+            "multi_speaker": multi_speaker,
+        })
         
-        # Component instances (populated during initialization)
+        # Component instances (will be lazy-loaded via component_manager)
+        self.initializer = None # This will be managed by ComponentManager
+        self.command_handler = None
+        self.ai_processor = None
         self.ai_engine = None
         self.rag_engine = None
         self.voice_engine = None
@@ -97,8 +124,6 @@ class M1K3CLICore:
         self.stats_tracker = None
         self.model_cli = None
         self.stt_manager = None
-        
-        # Streaming components
         self.streaming_tts = None
         self.conversation_flow = None
         
@@ -144,41 +169,312 @@ class M1K3CLICore:
         signal.signal(signal.SIGTERM, signal_handler)
     
     def initialize(self) -> bool:
-        """Initialize all CLI components"""
-        log_info("🚀 Initializing M1K3 CLI")
+        """Initialize CLI components with async optimization"""
+        log_info("🚀 Initializing M1K3 CLI (Optimized)")
         self.state = CLIState.STARTING
         
         try:
-            # Initialize components
-            self.initializer = initialize_cli_components()
-            if not self.initializer:
-                log_error("Failed to initialize components")
-                return False
+            # Import performance optimization
+            from utils.performance.startup_optimizer import get_startup_optimizer, create_performance_context, StartupPhase
+            from engines.ai.async_model_loader import get_async_loader, ModelLoadTask, LoadingPriority
             
-            # Setup AI engines
-            if not self._setup_ai_engines():
-                log_error("Failed to setup AI engines")
-                return False
+            self.optimizer = get_startup_optimizer()
+            self.async_loader = get_async_loader()
             
-            # Setup other components
-            self._setup_voice_engine()
-            self._setup_stt_engine()
-            self._setup_streaming_components()
-            self._setup_avatar_system()
-            self._setup_sound_system()
-            self._setup_monitoring()
-            self._setup_model_cli()
+            # Phase 1: Critical initialization (must complete before UI)
+            with create_performance_context("critical_initialization"):
+                if not self._initialize_critical_components():
+                    log_error("Failed to initialize critical components")
+                    return False
             
-            # Initialize command handler and AI processor
-            self.command_handler = CLICommandHandler(self)
-            self.ai_processor = CLIAIResponseProcessor(self)
+            # Phase 2: Start async loading of heavy components
+            self._start_async_loading()
+            
+            # Phase 3: Initialize UI-ready components
+            with create_performance_context("ui_initialization"):
+                self._initialize_ui_components()
+            
+            # Wait for critical models to be ready (with timeout)
+            if not self.async_loader.wait_for_critical(timeout=5.0):
+                log_warning("⚠️ Critical models not ready, using fallbacks")
             
             self.state = CLIState.READY
-            log_info("✅ CLI initialization complete")
+            self.optimizer.set_phase(StartupPhase.READY)
+            log_info("✅ CLI initialization complete (optimized)")
             return True
             
         except Exception as e:
             log_error(f"Initialization failed: {e}")
+            self.state = CLIState.ERROR
+            return False
+    
+    def _initialize_critical_components(self) -> bool:
+        """Initialize only critical components needed for basic functionality"""
+        log_info("🔧 Initializing critical components")
+        
+        # Setup minimal AI engine (fast fallback if needed)
+        self.ai_engine = self.component_manager.get_ai_engine()
+        if not self.ai_engine:
+            log_error("❌ Failed to setup minimal AI engine")
+            return False
+        
+        # Initialize command handler (lightweight)
+        self.command_handler = self.component_manager.get_command_handler(self) # Pass self for context
+        self.ai_processor = self.component_manager.get_ai_processor(self) # Pass self for context
+        
+        log_info("✅ Critical components ready")
+        return True
+    
+    def _start_async_loading(self):
+        """Start async loading of heavy components"""
+        log_info("⚡ Starting async loading")
+        
+        # Register model loading tasks with ComponentManager's loaders
+        self.async_loader.register_model(ModelLoadTask(
+            name="primary_ai", 
+            priority=LoadingPriority.HIGH,
+            loader_func=self.component_manager.get_ai_engine, # Use ComponentManager's loader
+            estimated_time=5.0
+        ))
+        if self.rag_enabled:
+            self.async_loader.register_model(ModelLoadTask(
+                name="rag_engine",
+                priority=LoadingPriority.MEDIUM,
+                loader_func=self.component_manager.get_rag_engine, # Use ComponentManager's loader
+                estimated_time=3.0
+            ))
+        if self.voice_enabled:
+            self.async_loader.register_model(ModelLoadTask(
+                name="voice_engine",
+                priority=LoadingPriority.HIGH,
+                loader_func=self.component_manager.get_voice_engine, # Use ComponentManager's loader
+                estimated_time=8.0
+            ))
+        # Add other optional models here if needed
+        
+        # Start async loading
+        self.async_loader.start_loading()
+        
+        # Register callbacks for when models are ready
+        self.async_loader.register_completion_callback(self._on_critical_models_ready)
+    
+    def _initialize_ui_components(self):
+        """Initialize UI and non-critical components"""
+        log_info("🎨 Initializing UI components")
+        
+        # These can start while models load in background
+        self.sound_manager = self.component_manager.get_sound_manager()
+        self.avatar_controller = self.component_manager.get_avatar_controller()
+        self.system_monitor = self.component_manager.get_system_monitor()
+        self.model_cli = self.component_manager.get_model_cli()
+        
+        # Setup voice and STT engines (deferred from critical path)
+        if self.voice_enabled:
+            self.voice_engine = self.component_manager.get_voice_engine()
+        
+        if self.stt_engine != "none":
+            self.stt_manager = self.component_manager.get_stt_manager()
+        
+        # Setup streaming components if enabled
+        if self.streaming_enabled:
+            self.streaming_tts = self.component_manager.get_streaming_tts_engine()
+        
+        # Setup conversation flow if enabled
+        if self.conversation_mode:
+            self.conversation_flow = self.component_manager.get_conversation_flow_manager()
+        
+        # Update AI processor with newly loaded engines
+        if hasattr(self, 'ai_processor'):
+            self.ai_processor.update_engines(
+                voice_engine=self.voice_engine,
+                rag_engine=self.rag_engine
+            )
+        
+        log_info("✅ UI components ready")
+    
+    
+    
+    def _register_ai_models(self):
+        """Register AI models for async loading"""
+        from engines.ai.async_model_loader import ModelLoadTask, LoadingPriority
+        
+        # Critical: Simple/fallback AI (loads first)
+        self.async_loader.register_model(ModelLoadTask(
+            name="simple_ai",
+            priority=LoadingPriority.CRITICAL,
+            loader_func=self._load_simple_ai,
+            estimated_time=0.5
+        ))
+        
+        # High: Primary AI engine
+        self.async_loader.register_model(ModelLoadTask(
+            name="primary_ai", 
+            priority=LoadingPriority.HIGH,
+            loader_func=self._load_primary_ai,
+            estimated_time=5.0
+        ))
+        
+        # Medium: RAG engine (if enabled)
+        if self.rag_enabled:
+            self.async_loader.register_model(ModelLoadTask(
+                name="rag_engine",
+                priority=LoadingPriority.MEDIUM,
+                loader_func=self._load_rag_engine,
+                estimated_time=3.0
+            ))
+    
+    def _register_voice_models(self):
+        """Register voice models for async loading"""
+        from engines.ai.async_model_loader import ModelLoadTask, LoadingPriority
+        
+        if not self.voice_enabled:
+            return
+        
+        # High priority: Basic TTS
+        self.async_loader.register_model(ModelLoadTask(
+            name="basic_tts",
+            priority=LoadingPriority.HIGH,
+            loader_func=self._load_basic_tts,
+            estimated_time=1.0
+        ))
+        
+        # Medium: Advanced TTS (VibeVoice, etc.)
+        self.async_loader.register_model(ModelLoadTask(
+            name="advanced_tts",
+            priority=LoadingPriority.MEDIUM,
+            loader_func=self._load_advanced_tts,
+            estimated_time=8.0
+        ))
+    
+    def _register_optional_models(self):
+        """Register optional/enhancement models"""
+        from engines.ai.async_model_loader import ModelLoadTask, LoadingPriority
+        
+        # Low priority: Advanced features
+        self.async_loader.register_model(ModelLoadTask(
+            name="enhancements",
+            priority=LoadingPriority.LOW,
+            loader_func=self._load_enhancements,
+            estimated_time=2.0
+        ))
+    
+    def _setup_minimal_ai(self) -> bool:
+        """Setup minimal AI for immediate functionality"""
+        try:
+            # Try to use real AI first, then fall back to simple AI
+            if self.initializer.is_component_available('local_ai_engine'):
+                LocalAIEngine = self.initializer.get_component('local_ai_engine')
+                self.ai_engine = LocalAIEngine()
+                log_info("✅ Real AI engine ready")
+                return True
+            elif self.initializer.is_component_available('simple_ai_engine'):
+                SimpleAIEngine = self.initializer.get_component('simple_ai_engine')
+                self.ai_engine = SimpleAIEngine()
+                log_info("✅ Fallback AI engine ready")
+                return True
+            else:
+                log_error("❌ No AI engine available (neither local nor simple)")
+                return False
+        except Exception as e:
+            log_error(f"Failed to setup minimal AI: {e}")
+            return False
+    
+    def _load_simple_ai(self):
+        """Load simple AI engine"""
+        if self.initializer.is_component_available('simple_ai_engine'):
+            SimpleAIEngine = self.initializer.get_component('simple_ai_engine')
+            return SimpleAIEngine()
+        return None
+    
+    def _load_primary_ai(self):
+        """Load primary AI engine"""
+        try:
+            if self.initializer.is_component_available('local_ai_engine'):
+                LocalAIEngine = self.initializer.get_component('local_ai_engine')
+                return LocalAIEngine()
+        except Exception as e:
+            log_warning(f"Primary AI loading failed: {e}")
+        return None
+    
+    def _load_rag_engine(self):
+        """Load RAG engine"""
+        try:
+            if self.initializer.is_component_available('rag_engine'):
+                M1K3RAGIntegratedEngine = self.initializer.get_component('rag_engine')
+                return M1K3RAGIntegratedEngine()
+        except Exception as e:
+            log_warning(f"RAG engine loading failed: {e}")
+        return None
+    
+    def _load_basic_tts(self):
+        """Load basic TTS engine"""
+        try:
+            self._setup_voice_engine()
+            return self.voice_engine
+        except Exception as e:
+            log_warning(f"Basic TTS loading failed: {e}")
+        return None
+    
+    def _load_advanced_tts(self):
+        """Load advanced TTS features"""
+        try:
+            # Setup streaming TTS if available
+            self._setup_streaming_components()
+            return True
+        except Exception as e:
+            log_warning(f"Advanced TTS loading failed: {e}")
+        return None
+    
+    def _load_enhancements(self):
+        """Load enhancement features"""
+        try:
+            # Setup STT
+            self._setup_stt_engine()
+            return True
+        except Exception as e:
+            log_warning(f"Enhancement loading failed: {e}")
+        return None
+    
+    def _on_critical_models_ready(self, models: dict):
+        """Callback when critical models are ready"""
+        log_info("🎯 Critical models loaded, upgrading AI engine")
+        
+        # Upgrade to primary AI if available
+        if "primary_ai" in models and models["primary_ai"]:
+            self.ai_engine = self.component_manager.get_ai_engine() # Fetch from manager
+            log_info("✅ Upgraded to primary AI engine")
+        
+        # Setup RAG if available
+        if "rag_engine" in models and models["rag_engine"]:
+            self.rag_engine = self.component_manager.get_rag_engine() # Fetch from manager
+            log_info("✅ RAG engine ready")
+        
+        # Update optimizer
+        if hasattr(self, 'optimizer'):
+            self.optimizer.set_phase(self.optimizer.StartupPhase.LOADING_SECONDARY)
+    
+    def _initialize_minimal_for_query(self) -> bool:
+        """Minimal initialization for single query mode"""
+        log_info("🚀 Minimal initialization for single query")
+        self.state = CLIState.STARTING
+        
+        try:
+            # Absolutely minimal - just get a working AI engine
+            self.ai_engine = self.component_manager.get_ai_engine()
+            if not self.ai_engine:
+                log_error("❌ Failed to setup minimal AI engine")
+                return False
+            
+            # Minimal command processing
+            self.command_handler = self.component_manager.get_command_handler(self)
+            self.ai_processor = self.component_manager.get_ai_processor(self)
+            
+            self.state = CLIState.READY
+            log_info("✅ Minimal initialization complete")
+            return True
+            
+        except Exception as e:
+            log_error(f"Minimal initialization failed: {e}")
             self.state = CLIState.ERROR
             return False
     
@@ -206,8 +502,11 @@ class M1K3CLICore:
             SimpleAIEngine = self.initializer.get_component('simple_ai_engine')
             if SimpleAIEngine:
                 try:
-                    self.ai_engine = SimpleAIEngine()
-                    log_info("✅ Simple AI engine loaded as fallback")
+                    self.ai_engine = SimpleAIEngine(auto_load=True)  # Ensure auto-load is enabled
+                    if self.ai_engine.model_loaded:
+                        log_info("✅ Simple AI engine loaded as fallback")
+                    else:
+                        log_warning("Simple AI engine created but model not loaded")
                 except Exception as e:
                     log_error(f"Simple AI engine setup failed: {e}")
         
@@ -388,7 +687,7 @@ class M1K3CLICore:
             return
         
         try:
-            from ..engines.stt.stt_manager import STTManager
+            from engines.stt.stt_manager import STTManager
             
             # Set environment variables for STT configuration
             import os
@@ -625,10 +924,13 @@ class M1K3CLICore:
         self.running = True
         self.state = CLIState.READY
         
+        conversation_flow = self.component_manager.get_conversation_flow_manager()
+        stt_manager = self.component_manager.get_stt_manager()
+        
         # Start conversation flow if enabled
-        if self.conversation_mode and self.conversation_flow:
+        if self.conversation_mode and conversation_flow:
             log_info("Starting conversation flow manager")
-            if self.conversation_flow.start_conversation():
+            if conversation_flow.start_conversation():
                 log_info("✅ Conversation flow active - natural turn-taking enabled")
             else:
                 log_warning("Failed to start conversation flow, falling back to standard mode")
@@ -637,9 +939,9 @@ class M1K3CLICore:
         log_info("CLI ready for user input")
         
         # Voice-first mode announcement
-        if self.voice_first and self.stt_manager and self.stt_manager.is_available():
+        if self.voice_first and stt_manager and stt_manager.is_available():
             print("🎤 VOICE-FIRST MODE ENABLED")
-            print(f"   - Primary engine: {self.stt_manager.current_engine_name}")
+            print(f"   - Primary engine: {stt_manager.current_engine_name}")
             print(f"   - Voice input will be used by default for all interactions")
             print(f"   - You can still type instead if speech recognition fails")
             print()
@@ -675,21 +977,23 @@ class M1K3CLICore:
         """Run single query mode"""
         log_info(f"Running single query: {query[:50]}...")
         
-        if not self.initialize():
+        # For single queries, use minimal initialization
+        if not self._initialize_minimal_for_query():
             log_error("Failed to initialize CLI")
             return 1
         
         try:
             self.state = CLIState.PROCESSING
             
+            ai_processor = self.component_manager.get_ai_processor(self)
             # Process the query
-            response = self.ai_processor.process_ai_query(query, self.rag_enabled)
+            response = ai_processor.process_ai_query(query, self.rag_enabled)
             if response:
                 print(response)
                 
                 # Process with voice if enabled
                 if self.voice_enabled:
-                    self.ai_processor.process_response_with_voice(response, background=False)
+                    ai_processor.process_response_with_voice(response, background=False)
                 
                 return 0
             else:
@@ -704,13 +1008,14 @@ class M1K3CLICore:
     
     def _display_startup_banner(self):
         """Display startup banner"""
-        print("\033[1m🧘 M1K3 - Local AI with Advanced Voice & Animations\033[0m")
+        print("🧘 M1K3 - Local AI with Advanced Voice & Animations")
         print("=" * 60)
         
         # Display system info
-        if self.system_monitor:
+        system_monitor = self.component_manager.get_system_monitor()
+        if system_monitor:
             try:
-                metrics = self.system_monitor.collect_metrics()
+                metrics = system_monitor.collect_metrics()
                 print(f"💾 RAM: {metrics.memory_percent or 0:.1f}% | "
                       f"⚡ CPU: {metrics.cpu_usage or 0:.1f}% | "
                       f"🖥️  Platform: {metrics.os_name or 'Unknown'}")
@@ -718,47 +1023,54 @@ class M1K3CLICore:
                 log_debug(f"Error displaying system metrics: {e}")
         
         # Display AI engine info
-        if self.ai_engine:
-            engine_name = type(self.ai_engine).__name__
+        ai_engine = self.component_manager.get_ai_engine()
+        if ai_engine:
+            engine_name = type(ai_engine).__name__
             print(f"🧠 AI Engine: {engine_name}")
         
-        if self.rag_enabled and self.rag_engine:
+        rag_engine = self.component_manager.get_rag_engine()
+        if self.rag_enabled and rag_engine:
             print("🔍 RAG: Enabled")
         
-        if self.voice_enabled and self.voice_engine:
+        voice_engine = self.component_manager.get_voice_engine()
+        if self.voice_enabled and voice_engine:
             print("🔊 Voice: Enabled")
         
-        if self.stt_manager and self.stt_manager.is_available():
-            engine_info = self.stt_manager.get_engine_info()
+        stt_manager = self.component_manager.get_stt_manager()
+        if stt_manager and stt_manager.is_available():
+            engine_info = stt_manager.get_engine_info()
             current_engine = engine_info.get("current_engine", "unknown")
             print(f"🎤 STT: Enabled ({current_engine})")
         
-        if self.auto_avatar:
+        avatar_controller = self.component_manager.get_avatar_controller()
+        if self.auto_avatar and avatar_controller: # Check if avatar is enabled and loaded
             print(f"👤 Avatar: http://localhost:{self.avatar_port}")
         
         print("-" * 60)
     
     def _play_startup_sounds(self):
         """Play startup sound sequence"""
-        if self.sound_manager:
+        sound_manager = self.component_manager.get_sound_manager()
+        if sound_manager:
             try:
-                self.sound_manager.play_startup_sequence()
+                sound_manager.play_startup_sequence()
             except Exception as e:
                 log_debug(f"Startup sounds failed: {e}")
     
     def _get_user_input(self) -> Optional[str]:
         """Get user input with prompt (text or voice)"""
         try:
+            stt_manager = self.component_manager.get_stt_manager()
             # Voice-first mode: automatically start with voice input
-            if self.voice_first and self.stt_manager and self.stt_manager.is_available():
+            if self.voice_first and stt_manager and stt_manager.is_available():
                 print("🎤 Voice-first mode: Listening... (speak now or type to override)")
-                print(f"🔧 DEBUG: Using {self.stt_manager.current_engine_name} engine")
+                print(f"🔧 DEBUG: Using {stt_manager.current_engine_name} engine")
                 
                 # Check for shutdown before potentially blocking voice input
                 if self.shutdown_requested:
                     return None
                 
-                voice_result = self.stt_manager.listen_once(timeout=15.0)
+                voice_result = stt_manager.listen_once(timeout=15.0)
                 
                 # Check for shutdown after voice input
                 if self.shutdown_requested:
@@ -773,7 +1085,7 @@ class M1K3CLICore:
                     # Fall through to text input
             
             # Standard mode or fallback: prompt for text with optional voice
-            if self.stt_manager and self.stt_manager.is_available() and not self.voice_first:
+            if stt_manager and stt_manager.is_available() and not self.voice_first:
                 prompt = "💬 You (type or press ENTER for voice): "
             else:
                 prompt = "💬 You: "
@@ -788,14 +1100,14 @@ class M1K3CLICore:
             user_input = input().strip()
             
             # If empty input and STT available (standard mode), use voice
-            if not user_input and self.stt_manager and self.stt_manager.is_available() and not self.voice_first:
+            if not user_input and stt_manager and stt_manager.is_available() and not self.voice_first:
                 # Check for shutdown before voice input
                 if self.shutdown_requested:
                     return None
                     
                 print("🎤 Listening... (speak now)")
-                print(f"🔧 DEBUG: Using {self.stt_manager.current_engine_name} engine")
-                voice_result = self.stt_manager.listen_once(timeout=15.0)
+                print(f"🔧 DEBUG: Using {stt_manager.current_engine_name} engine")
+                voice_result = stt_manager.listen_once(timeout=15.0)
                 
                 # Check for shutdown after voice input
                 if self.shutdown_requested:
@@ -819,6 +1131,7 @@ class M1K3CLICore:
     def _handle_speech_input(self, stt_result):
         """Handle speech input from STT engine"""
         try:
+            stt_manager = self.component_manager.get_stt_manager() # Fetch from manager
             if stt_result and stt_result.text:
                 log_info(f"Speech detected: {stt_result.text}")
                 print(f"🔊 Heard: {stt_result.text}")
@@ -832,18 +1145,20 @@ class M1K3CLICore:
         """Handle STT listening start"""
         try:
             print("🎤 Listening...")
-            if self.avatar_controller:
-                from ..avatar.avatar_controller import AvatarEmotion
-                self.avatar_controller.update_emotion("", "listening", force_emotion=AvatarEmotion.THINKING)
+            avatar_controller = self.component_manager.get_avatar_controller()
+            if avatar_controller:
+                from avatar.avatar_controller import AvatarEmotion
+                avatar_controller.update_emotion("", "listening", force_emotion=AvatarEmotion.THINKING)
         except Exception as e:
             log_debug(f"Error handling listening start: {e}")
     
     def _handle_listening_stop(self):
         """Handle STT listening stop"""
         try:
-            if self.avatar_controller:
-                from ..avatar.avatar_controller import AvatarEmotion
-                self.avatar_controller.update_emotion("", "listening_done", force_emotion=AvatarEmotion.HAPPY)
+            avatar_controller = self.component_manager.get_avatar_controller()
+            if avatar_controller:
+                from avatar.avatar_controller import AvatarEmotion
+                avatar_controller.update_emotion("", "listening_done", force_emotion=AvatarEmotion.HAPPY)
         except Exception as e:
             log_debug(f"Error handling listening stop: {e}")
     
@@ -859,8 +1174,9 @@ class M1K3CLICore:
             log_debug(f"Conversation state: {new_state.value}")
             
             # Update avatar based on conversation state
-            if self.avatar_controller:
-                from ..avatar.avatar_controller import AvatarEmotion
+            avatar_controller = self.component_manager.get_avatar_controller()
+            if avatar_controller:
+                from avatar.avatar_controller import AvatarEmotion
                 
                 state_emotion_map = {
                     "waiting": AvatarEmotion.HAPPY,
@@ -872,7 +1188,7 @@ class M1K3CLICore:
                 }
                 
                 emotion = state_emotion_map.get(new_state.value, AvatarEmotion.HAPPY)
-                self.avatar_controller.update_emotion("", f"conversation_{new_state.value}", 
+                avatar_controller.update_emotion("", f"conversation_{new_state.value}", 
                                                      force_emotion=emotion)
         except Exception as e:
             log_error(f"Error handling conversation state change: {e}")
@@ -921,27 +1237,32 @@ class M1K3CLICore:
         try:
             self.state = CLIState.PROCESSING
             
+            command_handler = self.component_manager.get_command_handler(self)
             # Check if it's a command
-            if self.command_handler.is_command(user_input):
-                command_name, args = self.command_handler.parse_command(user_input)
+            if command_handler.is_command(user_input):
+                command_name, args = command_handler.parse_command(user_input)
                 if command_name:
-                    result = self.command_handler.execute_command(command_name, args)
+                    result = command_handler.execute_command(command_name, args)
                     # Some commands (like quit) return False to signal exit
                     return result if result is not None else True
             
             # Otherwise, process as AI query
             else:
+                conversation_flow = self.component_manager.get_conversation_flow_manager()
+                streaming_tts = self.component_manager.get_streaming_tts_engine()
+                ai_processor = self.component_manager.get_ai_processor(self)
+                
                 # Use conversation flow if enabled, otherwise use standard processing
-                if self.conversation_mode and self.conversation_flow:
+                if self.conversation_mode and conversation_flow:
                     # Conversation flow handles AI response processing internally
                     # Just simulate user input for now - the conversation flow will handle the rest
                     log_debug("Processing through conversation flow")
                 else:
                     # Standard AI processing with optional streaming
-                    if self.streaming_enabled and self.streaming_tts:
+                    if self.streaming_enabled and streaming_tts:
                         response = self._process_streaming_ai_response(user_input)
                     else:
-                        response = self.ai_processor.process_full_response_pipeline(
+                        response = ai_processor.process_full_response_pipeline(
                             user_input, 
                             use_rag=self.rag_enabled,
                             enable_voice=self.voice_enabled,
@@ -965,11 +1286,15 @@ class M1K3CLICore:
         try:
             log_info("Processing with streaming TTS")
             
+            rag_engine = self.component_manager.get_rag_engine()
+            ai_engine = self.component_manager.get_ai_engine()
+            streaming_tts = self.component_manager.get_streaming_tts_engine()
+            
             # Generate AI response
-            if self.rag_enabled and self.rag_engine:
-                ai_response = self.rag_engine.generate_response(user_input)
+            if self.rag_enabled and rag_engine:
+                ai_response = rag_engine.generate_response(user_input)
             else:
-                ai_response = self.ai_engine.generate_response(user_input)
+                ai_response = ai_engine.generate_response(user_input)
             
             print(f"\n🤖 M1K3: ", end="", flush=True)
             
@@ -977,7 +1302,7 @@ class M1K3CLICore:
             if hasattr(ai_response, '__iter__') and not isinstance(ai_response, str):
                 # Streaming response
                 response_text = ""
-                for chunk in self.streaming_tts.process_token_stream(ai_response):
+                for chunk in streaming_tts.process_token_stream(ai_response):
                     # Print tokens as they're processed
                     print(chunk.text, end=" ", flush=True)
                     response_text += chunk.text + " "
@@ -989,8 +1314,8 @@ class M1K3CLICore:
                 response_text = ai_response if ai_response else ""
                 print(response_text)
                 
-                if self.streaming_tts and response_text:
-                    self.streaming_tts.add_text_chunk(response_text)
+                if streaming_tts and response_text:
+                    streaming_tts.add_text_chunk(response_text)
                 
                 return response_text
                 
@@ -1007,37 +1332,40 @@ class M1K3CLICore:
         log_info(f"Voice synthesis {status}")
         
         # Also update voice engine if available
-        if self.voice_engine and hasattr(self.voice_engine, 'voice_enabled'):
-            self.voice_engine.voice_enabled = self.voice_enabled
+        voice_engine = self.component_manager.get_voice_engine()
+        if voice_engine and hasattr(voice_engine, 'voice_enabled'):
+            voice_engine.voice_enabled = self.voice_enabled
         
         return True
     
     def set_voice_profile(self, profile_name: str) -> bool:
         """Set voice profile for TTS"""
-        if not self.voice_engine:
+        voice_engine = self.component_manager.get_voice_engine()
+        if not voice_engine:
             return False
         
-        if hasattr(self.voice_engine, 'set_profile'):
-            success = self.voice_engine.set_profile(profile_name)
+        if hasattr(voice_engine, 'set_profile'):
+            success = voice_engine.set_profile(profile_name)
             if success:
                 log_info(f"Voice profile changed to: {profile_name}")
                 return True
             else:
                 # Show available profiles
-                if hasattr(self.voice_engine, 'profiles'):
-                    available = ', '.join(self.voice_engine.profiles.keys())
+                if hasattr(voice_engine, 'profiles'):
+                    available = ', '.join(voice_engine.profiles.keys())
                     print(f"⚠️ Available profiles: {available}")
                 return False
         return False
     
     def show_tts_status(self) -> bool:
         """Show TTS system status and settings"""
-        if not self.voice_engine:
+        voice_engine = self.component_manager.get_voice_engine()
+        if not voice_engine:
             print("⚠️ Voice engine not available")
             return False
         
-        if hasattr(self.voice_engine, 'get_status'):
-            status = self.voice_engine.get_status()
+        if hasattr(voice_engine, 'get_status'):
+            status = voice_engine.get_status()
             print(f"\n🎤 Voice Engine Status:")
             print(f"  Available: {'✅' if status.get('available', False) else '❌'}")
             print(f"  Loaded: {'✅' if status.get('loaded', False) else '❌'}")
@@ -1045,9 +1373,9 @@ class M1K3CLICore:
             print(f"  Model: {status.get('model', 'Unknown')}")
             print(f"  Profile: {status.get('current_profile', 'natural')}")
             
-            if hasattr(self.voice_engine, 'profiles'):
+            if hasattr(voice_engine, 'profiles'):
                 print(f"\n🎭 Available Profiles:")
-                for name, config in self.voice_engine.profiles.items():
+                for name, config in voice_engine.profiles.items():
                     current = "👆" if name == status.get('current_profile') else "  "
                     desc = config.get('description', 'No description')
                     print(f"  {current} {name}: {desc}")
@@ -1089,54 +1417,61 @@ class M1K3CLICore:
                 log_debug("Force shutdown signal activated")
             
             # Stop AI processor
-            if self.ai_processor:
+            ai_processor = self.component_manager.get_ai_processor(self)
+            if ai_processor:
                 safe_cleanup("AI processor", 
-                           lambda: self.ai_processor.stop_processing(), timeout=1.0)
+                           lambda: ai_processor.stop_processing(), timeout=1.0)
             
-            # Stop STT engine with timeout
-            if self.stt_manager:
+            # Stop STT manager
+            stt_manager = self.component_manager.get_stt_manager()
+            if stt_manager:
                 safe_cleanup("STT manager", 
-                           lambda: self.stt_manager.cleanup(), timeout=2.0)
+                           lambda: stt_manager.cleanup(), timeout=2.0)
             
-            # Stop streaming components with timeout
-            if self.conversation_flow:
+            # Stop streaming components
+            conversation_flow = self.component_manager.get_conversation_flow_manager()
+            if conversation_flow:
                 def cleanup_conversation():
-                    self.conversation_flow.stop_conversation()
-                    self.conversation_flow.cleanup()
+                    conversation_flow.stop_conversation()
+                    conversation_flow.cleanup()
                 safe_cleanup("Conversation flow", cleanup_conversation, timeout=2.0)
             
-            if self.streaming_tts:
+            streaming_tts = self.component_manager.get_streaming_tts_engine()
+            if streaming_tts:
                 def cleanup_streaming():
-                    self.streaming_tts.stop_streaming()
-                    self.streaming_tts.cleanup()
+                    streaming_tts.stop_streaming()
+                    streaming_tts.cleanup()
                 safe_cleanup("Streaming TTS", cleanup_streaming, timeout=2.0)
             
-            # Stop avatar server with timeout
-            if self.auto_avatar and self.initializer and self.initializer.is_component_available('avatar'):
-                avatar_components = self.initializer.get_component('avatar_server')
-                if avatar_components:
-                    stop_server = avatar_components['stop_avatar_server']
-                    safe_cleanup("Avatar server", stop_server, timeout=1.5)
+            # Stop avatar server
+            avatar_controller = self.component_manager.get_avatar_controller()
+            if self.auto_avatar and avatar_controller:
+                # Avatar server cleanup needs to be handled by the component manager
+                safe_cleanup("Avatar server", lambda: avatar_controller.cleanup(), timeout=1.5)
             
-            # Cleanup voice engine with timeout
-            if self.voice_engine and hasattr(self.voice_engine, 'cleanup'):
+            # Cleanup voice engine
+            voice_engine = self.component_manager.get_voice_engine()
+            if voice_engine and hasattr(voice_engine, 'cleanup'):
                 safe_cleanup("Voice engine", 
-                           lambda: self.voice_engine.cleanup(), timeout=1.0)
+                           lambda: voice_engine.cleanup(), timeout=1.0)
             
-            # Cleanup AI engines with timeout
-            if self.ai_engine and hasattr(self.ai_engine, 'cleanup'):
+            # Cleanup AI engines
+            ai_engine = self.component_manager.get_ai_engine()
+            if ai_engine and hasattr(ai_engine, 'cleanup'):
                 safe_cleanup("AI engine", 
-                           lambda: self.ai_engine.cleanup(), timeout=1.0)
+                           lambda: ai_engine.cleanup(), timeout=1.0)
             
-            if self.rag_engine and hasattr(self.rag_engine, 'cleanup'):
+            rag_engine = self.component_manager.get_rag_engine()
+            if rag_engine and hasattr(rag_engine, 'cleanup'):
                 safe_cleanup("RAG engine", 
-                           lambda: self.rag_engine.cleanup(), timeout=1.0)
+                           lambda: rag_engine.cleanup(), timeout=1.0)
             
             # Shutdown model monitor background thread
-            if self.model_cli and hasattr(self.model_cli, 'monitor'):
-                if hasattr(self.model_cli.monitor, 'shutdown'):
+            model_cli = self.component_manager.get_model_cli()
+            if model_cli and hasattr(model_cli, 'monitor'):
+                if hasattr(model_cli.monitor, 'shutdown'):
                     safe_cleanup("Model monitor", 
-                               lambda: self.model_cli.monitor.shutdown(), timeout=1.0)
+                               lambda: model_cli.monitor.shutdown(), timeout=1.0)
             
             # Final cleanup
             self.running = False

@@ -46,13 +46,17 @@ class ConversationContext:
 class SimpleAIEngine:
     """Simple AI engine that provides realistic responses for MVP testing"""
     
-    def __init__(self, model_path: str = None, system_context: str = None):
+    def __init__(self, model_path: str = None, system_context: str = None, auto_load: bool = True):
         self.model_path = model_path or self._get_default_model_path()
         self.context = ConversationContext()
         self.model_loaded = False
         self.system_context = system_context or self._get_default_system_context()
         self.user_preferences = {}
         self.session_context = {}
+        
+        # Auto-load the model if requested (default behavior)
+        if auto_load:
+            self.load_model()
         
         # Response templates for realistic behavior
         self.response_templates = [

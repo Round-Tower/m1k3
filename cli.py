@@ -42,6 +42,8 @@ def main():
                           choices=["auto", "vibevoice", "kitten", "fallback"],
                           default="auto",
                           help="Text-to-Speech engine: auto (smart default), vibevoice (Microsoft's frontier TTS), kitten (lightweight), fallback (system)")
+    tts_group.add_argument("--no-vibevoice", action="store_true",
+                          help="Disable VibeVoice entirely for faster startup (use KittenTTS instead)")
     tts_group.add_argument("--vibevoice-model",
                           choices=["1.5B", "7B"],
                           default="1.5B",

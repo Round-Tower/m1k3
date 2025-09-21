@@ -1,0 +1,149 @@
+# Page snapshot
+
+```yaml
+- generic [active] [ref=e1]:
+  - banner [ref=e2]:
+    - generic [ref=e4]:
+      - generic [ref=e6]:
+        - heading "M1K3" [level=1] [ref=e7]
+        - generic [ref=e8]: v2.0.1
+        - generic [ref=e11]: INITIALIZING
+      - generic [ref=e13]:
+        - button "_" [ref=e14]
+        - button "□" [ref=e15]
+        - button "×" [ref=e16]
+  - generic [ref=e18]:
+    - complementary [ref=e19]:
+      - generic [ref=e20]:
+        - heading "System Metrics" [level=3] [ref=e22]
+        - generic [ref=e24]:
+          - generic [ref=e25]:
+            - generic [ref=e26]: CPU Usage
+            - generic [ref=e27]: 0%
+          - generic [ref=e28]:
+            - generic [ref=e29]: Memory
+            - generic [ref=e30]: 0%
+          - generic [ref=e31]:
+            - generic [ref=e32]: Temperature
+            - generic [ref=e33]: 25°C
+          - generic [ref=e34]:
+            - generic [ref=e35]: Battery
+            - generic [ref=e36]: 100%
+      - generic [ref=e37]:
+        - heading "Component Status" [level=3] [ref=e39]
+        - generic [ref=e41]:
+          - generic [ref=e42]:
+            - generic [ref=e43]: AI Engine
+            - generic [ref=e44]: Loading...
+          - generic [ref=e45]:
+            - generic [ref=e46]: Voice System
+            - generic [ref=e47]: Loading...
+          - generic [ref=e48]:
+            - generic [ref=e49]: Avatar Server
+            - generic [ref=e50]: Loading...
+          - generic [ref=e51]:
+            - generic [ref=e52]: WebSocket
+            - generic [ref=e53]: Loading...
+      - generic [ref=e54]:
+        - heading "Performance" [level=3] [ref=e56]
+        - generic [ref=e58]:
+          - generic [ref=e59]:
+            - generic [ref=e60]: Messages Sent
+            - generic [ref=e61]: "0"
+          - generic [ref=e62]:
+            - generic [ref=e63]: Messages Received
+            - generic [ref=e64]: "0"
+          - generic [ref=e65]:
+            - generic [ref=e66]: Generation Speed
+            - generic [ref=e67]: 0 tok/s
+          - generic [ref=e68]:
+            - generic [ref=e69]: Uptime
+            - generic [ref=e70]: 0s
+    - main [ref=e71]:
+      - generic [ref=e72]:
+        - generic [ref=e75]:
+          - button "Dashboard" [ref=e76]
+          - button "Chat" [ref=e77]
+          - button "Settings" [ref=e78]
+          - button "Debug" [ref=e79]
+        - generic [ref=e83]:
+          - generic [ref=e84]:
+            - heading "AI Status" [level=4] [ref=e86]
+            - generic [ref=e88]:
+              - generic [ref=e89]:
+                - generic [ref=e90]: Engine
+                - generic [ref=e91]: Loading...
+              - generic [ref=e92]:
+                - generic [ref=e93]: State
+                - generic [ref=e94]: idle
+              - generic [ref=e95]:
+                - generic [ref=e96]: Confidence
+                - generic [ref=e97]: 0%
+              - generic [ref=e98]:
+                - generic [ref=e99]: Token Count
+                - generic [ref=e100]: "0"
+          - generic [ref=e101]:
+            - heading "Voice Status" [level=4] [ref=e103]
+            - generic [ref=e105]:
+              - generic [ref=e106]:
+                - generic [ref=e107]: TTS Engine
+                - generic [ref=e108]: auto
+              - generic [ref=e109]:
+                - generic [ref=e110]: Profile
+                - generic [ref=e111]: natural
+              - generic [ref=e112]:
+                - generic [ref=e113]: Status
+                - generic [ref=e114]: Ready
+    - complementary [ref=e115]:
+      - generic [ref=e116]:
+        - heading "Avatar" [level=3] [ref=e118]
+        - generic [ref=e119]:
+          - generic [ref=e124]:
+            - generic [ref=e125]:
+              - generic [ref=e126]: Emotion
+              - generic [ref=e127]: neutral
+            - generic [ref=e128]:
+              - generic [ref=e129]: Intensity
+              - generic [ref=e130]: 50%
+            - generic [ref=e131]:
+              - generic [ref=e132]: Style
+              - generic [ref=e133]: robot
+          - generic [ref=e134]:
+            - generic [ref=e135]:
+              - button "😊" [ref=e136]
+              - button "😢" [ref=e137]
+              - button "😠" [ref=e138]
+              - button "😲" [ref=e139]
+              - button "🤔" [ref=e140]
+              - button "🤩" [ref=e141]
+            - generic [ref=e142]:
+              - generic [ref=e143]: Intensity
+              - slider "Intensity" [ref=e144]: "50"
+              - generic [ref=e145]:
+                - generic [ref=e146]: "50"
+                - text: "%"
+            - generic [ref=e147]:
+              - button "Test All" [ref=e148]
+              - button "Random" [ref=e149]
+              - button "Reset" [ref=e150]
+  - contentinfo [ref=e151]:
+    - generic [ref=e153]:
+      - generic [ref=e154]:
+        - generic [ref=e155]:
+          - text: 🔗
+          - generic [ref=e156]: disconnected
+        - generic [ref=e157]:
+          - text: 📊
+          - generic [ref=e158]: 5s
+        - generic [ref=e159]:
+          - text: 💾
+          - generic [ref=e160]: 0.0 Wh
+      - generic [ref=e161]:
+        - button "Reconnect" [ref=e162]
+        - button "Refresh" [ref=e163]
+        - button "Debug Test" [ref=e164]
+  - generic [ref=e165]:
+    - heading "❌ Application Error" [level=2] [ref=e166]
+    - paragraph [ref=e167]: Failed to initialize M1K3. Please refresh the page.
+    - group [ref=e168]
+```

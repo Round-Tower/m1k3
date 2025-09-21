@@ -305,7 +305,7 @@ class LocalModelManager:
         recommended = []
         available_models = list(self.available_models.keys())
         
-        # Prioritize by RAM requirements and model quality - avoid Gemma due to tokenizer issues
+        # Prioritize models based on a scoring system that considers their performance and efficiency.
         model_priorities = []
         for name, spec in self.available_models.items():
             ram_req_gb = spec.ram_required_mb / 1024

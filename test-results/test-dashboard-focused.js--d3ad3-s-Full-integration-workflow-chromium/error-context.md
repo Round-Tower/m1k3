@@ -1,0 +1,124 @@
+# Page snapshot
+
+```yaml
+- generic [ref=e1]:
+  - banner [ref=e2]:
+    - generic [ref=e4]:
+      - generic [ref=e6]:
+        - heading "M1K3" [level=1] [ref=e7]
+        - generic [ref=e8]: v2.0.1
+        - generic [ref=e9]:
+          - generic [ref=e10]: "[○]"
+          - generic [ref=e11]: INITIALIZING
+      - generic [ref=e13]:
+        - button "_" [ref=e14] [cursor=pointer]
+        - button "□" [ref=e15] [cursor=pointer]
+        - button "×" [ref=e16] [cursor=pointer]
+  - generic [ref=e18]:
+    - complementary [ref=e19]:
+      - generic [ref=e20]:
+        - heading "System Metrics" [level=3] [ref=e22]
+        - generic [ref=e24]:
+          - generic [ref=e25]:
+            - generic [ref=e26]: CPU Usage
+            - generic [ref=e27]: 0%
+          - generic [ref=e28]:
+            - generic [ref=e29]: Memory
+            - generic [ref=e30]: 0%
+          - generic [ref=e31]:
+            - generic [ref=e32]: Temperature
+            - generic [ref=e33]: 25°C
+          - generic [ref=e34]:
+            - generic [ref=e35]: Battery
+            - generic [ref=e36]: 100%
+      - generic [ref=e37]:
+        - heading "Component Status" [level=3] [ref=e39]
+        - generic [ref=e41]:
+          - generic [ref=e43]: Ai Model
+          - generic [ref=e45]: Voice Model
+          - generic [ref=e47]: Avatar Server
+          - generic [ref=e49]: Websocket
+          - generic [ref=e51]: Rag System
+      - generic [ref=e52]:
+        - heading "Performance" [level=3] [ref=e54]
+        - generic [ref=e56]:
+          - generic [ref=e57]:
+            - generic [ref=e58]: Messages Sent
+            - generic [ref=e59]: "0"
+          - generic [ref=e60]:
+            - generic [ref=e61]: Messages Received
+            - generic [ref=e62]: "0"
+          - generic [ref=e63]:
+            - generic [ref=e64]: Generation Speed
+            - generic [ref=e65]: 0.0 tok/s
+          - generic [ref=e66]:
+            - generic [ref=e67]: Uptime
+            - generic [ref=e68]: 4s
+    - main [ref=e69]:
+      - generic [ref=e70]:
+        - generic [ref=e73]:
+          - button "Dashboard" [ref=e74] [cursor=pointer]
+          - button "Chat" [ref=e75] [cursor=pointer]
+          - button "Settings" [ref=e76] [cursor=pointer]
+          - button "Debug" [ref=e77] [cursor=pointer]
+        - generic [ref=e80]:
+          - generic [ref=e82]:
+            - generic [ref=e83]: "[12:34:56]"
+            - generic [ref=e84]: M1K3 Avatar System initialized
+          - generic [ref=e86]:
+            - textbox "Type a message... (Enter to send)" [active] [ref=e87]
+            - button "Send" [disabled] [ref=e88]
+            - button "🎤" [ref=e89] [cursor=pointer]
+    - complementary [ref=e90]:
+      - generic [ref=e91]:
+        - heading "Avatar" [level=3] [ref=e93]
+        - generic [ref=e94]:
+          - generic [ref=e99]:
+            - generic [ref=e100]:
+              - generic [ref=e101]: Emotion
+              - generic [ref=e102]: neutral
+            - generic [ref=e103]:
+              - generic [ref=e104]: Intensity
+              - generic [ref=e105]: 50%
+            - generic [ref=e106]:
+              - generic [ref=e107]: Style
+              - generic [ref=e108]: robot
+          - generic [ref=e109]:
+            - generic [ref=e110]:
+              - button "😊" [ref=e111] [cursor=pointer]
+              - button "😢" [ref=e112] [cursor=pointer]
+              - button "😠" [ref=e113] [cursor=pointer]
+              - button "😲" [ref=e114] [cursor=pointer]
+              - button "🤔" [ref=e115] [cursor=pointer]
+              - button "🤩" [ref=e116] [cursor=pointer]
+            - generic [ref=e117]:
+              - generic [ref=e118]: Intensity
+              - slider "Intensity" [ref=e119]: "50"
+              - generic [ref=e120]:
+                - generic [ref=e121]: "50"
+                - text: "%"
+            - generic [ref=e122]:
+              - button "Test All" [ref=e123] [cursor=pointer]
+              - button "Random" [ref=e124] [cursor=pointer]
+              - button "Reset" [ref=e125] [cursor=pointer]
+  - contentinfo [ref=e126]:
+    - generic [ref=e128]:
+      - generic [ref=e129]:
+        - generic [ref=e130]:
+          - text: 🔗
+          - generic [ref=e131]: disconnected
+        - generic [ref=e132]:
+          - text: 📊
+          - generic [ref=e133]: 5s
+        - generic [ref=e134]:
+          - text: 💾
+          - generic [ref=e135]: 0.0 Wh
+      - generic [ref=e136]:
+        - button "Reconnect" [ref=e137] [cursor=pointer]
+        - button "Refresh" [ref=e138] [cursor=pointer]
+        - button "Debug Test" [ref=e139] [cursor=pointer]
+  - generic [ref=e140]:
+    - heading "❌ Application Error" [level=2] [ref=e141]
+    - paragraph [ref=e142]: Failed to initialize M1K3. Please refresh the page.
+    - group [ref=e143]
+```

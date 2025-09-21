@@ -33,7 +33,7 @@ class KittenTTSManager:
             self.model_name = model_name
             self.tts_model: Optional[KittenTTS] = None
             self.loading = False
-            self.current_voice = "expr-voice-2-f"  # Default to cleaner female voice
+            self.current_voice = "expr-voice-2-m"  # Default to cleaner male voice
             self.initialized = True
 
     def is_available(self) -> bool:
@@ -64,8 +64,10 @@ class KittenTTSManager:
     def generate(self, text: str, voice: str = None) -> Optional[np.ndarray]:
         """Generate raw audio from text with specified voice."""
         if not self.tts_model:
-            print("⚠️  KittenTTS model not loaded. Cannot generate audio.")
-            return None
+            print("⚠️  KittenTTS model not loaded. Attempting to load...")
+            if not self.load_model():
+                print("❌ Failed to load KittenTTS model. Cannot generate audio.")
+                return None
         
         # Use specified voice or current default
         selected_voice = voice or self.current_voice

@@ -58,8 +58,8 @@ class UnifiedVoiceEngine:
         # Intercom effects: the main differentiator between profiles
         self.profiles = {
             "natural": {
-                "description": "Default conversational voice with light intercom enhancement",
-                "effects": ["light_intercom", "formant_correction", "compression", "normalization"],
+                "description": "Default conversational voice with medium intercom enhancement",
+                "effects": ["medium_intercom", "formant_correction", "compression", "normalization"],
                 "preferred_engine": "kitten"
             },
             "assistant": {
@@ -117,14 +117,30 @@ class UnifiedVoiceEngine:
             self.preferred_engine = preferred_engine
             
         # Try loading engines in preference order
-        if self.preferred_engine == "vibevoice":
-            if self.vibevoice_manager.is_available() and self.vibevoice_manager.load_model():
-                self.is_loaded = True
-                self.voice_enabled = True
-                self.preferred_engine = "vibevoice"
-                print("✅ VibeVoice engine loaded successfully")
-                self._configure_effects_pipeline()
-                return True
+        # VibeVoice is currently broken due to bugs in the external library.
+        # Forcing fallback to KittenTTS until VibeVoice is fixed.
+        if self.preferred_engine == "vibevoice" and False: # Temporarily disable VibeVoice
+            # Check if VibeVoice is available and not too slow
+            if self.vibevoice_manager.is_available():
+                print("🔄 Attempting VibeVoice loading...")
+                start_time = time.time()
+                
+                if self.vibevoice_manager.load_model():
+                    load_time = time.time() - start_time
+                    
+                    # Skip VibeVoice if it takes too long (>10 seconds)
+                    if load_time > 120.0:
+                        print(f"⚠️ VibeVoice loading too slow ({load_time:.1f}s), skipping to KittenTTS")
+                        self.preferred_engine = "kitten"
+                    else:
+                        self.is_loaded = True
+                        self.voice_enabled = True
+                        self.preferred_engine = "vibevoice"
+                        print(f"✅ VibeVoice engine loaded successfully ({load_time:.1f}s)")
+                        self._configure_effects_pipeline()
+                        return True
+                else:
+                    print("🔄 VibeVoice loading failed, trying KittenTTS...")
             else:
                 print("🔄 VibeVoice not available, trying KittenTTS...")
                 
