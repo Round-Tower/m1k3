@@ -25,12 +25,22 @@ except ImportError:
 # Enable HuggingFace tokenizers parallelism for better performance
 os.environ['TOKENIZERS_PARALLELISM'] = 'true'
 
-# Import Universal Model Engine and logging
+# Import logging first (needed by LocalAIEngine)
+try:
+    from ...utils.logging.prompt_logger import get_prompt_logger
+    PROMPT_LOGGER_AVAILABLE = True
+except ImportError:
+    PROMPT_LOGGER_AVAILABLE = False
+    get_prompt_logger = None
+
+# Import Universal Model Engine
 SMOLLM_ENGINE_AVAILABLE = False  # Ensure flag exists
 try:
     from .universal_model_engine import UniversalModelEngine
+    import sys
+    import os
+    sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
     from model_tiers import ModelTierManager, DeviceTier
-    from ...utils.logging.prompt_logger import get_prompt_logger
     UNIVERSAL_ENGINE_AVAILABLE = True
     print("🤖 Universal Model Engine available")
 except ImportError as e:
@@ -56,8 +66,11 @@ except ImportError:
 
 # Import new template and formatting systems
 try:
-    from ...models.managers.model_template_manager import ModelTemplateManager, format_conversation_for_model
-    from ...utils.response_formatter import ResponseFormatter, format_ai_response
+    import sys
+    import os
+    sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
+    from src.models.managers.model_template_manager import ModelTemplateManager, format_conversation_for_model
+    from src.utils.response_formatter import ResponseFormatter, format_ai_response
     TEMPLATE_SYSTEM_AVAILABLE = True
     print("✅ Template and formatting systems available")
 except ImportError as e:
@@ -154,8 +167,12 @@ class LocalAIEngine:
         self.models_dir = Path("models")
         
         # Initialize prompt logger
-        if UNIVERSAL_ENGINE_AVAILABLE or SMOLLM_ENGINE_AVAILABLE:
-            self.logger = get_prompt_logger()
+        if PROMPT_LOGGER_AVAILABLE and get_prompt_logger:
+            try:
+                self.logger = get_prompt_logger()
+            except Exception as e:
+                print(f"⚠️ Prompt logger initialization failed: {e}")
+                self.logger = None
         else:
             self.logger = None
         self.models_dir.mkdir(exist_ok=True)

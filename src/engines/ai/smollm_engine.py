@@ -19,6 +19,9 @@ from src.utils.logging.prompt_logger import get_prompt_logger
 
 # Import system context builder for dynamic stats
 try:
+    import sys
+    import os
+    sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
     from system_context_builder import SystemContextBuilder
     CONTEXT_BUILDER_AVAILABLE = True
 except ImportError:

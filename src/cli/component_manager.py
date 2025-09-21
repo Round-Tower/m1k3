@@ -24,14 +24,34 @@ from cli.cli_commands import CLICommandHandler
 from cli.cli_ai_handler import CLIAIResponseProcessor
 from cli.cli_initialization import initialize_cli_components # For component availability checks
 from utils.performance.startup_optimizer import get_startup_optimizer
-from utils.system_monitor import SystemMonitor
+from utils.performance.system_metrics import SystemMonitor
+from utils.logging.session_stats import SessionStatisticsTracker
 from sound_manager import SoundManager
 from llm_greeting_engine import LLMGreetingEngine
-from avatar.avatar_controller import AvatarController, start_avatar_server, stop_avatar_server
-from model_cli import ModelCLI
-from websocket_client import WebSocketClient
-from model_transparency import transparency_engine
-from streaming_response_filter import StreamingResponseFilter
+from avatar.avatar_controller import AvatarController
+from avatar.avatar_server import start_avatar_server, stop_avatar_server
+from cli.cli_model_commands import ModelCLI
+# Optional components - may not be available
+try:
+    from websocket_client import WebSocketClient
+    WEBSOCKET_CLIENT_AVAILABLE = True
+except ImportError:
+    WebSocketClient = None
+    WEBSOCKET_CLIENT_AVAILABLE = False
+
+try:
+    from model_transparency import transparency_engine
+    TRANSPARENCY_ENGINE_AVAILABLE = True
+except ImportError:
+    transparency_engine = None
+    TRANSPARENCY_ENGINE_AVAILABLE = False
+
+try:
+    from streaming_response_filter import StreamingResponseFilter
+    STREAMING_FILTER_AVAILABLE = True
+except ImportError:
+    StreamingResponseFilter = None
+    STREAMING_FILTER_AVAILABLE = False
 from models.loaders.download_model import download_model
 from engines.tts.streaming_tts_engine import create_streaming_tts_engine
 from conversation_flow_manager import ConversationFlowManager
@@ -120,14 +140,25 @@ class ComponentManager:
     def get_ai_engine(self) -> Optional[LocalAIEngine]:
         return self._load_component("ai_engine", self._load_ai_engine_instance)
 
-    def _load_ai_engine_instance(self) -> Optional[LocalAIEngine]:
+    def _load_ai_engine_instance(self):
         # This will be the main AI engine, potentially lazy-loaded
         # based on config.get("ai_engine_type", "real")
-        # For now, just load LocalAIEngine
-        engine = LocalAIEngine(
-            auto_load=True # Ensure it auto-loads its model
-        )
-        return engine
+        try:
+            # Try LocalAIEngine first
+            engine = LocalAIEngine(auto_load=True)
+            print("✅ LocalAIEngine loaded successfully")
+            return engine
+        except Exception as e:
+            print(f"⚠️ LocalAIEngine failed: {e}")
+            try:
+                # Fallback to SimpleAIEngine
+                print("🔄 Falling back to SimpleAIEngine")
+                simple_engine = SimpleAIEngine()
+                print("✅ SimpleAIEngine loaded as fallback")
+                return simple_engine
+            except Exception as e2:
+                print(f"❌ Both AI engines failed: LocalAI: {e}, Simple: {e2}")
+                return None
 
     def get_rag_engine(self) -> Optional[M1K3RAGEngine]:
         if not self._rag_enabled:
@@ -194,6 +225,9 @@ class ComponentManager:
     def get_system_monitor(self) -> SystemMonitor:
         return self._load_component("system_monitor", lambda: SystemMonitor())
 
+    def get_session_stats(self) -> SessionStatisticsTracker:
+        return self._load_component("session_stats", lambda: SessionStatisticsTracker())
+
     def get_sound_manager(self) -> SoundManager:
         return self._load_component("sound_manager", lambda: SoundManager())
 
@@ -208,13 +242,19 @@ class ComponentManager:
     def get_model_cli(self) -> ModelCLI:
         return self._load_component("model_cli", lambda: ModelCLI())
 
-    def get_websocket_client(self) -> WebSocketClient:
+    def get_websocket_client(self):
+        if not WEBSOCKET_CLIENT_AVAILABLE:
+            return None
         return self._load_component("websocket_client", lambda: WebSocketClient())
 
-    def get_transparency_engine(self) -> Any:
+    def get_transparency_engine(self):
+        if not TRANSPARENCY_ENGINE_AVAILABLE:
+            return None
         return self._load_component("transparency_engine", lambda: transparency_engine)
 
-    def get_streaming_response_filter(self) -> StreamingResponseFilter:
+    def get_streaming_response_filter(self):
+        if not STREAMING_FILTER_AVAILABLE:
+            return None
         return self._load_component("streaming_response_filter", lambda: StreamingResponseFilter())
 
     def get_download_model_utility(self) -> Any:

@@ -71,8 +71,10 @@ class CLIAIResponseProcessor:
     
     def process_ai_query(self, user_input: str, use_rag: bool = False) -> Optional[str]:
         """Process AI query and return response"""
+        import time
+        start_time = time.time()
         log_info(f"Processing AI query: {user_input[:50]}...")
-        
+
         if not hasattr(self.cli, 'ai_engine') or not self.cli.ai_engine:
             log_error("No AI engine available")
             return "⚠️ AI engine not available"
@@ -107,6 +109,12 @@ class CLIAIResponseProcessor:
                 self.set_state(ResponseProcessingState.COMPLETE)
                 self._trigger_callback('response_generated', response_text)
                 log_info(f"AI response generated: {len(response_text)} characters")
+
+                # Record stats for eco metrics and virtual pet features
+                if hasattr(self.cli, 'record_query_stats'):
+                    elapsed_time = time.time() - start_time
+                    estimated_tokens = len(response_text.split()) * 1.3  # Rough token estimate
+                    self.cli.record_query_stats(elapsed_time, int(estimated_tokens), response_text)
                 return response_text
             else:
                 self.set_state(ResponseProcessingState.ERROR)

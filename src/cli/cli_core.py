@@ -266,6 +266,7 @@ class M1K3CLICore:
         self.sound_manager = self.component_manager.get_sound_manager()
         self.avatar_controller = self.component_manager.get_avatar_controller()
         self.system_monitor = self.component_manager.get_system_monitor()
+        self.session_stats = self.component_manager.get_session_stats()
         self.model_cli = self.component_manager.get_model_cli()
         
         # Setup voice and STT engines (deferred from critical path)
@@ -1384,7 +1385,38 @@ class M1K3CLICore:
         
         print("⚠️ TTS status not available")
         return False
-    
+
+    def calculate_eco_impact(self, tokens_used: int = 0) -> dict:
+        """Calculate environmental impact savings vs cloud AI"""
+        if not hasattr(self, 'session_stats') or not self.session_stats:
+            return {}
+
+        # Get current session stats
+        stats = self.session_stats.current_stats
+
+        return {
+            'water_saved': stats.water_saved_ml,
+            'energy_saved': stats.energy_saved_wh,
+            'co2_saved': stats.co2_saved_g,
+            'queries_handled': stats.queries_handled,
+            'session_duration': self.session_stats.get_session_duration_str()
+        }
+
+    def record_query_stats(self, response_time: float = 0, tokens: int = 0, content: str = ""):
+        """Record query statistics for eco metrics and achievements"""
+        if hasattr(self, 'session_stats') and self.session_stats:
+            self.session_stats.record_query(response_time, tokens)
+
+            # Record word count for virtual pet features
+            if content:
+                word_count = len(content.split())
+                self.session_stats.current_stats.total_words_generated += word_count
+
+            # Check for exciting insights or achievements
+            insight = self.session_stats.get_exciting_insight()
+            if insight:
+                print(f"\n{insight}")
+
     def _cleanup(self):
         """Cleanup resources before exit with timeouts and emergency fallback"""
         log_info("🧹 Cleaning up CLI resources")

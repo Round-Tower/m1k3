@@ -130,7 +130,10 @@ Examples:
 def launch_classic_cli(args):
     """Launch the classic CLI interface"""
     try:
-        from cli import main as cli_main
+        import sys
+        sys.path.append('.')
+        import cli
+        cli_main = cli.main
         
         # Convert args to classic CLI format
         cli_args = []

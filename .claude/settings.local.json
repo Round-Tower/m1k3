@@ -24,7 +24,15 @@
       "Bash(open http://localhost:8080/static/js/test/integration-tests.html)",
       "WebFetch(domain:localhost)",
       "Bash(open http://localhost:8082/realtime_dashboard.html)",
-      "Bash(npx playwright test:*)"
+      "Bash(npx playwright test:*)",
+      "Bash(git push:*)",
+      "Bash(gh workflow:*)",
+      "Bash(gh run list:*)",
+      "Bash(gh run view:*)",
+      "Bash(git pull:*)",
+      "Bash(git stash push:*)",
+      "Bash(git stash:*)",
+      "Bash(gtimeout:*)"
     ],
     "deny": [],
     "ask": []

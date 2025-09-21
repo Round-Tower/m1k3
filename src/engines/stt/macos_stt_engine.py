@@ -46,11 +46,20 @@ if MACOS_AVAILABLE and MACOS_VERSION_OK:
 
 
 if PYOBJC_AVAILABLE:
-    class MacOSSTTDelegate(NSObject):
-        """
-        Enhanced delegate for handling speech recognition events
-        Implements all required SFSpeechRecognitionTaskDelegate methods with proper PyObjC naming
-        """
+    # Check if any delegate class already exists in objc runtime
+    try:
+        import objc
+        # Try to find if the class already exists
+        existing_class = objc.lookUpClass("M1K3MacOSSTTDelegate")
+        print("⚠️ M1K3MacOSSTTDelegate already exists, using existing class")
+        M1K3MacOSSTTDelegate = existing_class
+    except objc.nosuchclass_error:
+        # Class doesn't exist, safe to create
+        class M1K3MacOSSTTDelegate(NSObject):
+            """
+            Enhanced delegate for handling speech recognition events
+            Implements all required SFSpeechRecognition methods with proper PyObjC naming
+            """
         
         def init(self):
             self = objc.super(MacOSSTTDelegate, self).init()
@@ -157,11 +166,21 @@ if PYOBJC_AVAILABLE:
                 'is_finished': self.is_finished,
                 'partial_results_count': len([c for c in self.delegate_calls if 'didHypothesizeTranscription' in c])
             }
-else:
+
+    # Create alias for compatibility
+    MacOSSTTDelegate = M1K3MacOSSTTDelegate
+
+elif 'MacOSSTTDelegate' not in globals():
     # Dummy delegate class when PyObjC not available
     class MacOSSTTDelegate:
         def __init__(self):
             pass
+
+        def alloc(self):
+            return self
+
+        def init(self):
+            return self
 
 
 class MacOSSTTEngine(STTEngine):

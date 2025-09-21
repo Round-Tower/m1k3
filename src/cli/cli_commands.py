@@ -326,12 +326,40 @@ class CLICommandHandler:
     
     def handle_stats(self, args: List[str]) -> bool:
         """Handle stats command"""
+        print("\n📊 M1K3 Statistics:")
+        print("=" * 50)
+
+        # Show session statistics if available
+        if hasattr(self.cli, 'session_stats') and self.cli.session_stats:
+            stats = self.cli.session_stats.current_stats
+            print(f"\n🎮 Session Stats:")
+            print(f"   📝 Queries handled: {stats.queries_handled}")
+            print(f"   💬 Words generated: {stats.total_words_generated:,}")
+            print(f"   ⏱️  Session duration: {self.cli.session_stats.get_session_duration_str()}")
+            print(f"   🏆 Features used: {', '.join(stats.features_used) if stats.features_used else 'None'}")
+
+            if stats.achievements_unlocked:
+                print(f"   🌟 Achievements: {', '.join(stats.achievements_unlocked)}")
+
+            # Show eco impact
+            print(f"\n🌱 Environmental Impact vs Cloud AI:")
+            print(f"   💧 Water saved: {stats.water_saved_ml:.1f}ml")
+            print(f"   ⚡ Energy saved: {stats.energy_saved_wh:.2f}Wh")
+            print(f"   🌍 CO2 saved: {stats.co2_saved_g:.2f}g")
+
+            # Show exciting insight
+            insight = self.cli.session_stats.get_exciting_insight()
+            if insight:
+                print(f"\n{insight}")
+
+        # Show system diagnostics if available
         if hasattr(self.cli, 'display_system_diagnostics'):
-            print("\n📊 System Statistics:")
-            print("=" * 50)
+            print(f"\n🔧 System Diagnostics:")
+            print("=" * 30)
             self.cli.display_system_diagnostics(None)
         else:
-            print("⚠️ System statistics not available")
+            print("⚠️ System diagnostics not available")
+
         return True
     
     def handle_tokens(self, args: List[str]) -> bool:
