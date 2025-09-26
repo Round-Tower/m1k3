@@ -47,6 +47,12 @@ kittentts>=0.1.0
 pyttsx3>=2.90    # Local TTS engine (works offline)
 gTTS>=2.5.0      # Google Text-to-Speech (requires internet)
 
+# Real-time offline TTS engines (NEW - for ultra-fast real-time chat)
+piper-tts>=1.2.0          # Neural TTS optimized for real-time (10x faster than traditional)
+espeak>=1.48.15           # Ultra-fast TTS engine (sub-10ms latency, 2MB footprint)
+styletts2>=0.1.0          # High-quality neural TTS (human-level, faster than VITS)
+realtimetts>=0.3.0        # Streaming TTS framework with multiple engines
+
 # VibeVoice - Microsoft's frontier open-source TTS (optional, requires CUDA GPU)
 # Uncomment below for VibeVoice support (recommended for advanced users with NVIDIA GPU)
 # diffusers>=0.21.0           # Required for VibeVoice diffusion models
@@ -61,6 +67,8 @@ scipy>=1.16.1
 
 # Additional dependencies
 diskcache>=5.6.1           # Disk-based caching
+duckdb>=0.9.2              # Embedded analytics database for conversation persistence
+sentence-transformers>=2.2.2  # Vector embeddings for conversation similarity search
 
 # =============================================================================
 # PYTHON 3.12+ COMPATIBILITY NOTES

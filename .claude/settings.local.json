@@ -32,7 +32,11 @@
       "Bash(git pull:*)",
       "Bash(git stash push:*)",
       "Bash(git stash:*)",
-      "Bash(gtimeout:*)"
+      "Bash(gtimeout:*)",
+      "Bash(pip show:*)",
+      "Read(//Users/kevinmurphy/.pyenv/versions/3.12.7/lib/python3.12/site-packages/**)",
+      "Bash(say:*)",
+      "Bash(ollama list:*)"
     ],
     "deny": [],
     "ask": []

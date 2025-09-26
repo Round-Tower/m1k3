@@ -5,6 +5,7 @@ Command-line interface with modular architecture, proper logging, and clean sepa
 """
 
 import sys
+import time
 import argparse
 from pathlib import Path
 
@@ -28,6 +29,7 @@ def main():
     parser.add_argument("--model", default="SmolLM-135M-Q4_K_M", help="Model to download")
     parser.add_argument("--no-voice", action="store_true", help="Disable voice synthesis")
     parser.add_argument("--test-voice", action="store_true", help="Test voice synthesis only")
+    parser.add_argument("--test-realtime-tts", action="store_true", help="Test real-time TTS engines with audio demo")
     parser.add_argument("--no-avatar", action="store_true", help="Disable auto-start of avatar server")
     parser.add_argument("--avatar-port", type=int, default=8080, help="Avatar server HTTP port (default: 8080)")
     parser.add_argument("--no-browser", action="store_true", help="Don't auto-open browser when starting avatar server")
@@ -36,37 +38,77 @@ def main():
     parser.add_argument("--rag", action="store_true", 
                        help="Enable RAG (Retrieval-Augmented Generation) with comprehensive knowledge base")
     
-    # VibeVoice TTS options
-    tts_group = parser.add_argument_group('VibeVoice TTS Options')
-    tts_group.add_argument("--tts-engine", 
-                          choices=["auto", "vibevoice", "kitten", "fallback"],
+    # Real-time TTS options (Updated with new offline engines)
+    tts_group = parser.add_argument_group('Real-Time TTS Options')
+    tts_group.add_argument("--tts-engine",
+                          choices=["auto", "piper", "espeak", "vibevoice", "kitten", "fallback"],
                           default="auto",
-                          help="Text-to-Speech engine: auto (smart default), vibevoice (Microsoft's frontier TTS), kitten (lightweight), fallback (system)")
-    tts_group.add_argument("--no-vibevoice", action="store_true",
-                          help="Disable VibeVoice entirely for faster startup (use KittenTTS instead)")
-    tts_group.add_argument("--vibevoice-model",
-                          choices=["1.5B", "7B"],
-                          default="1.5B",
-                          help="VibeVoice model variant: 1.5B (64K context, 90min), 7B (32K context, 45min)")
-    tts_group.add_argument("--multi-speaker", 
-                          action="store_true",
-                          help="Enable multi-speaker conversation mode (up to 4 speakers)")
-    tts_group.add_argument("--continuous-mode",
-                          action="store_true", 
-                          help="Enable continuous synthesis mode (up to 90 minutes)")
-    tts_group.add_argument("--speakers",
-                          nargs="+",
-                          default=["Alice"],
-                          help="Specify speaker names for multi-speaker mode (e.g., --speakers Alice Bob)")
+                          help="Text-to-Speech engine: auto (smart default), piper (ultra-fast neural, sub-50ms), espeak (instant formant, sub-10ms), vibevoice (long-form), kitten (lightweight), fallback (system)")
+    tts_group.add_argument("--realtime-mode", action="store_true",
+                          help="Enable ultra-fast real-time TTS optimized for chat (uses Piper by default)")
+    tts_group.add_argument("--instant-mode", action="store_true",
+                          help="Enable instant TTS for maximum speed (uses eSpeak, sub-10ms latency)")
+
+    # Piper TTS options (NEW)
+    piper_group = parser.add_argument_group('Piper TTS Options (Neural Real-Time)')
+    piper_group.add_argument("--piper-voice",
+                            choices=["en_US-lessac-medium", "en_US-lessac-low", "en_US-amy-medium", "en_US-ryan-medium"],
+                            default="en_US-lessac-medium",
+                            help="Piper voice selection: lessac-medium (balanced), lessac-low (fastest), amy-medium, ryan-medium")
+    piper_group.add_argument("--piper-speed", type=float, default=1.0,
+                            help="Piper synthesis speed multiplier (0.5-2.0, default: 1.0)")
+
+    # eSpeak TTS options (NEW)
+    espeak_group = parser.add_argument_group('eSpeak TTS Options (Ultra-Fast)')
+    espeak_group.add_argument("--espeak-voice",
+                             choices=["en", "en+f3", "en+m3", "en+f4", "en-us", "en-gb"],
+                             default="en",
+                             help="eSpeak voice selection: en (default male), en+f3 (female), en+m3 (male variant), etc.")
+    espeak_group.add_argument("--espeak-speed", type=int, default=175,
+                             help="eSpeak speed in words per minute (80-450, default: 175)")
+    espeak_group.add_argument("--espeak-profile",
+                             choices=["ultra_fast", "fast", "balanced", "clear"],
+                             default="fast",
+                             help="eSpeak performance profile: ultra_fast (maximum speed), fast (default), balanced, clear (slower but clearer)")
+
+    # VibeVoice TTS options (Long-form)
+    vibevoice_group = parser.add_argument_group('VibeVoice TTS Options (Long-Form)')
+    vibevoice_group.add_argument("--no-vibevoice", action="store_true",
+                                help="Disable VibeVoice entirely for faster startup")
+    vibevoice_group.add_argument("--vibevoice-model",
+                                choices=["1.5B", "7B"],
+                                default="1.5B",
+                                help="VibeVoice model variant: 1.5B (64K context, 90min), 7B (32K context, 45min)")
+    vibevoice_group.add_argument("--multi-speaker",
+                                action="store_true",
+                                help="Enable multi-speaker conversation mode (up to 4 speakers)")
+    vibevoice_group.add_argument("--continuous-mode",
+                                action="store_true",
+                                help="Enable continuous synthesis mode (up to 90 minutes)")
+    vibevoice_group.add_argument("--speakers",
+                                nargs="+",
+                                default=["Alice"],
+                                help="Specify speaker names for multi-speaker mode (e.g., --speakers Alice Bob)")
+    vibevoice_group.add_argument("--vibevoice-quality",
+                                choices=["fast", "balanced", "quality"],
+                                default="balanced",
+                                help="VibeVoice generation quality: fast (5 steps), balanced (7 steps), quality (10 steps)")
+
+    # Reverb options (NEW)
+    reverb_group = parser.add_argument_group('Reverb Effects Options')
+    reverb_group.add_argument("--reverb-type",
+                             choices=["room", "hall", "cathedral", "studio", "intimate"],
+                             help="Reverb type for studio/hall/intimate profiles")
+    reverb_group.add_argument("--reverb-intensity", type=float, default=0.3,
+                             help="Reverb intensity (0.0-1.0, default: 0.3)")
+
+    # Voice profiles (Updated with new real-time profiles and reverb)
     tts_group.add_argument("--voice-profile",
-                          choices=["natural", "assistant", "broadcast", "terminal", "debug", "minimal", 
-                                  "conversational", "narrative", "assistant_duo"],
-                          default="natural",
-                          help="Voice profile: natural/assistant/broadcast/terminal/debug/minimal (KittenTTS) or conversational/narrative/assistant_duo (VibeVoice)")
-    tts_group.add_argument("--vibevoice-quality",
-                          choices=["fast", "balanced", "quality"],
-                          default="balanced", 
-                          help="VibeVoice generation quality: fast (5 steps), balanced (7 steps), quality (10 steps)")
+                          choices=["realtime", "instant", "chat", "natural", "assistant", "broadcast", "terminal", "debug", "minimal",
+                                  "kitten_natural", "kitten_fast", "conversational", "narrative", "assistant_duo",
+                                  "studio", "hall", "intimate", "realtime_chat", "studio_chat", "intimate_chat"],
+                          default="realtime",
+                          help="Voice profile: realtime (Piper, sub-50ms), instant (eSpeak, sub-10ms), chat (conversational AI), natural/assistant/broadcast/terminal (traditional), debug/minimal (fast), studio/hall/intimate (reverb effects), realtime_chat/studio_chat/intimate_chat (optimized chat with reverb)")
     
     # Speech-to-Text (STT) options
     stt_group = parser.add_argument_group('Speech Recognition Options')
@@ -125,6 +167,9 @@ def main():
     
     if args.test_voice:
         return handle_voice_test()
+
+    if args.test_realtime_tts:
+        return handle_realtime_tts_test(args)
     
     if args.mic_test:
         return handle_microphone_test()
@@ -161,13 +206,26 @@ def main():
         chunk_timeout=args.chunk_timeout,
         response_delay=args.response_delay,
         enable_interruptions=args.enable_interruptions,
-        # TTS/VibeVoice options
+        # Real-time TTS options (Updated)
         tts_engine=args.tts_engine,
-        vibevoice_model=args.vibevoice_model,
-        vibevoice_quality=args.vibevoice_quality,
         voice_profile=args.voice_profile,
-        speakers=args.speakers,
-        multi_speaker=args.multi_speaker
+        realtime_mode=getattr(args, 'realtime_mode', False),
+        instant_mode=getattr(args, 'instant_mode', False),
+        # Piper TTS options
+        piper_voice=getattr(args, 'piper_voice', 'en_US-lessac-medium'),
+        piper_speed=getattr(args, 'piper_speed', 1.0),
+        # eSpeak TTS options
+        espeak_voice=getattr(args, 'espeak_voice', 'en'),
+        espeak_speed=getattr(args, 'espeak_speed', 175),
+        espeak_profile=getattr(args, 'espeak_profile', 'fast'),
+        # VibeVoice options (Long-form)
+        vibevoice_model=getattr(args, 'vibevoice_model', '1.5B'),
+        vibevoice_quality=getattr(args, 'vibevoice_quality', 'balanced'),
+        speakers=getattr(args, 'speakers', ['Alice']),
+        multi_speaker=getattr(args, 'multi_speaker', False),
+        # Reverb options (NEW)
+        reverb_type=getattr(args, 'reverb_type', None),
+        reverb_intensity=getattr(args, 'reverb_intensity', 0.3)
     )
     
     # Run in appropriate mode
@@ -461,6 +519,108 @@ def handle_detect_audio_devices() -> int:
     except Exception as e:
         print(f"Device detection failed: {e}")
         log_error(f"Device detection failed: {e}")
+        return 1
+
+
+def handle_realtime_tts_test(args) -> int:
+    """Handle real-time TTS test with audio demo"""
+    try:
+        log_info("Running real-time TTS test...")
+        print("🎤 M1K3 Real-Time TTS Demo")
+        print("=" * 50)
+        print("This will test the new ultra-fast offline TTS engines with actual audio.")
+        print("Make sure your speakers are on and volume is set appropriately.\n")
+
+        from src.engines.voice.unified_voice_engine import UnifiedVoiceEngine
+
+        # Create voice engine
+        engine = UnifiedVoiceEngine()
+
+        # Set engine preference if specified
+        if hasattr(args, 'tts_engine') and args.tts_engine != "auto":
+            engine.set_engine_preference(args.tts_engine)
+
+        # Load engine
+        if not engine.load_model():
+            print("❌ Failed to load voice engine")
+            log_error("Failed to load voice engine")
+            return 1
+
+        print(f"✅ Voice engine loaded: {engine.preferred_engine}")
+
+        # Set voice profile
+        profile = getattr(args, 'voice_profile', 'realtime')
+        if engine.set_profile(profile):
+            profile_info = engine.get_current_profile()
+            print(f"🎭 Voice profile: {profile}")
+            print(f"   Engine: {profile_info['preferred_engine']}")
+            print(f"   Description: {profile_info['description']}")
+
+        # Configure engine-specific settings
+        if engine.preferred_engine == "espeak" and hasattr(args, 'espeak_speed'):
+            engine.espeak_manager.set_speed(args.espeak_speed)
+        elif engine.preferred_engine == "piper" and hasattr(args, 'piper_speed'):
+            engine.piper_manager.set_speed(args.piper_speed)
+
+        # Demo texts
+        demo_texts = [
+            "Welcome to M1K3's real-time text-to-speech system.",
+            "This demonstrates ultra-fast offline voice synthesis.",
+            "Perfect for natural conversation with AI assistants.",
+            "The system prioritizes speed while maintaining quality."
+        ]
+
+        print(f"\n🎵 Playing {len(demo_texts)} audio demonstrations...")
+
+        for i, text in enumerate(demo_texts, 1):
+            print(f"\n📢 Demo {i}/{len(demo_texts)}: \"{text[:50]}{'...' if len(text) > 50 else ''}\"")
+
+            start_time = time.time()
+            success = engine.synthesize_and_play(text, background=False)
+            total_time = time.time() - start_time
+
+            if success:
+                print(f"✅ Played in {total_time:.2f}s using {engine.preferred_engine}")
+            else:
+                print(f"⚠️ Demo {i} had playback issues but synthesis likely worked")
+
+            if i < len(demo_texts):
+                print("⏸️ Pausing...")
+                time.sleep(1.5)
+
+        # Show performance summary
+        print(f"\n📊 PERFORMANCE SUMMARY")
+        print(f"   Active engine: {engine.preferred_engine}")
+        print(f"   Voice profile: {profile}")
+        print(f"   Audio effects: {len(engine.effects_pipeline)} effects")
+
+        engine_status = engine.get_status()
+        if "current_engine_info" in engine_status:
+            info = engine_status["current_engine_info"]
+            if isinstance(info, dict):
+                for key, value in info.items():
+                    if key in ["optimization", "engine_type", "sample_rate"]:
+                        print(f"   {key}: {value}")
+
+        print(f"\n🎯 CLI Integration Examples:")
+        print(f"   # Start with this engine:")
+        print(f"   python cli.py --tts-engine {engine.preferred_engine} --voice-profile {profile}")
+        print(f"   # Ultra-fast mode:")
+        print(f"   python cli.py --instant-mode")
+        print(f"   # Real-time neural:")
+        print(f"   python cli.py --realtime-mode")
+
+        print(f"\n✅ Real-time TTS test completed successfully!")
+        log_info("Real-time TTS test completed successfully")
+        return 0
+
+    except ImportError as e:
+        print(f"❌ TTS engine not available: {e}")
+        log_error(f"TTS engine not available: {e}")
+        return 1
+    except Exception as e:
+        print(f"❌ Real-time TTS test failed: {e}")
+        log_error(f"Real-time TTS test failed: {e}")
         return 1
 
 

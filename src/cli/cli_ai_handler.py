@@ -11,6 +11,14 @@ from enum import Enum
 
 from .cli_logging import get_cli_logger, log_info, log_debug, log_warning, log_error
 
+# Import database components (optional)
+try:
+    from src.database.conversation_manager import get_conversation_manager, ConversationRecord
+    from datetime import datetime
+    DATABASE_AVAILABLE = True
+except ImportError:
+    DATABASE_AVAILABLE = False
+
 
 class ResponseProcessingState(Enum):
     """States for response processing"""
@@ -115,6 +123,10 @@ class CLIAIResponseProcessor:
                     elapsed_time = time.time() - start_time
                     estimated_tokens = len(response_text.split()) * 1.3  # Rough token estimate
                     self.cli.record_query_stats(elapsed_time, int(estimated_tokens), response_text)
+
+                # Record conversation to database if available
+                self._record_conversation(user_input, response_text, start_time, int(estimated_tokens if 'estimated_tokens' in locals() else len(response_text.split()) * 1.3), use_rag)
+
                 return response_text
             else:
                 self.set_state(ResponseProcessingState.ERROR)
@@ -319,7 +331,58 @@ class CLIAIResponseProcessor:
         except Exception as e:
             log_warning(f"Content classification failed: {e}")
             return 'answer'
-    
+
+    def _record_conversation(self, user_input: str, ai_response: str, start_time: float, tokens_used: int, use_rag: bool = False):
+        """Record conversation to database if available"""
+        if not DATABASE_AVAILABLE:
+            return
+
+        try:
+            elapsed_time = time.time() - start_time
+            response_time_ms = int(elapsed_time * 1000)
+
+            # Get session ID from CLI instance
+            session_id = getattr(self.cli, 'session_id', 'unknown')
+
+            # Check various features
+            voice_enabled = getattr(self.cli, 'voice_enabled', False)
+            avatar_active = hasattr(self.cli, 'avatar_server') and getattr(self.cli, 'avatar_server', None) is not None
+
+            # Determine personality type
+            personality_type = "default"
+            if hasattr(self.cli, 'current_personality'):
+                personality_type = self.cli.current_personality
+            elif "witty" in ai_response.lower() or "bartender" in ai_response.lower():
+                personality_type = "witty_bartender"
+
+            # Create conversation record
+            conversation = ConversationRecord(
+                id="",  # Will be auto-generated
+                session_id=session_id,
+                timestamp=datetime.now(),
+                user_input=user_input,
+                ai_response=ai_response,
+                response_time_ms=response_time_ms,
+                tokens_used=tokens_used,
+                voice_enabled=voice_enabled,
+                avatar_active=avatar_active,
+                rag_used=use_rag,
+                personality_type=personality_type,
+                metadata={
+                    "elapsed_time": elapsed_time,
+                    "response_length": len(ai_response),
+                    "input_length": len(user_input)
+                }
+            )
+
+            # Save to database
+            manager = get_conversation_manager()
+            conversation_id = manager.add_conversation(conversation)
+            log_debug(f"Recorded conversation to database: {conversation_id}")
+
+        except Exception as e:
+            log_warning(f"Failed to record conversation to database: {e}")
+
     def stop_processing(self):
         """Stop any ongoing response processing"""
         try:

@@ -30,19 +30,25 @@ class CLIState(Enum):
 class M1K3CLICore:
     """Core CLI application class with modular architecture"""
     
-    def __init__(self, voice_enabled: bool = True, auto_avatar: bool = False, 
-                 avatar_port: int = 8080, open_browser: bool = True, 
+    def __init__(self, voice_enabled: bool = True, auto_avatar: bool = False,
+                 avatar_port: int = 8080, open_browser: bool = True,
                  transparency_level: str = "basic", rag_enabled: bool = False,
                  stt_engine: str = "auto", stt_model: str = "vosk-model-small-en-us-0.15",
-                 stt_language: str = "en-US", voice_first: bool = False, 
+                 stt_language: str = "en-US", voice_first: bool = False,
                  force_internal_mic: bool = False,
-                 streaming_enabled: bool = False, conversation_mode: bool = False, 
+                 streaming_enabled: bool = False, conversation_mode: bool = False,
                  chunk_size: int = 20, chunk_timeout: float = 0.5, response_delay: float = 0.2,
                  enable_interruptions: bool = True,
                  # TTS/VibeVoice parameters
-                 tts_engine: str = "auto", vibevoice_model: str = "1.5B", 
+                 tts_engine: str = "auto", vibevoice_model: str = "1.5B",
                  vibevoice_quality: str = "balanced", voice_profile: str = "natural",
-                 speakers: list = None, multi_speaker: bool = False):
+                 speakers: list = None, multi_speaker: bool = False,
+                 # Additional TTS parameters (for compatibility with cli.py)
+                 realtime_mode: bool = False, instant_mode: bool = False,
+                 piper_voice: str = "en_US-lessac-medium", piper_speed: float = 1.0,
+                 espeak_voice: str = "en", espeak_speed: int = 175, espeak_profile: str = "fast",
+                 reverb_type: str = None, reverb_intensity: float = 0.3,
+                 **kwargs):
         
         # Setup logging first
         setup_cli_logging()
@@ -68,6 +74,17 @@ class M1K3CLICore:
         self.voice_profile = voice_profile
         self.speakers = speakers or ["Alice"]
         self.multi_speaker = multi_speaker
+
+        # Additional TTS configuration (compatibility)
+        self.realtime_mode = realtime_mode
+        self.instant_mode = instant_mode
+        self.piper_voice = piper_voice
+        self.piper_speed = piper_speed
+        self.espeak_voice = espeak_voice
+        self.espeak_speed = espeak_speed
+        self.espeak_profile = espeak_profile
+        self.reverb_type = reverb_type
+        self.reverb_intensity = reverb_intensity
         
         # Streaming configuration
         self.streaming_enabled = streaming_enabled
@@ -81,9 +98,13 @@ class M1K3CLICore:
         self.state = CLIState.STARTING
         self.running = False
         self.shutdown_requested = False
+
+        # Session management
+        self.session_id = self._generate_session_id()
+        self.current_personality = "default"
         
         # Initialize ComponentManager and pass it the CLI config
-        from cli.component_manager import ComponentManager
+        from src.cli.component_manager import ComponentManager
         self.component_manager = ComponentManager()
         self.component_manager.set_cli_config({
             "voice_enabled": voice_enabled,
@@ -175,8 +196,8 @@ class M1K3CLICore:
         
         try:
             # Import performance optimization
-            from utils.performance.startup_optimizer import get_startup_optimizer, create_performance_context, StartupPhase
-            from engines.ai.async_model_loader import get_async_loader, ModelLoadTask, LoadingPriority
+            from src.utils.performance.startup_optimizer import get_startup_optimizer, create_performance_context, StartupPhase
+            from src.engines.ai.async_model_loader import get_async_loader, ModelLoadTask, LoadingPriority
             
             self.optimizer = get_startup_optimizer()
             self.async_loader = get_async_loader()
@@ -297,7 +318,7 @@ class M1K3CLICore:
     
     def _register_ai_models(self):
         """Register AI models for async loading"""
-        from engines.ai.async_model_loader import ModelLoadTask, LoadingPriority
+        from src.engines.ai.async_model_loader import ModelLoadTask, LoadingPriority
         
         # Critical: Simple/fallback AI (loads first)
         self.async_loader.register_model(ModelLoadTask(
@@ -326,7 +347,7 @@ class M1K3CLICore:
     
     def _register_voice_models(self):
         """Register voice models for async loading"""
-        from engines.ai.async_model_loader import ModelLoadTask, LoadingPriority
+        from src.engines.ai.async_model_loader import ModelLoadTask, LoadingPriority
         
         if not self.voice_enabled:
             return
@@ -349,7 +370,7 @@ class M1K3CLICore:
     
     def _register_optional_models(self):
         """Register optional/enhancement models"""
-        from engines.ai.async_model_loader import ModelLoadTask, LoadingPriority
+        from src.engines.ai.async_model_loader import ModelLoadTask, LoadingPriority
         
         # Low priority: Advanced features
         self.async_loader.register_model(ModelLoadTask(
@@ -924,7 +945,10 @@ class M1K3CLICore:
         
         self.running = True
         self.state = CLIState.READY
-        
+
+        # Start database session
+        self._start_database_session()
+
         conversation_flow = self.component_manager.get_conversation_flow_manager()
         stt_manager = self.component_manager.get_stt_manager()
         
@@ -1505,6 +1529,10 @@ class M1K3CLICore:
                     safe_cleanup("Model monitor", 
                                lambda: model_cli.monitor.shutdown(), timeout=1.0)
             
+            # End database session
+            safe_cleanup("Database session",
+                       lambda: self._end_database_session(), timeout=1.0)
+
             # Final cleanup
             self.running = False
             log_info("✅ CLI cleanup complete")
@@ -1575,3 +1603,53 @@ class M1K3CLICore:
         except Exception as e:
             log_error(f"Error checking shutdown status: {e}")
             return False  # Assume not shutdown if we can't determine state
+
+    # Session management methods
+
+    def _generate_session_id(self) -> str:
+        """Generate a unique session ID"""
+        import uuid
+        from datetime import datetime
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        session_uuid = str(uuid.uuid4())[:8]
+        return f"{timestamp}_{session_uuid}"
+
+    def _start_database_session(self):
+        """Start database session if available"""
+        try:
+            # Import here to avoid circular imports
+            from src.database.conversation_manager import get_conversation_manager
+
+            manager = get_conversation_manager()
+            manager.start_session(self.session_id, self.current_personality)
+            log_debug(f"Started database session: {self.session_id}")
+        except ImportError:
+            log_debug("Database session not available - DuckDB not installed")
+        except Exception as e:
+            log_warning(f"Failed to start database session: {e}")
+
+    def _end_database_session(self):
+        """End database session if available"""
+        try:
+            from src.database.conversation_manager import get_conversation_manager
+
+            # Get stats from session statistics tracker if available
+            total_queries = 0
+            total_tokens = 0
+
+            try:
+                from ..utils.logging.session_stats import get_stats_tracker
+                stats_tracker = get_stats_tracker()
+                stats = stats_tracker.get_stats_summary()
+                total_queries = stats.get('queries', 0)
+                total_tokens = stats.get('tokens', 0)
+            except:
+                pass
+
+            manager = get_conversation_manager()
+            manager.end_session(self.session_id, total_queries, total_tokens)
+            log_debug(f"Ended database session: {self.session_id}")
+        except ImportError:
+            pass  # Database not available
+        except Exception as e:
+            log_warning(f"Failed to end database session: {e}")

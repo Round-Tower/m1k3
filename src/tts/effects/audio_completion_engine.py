@@ -81,8 +81,8 @@ class AudioCompletionEngine:
         indicators = [high_amplitude, lacks_fadeout, unnatural_spectrum]
         confidence = sum(indicators) / len(indicators)
         
-        # For KittenTTS mode, be more aggressive since it always truncates
-        threshold = 0.2 if self.kitten_mode else 0.5  # Much lower threshold for KittenTTS
+        # For KittenTTS mode, be more selective - only fix actual truncations
+        threshold = 0.4 if self.kitten_mode else 0.5  # More selective threshold for KittenTTS
         is_truncated = confidence >= threshold or self.force_completion
         
         # Boost confidence for forced completion
@@ -105,16 +105,16 @@ class AudioCompletionEngine:
         if len(audio) == 0:
             return audio
             
-        # Determine completion length based on truncation severity (optimized for faster, more natural speech)
+        # Determine completion length based on truncation severity (optimized for natural speech)
         if self.kitten_mode:
-            # KittenTTS needs minimal completion - most "truncation" is natural speech ending
-            base_completion_ms = 150  # Reduced from 800ms - was adding too much padding
-            severity_multiplier = min(confidence * 1.5, 1.0)  # Reduced multiplier
-            max_completion_ms = 300  # Reduced from 1200ms - was causing long pauses
+            # KittenTTS needs very minimal completion - most cutoffs are natural
+            base_completion_ms = 50   # Minimal padding - just enough to avoid abrupt cutoffs
+            severity_multiplier = min(confidence * 0.8, 0.5)  # Much more conservative
+            max_completion_ms = 120   # Maximum 120ms to avoid noticeable pauses
         else:
-            base_completion_ms = 100  # Also reduced for other engines
-            severity_multiplier = min(confidence * 1.2, 0.8)
-            max_completion_ms = 250  # Reduced maximum
+            base_completion_ms = 75   # Slightly more for other engines
+            severity_multiplier = min(confidence * 1.0, 0.7)
+            max_completion_ms = 150   # Conservative maximum
         
         completion_ms = min(base_completion_ms * (1 + severity_multiplier), max_completion_ms)
         completion_samples = int(completion_ms * self.sample_rate / 1000)
@@ -197,16 +197,16 @@ class AudioCompletionEngine:
         if len(audio) == 0:
             return audio, {"truncated": False, "confidence": 0.0, "applied_fix": False}
             
-        # For KittenTTS chunks, always apply some completion since it always truncates
-        force_fix = self.kitten_mode and ("chunk_" in debug_label)
-        
+        # Only apply forced fixes for clearly truncated chunks
+        force_fix = self.kitten_mode and ("chunk_" in debug_label) and len(audio) > 12000  # Only long chunks
+
         # Detect truncation
         is_truncated, confidence = self.detect_truncation(audio)
-        
-        # Override detection for KittenTTS chunks - they need completion even if not detected
-        if force_fix and not is_truncated:
+
+        # Override detection only for long chunks that likely need completion
+        if force_fix and not is_truncated and confidence > 0.3:
             is_truncated = True
-            confidence = max(confidence, 0.6)  # Boost confidence for forced fixes
+            confidence = max(confidence, 0.5)  # Moderate confidence boost
         
         info = {
             "truncated": is_truncated,
@@ -252,6 +252,9 @@ def test_completion_engine():
     
     # Test with KittenTTS to see if it fixes truncation
     try:
+        import sys
+        from pathlib import Path
+        sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
         from src.tts.controllers.kittentts_manager import KittenManager
         
         if not KittenManager.load_model():

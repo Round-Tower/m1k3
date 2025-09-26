@@ -232,6 +232,176 @@ class SidechainCompressionEffect(AudioEffect):
         
         return compressed_audio
 
+
+class ReverbEffect(AudioEffect):
+    """
+    Algorithmic reverb effect using comb and allpass filters
+    Optimized for real-time processing with multiple presets
+    """
+
+    def __init__(self, config: Dict[str, Any] = None):
+        super().__init__(config)
+
+        # Reverb presets
+        self.presets = {
+            "room": {
+                "room_size": 0.5,
+                "decay_time": 1.0,
+                "damping": 0.5,
+                "wet_mix": 0.3,
+                "dry_mix": 0.7
+            },
+            "hall": {
+                "room_size": 0.8,
+                "decay_time": 2.5,
+                "damping": 0.3,
+                "wet_mix": 0.4,
+                "dry_mix": 0.6
+            },
+            "cathedral": {
+                "room_size": 0.95,
+                "decay_time": 4.0,
+                "damping": 0.2,
+                "wet_mix": 0.5,
+                "dry_mix": 0.5
+            },
+            "studio": {
+                "room_size": 0.4,
+                "decay_time": 0.8,
+                "damping": 0.6,
+                "wet_mix": 0.25,
+                "dry_mix": 0.75
+            },
+            "intimate": {
+                "room_size": 0.3,
+                "decay_time": 0.5,
+                "damping": 0.7,
+                "wet_mix": 0.2,
+                "dry_mix": 0.8
+            }
+        }
+
+        # Get preset or use custom config
+        preset_name = self.config.get("preset", "room")
+        if preset_name in self.presets:
+            preset_config = self.presets[preset_name]
+            # Override with any custom values
+            for key, value in preset_config.items():
+                if key not in self.config:
+                    self.config[key] = value
+
+        # Initialize filter buffers (will be set per sample rate)
+        self.comb_buffers = []
+        self.allpass_buffers = []
+        self.initialized_sample_rate = None
+
+    def _initialize_filters(self, sample_rate: int):
+        """Initialize filter delay lines based on sample rate"""
+        if self.initialized_sample_rate == sample_rate:
+            return
+
+        room_size = self.config.get("room_size", 0.5)
+
+        # Comb filter delay times (in samples) - different for each filter
+        comb_delays = [
+            int(0.02973 * sample_rate * room_size),  # ~29.7ms base delay
+            int(0.03179 * sample_rate * room_size),  # ~31.8ms
+            int(0.03407 * sample_rate * room_size),  # ~34.1ms
+            int(0.03653 * sample_rate * room_size),  # ~36.5ms
+        ]
+
+        # Allpass filter delay times (in samples)
+        allpass_delays = [
+            int(0.00507 * sample_rate * room_size),  # ~5.1ms
+            int(0.01127 * sample_rate * room_size),  # ~11.3ms
+        ]
+
+        # Initialize comb filter buffers
+        self.comb_buffers = []
+        for delay in comb_delays:
+            buffer = np.zeros(max(delay, 1))
+            self.comb_buffers.append({"buffer": buffer, "index": 0, "delay": delay})
+
+        # Initialize allpass filter buffers
+        self.allpass_buffers = []
+        for delay in allpass_delays:
+            buffer = np.zeros(max(delay, 1))
+            self.allpass_buffers.append({"buffer": buffer, "index": 0, "delay": delay})
+
+        self.initialized_sample_rate = sample_rate
+
+    def apply(self, audio_data: np.ndarray, sample_rate: int) -> np.ndarray:
+        """Apply reverb effect to audio data"""
+        self._initialize_filters(sample_rate)
+
+        # Get parameters
+        decay_time = self.config.get("decay_time", 1.0)
+        damping = self.config.get("damping", 0.5)
+        wet_mix = self.config.get("wet_mix", 0.3)
+        dry_mix = self.config.get("dry_mix", 0.7)
+
+        # Calculate feedback coefficients
+        comb_feedback = min(0.95, 0.84 * decay_time / 2.0)  # Prevent instability
+        allpass_feedback = 0.7
+
+        # Process audio sample by sample for real-time behavior
+        output = np.zeros_like(audio_data)
+
+        for i, sample in enumerate(audio_data):
+            # Process through comb filters (parallel)
+            comb_sum = 0.0
+
+            for comb in self.comb_buffers:
+                # Read delayed sample
+                delayed_sample = comb["buffer"][comb["index"]]
+
+                # Apply damping (simple high-frequency roll-off)
+                damped_delayed = delayed_sample * (1.0 - damping * 0.1)
+
+                # Calculate output
+                comb_sum += damped_delayed
+
+                # Write new sample with feedback
+                feedback_sample = sample + damped_delayed * comb_feedback
+                comb["buffer"][comb["index"]] = feedback_sample
+
+                # Advance buffer index
+                comb["index"] = (comb["index"] + 1) % comb["delay"]
+
+            # Average comb filter outputs
+            comb_output = comb_sum / len(self.comb_buffers)
+
+            # Process through allpass filters (series)
+            allpass_output = comb_output
+
+            for allpass in self.allpass_buffers:
+                # Read delayed sample
+                delayed_sample = allpass["buffer"][allpass["index"]]
+
+                # Allpass calculation
+                output_sample = delayed_sample + allpass_output * (-allpass_feedback)
+                feedback_sample = allpass_output + delayed_sample * allpass_feedback
+
+                # Write to buffer
+                allpass["buffer"][allpass["index"]] = feedback_sample
+
+                # Advance buffer index
+                allpass["index"] = (allpass["index"] + 1) % allpass["delay"]
+
+                # Use output for next stage
+                allpass_output = output_sample
+
+            # Mix wet and dry signals
+            output[i] = dry_mix * sample + wet_mix * allpass_output
+
+        return output
+
+    def get_name(self) -> str:
+        """Return effect name with preset info"""
+        preset = self.config.get("preset", "custom")
+        return f"ReverbEffect ({preset})"
+
+
 if __name__ == "__main__":
     print("Testing Audio Effects...")
     

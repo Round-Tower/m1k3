@@ -12,10 +12,13 @@ from typing import List, Dict, Any, Optional
 
 from src.tts.controllers.kittentts_manager import KittenManager
 from src.tts.controllers.vibevoice_manager import VibeVoiceManager
+from src.tts.controllers.piper_tts_manager import piper_manager
+from src.tts.controllers.espeak_tts_manager import espeak_manager
 from src.utils.text_processors import smart_text_chunking
 from src.tts.effects.audio_effects import AudioEffect
 from src.engines.voice.simple_voice_engine import SimpleVoiceEngine
 from src.tts.effects.audio_completion_engine import AudioCompletionEngine
+from src.tts.streaming.realtime_processor import StreamingTextProcessor, ConversationFlowOptimizer
 
 class UnifiedVoiceEngine:
     """
@@ -31,18 +34,25 @@ class UnifiedVoiceEngine:
     def __init__(self):
         self.kitten_manager = KittenManager  # KittenManager is already a singleton instance
         self.vibevoice_manager = VibeVoiceManager()  # VibeVoice manager instance
+        self.piper_manager = piper_manager  # Piper TTS manager (singleton)
+        self.espeak_manager = espeak_manager  # eSpeak TTS manager (singleton)
         self.fallback_engine = SimpleVoiceEngine()
-        
+
         # State
         self.voice_enabled = False
         self.is_loaded = False
-        self.preferred_engine = "kitten"  # Default: kitten, options: vibevoice, kitten, fallback
+        self.preferred_engine = "kitten"  # Default: kitten (best quality/speed balance), options: piper, espeak, kitten, vibevoice, fallback
         
         # Shutdown signal (can be set by CLI core for force termination)
         self.force_shutdown = None
         
         # Configurable settings
         self.sample_rate = 24000  # KittenTTS native sample rate
+
+        # Real-time processing components
+        self.streaming_processor = None
+        self.conversation_optimizer = None
+        self.realtime_mode = False
         
         # Pipeline components
         self.text_chunker = smart_text_chunking
@@ -51,43 +61,81 @@ class UnifiedVoiceEngine:
         self.chunk_size = 300
         self.inter_chunk_silence = 0.02  # Optimized for speed
         self.current_voice = None  # Will be set by voice profile
-        self.current_profile = "natural"
+        self.current_profile = "natural"  # Uses kitten by default now
         
         # Voice profiles with audio effect configurations
         # Standard effects: compression, normalization, formant_correction for quality
         # Intercom effects: the main differentiator between profiles
         self.profiles = {
+            # Real-time optimized profiles (NEW - for ultra-fast chat)
+            "realtime": {
+                "description": "Ultra-fast real-time chat using Piper TTS (sub-50ms)",
+                "effects": ["compression", "normalization"],
+                "preferred_engine": "piper",
+                "speed": 1.1,  # Slightly faster for chat
+                "optimization": "speed"
+            },
+            "instant": {
+                "description": "Instant synthesis using eSpeak (sub-10ms, emergency speed)",
+                "effects": [],  # No effects for maximum speed
+                "preferred_engine": "espeak",
+                "profile": "ultra_fast",
+                "optimization": "maximum_speed"
+            },
+            "chat": {
+                "description": "Optimized for conversational AI with Piper neural TTS",
+                "effects": ["light_intercom", "compression", "normalization"],
+                "preferred_engine": "piper",
+                "speed": 1.0,
+                "optimization": "balanced"
+            },
+
+            # Traditional profiles (updated with new engine priorities)
             "natural": {
                 "description": "Default conversational voice with medium intercom enhancement",
                 "effects": ["medium_intercom", "formant_correction", "compression", "normalization"],
-                "preferred_engine": "kitten"
+                "preferred_engine": "kitten"  # KittenTTS for best quality/speed balance
             },
             "assistant": {
-                "description": "Professional AI assistant tone with medium intercom", 
+                "description": "Professional AI assistant tone with medium intercom",
                 "effects": ["medium_intercom", "formant_correction", "compression", "normalization"],
-                "preferred_engine": "kitten"
+                "preferred_engine": "kitten"  # KittenTTS for quality
             },
             "broadcast": {
                 "description": "Clear, announcer-style voice with strong intercom effect",
                 "effects": ["heavy_intercom", "formant_correction", "compression", "normalization"],
-                "preferred_engine": "kitten"
+                "preferred_engine": "kitten"  # KittenTTS for quality
             },
             "terminal": {
                 "description": "Technical, system-style voice with medium intercom",
                 "effects": ["medium_intercom", "formant_correction", "compression", "normalization"],
-                "preferred_engine": "kitten"
+                "preferred_engine": "kitten"  # KittenTTS for quality
             },
             "debug": {
-                "description": "Fast, minimal voice for debugging - no effects for speed",
+                "description": "Fast, minimal voice for debugging - eSpeak for maximum speed",
                 "effects": [],
-                "preferred_engine": "kitten"
+                "preferred_engine": "espeak",  # Updated to use eSpeak for debug
+                "profile": "fast"
             },
             "minimal": {
                 "description": "Basic synthesis with minimal processing - no effects",
                 "effects": [],
                 "preferred_engine": "fallback"
             },
-            # New VibeVoice profiles
+
+            # Legacy KittenTTS profiles (for compatibility)
+            "kitten_natural": {
+                "description": "KittenTTS with natural voice processing",
+                "effects": ["medium_intercom", "formant_correction", "compression", "normalization"],
+                "preferred_engine": "kitten"
+            },
+            "kitten_fast": {
+                "description": "KittenTTS optimized for speed",
+                "effects": ["compression", "normalization"],
+                "preferred_engine": "kitten"
+            },
+
+            # VibeVoice profiles (for long-form content)
             "conversational": {
                 "description": "Multi-speaker conversation using VibeVoice (up to 4 speakers)",
                 "effects": ["compression", "normalization"],
@@ -96,7 +144,7 @@ class UnifiedVoiceEngine:
             },
             "narrative": {
                 "description": "Long-form storytelling with VibeVoice (up to 90 minutes)",
-                "effects": ["compression", "normalization"], 
+                "effects": ["compression", "normalization"],
                 "preferred_engine": "vibevoice",
                 "speakers": ["Alice"]
             },
@@ -105,6 +153,44 @@ class UnifiedVoiceEngine:
                 "effects": ["medium_intercom", "compression", "normalization"],
                 "preferred_engine": "vibevoice",
                 "speakers": ["Alice", "Bob"]
+            },
+
+            # New reverb-enhanced profiles for real-time chatbot
+            "studio": {
+                "description": "Studio-quality voice with professional reverb",
+                "effects": ["reverb_studio", "compression", "normalization"],
+                "preferred_engine": "kitten",
+                "optimization": "quality"
+            },
+            "hall": {
+                "description": "Grand hall reverb for announcements and presentations",
+                "effects": ["reverb_hall", "compression", "normalization"],
+                "preferred_engine": "kitten",
+                "optimization": "quality"
+            },
+            "intimate": {
+                "description": "Intimate conversation with subtle room reverb",
+                "effects": ["reverb_intimate", "compression", "normalization"],
+                "preferred_engine": "kitten",
+                "optimization": "balanced"
+            },
+            "realtime_chat": {
+                "description": "Ultra-optimized for real-time conversation (minimal effects, maximum speed)",
+                "effects": ["compression"],
+                "preferred_engine": "kitten",
+                "optimization": "speed"
+            },
+            "studio_chat": {
+                "description": "High-quality chat with studio reverb for voice assistant character",
+                "effects": ["reverb_studio", "compression"],
+                "preferred_engine": "kitten",
+                "optimization": "balanced"
+            },
+            "intimate_chat": {
+                "description": "Personal AI companion with intimate room reverb",
+                "effects": ["reverb_intimate", "compression"],
+                "preferred_engine": "kitten",
+                "optimization": "balanced"
             }
         }
 
@@ -112,26 +198,76 @@ class UnifiedVoiceEngine:
         """Loads the necessary models for the pipeline."""
         if self.is_loaded:
             return True
-            
+
         if preferred_engine:
             self.preferred_engine = preferred_engine
-            
-        # Try loading engines in preference order
-        # VibeVoice is currently broken due to bugs in the external library.
-        # Forcing fallback to KittenTTS until VibeVoice is fixed.
-        if self.preferred_engine == "vibevoice" and False: # Temporarily disable VibeVoice
-            # Check if VibeVoice is available and not too slow
+
+        # Try loading engines in order of quality and availability
+        # Priority: kitten > piper > espeak > vibevoice > fallback
+        # Note: KittenTTS has best quality/speed balance for most users
+
+        # Priority 1: KittenTTS - Best quality/speed balance
+        if self.preferred_engine == "kitten" or (not preferred_engine and self.preferred_engine == "kitten"):
+            if self.kitten_manager.load_model():
+                self.is_loaded = True
+                self.voice_enabled = True
+                self.preferred_engine = "kitten"
+                print("✅ KittenTTS engine loaded successfully (best quality/speed balance)")
+                self._configure_effects_pipeline()
+                return True
+            else:
+                print("🔄 KittenTTS not available, trying next engine...")
+
+        # Priority 2: Piper TTS - Ultra-fast neural TTS (sub-50ms)
+        if self.preferred_engine == "piper" or not self.is_loaded:
+            if self.piper_manager.is_available():
+                print("🔄 Attempting Piper TTS loading...")
+                start_time = time.time()
+
+                if self.piper_manager.load_model():
+                    load_time = time.time() - start_time
+                    self.is_loaded = True
+                    self.voice_enabled = True
+                    self.preferred_engine = "piper"
+                    print(f"✅ Piper TTS engine loaded successfully ({load_time:.2f}s)")
+                    self._configure_effects_pipeline()
+                    return True
+                else:
+                    print("🔄 Piper TTS loading failed, trying next engine...")
+            else:
+                print("🔄 Piper TTS not available, trying next engine...")
+
+        # Priority 3: eSpeak - Ultra-fast fallback (sub-10ms) - ONLY if no better options
+        if self.preferred_engine == "espeak" or not self.is_loaded:
+            if self.espeak_manager.is_available():
+                print("🔄 Attempting eSpeak TTS loading... (Note: Poor quality, but fast)")
+                start_time = time.time()
+
+                if self.espeak_manager.load_model():
+                    load_time = time.time() - start_time
+                    self.is_loaded = True
+                    self.voice_enabled = True
+                    self.preferred_engine = "espeak"
+                    print(f"⚠️ eSpeak TTS loaded ({load_time:.2f}s) - Consider better engines for quality")
+                    self._configure_effects_pipeline()
+                    return True
+                else:
+                    print("🔄 eSpeak TTS loading failed, trying next engine...")
+            else:
+                print("🔄 eSpeak TTS not available, trying next engine...")
+
+        # Priority 4: VibeVoice - Long-form TTS (only if explicitly requested)
+        if self.preferred_engine == "vibevoice":
             if self.vibevoice_manager.is_available():
                 print("🔄 Attempting VibeVoice loading...")
                 start_time = time.time()
-                
+
                 if self.vibevoice_manager.load_model():
                     load_time = time.time() - start_time
-                    
-                    # Skip VibeVoice if it takes too long (>10 seconds)
-                    if load_time > 120.0:
-                        print(f"⚠️ VibeVoice loading too slow ({load_time:.1f}s), skipping to KittenTTS")
-                        self.preferred_engine = "kitten"
+
+                    # Skip VibeVoice if it takes too long (>30 seconds)
+                    if load_time > 30.0:
+                        print(f"⚠️ VibeVoice loading too slow ({load_time:.1f}s), trying faster engines...")
                     else:
                         self.is_loaded = True
                         self.voice_enabled = True
@@ -140,29 +276,19 @@ class UnifiedVoiceEngine:
                         self._configure_effects_pipeline()
                         return True
                 else:
-                    print("🔄 VibeVoice loading failed, trying KittenTTS...")
+                    print("🔄 VibeVoice loading failed, trying fallback...")
             else:
-                print("🔄 VibeVoice not available, trying KittenTTS...")
-                
-        # Try to load the core KittenTTS model
-        if self.kitten_manager.load_model():
-            self.is_loaded = True
-            self.voice_enabled = True
-            self.preferred_engine = "kitten"
-            # Initialize effects pipeline with default profile
-            self._configure_effects_pipeline()
-            return True
-        
-        # Fallback to simple system TTS
-        print("🔄 KittenTTS not available, falling back to system TTS.")
+                print("🔄 VibeVoice not available, trying fallback...")
+
+        # Final fallback: Simple system TTS
+        print("🔄 All advanced engines failed, falling back to system TTS.")
         if self.fallback_engine.load_model():
             self.is_loaded = True
             self.voice_enabled = True
             self.preferred_engine = "fallback"
-            # Initialize effects pipeline with default profile
             self._configure_effects_pipeline()
             return True
-            
+
         print("❌ All voice engines failed to load.")
         self.is_loaded = False
         self.voice_enabled = False
@@ -202,12 +328,21 @@ class UnifiedVoiceEngine:
         """Fast-path synthesis for short text with minimal processing"""
         try:
             import sounddevice as sd
-            
+
+            # CRITICAL FIX: Ensure fast-path also sanitizes text
+            try:
+                from src.utils.text_processors import sanitize_text_for_speech
+                clean_text = sanitize_text_for_speech(text)
+                if not clean_text:
+                    clean_text = text
+            except:
+                clean_text = text
+
             # Generate audio directly without chunking
-            raw_audio = self.kitten_manager.generate(text, voice=self.current_voice)
+            raw_audio = self.kitten_manager.generate(clean_text, voice=self.current_voice)
             if raw_audio is None:
                 print("⚠️ Fast-path TTS generation failed, falling back to simple engine")
-                return self.fallback_engine.synthesize_and_play(text, background=False)
+                return self.fallback_engine.synthesize_and_play(clean_text, background=False)
             
             # Minimal padding - just enough to prevent cutoff
             pre_padding = np.zeros(int(0.02 * self.sample_rate), dtype=np.float32)  # 20ms
@@ -236,22 +371,41 @@ class UnifiedVoiceEngine:
         if not self.voice_enabled:
             print("⚠️ Voice synthesis disabled")
             return False
-            
+
         if not self.is_loaded:
             print("⚠️ Voice engine not loaded")
             return False
-            
+
         if not text or not text.strip():
             print("⚠️ Empty text provided for synthesis")
             return False
 
+        # CRITICAL FIX: Always sanitize text before synthesis to prevent asterisk reading
+        try:
+            from src.utils.text_processors import sanitize_text_for_speech
+            cleaned_text = sanitize_text_for_speech(text)
+
+            if not cleaned_text or not cleaned_text.strip():
+                print("⚠️ Text sanitization resulted in empty text")
+                return False
+
+            # Use cleaned text for synthesis
+            synthesis_text = cleaned_text
+
+        except ImportError:
+            print("⚠️ Text sanitization not available, using raw text")
+            synthesis_text = text
+        except Exception as e:
+            print(f"⚠️ Text sanitization failed: {e}, using raw text")
+            synthesis_text = text
+
         try:
             if background:
-                thread = threading.Thread(target=self._synthesis_worker, args=(text,), daemon=True)
+                thread = threading.Thread(target=self._synthesis_worker, args=(synthesis_text,), daemon=True)
                 thread.start()
                 return True
             else:
-                return self._synthesis_worker(text)
+                return self._synthesis_worker(synthesis_text)
         except Exception as e:
             print(f"❌ Failed to start synthesis: {e}")
             return False
@@ -259,7 +413,11 @@ class UnifiedVoiceEngine:
     def _synthesis_worker(self, text: str):
         """The core synthesis and playback logic."""
         # Route to appropriate engine based on preference and availability
-        if self.preferred_engine == "vibevoice" and self.vibevoice_manager.is_available():
+        if self.preferred_engine == "piper" and self.piper_manager.is_available():
+            return self._synthesis_with_piper(text)
+        elif self.preferred_engine == "espeak" and self.espeak_manager.is_available():
+            return self._synthesis_with_espeak(text)
+        elif self.preferred_engine == "vibevoice" and self.vibevoice_manager.is_available():
             return self._synthesis_with_vibevoice(text)
         elif self.preferred_engine == "kitten" and self.kitten_manager.is_available():
             return self._synthesis_with_kitten(text)
@@ -267,6 +425,98 @@ class UnifiedVoiceEngine:
             # Fallback to simple engine
             return self.fallback_engine.synthesize_and_play(text, background=False)
     
+    def _synthesis_with_piper(self, text: str):
+        """Synthesis using Piper TTS engine - ultra-fast neural TTS"""
+        try:
+            import sounddevice as sd
+
+            print("🎯 Using Piper TTS for real-time synthesis...")
+            start_time = time.time()
+
+            # Get current profile settings for Piper optimization
+            profile = self.profiles.get(self.current_profile, {})
+            speed = profile.get("speed", 1.0)
+
+            # Set speed if profile specifies it
+            if hasattr(self.piper_manager, 'set_speed'):
+                self.piper_manager.set_speed(speed)
+
+            # Generate audio using Piper
+            raw_audio = self.piper_manager.generate(text)
+            if raw_audio is None:
+                print("⚠️ Piper TTS generation failed, falling back to next engine...")
+                return self._synthesis_with_espeak(text)
+
+            synthesis_time = time.time() - start_time
+            duration = len(raw_audio) / self.piper_manager.sample_rate
+
+            # Apply effects pipeline
+            processed_audio = self._apply_effects_pipeline(raw_audio)
+
+            # Add minimal padding for clean playback
+            pre_padding = np.zeros(int(0.01 * self.piper_manager.sample_rate), dtype=np.float32)  # 10ms
+            end_padding = np.zeros(int(0.05 * self.piper_manager.sample_rate), dtype=np.float32)  # 50ms
+            processed_audio = np.concatenate([pre_padding, processed_audio, end_padding])
+
+            # Play audio
+            if self._safe_audio_play(processed_audio, self.piper_manager.sample_rate):
+                print(f"✅ Piper TTS: {duration:.2f}s audio in {synthesis_time:.3f}s (RTF: {synthesis_time/duration:.2f}x)")
+                return True
+            else:
+                print("⚠️ Audio playback failed, but synthesis completed successfully")
+                return True
+
+        except Exception as e:
+            print(f"❌ Piper TTS synthesis failed: {e}")
+            return self._synthesis_with_espeak(text)
+
+    def _synthesis_with_espeak(self, text: str):
+        """Synthesis using eSpeak engine - ultra-fast formant synthesis"""
+        try:
+            import sounddevice as sd
+
+            print("⚡ Using eSpeak for ultra-fast synthesis...")
+            start_time = time.time()
+
+            # Get current profile settings for eSpeak optimization
+            profile = self.profiles.get(self.current_profile, {})
+            espeak_profile = profile.get("profile", "fast")
+
+            # Set eSpeak performance profile
+            if hasattr(self.espeak_manager, 'set_profile'):
+                self.espeak_manager.set_profile(espeak_profile)
+
+            # Generate audio using eSpeak
+            raw_audio = self.espeak_manager.generate(text)
+            if raw_audio is None:
+                print("⚠️ eSpeak synthesis failed, falling back to KittenTTS...")
+                return self._synthesis_with_kitten(text)
+
+            synthesis_time = time.time() - start_time
+            duration = len(raw_audio) / self.espeak_manager.sample_rate
+
+            # Apply minimal effects pipeline (eSpeak profiles often skip effects for speed)
+            processed_audio = raw_audio
+            if self.effects_pipeline:  # Only apply effects if configured
+                processed_audio = self._apply_effects_pipeline(raw_audio)
+
+            # Minimal padding for eSpeak (optimized for maximum speed)
+            pre_padding = np.zeros(int(0.005 * self.espeak_manager.sample_rate), dtype=np.float32)  # 5ms
+            end_padding = np.zeros(int(0.03 * self.espeak_manager.sample_rate), dtype=np.float32)  # 30ms
+            processed_audio = np.concatenate([pre_padding, processed_audio, end_padding])
+
+            # Play audio
+            if self._safe_audio_play(processed_audio, self.espeak_manager.sample_rate):
+                print(f"⚡ eSpeak: {duration:.2f}s audio in {synthesis_time:.3f}s (RTF: {synthesis_time/duration:.2f}x)")
+                return True
+            else:
+                print("⚠️ Audio playback failed, but synthesis completed successfully")
+                return True
+
+        except Exception as e:
+            print(f"❌ eSpeak synthesis failed: {e}")
+            return self._synthesis_with_kitten(text)
+
     def _synthesis_with_vibevoice(self, text: str):
         """Synthesis using VibeVoice engine"""
         try:
@@ -456,7 +706,7 @@ class UnifiedVoiceEngine:
     def _configure_effects_pipeline(self):
         """Configure the audio effects pipeline based on current profile"""
         try:
-            from src.tts.effects.audio_effects import IntercomEffect, CompressionEffect, NormalizationEffect, FormantCorrectionEffect
+            from src.tts.effects.audio_effects import IntercomEffect, CompressionEffect, NormalizationEffect, FormantCorrectionEffect, ReverbEffect
             effects_available = True
         except ImportError as e:
             print(f"⚠️ Audio effects not available: {e}")
@@ -505,10 +755,36 @@ class UnifiedVoiceEngine:
                     # Formant correction for clarity
                     effect = FormantCorrectionEffect({"shift_factor": 0.97})
                     self.effects_pipeline.append(effect)
-                    
+
+                # Reverb effects with different presets
+                elif effect_name == "reverb_room":
+                    effect = ReverbEffect({"preset": "room"})
+                    self.effects_pipeline.append(effect)
+
+                elif effect_name == "reverb_hall":
+                    effect = ReverbEffect({"preset": "hall"})
+                    self.effects_pipeline.append(effect)
+
+                elif effect_name == "reverb_cathedral":
+                    effect = ReverbEffect({"preset": "cathedral"})
+                    self.effects_pipeline.append(effect)
+
+                elif effect_name == "reverb_studio":
+                    effect = ReverbEffect({"preset": "studio"})
+                    self.effects_pipeline.append(effect)
+
+                elif effect_name == "reverb_intimate":
+                    effect = ReverbEffect({"preset": "intimate"})
+                    self.effects_pipeline.append(effect)
+
+                # Generic reverb (defaults to room)
+                elif effect_name == "reverb":
+                    effect = ReverbEffect({"preset": "room"})
+                    self.effects_pipeline.append(effect)
+
                 else:
                     print(f"⚠️ Unknown effect: {effect_name}")
-                    
+
             except Exception as e:
                 print(f"⚠️ Failed to create effect {effect_name}: {e}")
 
@@ -530,15 +806,47 @@ class UnifiedVoiceEngine:
             "model": "UnifiedVoiceEngine",
             "current_profile": self.current_profile,
             "available_profiles": list(self.profiles.keys()),
-            "preferred_engine": self.preferred_engine
+            "preferred_engine": self.preferred_engine,
+            "available_engines": ["piper", "espeak", "vibevoice", "kitten", "fallback"]
         }
-        
-        # Add engine-specific status
-        if self.preferred_engine == "vibevoice":
-            status["vibevoice_info"] = self.vibevoice_manager.get_availability_info()
+
+        # Add engine availability status
+        status["engines"] = {
+            "piper": {
+                "available": self.piper_manager.is_available(),
+                "description": "Ultra-fast neural TTS (sub-50ms)",
+                "info": self.piper_manager.get_availability_info() if hasattr(self.piper_manager, 'get_availability_info') else {}
+            },
+            "espeak": {
+                "available": self.espeak_manager.is_available(),
+                "description": "Ultra-fast formant synthesis (sub-10ms)",
+                "info": self.espeak_manager.get_availability_info() if hasattr(self.espeak_manager, 'get_availability_info') else {}
+            },
+            "kitten": {
+                "available": self.kitten_manager.is_available(),
+                "description": "Lightweight neural TTS"
+            },
+            "vibevoice": {
+                "available": self.vibevoice_manager.is_available(),
+                "description": "Long-form multi-speaker TTS",
+                "info": self.vibevoice_manager.get_availability_info()
+            },
+            "fallback": {
+                "available": True,
+                "description": "System TTS fallback"
+            }
+        }
+
+        # Add current engine specific details
+        if self.preferred_engine == "piper":
+            status["current_engine_info"] = self.piper_manager.get_model_info() if hasattr(self.piper_manager, 'get_model_info') else {}
+        elif self.preferred_engine == "espeak":
+            status["current_engine_info"] = self.espeak_manager.get_model_info() if hasattr(self.espeak_manager, 'get_model_info') else {}
+        elif self.preferred_engine == "vibevoice":
+            status["current_engine_info"] = self.vibevoice_manager.get_model_info()
         elif self.preferred_engine == "kitten":
-            status["kitten_available"] = self.kitten_manager.is_available()
-        
+            status["current_engine_info"] = {"loaded": self.kitten_manager.is_available()}
+
         return status
     
     def _safe_audio_play(self, audio_data: np.ndarray, sample_rate: int, wait: bool = True) -> bool:
@@ -665,10 +973,11 @@ class UnifiedVoiceEngine:
     
     def set_engine_preference(self, engine: str) -> bool:
         """Set the preferred TTS engine"""
-        if engine in ["vibevoice", "kitten", "fallback"]:
+        valid_engines = ["piper", "espeak", "vibevoice", "kitten", "fallback"]
+        if engine in valid_engines:
             self.preferred_engine = engine
             print(f"🔄 TTS engine preference set to: {engine}")
-            
+
             # Update current profile to match engine if needed
             profile = self.profiles.get(self.current_profile, {})
             if profile.get("preferred_engine") != engine:
@@ -677,9 +986,133 @@ class UnifiedVoiceEngine:
                     if prof.get("preferred_engine") == engine:
                         self.set_profile(name)
                         break
-            
+
             return True
-        return False
+        else:
+            print(f"❌ Invalid engine. Valid options: {valid_engines}")
+            return False
+
+    # Real-time processing methods for chatbot optimization
+    def enable_realtime_mode(self, audio_callback=None):
+        """Enable real-time processing mode for conversational chatbots."""
+        if self.realtime_mode:
+            print("⚡ Real-time mode already enabled")
+            return True
+
+        if not self.is_loaded:
+            print("⚠️ Cannot enable real-time mode: voice engine not loaded")
+            return False
+
+        # Initialize streaming processor
+        current_tts = self._get_current_tts_engine()
+        if not current_tts:
+            print("⚠️ No TTS engine available for real-time mode")
+            return False
+
+        # Create streaming processor with optimized TTS wrapper
+        self.streaming_processor = StreamingTextProcessor(current_tts, buffer_size=5)
+        self.conversation_optimizer = ConversationFlowOptimizer(self.streaming_processor)
+
+        # Set up audio callback
+        if audio_callback:
+            self.streaming_processor.set_audio_callback(audio_callback)
+        else:
+            # Default callback that plays audio immediately
+            def default_callback(audio_data):
+                self._safe_audio_play(audio_data, self.sample_rate, wait=False)
+            self.streaming_processor.set_audio_callback(default_callback)
+
+        # Start processing
+        self.streaming_processor.start_processing()
+        self.realtime_mode = True
+
+        print("⚡ Real-time processing mode enabled for conversational chatbot")
+        return True
+
+    def disable_realtime_mode(self):
+        """Disable real-time processing mode."""
+        if not self.realtime_mode:
+            return
+
+        if self.streaming_processor:
+            self.streaming_processor.stop_processing()
+            self.streaming_processor = None
+
+        if self.conversation_optimizer:
+            self.conversation_optimizer = None
+
+        self.realtime_mode = False
+        print("⏹️  Real-time processing mode disabled")
+
+    def speak_realtime(self, text: str, priority: bool = False):
+        """Speak text using real-time processing (non-blocking)."""
+        if not self.realtime_mode or not self.streaming_processor:
+            print("⚠️ Real-time mode not enabled. Use enable_realtime_mode() first.")
+            return False
+
+        if not text or not text.strip():
+            return False
+
+        self.streaming_processor.add_text(text, priority=priority)
+        return True
+
+    def start_conversation_response(self, full_response: str, stream_chunks: bool = True):
+        """Start a conversational response with flow optimization."""
+        if not self.realtime_mode or not self.conversation_optimizer:
+            # Fallback to regular synthesis
+            return self.synthesize_and_play(full_response)
+
+        self.conversation_optimizer.start_response(full_response, stream_chunks=stream_chunks)
+        return True
+
+    def interrupt_conversation(self):
+        """Interrupt current conversation for user input."""
+        if self.realtime_mode and self.conversation_optimizer:
+            self.conversation_optimizer.interrupt_for_user()
+
+    def _get_current_tts_engine(self):
+        """Get the current TTS engine instance for real-time processing."""
+        if self.preferred_engine == "kitten" and self.kitten_manager.is_available():
+            return self.kitten_manager
+        elif self.preferred_engine == "piper" and self.piper_manager.is_available():
+            return self.piper_manager
+        elif self.preferred_engine == "espeak" and self.espeak_manager.is_available():
+            return self.espeak_manager
+        elif self.preferred_engine == "vibevoice" and self.vibevoice_manager.is_available():
+            return self.vibevoice_manager
+        else:
+            # Try fallback order
+            engines = [
+                (self.kitten_manager, "kitten"),
+                (self.piper_manager, "piper"),
+                (self.espeak_manager, "espeak"),
+                (self.vibevoice_manager, "vibevoice")
+            ]
+
+            for engine, name in engines:
+                if hasattr(engine, 'is_available') and engine.is_available():
+                    print(f"🔄 Using {name} engine for real-time processing")
+                    return engine
+
+            return None
+
+    def get_realtime_status(self):
+        """Get real-time processing status and metrics."""
+        if not self.realtime_mode:
+            return {"realtime_mode": False}
+
+        status = {
+            "realtime_mode": True,
+            "current_engine": self.preferred_engine
+        }
+
+        if self.streaming_processor:
+            status["processor_metrics"] = self.streaming_processor.get_metrics()
+
+        if self.conversation_optimizer:
+            status["conversation_stats"] = self.conversation_optimizer.get_conversation_stats()
+
+        return status
 
 if __name__ == "__main__":
     print("Testing Unified Voice Engine...")

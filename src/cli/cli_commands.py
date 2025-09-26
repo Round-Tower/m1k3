@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from enum import Enum
 
 from .cli_logging import get_cli_logger, log_info, log_debug, log_warning, log_error
+from .cli_database_commands import DatabaseCommandHandler
 
 
 class CommandCategory(Enum):
@@ -23,6 +24,7 @@ class CommandCategory(Enum):
     PERFORMANCE = "performance"
     HELP = "help"
     SESSION = "session"
+    DATABASE = "database"
 
 
 @dataclass
@@ -46,6 +48,10 @@ class CLICommandHandler:
         self.logger = get_cli_logger()
         self.commands: Dict[str, Command] = {}
         self.aliases: Dict[str, str] = {}
+
+        # Initialize database command handler
+        self.db_handler = DatabaseCommandHandler(cli_instance)
+
         self._register_commands()
     
     def _register_commands(self):
@@ -171,14 +177,100 @@ class CLICommandHandler:
         
         # Performance commands
         self._register_command(Command(
-            name="performance", aliases=["perf"], 
+            name="performance", aliases=["perf"],
             description="Monitor inference speed, memory usage, and system performance",
             category=CommandCategory.PERFORMANCE, handler=self.handle_performance,
             requires_args=True,
             usage="performance <monitor|stats|benchmark>",
             examples=["performance monitor", "performance stats", "perf benchmark"]
         ))
-        
+
+        # Database commands
+        self._register_command(Command(
+            name="conversations", aliases=["conv", "history"],
+            description="List recent conversations from database",
+            category=CommandCategory.DATABASE, handler=self._handle_conversations,
+            usage="conversations [limit]",
+            examples=["conversations", "conversations 10", "history 50"]
+        ))
+
+        self._register_command(Command(
+            name="search", aliases=["find"],
+            description="Search conversations by content",
+            category=CommandCategory.DATABASE, handler=self._handle_search,
+            requires_args=True,
+            usage="search <query> [limit]",
+            examples=["search consciousness", "search 'machine learning' 10", "find python"]
+        ))
+
+        self._register_command(Command(
+            name="analytics", aliases=["analysis", "insights"],
+            description="Show conversation analytics and insights",
+            category=CommandCategory.DATABASE, handler=self._handle_analytics,
+            usage="analytics [days]",
+            examples=["analytics", "analytics 7", "insights 30"]
+        ))
+
+        self._register_command(Command(
+            name="export", aliases=["backup"],
+            description="Export conversations to file (JSON, CSV, Parquet)",
+            category=CommandCategory.DATABASE, handler=self._handle_export,
+            usage="export [format] [--session id] [--days N] [--output file]",
+            examples=["export json", "export csv --days 30", "backup --session abc123"]
+        ))
+
+        self._register_command(Command(
+            name="cleanup", aliases=["clean"],
+            description="Clean up old conversations from database",
+            category=CommandCategory.DATABASE, handler=self._handle_cleanup,
+            usage="cleanup <days>",
+            examples=["cleanup 365", "clean 180"]
+        ))
+
+        self._register_command(Command(
+            name="sql", aliases=["query"],
+            description="Run custom SQL queries on conversation database",
+            category=CommandCategory.DATABASE, handler=self._handle_sql,
+            requires_args=True,
+            usage="sql <query>",
+            examples=['sql "SELECT COUNT(*) FROM conversations"', 'query "SELECT * FROM sessions LIMIT 5"']
+        ))
+
+        self._register_command(Command(
+            name="dbstats", aliases=["database"],
+            description="Show database statistics and information",
+            category=CommandCategory.DATABASE, handler=self._handle_dbstats,
+            usage="dbstats [days]",
+            examples=["dbstats", "database 7", "dbstats 90"]
+        ))
+
+        # Vector memory commands
+        self._register_command(Command(
+            name="vector_search", aliases=["vsearch"],
+            description="Search conversations using vector similarity",
+            category=CommandCategory.DATABASE, handler=self._handle_vector_search,
+            requires_args=True,
+            usage="vector_search <query>",
+            examples=["vector_search consciousness", "vsearch machine learning"]
+        ))
+
+        self._register_command(Command(
+            name="memory_insights", aliases=["mind", "clusters"],
+            description="Show conversation memory insights and topic clustering",
+            category=CommandCategory.DATABASE, handler=self._handle_memory_insights,
+            usage="memory_insights [days]",
+            examples=["memory_insights", "mind 7", "clusters 30"]
+        ))
+
+        self._register_command(Command(
+            name="enhance_query", aliases=["enhance"],
+            description="Test query enhancement with conversation memory",
+            category=CommandCategory.DATABASE, handler=self._handle_enhance_query,
+            requires_args=True,
+            usage="enhance_query <query>",
+            examples=["enhance_query tell me about AI", "enhance what is consciousness"]
+        ))
+
         log_debug(f"Registered {len(self.commands)} commands")
     
     def _register_command(self, command: Command):
@@ -845,7 +937,69 @@ class CLICommandHandler:
             print("❌ VibeVoice not available")
         except Exception as e:
             print(f"❌ Test error: {e}")
-    
+
+    # Database command handlers - delegate to DatabaseCommandHandler
+
+    def _handle_conversations(self, args: List[str]) -> bool:
+        """Handle conversations command"""
+        result = self.db_handler.handle_conversations_command(args)
+        print(result)
+        return True
+
+    def _handle_search(self, args: List[str]) -> bool:
+        """Handle search command"""
+        result = self.db_handler.handle_search_command(args)
+        print(result)
+        return True
+
+    def _handle_analytics(self, args: List[str]) -> bool:
+        """Handle analytics command"""
+        result = self.db_handler.handle_analytics_command(args)
+        print(result)
+        return True
+
+    def _handle_export(self, args: List[str]) -> bool:
+        """Handle export command"""
+        result = self.db_handler.handle_export_command(args)
+        print(result)
+        return True
+
+    def _handle_cleanup(self, args: List[str]) -> bool:
+        """Handle cleanup command"""
+        result = self.db_handler.handle_cleanup_command(args)
+        print(result)
+        return True
+
+    def _handle_sql(self, args: List[str]) -> bool:
+        """Handle sql command"""
+        result = self.db_handler.handle_sql_command(args)
+        print(result)
+        return True
+
+    def _handle_dbstats(self, args: List[str]) -> bool:
+        """Handle dbstats command"""
+        result = self.db_handler.handle_stats_command(args)
+        print(result)
+        return True
+
+    def _handle_vector_search(self, args: List[str]) -> bool:
+        """Handle vector_search command"""
+        result = self.db_handler.handle_vector_search(args)
+        print(result)
+        return True
+
+    def _handle_memory_insights(self, args: List[str]) -> bool:
+        """Handle memory_insights command"""
+        result = self.db_handler.handle_memory_insights(args)
+        print(result)
+        return True
+
+    def _handle_enhance_query(self, args: List[str]) -> bool:
+        """Handle enhance_query command"""
+        result = self.db_handler.handle_enhance_query(args)
+        print(result)
+        return True
+
     def get_command_list(self) -> List[str]:
         """Get list of all available commands"""
         return list(self.commands.keys())

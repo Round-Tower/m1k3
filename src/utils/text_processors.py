@@ -5,6 +5,7 @@ Utilities for preparing text for synthesis.
 """
 
 from typing import List
+import re
 
 def smart_text_chunking(text: str, chunk_size: int = 300, overlap_words: int = 1) -> List[str]:
     """
@@ -59,6 +60,96 @@ def smart_text_chunking(text: str, chunk_size: int = 300, overlap_words: int = 1
         chunks.append(current_chunk.strip())
         
     return [c for c in chunks if c] # Filter out any empty chunks
+
+def sanitize_text_for_speech(text: str) -> str:
+    """
+    Clean text for natural speech synthesis, removing markdown and formatting
+    that would sound awkward when spoken aloud.
+    """
+    if not text or not isinstance(text, str):
+        return ""
+
+    # Start with the original text
+    cleaned = text
+
+    # Remove markdown formatting
+    cleaned = re.sub(r'\*\*(.+?)\*\*', r'\1', cleaned)  # **bold** -> bold
+    cleaned = re.sub(r'\*(.+?)\*', r'\1', cleaned)      # *italic* -> italic
+    cleaned = re.sub(r'`(.+?)`', r'\1', cleaned)        # `code` -> code
+    cleaned = re.sub(r'```[\s\S]*?```', '', cleaned)    # Remove code blocks
+
+    # Remove headers
+    cleaned = re.sub(r'^#{1,6}\s+', '', cleaned, flags=re.MULTILINE)
+
+    # Clean up links - keep the text but remove URL formatting
+    cleaned = re.sub(r'\[([^\]]+)\]\([^)]+\)', r'\1', cleaned)  # [text](url) -> text
+    cleaned = re.sub(r'<([^>]+)>', r'\1', cleaned)              # <url> -> url
+
+    # Remove bullet points and list formatting
+    cleaned = re.sub(r'^\s*[-*+]\s+', '', cleaned, flags=re.MULTILINE)
+    cleaned = re.sub(r'^\s*\d+\.\s+', '', cleaned, flags=re.MULTILINE)
+
+    # Replace underscores used for emphasis with spaces
+    cleaned = re.sub(r'_{2,}', ' ', cleaned)
+
+    # Clean up parenthetical asides that might sound awkward
+    cleaned = re.sub(r'\([^)]*\)', '', cleaned)  # Remove (parenthetical notes)
+
+    # Fix common speech issues
+    cleaned = cleaned.replace('&', ' and ')
+    cleaned = cleaned.replace('@', ' at ')
+    cleaned = cleaned.replace('#', ' number ')
+    cleaned = cleaned.replace('%', ' percent')
+    cleaned = cleaned.replace('$', ' dollars ')
+
+    # Clean up whitespace
+    cleaned = re.sub(r'\s+', ' ', cleaned)  # Multiple spaces -> single space
+    cleaned = cleaned.strip()
+
+    # Fix common pronunciation issues
+    cleaned = re.sub(r'\b(AI|ML|TTS|API|HTTP)\b', lambda m: spell_out_acronym(m.group(1)), cleaned)
+
+    return cleaned
+
+def spell_out_acronym(acronym: str) -> str:
+    """Convert common tech acronyms to speakable form"""
+    acronym_map = {
+        'AI': 'A I',
+        'ML': 'M L',
+        'TTS': 'T T S',
+        'API': 'A P I',
+        'HTTP': 'H T T P',
+        'URL': 'U R L',
+        'CPU': 'C P U',
+        'GPU': 'G P U',
+        'RAM': 'R A M'
+    }
+    return acronym_map.get(acronym.upper(), acronym)
+
+def prepare_text_for_realtime_synthesis(text: str) -> List[str]:
+    """
+    Prepare text for streaming TTS synthesis - clean and chunk for immediate speaking
+    """
+    # First sanitize for speech
+    clean_text = sanitize_text_for_speech(text)
+
+    if not clean_text:
+        return []
+
+    # For real-time synthesis, use smaller chunks (sentence-level)
+    sentences = re.split(r'[.!?]+', clean_text)
+
+    # Clean and filter sentences
+    processed_sentences = []
+    for sentence in sentences:
+        sentence = sentence.strip()
+        if sentence and len(sentence) > 3:  # Skip very short fragments
+            # Add back punctuation for natural speech rhythm
+            if not sentence.endswith(('.', '!', '?')):
+                sentence += '.'
+            processed_sentences.append(sentence)
+
+    return processed_sentences
 
 if __name__ == "__main__":
     print("Testing Text Processors...")
