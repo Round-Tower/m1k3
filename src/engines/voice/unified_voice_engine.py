@@ -343,11 +343,18 @@ class UnifiedVoiceEngine:
             if raw_audio is None:
                 print("⚠️ Fast-path TTS generation failed, falling back to simple engine")
                 return self.fallback_engine.synthesize_and_play(clean_text, background=False)
-            
-            # Minimal padding - just enough to prevent cutoff
+
+            # AUDIO COMPLETION FIX: Apply completion engine to fast path too
+            try:
+                fixed_audio, fix_info = self.completion_engine.fix_audio(raw_audio, "fast_path")
+                print(f"🔧 Fast-path audio completion: {fix_info}")
+            except Exception as e:
+                print(f"⚠️ Fast-path audio completion failed, using raw audio: {e}")
+                fixed_audio = raw_audio
+
+            # Add minimal pre-padding for clean playback
             pre_padding = np.zeros(int(0.02 * self.sample_rate), dtype=np.float32)  # 20ms
-            end_padding = np.zeros(int(0.08 * self.sample_rate), dtype=np.float32)  # 80ms
-            processed_audio = np.concatenate([pre_padding, raw_audio, end_padding])
+            processed_audio = np.concatenate([pre_padding, fixed_audio])
             
             # Apply effects pipeline if configured
             try:
@@ -589,17 +596,13 @@ class UnifiedVoiceEngine:
             try:
                 raw_audio = self.kitten_manager.generate(chunk, voice=self.current_voice)
                 if raw_audio is not None:
-                    # Smart completion engine usage for speed optimization
-                    if i == len(chunks) - 1 and len(chunk) > 50:
-                        # Only apply to final chunk of longer text to prevent cutoff
-                        try:
-                            fixed_audio, fix_info = self.completion_engine.fix_audio(raw_audio, f"final_chunk")
-                            audio_chunks.append(fixed_audio)
-                        except Exception as e:
-                            print(f"⚠️ Audio completion failed, using raw audio: {e}")
-                            audio_chunks.append(raw_audio)
-                    else:
-                        # Skip completion engine for intermediate chunks and very short text
+                    # AUDIO COMPLETION FIX: Apply to ALL chunks to prevent any truncation
+                    try:
+                        fixed_audio, fix_info = self.completion_engine.fix_audio(raw_audio, f"chunk_{i+1}")
+                        print(f"🔧 Chunk {i+1} audio completion: {fix_info}")
+                        audio_chunks.append(fixed_audio)
+                    except Exception as e:
+                        print(f"⚠️ Audio completion failed for chunk {i+1}, using raw audio: {e}")
                         audio_chunks.append(raw_audio)
                 else:
                     failed_chunks += 1

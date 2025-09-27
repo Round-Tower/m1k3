@@ -25,10 +25,10 @@ class AudioCompletionEngine:
     
     def __init__(self, sample_rate: int = 24000):
         self.sample_rate = sample_rate
-        self.truncation_threshold = 0.02  # Slightly higher threshold to reduce false positives
+        self.truncation_threshold = 0.008  # SYLLABLE FIX: Even more sensitive for final syllables
         self.kitten_mode = True  # Assume KittenTTS always needs completion
-        self.analysis_window = 800  # Smaller analysis window for efficiency
-        self.force_completion = False  # Only apply when actually detected - was causing too much padding
+        self.analysis_window = 1200  # Larger window to better detect syllable patterns
+        self.force_completion = True  # AGGRESSIVE FIX: Always apply completion for KittenTTS
         
     def detect_truncation(self, audio: np.ndarray) -> Tuple[bool, float]:
         """
@@ -105,33 +105,34 @@ class AudioCompletionEngine:
         if len(audio) == 0:
             return audio
             
-        # Determine completion length based on truncation severity (optimized for natural speech)
+        # Determine completion length based on truncation severity (optimized for final syllable preservation)
         if self.kitten_mode:
-            # KittenTTS needs very minimal completion - most cutoffs are natural
-            base_completion_ms = 50   # Minimal padding - just enough to avoid abrupt cutoffs
-            severity_multiplier = min(confidence * 0.8, 0.5)  # Much more conservative
-            max_completion_ms = 120   # Maximum 120ms to avoid noticeable pauses
+            # SYLLABLE FIX: Increase completion to capture full final syllables (150-300ms typical)
+            base_completion_ms = 150   # Enough for a typical syllable
+            severity_multiplier = min(confidence * 1.2, 0.8)  # More aggressive completion
+            max_completion_ms = 300   # Allow full syllable completion (was 120ms)
         else:
-            base_completion_ms = 75   # Slightly more for other engines
-            severity_multiplier = min(confidence * 1.0, 0.7)
-            max_completion_ms = 150   # Conservative maximum
+            base_completion_ms = 180   # Even more for other engines
+            severity_multiplier = min(confidence * 1.4, 1.0)
+            max_completion_ms = 350   # Conservative but syllable-aware maximum
         
         completion_ms = min(base_completion_ms * (1 + severity_multiplier), max_completion_ms)
         completion_samples = int(completion_ms * self.sample_rate / 1000)
         
-        # Method 1: Exponential decay of the ending
+        # Method 1: Exponential decay of the ending (enhanced for syllable preservation)
         if len(audio) >= 100:
-            # Take a sample of the ending to base the decay on
-            ending_sample_length = min(200, len(audio) // 4)
+            # SYLLABLE FIX: Take a longer sample to better capture syllable patterns
+            ending_sample_length = min(400, len(audio) // 3)  # Larger sample for better analysis
             ending_sample = audio[-ending_sample_length:]
-            
-            # Create exponential decay
-            decay_rate = 3.0 / completion_samples  # Decay to ~5% in completion_samples
+
+            # SYLLABLE FIX: Slower decay to preserve more of the natural ending
+            decay_rate = 2.0 / completion_samples  # Slower decay (was 3.0) - preserve more audio
             decay_curve = np.exp(-decay_rate * np.arange(completion_samples))
-            
+
             # Use the mean characteristics of the ending to generate completion
             ending_amplitude = np.mean(np.abs(ending_sample))
-            ending_characteristics = ending_sample[-50:] if len(ending_sample) >= 50 else ending_sample
+            # SYLLABLE FIX: Use more ending characteristics for better syllable reconstruction
+            ending_characteristics = ending_sample[-120:] if len(ending_sample) >= 120 else ending_sample
             
             # Generate completion based on ending characteristics
             completion = np.zeros(completion_samples)

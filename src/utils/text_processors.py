@@ -64,13 +64,21 @@ def smart_text_chunking(text: str, chunk_size: int = 300, overlap_words: int = 1
 def sanitize_text_for_speech(text: str) -> str:
     """
     Clean text for natural speech synthesis, removing markdown and formatting
-    that would sound awkward when spoken aloud.
+    that would sound awkward when spoken aloud. Enhanced to prevent phonemizer warnings.
     """
     if not text or not isinstance(text, str):
         return ""
 
     # Start with the original text
     cleaned = text
+
+    # PHONEMIZER FIX: Handle problematic characters that cause word count mismatch
+    # Remove or replace characters that confuse the phonemizer
+    cleaned = re.sub(r'["""''`]', '"', cleaned)  # Normalize quotes
+    cleaned = re.sub(r'[–—]', '-', cleaned)      # Normalize dashes
+    cleaned = re.sub(r'[…]', '...', cleaned)     # Normalize ellipsis
+    cleaned = re.sub(r'[°•×÷±]', ' ', cleaned)   # Remove special symbols
+    cleaned = re.sub(r'[™®©]', '', cleaned)      # Remove trademark symbols
 
     # Remove markdown formatting
     cleaned = re.sub(r'\*\*(.+?)\*\*', r'\1', cleaned)  # **bold** -> bold
@@ -109,6 +117,35 @@ def sanitize_text_for_speech(text: str) -> str:
     # Fix common pronunciation issues
     cleaned = re.sub(r'\b(AI|ML|TTS|API|HTTP)\b', lambda m: spell_out_acronym(m.group(1)), cleaned)
 
+    # PHONEMIZER FIXES: Address specific issues that cause word count mismatch
+    # Remove sequences that confuse the phonemizer
+    cleaned = re.sub(r'[^\w\s.,!?;:\'"-]', ' ', cleaned)  # Keep only basic punctuation
+
+    # Fix spacing issues around punctuation that cause word count problems
+    cleaned = re.sub(r'\s*([.,!?;:])\s*', r'\1 ', cleaned)  # Normalize punctuation spacing
+    cleaned = re.sub(r'\s*([\'"])\s*([^\'"]*)\s*([\'"])\s*', r' \1\2\3 ', cleaned)  # Fix quote spacing
+
+    # Remove problematic sequences
+    cleaned = re.sub(r'\b\d+[a-zA-Z]+\b', lambda m: _spell_out_alphanumeric(m.group(0)), cleaned)  # 1st -> first
+    cleaned = re.sub(r'\b[a-zA-Z]+\d+\b', ' ', cleaned)  # Remove mixed alphanumeric like M1K3
+
+    # Final normalization to prevent phonemizer word count issues
+    cleaned = re.sub(r'\s+', ' ', cleaned)  # Multiple spaces -> single space
+    cleaned = cleaned.strip()
+
+    # Ensure text isn't empty after cleaning
+    if not cleaned or len(cleaned.strip()) < 3:
+        return "Ready."  # Safe fallback text
+
+    # Truncate very long text to prevent ONNX model errors
+    if len(cleaned) > 500:
+        # Find a good break point
+        break_point = cleaned.rfind('.', 0, 500)
+        if break_point > 100:  # Only break if we find a reasonable sentence end
+            cleaned = cleaned[:break_point + 1]
+        else:
+            cleaned = cleaned[:500].rstrip() + "."
+
     return cleaned
 
 def spell_out_acronym(acronym: str) -> str:
@@ -125,6 +162,27 @@ def spell_out_acronym(acronym: str) -> str:
         'RAM': 'R A M'
     }
     return acronym_map.get(acronym.upper(), acronym)
+
+def _spell_out_alphanumeric(text: str) -> str:
+    """Convert alphanumeric sequences like '1st', '2nd', '3rd' to speakable form"""
+    # Common ordinals
+    ordinal_map = {
+        '1st': 'first', '2nd': 'second', '3rd': 'third', '4th': 'fourth',
+        '5th': 'fifth', '6th': 'sixth', '7th': 'seventh', '8th': 'eighth',
+        '9th': 'ninth', '10th': 'tenth', '11th': 'eleventh', '12th': 'twelfth'
+    }
+
+    text_lower = text.lower()
+    if text_lower in ordinal_map:
+        return ordinal_map[text_lower]
+
+    # For other cases, just remove the text part to prevent phonemizer confusion
+    import re
+    number_part = re.search(r'\d+', text)
+    if number_part:
+        return number_part.group(0)
+
+    return text
 
 def prepare_text_for_realtime_synthesis(text: str) -> List[str]:
     """
