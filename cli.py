@@ -7,6 +7,8 @@ Command-line interface with modular architecture, proper logging, and clean sepa
 import sys
 import time
 import argparse
+import subprocess
+import atexit
 from pathlib import Path
 
 # Add src directory to path for imports
@@ -16,9 +18,23 @@ sys.path.insert(0, str(Path(__file__).parent / "src"))
 from src.cli.cli_core import M1K3CLICore
 from src.cli.cli_logging import setup_cli_logging, log_info, log_error
 
+# Global variable to hold the server process
+mcp_server_process = None
+
+def cleanup_mcp_server():
+    """Ensure the MCP server process is terminated on exit."""
+    global mcp_server_process
+    if mcp_server_process:
+        log_info("Terminating MCP server...")
+        mcp_server_process.terminate()
+        mcp_server_process.wait()
+        print("\nMCP server terminated.")
+
+atexit.register(cleanup_mcp_server)
 
 def main():
     """Main entry point for M1K3 CLI"""
+    global mcp_server_process
     # Setup logging first
     setup_cli_logging()
     
@@ -37,6 +53,8 @@ def main():
                        default="basic", help="Set model transparency level")
     parser.add_argument("--rag", action="store_true", 
                        help="Enable RAG (Retrieval-Augmented Generation) with comprehensive knowledge base")
+    parser.add_argument("--with-mcp-server", action="store_true",
+                       help="Launch the Model Context Protocol server alongside the CLI.")
     
     # Real-time TTS options (Updated with new offline engines)
     tts_group = parser.add_argument_group('Real-Time TTS Options')
@@ -160,6 +178,16 @@ def main():
                             help="Detect and display available audio devices")
     
     args = parser.parse_args()
+
+    # Launch MCP server if requested
+    if args.with_mcp_server:
+        log_info("Launching MCP server in the background...")
+        try:
+            mcp_server_process = subprocess.Popen(["./launch_mcp_server.sh"])
+            print("MCP server started in the background.")
+        except Exception as e:
+            log_error(f"Failed to launch MCP server: {e}")
+            print(f"❌ Failed to launch MCP server: {e}")
     
     # Handle special modes
     if args.download_only:

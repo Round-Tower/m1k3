@@ -90,3 +90,6 @@ sentence-transformers>=2.2.2  # Vector embeddings for conversation similarity se
 #
 # 📦 INSTALLATION: pip install -r requirements.txt
 # 🧪 TESTING: python cli.py --help  (should load without NumPy warnings)
+# Web Server for MCP
+fastapi>=0.116.1
+uvicorn>=0.30.1
