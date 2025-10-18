@@ -17,14 +17,6 @@ SERVER_HOST = "127.0.0.1"
 SERVER_PORT = 8001
 BASE_URL = f"http://{SERVER_HOST}:{SERVER_PORT}"
 
-def run_server(stdout_log, stderr_log):
-    """Function to run in a separate process, with logging."""
-    with open(stdout_log, 'w') as f_out, open(stderr_log, 'w') as f_err:
-        # Redirect stdout and stderr to log files
-        sys.stdout = f_out
-        sys.stderr = f_err
-        uvicorn.run(app, host=SERVER_HOST, port=SERVER_PORT, log_level="info")
-
 @pytest.fixture(scope="module")
 def mcp_server():
     """
@@ -33,10 +25,17 @@ def mcp_server():
     """
     stdout_log = tempfile.NamedTemporaryFile(delete=False, suffix="_stdout.log")
     stderr_log = tempfile.NamedTemporaryFile(delete=False, suffix="_stderr.log")
-    
-    server_process = Process(target=run_server, args=(stdout_log.name, stderr_log.name))
-    server_process.start()
-    
+
+    command = [
+        sys.executable, "-m", "uvicorn",
+        "mcp_server:app",
+        f"--host={SERVER_HOST}",
+        f"--port={SERVER_PORT}"
+    ]
+
+    server_process = subprocess.Popen(command, stdout=stdout_log, stderr=stderr_log)
+    time.sleep(1) # Give the server a moment to start and write logs
+
     # Wait for the server to be ready (increased timeout)
     retries = 15
     server_ready = False
@@ -49,14 +48,14 @@ def mcp_server():
         except requests.ConnectionError:
             time.sleep(1)
             retries -= 1
-    
+
     if not server_ready:
         server_process.terminate()
         with open(stdout_log.name, 'r') as f:
             stdout_content = f.read()
         with open(stderr_log.name, 'r') as f:
             stderr_content = f.read()
-        
+
         # Print logs to stdout for capturing
         print("--- SERVER STDOUT ---")
         print(stdout_content)
@@ -68,11 +67,13 @@ def mcp_server():
         os.unlink(stderr_log.name)
         pytest.fail("Server did not start in time. See logs above.")
 
-    yield
-    
+    yield stdout_log.name, stderr_log.name
+
     # Teardown: stop the server and clean up logs
     server_process.terminate()
-    server_process.join()
+    server_process.wait()
+    stdout_log.close()
+    stderr_log.close()
     os.unlink(stdout_log.name)
     os.unlink(stderr_log.name)
 
@@ -91,10 +92,24 @@ def test_tts_and_stt_end_to_end(mcp_server):
     """
     Tests the full TTS -> Audio -> STT loop and plays the audio.
     """
+    stdout_log, stderr_log = mcp_server
+
     # --- 1. Test TTS Endpoint ---
-    test_text = "Hello from your Model Context Protocol server."
+    test_text = "Hello from your Model Context Protocol server"
     tts_response = requests.post(f"{BASE_URL}/tts", params={"text": test_text})
-    
+
+    if tts_response.status_code != 200:
+        with open(stdout_log, 'r') as f:
+            print("--- SERVER STDOUT ---")
+            print(f.read())
+        with open(stderr_log, 'r') as f:
+            print("--- SERVER STDERR ---")
+            print(f.read())
+        pytest.fail(
+            f"TTS request failed with status {tts_response.status_code}. "
+            f"Check the server logs above for details."
+        )
+
     assert tts_response.status_code == 200
     assert tts_response.headers["content-type"] == "audio/wav"
     
@@ -122,15 +137,26 @@ def test_tts_and_stt_end_to_end(mcp_server):
         files = {'audio_file': (audio_output_path, f, 'audio/wav')}
         stt_response = requests.post(f"{BASE_URL}/stt", files=files)
 
+    if stt_response.status_code != 200:
+        with open(stdout_log, 'r') as f:
+            print("--- SERVER STDOUT ---")
+            print(f.read())
+        with open(stderr_log, 'r') as f:
+            print("--- SERVER STDERR ---")
+            print(f.read())
+        pytest.fail(
+            f"STT request failed with status {stt_response.status_code}. "
+            f"Check the server logs above for details."
+        )
+
     assert stt_response.status_code == 200
     transcription = stt_response.json()["transcription"]
     
     print(f"\n📝 Transcription result: '{transcription}'")
-    
-    # The placeholder STT function returns a fixed string.
+
     # In a real test with a functional STT, you'd assert this:
-    # assert test_text.lower() in transcription.lower()
-    assert transcription == "simulated transcription of audio"
+    assert test_text.lower() in transcription.lower()
+    # assert transcription == "simulated transcription of audio"
     print("✅ STT endpoint returned the expected (simulated) transcription.")
 
     # --- 4. Cleanup ---

@@ -1,9 +1,11 @@
-
 import uvicorn
 from fastapi import FastAPI, UploadFile, File
 from fastapi.responses import JSONResponse, StreamingResponse
 import tempfile
 import os
+import traceback
+import numpy as np
+from scipy.io.wavfile import write as write_wav
 
 # M1K3-specific imports
 from src.engines.stt.stt_manager import STTManager
@@ -82,24 +84,23 @@ async def text_to_speech_endpoint(text: str):
     Endpoint for Text-to-Speech.
     Saves the synthesized audio to a temporary file and streams it back.
     """
-    try:
-        # Create a temporary file to store the output audio
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmp_audio_file:
-            output_path = tmp_audio_file.name
-        
-        # Use the engine to synthesize audio
-        tts_engine.synthesize(text, output_path)
+    audio_data, sample_rate = tts_engine.synthesize(text)
 
-        # Stream the file back to the user
-        def file_iterator(file_path):
-            with open(file_path, "rb") as f:
-                yield from f
-            os.unlink(file_path) # Clean up the file after streaming
+    if audio_data is None:
+        return JSONResponse(status_code=500, content={"error": "TTS synthesis failed"})
 
-        return StreamingResponse(file_iterator(output_path), media_type="audio/wav")
-    except Exception as e:
-        traceback.print_exc()
-        return JSONResponse(status_code=500, content={"error": str(e)})
+    # Create a temporary file to store the output audio
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmp_audio_file:
+        output_path = tmp_audio_file.name
+        write_wav(output_path, sample_rate, audio_data)
+
+    # Stream the file back to the user
+    def file_iterator(file_path):
+        with open(file_path, "rb") as f:
+            yield from f
+        os.unlink(file_path) # Clean up the file after streaming
+
+    return StreamingResponse(file_iterator(output_path), media_type="audio/wav")
 
 @app.post("/stt")
 async def speech_to_text_endpoint(audio_file: UploadFile = File(...)):
@@ -115,7 +116,12 @@ async def speech_to_text_endpoint(audio_file: UploadFile = File(...)):
             audio_path = tmp_audio_file.name
 
         # Transcribe the audio file
-        transcription = stt_manager.transcribe(audio_path)
+        result = stt_manager.transcribe_file(audio_path)
+        
+        if result is None:
+            return JSONResponse(status_code=500, content={"error": "STT transcription failed"})
+
+        transcription = result.text
         
         # Clean up the temporary file
         os.unlink(audio_path)

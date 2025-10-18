@@ -369,6 +369,20 @@ class WebSpeechEngine(STTEngine):
     def get_supported_languages(self) -> List[str]:
         """Get list of supported languages"""
         return self.supported_languages.copy()
+
+    def transcribe_file(self, file_path: str) -> Optional[STTResult]:
+        """Transcribe an audio file"""
+        if not self.is_available():
+            return None
+        
+        try:
+            with sr.AudioFile(file_path) as source:
+                audio_data = self.recognizer.record(source)
+            return self._recognize_speech(audio_data)
+        except Exception as e:
+            print(f"❌ Failed to read or transcribe audio file: {e}")
+            return None
+
     
     def set_backend(self, backend: str) -> bool:
         """Switch to a different recognition backend"""

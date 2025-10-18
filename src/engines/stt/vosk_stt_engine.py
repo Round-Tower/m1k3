@@ -442,6 +442,19 @@ class VoskSTTEngine(STTEngine):
     def get_supported_languages(self) -> List[str]:
         """Get list of supported languages"""
         return self.supported_languages.copy()
+
+    def transcribe_file(self, file_path: str) -> Optional[STTResult]:
+        """Transcribe an audio file"""
+        if not self.is_available():
+            return None
+        
+        try:
+            audio_data, _ = sf.read(file_path, dtype=self.dtype)
+            return self._transcribe_audio(audio_data)
+        except Exception as e:
+            print(f"❌ Failed to read or transcribe audio file: {e}")
+            return None
+
     
     def set_model(self, model_name: str) -> bool:
         """Switch to a different Vosk model"""

@@ -70,6 +70,11 @@ class STTEngine(ABC):
         """Get list of supported languages"""
         pass
 
+    @abstractmethod
+    def transcribe_file(self, file_path: str) -> Optional[STTResult]:
+        """Transcribe an audio file"""
+        pass
+
 
 class STTManager:
     """Manages multiple STT engines and provides unified interface"""
@@ -354,6 +359,23 @@ class STTManager:
             "continuous_listening": self.continuous_listening,
             "confidence_threshold": self.confidence_threshold
         }
+
+    def transcribe_file(self, file_path: str) -> Optional[STTResult]:
+        """Transcribe an audio file"""
+        if not self.current_engine:
+            return None
+        
+        try:
+            self.status = STTStatus.PROCESSING
+            result = self.current_engine.transcribe_file(file_path)
+            self.status = STTStatus.IDLE
+            return result
+        except Exception as e:
+            self.status = STTStatus.ERROR
+            if self.on_error:
+                self.on_error(f"STT Error: {str(e)}")
+            return None
+
     
     def set_language(self, language: str) -> bool:
         """Set recognition language"""
