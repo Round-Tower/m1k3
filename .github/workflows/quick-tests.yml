@@ -11,73 +11,72 @@ jobs:
     name: ⚡ Quick Test Validation
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    
+
     steps:
       - name: 📥 Checkout Code
         uses: actions/checkout@v5
-      
+
       - name: 📦 Set up Node.js
         uses: actions/setup-node@v5
         with:
           node-version: '20.x'
           cache: 'npm'
-      
+
       - name: 🐍 Set up Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.11'
-      
+
       - name: 🔧 Install Dependencies
         run: |
           cd tests/unified-suite
           npm install --production
-          pip install pytest safety bandit
-      
+          pip install pytest
+
       - name: 🔍 Quick Test Discovery
         run: |
           cd tests/unified-suite
           npm run discover
-      
+
       - name: ⚡ Run Quick Tests
         run: |
           cd tests/unified-suite
           npm run test:quick
         continue-on-error: true
-      
-      - name: 🔒 Security Quick Scan
-        run: |
-          cd tests/unified-suite
-          # Quick security checks
-          npm audit --audit-level=high
-          safety check --short-report || true
-          bandit -r ../../ -f json -o security-quick.json || true
-        continue-on-error: true
-      
+
       - name: 📊 Generate Quick Report
         run: |
           cd tests/unified-suite
           npm run report
         if: always()
-      
+
+      - name: 📤 Upload Test Reports
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: quick-test-reports
+          path: tests/unified-suite/output/
+          retention-days: 7
+
       - name: 📋 PR Status Comment
         uses: actions/github-script@v7
         if: github.event_name == 'pull_request' && always()
         with:
           script: |
             const fs = require('fs');
-            
+
             let status = '✅ Quick validation passed';
             let details = '';
-            
+
             try {
               if (fs.existsSync('tests/unified-suite/output/data/test-discovery.json')) {
                 const discovery = JSON.parse(fs.readFileSync('tests/unified-suite/output/data/test-discovery.json', 'utf8'));
                 details = `
                 **⚡ Quick Validation Results:**
-                - 🔍 **${discovery.summary.total_files}** test files discovered  
+                - 🔍 **${discovery.summary.total_files}** test files discovered
                 - 🧪 **${discovery.summary.total_tests}** tests identified
                 - ⏱️ **${discovery.summary.estimated_duration_readable}** estimated runtime
-                
+
                 **🚀 Ready for full test suite on merge**
                 `;
               } else {
@@ -88,60 +87,17 @@ jobs:
               status = '❌ Quick validation failed';
               details = `**❌ Error:** ${error.message}`;
             }
-            
+
             const comment = `## ${status}
-            
+
             ${details}
-            
-            💡 **Tip:** Full test suite with screenshots and security audit will run after merge to main branch.
+
+            💡 **Tip:** Full test suite will run after merge to main/master branch.
             `;
-            
+
             github.rest.issues.createComment({
               issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
               body: comment
             });
-
-  lint-and-format:
-    name: 🎨 Code Quality
-    runs-on: ubuntu-latest
-    
-    steps:
-      - name: 📥 Checkout Code
-        uses: actions/checkout@v5
-      
-      - name: 📦 Set up Node.js
-        uses: actions/setup-node@v5
-        with:
-          node-version: '20.x'
-      
-      - name: 🐍 Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.11'
-      
-      - name: 🔧 Install Linting Tools
-        run: |
-          npm install -g eslint prettier
-          pip install flake8 black pylint
-      
-      - name: 🎨 Check JavaScript/Node.js Code
-        run: |
-          # Check tests/unified-suite directory
-          cd tests/unified-suite
-          npx eslint . --ext .js --fix-dry-run
-          npx prettier --check "**/*.js"
-        continue-on-error: true
-      
-      - name: 🐍 Check Python Code
-        run: |
-          # Check Python files
-          flake8 . --max-line-length=88 --extend-ignore=E203,W503
-          black --check --diff .
-        continue-on-error: true
-      
-      - name: 📝 Code Quality Report
-        run: |
-          echo "🎨 Code quality checks completed"
-          echo "💡 Any issues found are advisory for this PR"

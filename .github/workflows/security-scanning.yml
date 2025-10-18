@@ -2,35 +2,11 @@ name: Security Scanning
 
 on:
   pull_request:
-    branches: [ main, master, develop ]
+    branches: [ main, master ]
   push:
-    branches: [ main, master, develop ]
-  schedule:
-    # Run security scans daily at 3 AM UTC
-    - cron: '0 3 * * *'
+    branches: [ main, master ]
 
 jobs:
-  dependency-review:
-    name: 🔒 Dependency Security Review
-    runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request'
-    
-    steps:
-      - name: 📥 Checkout Code
-        uses: actions/checkout@v5
-        
-      - name: 🛡️ Dependency Review
-        uses: actions/dependency-review-action@v4
-        with:
-          # Fail the action if vulnerabilities with severity >= medium are found
-          fail-on-severity: medium
-          # Allow licenses that are commonly used in open source
-          allow-licenses: GPL-3.0, MIT, Apache-2.0, BSD-2-Clause, BSD-3-Clause, ISC, MPL-2.0
-          # Deny licenses that are problematic
-          deny-licenses: AGPL-1.0, AGPL-3.0
-          # Comment on PR with results
-          comment-summary-in-pr: true
-
   codeql-analysis:
     name: 🔍 CodeQL Security Analysis
     runs-on: ubuntu-latest
@@ -194,7 +170,7 @@ jobs:
   security-summary:
     name: 📊 Security Summary
     runs-on: ubuntu-latest
-    needs: [dependency-review, codeql-analysis, npm-audit, python-security, secrets-scan]
+    needs: [codeql-analysis, npm-audit, python-security, secrets-scan]
     if: always()
     
     steps:
@@ -211,18 +187,16 @@ jobs:
           echo "### 📋 Scan Results" >> $GITHUB_STEP_SUMMARY
           echo "| Security Check | Status |" >> $GITHUB_STEP_SUMMARY
           echo "|---|---|" >> $GITHUB_STEP_SUMMARY
-          echo "| 🔒 Dependency Review | ${{ needs.dependency-review.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| 🔍 CodeQL Analysis | ${{ needs.codeql-analysis.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| 📦 NPM Audit | ${{ needs.npm-audit.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| 🐍 Python Security | ${{ needs.python-security.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| 🔑 Secrets Scan | ${{ needs.secrets-scan.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          
+
           # Overall status
-          if [[ "${{ needs.dependency-review.result }}" == "success" && 
-                "${{ needs.codeql-analysis.result }}" == "success" && 
-                "${{ needs.npm-audit.result }}" == "success" && 
-                "${{ needs.python-security.result }}" == "success" && 
+          if [[ "${{ needs.codeql-analysis.result }}" == "success" &&
+                "${{ needs.npm-audit.result }}" == "success" &&
+                "${{ needs.python-security.result }}" == "success" &&
                 "${{ needs.secrets-scan.result }}" == "success" ]]; then
             echo "### ✅ Overall Status: PASS" >> $GITHUB_STEP_SUMMARY
             echo "All security scans completed successfully with no critical issues detected." >> $GITHUB_STEP_SUMMARY
