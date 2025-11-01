@@ -6,9 +6,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.Send
-import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -88,8 +85,8 @@ fun ChatScreen(
                     }
                 },
                 navigationIcon = {
-                    IconButton(onClick = onBackClick) {
-                        Icon(Icons.Filled.ArrowBack, "Back")
+                    TextButton(onClick = onBackClick) {
+                        Text("← Back", style = MaterialTheme.typography.titleMedium)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -252,11 +249,11 @@ fun ChatInputBar(
                 shape = RoundedCornerShape(24.dp)
             )
 
-            FilledIconButton(
+            FilledTonalButton(
                 onClick = onSend,
                 enabled = enabled && text.isNotBlank()
             ) {
-                Icon(Icons.AutoMirrored.Filled.Send, "Send")
+                Text("➤", style = MaterialTheme.typography.headlineSmall)
             }
         }
     }

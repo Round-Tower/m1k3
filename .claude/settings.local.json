@@ -7,7 +7,15 @@
       "Bash(./gradlew:*)",
       "Bash(git worktree:*)",
       "WebSearch",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(python scripts/export_smollm2_onnx.py:*)",
+      "Bash(pip install:*)",
+      "Bash(python:*)",
+      "Bash(adb shell:*)",
+      "Bash(adb shell am start:*)",
+      "Bash(adb exec-out:*)",
+      "Bash(ma_ai_with_chat_button.png)",
+      "Bash(ma_ai_main_screen.png)"
     ],
     "deny": [],
     "ask": []

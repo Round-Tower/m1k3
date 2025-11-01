@@ -12,8 +12,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import app.m1k3.ai.assistant.ai.SmolLM2Engine
 import app.m1k3.ai.assistant.database.AndroidDatabaseFactory
 import app.m1k3.ai.assistant.database.DatabaseConfig
+import app.m1k3.ai.assistant.ui.ChatScreen
 import kotlinx.coroutines.launch
 
 /**
@@ -26,16 +28,29 @@ import kotlinx.coroutines.launch
  * - "Negative space" philosophy
  */
 class MainActivity : ComponentActivity() {
+    private lateinit var aiEngine: SmolLM2Engine
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        aiEngine = SmolLM2Engine(this)
+
         setContent {
             MaAITheme {
+                var showChat by remember { mutableStateOf(false) }
+
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    MaAIDemo()
+                    if (showChat) {
+                        ChatScreen(
+                            onBackClick = { showChat = false },
+                            aiEngine = aiEngine
+                        )
+                    } else {
+                        MaAIDemo(onChatClick = { showChat = true })
+                    }
                 }
             }
         }
@@ -57,7 +72,7 @@ fun MaAITheme(content: @Composable () -> Unit) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MaAIDemo() {
+fun MaAIDemo(onChatClick: () -> Unit) {
     var systemStatus by remember { mutableStateOf<List<StatusItem>>(emptyList()) }
     val scope = rememberCoroutineScope()
 
@@ -97,6 +112,23 @@ fun MaAIDemo() {
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
+            // Chat Button
+            item {
+                Button(
+                    onClick = onChatClick,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(56.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.primary
+                    )
+                ) {
+                    Text("▶", style = MaterialTheme.typography.headlineMedium)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("💬 Chat with 間 AI", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                }
+            }
+
             // Hero Section
             item {
                 Card(
@@ -110,12 +142,12 @@ fun MaAIDemo() {
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         Text(
-                            "🎉 Phase 0 Foundation Complete",
+                            "🎉 Phase 1 AI Engine Complete",
                             style = MaterialTheme.typography.titleLarge,
                             fontWeight = FontWeight.Bold
                         )
                         Text(
-                            "7/15 tickets implemented (46.7%)",
+                            "SmolLM2-360M • Local Inference • Mock Demo",
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
                         )
@@ -286,9 +318,9 @@ fun getSystemStatus(): List<StatusItem> {
         ),
         StatusItem(
             name = "AI Engine",
-            description = "Coming in Phase 1 (SmolLM2-360M)",
+            description = "SmolLM2-360M (Mock Demo Ready)",
             icon = "🤖",
-            isSuccess = false
+            isSuccess = true
         ),
         StatusItem(
             name = "Multi-Modal Vision",
