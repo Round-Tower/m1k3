@@ -12,31 +12,67 @@ from pathlib import Path
 class ConversationEmbedder:
     """Generates vector embeddings for conversation text"""
 
-    def __init__(self, model_name: str = "BAAI/bge-small-en-v1.5"):
+    def __init__(self,
+                 model_name: str = "google/embeddinggemma-300m",
+                 embedding_dim: Optional[int] = None,
+                 truncate_dim: Optional[int] = None):
+        """
+        Initialize conversation embedder with EmbeddingGemma (default) or other models.
+
+        Args:
+            model_name: Model identifier (default: google/embeddinggemma-300m)
+            embedding_dim: Expected output dimension (auto-detected if None)
+            truncate_dim: Truncate embeddings to this dimension via Matryoshka Representation Learning
+                         Supported for EmbeddingGemma: 768 (full), 512, 256, 128
+        """
         self.model_name = model_name
         self.model = None
         self.tokenizer = None
-        self.embedding_dim = 384  # BGE-small embedding dimension
+        self.truncate_dim = truncate_dim
+
+        # Set default embedding dimensions based on model
+        if embedding_dim is None:
+            if "embeddinggemma" in model_name.lower():
+                self.embedding_dim = 768  # EmbeddingGemma native dimension
+            elif "bge-small" in model_name.lower():
+                self.embedding_dim = 384  # BGE-small dimension
+            else:
+                self.embedding_dim = 768  # Safe default
+        else:
+            self.embedding_dim = embedding_dim
+
         self._initialize_model()
 
     def _initialize_model(self):
-        """Initialize the embedding model"""
+        """Initialize the embedding model with multi-model support"""
         try:
             from sentence_transformers import SentenceTransformer
 
-            # Use local models directory if it exists
+            # Determine local model directory name
+            if "embeddinggemma" in self.model_name.lower():
+                local_model_dir = "embeddinggemma-300m"
+            elif "bge-small" in self.model_name.lower():
+                local_model_dir = "bge-small-en-v1.5"
+            else:
+                local_model_dir = self.model_name.replace("/", "_")
+
+            # Check for local models
             models_dir = Path("models/embeddings")
             if models_dir.exists():
-                model_path = models_dir / "bge-small-en-v1.5"
+                model_path = models_dir / local_model_dir
                 if model_path.exists():
                     self.model = SentenceTransformer(str(model_path))
                     print(f"✅ Loaded local embedding model from {model_path}")
+                    self._validate_and_set_dimensions()
                     return
 
             # Download model if not available locally
             print(f"⬇️ Downloading embedding model: {self.model_name}")
             self.model = SentenceTransformer(self.model_name)
-            print("✅ Embedding model initialized")
+
+            # Validate dimensions
+            self._validate_and_set_dimensions()
+            print(f"✅ Embedding model initialized ({self.embedding_dim}D)")
 
         except ImportError:
             print("⚠️ sentence-transformers not available. Installing...")
@@ -44,10 +80,38 @@ class ConversationEmbedder:
             subprocess.check_call(["pip", "install", "sentence-transformers"])
             from sentence_transformers import SentenceTransformer
             self.model = SentenceTransformer(self.model_name)
+            self._validate_and_set_dimensions()
             print("✅ Installed and initialized embedding model")
         except Exception as e:
             print(f"❌ Failed to initialize embedding model: {e}")
             self.model = None
+
+    def _validate_and_set_dimensions(self):
+        """Validate model dimensions and adjust if needed"""
+        if not self.model:
+            return
+
+        # Test encoding to get actual dimensions
+        test_embedding = self.model.encode(["test"], show_progress_bar=False)
+        actual_dim = len(test_embedding[0])
+
+        # Update embedding_dim if different
+        if self.embedding_dim != actual_dim:
+            print(f"⚠️ Model dimension ({actual_dim}D) differs from expected ({self.embedding_dim}D)")
+            self.embedding_dim = actual_dim
+
+        # Validate truncate_dim for EmbeddingGemma
+        if self.truncate_dim:
+            if "embeddinggemma" in self.model_name.lower():
+                valid_dims = [768, 512, 256, 128]
+                if self.truncate_dim not in valid_dims:
+                    print(f"⚠️ Invalid truncate_dim {self.truncate_dim}. Must be one of {valid_dims}")
+                    self.truncate_dim = None
+                else:
+                    print(f"✅ Matryoshka truncation enabled: {self.embedding_dim}D → {self.truncate_dim}D")
+            else:
+                print(f"⚠️ Truncation only supported for EmbeddingGemma. Ignoring truncate_dim.")
+                self.truncate_dim = None
 
     def is_available(self) -> bool:
         """Check if the embedding model is available"""
@@ -65,8 +129,14 @@ class ConversationEmbedder:
                 return None
 
             # Generate embedding
-            embedding = self.model.encode([clean_text])
-            return embedding[0].tolist()  # Convert numpy array to list
+            embedding = self.model.encode([clean_text], show_progress_bar=False)
+            embedding_vec = embedding[0]
+
+            # Apply Matryoshka truncation if specified
+            if self.truncate_dim and len(embedding_vec) > self.truncate_dim:
+                embedding_vec = embedding_vec[:self.truncate_dim]
+
+            return embedding_vec.tolist()  # Convert numpy array to list
 
         except Exception as e:
             print(f"❌ Embedding generation failed: {e}")
@@ -93,7 +163,11 @@ class ConversationEmbedder:
                 return [None] * len(texts)
 
             # Generate embeddings
-            embeddings = self.model.encode(valid_texts)
+            embeddings = self.model.encode(valid_texts, show_progress_bar=False)
+
+            # Apply Matryoshka truncation if specified
+            if self.truncate_dim:
+                embeddings = np.array([emb[:self.truncate_dim] for emb in embeddings])
 
             # Map back to original order
             result = [None] * len(texts)
@@ -117,9 +191,16 @@ class ConversationEmbedder:
         # Remove excessive whitespace
         clean_text = ' '.join(clean_text.split())
 
-        # Truncate to reasonable length (embedding models have token limits)
-        if len(clean_text) > 8000:  # Conservative limit for BGE models
-            clean_text = clean_text[:8000] + "..."
+        # Truncate to reasonable length based on model
+        # EmbeddingGemma: 2K token context (~8000 chars)
+        # BGE models: ~512 tokens (~2000 chars conservative)
+        if "embeddinggemma" in self.model_name.lower():
+            max_chars = 8000  # 2K tokens * ~4 chars/token
+        else:
+            max_chars = 2000  # Conservative for BGE
+
+        if len(clean_text) > max_chars:
+            clean_text = clean_text[:max_chars] + "..."
 
         return clean_text
 

@@ -69,6 +69,9 @@ scipy>=1.16.1
 diskcache>=5.6.1           # Disk-based caching
 duckdb>=0.9.2              # Embedded analytics database for conversation persistence
 sentence-transformers>=2.2.2  # Vector embeddings for conversation similarity search
+                               # Supports EmbeddingGemma (google/embeddinggemma-300m) - 308M params, 768D
+                               # Replaces BGE-small-en-v1.5 (384D) with superior multilingual performance
+                               # Matryoshka Representation Learning: truncate to 512/256/128D on demand
 
 # =============================================================================
 # PYTHON 3.12+ COMPATIBILITY NOTES
