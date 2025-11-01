@@ -6,7 +6,8 @@
       "Bash(./gradlew composeApp:assembleDebug:*)",
       "Bash(./gradlew:*)",
       "Bash(git worktree:*)",
-      "WebSearch"
+      "WebSearch",
+      "Bash(git add:*)"
     ],
     "deny": [],
     "ask": []
