@@ -66,7 +66,7 @@ class KnowledgeBaseImporter(
                             access_count = 0,
                             last_accessed_at = null,
                             embedding_id = null,
-                            has_embedding = false,
+                            has_embedding = 0, // SQLite INTEGER: 0 = false, 1 = true
                             source = "m1k3_kb_v1",
                             created_at = Clock.System.now().toEpochMilliseconds(),
                             updated_at = Clock.System.now().toEpochMilliseconds()
