@@ -183,26 +183,12 @@ $prompt<|im_end|>
                     "position_ids" to positionIdsTensor
                 )
 
-                // Add KV cache inputs for all 32 layers
-                if (pastKeyValues == null) {
-                    // First pass: create empty KV cache tensors
-                    for (layer in 0 until numLayers) {
-                        // Empty cache: shape [batch_size=1, num_heads=5, seq_len=0, head_dim=64]
-                        val emptyKey = OnnxTensor.createTensor(
-                            env,
-                            Array(1) { Array(numHeads) { Array(0) { FloatArray(headDim) } } }
-                        )
-                        val emptyValue = OnnxTensor.createTensor(
-                            env,
-                            Array(1) { Array(numHeads) { Array(0) { FloatArray(headDim) } } }
-                        )
-                        inputs["past_key_values.$layer.key"] = emptyKey
-                        inputs["past_key_values.$layer.value"] = emptyValue
-                    }
-                } else {
-                    // Subsequent passes: reuse cached KV from previous step
-                    inputs.putAll(pastKeyValues)
+                // Add KV cache inputs for all 32 layers (if we have cached values)
+                pastKeyValues?.let { cache ->
+                    // Reuse cached KV from previous step
+                    inputs.putAll(cache)
                 }
+                // Note: First pass doesn't need cache inputs - model will generate new cache
 
                 // Run model with all required inputs
                 val outputs = session.run(inputs)
