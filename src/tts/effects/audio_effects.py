@@ -483,6 +483,228 @@ class LoFiEffect(AudioEffect):
         return np.clip(crushed, -1.0, 1.0)
 
 
+class MultibandLoFiEffect(AudioEffect):
+    """
+    Multiband Lo-Fi effect with vocal clarity preservation
+
+    Uses frequency band splitting to apply aggressive lofi to background
+    while maintaining voice intelligibility through:
+    - Gentle bitcrushing on vocal frequencies (300-3400 Hz)
+    - Adaptive ducking of non-vocal bands when voice is active
+    - Clarity boost in voice-critical frequencies (2-4 kHz)
+
+    Presets:
+    - lofi_gentle: Minimal degradation, maximum clarity
+    - lofi_balanced: Nostalgic character, preserved intelligibility (default)
+    - lofi_aggressive: Heavy vintage sound, vocal protection only
+    """
+
+    PRESETS = {
+        "lofi_gentle": {
+            "vocal_bit_depth": 12,
+            "background_bit_depth": 10,
+            "vocal_preservation": 0.9,
+            "ducking_ratio": 0.3,
+            "clarity_boost_db": 2.0
+        },
+        "lofi_balanced": {
+            "vocal_bit_depth": 10,
+            "background_bit_depth": 6,
+            "vocal_preservation": 0.7,
+            "ducking_ratio": 0.5,
+            "clarity_boost_db": 3.0
+        },
+        "lofi_aggressive": {
+            "vocal_bit_depth": 8,
+            "background_bit_depth": 4,
+            "vocal_preservation": 0.5,
+            "ducking_ratio": 0.7,
+            "clarity_boost_db": 4.0
+        }
+    }
+
+    def __init__(self, config: Dict[str, Any] = None):
+        super().__init__(config)
+
+        # Load preset if specified
+        preset = self.config.get("preset", "lofi_balanced")
+        if preset in self.PRESETS:
+            preset_config = self.PRESETS[preset].copy()
+            preset_config.update(self.config)  # User overrides take precedence
+            self.config = preset_config
+
+        # Band frequencies (Hz)
+        self.vocal_low = self.config.get("vocal_low_freq", 300)
+        self.vocal_high = self.config.get("vocal_high_freq", 3400)
+
+        # Bit depths
+        self.vocal_bit_depth = self.config.get("vocal_bit_depth", 10)
+        self.background_bit_depth = self.config.get("background_bit_depth", 6)
+
+        # Vocal preservation (0.0-1.0)
+        self.vocal_preservation = self.config.get("vocal_preservation", 0.7)
+
+        # Ducking parameters
+        self.ducking_ratio = self.config.get("ducking_ratio", 0.5)
+        self.ducking_threshold = self.config.get("ducking_threshold", 0.15)
+
+        # Clarity boost in voice-critical range (2-4 kHz)
+        self.clarity_boost_db = self.config.get("clarity_boost_db", 3.0)
+
+        # Vinyl noise
+        self.noise_amount = self.config.get("noise", 0.005)
+
+    def apply(self, audio_data: np.ndarray, sample_rate: int) -> np.ndarray:
+        """Apply multiband lofi effect with vocal preservation"""
+
+        # Split into frequency bands
+        low_band, vocal_band, high_band = self._split_bands(audio_data, sample_rate)
+
+        # Detect vocal presence for adaptive ducking
+        vocal_rms = self._calculate_rms_envelope(vocal_band, sample_rate)
+
+        # Apply bitcrushing to each band
+        low_band = self._apply_bitcrush(low_band, self.background_bit_depth)
+        vocal_band = self._apply_bitcrush(vocal_band, self.vocal_bit_depth)
+        high_band = self._apply_bitcrush(high_band, self.background_bit_depth)
+
+        # Apply clarity boost to vocal band
+        vocal_band = self._apply_clarity_boost(vocal_band, sample_rate)
+
+        # Apply adaptive ducking to non-vocal bands
+        low_band = self._apply_ducking(low_band, vocal_rms, self.ducking_ratio)
+        high_band = self._apply_ducking(high_band, vocal_rms, self.ducking_ratio)
+
+        # Recombine bands
+        output = low_band + vocal_band + high_band
+
+        # Add vinyl-style noise
+        if self.noise_amount > 0:
+            noise = np.random.normal(0, self.noise_amount, len(output))
+            output = output + noise
+
+        # Normalize and clip
+        return np.clip(output, -1.0, 1.0)
+
+    def _split_bands(self, audio_data: np.ndarray, sample_rate: int):
+        """Split audio into low, vocal, and high frequency bands"""
+        try:
+            from scipy import signal
+
+            nyquist = sample_rate / 2
+            vocal_low_norm = self.vocal_low / nyquist
+            vocal_high_norm = self.vocal_high / nyquist
+
+            # Lowpass filter for low band (< 300 Hz)
+            b_low, a_low = signal.butter(4, vocal_low_norm, btype='low')
+            low_band = signal.filtfilt(b_low, a_low, audio_data)
+
+            # Bandpass filter for vocal band (300-3400 Hz)
+            b_vocal, a_vocal = signal.butter(4, [vocal_low_norm, vocal_high_norm], btype='band')
+            vocal_band = signal.filtfilt(b_vocal, a_vocal, audio_data)
+
+            # Highpass filter for high band (> 3400 Hz)
+            b_high, a_high = signal.butter(4, vocal_high_norm, btype='high')
+            high_band = signal.filtfilt(b_high, a_high, audio_data)
+
+            return low_band, vocal_band, high_band
+
+        except ImportError:
+            # Fallback: FFT-based band splitting
+            return self._split_bands_fft(audio_data, sample_rate)
+
+    def _split_bands_fft(self, audio_data: np.ndarray, sample_rate: int):
+        """Fallback FFT-based band splitting if scipy unavailable"""
+        fft = np.fft.fft(audio_data)
+        freqs = np.fft.fftfreq(len(audio_data), 1 / sample_rate)
+
+        # Create masks for each band
+        low_mask = np.abs(freqs) < self.vocal_low
+        vocal_mask = (np.abs(freqs) >= self.vocal_low) & (np.abs(freqs) <= self.vocal_high)
+        high_mask = np.abs(freqs) > self.vocal_high
+
+        # Apply masks and inverse FFT
+        low_band = np.real(np.fft.ifft(fft * low_mask))
+        vocal_band = np.real(np.fft.ifft(fft * vocal_mask))
+        high_band = np.real(np.fft.ifft(fft * high_mask))
+
+        return low_band, vocal_band, high_band
+
+    def _apply_bitcrush(self, audio_data: np.ndarray, bit_depth: int) -> np.ndarray:
+        """Apply bit depth reduction to audio"""
+        steps = 2 ** bit_depth
+        return np.round(audio_data * steps) / steps
+
+    def _calculate_rms_envelope(self, audio_data: np.ndarray, sample_rate: int) -> np.ndarray:
+        """Calculate RMS envelope for vocal presence detection"""
+        window_size = int(sample_rate * 0.01)  # 10ms windows
+
+        # Pad audio to window size
+        pad_size = window_size - (len(audio_data) % window_size)
+        if pad_size > 0:
+            audio_data = np.pad(audio_data, (0, pad_size))
+
+        # Calculate RMS in windows
+        reshaped = audio_data.reshape(-1, window_size)
+        rms_values = np.sqrt(np.mean(reshaped ** 2, axis=1))
+
+        # Upsample RMS envelope to match audio length
+        rms_envelope = np.repeat(rms_values, window_size)
+
+        return rms_envelope[:len(audio_data)]
+
+    def _apply_clarity_boost(self, audio_data: np.ndarray, sample_rate: int) -> np.ndarray:
+        """Apply gentle boost to voice-critical frequencies (2-4 kHz)"""
+        if self.clarity_boost_db <= 0:
+            return audio_data
+
+        try:
+            from scipy import signal
+
+            # Boost 2-4 kHz range for voice intelligibility
+            nyquist = sample_rate / 2
+            low_boost = 2000 / nyquist
+            high_boost = 4000 / nyquist
+
+            # Peaking EQ filter
+            b, a = signal.butter(2, [low_boost, high_boost], btype='band')
+            boosted = signal.filtfilt(b, a, audio_data)
+
+            # Mix with original (gentle boost)
+            boost_amount = 10 ** (self.clarity_boost_db / 20)  # dB to linear
+            return audio_data + boosted * (boost_amount - 1)
+
+        except ImportError:
+            # Fallback: no boost if scipy unavailable
+            return audio_data
+
+    def _apply_ducking(self, audio_data: np.ndarray, vocal_rms: np.ndarray, ratio: float) -> np.ndarray:
+        """Apply adaptive ducking based on vocal presence"""
+        # Trim or pad vocal_rms to match audio length
+        if len(vocal_rms) > len(audio_data):
+            vocal_rms = vocal_rms[:len(audio_data)]
+        elif len(vocal_rms) < len(audio_data):
+            vocal_rms = np.pad(vocal_rms, (0, len(audio_data) - len(vocal_rms)))
+
+        # Calculate gain reduction envelope
+        # When vocal RMS > threshold, reduce background by ratio
+        gain_envelope = np.ones_like(audio_data)
+        vocal_active = vocal_rms > self.ducking_threshold
+        gain_envelope[vocal_active] = ratio
+
+        # Smooth the envelope (attack/release)
+        try:
+            from scipy import signal
+            # 10ms attack, 100ms release
+            attack_samples = int(0.01 * 22050)  # Assume 22050 Hz
+            b, a = signal.butter(1, 1.0 / attack_samples)
+            gain_envelope = signal.filtfilt(b, a, gain_envelope)
+        except ImportError:
+            pass  # Use stepped envelope if scipy unavailable
+
+        return audio_data * gain_envelope
+
+
 class FlangerEffect(AudioEffect):
     """
     Flanger effect - creates sweeping, swooshing sound
