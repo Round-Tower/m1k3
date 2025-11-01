@@ -4,7 +4,9 @@
       "Bash(tree:*)",
       "Bash(find:*)",
       "Bash(./gradlew composeApp:assembleDebug:*)",
-      "Bash(./gradlew:*)"
+      "Bash(./gradlew:*)",
+      "Bash(git worktree:*)",
+      "WebSearch"
     ],
     "deny": [],
     "ask": []
