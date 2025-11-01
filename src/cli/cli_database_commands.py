@@ -420,3 +420,243 @@ Available tables: conversations, sessions"""
 
         except Exception as e:
             return f"❌ Query enhancement error: {e}"
+
+    def handle_personality_command(self, args: List[str]) -> str:
+        """Handle 'personality' command - personality analytics and management"""
+        try:
+            from src.cli.cli_personality_integration import CLIPersonalityIntegrator
+            from src.personality.personality_engine import PersonalityEngine
+            from src.database.enhanced_conversation_manager import EnhancedConversationManager
+
+            integrator = CLIPersonalityIntegrator(self.cli)
+            if not integrator.is_enabled():
+                return "❌ Personality system not available. Please check dependencies."
+
+        except ImportError:
+            return "❌ Personality system not available. Missing dependencies."
+
+        if not args:
+            return self._show_personality_help()
+
+        command = args[0].lower()
+
+        if command == "status":
+            return self._handle_personality_status(integrator, args[1:])
+        elif command == "stats":
+            return self._handle_personality_stats(integrator, args[1:])
+        elif command == "humor":
+            return self._handle_humor_analytics(integrator, args[1:])
+        elif command == "dashboard":
+            return self._handle_dashboard_data(integrator, args[1:])
+        elif command == "test":
+            return self._handle_personality_test(integrator, args[1:])
+        else:
+            return self._show_personality_help()
+
+    def _show_personality_help(self) -> str:
+        """Show personality command help"""
+        return """🎭 M1K3 Personality System Commands
+
+Available commands:
+  personality status              - Show system status and configuration
+  personality stats [session_id] - Show humor effectiveness statistics
+  personality humor [days]        - Show humor analytics and trends
+  personality dashboard [hours]   - Show dashboard analytics data
+  personality test                - Test personality enhancement
+
+Examples:
+  personality status
+  personality stats session_001
+  personality humor 7
+  personality dashboard 24
+  personality test
+"""
+
+    def _handle_personality_status(self, integrator, args: List[str]) -> str:
+        """Handle personality status command"""
+        try:
+            lines = [
+                "🎭 M1K3 Personality System Status",
+                "=" * 40,
+                f"✅ System Enabled: {integrator.is_enabled()}",
+                f"🧠 PersonalityEngine: {'Available' if hasattr(integrator, 'personality_engine') else 'Unavailable'}",
+                f"💾 Enhanced Database: {'Available' if hasattr(integrator, 'enhanced_conversation_manager') else 'Unavailable'}",
+                "",
+                "🎯 Current Configuration:",
+                f"   Humor Intensity: {getattr(self.cli, 'humor_intensity', 7.0):.1f}/10",
+                f"   Preferred Types: {getattr(self.cli, 'preferred_humor_types', ['context_aware', 'trivia'])}",
+                f"   Session ID: {getattr(self.cli, 'session_id', 'cli_session')}",
+            ]
+
+            return "\n".join(lines)
+
+        except Exception as e:
+            return f"❌ Failed to get personality status: {e}"
+
+    def _handle_personality_stats(self, integrator, args: List[str]) -> str:
+        """Handle personality stats command"""
+        try:
+            session_id = args[0] if args else getattr(self.cli, 'session_id', None)
+
+            if not session_id:
+                return "❌ No session ID provided and no current session available"
+
+            stats = integrator.get_humor_effectiveness_stats(session_id)
+
+            if not stats:
+                return f"📊 No personality statistics found for session: {session_id}"
+
+            lines = [
+                f"📊 Humor Effectiveness Statistics - Session: {session_id}",
+                "=" * 60,
+                f"🎯 Average Humor Score: {stats.get('avg_humor_score', 0):.2f}/10",
+                f"📈 User Engagement: {stats.get('avg_engagement_score', 0):.2f}/10",
+                f"🎭 Personality Consistency: {stats.get('avg_consistency', 0):.2f}/10",
+                f"💬 Total Conversations: {stats.get('total_conversations', 0)}",
+                "",
+                "🃏 Top Joke Types:",
+            ]
+
+            # Add joke types if available
+            joke_types = stats.get('top_joke_types', [])
+            if joke_types:
+                for i, joke_type in enumerate(joke_types[:5], 1):
+                    lines.append(f"   {i}. {joke_type}")
+            else:
+                lines.append("   No joke types data available")
+
+            return "\n".join(lines)
+
+        except Exception as e:
+            return f"❌ Failed to get personality stats: {e}"
+
+    def _handle_humor_analytics(self, integrator, args: List[str]) -> str:
+        """Handle humor analytics command"""
+        try:
+            days = 7
+            if args and args[0].isdigit():
+                days = int(args[0])
+
+            # Get trends data (this would need to be implemented in the enhanced manager)
+            lines = [
+                f"😄 Humor Analytics (Last {days} days)",
+                "=" * 50,
+                "🚧 Humor trend analysis - Coming Soon!",
+                "",
+                "This feature will show:",
+                "• Humor effectiveness over time",
+                "• Most successful joke types",
+                "• User engagement correlation",
+                "• Context-aware humor performance",
+            ]
+
+            return "\n".join(lines)
+
+        except Exception as e:
+            return f"❌ Failed to get humor analytics: {e}"
+
+    def _handle_dashboard_data(self, integrator, args: List[str]) -> str:
+        """Handle dashboard data command"""
+        try:
+            hours = 24
+            if args and args[0].isdigit():
+                hours = int(args[0])
+
+            session_id = getattr(self.cli, 'session_id', None)
+            data = integrator.get_dashboard_analytics(session_id, hours)
+
+            if not data:
+                return "📊 No dashboard data available"
+
+            lines = [
+                f"📊 Dashboard Analytics (Last {hours} hours)",
+                "=" * 50,
+            ]
+
+            # Humor metrics
+            if 'humor_metrics' in data:
+                humor = data['humor_metrics']
+                lines.extend([
+                    "🎭 Humor Metrics:",
+                    f"   Average Score: {humor.get('avg_humor_score', 0):.2f}/10",
+                    f"   Trend: {humor.get('humor_trend', 'unknown')}",
+                    f"   Top Types: {', '.join(humor.get('top_joke_types', []))}",
+                    "",
+                ])
+
+            # Engagement metrics
+            if 'engagement_metrics' in data:
+                engagement = data['engagement_metrics']
+                lines.extend([
+                    "📈 Engagement Metrics:",
+                    f"   Average Score: {engagement.get('avg_engagement_score', 0):.2f}/10",
+                    f"   Satisfaction: {engagement.get('user_satisfaction', 'unknown')}",
+                    f"   Correlation: {engagement.get('engagement_correlation', 0):.2f}",
+                    "",
+                ])
+
+            # Eco metrics
+            if 'eco_metrics' in data:
+                eco = data['eco_metrics']
+                lines.extend([
+                    "🌱 Eco Metrics:",
+                    f"   Total Credits: {eco.get('total_eco_credits', 0)}",
+                    f"   Conversations: {eco.get('eco_conversations', 0)}",
+                    f"   Energy Saved: {eco.get('energy_saved', 0):.3f} kWh",
+                    f"   Carbon Reduced: {eco.get('carbon_reduced', 0):.3f} kg",
+                    "",
+                ])
+
+            # Performance metrics
+            if 'performance_metrics' in data:
+                perf = data['performance_metrics']
+                lines.extend([
+                    "⚡ Performance Metrics:",
+                    f"   Avg Response Time: {perf.get('avg_response_time_ms', 0)}ms",
+                    f"   Total Responses: {perf.get('total_responses', 0)}",
+                    f"   Consistency Score: {perf.get('consistency_score', 0):.2f}/10",
+                ])
+
+            return "\n".join(lines)
+
+        except Exception as e:
+            return f"❌ Failed to get dashboard data: {e}"
+
+    def _handle_personality_test(self, integrator, args: List[str]) -> str:
+        """Handle personality test command"""
+        try:
+            test_input = "Tell me about the weather"
+            test_response = "I don't have access to weather data, but I can help with other questions."
+
+            enhancement_result = integrator.enhance_ai_response(
+                base_response=test_response,
+                user_input=test_input,
+                context={}
+            )
+
+            lines = [
+                "🧪 Personality Enhancement Test",
+                "=" * 40,
+                f"📝 Test Input: {test_input}",
+                f"🤖 Base Response: {test_response}",
+                "",
+                f"✨ Enhanced Response: {enhancement_result['enhanced_response']}",
+                "",
+                "📊 Analytics:",
+                f"   Enhancement Applied: {enhancement_result['personality_applied']}",
+            ]
+
+            if enhancement_result.get('analytics'):
+                analytics = enhancement_result['analytics']
+                lines.extend([
+                    f"   Humor Score: {analytics.get('humor_score', 0):.2f}/10",
+                    f"   Consistency: {analytics.get('personality_consistency', 0):.2f}/10",
+                    f"   Engagement: {analytics.get('user_engagement_score', 0):.2f}/10",
+                    f"   Joke Types: {', '.join(analytics.get('joke_types', []))}",
+                    f"   Eco Credits: {analytics.get('eco_credits_earned', 0)}",
+                ])
+
+            return "\n".join(lines)
+
+        except Exception as e:
+            return f"❌ Personality test failed: {e}"

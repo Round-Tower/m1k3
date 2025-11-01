@@ -233,6 +233,305 @@ class SidechainCompressionEffect(AudioEffect):
         return compressed_audio
 
 
+class PitchShiftEffect(AudioEffect):
+    """
+    Pitch shift effect for fun voice modulation
+    Presets: chipmunk, giant, slight_up, slight_down
+    """
+
+    def __init__(self, config: Dict[str, Any] = None):
+        super().__init__(config)
+
+        # Presets for common pitch shifts
+        self.presets = {
+            "chipmunk": {"semitones": 8},      # High-pitched cute voice
+            "giant": {"semitones": -6},         # Deep low voice
+            "slight_up": {"semitones": 2},      # Subtle lift
+            "slight_down": {"semitones": -2},   # Subtle lower
+            "robot": {"semitones": 0},          # For robot effect (no pitch shift)
+        }
+
+        # Get preset or use custom value
+        preset_name = self.config.get("preset")
+        if preset_name and preset_name in self.presets:
+            self.config.update(self.presets[preset_name])
+
+    def apply(self, audio_data: np.ndarray, sample_rate: int) -> np.ndarray:
+        """Apply pitch shift using phase vocoder technique"""
+        semitones = self.config.get("semitones", 0)
+
+        if semitones == 0:
+            return audio_data
+
+        # Calculate pitch shift ratio
+        pitch_ratio = 2 ** (semitones / 12.0)
+
+        try:
+            # Try using librosa if available (higher quality)
+            import librosa
+            return librosa.effects.pitch_shift(
+                y=audio_data,
+                sr=sample_rate,
+                n_steps=semitones
+            )
+        except ImportError:
+            # Fallback: Simple resampling method (lower quality but fast)
+            # This changes both pitch and speed
+            new_length = int(len(audio_data) / pitch_ratio)
+            indices = np.linspace(0, len(audio_data) - 1, new_length)
+            shifted = np.interp(indices, np.arange(len(audio_data)), audio_data)
+
+            # Pad or trim to original length
+            if len(shifted) < len(audio_data):
+                shifted = np.pad(shifted, (0, len(audio_data) - len(shifted)))
+            else:
+                shifted = shifted[:len(audio_data)]
+
+            return shifted
+
+
+class RobotVoiceEffect(AudioEffect):
+    """
+    Robot/vocoder voice effect with distortion and modulation
+    Makes the voice sound mechanical and robotic
+
+    Quality presets:
+    - "clean": Subtle robotic effect, mostly intelligible
+    - "vintage": Classic 80s robot sound
+    - "heavy": Strong digital distortion
+    """
+
+    def __init__(self, config: Dict[str, Any] = None):
+        super().__init__(config)
+
+        # Presets for different robot voice styles
+        self.presets = {
+            "clean": {
+                "carrier_freq": 80,  # Lower freq for smoother sound
+                "intensity": 0.4,
+                "bit_depth": 12,     # Higher bit depth = cleaner
+                "resonance": 0.1
+            },
+            "vintage": {
+                "carrier_freq": 120,
+                "intensity": 0.6,
+                "bit_depth": 10,
+                "resonance": 0.2
+            },
+            "heavy": {
+                "carrier_freq": 200,
+                "intensity": 0.8,
+                "bit_depth": 8,
+                "resonance": 0.3
+            }
+        }
+
+        # Apply preset if specified
+        preset_name = self.config.get("preset", "clean")  # Default to clean
+        if preset_name in self.presets:
+            preset_config = self.presets[preset_name]
+            # Override with any custom values
+            for key, value in preset_config.items():
+                if key not in self.config:
+                    self.config[key] = value
+
+    def apply(self, audio_data: np.ndarray, sample_rate: int) -> np.ndarray:
+        """Apply robot voice effect with improved quality"""
+        intensity = self.config.get("intensity", 0.4)  # Lower default
+        carrier_freq = self.config.get("carrier_freq", 80)  # Lower default freq
+        bit_depth = self.config.get("bit_depth", 12)  # Higher default bit depth
+        resonance_amount = self.config.get("resonance", 0.1)  # Lower default resonance
+
+        # Generate time array
+        t = np.arange(len(audio_data)) / sample_rate
+
+        # Stage 1: Ring modulation (gives metallic quality)
+        # Use a gentler modulation approach
+        carrier = np.sin(2 * np.pi * carrier_freq * t)
+        # Blend between original and modulated based on intensity
+        modulated = audio_data * (1 - intensity * 0.5) + (audio_data * carrier) * intensity
+
+        # Stage 2: Bit crushing (reduces bit depth for digital distortion)
+        # Use specified bit depth instead of calculating from intensity
+        steps = 2 ** bit_depth
+        crushed = np.round(modulated * steps) / steps
+
+        # Stage 3: Add subtle mechanical resonance (optional)
+        if resonance_amount > 0 and len(crushed) > 10:
+            # Simple comb filter for metallic resonance
+            delay_samples = min(int(sample_rate / carrier_freq), len(crushed) - 1)
+            if delay_samples > 0:
+                resonance = np.zeros_like(crushed)
+                resonance[delay_samples:] = crushed[:-delay_samples] * resonance_amount
+                crushed = crushed + resonance
+
+        # Stage 4: Gentle normalization and clipping
+        max_val = np.max(np.abs(crushed))
+        if max_val > 0:
+            crushed = crushed / max_val * 0.95  # Normalize to 95% to prevent clipping
+
+        crushed = np.clip(crushed, -1.0, 1.0)
+
+        return crushed
+
+
+class EchoEffect(AudioEffect):
+    """
+    Echo/Delay effect with configurable delay time and decay
+    Creates repeating echoes of the audio
+    """
+
+    def apply(self, audio_data: np.ndarray, sample_rate: int) -> np.ndarray:
+        """Apply echo effect"""
+        delay_ms = self.config.get("delay_ms", 300)     # Delay time in milliseconds
+        decay = self.config.get("decay", 0.5)           # Echo decay (0.0 to 1.0)
+        num_echoes = self.config.get("num_echoes", 3)   # Number of echoes
+        mix = self.config.get("mix", 0.5)               # Wet/dry mix
+
+        # Convert delay to samples
+        delay_samples = int(delay_ms * sample_rate / 1000)
+
+        # Create output buffer
+        output_length = len(audio_data) + (delay_samples * num_echoes)
+        output = np.zeros(output_length)
+
+        # Add original audio (dry signal)
+        output[:len(audio_data)] = audio_data * (1 - mix)
+
+        # Add echoes with decreasing amplitude
+        for i in range(num_echoes):
+            echo_decay = decay ** (i + 1)
+            start_idx = delay_samples * (i + 1)
+            end_idx = start_idx + len(audio_data)
+            output[start_idx:end_idx] += audio_data * echo_decay * mix
+
+        # Trim back to original length
+        return output[:len(audio_data)]
+
+
+class ChorusEffect(AudioEffect):
+    """
+    Chorus effect - creates multiple slightly detuned copies for a richer sound
+    Makes it sound like multiple voices singing together
+    """
+
+    def apply(self, audio_data: np.ndarray, sample_rate: int) -> np.ndarray:
+        """Apply chorus effect"""
+        num_voices = self.config.get("num_voices", 3)   # Number of chorus voices
+        detune = self.config.get("detune", 0.02)        # Pitch detune amount
+        delay = self.config.get("delay_ms", 20)         # Delay in ms
+        mix = self.config.get("mix", 0.5)               # Wet/dry mix
+
+        delay_samples = int(delay * sample_rate / 1000)
+        output = audio_data.copy() * (1 - mix)  # Dry signal
+
+        # Add detuned voices
+        for i in range(num_voices):
+            # Create slightly different delay for each voice
+            voice_delay = delay_samples + int(i * sample_rate * 0.005)  # 5ms spread
+
+            # Simple time-based detuning (vibrato)
+            t = np.arange(len(audio_data)) / sample_rate
+            lfo_freq = 1.0 + i * 0.5  # Slightly different LFO for each voice
+            vibrato = np.sin(2 * np.pi * lfo_freq * t) * detune
+
+            # Apply subtle pitch modulation via sample index modulation
+            indices = np.arange(len(audio_data)) + vibrato * sample_rate * 0.01
+            indices = np.clip(indices, 0, len(audio_data) - 1).astype(int)
+            detuned_voice = audio_data[indices]
+
+            # Add to output with proper gain
+            output += detuned_voice * (mix / num_voices)
+
+        return output
+
+
+class LoFiEffect(AudioEffect):
+    """
+    Lo-Fi/Bitcrusher effect for degraded, vintage sound
+    Reduces sample rate and bit depth for a retro aesthetic
+    """
+
+    def apply(self, audio_data: np.ndarray, sample_rate: int) -> np.ndarray:
+        """Apply lo-fi bitcrusher effect"""
+        bit_depth = self.config.get("bit_depth", 8)             # Bits (1-16)
+        sample_rate_factor = self.config.get("downsample", 4)   # Downsample factor
+        noise_amount = self.config.get("noise", 0.01)           # Vinyl noise
+
+        # Downsample (reduce sample rate)
+        downsampled = audio_data[::sample_rate_factor]
+
+        # Upsample back to original rate (creates aliasing)
+        upsampled = np.repeat(downsampled, sample_rate_factor)
+
+        # Trim or pad to original length
+        if len(upsampled) < len(audio_data):
+            upsampled = np.pad(upsampled, (0, len(audio_data) - len(upsampled)))
+        else:
+            upsampled = upsampled[:len(audio_data)]
+
+        # Reduce bit depth
+        steps = 2 ** bit_depth
+        crushed = np.round(upsampled * steps) / steps
+
+        # Add vinyl-style noise
+        if noise_amount > 0:
+            noise = np.random.normal(0, noise_amount, len(crushed))
+            crushed = crushed + noise
+
+        # Clip to valid range
+        return np.clip(crushed, -1.0, 1.0)
+
+
+class FlangerEffect(AudioEffect):
+    """
+    Flanger effect - creates sweeping, swooshing sound
+    Classic effect using modulated delay
+    """
+
+    def apply(self, audio_data: np.ndarray, sample_rate: int) -> np.ndarray:
+        """Apply flanger effect"""
+        rate = self.config.get("rate", 0.5)         # LFO rate in Hz
+        depth = self.config.get("depth", 0.002)     # Depth in seconds
+        mix = self.config.get("mix", 0.5)           # Wet/dry mix
+        feedback = self.config.get("feedback", 0.5) # Feedback amount
+
+        # Generate LFO (Low Frequency Oscillator)
+        t = np.arange(len(audio_data)) / sample_rate
+        lfo = np.sin(2 * np.pi * rate * t)
+
+        # Convert depth to samples
+        depth_samples = depth * sample_rate
+
+        # Calculate modulated delay for each sample
+        output = np.zeros_like(audio_data)
+        delay_line = np.zeros(int(depth_samples * 2))  # Delay buffer
+
+        for i, sample in enumerate(audio_data):
+            # Calculate current delay based on LFO
+            current_delay = depth_samples * (1 + lfo[i]) / 2
+            delay_idx = int(current_delay)
+
+            # Read from delay line with linear interpolation
+            if delay_idx < len(delay_line) - 1:
+                frac = current_delay - delay_idx
+                delayed_sample = (delay_line[delay_idx] * (1 - frac) +
+                                delay_line[delay_idx + 1] * frac)
+            else:
+                delayed_sample = 0
+
+            # Mix dry and wet signals
+            output_sample = (1 - mix) * sample + mix * delayed_sample
+
+            # Update delay line with feedback
+            delay_line = np.roll(delay_line, 1)
+            delay_line[0] = sample + delayed_sample * feedback
+
+            output[i] = output_sample
+
+        return output
+
+
 class ReverbEffect(AudioEffect):
     """
     Algorithmic reverb effect using comb and allpass filters

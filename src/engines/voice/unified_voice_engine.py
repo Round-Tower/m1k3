@@ -19,6 +19,7 @@ from src.tts.effects.audio_effects import AudioEffect
 from src.engines.voice.simple_voice_engine import SimpleVoiceEngine
 from src.tts.effects.audio_completion_engine import AudioCompletionEngine
 from src.tts.streaming.realtime_processor import StreamingTextProcessor, ConversationFlowOptimizer
+from src.engines.voice.intelligent_tts_engine import intelligent_tts_engine, TTSQuality
 
 class UnifiedVoiceEngine:
     """
@@ -32,6 +33,10 @@ class UnifiedVoiceEngine:
     """
 
     def __init__(self):
+        # NEW: Intelligent TTS engine (automatically selects best engine)
+        self.intelligent_engine = intelligent_tts_engine
+
+        # Legacy engines (for compatibility and manual selection)
         self.kitten_manager = KittenManager  # KittenManager is already a singleton instance
         self.vibevoice_manager = VibeVoiceManager()  # VibeVoice manager instance
         self.piper_manager = piper_manager  # Piper TTS manager (singleton)
@@ -41,7 +46,8 @@ class UnifiedVoiceEngine:
         # State
         self.voice_enabled = False
         self.is_loaded = False
-        self.preferred_engine = "kitten"  # Default: kitten (best quality/speed balance), options: piper, espeak, kitten, vibevoice, fallback
+        self.preferred_engine = "intelligent"  # NEW: Default to intelligent engine (automatically avoids truncation)
+        self.legacy_engine = "kitten"  # Fallback for manual engine selection
         
         # Shutdown signal (can be set by CLI core for force termination)
         self.force_shutdown = None
@@ -202,12 +208,24 @@ class UnifiedVoiceEngine:
         if preferred_engine:
             self.preferred_engine = preferred_engine
 
-        # Try loading engines in order of quality and availability
-        # Priority: kitten > piper > espeak > vibevoice > fallback
-        # Note: KittenTTS has best quality/speed balance for most users
+        # NEW: Priority 0: Intelligent Engine - Automatically selects best engine to avoid truncation
+        if self.preferred_engine == "intelligent" or (not preferred_engine and self.preferred_engine == "intelligent"):
+            if self.intelligent_engine.load_model():
+                self.is_loaded = True
+                self.voice_enabled = True
+                self.preferred_engine = "intelligent"
+                print("✅ Intelligent TTS Engine loaded (auto-selects best engine, avoids truncation)")
+                print("   Available engines: eSpeak (no truncation), KittenTTS (with completion), others...")
+                return True
+            else:
+                print("🔄 Intelligent engine not available, falling back to legacy engines...")
 
-        # Priority 1: KittenTTS - Best quality/speed balance
-        if self.preferred_engine == "kitten" or (not preferred_engine and self.preferred_engine == "kitten"):
+        # Legacy engine loading (for manual selection)
+        # Priority: kitten > piper > espeak > vibevoice > fallback
+        # Note: KittenTTS has truncation issues but good quality with completion
+
+        # Priority 1: KittenTTS - Best quality/speed balance (but has truncation issues)
+        if self.preferred_engine == "kitten":
             if self.kitten_manager.load_model():
                 self.is_loaded = True
                 self.voice_enabled = True
@@ -420,7 +438,10 @@ class UnifiedVoiceEngine:
     def _synthesis_worker(self, text: str):
         """The core synthesis and playback logic."""
         # Route to appropriate engine based on preference and availability
-        if self.preferred_engine == "piper" and self.piper_manager.is_available():
+        if self.preferred_engine == "intelligent":
+            # NEW: Use intelligent engine (automatically selects best engine and avoids truncation)
+            return self.intelligent_engine.synthesize_and_play(text, background=False, quality=TTSQuality.BALANCED)
+        elif self.preferred_engine == "piper" and self.piper_manager.is_available():
             return self._synthesis_with_piper(text)
         elif self.preferred_engine == "espeak" and self.espeak_manager.is_available():
             return self._synthesis_with_espeak(text)
@@ -429,8 +450,11 @@ class UnifiedVoiceEngine:
         elif self.preferred_engine == "kitten" and self.kitten_manager.is_available():
             return self._synthesis_with_kitten(text)
         else:
-            # Fallback to simple engine
-            return self.fallback_engine.synthesize_and_play(text, background=False)
+            # Fallback to intelligent engine first, then simple engine
+            try:
+                return self.intelligent_engine.synthesize_and_play(text, background=False, quality=TTSQuality.ULTRA_FAST)
+            except:
+                return self.fallback_engine.synthesize_and_play(text, background=False)
     
     def _synthesis_with_piper(self, text: str):
         """Synthesis using Piper TTS engine - ultra-fast neural TTS"""
@@ -976,19 +1000,20 @@ class UnifiedVoiceEngine:
     
     def set_engine_preference(self, engine: str) -> bool:
         """Set the preferred TTS engine"""
-        valid_engines = ["piper", "espeak", "vibevoice", "kitten", "fallback"]
+        valid_engines = ["intelligent", "piper", "espeak", "vibevoice", "kitten", "fallback"]
         if engine in valid_engines:
             self.preferred_engine = engine
             print(f"🔄 TTS engine preference set to: {engine}")
 
-            # Update current profile to match engine if needed
-            profile = self.profiles.get(self.current_profile, {})
-            if profile.get("preferred_engine") != engine:
-                # Find a suitable profile for this engine
-                for name, prof in self.profiles.items():
-                    if prof.get("preferred_engine") == engine:
-                        self.set_profile(name)
-                        break
+            # Update current profile to match engine if needed (except for intelligent engine)
+            if engine != "intelligent":
+                profile = self.profiles.get(self.current_profile, {})
+                if profile.get("preferred_engine") != engine:
+                    # Find a suitable profile for this engine
+                    for name, prof in self.profiles.items():
+                        if prof.get("preferred_engine") == engine:
+                            self.set_profile(name)
+                            break
 
             return True
         else:
