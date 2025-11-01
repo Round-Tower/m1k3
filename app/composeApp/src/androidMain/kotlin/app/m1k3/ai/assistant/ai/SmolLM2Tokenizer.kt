@@ -64,43 +64,106 @@ class SmolLM2Tokenizer(private val context: Context) {
     }
 
     /**
-     * Encode text to token IDs
+     * Encode text to token IDs using BPE
      */
     fun encode(text: String): LongArray {
         if (!isInitialized) {
             throw IllegalStateException("Tokenizer not initialized")
         }
 
-        // Simple word-level tokenization for now
-        // TODO: Implement proper BPE encoding
-        val words = text.lowercase().split(Regex("\\s+"))
+        // Byte-level encoding
+        val bytes = text.toByteArray(Charsets.UTF_8)
 
-        val tokens = mutableListOf<Long>()
-        tokens.add(BOS_ID.toLong()) // Start token
-
-        for (word in words) {
-            val tokenId = vocabMap[word] ?: vocabMap["<unk>"] ?: 0
-            tokens.add(tokenId.toLong())
+        // Convert bytes to byte tokens
+        val byteTokens = bytes.map { byte ->
+            val unsigned = byte.toInt() and 0xFF
+            byteToChar(unsigned)
         }
 
-        tokens.add(EOS_ID.toLong()) // End token
+        // Apply BPE merges
+        var tokens = byteTokens.toMutableList()
 
-        return tokens.toLongArray()
+        for ((first, second) in merges) {
+            val pair = first + second
+            var i = 0
+            while (i < tokens.size - 1) {
+                if (tokens[i] == first && tokens[i + 1] == second) {
+                    tokens[i] = pair
+                    tokens.removeAt(i + 1)
+                } else {
+                    i++
+                }
+            }
+        }
+
+        // Convert to token IDs
+        val tokenIds = tokens.mapNotNull { token ->
+            vocabMap[token]?.toLong()
+        }
+
+        return tokenIds.toLongArray()
     }
 
     /**
-     * Decode token IDs to text
+     * Convert byte to character (GPT-2 byte encoding)
+     */
+    private fun byteToChar(byte: Int): String {
+        // GPT-2 uses a custom byte encoding to ensure all bytes map to valid Unicode
+        val c = when (byte) {
+            in 33..126 -> byte.toChar()  // Printable ASCII
+            in 161..172 -> byte.toChar()  // Latin-1 supplement
+            in 174..255 -> byte.toChar()  // Latin-1 supplement
+            else -> (256 + byte).toChar()  // Map to private use area
+        }
+        return c.toString()
+    }
+
+    /**
+     * Decode token IDs to text using BPE
      */
     fun decode(tokenIds: LongArray): String {
         if (!isInitialized) {
             throw IllegalStateException("Tokenizer not initialized")
         }
 
-        val words = tokenIds
-            .filter { it != BOS_ID.toLong() && it != EOS_ID.toLong() }
-            .mapNotNull { idToToken[it.toInt()] }
+        // Convert token IDs to tokens
+        val tokens = tokenIds.toList().mapNotNull { id ->
+            idToToken[id.toInt()]
+        }
 
-        return words.joinToString(" ")
+        // Join tokens
+        val tokenString = tokens.joinToString("")
+
+        // Convert back to bytes
+        val bytes = mutableListOf<Byte>()
+        val chars: CharSequence = tokenString
+        for (char in chars) {
+            val byte = charToByte(char.code)
+            if (byte != null) {
+                bytes.add(byte)
+            }
+        }
+
+        // Convert bytes to string
+        return try {
+            bytes.toByteArray().toString(Charsets.UTF_8)
+        } catch (e: Exception) {
+            // Fallback: just join the tokens with spaces
+            tokens.joinToString(" ")
+        }
+    }
+
+    /**
+     * Convert character back to byte (inverse of byteToChar)
+     */
+    private fun charToByte(charCode: Int): Byte? {
+        return when (charCode) {
+            in 33..126 -> charCode.toByte()  // Printable ASCII
+            in 161..172 -> charCode.toByte()  // Latin-1 supplement
+            in 174..255 -> charCode.toByte()  // Latin-1 supplement
+            in 256..511 -> (charCode - 256).toByte()  // From private use area
+            else -> null
+        }
     }
 
     /**

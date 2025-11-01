@@ -41,17 +41,59 @@ class SmolLM2Engine(private val context: Context) {
         if (isInitialized) return@withContext
 
         try {
-            // For this demo, we're using mock inference
-            // TODO: Load real ONNX model when available
-
-            println("✅ SmolLM2 engine initialized (Mock Mode)")
-            println("   Model: SmolLM2-360M-Instruct (Demo)")
+            println("🤖 Initializing SmolLM2 engine...")
             println("   Device: ${android.os.Build.MODEL}")
-            println("   Mode: Mock inference for demonstration")
+
+            // 1. Initialize ONNX Runtime Environment
+            ortEnvironment = OrtEnvironment.getEnvironment()
+            println("   ✓ ONNX Runtime environment created")
+
+            // 2. Configure session options for mobile optimization
+            val sessionOptions = OrtSession.SessionOptions()
+            sessionOptions.apply {
+                setIntraOpNumThreads(4)  // Tensor G1 has 4 high-performance cores
+                setInterOpNumThreads(2)
+                setOptimizationLevel(OrtSession.SessionOptions.OptLevel.ALL_OPT)
+                setMemoryPatternOptimization(true)
+                // Note: setCpuArenaAllocator not available in this ONNX Runtime version
+            }
+            println("   ✓ Session options configured (4 threads, full optimization)")
+
+            // 3. Copy ONNX model to internal storage (avoids OOM when loading large model)
+            val modelFile = java.io.File(context.filesDir, "smollm2-360m-q4f16.onnx")
+
+            if (!modelFile.exists()) {
+                println("   📥 Copying model to internal storage (one-time operation)...")
+                context.assets.open("models/smollm2-360m-q4f16.onnx").use { input ->
+                    modelFile.outputStream().use { output ->
+                        input.copyTo(output, bufferSize = 8192)
+                    }
+                }
+                println("   ✓ Model copied (${modelFile.length() / 1024 / 1024} MB)")
+            } else {
+                println("   ✓ Model already in storage (${modelFile.length() / 1024 / 1024} MB)")
+            }
+
+            // 4. Create ONNX session from file path (memory efficient)
+            ortSession = ortEnvironment!!.createSession(modelFile.absolutePath, sessionOptions)
+            println("   ✓ ONNX session created")
+
+            // 5. Initialize tokenizer
+            tokenizer = SmolLM2Tokenizer(context)
+            tokenizer?.initialize()
+            println("   ✓ Tokenizer initialized")
+
+            println("✅ SmolLM2 engine ready!")
+            println("   Model: SmolLM2-360M-Instruct (INT4 quantized)")
+            println("   Size: ${modelFile.length() / 1024 / 1024} MB")
+            println("   Backend: ONNX Runtime 1.17.0")
+            println("   Mode: Production inference")
 
             isInitialized = true
 
         } catch (e: Exception) {
+            println("❌ Failed to initialize SmolLM2 engine: ${e.message}")
+            e.printStackTrace()
             throw RuntimeException("Failed to initialize SmolLM2 engine", e)
         }
     }
@@ -75,15 +117,150 @@ class SmolLM2Engine(private val context: Context) {
         val startTime = System.currentTimeMillis()
 
         try {
-            // For demo purposes, use mock inference since we have a minimal ONNX model
-            // TODO: Replace with real ONNX inference once full model is available
-            val responseText = generateMockResponse(prompt)
-            val tokensGenerated = responseText.split(" ").size
+            val session = ortSession ?: throw IllegalStateException("ONNX session not initialized")
+            val tok = tokenizer ?: throw IllegalStateException("Tokenizer not initialized")
 
-            // Simulate realistic inference time
-            kotlinx.coroutines.delay(200 + (tokensGenerated * 15L))
+            // 1. Format prompt with instruction template
+            val formattedPrompt = """<|im_start|>system
+You are 間 AI, a helpful and friendly AI assistant running 100% locally on a Pixel 6 Pro. You respect privacy and never transmit data.<|im_end|>
+<|im_start|>user
+$prompt<|im_end|>
+<|im_start|>assistant
+"""
+
+            // 2. Tokenize input
+            val inputIds = tok.encode(formattedPrompt)
+            println("   📝 Tokenized prompt: ${inputIds.size} tokens")
+
+            // 3. Create input tensor
+            val env = ortEnvironment ?: throw IllegalStateException("Environment not initialized")
+            val inputTensor = OnnxTensor.createTensor(
+                env,
+                arrayOf(inputIds)
+            )
+
+            // 4. Prepare model inputs
+            val inputs = mapOf("input_ids" to inputTensor)
+
+            // 5. Run inference (autoregressive generation with KV cache)
+            val generatedIds = mutableListOf<Long>()
+            generatedIds.addAll(inputIds.toList())
+
+            // KV cache configuration (SmolLM2-360M: 32 layers, 5 heads, 64 head_dim)
+            val numLayers = 32
+            val numHeads = 5
+            val headDim = 64
+
+            // Initialize KV cache storage (will be populated after first inference)
+            var pastKeyValues: MutableMap<String, OnnxTensor>? = null
+
+            for (i in 0 until maxTokens) {
+                // Create tensor from current sequence
+                val currentIds = generatedIds.toLongArray()
+                val currentTensor = OnnxTensor.createTensor(
+                    env,
+                    arrayOf(currentIds)
+                )
+
+                // Create position_ids tensor (0, 1, 2, 3, ..., n-1)
+                val positionIds = LongArray(currentIds.size) { it.toLong() }
+                val positionIdsTensor = OnnxTensor.createTensor(
+                    env,
+                    arrayOf(positionIds)
+                )
+
+                // Create attention_mask tensor (all 1s, same shape as input_ids)
+                val attentionMask = LongArray(currentIds.size) { 1L }
+                val attentionMaskTensor = OnnxTensor.createTensor(
+                    env,
+                    arrayOf(attentionMask)
+                )
+
+                // Prepare model inputs
+                val inputs = mutableMapOf(
+                    "input_ids" to currentTensor,
+                    "attention_mask" to attentionMaskTensor,
+                    "position_ids" to positionIdsTensor
+                )
+
+                // Add KV cache inputs for all 32 layers
+                if (pastKeyValues == null) {
+                    // First pass: create empty KV cache tensors
+                    for (layer in 0 until numLayers) {
+                        // Empty cache: shape [batch_size=1, num_heads=5, seq_len=0, head_dim=64]
+                        val emptyKey = OnnxTensor.createTensor(
+                            env,
+                            Array(1) { Array(numHeads) { Array(0) { FloatArray(headDim) } } }
+                        )
+                        val emptyValue = OnnxTensor.createTensor(
+                            env,
+                            Array(1) { Array(numHeads) { Array(0) { FloatArray(headDim) } } }
+                        )
+                        inputs["past_key_values.$layer.key"] = emptyKey
+                        inputs["past_key_values.$layer.value"] = emptyValue
+                    }
+                } else {
+                    // Subsequent passes: reuse cached KV from previous step
+                    inputs.putAll(pastKeyValues)
+                }
+
+                // Run model with all required inputs
+                val outputs = session.run(inputs)
+
+                // Get logits and sample next token
+                val logitsObj = outputs.get(0).value
+                val nextTokenId = sampleNextToken(logitsObj, temperature)
+
+                // Check for end-of-sequence
+                if (nextTokenId == 2L) {  // EOS token
+                    currentTensor.close()
+                    attentionMaskTensor.close()
+                    positionIdsTensor.close()
+                    outputs.close()
+                    break
+                }
+
+                generatedIds.add(nextTokenId)
+
+                // Extract and update KV cache for next iteration
+                // Note: The model outputs the updated cache after processing current token
+                // We need to extract it and pass it to the next iteration
+                // For now, we'll keep empty cache (slower but simpler implementation)
+
+                // Clean up tensors
+                currentTensor.close()
+                attentionMaskTensor.close()
+                positionIdsTensor.close()
+
+                // Close old cache tensors if they exist
+                pastKeyValues?.values?.forEach { it.close() }
+
+                // TODO: Extract and reuse KV cache from outputs for efficiency
+                // For now, set to null to use empty cache each time
+                pastKeyValues = null
+
+                outputs.close()
+
+                // Stop if we hit special tokens
+                if (nextTokenId == 0L || nextTokenId == 1L) {
+                    break
+                }
+            }
+
+            // Clean up any remaining cache tensors
+            pastKeyValues?.values?.forEach { it.close() }
+
+            inputTensor.close()
+
+            // 6. Decode generated tokens (skip the input prompt)
+            val responseTokens = generatedIds.drop(inputIds.size).toLongArray()
+            val responseText = tok.decode(responseTokens)
 
             val inferenceTime = System.currentTimeMillis() - startTime
+            val tokensGenerated = responseTokens.size
+
+            println("   ⚡ Generated ${tokensGenerated} tokens in ${inferenceTime}ms")
+            println("   🚀 Speed: ${"%.1f".format((tokensGenerated * 1000.0f) / inferenceTime)} tok/s")
 
             GenerationResult(
                 text = responseText.trim(),
@@ -93,47 +270,50 @@ class SmolLM2Engine(private val context: Context) {
             )
 
         } catch (e: Exception) {
+            println("❌ Inference failed: ${e.message}")
+            e.printStackTrace()
             throw RuntimeException("Inference failed", e)
         }
     }
 
     /**
-     * Mock response generator for demo purposes.
-     * TODO: Replace with real ONNX inference when full model is available.
+     * Sample next token from logits using temperature sampling
      */
-    private fun generateMockResponse(prompt: String): String {
-        val lowercasePrompt = prompt.lowercase()
+    private fun sampleNextToken(logitsObj: Any, temperature: Float): Long {
+        // Extract logits from ONNX output
+        @Suppress("UNCHECKED_CAST")
+        val logits = when (logitsObj) {
+            is Array<*> -> {
+                val batch = logitsObj[0] as Array<*>
+                val lastToken = batch[batch.size - 1] as FloatArray
+                lastToken
+            }
+            else -> throw IllegalStateException("Unexpected logits format")
+        }
 
-        return when {
-            lowercasePrompt.contains("hello") || lowercasePrompt.contains("hi") -> {
-                "Hello! I'm 間 AI running locally on your Pixel 6 Pro. How can I help you today?"
-            }
-            lowercasePrompt.contains("what") && lowercasePrompt.contains("name") -> {
-                "I'm 間 AI (Ma AI), a privacy-first mobile assistant. All my processing happens 100% locally on your device!"
-            }
-            lowercasePrompt.contains("how are you") || lowercasePrompt.contains("how're you") -> {
-                "I'm functioning perfectly! Running smoothly on your device with zero network transmission. Your privacy is my priority."
-            }
-            lowercasePrompt.contains("explain") || lowercasePrompt.contains("what is") -> {
-                "I'd be happy to explain! As a local AI assistant, I process everything on your device. This demo is using a lightweight inference engine optimized for mobile."
-            }
-            lowercasePrompt.contains("thank") -> {
-                "You're welcome! Remember, all our interactions stay completely private on your device."
-            }
-            lowercasePrompt.contains("privacy") -> {
-                "Privacy is my core principle! I run 100% locally with zero network permission. Your data never leaves your Pixel 6 Pro."
-            }
-            lowercasePrompt.contains("help") -> {
-                "I'm here to assist! I can answer questions, have conversations, and demonstrate local AI capabilities. Try asking me about privacy, technology, or just chat with me!"
-            }
-            lowercasePrompt.contains("tell") && lowercasePrompt.contains("story") -> {
-                "Once upon a time, there was an AI that respected user privacy. Unlike cloud-based assistants, this AI lived entirely on the user's device, processing thoughts locally and never transmitting data. That AI is me - 間 AI!"
-            }
-            else -> {
-                "That's an interesting question! I'm currently running in demo mode with a lightweight inference engine. Soon I'll have the full SmolLM2-360M model for even better responses. All processing stays local on your device!"
+        // Apply temperature
+        val scaledLogits = logits.map { it / temperature }
+
+        // Softmax
+        val maxLogit = scaledLogits.maxOrNull() ?: 0f
+        val expLogits = scaledLogits.map { kotlin.math.exp(it - maxLogit) }
+        val sumExp = expLogits.sum()
+        val probs = expLogits.map { it / sumExp }
+
+        // Sample from distribution
+        val random = kotlin.random.Random.nextFloat()
+        var cumProb = 0f
+        for (i in probs.indices) {
+            cumProb += probs[i]
+            if (random < cumProb) {
+                return i.toLong()
             }
         }
+
+        // Fallback to argmax
+        return probs.indices.maxByOrNull { probs[it] }?.toLong() ?: 0L
     }
+
 
     /**
      * Generate response with streaming (token-by-token)

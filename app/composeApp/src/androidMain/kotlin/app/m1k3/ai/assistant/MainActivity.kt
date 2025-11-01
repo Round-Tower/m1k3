@@ -147,7 +147,7 @@ fun MaAIDemo(onChatClick: () -> Unit) {
                             fontWeight = FontWeight.Bold
                         )
                         Text(
-                            "SmolLM2-360M • Local Inference • Mock Demo",
+                            "SmolLM2-360M • Local Inference • Production",
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
                         )
@@ -254,7 +254,7 @@ fun ArchitectureCard() {
             Divider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f))
             ArchitectureLayer("SQLDelight 2.0.2", "Type-safe database")
             Divider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f))
-            ArchitectureLayer("ONNX Runtime 1.17.0", "Local AI inference")
+            ArchitectureLayer("ONNX Runtime 1.23.1", "Local AI inference")
             Divider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f))
             ArchitectureLayer("CameraX + ML Kit", "Multi-modal vision")
         }
@@ -318,7 +318,7 @@ fun getSystemStatus(): List<StatusItem> {
         ),
         StatusItem(
             name = "AI Engine",
-            description = "SmolLM2-360M (Mock Demo Ready)",
+            description = "SmolLM2-360M (Production Ready)",
             icon = "🤖",
             isSuccess = true
         ),

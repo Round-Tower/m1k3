@@ -15,7 +15,17 @@
       "Bash(adb shell am start:*)",
       "Bash(adb exec-out:*)",
       "Bash(ma_ai_with_chat_button.png)",
-      "Bash(ma_ai_main_screen.png)"
+      "Bash(ma_ai_main_screen.png)",
+      "mcp__m1k3-tts__speak",
+      "Bash(ma_ai_scrolled.png)",
+      "Bash(pkill:*)",
+      "Bash(cat:*)",
+      "Bash(python3:*)",
+      "Bash(adb logcat:*)",
+      "Bash(ma_ai_onnx_runtime_123.png)",
+      "Bash(ma_ai_final_test.png)",
+      "Bash(ma_ai_kv_cache_test.png)",
+      "Bash(ma_ai_chat_kv_test.png)"
     ],
     "deny": [],
     "ask": []
