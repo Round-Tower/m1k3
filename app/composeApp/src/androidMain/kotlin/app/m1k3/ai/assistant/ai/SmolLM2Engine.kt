@@ -183,18 +183,20 @@ $prompt<|im_end|>
                     "position_ids" to positionIdsTensor
                 )
 
-                // Add KV cache inputs for all 32 layers
-                if (pastKeyValues == null) {
-                    // First pass: provide minimal dummy cache (all zeros, seq_len=1)
-                    // Shape: [batch_size=1, num_heads=5, seq_len=1, head_dim=64]
-                    for (layer in 0 until numLayers) {
-                        val dummyCache = Array(1) { Array(numHeads) { Array(1) { FloatArray(headDim) { 0f } } } }
-                        inputs["past_key_values.$layer.key"] = OnnxTensor.createTensor(env, dummyCache)
-                        inputs["past_key_values.$layer.value"] = OnnxTensor.createTensor(env, dummyCache)
-                    }
-                } else {
-                    // Subsequent passes: reuse cached KV from previous step
-                    inputs.putAll(pastKeyValues)
+                // Add empty KV cache for all 32 layers
+                // We're processing the full sequence each time, so provide empty cache
+                // Shape: [batch_size=1, num_heads=5, seq_len=0, head_dim=64]
+                // Note: Using seq_len=0 creates FloatArray[0] which should represent no cached keys/values
+                for (layer in 0 until numLayers) {
+                    // Create properly shaped but empty cache tensors
+                    // Using nested arrays with 0 length for past sequence
+                    val emptyKeyCache = FloatBuffer.allocate(0) // Empty float buffer
+                    val emptyValueCache = FloatBuffer.allocate(0)
+
+                    // Create tensors from empty buffers with explicit shape
+                    val shape = longArrayOf(1, numHeads.toLong(), 0, headDim.toLong())
+                    inputs["past_key_values.$layer.key"] = OnnxTensor.createTensor(env, emptyKeyCache, shape)
+                    inputs["past_key_values.$layer.value"] = OnnxTensor.createTensor(env, emptyValueCache, shape)
                 }
 
                 // Run model with all required inputs
