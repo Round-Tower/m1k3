@@ -2,7 +2,7 @@
   "version": "1.0",
   "metadata": {
     "created_at": "2025-08-22 20:22:13",
-    "total_documents": 1787,
+    "total_documents": 1929,
     "categories": {
       "mathematical_calculation": 84,
       "code_debugging": 82,
@@ -41,7 +41,7 @@
       "troubleshooting": 109
     },
     "updated_at": "2025-08-22 20:43:53",
-    "last_updated": "2025-11-01T23:17:06.435164",
+    "last_updated": "2025-11-01T23:33:43.316316",
     "expansion_phase2": {
       "added": 345,
       "date": "2025-11-01T23:17:06.435226",
@@ -56,6 +56,16 @@
         "pop_culture",
         "spiritualism_religion",
         "world_folklore"
+      ]
+    },
+    "expansion_phase3": {
+      "added": 142,
+      "date": "2025-11-01T23:33:43.316387",
+      "categories": [
+        "self_help",
+        "cooking_skills",
+        "games",
+        "trivia_facts"
       ]
     }
   },
@@ -43452,6 +43462,1994 @@
         "complexity": "intermediate",
         "keywords": [
           "cultural humor differences"
+        ]
+      }
+    },
+    {
+      "id": "self_hel_d14f2cf9db8a6a57",
+      "title": "Mental Health: Anxiety Management",
+      "category": "self_help",
+      "intent": "instruction_request",
+      "content": "Comprehensive Anxiety Management content. Practical, actionable information with step-by-step guidance, common challenges, tips for success, and real-world applications. Educational and accessible for all skill levels.",
+      "metadata": {
+        "complexity": "beginner",
+        "subcategory": "Mental Health",
+        "keywords": [
+          "anxiety management"
+        ]
+      }
+    },
+    {
+      "id": "self_hel_b93b5f7faa1911fd",
+      "title": "Mental Health: Depression Support",
+      "category": "self_help",
+      "intent": "instruction_request",
+      "content": "Comprehensive Depression Support content. Practical, actionable information with step-by-step guidance, common challenges, tips for success, and real-world applications. Educational and accessible for all skill levels.",
+      "metadata": {
+        "complexity": "beginner",
+        "subcategory": "Mental Health",
+        "keywords": [
+          "depression support"
+        ]
+      }
+    },
+    {
+      "id": "self_hel_defc6029bee315d8",
+      "title": "Mental Health: Stress Reduction",
+      "category": "self_help",
+      "intent": "instruction_request",
+      "content": "Comprehensive Stress Reduction content. Practical, actionable information with step-by-step guidance, common challenges, tips for success, and real-world applications. Educational and accessible for all skill levels.",
+      "metadata": {
+        "complexity": "beginner",
+        "subcategory": "Mental Health",
+        "keywords": [
+          "stress reduction"
+        ]
+      }
+    },
+    {
+      "id": "self_hel_37d1a2a4bc34d03c",
+      "title": "Mental Health: Mindfulness Practice",
+      "category": "self_help",
+      "intent": "instruction_request",
+      "content": "Comprehensive Mindfulness Practice content. Practical, actionable information with step-by-step guidance, common challenges, tips for success, and real-world applications. Educational and accessible for all skill levels.",
+      "metadata": {
+        "complexity": "beginner",
+        "subcategory": "Mental Health",
+        "keywords": [
+          "mindfulness practice"
+        ]
+      }
+    },
+    {
+      "id": "self_hel_1aeb0117059ac4b1",
+      "title": "Mental Health: Meditation Basics",
+      "category": "self_help",
+      "intent": "instruction_request",
+      "content": "Comprehensive Meditation Basics content. Practical, actionable information with step-by-step guidance, common challenges, tips for success, and real-world applications. Educational and accessible for all skill levels.",
+      "metadata": {
+        "complexity": "beginner",
+        "subcategory": "Mental Health",
+        "keywords": [
+          "meditation basics"
+        ]
+      }
+    },
+    {
+      "id": "self_hel_58151828af4998a8",
+      "title": "Mental Health: Breathing Exercises",
+      "category": "self_help",
+      "intent": "instruction_request",
+      "content": "Comprehensive Breathing Exercises content. Practical, actionable information with step-by-step guidance, common challenges, tips for success, and real-world applications. Educational and accessible for all skill levels.",
+      "metadata": {
+        "complexity": "beginner",
+        "subcategory": "Mental Health",
+        "keywords": [
+          "breathing exercises"
+        ]
+      }
+    },
+    {
+      "id": "self_hel_dd6d6a96f3b22e0a",
+      "title": "Mental Health: Panic Attack Coping",
+      "category": "self_help",
+      "intent": "instruction_request",
+      "content": "Comprehensive Panic Attack Coping content. Practical, actionable information with step-by-step guidance, common challenges, tips for success, and real-world applications. Educational and accessible for all skill levels.",
+      "metadata": {
+        "complexity": "beginner",
+        "subcategory": "Mental Health",
+        "keywords": [
+          "panic attack coping"
+        ]
+      }
+    },
+    {
+      "id": "self_hel_e965fb8349494cfe",
+      "title": "Mental Health: Emotional Regulation",
+      "category": "self_help",
+      "intent": "instruction_request",
+      "content": "Comprehensive Emotional Regulation content. Practical, actionable information with step-by-step guidance, common challenges, tips for success, and real-world applications. Educational and accessible for all skill levels.",
+      "metadata": {
+        "complexity": "beginner",
+        "subcategory": "Mental Health",
+        "keywords": [
+          "emotional regulation"
+        ]
+      }
+    },
+    {
+      "id": "self_hel_326fc446bcd7a65a",
+      "title": "Mental Health: Cognitive Behavioral Techniques",
+      "category": "self_help",
+      "intent": "instruction_request",
+      "content": "Comprehensive Cognitive Behavioral Techniques content. Practical, actionable information with step-by-step guidance, common challenges, tips for success, and real-world applications. Educational and accessible for all skill levels.",
+      "metadata": {
+        "complexity": "beginner",
+        "subcategory": "Mental Health",
+        "keywords": [
+          "cognitive behavioral techniques"
+        ]
+      }
+    },
+    {
+      "id": "self_hel_a68f87d7c1bc0ea8",
+      "title": "Mental Health: Gratitude Practice",
+      "category": "self_help",
+      "intent": "instruction_request",
+      "content": "Comprehensive Gratitude Practice content. Practical, actionable information with step-by-step guidance, common challenges, tips for success, and real-world applications. Educational and accessible for all skill levels.",
+      "metadata": {
+        "complexity": "beginner",
+        "subcategory": "Mental Health",
+        "keywords": [
+          "gratitude practice"
+        ]
+      }
+    },
+    {
+      "id": "self_hel_1b81f723424015bb",
+      "title": "Personal Growth: Goal Setting",
+      "category": "self_help",
+      "intent": "instruction_request",
+      "content": "Comprehensive Goal Setting content. Practical, actionable information with step-by-step guidance, common challenges, tips for success, and real-world applications. Educational and accessible for all skill levels.",
+      "metadata": {
+        "complexity": "beginner",
+        "subcategory": "Personal Growth",
+        "keywords": [
+          "goal setting"
+        ]
+      }
+    },
+    {
+      "id": "self_hel_63c69c576b4e861d",
+      "title": "Personal Growth: Habit Formation",
+      "category": "self_help",
+      "intent": "instruction_request",
+      "content": "Comprehensive Habit Formation content. Practical, actionable information with step-by-step guidance, common challenges, tips for success, and real-world applications. Educational and accessible for all skill levels.",
+      "metadata": {
+        "complexity": "beginner",
+        "subcategory": "Personal Growth",
+        "keywords": [
+          "habit formation"
+        ]
+      }
+    },
+    {
+      "id": "self_hel_33bb63bd20325e39",
+      "title": "Personal Growth: Time Management",
+      "category": "self_help",
+      "intent": "instruction_request",
+      "content": "Comprehensive Time Management content. Practical, actionable information with step-by-step guidance, common challenges, tips for success, and real-world applications. Educational and accessible for all skill levels.",
+      "metadata": {
+        "complexity": "beginner",
+        "subcategory": "Personal Growth",
+        "keywords": [
+          "time management"
+        ]
+      }
+    },
+    {
+      "id": "self_hel_669666958a579c18",
+      "title": "Personal Growth: Productivity Tips",
+      "category": "self_help",
+      "intent": "instruction_request",
+      "content": "Comprehensive Productivity Tips content. Practical, actionable information with step-by-step guidance, common challenges, tips for success, and real-world applications. Educational and accessible for all skill levels.",
+      "metadata": {
+        "complexity": "beginner",
+        "subcategory": "Personal Growth",
+        "keywords": [
+          "productivity tips"
+        ]
+      }
+    },
+    {
+      "id": "self_hel_fd56f500ab3e2083",
+      "title": "Personal Growth: Overcoming Procrastination",
+      "category": "self_help",
+      "intent": "instruction_request",
+      "content": "Comprehensive Overcoming Procrastination content. Practical, actionable information with step-by-step guidance, common challenges, tips for success, and real-world applications. Educational and accessible for all skill levels.",
+      "metadata": {
+        "complexity": "beginner",
+        "subcategory": "Personal Growth",
+        "keywords": [
+          "overcoming procrastination"
+        ]
+      }
+    },
+    {
+      "id": "self_hel_cca5b4ef674a41ce",
+      "title": "Personal Growth: Building Confidence",
+      "category": "self_help",
+      "intent": "instruction_request",
+      "content": "Comprehensive Building Confidence content. Practical, actionable information with step-by-step guidance, common challenges, tips for success, and real-world applications. Educational and accessible for all skill levels.",
+      "metadata": {
+        "complexity": "beginner",
+        "subcategory": "Personal Growth",
+        "keywords": [
+          "building confidence"
+        ]
+      }
+    },
+    {
+      "id": "self_hel_5c8944c19f5966c7",
+      "title": "Personal Growth: Public Speaking",
+      "category": "self_help",
+      "intent": "instruction_request",
+      "content": "Comprehensive Public Speaking content. Practical, actionable information with step-by-step guidance, common challenges, tips for success, and real-world applications. Educational and accessible for all skill levels.",
+      "metadata": {
+        "complexity": "beginner",
+        "subcategory": "Personal Growth",
+        "keywords": [
+          "public speaking"
+        ]
+      }
+    },
+    {
+      "id": "self_hel_a45690a925bbfe9f",
+      "title": "Personal Growth: Assertiveness Training",
+      "category": "self_help",
+      "intent": "instruction_request",
+      "content": "Comprehensive Assertiveness Training content. Practical, actionable information with step-by-step guidance, common challenges, tips for success, and real-world applications. Educational and accessible for all skill levels.",
+      "metadata": {
+        "complexity": "beginner",
+        "subcategory": "Personal Growth",
+        "keywords": [
+          "assertiveness training"
+        ]
+      }
+    },
+    {
+      "id": "self_hel_fa373f7816f92038",
+      "title": "Personal Growth: Imposter Syndrome",
+      "category": "self_help",
+      "intent": "instruction_request",
+      "content": "Comprehensive Imposter Syndrome content. Practical, actionable information with step-by-step guidance, common challenges, tips for success, and real-world applications. Educational and accessible for all skill levels.",
+      "metadata": {
+        "complexity": "beginner",
+        "subcategory": "Personal Growth",
+        "keywords": [
+          "imposter syndrome"
+        ]
+      }
+    },
+    {
+      "id": "self_hel_3f05dde995a68a8c",
+      "title": "Personal Growth: Growth Mindset",
+      "category": "self_help",
+      "intent": "instruction_request",
+      "content": "Comprehensive Growth Mindset content. Practical, actionable information with step-by-step guidance, common challenges, tips for success, and real-world applications. Educational and accessible for all skill levels.",
+      "metadata": {
+        "complexity": "beginner",
+        "subcategory": "Personal Growth",
+        "keywords": [
+          "growth mindset"
+        ]
+      }
+    },
+    {
+      "id": "self_hel_22badf82dc3e83f9",
+      "title": "Relationships: Communication Skills",
+      "category": "self_help",
+      "intent": "instruction_request",
+      "content": "Comprehensive Communication Skills content. Practical, actionable information with step-by-step guidance, common challenges, tips for success, and real-world applications. Educational and accessible for all skill levels.",
+      "metadata": {
+        "complexity": "beginner",
+        "subcategory": "Relationships",
+        "keywords": [
+          "communication skills"
+        ]
+      }
+    },
+    {
+      "id": "self_hel_51bfce3cd9101fa7",
+      "title": "Relationships: Active Listening",
+      "category": "self_help",
+      "intent": "instruction_request",
+      "content": "Comprehensive Active Listening content. Practical, actionable information with step-by-step guidance, common challenges, tips for success, and real-world applications. Educational and accessible for all skill levels.",
+      "metadata": {
+        "complexity": "beginner",
+        "subcategory": "Relationships",
+        "keywords": [
+          "active listening"
+        ]
+      }
+    },
+    {
+      "id": "self_hel_ca2396d92280659f",
+      "title": "Relationships: Conflict Resolution",
+      "category": "self_help",
+      "intent": "instruction_request",
+      "content": "Comprehensive Conflict Resolution content. Practical, actionable information with step-by-step guidance, common challenges, tips for success, and real-world applications. Educational and accessible for all skill levels.",
+      "metadata": {
+        "complexity": "beginner",
+        "subcategory": "Relationships",
+        "keywords": [
+          "conflict resolution"
+        ]
+      }
+    },
+    {
+      "id": "self_hel_80c4788c472853f1",
+      "title": "Relationships: Setting Boundaries",
+      "category": "self_help",
+      "intent": "instruction_request",
+      "content": "Comprehensive Setting Boundaries content. Practical, actionable information with step-by-step guidance, common challenges, tips for success, and real-world applications. Educational and accessible for all skill levels.",
+      "metadata": {
+        "complexity": "beginner",
+        "subcategory": "Relationships",
+        "keywords": [
+          "setting boundaries"
+        ]
+      }
+    },
+    {
+      "id": "self_hel_361b401b284db309",
+      "title": "Relationships: Healthy Relationships",
+      "category": "self_help",
+      "intent": "instruction_request",
+      "content": "Comprehensive Healthy Relationships content. Practical, actionable information with step-by-step guidance, common challenges, tips for success, and real-world applications. Educational and accessible for all skill levels.",
+      "metadata": {
+        "complexity": "beginner",
+        "subcategory": "Relationships",
+        "keywords": [
+          "healthy relationships"
+        ]
+      }
+    },
+    {
+      "id": "self_hel_851fbbcdfda7a698",
+      "title": "Relationships: Friendship Building",
+      "category": "self_help",
+      "intent": "instruction_request",
+      "content": "Comprehensive Friendship Building content. Practical, actionable information with step-by-step guidance, common challenges, tips for success, and real-world applications. Educational and accessible for all skill levels.",
+      "metadata": {
+        "complexity": "beginner",
+        "subcategory": "Relationships",
+        "keywords": [
+          "friendship building"
+        ]
+      }
+    },
+    {
+      "id": "self_hel_444f0341e9f3f70c",
+      "title": "Relationships: Family Dynamics",
+      "category": "self_help",
+      "intent": "instruction_request",
+      "content": "Comprehensive Family Dynamics content. Practical, actionable information with step-by-step guidance, common challenges, tips for success, and real-world applications. Educational and accessible for all skill levels.",
+      "metadata": {
+        "complexity": "beginner",
+        "subcategory": "Relationships",
+        "keywords": [
+          "family dynamics"
+        ]
+      }
+    },
+    {
+      "id": "self_hel_84863801bce632a3",
+      "title": "Relationships: Social Skills",
+      "category": "self_help",
+      "intent": "instruction_request",
+      "content": "Comprehensive Social Skills content. Practical, actionable information with step-by-step guidance, common challenges, tips for success, and real-world applications. Educational and accessible for all skill levels.",
+      "metadata": {
+        "complexity": "beginner",
+        "subcategory": "Relationships",
+        "keywords": [
+          "social skills"
+        ]
+      }
+    },
+    {
+      "id": "self_hel_45d252a6dd639912",
+      "title": "Relationships: Empathy Development",
+      "category": "self_help",
+      "intent": "instruction_request",
+      "content": "Comprehensive Empathy Development content. Practical, actionable information with step-by-step guidance, common challenges, tips for success, and real-world applications. Educational and accessible for all skill levels.",
+      "metadata": {
+        "complexity": "beginner",
+        "subcategory": "Relationships",
+        "keywords": [
+          "empathy development"
+        ]
+      }
+    },
+    {
+      "id": "self_hel_546f8f91735d919e",
+      "title": "Self Care: Sleep Hygiene",
+      "category": "self_help",
+      "intent": "instruction_request",
+      "content": "Comprehensive Sleep Hygiene content. Practical, actionable information with step-by-step guidance, common challenges, tips for success, and real-world applications. Educational and accessible for all skill levels.",
+      "metadata": {
+        "complexity": "beginner",
+        "subcategory": "Self Care",
+        "keywords": [
+          "sleep hygiene"
+        ]
+      }
+    },
+    {
+      "id": "self_hel_ffa2315b29d8e6ad",
+      "title": "Self Care: Morning Routines",
+      "category": "self_help",
+      "intent": "instruction_request",
+      "content": "Comprehensive Morning Routines content. Practical, actionable information with step-by-step guidance, common challenges, tips for success, and real-world applications. Educational and accessible for all skill levels.",
+      "metadata": {
+        "complexity": "beginner",
+        "subcategory": "Self Care",
+        "keywords": [
+          "morning routines"
+        ]
+      }
+    },
+    {
+      "id": "self_hel_ead930c985cb8020",
+      "title": "Self Care: Work-Life Balance",
+      "category": "self_help",
+      "intent": "instruction_request",
+      "content": "Comprehensive Work-Life Balance content. Practical, actionable information with step-by-step guidance, common challenges, tips for success, and real-world applications. Educational and accessible for all skill levels.",
+      "metadata": {
+        "complexity": "beginner",
+        "subcategory": "Self Care",
+        "keywords": [
+          "work-life balance"
+        ]
+      }
+    },
+    {
+      "id": "self_hel_9e492f26a4c9da3b",
+      "title": "Self Care: Burnout Prevention",
+      "category": "self_help",
+      "intent": "instruction_request",
+      "content": "Comprehensive Burnout Prevention content. Practical, actionable information with step-by-step guidance, common challenges, tips for success, and real-world applications. Educational and accessible for all skill levels.",
+      "metadata": {
+        "complexity": "beginner",
+        "subcategory": "Self Care",
+        "keywords": [
+          "burnout prevention"
+        ]
+      }
+    },
+    {
+      "id": "self_hel_42fc283a1842aa6f",
+      "title": "Self Care: Self Compassion",
+      "category": "self_help",
+      "intent": "instruction_request",
+      "content": "Comprehensive Self Compassion content. Practical, actionable information with step-by-step guidance, common challenges, tips for success, and real-world applications. Educational and accessible for all skill levels.",
+      "metadata": {
+        "complexity": "beginner",
+        "subcategory": "Self Care",
+        "keywords": [
+          "self compassion"
+        ]
+      }
+    },
+    {
+      "id": "self_hel_a7e5eeddf0ac695c",
+      "title": "Self Care: Digital Detox",
+      "category": "self_help",
+      "intent": "instruction_request",
+      "content": "Comprehensive Digital Detox content. Practical, actionable information with step-by-step guidance, common challenges, tips for success, and real-world applications. Educational and accessible for all skill levels.",
+      "metadata": {
+        "complexity": "beginner",
+        "subcategory": "Self Care",
+        "keywords": [
+          "digital detox"
+        ]
+      }
+    },
+    {
+      "id": "self_hel_c0c5d3c42c5ea021",
+      "title": "Self Care: Nature Therapy",
+      "category": "self_help",
+      "intent": "instruction_request",
+      "content": "Comprehensive Nature Therapy content. Practical, actionable information with step-by-step guidance, common challenges, tips for success, and real-world applications. Educational and accessible for all skill levels.",
+      "metadata": {
+        "complexity": "beginner",
+        "subcategory": "Self Care",
+        "keywords": [
+          "nature therapy"
+        ]
+      }
+    },
+    {
+      "id": "cooking__99ef9f0e552a7095",
+      "title": "Basics: Knife Skills",
+      "category": "cooking_skills",
+      "intent": "instruction_request",
+      "content": "Comprehensive Knife Skills content. Practical, actionable information with step-by-step guidance, common challenges, tips for success, and real-world applications. Educational and accessible for all skill levels.",
+      "metadata": {
+        "complexity": "beginner",
+        "subcategory": "Basics",
+        "keywords": [
+          "knife skills"
+        ]
+      }
+    },
+    {
+      "id": "cooking__084635fb844bbe9e",
+      "title": "Basics: Mise en Place",
+      "category": "cooking_skills",
+      "intent": "instruction_request",
+      "content": "Comprehensive Mise en Place content. Practical, actionable information with step-by-step guidance, common challenges, tips for success, and real-world applications. Educational and accessible for all skill levels.",
+      "metadata": {
+        "complexity": "beginner",
+        "subcategory": "Basics",
+        "keywords": [
+          "mise en place"
+        ]
+      }
+    },
+    {
+      "id": "cooking__c920020e8afd4dd1",
+      "title": "Basics: Measuring Ingredients",
+      "category": "cooking_skills",
+      "intent": "instruction_request",
+      "content": "Comprehensive Measuring Ingredients content. Practical, actionable information with step-by-step guidance, common challenges, tips for success, and real-world applications. Educational and accessible for all skill levels.",
+      "metadata": {
+        "complexity": "beginner",
+        "subcategory": "Basics",
+        "keywords": [
+          "measuring ingredients"
+        ]
+      }
+    },
+    {
+      "id": "cooking__66a09ea8d7fcbf4c",
+      "title": "Basics: Reading Recipes",
+      "category": "cooking_skills",
+      "intent": "instruction_request",
+      "content": "Comprehensive Reading Recipes content. Practical, actionable information with step-by-step guidance, common challenges, tips for success, and real-world applications. Educational and accessible for all skill levels.",
+      "metadata": {
+        "complexity": "beginner",
+        "subcategory": "Basics",
+        "keywords": [
+          "reading recipes"
+        ]
+      }
+    },
+    {
+      "id": "cooking__afde9f51bdd2aa97",
+      "title": "Basics: Kitchen Safety",
+      "category": "cooking_skills",
+      "intent": "instruction_request",
+      "content": "Comprehensive Kitchen Safety content. Practical, actionable information with step-by-step guidance, common challenges, tips for success, and real-world applications. Educational and accessible for all skill levels.",
+      "metadata": {
+        "complexity": "beginner",
+        "subcategory": "Basics",
+        "keywords": [
+          "kitchen safety"
+        ]
+      }
+    },
+    {
+      "id": "cooking__c1ca632749eb4b26",
+      "title": "Basics: Food Storage",
+      "category": "cooking_skills",
+      "intent": "instruction_request",
+      "content": "Comprehensive Food Storage content. Practical, actionable information with step-by-step guidance, common challenges, tips for success, and real-world applications. Educational and accessible for all skill levels.",
+      "metadata": {
+        "complexity": "beginner",
+        "subcategory": "Basics",
+        "keywords": [
+          "food storage"
+        ]
+      }
+    },
+    {
+      "id": "cooking__8c1e7dbfcf0b23cc",
+      "title": "Basics: Temperature Control",
+      "category": "cooking_skills",
+      "intent": "instruction_request",
+      "content": "Comprehensive Temperature Control content. Practical, actionable information with step-by-step guidance, common challenges, tips for success, and real-world applications. Educational and accessible for all skill levels.",
+      "metadata": {
+        "complexity": "beginner",
+        "subcategory": "Basics",
+        "keywords": [
+          "temperature control"
+        ]
+      }
+    },
+    {
+      "id": "cooking__d05cc957628844c8",
+      "title": "Basics: Seasoning Basics",
+      "category": "cooking_skills",
+      "intent": "instruction_request",
+      "content": "Comprehensive Seasoning Basics content. Practical, actionable information with step-by-step guidance, common challenges, tips for success, and real-world applications. Educational and accessible for all skill levels.",
+      "metadata": {
+        "complexity": "beginner",
+        "subcategory": "Basics",
+        "keywords": [
+          "seasoning basics"
+        ]
+      }
+    },
+    {
+      "id": "cooking__b88a91de23ce9d7b",
+      "title": "Basics: Cooking Methods Overview",
+      "category": "cooking_skills",
+      "intent": "instruction_request",
+      "content": "Comprehensive Cooking Methods Overview content. Practical, actionable information with step-by-step guidance, common challenges, tips for success, and real-world applications. Educational and accessible for all skill levels.",
+      "metadata": {
+        "complexity": "beginner",
+        "subcategory": "Basics",
+        "keywords": [
+          "cooking methods overview"
+        ]
+      }
+    },
+    {
+      "id": "cooking__c877c5f4febae1a1",
+      "title": "Techniques: Sautéing",
+      "category": "cooking_skills",
+      "intent": "instruction_request",
+      "content": "Comprehensive Sautéing content. Practical, actionable information with step-by-step guidance, common challenges, tips for success, and real-world applications. Educational and accessible for all skill levels.",
+      "metadata": {
+        "complexity": "beginner",
+        "subcategory": "Techniques",
+        "keywords": [
+          "sautéing"
+        ]
+      }
+    },
+    {
+      "id": "cooking__e48b9a4bb530234e",
+      "title": "Techniques: Roasting",
+      "category": "cooking_skills",
+      "intent": "instruction_request",
+      "content": "Comprehensive Roasting content. Practical, actionable information with step-by-step guidance, common challenges, tips for success, and real-world applications. Educational and accessible for all skill levels.",
+      "metadata": {
+        "complexity": "beginner",
+        "subcategory": "Techniques",
+        "keywords": [
+          "roasting"
+        ]
+      }
+    },
+    {
+      "id": "cooking__5cd66f94510fb5fb",
+      "title": "Techniques: Braising",
+      "category": "cooking_skills",
+      "intent": "instruction_request",
+      "content": "Comprehensive Braising content. Practical, actionable information with step-by-step guidance, common challenges, tips for success, and real-world applications. Educational and accessible for all skill levels.",
+      "metadata": {
+        "complexity": "beginner",
+        "subcategory": "Techniques",
+        "keywords": [
+          "braising"
+        ]
+      }
+    },
+    {
+      "id": "cooking__bb66636495e2297b",
+      "title": "Techniques: Grilling",
+      "category": "cooking_skills",
+      "intent": "instruction_request",
+      "content": "Comprehensive Grilling content. Practical, actionable information with step-by-step guidance, common challenges, tips for success, and real-world applications. Educational and accessible for all skill levels.",
+      "metadata": {
+        "complexity": "beginner",
+        "subcategory": "Techniques",
+        "keywords": [
+          "grilling"
+        ]
+      }
+    },
+    {
+      "id": "cooking__8c6b5e7d9399dd9b",
+      "title": "Techniques: Baking",
+      "category": "cooking_skills",
+      "intent": "instruction_request",
+      "content": "Comprehensive Baking content. Practical, actionable information with step-by-step guidance, common challenges, tips for success, and real-world applications. Educational and accessible for all skill levels.",
+      "metadata": {
+        "complexity": "beginner",
+        "subcategory": "Techniques",
+        "keywords": [
+          "baking"
+        ]
+      }
+    },
+    {
+      "id": "cooking__0a1f43f8c284c95c",
+      "title": "Techniques: Steaming",
+      "category": "cooking_skills",
+      "intent": "instruction_request",
+      "content": "Comprehensive Steaming content. Practical, actionable information with step-by-step guidance, common challenges, tips for success, and real-world applications. Educational and accessible for all skill levels.",
+      "metadata": {
+        "complexity": "beginner",
+        "subcategory": "Techniques",
+        "keywords": [
+          "steaming"
+        ]
+      }
+    },
+    {
+      "id": "cooking__188442eefb2161de",
+      "title": "Techniques: Poaching",
+      "category": "cooking_skills",
+      "intent": "instruction_request",
+      "content": "Comprehensive Poaching content. Practical, actionable information with step-by-step guidance, common challenges, tips for success, and real-world applications. Educational and accessible for all skill levels.",
+      "metadata": {
+        "complexity": "beginner",
+        "subcategory": "Techniques",
+        "keywords": [
+          "poaching"
+        ]
+      }
+    },
+    {
+      "id": "cooking__acdd1cceac5896f7",
+      "title": "Techniques: Pan Frying",
+      "category": "cooking_skills",
+      "intent": "instruction_request",
+      "content": "Comprehensive Pan Frying content. Practical, actionable information with step-by-step guidance, common challenges, tips for success, and real-world applications. Educational and accessible for all skill levels.",
+      "metadata": {
+        "complexity": "beginner",
+        "subcategory": "Techniques",
+        "keywords": [
+          "pan frying"
+        ]
+      }
+    },
+    {
+      "id": "cooking__8874643d4d12a06f",
+      "title": "Techniques: Blanching",
+      "category": "cooking_skills",
+      "intent": "instruction_request",
+      "content": "Comprehensive Blanching content. Practical, actionable information with step-by-step guidance, common challenges, tips for success, and real-world applications. Educational and accessible for all skill levels.",
+      "metadata": {
+        "complexity": "beginner",
+        "subcategory": "Techniques",
+        "keywords": [
+          "blanching"
+        ]
+      }
+    },
+    {
+      "id": "cooking__13a9ce4992d1568b",
+      "title": "Techniques: Deglazing",
+      "category": "cooking_skills",
+      "intent": "instruction_request",
+      "content": "Comprehensive Deglazing content. Practical, actionable information with step-by-step guidance, common challenges, tips for success, and real-world applications. Educational and accessible for all skill levels.",
+      "metadata": {
+        "complexity": "beginner",
+        "subcategory": "Techniques",
+        "keywords": [
+          "deglazing"
+        ]
+      }
+    },
+    {
+      "id": "cooking__516b05509df256b4",
+      "title": "Techniques: Emulsifying",
+      "category": "cooking_skills",
+      "intent": "instruction_request",
+      "content": "Comprehensive Emulsifying content. Practical, actionable information with step-by-step guidance, common challenges, tips for success, and real-world applications. Educational and accessible for all skill levels.",
+      "metadata": {
+        "complexity": "beginner",
+        "subcategory": "Techniques",
+        "keywords": [
+          "emulsifying"
+        ]
+      }
+    },
+    {
+      "id": "cooking__483475b54c410e91",
+      "title": "Techniques: Caramelizing",
+      "category": "cooking_skills",
+      "intent": "instruction_request",
+      "content": "Comprehensive Caramelizing content. Practical, actionable information with step-by-step guidance, common challenges, tips for success, and real-world applications. Educational and accessible for all skill levels.",
+      "metadata": {
+        "complexity": "beginner",
+        "subcategory": "Techniques",
+        "keywords": [
+          "caramelizing"
+        ]
+      }
+    },
+    {
+      "id": "cooking__22de860906fbeb0e",
+      "title": "Skills: Making Stock",
+      "category": "cooking_skills",
+      "intent": "instruction_request",
+      "content": "Comprehensive Making Stock content. Practical, actionable information with step-by-step guidance, common challenges, tips for success, and real-world applications. Educational and accessible for all skill levels.",
+      "metadata": {
+        "complexity": "beginner",
+        "subcategory": "Skills",
+        "keywords": [
+          "making stock"
+        ]
+      }
+    },
+    {
+      "id": "cooking__7608a699137bfac3",
+      "title": "Skills: Cooking Rice",
+      "category": "cooking_skills",
+      "intent": "instruction_request",
+      "content": "Comprehensive Cooking Rice content. Practical, actionable information with step-by-step guidance, common challenges, tips for success, and real-world applications. Educational and accessible for all skill levels.",
+      "metadata": {
+        "complexity": "beginner",
+        "subcategory": "Skills",
+        "keywords": [
+          "cooking rice"
+        ]
+      }
+    },
+    {
+      "id": "cooking__2df2f5438a924051",
+      "title": "Skills: Pasta Preparation",
+      "category": "cooking_skills",
+      "intent": "instruction_request",
+      "content": "Comprehensive Pasta Preparation content. Practical, actionable information with step-by-step guidance, common challenges, tips for success, and real-world applications. Educational and accessible for all skill levels.",
+      "metadata": {
+        "complexity": "beginner",
+        "subcategory": "Skills",
+        "keywords": [
+          "pasta preparation"
+        ]
+      }
+    },
+    {
+      "id": "cooking__e90d4be545f24e10",
+      "title": "Skills: Egg Techniques",
+      "category": "cooking_skills",
+      "intent": "instruction_request",
+      "content": "Comprehensive Egg Techniques content. Practical, actionable information with step-by-step guidance, common challenges, tips for success, and real-world applications. Educational and accessible for all skill levels.",
+      "metadata": {
+        "complexity": "beginner",
+        "subcategory": "Skills",
+        "keywords": [
+          "egg techniques"
+        ]
+      }
+    },
+    {
+      "id": "cooking__71abbc4fbfb44bbf",
+      "title": "Skills: Bread Baking",
+      "category": "cooking_skills",
+      "intent": "instruction_request",
+      "content": "Comprehensive Bread Baking content. Practical, actionable information with step-by-step guidance, common challenges, tips for success, and real-world applications. Educational and accessible for all skill levels.",
+      "metadata": {
+        "complexity": "beginner",
+        "subcategory": "Skills",
+        "keywords": [
+          "bread baking"
+        ]
+      }
+    },
+    {
+      "id": "cooking__8d099ff06f4d4a44",
+      "title": "Skills: Sauce Making",
+      "category": "cooking_skills",
+      "intent": "instruction_request",
+      "content": "Comprehensive Sauce Making content. Practical, actionable information with step-by-step guidance, common challenges, tips for success, and real-world applications. Educational and accessible for all skill levels.",
+      "metadata": {
+        "complexity": "beginner",
+        "subcategory": "Skills",
+        "keywords": [
+          "sauce making"
+        ]
+      }
+    },
+    {
+      "id": "cooking__48ec829bed957814",
+      "title": "Skills: Vegetable Prep",
+      "category": "cooking_skills",
+      "intent": "instruction_request",
+      "content": "Comprehensive Vegetable Prep content. Practical, actionable information with step-by-step guidance, common challenges, tips for success, and real-world applications. Educational and accessible for all skill levels.",
+      "metadata": {
+        "complexity": "beginner",
+        "subcategory": "Skills",
+        "keywords": [
+          "vegetable prep"
+        ]
+      }
+    },
+    {
+      "id": "cooking__e7f213ba1d2e4296",
+      "title": "Skills: Meat Cooking",
+      "category": "cooking_skills",
+      "intent": "instruction_request",
+      "content": "Comprehensive Meat Cooking content. Practical, actionable information with step-by-step guidance, common challenges, tips for success, and real-world applications. Educational and accessible for all skill levels.",
+      "metadata": {
+        "complexity": "beginner",
+        "subcategory": "Skills",
+        "keywords": [
+          "meat cooking"
+        ]
+      }
+    },
+    {
+      "id": "cooking__61b8c1874dc29573",
+      "title": "Skills: Fish Preparation",
+      "category": "cooking_skills",
+      "intent": "instruction_request",
+      "content": "Comprehensive Fish Preparation content. Practical, actionable information with step-by-step guidance, common challenges, tips for success, and real-world applications. Educational and accessible for all skill levels.",
+      "metadata": {
+        "complexity": "beginner",
+        "subcategory": "Skills",
+        "keywords": [
+          "fish preparation"
+        ]
+      }
+    },
+    {
+      "id": "cooking__0a71bd1a15737923",
+      "title": "Kitchen Wisdom: Meal Planning",
+      "category": "cooking_skills",
+      "intent": "instruction_request",
+      "content": "Comprehensive Meal Planning content. Practical, actionable information with step-by-step guidance, common challenges, tips for success, and real-world applications. Educational and accessible for all skill levels.",
+      "metadata": {
+        "complexity": "beginner",
+        "subcategory": "Kitchen Wisdom",
+        "keywords": [
+          "meal planning"
+        ]
+      }
+    },
+    {
+      "id": "cooking__3b905093df0bc51e",
+      "title": "Kitchen Wisdom: Grocery Shopping",
+      "category": "cooking_skills",
+      "intent": "instruction_request",
+      "content": "Comprehensive Grocery Shopping content. Practical, actionable information with step-by-step guidance, common challenges, tips for success, and real-world applications. Educational and accessible for all skill levels.",
+      "metadata": {
+        "complexity": "beginner",
+        "subcategory": "Kitchen Wisdom",
+        "keywords": [
+          "grocery shopping"
+        ]
+      }
+    },
+    {
+      "id": "cooking__339d3b989739ce75",
+      "title": "Kitchen Wisdom: Budget Cooking",
+      "category": "cooking_skills",
+      "intent": "instruction_request",
+      "content": "Comprehensive Budget Cooking content. Practical, actionable information with step-by-step guidance, common challenges, tips for success, and real-world applications. Educational and accessible for all skill levels.",
+      "metadata": {
+        "complexity": "beginner",
+        "subcategory": "Kitchen Wisdom",
+        "keywords": [
+          "budget cooking"
+        ]
+      }
+    },
+    {
+      "id": "cooking__6d70058e923e9454",
+      "title": "Kitchen Wisdom: Leftover Management",
+      "category": "cooking_skills",
+      "intent": "instruction_request",
+      "content": "Comprehensive Leftover Management content. Practical, actionable information with step-by-step guidance, common challenges, tips for success, and real-world applications. Educational and accessible for all skill levels.",
+      "metadata": {
+        "complexity": "beginner",
+        "subcategory": "Kitchen Wisdom",
+        "keywords": [
+          "leftover management"
+        ]
+      }
+    },
+    {
+      "id": "cooking__cd914ae625023c43",
+      "title": "Kitchen Wisdom: Substitutions",
+      "category": "cooking_skills",
+      "intent": "instruction_request",
+      "content": "Comprehensive Substitutions content. Practical, actionable information with step-by-step guidance, common challenges, tips for success, and real-world applications. Educational and accessible for all skill levels.",
+      "metadata": {
+        "complexity": "beginner",
+        "subcategory": "Kitchen Wisdom",
+        "keywords": [
+          "substitutions"
+        ]
+      }
+    },
+    {
+      "id": "cooking__cb305b28e84c81ae",
+      "title": "Kitchen Wisdom: Scaling Recipes",
+      "category": "cooking_skills",
+      "intent": "instruction_request",
+      "content": "Comprehensive Scaling Recipes content. Practical, actionable information with step-by-step guidance, common challenges, tips for success, and real-world applications. Educational and accessible for all skill levels.",
+      "metadata": {
+        "complexity": "beginner",
+        "subcategory": "Kitchen Wisdom",
+        "keywords": [
+          "scaling recipes"
+        ]
+      }
+    },
+    {
+      "id": "cooking__97c4ae0a3b98c8e8",
+      "title": "Kitchen Wisdom: Food Pairing",
+      "category": "cooking_skills",
+      "intent": "instruction_request",
+      "content": "Comprehensive Food Pairing content. Practical, actionable information with step-by-step guidance, common challenges, tips for success, and real-world applications. Educational and accessible for all skill levels.",
+      "metadata": {
+        "complexity": "beginner",
+        "subcategory": "Kitchen Wisdom",
+        "keywords": [
+          "food pairing"
+        ]
+      }
+    },
+    {
+      "id": "games_84c86be094726dfb",
+      "title": "Board Games: Chess Basics",
+      "category": "games",
+      "intent": "explanation_request",
+      "content": "Comprehensive Chess Basics content. Practical, actionable information with step-by-step guidance, common challenges, tips for success, and real-world applications. Educational and accessible for all skill levels.",
+      "metadata": {
+        "complexity": "beginner",
+        "subcategory": "Board Games",
+        "keywords": [
+          "chess basics"
+        ]
+      }
+    },
+    {
+      "id": "games_21c10d6de75eba35",
+      "title": "Board Games: Checkers Strategy",
+      "category": "games",
+      "intent": "explanation_request",
+      "content": "Comprehensive Checkers Strategy content. Practical, actionable information with step-by-step guidance, common challenges, tips for success, and real-world applications. Educational and accessible for all skill levels.",
+      "metadata": {
+        "complexity": "beginner",
+        "subcategory": "Board Games",
+        "keywords": [
+          "checkers strategy"
+        ]
+      }
+    },
+    {
+      "id": "games_40ea1b645cf05cbe",
+      "title": "Board Games: Monopoly Rules",
+      "category": "games",
+      "intent": "explanation_request",
+      "content": "Comprehensive Monopoly Rules content. Practical, actionable information with step-by-step guidance, common challenges, tips for success, and real-world applications. Educational and accessible for all skill levels.",
+      "metadata": {
+        "complexity": "beginner",
+        "subcategory": "Board Games",
+        "keywords": [
+          "monopoly rules"
+        ]
+      }
+    },
+    {
+      "id": "games_841e8a7b2316b22f",
+      "title": "Board Games: Scrabble Tips",
+      "category": "games",
+      "intent": "explanation_request",
+      "content": "Comprehensive Scrabble Tips content. Practical, actionable information with step-by-step guidance, common challenges, tips for success, and real-world applications. Educational and accessible for all skill levels.",
+      "metadata": {
+        "complexity": "beginner",
+        "subcategory": "Board Games",
+        "keywords": [
+          "scrabble tips"
+        ]
+      }
+    },
+    {
+      "id": "games_ef3c39d8b33e6506",
+      "title": "Board Games: Risk Strategy",
+      "category": "games",
+      "intent": "explanation_request",
+      "content": "Comprehensive Risk Strategy content. Practical, actionable information with step-by-step guidance, common challenges, tips for success, and real-world applications. Educational and accessible for all skill levels.",
+      "metadata": {
+        "complexity": "beginner",
+        "subcategory": "Board Games",
+        "keywords": [
+          "risk strategy"
+        ]
+      }
+    },
+    {
+      "id": "games_6c10705175d688f2",
+      "title": "Board Games: Settlers of Catan",
+      "category": "games",
+      "intent": "explanation_request",
+      "content": "Comprehensive Settlers of Catan content. Practical, actionable information with step-by-step guidance, common challenges, tips for success, and real-world applications. Educational and accessible for all skill levels.",
+      "metadata": {
+        "complexity": "beginner",
+        "subcategory": "Board Games",
+        "keywords": [
+          "settlers of catan"
+        ]
+      }
+    },
+    {
+      "id": "games_8cfcdfe76737fed8",
+      "title": "Board Games: Ticket to Ride",
+      "category": "games",
+      "intent": "explanation_request",
+      "content": "Comprehensive Ticket to Ride content. Practical, actionable information with step-by-step guidance, common challenges, tips for success, and real-world applications. Educational and accessible for all skill levels.",
+      "metadata": {
+        "complexity": "beginner",
+        "subcategory": "Board Games",
+        "keywords": [
+          "ticket to ride"
+        ]
+      }
+    },
+    {
+      "id": "games_1e863b5e00131bcc",
+      "title": "Board Games: Modern Board Games",
+      "category": "games",
+      "intent": "explanation_request",
+      "content": "Comprehensive Modern Board Games content. Practical, actionable information with step-by-step guidance, common challenges, tips for success, and real-world applications. Educational and accessible for all skill levels.",
+      "metadata": {
+        "complexity": "beginner",
+        "subcategory": "Board Games",
+        "keywords": [
+          "modern board games"
+        ]
+      }
+    },
+    {
+      "id": "games_26b7bf6fd10bd5b0",
+      "title": "Card Games: Poker Basics",
+      "category": "games",
+      "intent": "explanation_request",
+      "content": "Comprehensive Poker Basics content. Practical, actionable information with step-by-step guidance, common challenges, tips for success, and real-world applications. Educational and accessible for all skill levels.",
+      "metadata": {
+        "complexity": "beginner",
+        "subcategory": "Card Games",
+        "keywords": [
+          "poker basics"
+        ]
+      }
+    },
+    {
+      "id": "games_bedc85ca9ef800e9",
+      "title": "Card Games: Bridge Introduction",
+      "category": "games",
+      "intent": "explanation_request",
+      "content": "Comprehensive Bridge Introduction content. Practical, actionable information with step-by-step guidance, common challenges, tips for success, and real-world applications. Educational and accessible for all skill levels.",
+      "metadata": {
+        "complexity": "beginner",
+        "subcategory": "Card Games",
+        "keywords": [
+          "bridge introduction"
+        ]
+      }
+    },
+    {
+      "id": "games_d413930ae4f35985",
+      "title": "Card Games: Rummy Rules",
+      "category": "games",
+      "intent": "explanation_request",
+      "content": "Comprehensive Rummy Rules content. Practical, actionable information with step-by-step guidance, common challenges, tips for success, and real-world applications. Educational and accessible for all skill levels.",
+      "metadata": {
+        "complexity": "beginner",
+        "subcategory": "Card Games",
+        "keywords": [
+          "rummy rules"
+        ]
+      }
+    },
+    {
+      "id": "games_86eb101f12f371d7",
+      "title": "Card Games: Solitaire Variations",
+      "category": "games",
+      "intent": "explanation_request",
+      "content": "Comprehensive Solitaire Variations content. Practical, actionable information with step-by-step guidance, common challenges, tips for success, and real-world applications. Educational and accessible for all skill levels.",
+      "metadata": {
+        "complexity": "beginner",
+        "subcategory": "Card Games",
+        "keywords": [
+          "solitaire variations"
+        ]
+      }
+    },
+    {
+      "id": "games_0a4afe755bef40ab",
+      "title": "Card Games: Blackjack Strategy",
+      "category": "games",
+      "intent": "explanation_request",
+      "content": "Comprehensive Blackjack Strategy content. Practical, actionable information with step-by-step guidance, common challenges, tips for success, and real-world applications. Educational and accessible for all skill levels.",
+      "metadata": {
+        "complexity": "beginner",
+        "subcategory": "Card Games",
+        "keywords": [
+          "blackjack strategy"
+        ]
+      }
+    },
+    {
+      "id": "games_951731c092b34331",
+      "title": "Card Games: Hearts Rules",
+      "category": "games",
+      "intent": "explanation_request",
+      "content": "Comprehensive Hearts Rules content. Practical, actionable information with step-by-step guidance, common challenges, tips for success, and real-world applications. Educational and accessible for all skill levels.",
+      "metadata": {
+        "complexity": "beginner",
+        "subcategory": "Card Games",
+        "keywords": [
+          "hearts rules"
+        ]
+      }
+    },
+    {
+      "id": "games_d8dc2a702bdda414",
+      "title": "Card Games: Spades Basics",
+      "category": "games",
+      "intent": "explanation_request",
+      "content": "Comprehensive Spades Basics content. Practical, actionable information with step-by-step guidance, common challenges, tips for success, and real-world applications. Educational and accessible for all skill levels.",
+      "metadata": {
+        "complexity": "beginner",
+        "subcategory": "Card Games",
+        "keywords": [
+          "spades basics"
+        ]
+      }
+    },
+    {
+      "id": "games_5407e1086250b7cd",
+      "title": "Card Games: Card Game Etiquette",
+      "category": "games",
+      "intent": "explanation_request",
+      "content": "Comprehensive Card Game Etiquette content. Practical, actionable information with step-by-step guidance, common challenges, tips for success, and real-world applications. Educational and accessible for all skill levels.",
+      "metadata": {
+        "complexity": "beginner",
+        "subcategory": "Card Games",
+        "keywords": [
+          "card game etiquette"
+        ]
+      }
+    },
+    {
+      "id": "games_2e52142c109aa047",
+      "title": "Video Games: Gaming History",
+      "category": "games",
+      "intent": "explanation_request",
+      "content": "Comprehensive Gaming History content. Practical, actionable information with step-by-step guidance, common challenges, tips for success, and real-world applications. Educational and accessible for all skill levels.",
+      "metadata": {
+        "complexity": "beginner",
+        "subcategory": "Video Games",
+        "keywords": [
+          "gaming history"
+        ]
+      }
+    },
+    {
+      "id": "games_410e27d02a563f23",
+      "title": "Video Games: Game Genres",
+      "category": "games",
+      "intent": "explanation_request",
+      "content": "Comprehensive Game Genres content. Practical, actionable information with step-by-step guidance, common challenges, tips for success, and real-world applications. Educational and accessible for all skill levels.",
+      "metadata": {
+        "complexity": "beginner",
+        "subcategory": "Video Games",
+        "keywords": [
+          "game genres"
+        ]
+      }
+    },
+    {
+      "id": "games_62cfc73d93d389c8",
+      "title": "Video Games: Esports Overview",
+      "category": "games",
+      "intent": "explanation_request",
+      "content": "Comprehensive Esports Overview content. Practical, actionable information with step-by-step guidance, common challenges, tips for success, and real-world applications. Educational and accessible for all skill levels.",
+      "metadata": {
+        "complexity": "beginner",
+        "subcategory": "Video Games",
+        "keywords": [
+          "esports overview"
+        ]
+      }
+    },
+    {
+      "id": "games_be80fde6cac28665",
+      "title": "Video Games: Gaming Culture",
+      "category": "games",
+      "intent": "explanation_request",
+      "content": "Comprehensive Gaming Culture content. Practical, actionable information with step-by-step guidance, common challenges, tips for success, and real-world applications. Educational and accessible for all skill levels.",
+      "metadata": {
+        "complexity": "beginner",
+        "subcategory": "Video Games",
+        "keywords": [
+          "gaming culture"
+        ]
+      }
+    },
+    {
+      "id": "games_a283be5fbba6241a",
+      "title": "Video Games: Game Design Basics",
+      "category": "games",
+      "intent": "explanation_request",
+      "content": "Comprehensive Game Design Basics content. Practical, actionable information with step-by-step guidance, common challenges, tips for success, and real-world applications. Educational and accessible for all skill levels.",
+      "metadata": {
+        "complexity": "beginner",
+        "subcategory": "Video Games",
+        "keywords": [
+          "game design basics"
+        ]
+      }
+    },
+    {
+      "id": "games_30df740101309584",
+      "title": "Video Games: Speedrunning",
+      "category": "games",
+      "intent": "explanation_request",
+      "content": "Comprehensive Speedrunning content. Practical, actionable information with step-by-step guidance, common challenges, tips for success, and real-world applications. Educational and accessible for all skill levels.",
+      "metadata": {
+        "complexity": "beginner",
+        "subcategory": "Video Games",
+        "keywords": [
+          "speedrunning"
+        ]
+      }
+    },
+    {
+      "id": "games_725278f5725e7045",
+      "title": "Video Games: Multiplayer Dynamics",
+      "category": "games",
+      "intent": "explanation_request",
+      "content": "Comprehensive Multiplayer Dynamics content. Practical, actionable information with step-by-step guidance, common challenges, tips for success, and real-world applications. Educational and accessible for all skill levels.",
+      "metadata": {
+        "complexity": "beginner",
+        "subcategory": "Video Games",
+        "keywords": [
+          "multiplayer dynamics"
+        ]
+      }
+    },
+    {
+      "id": "games_35df16e045e2aff5",
+      "title": "Video Games: Gaming Communities",
+      "category": "games",
+      "intent": "explanation_request",
+      "content": "Comprehensive Gaming Communities content. Practical, actionable information with step-by-step guidance, common challenges, tips for success, and real-world applications. Educational and accessible for all skill levels.",
+      "metadata": {
+        "complexity": "beginner",
+        "subcategory": "Video Games",
+        "keywords": [
+          "gaming communities"
+        ]
+      }
+    },
+    {
+      "id": "games_2dc0e8c8bcfdcfcc",
+      "title": "Party Games: Charades",
+      "category": "games",
+      "intent": "explanation_request",
+      "content": "Comprehensive Charades content. Practical, actionable information with step-by-step guidance, common challenges, tips for success, and real-world applications. Educational and accessible for all skill levels.",
+      "metadata": {
+        "complexity": "beginner",
+        "subcategory": "Party Games",
+        "keywords": [
+          "charades"
+        ]
+      }
+    },
+    {
+      "id": "games_5ea2ac212a87090e",
+      "title": "Party Games: Pictionary",
+      "category": "games",
+      "intent": "explanation_request",
+      "content": "Comprehensive Pictionary content. Practical, actionable information with step-by-step guidance, common challenges, tips for success, and real-world applications. Educational and accessible for all skill levels.",
+      "metadata": {
+        "complexity": "beginner",
+        "subcategory": "Party Games",
+        "keywords": [
+          "pictionary"
+        ]
+      }
+    },
+    {
+      "id": "games_45e89ed7f8ae1150",
+      "title": "Party Games: Trivia Games",
+      "category": "games",
+      "intent": "explanation_request",
+      "content": "Comprehensive Trivia Games content. Practical, actionable information with step-by-step guidance, common challenges, tips for success, and real-world applications. Educational and accessible for all skill levels.",
+      "metadata": {
+        "complexity": "beginner",
+        "subcategory": "Party Games",
+        "keywords": [
+          "trivia games"
+        ]
+      }
+    },
+    {
+      "id": "games_644280e90d86ad96",
+      "title": "Party Games: Word Games",
+      "category": "games",
+      "intent": "explanation_request",
+      "content": "Comprehensive Word Games content. Practical, actionable information with step-by-step guidance, common challenges, tips for success, and real-world applications. Educational and accessible for all skill levels.",
+      "metadata": {
+        "complexity": "beginner",
+        "subcategory": "Party Games",
+        "keywords": [
+          "word games"
+        ]
+      }
+    },
+    {
+      "id": "games_297c420aa316712e",
+      "title": "Party Games: Icebreaker Games",
+      "category": "games",
+      "intent": "explanation_request",
+      "content": "Comprehensive Icebreaker Games content. Practical, actionable information with step-by-step guidance, common challenges, tips for success, and real-world applications. Educational and accessible for all skill levels.",
+      "metadata": {
+        "complexity": "beginner",
+        "subcategory": "Party Games",
+        "keywords": [
+          "icebreaker games"
+        ]
+      }
+    },
+    {
+      "id": "games_b91a69b301cce2c6",
+      "title": "Party Games: Team Building Games",
+      "category": "games",
+      "intent": "explanation_request",
+      "content": "Comprehensive Team Building Games content. Practical, actionable information with step-by-step guidance, common challenges, tips for success, and real-world applications. Educational and accessible for all skill levels.",
+      "metadata": {
+        "complexity": "beginner",
+        "subcategory": "Party Games",
+        "keywords": [
+          "team building games"
+        ]
+      }
+    },
+    {
+      "id": "games_54067e6969e28f31",
+      "title": "Classic Games: Hide and Seek",
+      "category": "games",
+      "intent": "explanation_request",
+      "content": "Comprehensive Hide and Seek content. Practical, actionable information with step-by-step guidance, common challenges, tips for success, and real-world applications. Educational and accessible for all skill levels.",
+      "metadata": {
+        "complexity": "beginner",
+        "subcategory": "Classic Games",
+        "keywords": [
+          "hide and seek"
+        ]
+      }
+    },
+    {
+      "id": "games_614e8041a93ba6e9",
+      "title": "Classic Games: Tag Variations",
+      "category": "games",
+      "intent": "explanation_request",
+      "content": "Comprehensive Tag Variations content. Practical, actionable information with step-by-step guidance, common challenges, tips for success, and real-world applications. Educational and accessible for all skill levels.",
+      "metadata": {
+        "complexity": "beginner",
+        "subcategory": "Classic Games",
+        "keywords": [
+          "tag variations"
+        ]
+      }
+    },
+    {
+      "id": "games_9e6996bb749a8877",
+      "title": "Classic Games: Hopscotch",
+      "category": "games",
+      "intent": "explanation_request",
+      "content": "Comprehensive Hopscotch content. Practical, actionable information with step-by-step guidance, common challenges, tips for success, and real-world applications. Educational and accessible for all skill levels.",
+      "metadata": {
+        "complexity": "beginner",
+        "subcategory": "Classic Games",
+        "keywords": [
+          "hopscotch"
+        ]
+      }
+    },
+    {
+      "id": "games_61f12afa4930c1d3",
+      "title": "Classic Games: Jump Rope Games",
+      "category": "games",
+      "intent": "explanation_request",
+      "content": "Comprehensive Jump Rope Games content. Practical, actionable information with step-by-step guidance, common challenges, tips for success, and real-world applications. Educational and accessible for all skill levels.",
+      "metadata": {
+        "complexity": "beginner",
+        "subcategory": "Classic Games",
+        "keywords": [
+          "jump rope games"
+        ]
+      }
+    },
+    {
+      "id": "games_4742d902eb72da14",
+      "title": "Classic Games: Marbles",
+      "category": "games",
+      "intent": "explanation_request",
+      "content": "Comprehensive Marbles content. Practical, actionable information with step-by-step guidance, common challenges, tips for success, and real-world applications. Educational and accessible for all skill levels.",
+      "metadata": {
+        "complexity": "beginner",
+        "subcategory": "Classic Games",
+        "keywords": [
+          "marbles"
+        ]
+      }
+    },
+    {
+      "id": "games_b5c7c977a687955f",
+      "title": "Classic Games: Jacks",
+      "category": "games",
+      "intent": "explanation_request",
+      "content": "Comprehensive Jacks content. Practical, actionable information with step-by-step guidance, common challenges, tips for success, and real-world applications. Educational and accessible for all skill levels.",
+      "metadata": {
+        "complexity": "beginner",
+        "subcategory": "Classic Games",
+        "keywords": [
+          "jacks"
+        ]
+      }
+    },
+    {
+      "id": "quizzes__046729b9eaa585ce",
+      "title": "Quiz Formats: Multiple Choice Tips",
+      "category": "trivia_facts",
+      "intent": "explanation_request",
+      "content": "Comprehensive Multiple Choice Tips content. Practical, actionable information with step-by-step guidance, common challenges, tips for success, and real-world applications. Educational and accessible for all skill levels.",
+      "metadata": {
+        "complexity": "beginner",
+        "subcategory": "Quiz Formats",
+        "keywords": [
+          "multiple choice tips"
+        ]
+      }
+    },
+    {
+      "id": "quizzes__e98be785065480cc",
+      "title": "Quiz Formats: True/False Strategy",
+      "category": "trivia_facts",
+      "intent": "explanation_request",
+      "content": "Comprehensive True/False Strategy content. Practical, actionable information with step-by-step guidance, common challenges, tips for success, and real-world applications. Educational and accessible for all skill levels.",
+      "metadata": {
+        "complexity": "beginner",
+        "subcategory": "Quiz Formats",
+        "keywords": [
+          "true/false strategy"
+        ]
+      }
+    },
+    {
+      "id": "quizzes__33240b9be920fca3",
+      "title": "Quiz Formats: Fill in the Blank",
+      "category": "trivia_facts",
+      "intent": "explanation_request",
+      "content": "Comprehensive Fill in the Blank content. Practical, actionable information with step-by-step guidance, common challenges, tips for success, and real-world applications. Educational and accessible for all skill levels.",
+      "metadata": {
+        "complexity": "beginner",
+        "subcategory": "Quiz Formats",
+        "keywords": [
+          "fill in the blank"
+        ]
+      }
+    },
+    {
+      "id": "quizzes__eafbb10c570b4b9f",
+      "title": "Quiz Formats: Essay Questions",
+      "category": "trivia_facts",
+      "intent": "explanation_request",
+      "content": "Comprehensive Essay Questions content. Practical, actionable information with step-by-step guidance, common challenges, tips for success, and real-world applications. Educational and accessible for all skill levels.",
+      "metadata": {
+        "complexity": "beginner",
+        "subcategory": "Quiz Formats",
+        "keywords": [
+          "essay questions"
+        ]
+      }
+    },
+    {
+      "id": "quizzes__39ea055baa61d0b0",
+      "title": "Quiz Formats: Matching Questions",
+      "category": "trivia_facts",
+      "intent": "explanation_request",
+      "content": "Comprehensive Matching Questions content. Practical, actionable information with step-by-step guidance, common challenges, tips for success, and real-world applications. Educational and accessible for all skill levels.",
+      "metadata": {
+        "complexity": "beginner",
+        "subcategory": "Quiz Formats",
+        "keywords": [
+          "matching questions"
+        ]
+      }
+    },
+    {
+      "id": "quizzes__49a35a504e6ed64f",
+      "title": "Quiz Formats: Short Answer Techniques",
+      "category": "trivia_facts",
+      "intent": "explanation_request",
+      "content": "Comprehensive Short Answer Techniques content. Practical, actionable information with step-by-step guidance, common challenges, tips for success, and real-world applications. Educational and accessible for all skill levels.",
+      "metadata": {
+        "complexity": "beginner",
+        "subcategory": "Quiz Formats",
+        "keywords": [
+          "short answer techniques"
+        ]
+      }
+    },
+    {
+      "id": "quizzes__aae2d99e70d55896",
+      "title": "Trivia Categories: General Knowledge",
+      "category": "trivia_facts",
+      "intent": "explanation_request",
+      "content": "Comprehensive General Knowledge content. Practical, actionable information with step-by-step guidance, common challenges, tips for success, and real-world applications. Educational and accessible for all skill levels.",
+      "metadata": {
+        "complexity": "beginner",
+        "subcategory": "Trivia Categories",
+        "keywords": [
+          "general knowledge"
+        ]
+      }
+    },
+    {
+      "id": "quizzes__5fa593d5f53b30cb",
+      "title": "Trivia Categories: History Trivia",
+      "category": "trivia_facts",
+      "intent": "explanation_request",
+      "content": "Comprehensive History Trivia content. Practical, actionable information with step-by-step guidance, common challenges, tips for success, and real-world applications. Educational and accessible for all skill levels.",
+      "metadata": {
+        "complexity": "beginner",
+        "subcategory": "Trivia Categories",
+        "keywords": [
+          "history trivia"
+        ]
+      }
+    },
+    {
+      "id": "quizzes__e606fd706a85f3e4",
+      "title": "Trivia Categories: Science Facts",
+      "category": "trivia_facts",
+      "intent": "explanation_request",
+      "content": "Comprehensive Science Facts content. Practical, actionable information with step-by-step guidance, common challenges, tips for success, and real-world applications. Educational and accessible for all skill levels.",
+      "metadata": {
+        "complexity": "beginner",
+        "subcategory": "Trivia Categories",
+        "keywords": [
+          "science facts"
+        ]
+      }
+    },
+    {
+      "id": "quizzes__099711b956429d0f",
+      "title": "Trivia Categories: Geography Quiz",
+      "category": "trivia_facts",
+      "intent": "explanation_request",
+      "content": "Comprehensive Geography Quiz content. Practical, actionable information with step-by-step guidance, common challenges, tips for success, and real-world applications. Educational and accessible for all skill levels.",
+      "metadata": {
+        "complexity": "beginner",
+        "subcategory": "Trivia Categories",
+        "keywords": [
+          "geography quiz"
+        ]
+      }
+    },
+    {
+      "id": "quizzes__0e869bb5c9da8eaa",
+      "title": "Trivia Categories: Literature Trivia",
+      "category": "trivia_facts",
+      "intent": "explanation_request",
+      "content": "Comprehensive Literature Trivia content. Practical, actionable information with step-by-step guidance, common challenges, tips for success, and real-world applications. Educational and accessible for all skill levels.",
+      "metadata": {
+        "complexity": "beginner",
+        "subcategory": "Trivia Categories",
+        "keywords": [
+          "literature trivia"
+        ]
+      }
+    },
+    {
+      "id": "quizzes__0db432ee2243ab22",
+      "title": "Trivia Categories: Movie Trivia",
+      "category": "trivia_facts",
+      "intent": "explanation_request",
+      "content": "Comprehensive Movie Trivia content. Practical, actionable information with step-by-step guidance, common challenges, tips for success, and real-world applications. Educational and accessible for all skill levels.",
+      "metadata": {
+        "complexity": "beginner",
+        "subcategory": "Trivia Categories",
+        "keywords": [
+          "movie trivia"
+        ]
+      }
+    },
+    {
+      "id": "quizzes__e19459e156fd1951",
+      "title": "Trivia Categories: Music Trivia",
+      "category": "trivia_facts",
+      "intent": "explanation_request",
+      "content": "Comprehensive Music Trivia content. Practical, actionable information with step-by-step guidance, common challenges, tips for success, and real-world applications. Educational and accessible for all skill levels.",
+      "metadata": {
+        "complexity": "beginner",
+        "subcategory": "Trivia Categories",
+        "keywords": [
+          "music trivia"
+        ]
+      }
+    },
+    {
+      "id": "quizzes__3cab336825a081ba",
+      "title": "Trivia Categories: Sports Trivia",
+      "category": "trivia_facts",
+      "intent": "explanation_request",
+      "content": "Comprehensive Sports Trivia content. Practical, actionable information with step-by-step guidance, common challenges, tips for success, and real-world applications. Educational and accessible for all skill levels.",
+      "metadata": {
+        "complexity": "beginner",
+        "subcategory": "Trivia Categories",
+        "keywords": [
+          "sports trivia"
+        ]
+      }
+    },
+    {
+      "id": "quizzes__e60a7e622f1430d9",
+      "title": "Quiz Skills: Memory Techniques",
+      "category": "trivia_facts",
+      "intent": "explanation_request",
+      "content": "Comprehensive Memory Techniques content. Practical, actionable information with step-by-step guidance, common challenges, tips for success, and real-world applications. Educational and accessible for all skill levels.",
+      "metadata": {
+        "complexity": "beginner",
+        "subcategory": "Quiz Skills",
+        "keywords": [
+          "memory techniques"
+        ]
+      }
+    },
+    {
+      "id": "quizzes__3ee8d3879ac9c99f",
+      "title": "Quiz Skills: Test Taking Strategies",
+      "category": "trivia_facts",
+      "intent": "explanation_request",
+      "content": "Comprehensive Test Taking Strategies content. Practical, actionable information with step-by-step guidance, common challenges, tips for success, and real-world applications. Educational and accessible for all skill levels.",
+      "metadata": {
+        "complexity": "beginner",
+        "subcategory": "Quiz Skills",
+        "keywords": [
+          "test taking strategies"
+        ]
+      }
+    },
+    {
+      "id": "quizzes__6b6706cb27d51fae",
+      "title": "Quiz Skills: Educated Guessing",
+      "category": "trivia_facts",
+      "intent": "explanation_request",
+      "content": "Comprehensive Educated Guessing content. Practical, actionable information with step-by-step guidance, common challenges, tips for success, and real-world applications. Educational and accessible for all skill levels.",
+      "metadata": {
+        "complexity": "beginner",
+        "subcategory": "Quiz Skills",
+        "keywords": [
+          "educated guessing"
+        ]
+      }
+    },
+    {
+      "id": "quizzes__948d9bc25f5ac8a3",
+      "title": "Quiz Skills: Time Management",
+      "category": "trivia_facts",
+      "intent": "explanation_request",
+      "content": "Comprehensive Time Management content. Practical, actionable information with step-by-step guidance, common challenges, tips for success, and real-world applications. Educational and accessible for all skill levels.",
+      "metadata": {
+        "complexity": "beginner",
+        "subcategory": "Quiz Skills",
+        "keywords": [
+          "time management"
+        ]
+      }
+    },
+    {
+      "id": "quizzes__811f2da3fc3555b4",
+      "title": "Quiz Skills: Anxiety Reduction",
+      "category": "trivia_facts",
+      "intent": "explanation_request",
+      "content": "Comprehensive Anxiety Reduction content. Practical, actionable information with step-by-step guidance, common challenges, tips for success, and real-world applications. Educational and accessible for all skill levels.",
+      "metadata": {
+        "complexity": "beginner",
+        "subcategory": "Quiz Skills",
+        "keywords": [
+          "anxiety reduction"
+        ]
+      }
+    },
+    {
+      "id": "quizzes__127cd7efdb242232",
+      "title": "Quiz Skills: Review Methods",
+      "category": "trivia_facts",
+      "intent": "explanation_request",
+      "content": "Comprehensive Review Methods content. Practical, actionable information with step-by-step guidance, common challenges, tips for success, and real-world applications. Educational and accessible for all skill levels.",
+      "metadata": {
+        "complexity": "beginner",
+        "subcategory": "Quiz Skills",
+        "keywords": [
+          "review methods"
+        ]
+      }
+    },
+    {
+      "id": "quizzes__ceac3196144aba56",
+      "title": "Quiz Skills: Practice Tests",
+      "category": "trivia_facts",
+      "intent": "explanation_request",
+      "content": "Comprehensive Practice Tests content. Practical, actionable information with step-by-step guidance, common challenges, tips for success, and real-world applications. Educational and accessible for all skill levels.",
+      "metadata": {
+        "complexity": "beginner",
+        "subcategory": "Quiz Skills",
+        "keywords": [
+          "practice tests"
+        ]
+      }
+    },
+    {
+      "id": "quizzes__e09dc049ffa26c69",
+      "title": "Trivia Games: Pub Trivia Tips",
+      "category": "trivia_facts",
+      "intent": "explanation_request",
+      "content": "Comprehensive Pub Trivia Tips content. Practical, actionable information with step-by-step guidance, common challenges, tips for success, and real-world applications. Educational and accessible for all skill levels.",
+      "metadata": {
+        "complexity": "beginner",
+        "subcategory": "Trivia Games",
+        "keywords": [
+          "pub trivia tips"
+        ]
+      }
+    },
+    {
+      "id": "quizzes__6d6ad97437dfd682",
+      "title": "Trivia Games: Jeopardy Strategy",
+      "category": "trivia_facts",
+      "intent": "explanation_request",
+      "content": "Comprehensive Jeopardy Strategy content. Practical, actionable information with step-by-step guidance, common challenges, tips for success, and real-world applications. Educational and accessible for all skill levels.",
+      "metadata": {
+        "complexity": "beginner",
+        "subcategory": "Trivia Games",
+        "keywords": [
+          "jeopardy strategy"
+        ]
+      }
+    },
+    {
+      "id": "quizzes__16db38a4bccdd242",
+      "title": "Trivia Games: Trivial Pursuit",
+      "category": "trivia_facts",
+      "intent": "explanation_request",
+      "content": "Comprehensive Trivial Pursuit content. Practical, actionable information with step-by-step guidance, common challenges, tips for success, and real-world applications. Educational and accessible for all skill levels.",
+      "metadata": {
+        "complexity": "beginner",
+        "subcategory": "Trivia Games",
+        "keywords": [
+          "trivial pursuit"
+        ]
+      }
+    },
+    {
+      "id": "quizzes__dfd240340d94a817",
+      "title": "Trivia Games: Quiz Bowl",
+      "category": "trivia_facts",
+      "intent": "explanation_request",
+      "content": "Comprehensive Quiz Bowl content. Practical, actionable information with step-by-step guidance, common challenges, tips for success, and real-world applications. Educational and accessible for all skill levels.",
+      "metadata": {
+        "complexity": "beginner",
+        "subcategory": "Trivia Games",
+        "keywords": [
+          "quiz bowl"
+        ]
+      }
+    },
+    {
+      "id": "quizzes__478e970be00e9c1e",
+      "title": "Trivia Games: Online Quizzes",
+      "category": "trivia_facts",
+      "intent": "explanation_request",
+      "content": "Comprehensive Online Quizzes content. Practical, actionable information with step-by-step guidance, common challenges, tips for success, and real-world applications. Educational and accessible for all skill levels.",
+      "metadata": {
+        "complexity": "beginner",
+        "subcategory": "Trivia Games",
+        "keywords": [
+          "online quizzes"
+        ]
+      }
+    },
+    {
+      "id": "quizzes__12f42f3414da52bd",
+      "title": "Trivia Games: Team Trivia Dynamics",
+      "category": "trivia_facts",
+      "intent": "explanation_request",
+      "content": "Comprehensive Team Trivia Dynamics content. Practical, actionable information with step-by-step guidance, common challenges, tips for success, and real-world applications. Educational and accessible for all skill levels.",
+      "metadata": {
+        "complexity": "beginner",
+        "subcategory": "Trivia Games",
+        "keywords": [
+          "team trivia dynamics"
+        ]
+      }
+    },
+    {
+      "id": "quizzes__eb94b95aa44acdf5",
+      "title": "Fun Facts: Unusual Facts",
+      "category": "trivia_facts",
+      "intent": "explanation_request",
+      "content": "Comprehensive Unusual Facts content. Practical, actionable information with step-by-step guidance, common challenges, tips for success, and real-world applications. Educational and accessible for all skill levels.",
+      "metadata": {
+        "complexity": "beginner",
+        "subcategory": "Fun Facts",
+        "keywords": [
+          "unusual facts"
+        ]
+      }
+    },
+    {
+      "id": "quizzes__dbcc07bfe2ad4ccc",
+      "title": "Fun Facts: Did You Know",
+      "category": "trivia_facts",
+      "intent": "explanation_request",
+      "content": "Comprehensive Did You Know content. Practical, actionable information with step-by-step guidance, common challenges, tips for success, and real-world applications. Educational and accessible for all skill levels.",
+      "metadata": {
+        "complexity": "beginner",
+        "subcategory": "Fun Facts",
+        "keywords": [
+          "did you know"
+        ]
+      }
+    },
+    {
+      "id": "quizzes__a98a1565bd288cd0",
+      "title": "Fun Facts: Record Breakers",
+      "category": "trivia_facts",
+      "intent": "explanation_request",
+      "content": "Comprehensive Record Breakers content. Practical, actionable information with step-by-step guidance, common challenges, tips for success, and real-world applications. Educational and accessible for all skill levels.",
+      "metadata": {
+        "complexity": "beginner",
+        "subcategory": "Fun Facts",
+        "keywords": [
+          "record breakers"
+        ]
+      }
+    },
+    {
+      "id": "quizzes__2824c6db85e06cf2",
+      "title": "Fun Facts: Oddities",
+      "category": "trivia_facts",
+      "intent": "explanation_request",
+      "content": "Comprehensive Oddities content. Practical, actionable information with step-by-step guidance, common challenges, tips for success, and real-world applications. Educational and accessible for all skill levels.",
+      "metadata": {
+        "complexity": "beginner",
+        "subcategory": "Fun Facts",
+        "keywords": [
+          "oddities"
+        ]
+      }
+    },
+    {
+      "id": "quizzes__c049b1ccecef545c",
+      "title": "Fun Facts: Surprising Statistics",
+      "category": "trivia_facts",
+      "intent": "explanation_request",
+      "content": "Comprehensive Surprising Statistics content. Practical, actionable information with step-by-step guidance, common challenges, tips for success, and real-world applications. Educational and accessible for all skill levels.",
+      "metadata": {
+        "complexity": "beginner",
+        "subcategory": "Fun Facts",
+        "keywords": [
+          "surprising statistics"
+        ]
+      }
+    },
+    {
+      "id": "quizzes__cb955adb4263ba6b",
+      "title": "Fun Facts: Historical Oddities",
+      "category": "trivia_facts",
+      "intent": "explanation_request",
+      "content": "Comprehensive Historical Oddities content. Practical, actionable information with step-by-step guidance, common challenges, tips for success, and real-world applications. Educational and accessible for all skill levels.",
+      "metadata": {
+        "complexity": "beginner",
+        "subcategory": "Fun Facts",
+        "keywords": [
+          "historical oddities"
         ]
       }
     }
