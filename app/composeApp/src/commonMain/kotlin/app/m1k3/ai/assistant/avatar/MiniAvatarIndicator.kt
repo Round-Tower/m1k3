@@ -62,15 +62,15 @@ fun MiniAvatarIndicator(
             },
         contentAlignment = Alignment.Center
     ) {
-        // Glow effect (if enabled)
-        if (showGlow && state.isAnimating) {
+        // Glow effect (always visible when enabled for better visual feedback)
+        if (showGlow) {
             Canvas(
                 modifier = Modifier
                     .fillMaxSize()  // Fill parent size instead of hardcoded 80dp
-                    .graphicsLayer { alpha = glowPulse * 0.5f }
+                    .graphicsLayer { alpha = glowPulse * 0.8f }  // Increased from 0.5f
             ) {
                 drawCircle(
-                    color = state.displayColor.copy(alpha = 0.3f),
+                    color = state.displayColor.copy(alpha = 0.6f),  // Increased from 0.3f
                     radius = size.minDimension / 2
                 )
             }

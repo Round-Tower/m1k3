@@ -37,19 +37,20 @@ object AvatarEngine {
         val centerX = size.width / 2f
         val centerY = size.height / 2f
 
-        // Apply animation offsets
-        val bounceOffset = if (state.isAnimating) {
-            sin(state.animationProgress * Math.PI * 2).toFloat() * animation.bounceHeight
-        } else 0f
+        // Apply animation offsets - always animate, reduce intensity when idle
+        val bounceIntensity = if (state.activity.isActive) 1f else 0.3f
+        val bounceOffset = sin(state.animationProgress * Math.PI * 2).toFloat() *
+            animation.bounceHeight * bounceIntensity
 
         val emotionColor = state.displayColor
 
-        // Draw antenna
+        // Draw antenna with pulsing glow
         drawAntenna(
             center = Offset(centerX, centerY - geometry.headSize / 2),
             geometry = geometry,
             color = emotionColor,
-            isActive = state.isAnimating
+            isActive = state.isAnimating,
+            animationProgress = state.animationProgress
         )
 
         // Draw head
@@ -59,10 +60,16 @@ object AvatarEngine {
             color = emotionColor
         )
 
-        // Draw eyes based on emotion
+        // Blinking animation - blink every ~5 seconds
+        val blinkCycle = 5f  // Seconds between blinks (at 2s animation loop)
+        val blinkDuration = 0.03f  // 3% of cycle (quick blink)
+        val cyclePosition = state.animationProgress % (blinkCycle / 2f)
+        val shouldBlink = cyclePosition < blinkDuration
+
+        // Draw eyes based on emotion (use SLEEPY for closed eyes when blinking)
         drawEyes(
             center = Offset(centerX, centerY + bounceOffset + geometry.eyeVerticalOffset),
-            emotion = state.emotion,
+            emotion = if (shouldBlink) AvatarEmotion.SLEEPY else state.emotion,
             geometry = geometry,
             color = emotionColor
         )
@@ -122,13 +129,14 @@ object AvatarEngine {
     }
 
     /**
-     * Draw antenna with glowing bulb
+     * Draw antenna with glowing bulb (pulsing animation)
      */
     private fun DrawScope.drawAntenna(
         center: Offset,
         geometry: RobotGeometry,
         color: Color,
-        isActive: Boolean
+        isActive: Boolean,
+        animationProgress: Float = 0f
     ) {
         // Antenna stem
         drawLine(
@@ -154,14 +162,14 @@ object AvatarEngine {
             style = Stroke(width = geometry.outlineWidth)
         )
 
-        // Glow effect when active
-        if (isActive) {
-            drawCircle(
-                color = color.copy(alpha = 0.3f),
-                radius = geometry.antennaBulbRadius * 1.5f,
-                center = Offset(center.x, center.y - geometry.antennaHeight)
-            )
-        }
+        // Pulsing glow effect (always visible, more intense when active)
+        val glowIntensity = sin(animationProgress * Math.PI * 2).toFloat() * 0.5f + 0.5f
+        val baseAlpha = if (isActive) 0.4f else 0.2f
+        drawCircle(
+            color = color.copy(alpha = baseAlpha * glowIntensity),
+            radius = geometry.antennaBulbRadius * (1.5f + glowIntensity * 0.3f),
+            center = Offset(center.x, center.y - geometry.antennaHeight)
+        )
     }
 
     /**

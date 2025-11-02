@@ -100,10 +100,10 @@ fun rememberActivityAnimation(
     val pulseScale by infiniteTransition.animateFloat(
         initialValue = 1f,
         targetValue = when (activity) {
-            AvatarActivity.GENERATING -> 1.08f
-            AvatarActivity.LISTENING -> 1.03f
-            AvatarActivity.THINKING -> 1.05f
-            else -> 1.02f
+            AvatarActivity.GENERATING -> 1.15f  // More visible (15%)
+            AvatarActivity.LISTENING -> 1.10f   // More visible (10%)
+            AvatarActivity.THINKING -> 1.12f    // More visible (12%)
+            else -> 1.05f  // Even idle has visible breathing (5%)
         },
         animationSpec = infiniteRepeatable(
             animation = tween(
