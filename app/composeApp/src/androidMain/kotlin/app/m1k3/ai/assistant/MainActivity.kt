@@ -3,6 +3,7 @@ package app.m1k3.ai.assistant
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.lifecycle.lifecycleScope
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -15,8 +16,12 @@ import androidx.compose.ui.unit.dp
 import app.m1k3.ai.assistant.ai.SmolLM2Engine
 import app.m1k3.ai.assistant.database.AndroidDatabaseFactory
 import app.m1k3.ai.assistant.database.DatabaseConfig
+import app.m1k3.ai.assistant.database.MaDatabase
+import app.m1k3.ai.assistant.knowledge.KnowledgeBaseImporter
 import app.m1k3.ai.assistant.ui.ChatScreen
 import kotlinx.coroutines.launch
+import java.io.BufferedReader
+import java.io.InputStreamReader
 
 /**
  * 間 AI - MainActivity
@@ -29,11 +34,61 @@ import kotlinx.coroutines.launch
  */
 class MainActivity : ComponentActivity() {
     private lateinit var aiEngine: SmolLM2Engine
+    private var driver: app.cash.sqldelight.db.SqlDriver? = null
+    private var database: MaDatabase? = null
+    private var knowledgeImportStatus by mutableStateOf<String?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
         aiEngine = SmolLM2Engine(this)
+
+        // Import knowledge base on first startup
+        lifecycleScope.launch {
+            try {
+                knowledgeImportStatus = "Loading knowledge..."
+
+                // Initialize database
+                val databaseFactory = AndroidDatabaseFactory(this@MainActivity)
+                val passphrase = databaseFactory.getDatabasePassphrase()
+                driver = databaseFactory.createDriver(passphrase)
+                database = MaDatabase(driver!!)
+                val importer = KnowledgeBaseImporter(database!!)
+
+                // Check if knowledge already imported
+                val existingCount = database!!.triviaFactQueries.getTotalFactCount().executeAsOne()
+
+                if (existingCount == 0L) {
+                    println("📚 [M1K3] Importing comprehensive knowledge base (1,341+ documents)...")
+
+                    // Load comprehensive knowledge base from Compose Resources
+                    // Path: composeResources/myapplication.composeapp.generated.resources/files/comprehensive_knowledge_base.json
+                    val kbJson = assets.open("composeResources/myapplication.composeapp.generated.resources/files/comprehensive_knowledge_base.json").use { input ->
+                        BufferedReader(InputStreamReader(input)).use { reader ->
+                            reader.readText()
+                        }
+                    }
+
+                    // Import knowledge
+                    val result = importer.importKnowledgeBase(kbJson)
+                    println(result.toString())
+
+                    // Verify import
+                    val verification = importer.verifyImport()
+                    println(verification.toString())
+
+                    knowledgeImportStatus = "✅ Knowledge ready: ${result.imported} documents"
+                } else {
+                    println("📚 [M1K3] Knowledge base already loaded ($existingCount documents)")
+                    knowledgeImportStatus = "✅ Knowledge ready: $existingCount documents"
+                }
+
+            } catch (e: Exception) {
+                println("❌ [M1K3] Knowledge import failed: ${e.message}")
+                e.printStackTrace()
+                knowledgeImportStatus = "⚠️ Knowledge unavailable"
+            }
+        }
 
         setContent {
             MaAITheme {
@@ -49,11 +104,20 @@ class MainActivity : ComponentActivity() {
                             aiEngine = aiEngine
                         )
                     } else {
-                        MaAIDemo(onChatClick = { showChat = true })
+                        MaAIDemo(
+                            onChatClick = { showChat = true },
+                            knowledgeStatus = knowledgeImportStatus
+                        )
                     }
                 }
             }
         }
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        driver?.close()
+        aiEngine.close()
     }
 }
 
@@ -72,13 +136,13 @@ fun MaAITheme(content: @Composable () -> Unit) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MaAIDemo(onChatClick: () -> Unit) {
+fun MaAIDemo(onChatClick: () -> Unit, knowledgeStatus: String? = null) {
     var systemStatus by remember { mutableStateOf<List<StatusItem>>(emptyList()) }
     val scope = rememberCoroutineScope()
 
-    LaunchedEffect(Unit) {
+    LaunchedEffect(knowledgeStatus) {
         scope.launch {
-            systemStatus = getSystemStatus()
+            systemStatus = getSystemStatus(knowledgeStatus)
         }
     }
 
@@ -290,7 +354,7 @@ data class StatusItem(
     val isSuccess: Boolean
 )
 
-fun getSystemStatus(): List<StatusItem> {
+fun getSystemStatus(knowledgeStatus: String? = null): List<StatusItem> {
     return listOf(
         StatusItem(
             name = "Privacy Protection",
@@ -306,9 +370,9 @@ fun getSystemStatus(): List<StatusItem> {
         ),
         StatusItem(
             name = "Knowledge Base",
-            description = "1,341 documents • 20 categories",
+            description = knowledgeStatus ?: "Loading...",
             icon = "📚",
-            isSuccess = true
+            isSuccess = knowledgeStatus?.startsWith("✅") == true
         ),
         StatusItem(
             name = "Package Name",
