@@ -923,6 +923,195 @@ class ReverbEffect(AudioEffect):
         return f"ReverbEffect ({preset})"
 
 
+class Film80sEffect(AudioEffect):
+    """
+    Authentic 1980s Film Audio Effect
+
+    Recreates professional analog film sound from the 1980s using:
+    - Tape saturation (NOT bitcrushing) for analog warmth
+    - Academy Curve inspired EQ (mid-forward, gentle roll-offs)
+    - Subtle tape hiss (NOT quantization noise)
+    - Gentle vintage compression
+
+    Presets:
+    - theatrical: Professional cinema sound (wide dynamics, warm)
+    - vhs_hifi: High-quality VHS Hi-Fi (20Hz-20kHz, tape character)
+    - vhs_linear: Consumer VHS linear audio (100Hz-10kHz, nostalgic)
+    """
+
+    PRESETS = {
+        "theatrical": {
+            "saturation_drive": 1.3,
+            "eq_curve": "academy",
+            "compression_threshold": 0.75,
+            "compression_ratio": 0.67,  # 3:1
+            "tape_noise": 0.001,  # Minimal (-70dB)
+            "high_freq_rolloff": 8000
+        },
+        "vhs_hifi": {
+            "saturation_drive": 1.5,
+            "eq_curve": "gentle",
+            "compression_threshold": 0.65,
+            "compression_ratio": 0.5,  # 2:1
+            "tape_noise": 0.003,  # Subtle (-60dB)
+            "high_freq_rolloff": 12000
+        },
+        "vhs_linear": {
+            "saturation_drive": 1.8,
+            "eq_curve": "narrow",
+            "compression_threshold": 0.60,
+            "compression_ratio": 0.5,
+            "tape_noise": 0.005,  # Noticeable (-50dB)
+            "high_freq_rolloff": 6000
+        }
+    }
+
+    def __init__(self, config: Dict[str, Any] = None):
+        super().__init__(config)
+
+        # Load preset if specified
+        preset = self.config.get("preset", "theatrical")
+        if preset in self.PRESETS:
+            preset_config = self.PRESETS[preset].copy()
+            preset_config.update(self.config)
+            self.config = preset_config
+
+    def apply(self, audio_data: np.ndarray, sample_rate: int) -> np.ndarray:
+        """Apply authentic 80s film audio processing"""
+
+        # Stage 1: Pre-EQ (prepare frequency content)
+        output = self._apply_80s_film_eq(audio_data, sample_rate)
+
+        # Stage 2: Tape saturation (analog warmth)
+        saturation_drive = self.config.get("saturation_drive", 1.5)
+        output = self._apply_tape_saturation(output, saturation_drive)
+
+        # Stage 3: Vintage compression
+        output = self._apply_80s_compression(output, sample_rate)
+
+        # Stage 4: Subtle tape noise
+        tape_noise = self.config.get("tape_noise", 0.003)
+        output = self._add_analog_tape_noise(output, tape_noise)
+
+        # Stage 5: Final gentle normalization
+        output = np.clip(output, -0.98, 0.98)
+
+        return output
+
+    def _apply_tape_saturation(self, audio_data: np.ndarray, drive: float = 1.5) -> np.ndarray:
+        """Apply tape saturation for analog warmth (replaces bitcrushing)"""
+        # Apply drive (input gain)
+        driven = audio_data * drive
+
+        # Soft clipping with tanh (tape saturation curve)
+        # tanh provides smooth, musical distortion
+        saturated = np.tanh(driven * 0.7)
+
+        # Add subtle 3rd harmonic (tape characteristic)
+        harmonic_3rd = np.tanh(driven * 1.4) * 0.1
+
+        # Mix with slight emphasis on fundamentals
+        output = saturated * 0.85 + harmonic_3rd * 0.15
+
+        # Output gain compensation
+        return output * 0.9
+
+    def _apply_80s_film_eq(self, audio_data: np.ndarray, sample_rate: int) -> np.ndarray:
+        """Apply Academy Curve inspired 80s film EQ"""
+        try:
+            from scipy import signal
+
+            nyquist = sample_rate / 2
+
+            # Stage 1: Gentle bass roll-off (< 100Hz)
+            b_bass, a_bass = signal.butter(2, 100 / nyquist, btype='high')
+            output = signal.filtfilt(b_bass, a_bass, audio_data)
+
+            # Stage 2: Mid-range presence boost (800Hz-2kHz, +2dB)
+            mid_low = 800 / nyquist
+            mid_high = 2000 / nyquist
+            b_mid, a_mid = signal.butter(2, [mid_low, mid_high], btype='band')
+            mid_boost = signal.filtfilt(b_mid, a_mid, output)
+            output = output + mid_boost * 0.26  # +2dB = 1.26x
+
+            # Stage 3: Gentle high frequency roll-off (> 5kHz)
+            # This is the "warm" characteristic
+            high_rolloff = self.config.get("high_freq_rolloff", 8000)
+
+            # Ensure rolloff frequency is below Nyquist (must be < sample_rate / 2)
+            max_rolloff = nyquist * 0.95  # Stay below Nyquist limit
+            high_rolloff = min(high_rolloff, max_rolloff)
+
+            b_high, a_high = signal.butter(3, high_rolloff / nyquist, btype='low')
+            output = signal.filtfilt(b_high, a_high, output)
+
+            return output
+
+        except ImportError:
+            # Fallback: simple high-frequency roll-off
+            fft = np.fft.fft(audio_data)
+            freqs = np.fft.fftfreq(len(audio_data), 1 / sample_rate)
+
+            # Attenuate above 5kHz
+            high_freq_mask = np.abs(freqs) > 5000
+            fft[high_freq_mask] *= 0.32  # -10dB at 5kHz
+
+            return np.real(np.fft.ifft(fft))
+
+    def _apply_80s_compression(self, audio_data: np.ndarray, sample_rate: int) -> np.ndarray:
+        """Apply gentle 80s-style compression"""
+        threshold = self.config.get("compression_threshold", 0.7)
+        ratio = self.config.get("compression_ratio", 0.5)  # 2:1
+        attack_samples = int(0.020 * sample_rate)  # 20ms attack
+        release_samples = int(0.200 * sample_rate)  # 200ms release
+
+        output = audio_data.copy()
+        envelope = 0.0
+
+        for i, sample in enumerate(audio_data):
+            abs_sample = abs(sample)
+
+            # Envelope follower
+            if abs_sample > envelope:
+                # Attack
+                envelope = envelope + (abs_sample - envelope) / attack_samples
+            else:
+                # Release
+                envelope = envelope - (envelope - abs_sample) / release_samples
+
+            # Apply compression only above threshold
+            if envelope > threshold:
+                # Calculate gain reduction
+                over = envelope - threshold
+                gain_reduction = 1.0 - (over * (1.0 - ratio))
+                output[i] = sample * gain_reduction
+
+        return output
+
+    def _add_analog_tape_noise(self, audio_data: np.ndarray, amount: float = 0.003) -> np.ndarray:
+        """Add subtle tape hiss (NOT quantization noise)"""
+        # Pink noise (more natural than white noise)
+        # Approximate pink noise with filtered white noise
+        white_noise = np.random.normal(0, amount, len(audio_data))
+
+        # Simple pink noise filter (1/f spectrum)
+        # Roll off high frequencies in noise
+        if len(white_noise) > 2:
+            pink_noise = np.copy(white_noise)
+            for i in range(2, len(pink_noise)):
+                pink_noise[i] = (white_noise[i] + pink_noise[i-1] * 0.9) / 1.9
+        else:
+            pink_noise = white_noise
+
+        # Mix with original (very subtle)
+        return audio_data + pink_noise * 0.5  # -60dB noise floor
+
+    def get_name(self) -> str:
+        """Return effect name with preset info"""
+        preset = self.config.get("preset", "custom")
+        return f"Film80sEffect ({preset})"
+
+
 if __name__ == "__main__":
     print("Testing Audio Effects...")
     
