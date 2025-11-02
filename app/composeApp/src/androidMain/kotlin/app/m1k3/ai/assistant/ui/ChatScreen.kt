@@ -158,7 +158,11 @@ fun ChatScreen(
                                 )
 
                                 // Auto-scroll to show the new message
-                                listState.animateScrollToItem(messages.size - 1)
+                                try {
+                                    listState.animateScrollToItem(messages.size - 1)
+                                } catch (e: Exception) {
+                                    // Scroll animation failed, but continue with inference
+                                }
 
                                 // Use streaming generation for real-time updates
                                 val startTime = System.currentTimeMillis()
@@ -200,8 +204,14 @@ fun ChatScreen(
                                         messages = updatedMessages
 
                                         // Auto-scroll to keep the message visible
+                                        // Use scrollToItem (instant) during streaming to avoid MutatorMutex conflicts
+                                        // that would cancel the generation coroutine with CancellationException
                                         if (tokenCount % 3 == 0) {  // Scroll every 3 tokens to reduce UI updates
-                                            listState.animateScrollToItem(messages.size - 1)
+                                            try {
+                                                listState.scrollToItem(messages.size - 1)
+                                            } catch (e: Exception) {
+                                                // Ignore scroll failures - inference must continue regardless
+                                            }
                                         }
                                     }
                                 }
@@ -231,8 +241,12 @@ fun ChatScreen(
                                 )
                                 messages = updatedMessages
 
-                                // Final scroll
-                                listState.animateScrollToItem(messages.size - 1)
+                                // Final scroll with animation (safe since streaming is done)
+                                try {
+                                    listState.animateScrollToItem(messages.size - 1)
+                                } catch (e: Exception) {
+                                    // Scroll animation failed, but inference already completed
+                                }
 
                             } catch (e: Exception) {
                                 messages = messages + ChatMessage(
