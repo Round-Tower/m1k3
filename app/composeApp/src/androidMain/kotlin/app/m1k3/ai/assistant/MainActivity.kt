@@ -3,6 +3,8 @@ package app.m1k3.ai.assistant
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
+import androidx.core.view.WindowCompat
 import androidx.lifecycle.lifecycleScope
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -17,6 +19,7 @@ import app.m1k3.ai.assistant.ai.SmolLM2Engine
 import app.m1k3.ai.assistant.database.AndroidDatabaseFactory
 import app.m1k3.ai.assistant.database.DatabaseConfig
 import app.m1k3.ai.assistant.database.MaDatabase
+import app.m1k3.ai.assistant.design.theme.MaTheme
 import app.m1k3.ai.assistant.knowledge.KnowledgeBaseImporter
 import app.m1k3.ai.assistant.ui.ChatScreen
 import kotlinx.coroutines.launch
@@ -40,6 +43,12 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // Enable edge-to-edge for immersive full-screen experience
+        enableEdgeToEdge()
+
+        // Configure system bars for AMOLED black theme
+        WindowCompat.setDecorFitsSystemWindows(window, false)
 
         aiEngine = SmolLM2Engine(this)
 
@@ -91,7 +100,7 @@ class MainActivity : ComponentActivity() {
         }
 
         setContent {
-            MaAITheme {
+            MaTheme {
                 var showChat by remember { mutableStateOf(false) }
 
                 Surface(
@@ -120,19 +129,6 @@ class MainActivity : ComponentActivity() {
         driver?.close()
         aiEngine.close()
     }
-}
-
-@Composable
-fun MaAITheme(content: @Composable () -> Unit) {
-    MaterialTheme(
-        colorScheme = darkColorScheme(
-            primary = androidx.compose.ui.graphics.Color(0xFF00BCD4),
-            secondary = androidx.compose.ui.graphics.Color(0xFF03DAC5),
-            background = androidx.compose.ui.graphics.Color(0xFF121212),
-            surface = androidx.compose.ui.graphics.Color(0xFF1E1E1E),
-        ),
-        content = content
-    )
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
