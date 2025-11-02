@@ -35,6 +35,37 @@ class SmolLM2Engine(private val context: Context) {
     private var isInitialized = false
 
     /**
+     * Get device context for dynamic system prompts
+     */
+    private fun getDeviceContext(): String {
+        val deviceModel = android.os.Build.MODEL
+        val androidVersion = android.os.Build.VERSION.RELEASE
+        val sdkInt = android.os.Build.VERSION.SDK_INT
+
+        // Get RAM info
+        val activityManager = context.getSystemService(Context.ACTIVITY_SERVICE) as android.app.ActivityManager
+        val memInfo = android.app.ActivityManager.MemoryInfo()
+        activityManager.getMemoryInfo(memInfo)
+        val totalRamGB = memInfo.totalMem / (1024 * 1024 * 1024)
+
+        return "$deviceModel (Android $androidVersion, ${totalRamGB}GB RAM)"
+    }
+
+    /**
+     * Build default M1K3 system prompt with device context
+     */
+    private fun getDefaultSystemPrompt(userContext: Map<String, String>? = null): String {
+        val deviceInfo = getDeviceContext()
+        val userName = userContext?.get("name")
+
+        return if (userName != null) {
+            "You are M1K3 (Mike), $userName's privacy-first AI assistant running 100% locally on $deviceInfo. You never transmit data and respect user privacy."
+        } else {
+            "You are M1K3 (Mike), a privacy-first AI assistant running 100% locally on $deviceInfo. You never transmit data and respect user privacy."
+        }
+    }
+
+    /**
      * Initialize the AI engine.
      * Must be called before inference.
      */
@@ -105,14 +136,16 @@ class SmolLM2Engine(private val context: Context) {
      * @param prompt User input text
      * @param maxTokens Maximum tokens to generate (default: 256 for better responses)
      * @param temperature Sampling temperature (0.0-1.0, default: 0.7)
-     * @param systemPrompt Custom system prompt (default: privacy-focused assistant)
+     * @param systemPrompt Custom system prompt (default: dynamic M1K3 prompt with device context)
+     * @param userContext Optional user personalization context (e.g., name, timezone)
      * @return AI-generated response
      */
     suspend fun generate(
         prompt: String,
         maxTokens: Int = 256,  // Increased from 128 to 256 for better quality
         temperature: Float = 0.7f,
-        systemPrompt: String = "You are 間 AI, a helpful and friendly AI assistant running 100% locally on a Pixel 6 Pro. You respect privacy and never transmit data."
+        systemPrompt: String? = null,  // null = use default M1K3 prompt
+        userContext: Map<String, String>? = null
     ): GenerationResult = withContext(Dispatchers.Default) {
         if (!isInitialized) {
             throw IllegalStateException("Engine not initialized. Call initialize() first.")
@@ -124,15 +157,18 @@ class SmolLM2Engine(private val context: Context) {
             val session = ortSession ?: throw IllegalStateException("ONNX session not initialized")
             val tok = tokenizer ?: throw IllegalStateException("Tokenizer not initialized")
 
+            // Use custom system prompt or build default M1K3 prompt with device context
+            val finalSystemPrompt = systemPrompt ?: getDefaultSystemPrompt(userContext)
+
             println("🔍 [DEBUG] Starting generation...")
             println("   Prompt: \"$prompt\"")
             println("   Max tokens: $maxTokens")
             println("   Temperature: $temperature")
-            println("   System prompt: \"$systemPrompt\"")
+            println("   System prompt: \"$finalSystemPrompt\"")
 
             // 1. Format prompt with instruction template (ChatML format)
             val formattedPrompt = """<|im_start|>system
-$systemPrompt<|im_end|>
+$finalSystemPrompt<|im_end|>
 <|im_start|>user
 $prompt<|im_end|>
 <|im_start|>assistant
@@ -350,12 +386,13 @@ $prompt<|im_end|>
         prompt: String,
         maxTokens: Int = 256,
         temperature: Float = 0.7f,
-        systemPrompt: String = "You are 間 AI, a helpful and friendly AI assistant running 100% locally on a Pixel 6 Pro. You respect privacy and never transmit data.",
+        systemPrompt: String? = null,  // null = use default M1K3 prompt
+        userContext: Map<String, String>? = null,
         onToken: suspend (String) -> Unit
     ) = withContext(Dispatchers.Default) {
         // TODO: Implement streaming inference
         // For now, fallback to regular generation
-        val result = generate(prompt, maxTokens, temperature, systemPrompt)
+        val result = generate(prompt, maxTokens, temperature, systemPrompt, userContext)
         onToken(result.text)
     }
 
