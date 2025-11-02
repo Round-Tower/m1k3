@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Dynamic Feature Module Title -->
+    <string name="coding_module_title">Code Generation (Qwen2.5-Coder)</string>
+
+    <!-- User-facing messages for module download -->
+    <string name="coding_module_download_prompt">Download Code Generation Module?</string>
+    <string name="coding_module_download_description">Enable AI-powered code generation with Qwen2.5-Coder-0.5B model.\n\nSize: ~130MB\n\nSupports: Python, JavaScript, HTML/CSS, Java, Kotlin, and 90+ languages.</string>
+    <string name="coding_module_downloading">Downloading code generation module…</string>
+    <string name="coding_module_download_failed">Failed to download code generation module. Please try again.</string>
+    <string name="coding_module_not_available">Code generation feature is not available on this device.</string>
+</resources>
