@@ -17,7 +17,7 @@ kotlinx-coroutines = "1.10.2"
 ktor = "3.3.1"
 logback = "1.5.20"
 
-# 間 AI Dependencies
+# M1K3 AI Dependencies
 sqldelight = "2.0.2"
 onnxruntime = "1.23.1"
 camerax = "1.4.0"
@@ -28,6 +28,7 @@ kotlinx-serialization = "1.7.3"
 kotlinx-datetime = "0.6.1"
 sqlcipher = "4.5.4"
 androidx-security = "1.1.0-alpha06"
+compose-ui-text-googlefonts = "1.9.1"
 
 [libraries]
 kotlin-test = { module = "org.jetbrains.kotlin:kotlin-test", version.ref = "kotlin" }
@@ -47,7 +48,7 @@ ktor-serverCore = { module = "io.ktor:ktor-server-core-jvm", version.ref = "ktor
 ktor-serverNetty = { module = "io.ktor:ktor-server-netty-jvm", version.ref = "ktor" }
 ktor-serverTestHost = { module = "io.ktor:ktor-server-test-host-jvm", version.ref = "ktor" }
 
-# 間 AI Libraries
+# M1K3 AI Libraries
 sqldelight-driver-android = { module = "app.cash.sqldelight:android-driver", version.ref = "sqldelight" }
 sqldelight-driver-native = { module = "app.cash.sqldelight:native-driver", version.ref = "sqldelight" }
 sqldelight-driver-sqlite = { module = "app.cash.sqldelight:sqlite-driver", version.ref = "sqldelight" }
@@ -70,6 +71,8 @@ mlkit-image-labeling = { module = "com.google.mlkit:image-labeling", version.ref
 kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "kotlinx-serialization" }
 kotlinx-datetime = { module = "org.jetbrains.kotlinx:kotlinx-datetime", version.ref = "kotlinx-datetime" }
 
+compose-ui-text-googlefonts = { module = "androidx.compose.ui:ui-text-google-fonts", version.ref = "compose-ui-text-googlefonts" }
+
 [plugins]
 androidApplication = { id = "com.android.application", version.ref = "agp" }
 androidLibrary = { id = "com.android.library", version.ref = "agp" }
@@ -80,6 +83,6 @@ kotlinJvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
 ktor = { id = "io.ktor.plugin", version.ref = "ktor" }
 kotlinMultiplatform = { id = "org.jetbrains.kotlin.multiplatform", version.ref = "kotlin" }
 
-# 間 AI Plugins
+# M1K3 AI Plugins
 sqldelight = { id = "app.cash.sqldelight", version.ref = "sqldelight" }
 kotlinSerialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }

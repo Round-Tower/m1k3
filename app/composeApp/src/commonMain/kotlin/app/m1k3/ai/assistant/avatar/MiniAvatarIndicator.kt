@@ -51,7 +51,7 @@ fun MiniAvatarIndicator(
 
     Box(
         modifier = modifier
-            .size(80.dp)
+            .defaultMinSize(48.dp, 48.dp)  // Minimum size, but respects external size modifier
             .scale(activityAnim.scale)
             .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
             .glassmorphic(shape = CircleShape)
@@ -66,7 +66,7 @@ fun MiniAvatarIndicator(
         if (showGlow && state.isAnimating) {
             Canvas(
                 modifier = Modifier
-                    .size(80.dp)
+                    .fillMaxSize()  // Fill parent size instead of hardcoded 80dp
                     .graphicsLayer { alpha = glowPulse * 0.5f }
             ) {
                 drawCircle(
@@ -76,20 +76,20 @@ fun MiniAvatarIndicator(
             }
         }
 
-        // Avatar canvas
-        Canvas(modifier = Modifier.size(60.dp)) {
+        // Avatar canvas - uses 75% of parent size for padding
+        Canvas(modifier = Modifier.fillMaxSize(0.75f)) {
             drawRobotAvatar(
                 state = animatedState,
                 geometry = RobotGeometry(
                     headSize = size.minDimension * 0.9f,
                     headCornerRadius = 8f,
-                    eyeWidth = 16f,
+                    eyeWidth = size.width * 0.27f,  // Proportional to canvas size
                     eyeHeight = 5f,
-                    eyeSpacing = 24f,
-                    antennaHeight = 12f,
+                    eyeSpacing = size.width * 0.4f,  // Proportional to canvas size
+                    antennaHeight = size.height * 0.2f,  // Proportional to canvas size
                     antennaWidth = 3f,
                     antennaBulbRadius = 4f,
-                    mouthWidth = 24f,
+                    mouthWidth = size.width * 0.4f,  // Proportional to canvas size
                     mouthHeight = 3f
                 )
             )

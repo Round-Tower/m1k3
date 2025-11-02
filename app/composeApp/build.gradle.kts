@@ -47,7 +47,7 @@ kotlin {
             implementation(compose.preview)
             implementation(libs.androidx.activity.compose)
 
-            // 間 AI - Android-specific dependencies
+            // M1K3 AI - Android-specific dependencies
             implementation(libs.sqldelight.driver.android)
             // TODO: Re-enable SQLCipher once we resolve native library setup
             // implementation(libs.sqlcipher)
@@ -65,6 +65,9 @@ kotlin {
             implementation(libs.mlkit.text.recognition)
             implementation(libs.mlkit.objectdetection)
             implementation(libs.mlkit.image.labeling)
+
+            // Google Fonts for custom typography
+            implementation(libs.compose.ui.text.googlefonts)
         }
         commonMain.dependencies {
             implementation(compose.runtime)

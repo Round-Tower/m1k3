@@ -1,16 +1,34 @@
 package app.m1k3.ai.assistant.ui
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.*
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import app.m1k3.ai.assistant.ai.SmolLM2Engine
 import app.m1k3.ai.assistant.database.MaDatabase
@@ -18,10 +36,10 @@ import app.m1k3.ai.assistant.knowledge.KnowledgeRetrievalService
 import app.m1k3.ai.assistant.knowledge.PromptEnhancer
 import app.m1k3.ai.assistant.design.components.MaChatBubbleUser
 import app.m1k3.ai.assistant.design.components.MaChatBubbleAI
-import app.m1k3.ai.assistant.design.components.MaTextFieldChat
 import app.m1k3.ai.assistant.design.tokens.MaColors
 import app.m1k3.ai.assistant.design.tokens.MaSpacing
 import app.m1k3.ai.assistant.design.tokens.MaTypography
+import app.m1k3.ai.assistant.design.haptics.rememberHapticFeedback
 import app.m1k3.ai.assistant.avatar.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -29,7 +47,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.datetime.Clock
 
 /**
- * 間 AI - Chat Screen
+ * M1K3 AI - Chat Screen
  *
  * Beautiful chat interface with live AI responses.
  * 100% local inference on your Pixel 6 Pro!
@@ -48,6 +66,9 @@ fun ChatScreen(
 
     val scope = rememberCoroutineScope()
     val listState = rememberLazyListState()
+
+    // Haptic feedback for message outcomes
+    val haptics = rememberHapticFeedback()
 
     // Avatar state management
     val avatarVM = rememberAvatarViewModel()
@@ -123,7 +144,7 @@ fun ChatScreen(
                     ) {
                         Column {
                             Text(
-                                "間 AI Chat",
+                                "M1K3",
                                 style = MaTypography.titleLarge,
                                 fontWeight = FontWeight.Bold,
                                 color = MaColors.TextPrimary
@@ -273,6 +294,9 @@ fun ChatScreen(
                                 avatarVM.processMessage(streamedText, isUserMessage = false)
                                 avatarVM.startSpeaking()
 
+                                // Success haptic feedback
+                                haptics.success()
+
                                 // Final scroll with animation (safe since streaming is done)
                                 try {
                                     listState.animateScrollToItem(messages.size - 1)
@@ -282,6 +306,10 @@ fun ChatScreen(
 
                             } catch (e: Exception) {
                                 avatarVM.showError("Generation failed")
+
+                                // Error haptic feedback
+                                haptics.error()
+
                                 messages = messages + ChatMessage(
                                     text = "Error: ${e.message}",
                                     isUser = false,
@@ -358,36 +386,219 @@ fun ChatInputBar(
     onSend: () -> Unit,
     enabled: Boolean
 ) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isFocused by interactionSource.collectIsFocusedAsState()
+    val hasText = text.isNotBlank()
+
+    // Haptic feedback controller
+    val haptics = rememberHapticFeedback()
+
+    // Track previous text for "typing start" detection
+    var previousText by remember { mutableStateOf(text) }
+
+    // Detect typing start for haptic feedback
+    LaunchedEffect(text) {
+        if (previousText.isEmpty() && text.isNotEmpty()) {
+            haptics.light()  // Subtle feedback when typing starts
+        }
+        previousText = text
+    }
+
+    // Enhanced focus animations
+    val borderColor by animateColorAsState(
+        targetValue = when {
+            !enabled -> MaColors.BorderLight
+            isFocused -> MaColors.Orange
+            else -> MaColors.BorderLight
+        },
+        animationSpec = tween(durationMillis = 300, easing = FastOutSlowInEasing),
+        label = "borderColor"
+    )
+
+    val borderWidth by animateDpAsState(
+        targetValue = if (isFocused) 2.dp else 1.dp,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessMedium
+        ),
+        label = "borderWidth"
+    )
+
+    // Subtle elevation on focus
+    val elevation by animateDpAsState(
+        targetValue = if (isFocused) 4.dp else 0.dp,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioLowBouncy,
+            stiffness = Spring.StiffnessMedium
+        ),
+        label = "elevation"
+    )
+
+    // Subtle scale on focus for depth perception
+    val fieldScale by animateFloatAsState(
+        targetValue = if (isFocused) 1.01f else 1f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessMediumLow
+        ),
+        label = "fieldScale"
+    )
+
+    // Animated send button scale with bouncy spring
+    val sendButtonScale by animateFloatAsState(
+        targetValue = if (hasText && enabled) 1f else 0.85f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessLow
+        ),
+        label = "sendButtonScale"
+    )
+
+    // Glow pulse animation when focused
+    val glowAlpha by animateFloatAsState(
+        targetValue = if (isFocused) 0.15f else 0f,
+        animationSpec = tween(durationMillis = 400, easing = FastOutSlowInEasing),
+        label = "glowAlpha"
+    )
+
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        color = MaColors.BgSecondary
+        color = MaColors.BgPrimary
     ) {
-        Row(
+        Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(MaSpacing.base),
-            horizontalArrangement = Arrangement.spacedBy(MaSpacing.sm),
-            verticalAlignment = Alignment.Bottom
+                .padding(MaSpacing.base)
         ) {
-            MaTextFieldChat(
+            // Glow effect behind field when focused
+            if (isFocused) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(56.dp)
+                        .shadow(
+                            elevation = 8.dp,
+                            shape = RoundedCornerShape(28.dp),
+                            spotColor = MaColors.Orange.copy(alpha = glowAlpha)
+                        )
+                )
+            }
+
+            // Integrated input field with send button
+            BasicTextField(
                 value = text,
                 onValueChange = onTextChange,
-                onSend = onSend,
-                modifier = Modifier.weight(1f),
-                placeholder = "Ask 間 AI anything...",
-                enabled = enabled
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 56.dp, max = 180.dp)
+                    .scale(fieldScale)
+                    .shadow(
+                        elevation = elevation,
+                        shape = RoundedCornerShape(28.dp),
+                        spotColor = MaColors.Orange.copy(alpha = 0.3f)
+                    ),
+                enabled = enabled,
+                textStyle = MaTypography.bodyLarge.copy(
+                    color = if (enabled) MaColors.TextPrimary else MaColors.TextDisabled
+                ),
+                cursorBrush = SolidColor(MaColors.Orange),
+                maxLines = 6,
+                keyboardOptions = KeyboardOptions.Default.copy(
+                    imeAction = ImeAction.Send
+                ),
+                keyboardActions = KeyboardActions(
+                    onSend = { if (hasText && enabled) onSend() }
+                ),
+                interactionSource = interactionSource,
+                decorationBox = { innerTextField ->
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(28.dp))
+                            .background(
+                                color = if (enabled) MaColors.BgSecondary else MaColors.BgPrimary,
+                                shape = RoundedCornerShape(28.dp)
+                            )
+                            .border(
+                                width = borderWidth,
+                                color = borderColor,
+                                shape = RoundedCornerShape(28.dp)
+                            )
+                            .padding(start = 20.dp, end = 60.dp, top = 16.dp, bottom = 16.dp)
+                    ) {
+                        if (text.isEmpty()) {
+                            Text(
+                                text = "Message M1K3 AI...",
+                                style = MaTypography.bodyLarge,
+                                color = MaColors.TextDisabled,
+                                modifier = Modifier.align(Alignment.CenterStart)
+                            )
+                        }
+                        innerTextField()
+                    }
+                }
             )
 
-            IconButton(
-                onClick = onSend,
-                enabled = enabled && text.isNotBlank(),
-                modifier = Modifier.size(56.dp)
+            // Integrated send button (Claude-style)
+            Box(
+                modifier = Modifier
+                    .align(Alignment.CenterEnd)
+                    .padding(end = 8.dp)
+                    .size(40.dp)
+                    .scale(sendButtonScale)
+                    .clip(CircleShape)
+                    .background(
+                        color = if (hasText && enabled) MaColors.Orange else MaColors.BgSecondary,
+                        shape = CircleShape
+                    )
+                    .clickable(
+                        enabled = hasText && enabled,
+                        onClick = {
+                            haptics.strong()  // Strong feedback on send
+                            onSend()
+                        },
+                        indication = null,
+                        interactionSource = remember { MutableInteractionSource() }
+                    ),
+                contentAlignment = Alignment.Center
             ) {
-                Text(
-                    "➤",
-                    style = MaTypography.headlineMedium,
-                    color = if (enabled && text.isNotBlank()) MaColors.Orange else MaColors.TextDisabled
-                )
+                // Custom arrow icon (↑)
+                androidx.compose.foundation.Canvas(
+                    modifier = Modifier.size(20.dp)
+                ) {
+                    val arrowColor = if (hasText && enabled) MaColors.White else MaColors.TextDisabled
+                    val strokeWidth = 2.5f
+                    val centerX = size.width / 2
+                    val centerY = size.height / 2
+                    val arrowLength = size.height * 0.5f
+
+                    // Draw arrow shaft (vertical line)
+                    drawLine(
+                        color = arrowColor,
+                        start = Offset(centerX, centerY + arrowLength / 2),
+                        end = Offset(centerX, centerY - arrowLength / 2),
+                        strokeWidth = strokeWidth,
+                        cap = StrokeCap.Round
+                    )
+
+                    // Draw arrow head (left line)
+                    drawLine(
+                        color = arrowColor,
+                        start = Offset(centerX, centerY - arrowLength / 2),
+                        end = Offset(centerX - arrowLength / 3, centerY - arrowLength / 2 + arrowLength / 3),
+                        strokeWidth = strokeWidth,
+                        cap = StrokeCap.Round
+                    )
+
+                    // Draw arrow head (right line)
+                    drawLine(
+                        color = arrowColor,
+                        start = Offset(centerX, centerY - arrowLength / 2),
+                        end = Offset(centerX + arrowLength / 3, centerY - arrowLength / 2 + arrowLength / 3),
+                        strokeWidth = strokeWidth,
+                        cap = StrokeCap.Round
+                    )
+                }
             }
         }
     }

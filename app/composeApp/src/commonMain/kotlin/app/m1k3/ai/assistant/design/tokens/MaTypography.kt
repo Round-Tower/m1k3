@@ -7,21 +7,25 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 
 /**
- * 間 AI Typography System
+ * M1K3 AI Typography System
+ *
+ * Custom branded typography with Google Fonts:
+ * - Inter: Modern geometric sans-serif for branding (displays, headlines, titles)
+ * - Roboto: Android default for body text (optimal readability)
+ * - JetBrains Mono: Technical monospace for stats/code
  *
  * Material3 type scale optimized for mobile readability and terminal aesthetic.
- * Uses system font for universal compatibility and clean, technical appearance.
- *
  * Scale: 7 levels from 12sp (label) to 57sp (display)
  * Line heights: 1.25-1.5x for optimal readability
  */
 val MaTypography = Typography(
     // ============================================
     // Display Styles - Large marketing/hero text
+    // Uses Inter (brand font) for strong visual identity
     // ============================================
 
     displayLarge = TextStyle(
-        fontFamily = FontFamily.Default,
+        fontFamily = MaFontFamilyBrand,
         fontWeight = FontWeight.Bold,
         fontSize = 57.sp,
         lineHeight = 64.sp,
@@ -29,7 +33,7 @@ val MaTypography = Typography(
     ),
 
     displayMedium = TextStyle(
-        fontFamily = FontFamily.Default,
+        fontFamily = MaFontFamilyBrand,
         fontWeight = FontWeight.Bold,
         fontSize = 45.sp,
         lineHeight = 52.sp,
@@ -37,7 +41,7 @@ val MaTypography = Typography(
     ),
 
     displaySmall = TextStyle(
-        fontFamily = FontFamily.Default,
+        fontFamily = MaFontFamilyBrand,
         fontWeight = FontWeight.SemiBold,
         fontSize = 36.sp,
         lineHeight = 44.sp,
@@ -46,10 +50,11 @@ val MaTypography = Typography(
 
     // ============================================
     // Headline Styles - Section headers
+    // Uses Inter for branded section headers
     // ============================================
 
     headlineLarge = TextStyle(
-        fontFamily = FontFamily.Default,
+        fontFamily = MaFontFamilyBrand,
         fontWeight = FontWeight.Bold,
         fontSize = 32.sp,
         lineHeight = 40.sp,
@@ -57,7 +62,7 @@ val MaTypography = Typography(
     ),
 
     headlineMedium = TextStyle(
-        fontFamily = FontFamily.Default,
+        fontFamily = MaFontFamilyBrand,
         fontWeight = FontWeight.SemiBold,
         fontSize = 28.sp,
         lineHeight = 36.sp,
@@ -65,7 +70,7 @@ val MaTypography = Typography(
     ),
 
     headlineSmall = TextStyle(
-        fontFamily = FontFamily.Default,
+        fontFamily = MaFontFamilyBrand,
         fontWeight = FontWeight.SemiBold,
         fontSize = 24.sp,
         lineHeight = 32.sp,
@@ -74,10 +79,11 @@ val MaTypography = Typography(
 
     // ============================================
     // Title Styles - Component headers, app bars
+    // Uses Inter for consistent branding in UI components
     // ============================================
 
     titleLarge = TextStyle(
-        fontFamily = FontFamily.Default,
+        fontFamily = MaFontFamilyBrand,
         fontWeight = FontWeight.Medium,
         fontSize = 22.sp,
         lineHeight = 28.sp,
@@ -85,7 +91,7 @@ val MaTypography = Typography(
     ),
 
     titleMedium = TextStyle(
-        fontFamily = FontFamily.Default,
+        fontFamily = MaFontFamilyBrand,
         fontWeight = FontWeight.Medium,
         fontSize = 16.sp,
         lineHeight = 24.sp,
@@ -93,7 +99,7 @@ val MaTypography = Typography(
     ),
 
     titleSmall = TextStyle(
-        fontFamily = FontFamily.Default,
+        fontFamily = MaFontFamilyBrand,
         fontWeight = FontWeight.Medium,
         fontSize = 14.sp,
         lineHeight = 20.sp,
@@ -102,10 +108,11 @@ val MaTypography = Typography(
 
     // ============================================
     // Body Styles - Main content text
+    // Uses system Roboto for optimal readability
     // ============================================
 
     bodyLarge = TextStyle(
-        fontFamily = FontFamily.Default,
+        fontFamily = MaFontFamilyBody,
         fontWeight = FontWeight.Normal,
         fontSize = 16.sp,
         lineHeight = 24.sp,
@@ -113,7 +120,7 @@ val MaTypography = Typography(
     ),
 
     bodyMedium = TextStyle(
-        fontFamily = FontFamily.Default,
+        fontFamily = MaFontFamilyBody,
         fontWeight = FontWeight.Normal,
         fontSize = 14.sp,
         lineHeight = 20.sp,
@@ -121,7 +128,7 @@ val MaTypography = Typography(
     ),
 
     bodySmall = TextStyle(
-        fontFamily = FontFamily.Default,
+        fontFamily = MaFontFamilyBody,
         fontWeight = FontWeight.Normal,
         fontSize = 12.sp,
         lineHeight = 16.sp,
@@ -130,10 +137,11 @@ val MaTypography = Typography(
 
     // ============================================
     // Label Styles - Buttons, chips, badges
+    // Uses system Roboto for UI consistency
     // ============================================
 
     labelLarge = TextStyle(
-        fontFamily = FontFamily.Default,
+        fontFamily = MaFontFamilyBody,
         fontWeight = FontWeight.Medium,
         fontSize = 14.sp,
         lineHeight = 20.sp,
@@ -141,7 +149,7 @@ val MaTypography = Typography(
     ),
 
     labelMedium = TextStyle(
-        fontFamily = FontFamily.Default,
+        fontFamily = MaFontFamilyBody,
         fontWeight = FontWeight.Medium,
         fontSize = 12.sp,
         lineHeight = 16.sp,
@@ -149,7 +157,7 @@ val MaTypography = Typography(
     ),
 
     labelSmall = TextStyle(
-        fontFamily = FontFamily.Default,
+        fontFamily = MaFontFamilyBody,
         fontWeight = FontWeight.Medium,
         fontSize = 11.sp,
         lineHeight = 16.sp,
@@ -169,7 +177,7 @@ val MaTypography = Typography(
  * Example Usage:
  * ```kotlin
  * Text(
- *     text = "間 AI",
+ *     text = "M1K3 AI",
  *     style = MaterialTheme.typography.displayLarge
  * )
  * ```
