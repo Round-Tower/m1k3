@@ -20,6 +20,12 @@ import app.m1k3.ai.assistant.database.AndroidDatabaseFactory
 import app.m1k3.ai.assistant.database.DatabaseConfig
 import app.m1k3.ai.assistant.database.MaDatabase
 import app.m1k3.ai.assistant.design.theme.MaTheme
+import app.m1k3.ai.assistant.design.components.MaButtonPrimary
+import app.m1k3.ai.assistant.design.components.MaCard
+import app.m1k3.ai.assistant.design.tokens.MaColors
+import app.m1k3.ai.assistant.design.tokens.MaSpacing
+import app.m1k3.ai.assistant.design.tokens.MaTypography
+import app.m1k3.ai.assistant.avatar.*
 import app.m1k3.ai.assistant.knowledge.KnowledgeBaseImporter
 import app.m1k3.ai.assistant.ui.ChatScreen
 import kotlinx.coroutines.launch
@@ -137,9 +143,17 @@ fun MaAIDemo(onChatClick: () -> Unit, knowledgeStatus: String? = null) {
     var systemStatus by remember { mutableStateOf<List<StatusItem>>(emptyList()) }
     val scope = rememberCoroutineScope()
 
+    // Avatar state
+    val avatarVM = rememberAvatarViewModel()
+    val avatarState by avatarVM.collectAsState()
+
     LaunchedEffect(knowledgeStatus) {
         scope.launch {
             systemStatus = getSystemStatus(knowledgeStatus)
+            // Set avatar to happy when knowledge loads successfully
+            if (knowledgeStatus?.startsWith("✅") == true) {
+                avatarVM.setEmotion(AvatarEmotion.HAPPY, 0.8f)
+            }
         }
     }
 
@@ -147,21 +161,42 @@ fun MaAIDemo(onChatClick: () -> Unit, knowledgeStatus: String? = null) {
         topBar = {
             TopAppBar(
                 title = {
-                    Column {
-                        Text(
-                            "間 AI",
-                            style = MaterialTheme.typography.headlineSmall,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Text(
-                            "Privacy-First Mobile Assistant",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column {
+                            Text(
+                                "間 AI",
+                                style = MaTypography.headlineSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = MaColors.TextPrimary
+                            )
+                            Text(
+                                "Privacy-First Mobile Assistant",
+                                style = MaTypography.bodySmall,
+                                color = MaColors.TextSecondary
+                            )
+                        }
+                        // Mini avatar in top bar
+                        MiniAvatarIndicator(
+                            state = avatarState,
+                            modifier = Modifier.size(48.dp),
+                            onClick = {
+                                // Cycle through emotions on click (for demo)
+                                val emotions = listOf(
+                                    AvatarEmotion.HAPPY, AvatarEmotion.EXCITED,
+                                    AvatarEmotion.LOVE, AvatarEmotion.THINKING
+                                )
+                                val nextEmotion = emotions.random()
+                                avatarVM.setEmotion(nextEmotion, 0.8f)
+                            }
                         )
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface
+                    containerColor = MaColors.BgPrimary
                 )
             )
         }
@@ -170,47 +205,51 @@ fun MaAIDemo(onChatClick: () -> Unit, knowledgeStatus: String? = null) {
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+                .padding(MaSpacing.base),
+            verticalArrangement = Arrangement.spacedBy(MaSpacing.md)
         ) {
+            // Avatar Display
+            item {
+                Box(
+                    modifier = Modifier.fillMaxWidth(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    AvatarView(
+                        state = avatarState,
+                        showInfo = true,
+                        onClick = {
+                            avatarVM.flashEmotion(AvatarEmotion.EXCITED, 1500)
+                        }
+                    )
+                }
+            }
+
             // Chat Button
             item {
-                Button(
+                MaButtonPrimary(
                     onClick = onChatClick,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(56.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.primary
-                    )
-                ) {
-                    Text("▶", style = MaterialTheme.typography.headlineMedium)
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("💬 Chat with 間 AI", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                }
+                    text = "💬 Chat with 間 AI",
+                    modifier = Modifier.fillMaxWidth()
+                )
             }
 
             // Hero Section
             item {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.primaryContainer
-                    )
-                ) {
+                MaCard(modifier = Modifier.fillMaxWidth()) {
                     Column(
-                        modifier = Modifier.padding(20.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                        modifier = Modifier.padding(MaSpacing.lg),
+                        verticalArrangement = Arrangement.spacedBy(MaSpacing.sm)
                     ) {
                         Text(
-                            "🎉 Phase 1 AI Engine Complete",
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.Bold
+                            "🎉 Design System + Avatar Complete",
+                            style = MaTypography.titleLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = MaColors.Orange
                         )
                         Text(
-                            "SmolLM2-360M • Local Inference • Production",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
+                            "AMOLED Black • Liquid Glass • Robot Avatar • Streaming Inference",
+                            style = MaTypography.bodyMedium,
+                            color = MaColors.TextSecondary
                         )
                     }
                 }
@@ -220,9 +259,10 @@ fun MaAIDemo(onChatClick: () -> Unit, knowledgeStatus: String? = null) {
             item {
                 Text(
                     "System Status",
-                    style = MaterialTheme.typography.titleMedium,
+                    style = MaTypography.titleMedium,
                     fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier.padding(vertical = 8.dp)
+                    color = MaColors.TextPrimary,
+                    modifier = Modifier.padding(vertical = MaSpacing.sm)
                 )
             }
 
@@ -234,9 +274,10 @@ fun MaAIDemo(onChatClick: () -> Unit, knowledgeStatus: String? = null) {
             item {
                 Text(
                     "Architecture",
-                    style = MaterialTheme.typography.titleMedium,
+                    style = MaTypography.titleMedium,
                     fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier.padding(vertical = 8.dp)
+                    color = MaColors.TextPrimary,
+                    modifier = Modifier.padding(vertical = MaSpacing.sm)
                 )
             }
 
@@ -246,11 +287,11 @@ fun MaAIDemo(onChatClick: () -> Unit, knowledgeStatus: String? = null) {
 
             // Footer
             item {
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(MaSpacing.base))
                 Text(
                     "💡 100% Local • Zero Network • Privacy-First",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                    style = MaTypography.bodySmall,
+                    color = MaColors.TextDisabled,
                     modifier = Modifier.fillMaxWidth()
                 )
             }
@@ -260,38 +301,30 @@ fun MaAIDemo(onChatClick: () -> Unit, knowledgeStatus: String? = null) {
 
 @Composable
 fun StatusCard(status: StatusItem) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = if (status.isSuccess) {
-                MaterialTheme.colorScheme.surfaceVariant
-            } else {
-                MaterialTheme.colorScheme.errorContainer
-            }
-        )
-    ) {
+    MaCard(modifier = Modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp),
+                .padding(MaSpacing.base),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     status.name,
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Medium
+                    style = MaTypography.titleSmall,
+                    fontWeight = FontWeight.Medium,
+                    color = if (status.isSuccess) MaColors.TextPrimary else MaColors.Error
                 )
                 Text(
                     status.description,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                    style = MaTypography.bodySmall,
+                    color = MaColors.TextSecondary
                 )
             }
             Text(
                 status.icon,
-                style = MaterialTheme.typography.headlineMedium
+                style = MaTypography.headlineMedium
             )
         }
     }
@@ -299,24 +332,19 @@ fun StatusCard(status: StatusItem) {
 
 @Composable
 fun ArchitectureCard() {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
-        )
-    ) {
+    MaCard(modifier = Modifier.fillMaxWidth()) {
         Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            modifier = Modifier.padding(MaSpacing.base),
+            verticalArrangement = Arrangement.spacedBy(MaSpacing.md)
         ) {
             ArchitectureLayer("Kotlin Multiplatform 2.2.20", "Cross-platform foundation")
-            Divider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f))
+            HorizontalDivider(color = MaColors.BorderSubtle)
             ArchitectureLayer("Compose Multiplatform 1.9.1", "Modern UI framework")
-            Divider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f))
+            HorizontalDivider(color = MaColors.BorderSubtle)
             ArchitectureLayer("SQLDelight 2.0.2", "Type-safe database")
-            Divider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f))
+            HorizontalDivider(color = MaColors.BorderSubtle)
             ArchitectureLayer("ONNX Runtime 1.23.1", "Local AI inference")
-            Divider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f))
+            HorizontalDivider(color = MaColors.BorderSubtle)
             ArchitectureLayer("CameraX + ML Kit", "Multi-modal vision")
         }
     }
@@ -332,13 +360,14 @@ fun ArchitectureLayer(name: String, description: String) {
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 name,
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.Medium
+                style = MaTypography.bodyMedium,
+                fontWeight = FontWeight.Medium,
+                color = MaColors.TextPrimary
             )
             Text(
                 description,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                style = MaTypography.bodySmall,
+                color = MaColors.TextSecondary
             )
         }
     }
@@ -384,10 +413,16 @@ fun getSystemStatus(knowledgeStatus: String? = null): List<StatusItem> {
             isSuccess = true
         ),
         StatusItem(
-            name = "Multi-Modal Vision",
-            description = "Coming in Phase 4 (CameraX + ML Kit)",
-            icon = "📸",
-            isSuccess = false
+            name = "Design System",
+            description = "AMOLED Black • Liquid Glass • Complete",
+            icon = "🎨",
+            isSuccess = true
+        ),
+        StatusItem(
+            name = "Robot Avatar",
+            description = "9 Emotions • 6 Activities • Canvas Rendering",
+            icon = "🤖",
+            isSuccess = true
         )
     )
 }

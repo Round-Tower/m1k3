@@ -16,6 +16,13 @@ import app.m1k3.ai.assistant.ai.SmolLM2Engine
 import app.m1k3.ai.assistant.database.MaDatabase
 import app.m1k3.ai.assistant.knowledge.KnowledgeRetrievalService
 import app.m1k3.ai.assistant.knowledge.PromptEnhancer
+import app.m1k3.ai.assistant.design.components.MaChatBubbleUser
+import app.m1k3.ai.assistant.design.components.MaChatBubbleAI
+import app.m1k3.ai.assistant.design.components.MaTextFieldChat
+import app.m1k3.ai.assistant.design.tokens.MaColors
+import app.m1k3.ai.assistant.design.tokens.MaSpacing
+import app.m1k3.ai.assistant.design.tokens.MaTypography
+import app.m1k3.ai.assistant.avatar.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -42,8 +49,17 @@ fun ChatScreen(
     val scope = rememberCoroutineScope()
     val listState = rememberLazyListState()
 
+    // Avatar state management
+    val avatarVM = rememberAvatarViewModel()
+    val avatarState by avatarVM.collectAsState()
+
     // Initialize knowledge retrieval service
     val retrievalService = remember { KnowledgeRetrievalService(database) }
+
+    // Sync avatar with AI generation state
+    LaunchedEffect(isGenerating) {
+        avatarVM.syncWithAI(isGenerating)
+    }
 
     // Initialize AI engine on first load
     LaunchedEffect(Unit) {
@@ -100,20 +116,28 @@ fun ChatScreen(
         topBar = {
             TopAppBar(
                 title = {
-                    Column {
-                        Text(
-                            "間 AI Chat",
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Text(
-                            if (engineInitialized) "🟢 AI Ready (100% Local)" else "🔄 Loading...",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = if (engineInitialized) {
-                                MaterialTheme.colorScheme.primary
-                            } else {
-                                MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                            }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column {
+                            Text(
+                                "間 AI Chat",
+                                style = MaTypography.titleLarge,
+                                fontWeight = FontWeight.Bold,
+                                color = MaColors.TextPrimary
+                            )
+                            Text(
+                                if (engineInitialized) "🟢 AI Ready (100% Local)" else "🔄 Loading...",
+                                style = MaTypography.bodySmall,
+                                color = if (engineInitialized) MaColors.Orange else MaColors.TextSecondary
+                            )
+                        }
+                        // Mini avatar indicator
+                        MiniAvatarIndicator(
+                            state = avatarState,
+                            modifier = Modifier.size(48.dp)
                         )
                     }
                 },
@@ -123,7 +147,7 @@ fun ChatScreen(
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface
+                    containerColor = MaColors.BgPrimary
                 )
             )
         },
@@ -140,9 +164,13 @@ fun ChatScreen(
                         )
                         messages = messages + userMessage
 
+                        // Detect emotion from user message
+                        avatarVM.processMessage(inputText, isUserMessage = true)
+
                         val prompt = inputText
                         inputText = ""
                         isGenerating = true
+                        avatarVM.startThinking()
 
                         scope.launch {
                             try {
@@ -241,6 +269,10 @@ fun ChatScreen(
                                 )
                                 messages = updatedMessages
 
+                                // Detect emotion from AI response
+                                avatarVM.processMessage(streamedText, isUserMessage = false)
+                                avatarVM.startSpeaking()
+
                                 // Final scroll with animation (safe since streaming is done)
                                 try {
                                     listState.animateScrollToItem(messages.size - 1)
@@ -249,6 +281,7 @@ fun ChatScreen(
                                 }
 
                             } catch (e: Exception) {
+                                avatarVM.showError("Generation failed")
                                 messages = messages + ChatMessage(
                                     text = "Error: ${e.message}",
                                     isUser = false,
@@ -257,6 +290,11 @@ fun ChatScreen(
                                 )
                             } finally {
                                 isGenerating = false
+                                // Return to idle after a delay
+                                scope.launch {
+                                    kotlinx.coroutines.delay(2000)
+                                    avatarVM.returnToIdle()
+                                }
                             }
                         }
                     }
@@ -298,47 +336,18 @@ fun ChatScreen(
 
 @Composable
 fun ChatBubble(message: ChatMessage) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = if (message.isUser) Arrangement.End else Arrangement.Start
-    ) {
-        Card(
-            modifier = Modifier.widthIn(max = 280.dp),
-            colors = CardDefaults.cardColors(
-                containerColor = if (message.isUser) {
-                    MaterialTheme.colorScheme.primaryContainer
-                } else if (message.isError) {
-                    MaterialTheme.colorScheme.errorContainer
-                } else {
-                    MaterialTheme.colorScheme.secondaryContainer
-                }
-            ),
-            shape = RoundedCornerShape(
-                topStart = 16.dp,
-                topEnd = 16.dp,
-                bottomStart = if (message.isUser) 16.dp else 4.dp,
-                bottomEnd = if (message.isUser) 4.dp else 16.dp
-            )
-        ) {
-            Column(
-                modifier = Modifier.padding(12.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                Text(
-                    text = message.text,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-
-                message.inferenceStats?.let { stats ->
-                    Text(
-                        text = stats,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                    )
-                }
-            }
-        }
+    if (message.isUser) {
+        MaChatBubbleUser(
+            text = message.text,
+            timestamp = message.timestamp
+        )
+    } else {
+        MaChatBubbleAI(
+            text = message.text,
+            timestamp = message.timestamp,
+            inferenceStats = message.inferenceStats,
+            isError = message.isError
+        )
     }
 }
 
@@ -351,31 +360,34 @@ fun ChatInputBar(
 ) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        color = MaterialTheme.colorScheme.surface,
-        tonalElevation = 3.dp
+        color = MaColors.BgSecondary
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically
+                .padding(MaSpacing.base),
+            horizontalArrangement = Arrangement.spacedBy(MaSpacing.sm),
+            verticalAlignment = Alignment.Bottom
         ) {
-            OutlinedTextField(
+            MaTextFieldChat(
                 value = text,
                 onValueChange = onTextChange,
+                onSend = onSend,
                 modifier = Modifier.weight(1f),
-                placeholder = { Text("Ask 間 AI anything...") },
-                enabled = enabled,
-                maxLines = 4,
-                shape = RoundedCornerShape(24.dp)
+                placeholder = "Ask 間 AI anything...",
+                enabled = enabled
             )
 
-            FilledTonalButton(
+            IconButton(
                 onClick = onSend,
-                enabled = enabled && text.isNotBlank()
+                enabled = enabled && text.isNotBlank(),
+                modifier = Modifier.size(56.dp)
             ) {
-                Text("➤", style = MaterialTheme.typography.headlineSmall)
+                Text(
+                    "➤",
+                    style = MaTypography.headlineMedium,
+                    color = if (enabled && text.isNotBlank()) MaColors.Orange else MaColors.TextDisabled
+                )
             }
         }
     }
