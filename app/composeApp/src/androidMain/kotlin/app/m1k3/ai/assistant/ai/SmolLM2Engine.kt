@@ -6,7 +6,8 @@ import ai.onnxruntime.OrtEnvironment
 import ai.onnxruntime.OrtSession
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import java.nio.FloatBuffer
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
 
 /**
  * 間 AI - SmolLM2 Inference Engine
@@ -183,20 +184,19 @@ $prompt<|im_end|>
                     "position_ids" to positionIdsTensor
                 )
 
-                // Add empty KV cache for all 32 layers
+                // Add empty KV cache for all 32 layers (FLOAT16 type)
                 // We're processing the full sequence each time, so provide empty cache
                 // Shape: [batch_size=1, num_heads=5, seq_len=0, head_dim=64]
-                // Note: Using seq_len=0 creates FloatArray[0] which should represent no cached keys/values
+                // Note: Model expects FLOAT16 (element type 10), not FLOAT32
                 for (layer in 0 until numLayers) {
-                    // Create properly shaped but empty cache tensors
-                    // Using nested arrays with 0 length for past sequence
-                    val emptyKeyCache = FloatBuffer.allocate(0) // Empty float buffer
-                    val emptyValueCache = FloatBuffer.allocate(0)
+                    // Create empty FLOAT16 ByteBuffer (0 bytes for empty cache)
+                    val emptyKeyCache = ByteBuffer.allocateDirect(0).order(ByteOrder.nativeOrder())
+                    val emptyValueCache = ByteBuffer.allocateDirect(0).order(ByteOrder.nativeOrder())
 
-                    // Create tensors from empty buffers with explicit shape
+                    // Create FLOAT16 tensors from empty buffers with explicit shape
                     val shape = longArrayOf(1, numHeads.toLong(), 0, headDim.toLong())
-                    inputs["past_key_values.$layer.key"] = OnnxTensor.createTensor(env, emptyKeyCache, shape)
-                    inputs["past_key_values.$layer.value"] = OnnxTensor.createTensor(env, emptyValueCache, shape)
+                    inputs["past_key_values.$layer.key"] = OnnxTensor.createTensor(env, emptyKeyCache, shape, ai.onnxruntime.OnnxJavaType.FLOAT16)
+                    inputs["past_key_values.$layer.value"] = OnnxTensor.createTensor(env, emptyValueCache, shape, ai.onnxruntime.OnnxJavaType.FLOAT16)
                 }
 
                 // Run model with all required inputs
