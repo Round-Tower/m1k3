@@ -371,12 +371,20 @@ docker-compose up --build
 ## Overview
 **間 AI** (pronounced "ma" - meaning "negative space") is the mobile companion to M1K3, bringing privacy-first on-device AI to Android and iOS through Kotlin Multiplatform. Embracing wabi-sabi philosophy and computational sufficiency, 間 AI delivers a powerful AI assistant that never sends data to the cloud.
 
-## Status: 🔨 IN DEVELOPMENT (Planning Complete)
+## Status: 🚀 ACTIVE DEVELOPMENT
 
-**Current Phase:** Planning & Architecture (Phase 0 preparation)
+**Current Phase:** Phase 1 (Core AI Engine) - **MAJOR MILESTONE ACHIEVED!**
 **Timeline:** 16 weeks (6 phases)
 **Target Release:** Beta v0.1.0 (Week 16)
-**Progress:** 0/135 tickets (0%)
+**Progress:** 8/135 tickets (6%) - **Streaming Inference Working!** ✅
+
+### 🎉 **Latest Milestone:** Streaming Inference (2025-11-02)
+- ✅ **Real-time token-by-token AI generation** working end-to-end
+- ✅ **Fixed SIGSEGV crash** in ONNX Runtime KV cache management
+- ✅ **Fixed threading violations** in Compose UI updates
+- ✅ **Performance:** 15 tok/s on emulator (20-40 tok/s expected on device)
+- ✅ **256 tokens generated** without crashes
+- 📄 See [MILESTONE_STREAMING_INFERENCE.md](app/docs/MILESTONE_STREAMING_INFERENCE.md) for details
 
 ### Documentation
 - **[PROJECT_MANAGEMENT.md](app/PROJECT_MANAGEMENT.md)** - Master overview, architecture, testing strategy
