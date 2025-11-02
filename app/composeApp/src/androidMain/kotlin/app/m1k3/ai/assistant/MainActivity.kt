@@ -28,12 +28,13 @@ import app.m1k3.ai.assistant.design.tokens.MaTypography
 import app.m1k3.ai.assistant.avatar.*
 import app.m1k3.ai.assistant.knowledge.KnowledgeBaseImporter
 import app.m1k3.ai.assistant.ui.ChatScreen
+import app.m1k3.ai.assistant.ui.AvatarDebugScreen
 import kotlinx.coroutines.launch
 import java.io.BufferedReader
 import java.io.InputStreamReader
 
 /**
- * 間 AI - MainActivity
+ * M1K3 AI - MainActivity
  *
  * Minimalist demo showcasing:
  * - Privacy-first architecture (zero network)
@@ -108,22 +109,33 @@ class MainActivity : ComponentActivity() {
         setContent {
             MaTheme {
                 var showChat by remember { mutableStateOf(false) }
+                var showDebug by remember { mutableStateOf(false) }
 
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    if (showChat && database != null) {
-                        ChatScreen(
-                            onBackClick = { showChat = false },
-                            aiEngine = aiEngine,
-                            database = database!!
-                        )
-                    } else {
-                        MaAIDemo(
-                            onChatClick = { showChat = true },
-                            knowledgeStatus = knowledgeImportStatus
-                        )
+                    when {
+                        showDebug -> {
+                            AvatarDebugScreen(
+                                onBackClick = { showDebug = false }
+                            )
+                        }
+                        showChat && database != null -> {
+                            ChatScreen(
+                                onBackClick = { showChat = false },
+                                onDebugClick = { showDebug = true },
+                                aiEngine = aiEngine,
+                                database = database!!
+                            )
+                        }
+                        else -> {
+                            MaAIDemo(
+                                onChatClick = { showChat = true },
+                                onDebugClick = { showDebug = true },
+                                knowledgeStatus = knowledgeImportStatus
+                            )
+                        }
                     }
                 }
             }
@@ -139,7 +151,7 @@ class MainActivity : ComponentActivity() {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MaAIDemo(onChatClick: () -> Unit, knowledgeStatus: String? = null) {
+fun MaAIDemo(onChatClick: () -> Unit, onDebugClick: () -> Unit = {}, knowledgeStatus: String? = null) {
     var systemStatus by remember { mutableStateOf<List<StatusItem>>(emptyList()) }
     val scope = rememberCoroutineScope()
 
@@ -168,7 +180,7 @@ fun MaAIDemo(onChatClick: () -> Unit, knowledgeStatus: String? = null) {
                     ) {
                         Column {
                             Text(
-                                "間 AI",
+                                "M1K3 AI",
                                 style = MaTypography.headlineSmall,
                                 fontWeight = FontWeight.Bold,
                                 color = MaColors.TextPrimary
@@ -228,9 +240,40 @@ fun MaAIDemo(onChatClick: () -> Unit, knowledgeStatus: String? = null) {
             item {
                 MaButtonPrimary(
                     onClick = onChatClick,
-                    text = "💬 Chat with 間 AI",
+                    text = "💬 Chat with M1K3 AI",
                     modifier = Modifier.fillMaxWidth()
                 )
+            }
+
+            // Debug Button
+            item {
+                MaCard(
+                    onClick = onDebugClick,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(MaSpacing.base),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                "🎨 Avatar Debug Lab",
+                                style = MaTypography.titleSmall,
+                                fontWeight = FontWeight.Medium,
+                                color = MaColors.TextPrimary
+                            )
+                            Text(
+                                "Test 3D avatar • All emotions • Performance metrics",
+                                style = MaTypography.bodySmall,
+                                color = MaColors.TextSecondary
+                            )
+                        }
+                        Text("→", style = MaTypography.headlineMedium, color = MaColors.Orange)
+                    }
+                }
             }
 
             // Hero Section

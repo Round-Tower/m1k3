@@ -32,17 +32,23 @@ import app.m1k3.ai.assistant.design.tokens.MaTypography
 /**
  * Full-size avatar display with emotion and activity indicators
  *
+ * Supports both 2D Canvas and 3D model rendering:
+ * - Android: 3D Colobus monkey by default (with 2D fallback)
+ * - Other platforms: 2D Canvas robot (3D not yet supported)
+ *
  * @param state Current avatar state (emotion, activity, intensity)
  * @param modifier Optional modifier
  * @param showInfo Whether to show emotion/activity labels
  * @param onClick Optional click handler for interactive demos
+ * @param use3D Whether to use 3D model (Android only, defaults to 2D for compatibility)
  */
 @Composable
 fun AvatarView(
     state: AvatarState,
     modifier: Modifier = Modifier,
     showInfo: Boolean = true,
-    onClick: (() -> Unit)? = null
+    onClick: (() -> Unit)? = null,
+    use3D: Boolean = false  // Default to 2D for stability
 ) {
     // Animate state transitions
     val animatedState = rememberAnimatedAvatarState(
@@ -72,7 +78,7 @@ fun AvatarView(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
-            // Avatar canvas
+            // Avatar rendering (2D Canvas or 3D model)
             Box(
                 modifier = Modifier
                     .size(200.dp)
@@ -84,12 +90,19 @@ fun AvatarView(
                     },
                 contentAlignment = Alignment.Center
             ) {
-                Canvas(modifier = Modifier.fillMaxSize()) {
-                    drawRobotAvatar(
-                        state = animatedState,
-                        geometry = RobotGeometry(),
-                        animation = AvatarAnimation()
-                    )
+                if (use3D) {
+                    // 3D model rendering (Android only)
+                    // Defined in Avatar3DView.android.kt via expect/actual
+                    AvatarViewContent3D(state = animatedState)
+                } else {
+                    // 2D Canvas rendering (all platforms)
+                    Canvas(modifier = Modifier.fillMaxSize()) {
+                        drawRobotAvatar(
+                            state = animatedState,
+                            geometry = RobotGeometry(),
+                            animation = AvatarAnimation()
+                        )
+                    }
                 }
             }
 
@@ -301,6 +314,19 @@ fun AvatarActivityIndicator(
         )
     }
 }
+
+/**
+ * Platform-specific 3D avatar content
+ *
+ * On Android: Renders Colobus 3D model with SceneView
+ * On other platforms: Falls back to 2D Canvas (3D not yet supported)
+ *
+ * @param state Avatar state to render
+ */
+@Composable
+expect fun AvatarViewContent3D(
+    state: AvatarState
+)
 
 /**
  * Usage Examples:

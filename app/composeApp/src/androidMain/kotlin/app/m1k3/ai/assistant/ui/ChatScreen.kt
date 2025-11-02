@@ -56,6 +56,7 @@ import kotlinx.datetime.Clock
 @Composable
 fun ChatScreen(
     onBackClick: () -> Unit,
+    onDebugClick: () -> Unit = {},
     aiEngine: SmolLM2Engine,
     database: MaDatabase
 ) {
@@ -171,6 +172,15 @@ fun ChatScreen(
                     containerColor = MaColors.BgPrimary
                 )
             )
+        },
+        floatingActionButton = {
+            FloatingActionButton(
+                onClick = onDebugClick,
+                containerColor = MaColors.Orange,
+                contentColor = MaColors.White
+            ) {
+                Text("🎨", style = MaterialTheme.typography.headlineMedium)
+            }
         },
         bottomBar = {
             ChatInputBar(

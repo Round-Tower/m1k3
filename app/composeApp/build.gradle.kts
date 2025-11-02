@@ -68,6 +68,9 @@ kotlin {
 
             // Google Fonts for custom typography
             implementation(libs.compose.ui.text.googlefonts)
+
+            // SceneView for 3D avatar rendering
+            implementation(libs.sceneview)
         }
         commonMain.dependencies {
             implementation(compose.runtime)
