@@ -13,7 +13,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import app.m1k3.ai.assistant.ai.SmolLM2Engine
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.datetime.Clock
 
 /**
@@ -45,7 +47,7 @@ fun ChatScreen(
 
                 // Add welcome message
                 messages = messages + ChatMessage(
-                    text = "Hello! I'm 間 AI, running 100% locally on your Pixel 6 Pro. " +
+                    text = "Hello! I'm M1K3 (Mike), your privacy-first AI assistant running 100% locally on your device. " +
                             "I'm powered by SmolLM2-360M and I respect your privacy - " +
                             "zero network transmission. Ask me anything!",
                     isUser = false,
@@ -113,17 +115,70 @@ fun ChatScreen(
 
                         scope.launch {
                             try {
-                                val result = aiEngine.generate(prompt, maxTokens = 128)
+                                // Add placeholder AI message that will be updated during streaming
+                                val aiMessageTimestamp = Clock.System.now().toEpochMilliseconds()
+                                val aiMessageIndex = messages.size
 
-                                val aiMessage = ChatMessage(
-                                    text = result.text,
+                                messages = messages + ChatMessage(
+                                    text = "...",
                                     isUser = false,
-                                    timestamp = Clock.System.now().toEpochMilliseconds(),
-                                    inferenceStats = "⚡ ${result.tokensGenerated} tokens in ${result.inferenceTimeMs}ms"
+                                    timestamp = aiMessageTimestamp,
+                                    inferenceStats = "🔄 Generating..."
                                 )
-                                messages = messages + aiMessage
 
-                                // Auto-scroll to bottom
+                                // Auto-scroll to show the new message
+                                listState.animateScrollToItem(messages.size - 1)
+
+                                // Use streaming generation for real-time updates
+                                val startTime = System.currentTimeMillis()
+                                var streamedText = ""
+                                var tokenCount = 0
+
+                                aiEngine.generateStreaming(
+                                    prompt = prompt,
+                                    maxTokens = 256,  // Increased for better responses
+                                    temperature = 0.7f
+                                ) { token ->
+                                    // Append each token as it arrives
+                                    streamedText += token
+                                    tokenCount++
+
+                                    // Update the message in real-time on the MAIN thread
+                                    withContext(Dispatchers.Main) {
+                                        val updatedMessages = messages.toMutableList()
+                                        updatedMessages[aiMessageIndex] = ChatMessage(
+                                            text = streamedText,
+                                            isUser = false,
+                                            timestamp = aiMessageTimestamp,
+                                            inferenceStats = "⚡ Streaming... ($tokenCount tokens)"
+                                        )
+                                        messages = updatedMessages
+
+                                        // Auto-scroll to keep the message visible
+                                        if (tokenCount % 3 == 0) {  // Scroll every 3 tokens to reduce UI updates
+                                            listState.animateScrollToItem(messages.size - 1)
+                                        }
+                                    }
+                                }
+
+                                // Final update with complete stats
+                                val totalTime = System.currentTimeMillis() - startTime
+                                val tokensPerSec = if (totalTime > 0) {
+                                    (tokenCount * 1000.0f) / totalTime
+                                } else {
+                                    0f
+                                }
+
+                                val updatedMessages = messages.toMutableList()
+                                updatedMessages[aiMessageIndex] = ChatMessage(
+                                    text = streamedText.ifEmpty { "..." },
+                                    isUser = false,
+                                    timestamp = aiMessageTimestamp,
+                                    inferenceStats = "⚡ $tokenCount tokens in ${totalTime}ms (${"%.1f".format(tokensPerSec)} tok/s)"
+                                )
+                                messages = updatedMessages
+
+                                // Final scroll
                                 listState.animateScrollToItem(messages.size - 1)
 
                             } catch (e: Exception) {

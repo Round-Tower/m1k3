@@ -202,30 +202,43 @@ $prompt<|im_end|>
 
             // Initialize KV cache storage (will be populated after first inference)
             var pastKeyValues: MutableMap<String, OnnxTensor>? = null
+            var previousOutputs: OrtSession.Result? = null  // Track previous outputs container
+            var currentSeqLen = 0  // Track sequence length in KV cache
 
             println("🔍 [DEBUG] Starting autoregressive generation loop (max $maxTokens tokens)...")
 
             for (i in 0 until maxTokens) {
                 if (i % 10 == 0) {
-                    println("🔍 [DEBUG] Token $i/${maxTokens} | Sequence length: ${generatedIds.size}")
+                    println("🔍 [DEBUG] Token $i/${maxTokens} | Sequence length: ${generatedIds.size} | KV cache len: $currentSeqLen")
                 }
 
-                // Create tensor from current sequence
-                val currentIds = generatedIds.toLongArray()
+                // For first token, process entire prompt. For subsequent tokens, only process new token
+                val isFirstToken = (i == 0)
+                val currentIds = if (isFirstToken) {
+                    generatedIds.toLongArray()
+                } else {
+                    longArrayOf(generatedIds.last())  // Only the newly generated token
+                }
+
                 val currentTensor = OnnxTensor.createTensor(
                     env,
                     arrayOf(currentIds)
                 )
 
-                // Create position_ids tensor (0, 1, 2, 3, ..., n-1)
-                val positionIds = LongArray(currentIds.size) { it.toLong() }
+                // Create position_ids tensor
+                val positionIds = if (isFirstToken) {
+                    LongArray(currentIds.size) { it.toLong() }
+                } else {
+                    longArrayOf(currentSeqLen.toLong())  // Position of the new token
+                }
                 val positionIdsTensor = OnnxTensor.createTensor(
                     env,
                     arrayOf(positionIds)
                 )
 
-                // Create attention_mask tensor (all 1s, same shape as input_ids)
-                val attentionMask = LongArray(currentIds.size) { 1L }
+                // Create attention_mask tensor (all 1s for the total sequence length so far)
+                val totalSeqLen = if (isFirstToken) currentIds.size else currentSeqLen + 1
+                val attentionMask = LongArray(totalSeqLen) { 1L }
                 val attentionMaskTensor = OnnxTensor.createTensor(
                     env,
                     arrayOf(attentionMask)
@@ -238,19 +251,22 @@ $prompt<|im_end|>
                     "position_ids" to positionIdsTensor
                 )
 
-                // Add empty KV cache for all 32 layers (FLOAT16 type)
-                // We're processing the full sequence each time, so provide empty cache
-                // Shape: [batch_size=1, num_heads=5, seq_len=0, head_dim=64]
-                // Note: Model expects FLOAT16 (element type 10), not FLOAT32
-                for (layer in 0 until numLayers) {
-                    // Create empty FLOAT16 ByteBuffer (0 bytes for empty cache)
-                    val emptyKeyCache = ByteBuffer.allocateDirect(0).order(ByteOrder.nativeOrder())
-                    val emptyValueCache = ByteBuffer.allocateDirect(0).order(ByteOrder.nativeOrder())
-
-                    // Create FLOAT16 tensors from empty buffers with explicit shape
-                    val shape = longArrayOf(1, numHeads.toLong(), 0, headDim.toLong())
-                    inputs["past_key_values.$layer.key"] = OnnxTensor.createTensor(env, emptyKeyCache, shape, ai.onnxruntime.OnnxJavaType.FLOAT16)
-                    inputs["past_key_values.$layer.value"] = OnnxTensor.createTensor(env, emptyValueCache, shape, ai.onnxruntime.OnnxJavaType.FLOAT16)
+                // Add KV cache tensors
+                if (isFirstToken || pastKeyValues == null) {
+                    // First token: Use empty KV cache
+                    for (layer in 0 until numLayers) {
+                        val emptyKeyCache = ByteBuffer.allocateDirect(0).order(ByteOrder.nativeOrder())
+                        val emptyValueCache = ByteBuffer.allocateDirect(0).order(ByteOrder.nativeOrder())
+                        val shape = longArrayOf(1, numHeads.toLong(), 0, headDim.toLong())
+                        inputs["past_key_values.$layer.key"] = OnnxTensor.createTensor(env, emptyKeyCache, shape, ai.onnxruntime.OnnxJavaType.FLOAT16)
+                        inputs["past_key_values.$layer.value"] = OnnxTensor.createTensor(env, emptyValueCache, shape, ai.onnxruntime.OnnxJavaType.FLOAT16)
+                    }
+                } else {
+                    // Subsequent tokens: Reuse KV cache from previous iteration
+                    for (layer in 0 until numLayers) {
+                        inputs["past_key_values.$layer.key"] = pastKeyValues!!["present.$layer.key"]!!
+                        inputs["past_key_values.$layer.value"] = pastKeyValues!!["present.$layer.value"]!!
+                    }
                 }
 
                 // Run model with all required inputs
@@ -277,29 +293,39 @@ $prompt<|im_end|>
                     attentionMaskTensor.close()
                     positionIdsTensor.close()
                     outputs.close()
+                    previousOutputs?.close()
                     break
                 }
 
                 generatedIds.add(nextTokenId)
 
-                // Extract and update KV cache for next iteration
-                // Note: The model outputs the updated cache after processing current token
-                // We need to extract it and pass it to the next iteration
-                // For now, we'll keep empty cache (slower but simpler implementation)
+                // Close the PREVIOUS outputs container (now that we've used its cached tensors)
+                // This is safe because we're about to extract new tensors from the current outputs
+                previousOutputs?.close()
 
-                // Clean up tensors
+                // Extract new KV cache from outputs for reuse in next iteration
+                pastKeyValues = mutableMapOf()
+                for (layer in 0 until numLayers) {
+                    val presentKeyOpt = outputs.get("present.$layer.key")
+                    val presentValueOpt = outputs.get("present.$layer.value")
+
+                    if (presentKeyOpt.isPresent && presentValueOpt.isPresent) {
+                        pastKeyValues["present.$layer.key"] = presentKeyOpt.get() as OnnxTensor
+                        pastKeyValues["present.$layer.value"] = presentValueOpt.get() as OnnxTensor
+                    }
+                }
+
+                // Update sequence length for next iteration
+                currentSeqLen = totalSeqLen
+
+                // Clean up input tensors
                 currentTensor.close()
                 attentionMaskTensor.close()
                 positionIdsTensor.close()
 
-                // Close old cache tensors if they exist
-                pastKeyValues?.values?.forEach { it.close() }
-
-                // TODO: Extract and reuse KV cache from outputs for efficiency
-                // For now, set to null to use empty cache each time
-                pastKeyValues = null
-
-                outputs.close()
+                // Save current outputs for cleanup in next iteration
+                // DO NOT close it yet - we need the KV cache tensors to stay alive!
+                previousOutputs = outputs
 
                 // Stop if we hit special tokens
                 if (nextTokenId == 0L || nextTokenId == 1L) {
@@ -307,8 +333,8 @@ $prompt<|im_end|>
                 }
             }
 
-            // Clean up any remaining cache tensors
-            pastKeyValues?.values?.forEach { it.close() }
+            // Clean up the final outputs container
+            previousOutputs?.close()
 
             inputTensor.close()
 
@@ -381,19 +407,180 @@ $prompt<|im_end|>
 
     /**
      * Generate response with streaming (token-by-token)
+     *
+     * This function provides real-time token generation with incremental decoding.
+     * The onToken callback is called after each token is generated and decoded.
      */
     suspend fun generateStreaming(
         prompt: String,
         maxTokens: Int = 256,
         temperature: Float = 0.7f,
-        systemPrompt: String? = null,  // null = use default M1K3 prompt
+        systemPrompt: String? = null,
         userContext: Map<String, String>? = null,
         onToken: suspend (String) -> Unit
     ) = withContext(Dispatchers.Default) {
-        // TODO: Implement streaming inference
-        // For now, fallback to regular generation
-        val result = generate(prompt, maxTokens, temperature, systemPrompt, userContext)
-        onToken(result.text)
+        if (!isInitialized) {
+            throw IllegalStateException("Engine not initialized. Call initialize() first.")
+        }
+
+        val startTime = System.currentTimeMillis()
+
+        try {
+            val session = ortSession ?: throw IllegalStateException("ONNX session not initialized")
+            val tok = tokenizer ?: throw IllegalStateException("Tokenizer not initialized")
+
+            // Use custom system prompt or build default M1K3 prompt
+            val finalSystemPrompt = systemPrompt ?: getDefaultSystemPrompt(userContext)
+
+            println("🔍 [STREAMING] Starting generation...")
+            println("   Prompt: \"$prompt\"")
+            println("   Max tokens: $maxTokens")
+            println("   Temperature: $temperature")
+
+            // 1. Format prompt with ChatML
+            val formattedPrompt = """<|im_start|>system
+$finalSystemPrompt<|im_end|>
+<|im_start|>user
+$prompt<|im_end|>
+<|im_start|>assistant
+"""
+
+            // 2. Tokenize input
+            val inputIds = tok.encode(formattedPrompt)
+            println("   📝 Tokenized prompt: ${inputIds.size} tokens")
+
+            val env = ortEnvironment ?: throw IllegalStateException("Environment not initialized")
+
+            // 3. Initialize generation state
+            val generatedIds = mutableListOf<Long>()
+            generatedIds.addAll(inputIds.toList())
+
+            val numLayers = 32
+            val numHeads = 5
+            val headDim = 64
+
+            var pastKeyValues: MutableMap<String, OnnxTensor>? = null
+            var previousOutputs: OrtSession.Result? = null  // Track previous outputs container
+            var currentSeqLen = 0
+
+            println("🔍 [STREAMING] Starting token-by-token generation...")
+
+            // 4. Generate tokens one at a time
+            for (i in 0 until maxTokens) {
+                val isFirstToken = (i == 0)
+                val currentIds = if (isFirstToken) {
+                    generatedIds.toLongArray()
+                } else {
+                    longArrayOf(generatedIds.last())
+                }
+
+                val currentTensor = OnnxTensor.createTensor(env, arrayOf(currentIds))
+
+                val positionIds = if (isFirstToken) {
+                    LongArray(currentIds.size) { it.toLong() }
+                } else {
+                    longArrayOf(currentSeqLen.toLong())
+                }
+                val positionIdsTensor = OnnxTensor.createTensor(env, arrayOf(positionIds))
+
+                val totalSeqLen = if (isFirstToken) currentIds.size else currentSeqLen + 1
+                val attentionMask = LongArray(totalSeqLen) { 1L }
+                val attentionMaskTensor = OnnxTensor.createTensor(env, arrayOf(attentionMask))
+
+                val inputs = mutableMapOf(
+                    "input_ids" to currentTensor,
+                    "attention_mask" to attentionMaskTensor,
+                    "position_ids" to positionIdsTensor
+                )
+
+                // Add KV cache
+                if (isFirstToken || pastKeyValues == null) {
+                    for (layer in 0 until numLayers) {
+                        val emptyKeyCache = ByteBuffer.allocateDirect(0).order(ByteOrder.nativeOrder())
+                        val emptyValueCache = ByteBuffer.allocateDirect(0).order(ByteOrder.nativeOrder())
+                        val shape = longArrayOf(1, numHeads.toLong(), 0, headDim.toLong())
+                        inputs["past_key_values.$layer.key"] = OnnxTensor.createTensor(env, emptyKeyCache, shape, ai.onnxruntime.OnnxJavaType.FLOAT16)
+                        inputs["past_key_values.$layer.value"] = OnnxTensor.createTensor(env, emptyValueCache, shape, ai.onnxruntime.OnnxJavaType.FLOAT16)
+                    }
+                } else {
+                    for (layer in 0 until numLayers) {
+                        inputs["past_key_values.$layer.key"] = pastKeyValues!!["present.$layer.key"]!!
+                        inputs["past_key_values.$layer.value"] = pastKeyValues!!["present.$layer.value"]!!
+                    }
+                }
+
+                // Run inference
+                val outputs = session.run(inputs)
+                val logitsObj = outputs.get(0).value
+                val nextTokenId = sampleNextToken(logitsObj, temperature)
+
+                // Check for EOS
+                if (nextTokenId == 2L) {
+                    println("🔍 [STREAMING] EOS token detected, stopping")
+                    currentTensor.close()
+                    attentionMaskTensor.close()
+                    positionIdsTensor.close()
+                    outputs.close()
+                    previousOutputs?.close()
+                    break
+                }
+
+                generatedIds.add(nextTokenId)
+
+                // Decode and emit the new token immediately
+                val newTokenText = tok.decode(longArrayOf(nextTokenId))
+                if (newTokenText.isNotEmpty()) {
+                    if (i == 0 || i % 5 == 0) {
+                        println("🔍 [STREAMING] Token $i: \"$newTokenText\"")
+                    }
+                    onToken(newTokenText)
+                }
+
+                // Close the PREVIOUS outputs container (now that we've used its cached tensors)
+                // This is safe because we're about to extract new tensors from the current outputs
+                previousOutputs?.close()
+
+                // Extract KV cache for next iteration from current outputs
+                pastKeyValues = mutableMapOf()
+                for (layer in 0 until numLayers) {
+                    val presentKeyOpt = outputs.get("present.$layer.key")
+                    val presentValueOpt = outputs.get("present.$layer.value")
+                    if (presentKeyOpt.isPresent && presentValueOpt.isPresent) {
+                        pastKeyValues["present.$layer.key"] = presentKeyOpt.get() as OnnxTensor
+                        pastKeyValues["present.$layer.value"] = presentValueOpt.get() as OnnxTensor
+                    }
+                }
+
+                currentSeqLen = totalSeqLen
+
+                // Clean up input tensors
+                currentTensor.close()
+                attentionMaskTensor.close()
+                positionIdsTensor.close()
+
+                // Save current outputs for cleanup in next iteration
+                // DO NOT close it yet - we need the KV cache tensors to stay alive!
+                previousOutputs = outputs
+
+                // Stop on special tokens
+                if (nextTokenId == 0L || nextTokenId == 1L) {
+                    break
+                }
+            }
+
+            // Clean up the final outputs container
+            previousOutputs?.close()
+
+            val totalTime = System.currentTimeMillis() - startTime
+            val tokensGenerated = generatedIds.size - inputIds.size
+            println("   ⚡ Streamed ${tokensGenerated} tokens in ${totalTime}ms")
+            println("   🚀 Speed: ${"%.1f".format((tokensGenerated * 1000.0f) / totalTime)} tok/s")
+
+        } catch (e: Exception) {
+            println("❌ Streaming inference failed: ${e.message}")
+            e.printStackTrace()
+            throw RuntimeException("Streaming inference failed", e)
+        }
     }
 
     /**
