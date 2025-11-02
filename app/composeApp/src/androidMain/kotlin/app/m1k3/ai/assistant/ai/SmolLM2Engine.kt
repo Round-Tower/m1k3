@@ -103,13 +103,16 @@ class SmolLM2Engine(private val context: Context) {
      * Generate AI response for a given prompt.
      *
      * @param prompt User input text
-     * @param maxTokens Maximum tokens to generate
+     * @param maxTokens Maximum tokens to generate (default: 256 for better responses)
+     * @param temperature Sampling temperature (0.0-1.0, default: 0.7)
+     * @param systemPrompt Custom system prompt (default: privacy-focused assistant)
      * @return AI-generated response
      */
     suspend fun generate(
         prompt: String,
-        maxTokens: Int = 128,
-        temperature: Float = 0.7f
+        maxTokens: Int = 256,  // Increased from 128 to 256 for better quality
+        temperature: Float = 0.7f,
+        systemPrompt: String = "You are 間 AI, a helpful and friendly AI assistant running 100% locally on a Pixel 6 Pro. You respect privacy and never transmit data."
     ): GenerationResult = withContext(Dispatchers.Default) {
         if (!isInitialized) {
             throw IllegalStateException("Engine not initialized. Call initialize() first.")
@@ -121,17 +124,26 @@ class SmolLM2Engine(private val context: Context) {
             val session = ortSession ?: throw IllegalStateException("ONNX session not initialized")
             val tok = tokenizer ?: throw IllegalStateException("Tokenizer not initialized")
 
-            // 1. Format prompt with instruction template
+            println("🔍 [DEBUG] Starting generation...")
+            println("   Prompt: \"$prompt\"")
+            println("   Max tokens: $maxTokens")
+            println("   Temperature: $temperature")
+            println("   System prompt: \"$systemPrompt\"")
+
+            // 1. Format prompt with instruction template (ChatML format)
             val formattedPrompt = """<|im_start|>system
-You are 間 AI, a helpful and friendly AI assistant running 100% locally on a Pixel 6 Pro. You respect privacy and never transmit data.<|im_end|>
+$systemPrompt<|im_end|>
 <|im_start|>user
 $prompt<|im_end|>
 <|im_start|>assistant
 """
 
+            println("🔍 [DEBUG] Formatted prompt length: ${formattedPrompt.length} chars")
+
             // 2. Tokenize input
             val inputIds = tok.encode(formattedPrompt)
             println("   📝 Tokenized prompt: ${inputIds.size} tokens")
+            println("🔍 [DEBUG] Token IDs (first 10): ${inputIds.take(10).joinToString(", ")}")
 
             // 3. Create input tensor
             val env = ortEnvironment ?: throw IllegalStateException("Environment not initialized")
@@ -155,7 +167,13 @@ $prompt<|im_end|>
             // Initialize KV cache storage (will be populated after first inference)
             var pastKeyValues: MutableMap<String, OnnxTensor>? = null
 
+            println("🔍 [DEBUG] Starting autoregressive generation loop (max $maxTokens tokens)...")
+
             for (i in 0 until maxTokens) {
+                if (i % 10 == 0) {
+                    println("🔍 [DEBUG] Token $i/${maxTokens} | Sequence length: ${generatedIds.size}")
+                }
+
                 // Create tensor from current sequence
                 val currentIds = generatedIds.toLongArray()
                 val currentTensor = OnnxTensor.createTensor(
@@ -200,14 +218,25 @@ $prompt<|im_end|>
                 }
 
                 // Run model with all required inputs
+                val inferenceStart = System.currentTimeMillis()
                 val outputs = session.run(inputs)
+                val inferenceTime = System.currentTimeMillis() - inferenceStart
+
+                if (i < 3 || i % 10 == 0) {
+                    println("🔍 [DEBUG] Inference ${i+1} took ${inferenceTime}ms")
+                }
 
                 // Get logits and sample next token
                 val logitsObj = outputs.get(0).value
                 val nextTokenId = sampleNextToken(logitsObj, temperature)
 
+                if (i < 5) {
+                    println("🔍 [DEBUG] Generated token ID: $nextTokenId")
+                }
+
                 // Check for end-of-sequence
                 if (nextTokenId == 2L) {  // EOS token
+                    println("🔍 [DEBUG] EOS token detected, stopping generation")
                     currentTensor.close()
                     attentionMaskTensor.close()
                     positionIdsTensor.close()
@@ -249,6 +278,9 @@ $prompt<|im_end|>
 
             // 6. Decode generated tokens (skip the input prompt)
             val responseTokens = generatedIds.drop(inputIds.size).toLongArray()
+            println("🔍 [DEBUG] Generated ${responseTokens.size} new tokens")
+            println("🔍 [DEBUG] Response token IDs (first 10): ${responseTokens.take(10).joinToString(", ")}")
+
             val responseText = tok.decode(responseTokens)
 
             val inferenceTime = System.currentTimeMillis() - startTime
@@ -256,6 +288,7 @@ $prompt<|im_end|>
 
             println("   ⚡ Generated ${tokensGenerated} tokens in ${inferenceTime}ms")
             println("   🚀 Speed: ${"%.1f".format((tokensGenerated * 1000.0f) / inferenceTime)} tok/s")
+            println("🔍 [DEBUG] Response text: \"$responseText\"")
 
             GenerationResult(
                 text = responseText.trim(),
@@ -315,12 +348,14 @@ $prompt<|im_end|>
      */
     suspend fun generateStreaming(
         prompt: String,
-        maxTokens: Int = 128,
+        maxTokens: Int = 256,
+        temperature: Float = 0.7f,
+        systemPrompt: String = "You are 間 AI, a helpful and friendly AI assistant running 100% locally on a Pixel 6 Pro. You respect privacy and never transmit data.",
         onToken: suspend (String) -> Unit
     ) = withContext(Dispatchers.Default) {
         // TODO: Implement streaming inference
         // For now, fallback to regular generation
-        val result = generate(prompt, maxTokens)
+        val result = generate(prompt, maxTokens, temperature, systemPrompt)
         onToken(result.text)
     }
 

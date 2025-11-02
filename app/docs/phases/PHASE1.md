@@ -28,7 +28,7 @@ Phase 1 implements the core AI functionality:
 ## Week 3: Model Export & ONNX Integration (Tickets 001-007)
 
 ### PHASE1-001: Export SmolLM2-360M to ONNX ⚠️ CRITICAL
-**Priority:** P0 | **Estimated Hours:** 4h | **Status:** [ ]
+**Priority:** P0 | **Estimated Hours:** 4h | **Status:** [✅] **COMPLETE** (2025-11-01)
 
 **Description:**
 Export SmolLM2-360M-Instruct from HuggingFace to ONNX format with 4-bit quantization to target ~120MB model size.
@@ -150,7 +150,7 @@ fun `model size under 150MB compressed`() {
 ---
 
 ### PHASE1-002: Implement Android ONNX Runtime Session
-**Priority:** P0 | **Estimated Hours:** 3h | **Status:** [ ]
+**Priority:** P0 | **Estimated Hours:** 3h | **Status:** [✅] **COMPLETE** (2025-11-01)
 
 **Description:**
 Create AndroidAIEngine that loads ONNX model from assets and manages OrtSession lifecycle.
@@ -399,7 +399,7 @@ fun `model unloads after idle timeout`() = runTest {
 ---
 
 ### PHASE1-003: Implement SmolLM2 Tokenizer
-**Priority:** P0 | **Estimated Hours:** 4h | **Status:** [ ]
+**Priority:** P0 | **Estimated Hours:** 4h | **Status:** [✅] **COMPLETE** (2025-11-01)
 
 **Description:**
 Create tokenizer for SmolLM2 using SentencePiece, with encoding/decoding and special token handling.
@@ -562,7 +562,7 @@ fun `token counting works`() {
 ---
 
 ### PHASE1-004: Integrate Tokenizer with AI Engine
-**Priority:** P0 | **Estimated Hours:** 2h | **Status:** [ ]
+**Priority:** P0 | **Estimated Hours:** 2h | **Status:** [✅] **COMPLETE** (2025-11-01)
 
 **Description:**
 Connect SmolLMTokenizer with AndroidAIEngine to enable text-to-text generation.
