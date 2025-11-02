@@ -98,10 +98,11 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    if (showChat) {
+                    if (showChat && database != null) {
                         ChatScreen(
                             onBackClick = { showChat = false },
-                            aiEngine = aiEngine
+                            aiEngine = aiEngine,
+                            database = database!!
                         )
                     } else {
                         MaAIDemo(

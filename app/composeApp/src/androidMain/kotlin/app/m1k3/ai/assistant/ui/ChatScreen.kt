@@ -13,6 +13,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import app.m1k3.ai.assistant.ai.SmolLM2Engine
+import app.m1k3.ai.assistant.database.MaDatabase
+import app.m1k3.ai.assistant.knowledge.KnowledgeRetrievalService
+import app.m1k3.ai.assistant.knowledge.PromptEnhancer
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -28,7 +31,8 @@ import kotlinx.datetime.Clock
 @Composable
 fun ChatScreen(
     onBackClick: () -> Unit,
-    aiEngine: SmolLM2Engine
+    aiEngine: SmolLM2Engine,
+    database: MaDatabase
 ) {
     var messages by remember { mutableStateOf<List<ChatMessage>>(emptyList()) }
     var inputText by remember { mutableStateOf("") }
@@ -38,6 +42,9 @@ fun ChatScreen(
     val scope = rememberCoroutineScope()
     val listState = rememberLazyListState()
 
+    // Initialize knowledge retrieval service
+    val retrievalService = remember { KnowledgeRetrievalService(database) }
+
     // Initialize AI engine on first load
     LaunchedEffect(Unit) {
         scope.launch {
@@ -45,14 +52,38 @@ fun ChatScreen(
                 aiEngine.initialize()
                 engineInitialized = true
 
-                // Add welcome message
+                // Generate context-aware welcome message
+                val aiMessageTimestamp = Clock.System.now().toEpochMilliseconds()
+                val aiMessageIndex = messages.size
+
                 messages = messages + ChatMessage(
-                    text = "Hello! I'm M1K3 (Mike), your privacy-first AI assistant running 100% locally on your device. " +
-                            "I'm powered by SmolLM2-360M and I respect your privacy - " +
-                            "zero network transmission. Ask me anything!",
+                    text = "...",
                     isUser = false,
-                    timestamp = Clock.System.now().toEpochMilliseconds()
+                    timestamp = aiMessageTimestamp,
+                    inferenceStats = "🔄 Initializing..."
                 )
+
+                // Generate personalized welcome
+                var welcomeText = ""
+                aiEngine.generateStreaming(
+                    prompt = "Greet the user warmly and introduce yourself as M1K3, their privacy-first AI assistant. " +
+                            "Mention that you run 100% locally on their device and respect their privacy. Keep it brief and friendly.",
+                    maxTokens = 128,  // Short welcome message
+                    temperature = 0.3f  // Slightly creative but still coherent
+                ) { token ->
+                    welcomeText += token
+                    // Update welcome message in real-time
+                    withContext(Dispatchers.Main) {
+                        val updatedMessages = messages.toMutableList()
+                        updatedMessages[aiMessageIndex] = ChatMessage(
+                            text = welcomeText,
+                            isUser = false,
+                            timestamp = aiMessageTimestamp
+                        )
+                        messages = updatedMessages
+                    }
+                }
+
             } catch (e: Exception) {
                 messages = messages + ChatMessage(
                     text = "⚠️ AI engine initialization failed: ${e.message}. " +
@@ -133,11 +164,25 @@ fun ChatScreen(
                                 val startTime = System.currentTimeMillis()
                                 var streamedText = ""
                                 var tokenCount = 0
+                                var ragInfo = ""
 
+                                // RAG: Retrieve relevant knowledge before generation
+                                val retrievedFacts = retrievalService.retrieve(prompt, limit = 3)
+                                val enhancedPrompt = PromptEnhancer.enhancePrompt(prompt, retrievedFacts)
+
+                                // Track RAG usage for display
+                                if (enhancedPrompt.hasKnowledge) {
+                                    ragInfo = PromptEnhancer.formatKnowledgeSummary(retrievedFacts)
+                                    println("📚 [RAG] $ragInfo")
+                                    println("📚 [RAG] Enhanced prompt length: ${enhancedPrompt.enhancedQuery.length} chars")
+                                }
+
+                                // Use device-adaptive max tokens (will be exposed from engine)
+                                // For now, use 256 which is reasonable for 6GB+ devices
                                 aiEngine.generateStreaming(
-                                    prompt = prompt,
-                                    maxTokens = 256,  // Increased for better responses
-                                    temperature = 0.7f
+                                    prompt = enhancedPrompt.enhancedQuery,  // Use enhanced prompt with knowledge
+                                    maxTokens = 256,  // TODO: Use aiEngine.getOptimalMaxTokens()
+                                    temperature = 0.0f  // Greedy decoding for coherent output
                                 ) { token ->
                                     // Append each token as it arrives
                                     streamedText += token
@@ -169,12 +214,20 @@ fun ChatScreen(
                                     0f
                                 }
 
+                                // Build stats with RAG info
+                                val statsText = buildString {
+                                    append("⚡ $tokenCount tokens in ${totalTime}ms (${"%.1f".format(tokensPerSec)} tok/s)")
+                                    if (ragInfo.isNotEmpty()) {
+                                        append(" • $ragInfo")
+                                    }
+                                }
+
                                 val updatedMessages = messages.toMutableList()
                                 updatedMessages[aiMessageIndex] = ChatMessage(
                                     text = streamedText.ifEmpty { "..." },
                                     isUser = false,
                                     timestamp = aiMessageTimestamp,
-                                    inferenceStats = "⚡ $tokenCount tokens in ${totalTime}ms (${"%.1f".format(tokensPerSec)} tok/s)"
+                                    inferenceStats = statsText
                                 )
                                 messages = updatedMessages
 
