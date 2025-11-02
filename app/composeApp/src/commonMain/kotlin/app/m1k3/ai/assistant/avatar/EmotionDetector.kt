@@ -33,7 +33,9 @@ object EmotionDetector {
         scores[AvatarEmotion.EXCITED] = scoreExcited(lowerText)
 
         // Find highest scoring emotion
-        val (emotion, score) = scores.maxByOrNull { it.value } ?: (AvatarEmotion.NEUTRAL to 0f)
+        val maxEntry = scores.maxByOrNull { it.value }
+        val emotion = maxEntry?.key ?: AvatarEmotion.NEUTRAL
+        val score = maxEntry?.value ?: 0f
 
         // Use neutral if no strong emotion detected
         val finalEmotion = if (score < 0.2f) AvatarEmotion.NEUTRAL else emotion
@@ -247,8 +249,9 @@ object EmotionDetector {
                 (emotionScores[detection.emotion] ?: 0f) + (detection.confidence * weight)
         }
 
-        val (emotion, score) = emotionScores.maxByOrNull { it.value }
-            ?: (AvatarEmotion.NEUTRAL to 0f)
+        val maxEntry = emotionScores.maxByOrNull { it.value }
+        val emotion = maxEntry?.key ?: AvatarEmotion.NEUTRAL
+        val score = maxEntry?.value ?: 0f
 
         // Average intensity
         val avgIntensity = detections.map { it.intensity }.average().toFloat()
