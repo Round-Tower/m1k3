@@ -25,7 +25,10 @@ import app.m1k3.ai.assistant.design.tokens.MaTypography
  * 間 AI Avatar Debug Screen
  *
  * Comprehensive testing interface for the avatar system:
- * - Toggle between 2D Canvas and 3D Colobus model
+ * - Toggle between 2D Canvas and 3D models
+ * - **NEW:** Select from 8 Quirky Series animals (Colobus, Sparrow, Gecko, etc.)
+ * - **NEW:** Interactive camera controls (pinch-zoom, orbit, pan)
+ * - **NEW:** Model metadata viewer
  * - Test all 9 emotions with intensity control
  * - Test all 6 activities
  * - Real-time state visualization
@@ -48,13 +51,18 @@ fun AvatarDebugScreen(
     var use3D by remember { mutableStateOf(false) }
     var showAdvanced by remember { mutableStateOf(false) }
 
+    // NEW: 3D model selection and camera controls
+    var selectedModel by remember { mutableStateOf(ModelRegistry.getDefault()) }
+    var enableInteraction by remember { mutableStateOf(true) }
+    var showModelInfo by remember { mutableStateOf(false) }
+
     val avatarState by remember {
         derivedStateOf {
             AvatarState(
                 emotion = currentEmotion,
                 activity = currentActivity,
                 intensity = intensity,
-                message = if (use3D) "3D Colobus Monkey" else "2D Canvas Robot"
+                message = if (use3D) selectedModel.name else "2D Canvas Robot"
             )
         }
     }
@@ -71,7 +79,7 @@ fun AvatarDebugScreen(
                             color = MaColors.TextPrimary
                         )
                         Text(
-                            if (use3D) "Testing 3D Colobus Model" else "Testing 2D Canvas Robot",
+                            if (use3D) "Testing ${selectedModel.name} • ${if (enableInteraction) "Interactive" else "Static"}" else "Testing 2D Canvas Robot",
                             style = MaTypography.bodySmall,
                             color = MaColors.Orange
                         )
@@ -106,13 +114,22 @@ fun AvatarDebugScreen(
                         .padding(MaSpacing.base),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    // Avatar
-                    AvatarView(
-                        state = avatarState,
-                        showInfo = true,
-                        use3D = use3D,
-                        modifier = Modifier.size(280.dp)
-                    )
+                    // Avatar (with 3D model support)
+                    if (use3D) {
+                        Avatar3DView(
+                            state = avatarState,
+                            modelConfig = selectedModel,
+                            enableInteraction = enableInteraction,
+                            modifier = Modifier.size(280.dp)
+                        )
+                    } else {
+                        AvatarView(
+                            state = avatarState,
+                            showInfo = true,
+                            use3D = false,
+                            modifier = Modifier.size(280.dp)
+                        )
+                    }
 
                     Spacer(modifier = Modifier.height(MaSpacing.sm))
 
@@ -161,6 +178,155 @@ fun AvatarDebugScreen(
                             checkedTrackColor = MaColors.Orange.copy(alpha = 0.5f)
                         )
                     )
+                }
+            }
+
+            // Model Selector & Camera Controls (3D only)
+            AnimatedVisibility(visible = use3D) {
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(MaSpacing.base)
+                ) {
+                    // Model Selector
+                    MaCard(
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(MaSpacing.base)
+                        ) {
+                            Text(
+                                "3D Model (${ModelRegistry.allModels.size} Animals)",
+                                style = MaTypography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaColors.TextPrimary
+                            )
+                            Spacer(modifier = Modifier.height(MaSpacing.sm))
+
+                            // Model buttons grid (2 columns)
+                            ModelRegistry.allModels.chunked(2).forEach { row ->
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(MaSpacing.xs)
+                                ) {
+                                    row.forEach { model ->
+                                        if (selectedModel.id == model.id) {
+                                            MaButtonPrimary(
+                                                text = model.name,
+                                                onClick = {},
+                                                modifier = Modifier.weight(1f),
+                                                enabled = false  // Selected
+                                            )
+                                        } else {
+                                            MaButtonSecondary(
+                                                text = model.name,
+                                                onClick = {
+                                                    selectedModel = model
+                                                    haptics.performHapticFeedback(HapticFeedbackType.MEDIUM)
+                                                },
+                                                modifier = Modifier.weight(1f)
+                                            )
+                                        }
+                                    }
+                                    // Fill empty space if odd number
+                                    if (row.size == 1) {
+                                        Spacer(modifier = Modifier.weight(1f))
+                                    }
+                                }
+                                Spacer(modifier = Modifier.height(MaSpacing.xs))
+                            }
+
+                            // Model info toggle
+                            Spacer(modifier = Modifier.height(MaSpacing.xs))
+                            MaButtonSecondary(
+                                text = if (showModelInfo) "▼ Hide Model Info" else "▶ Show Model Info",
+                                onClick = {
+                                    showModelInfo = !showModelInfo
+                                    haptics.performHapticFeedback(HapticFeedbackType.LIGHT)
+                                },
+                                modifier = Modifier.fillMaxWidth()
+                            )
+
+                            // Model metadata display
+                            AnimatedVisibility(visible = showModelInfo) {
+                                Column(
+                                    modifier = Modifier.padding(top = MaSpacing.sm),
+                                    verticalArrangement = Arrangement.spacedBy(MaSpacing.xs)
+                                ) {
+                                    HorizontalDivider(color = MaColors.BorderLight)
+                                    Spacer(modifier = Modifier.height(MaSpacing.xs))
+
+                                    DebugInfoRow("ID", selectedModel.id)
+                                    DebugInfoRow("Path", selectedModel.path)
+                                    DebugInfoRow("Category", selectedModel.category)
+                                    if (selectedModel.description.isNotEmpty()) {
+                                        Text(
+                                            text = selectedModel.description,
+                                            style = MaTypography.bodySmall,
+                                            color = MaColors.TextSecondary,
+                                            modifier = Modifier.padding(top = MaSpacing.xs)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // Camera Controls
+                    MaCard(
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(MaSpacing.base)
+                        ) {
+                            Text(
+                                "Camera Controls",
+                                style = MaTypography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaColors.TextPrimary
+                            )
+                            Text(
+                                "Interactive gestures: pinch-zoom, drag-orbit, two-finger-pan, double-tap-reset",
+                                style = MaTypography.bodySmall,
+                                color = MaColors.TextSecondary
+                            )
+                            Spacer(modifier = Modifier.height(MaSpacing.sm))
+
+                            // Enable interaction toggle
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column {
+                                    Text(
+                                        "Enable Touch Controls",
+                                        style = MaTypography.bodyMedium,
+                                        fontWeight = FontWeight.Medium,
+                                        color = MaColors.TextPrimary
+                                    )
+                                    Text(
+                                        if (enableInteraction) "Touch enabled (pinch/drag)" else "Touch disabled (static view)",
+                                        style = MaTypography.labelSmall,
+                                        color = MaColors.TextSecondary
+                                    )
+                                }
+                                Switch(
+                                    checked = enableInteraction,
+                                    onCheckedChange = {
+                                        enableInteraction = it
+                                        haptics.performHapticFeedback(HapticFeedbackType.MEDIUM)
+                                    },
+                                    colors = SwitchDefaults.colors(
+                                        checkedThumbColor = MaColors.Orange,
+                                        checkedTrackColor = MaColors.Orange.copy(alpha = 0.5f)
+                                    )
+                                )
+                            }
+                        }
+                    }
                 }
             }
 
@@ -371,10 +537,31 @@ fun AvatarDebugScreen(
                             DebugInfoRow("Is Animating", avatarState.isAnimating.toString())
 
                             if (use3D) {
-                                Divider(color = MaColors.BorderLight, modifier = Modifier.padding(vertical = MaSpacing.xs))
+                                HorizontalDivider(color = MaColors.BorderLight, modifier = Modifier.padding(vertical = MaSpacing.xs))
+
+                                // Model info
+                                Text(
+                                    "3D Model Info",
+                                    style = MaTypography.bodyMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaColors.TextPrimary
+                                )
+                                DebugInfoRow("Model", selectedModel.name)
+                                DebugInfoRow("Model ID", selectedModel.id)
+                                DebugInfoRow("Category", selectedModel.category)
+                                DebugInfoRow("Interactive", enableInteraction.toString())
+
+                                // Animation info
+                                Spacer(modifier = Modifier.height(MaSpacing.xs))
                                 val animInfo = Avatar3DEngine.getAnimation(avatarState)
-                                DebugInfoRow("3D Animation", animInfo.name)
-                                DebugInfoRow("Animation Speed", "${Avatar3DEngine.getAnimationSpeed(intensity)}x")
+                                Text(
+                                    "Current Animation",
+                                    style = MaTypography.bodyMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaColors.TextPrimary
+                                )
+                                DebugInfoRow("Animation", animInfo.name)
+                                DebugInfoRow("Speed", "${Avatar3DEngine.getAnimationSpeed(intensity)}x")
                                 DebugInfoRow("Loopable", animInfo.loopable.toString())
                                 DebugInfoRow("Duration", "${animInfo.duration}s")
                             }

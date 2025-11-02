@@ -3,18 +3,25 @@ package app.m1k3.ai.assistant.avatar
 /**
  * 間 AI Avatar 3D Animation Engine
  *
- * Maps AvatarState (emotion + activity) to Colobus monkey GLB animations.
- * Provides intelligent animation selection based on emotional context.
+ * **UPDATED:** Now supports dynamic animation mapping for ANY model.
+ * Uses AnimationIntrospector for intelligent animation selection.
  *
- * Available Colobus Animations (18):
- * - Idle: Idle_A (calm), Idle_B (energetic), Idle_C (neutral)
- * - Emotions: Fear, Bounce, Death, Eat, Sit
- * - Movement: Walk, Run, Fly, Swim, Jump, Roll, Spin
- * - Interactions: Clicked, Attack, Hit
+ * Key Changes:
+ * - Generic model support (not just Colobus)
+ * - Uses ModelMetadata.animations for discovery
+ * - Fuzzy matching for emotion → animation mapping
+ * - Graceful fallbacks when animations don't exist
+ *
+ * Legacy Support:
+ * - ColobusAnimations constants preserved for backward compatibility
+ * - Original getAnimation() method delegates to new system
  */
 
 /**
  * Animation name constants for Colobus monkey model
+ *
+ * **LEGACY:** Kept for backward compatibility.
+ * New code should use AnimationIntrospector.findAnimation() instead.
  */
 object ColobusAnimations {
     // Idle animations
@@ -46,6 +53,9 @@ object ColobusAnimations {
 
 /**
  * Animation metadata
+ *
+ * **LEGACY:** Use AnimationMetadata instead for new code.
+ * Kept for backward compatibility.
  */
 data class AnimationInfo(
     val name: String,
@@ -55,14 +65,44 @@ data class AnimationInfo(
 )
 
 /**
+ * Convert AnimationMetadata to legacy AnimationInfo
+ */
+fun AnimationMetadata.toLegacyInfo(): AnimationInfo {
+    return AnimationInfo(
+        name = name,
+        duration = duration,
+        loopable = isLoopable,
+        transitionDuration = 0.2f
+    )
+}
+
+/**
  * Avatar 3D Animation Engine
  *
  * Selects appropriate 3D animations based on avatar state.
+ *
+ * **NEW:** Supports dynamic animation mapping via getAnimation(state, availableAnimations)
+ * **LEGACY:** Original getAnimation(state) preserved for backward compatibility
  */
 object Avatar3DEngine {
 
     /**
-     * Get animation info for current avatar state
+     * Global animation speed scale factor
+     *
+     * All animations are multiplied by this value to slow them down.
+     * - 1.0f = normal speed
+     * - 0.7f = 30% slower (more graceful)
+     * - 0.5f = 50% slower (very slow)
+     *
+     * This is applied in addition to intensity-based speed adjustments.
+     */
+    const val ANIMATION_SPEED_SCALE = 0.7f
+
+    /**
+     * Get animation info for current avatar state (LEGACY)
+     *
+     * **LEGACY:** This method assumes Colobus animations.
+     * Use getAnimation(state, availableAnimations) for generic models.
      *
      * Uses intelligent mapping:
      * 1. Activity takes precedence (GENERATING → Run, THINKING → Spin)
@@ -158,6 +198,23 @@ object Avatar3DEngine {
     }
 
     /**
+     * Get animation for current avatar state (GENERIC)
+     *
+     * **NEW:** Universal animation mapper for any model.
+     * Uses AnimationIntrospector for intelligent fuzzy matching.
+     *
+     * @param state Current avatar state
+     * @param availableAnimations List of animations from ModelMetadata
+     * @return Best matching animation metadata
+     */
+    fun getAnimation(
+        state: AvatarState,
+        availableAnimations: List<AnimationMetadata>
+    ): AnimationMetadata {
+        return AnimationIntrospector.findAnimation(state, availableAnimations)
+    }
+
+    /**
      * Get animation playback speed multiplier based on intensity
      *
      * Intensity affects how fast/slow animation plays:
@@ -215,19 +272,38 @@ object Avatar3DEngine {
 /**
  * Usage Examples:
  * ```kotlin
- * // Get animation for current state
+ * // ===== NEW GENERIC API (Recommended) =====
+ *
+ * // Load model metadata
+ * val metadata = GLBModelLoader.loadMetadata(modelLoader, "models/Sparrow_Animations.glb")
  * val state = AvatarState(
- *     emotion = AvatarEmotion.THINKING,
+ *     emotion = AvatarEmotion.HAPPY,
  *     activity = AvatarActivity.GENERATING
  * )
- * val anim = Avatar3DEngine.getAnimation(state)
+ *
+ * // Get animation using intelligent fuzzy matching
+ * val anim = Avatar3DEngine.getAnimation(state, metadata.animations)
+ * // Returns: AnimationMetadata(name="Run", duration=1.5f, isLoopable=true)
+ * // Works with ANY model (Colobus, Sparrow, Gecko, etc.)
+ *
+ * // Play animation
+ * modelNode.playAnimation(
+ *     animationIndex = anim.index,
+ *     loop = anim.isLoopable,
+ *     speed = Avatar3DEngine.getAnimationSpeed(state.intensity)
+ * )
+ *
+ * // ===== LEGACY API (Colobus Only) =====
+ *
+ * // Get animation for Colobus (assumes hardcoded animations)
+ * val colobusAnim = Avatar3DEngine.getAnimation(state)
  * // Returns: AnimationInfo(name="Run", duration=1.5f, loopable=true)
  *
  * // Get playback speed from intensity
  * val speed = Avatar3DEngine.getAnimationSpeed(state.intensity)
  * // intensity=0.8 → speed=1.3x
  *
- * // Rotate idle variants to prevent monotony
+ * // Rotate idle variants to prevent monotony (Colobus-specific)
  * val idleVariant = Avatar3DEngine.getIdleVariant(timeInState = 15f)
  * // Returns: "Idle_A" (second 10-second cycle)
  * ```
