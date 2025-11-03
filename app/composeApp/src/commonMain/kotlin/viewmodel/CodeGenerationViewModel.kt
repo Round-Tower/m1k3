@@ -236,75 +236,75 @@ abstract class BaseCodeGenerationViewModel : ViewModel() {
 
                     // Update state based on event
                     when (event) {
-                    is GenerationEvent.Started -> {
-                        _uiState.update { it.copy(generationStage = "Starting...") }
-                    }
-
-                    is GenerationEvent.LoadingTemplate -> {
-                        _uiState.update {
-                            it.copy(generationStage = "Loading ${event.templateType.name.lowercase()} template...")
+                        is GenerationEvent.Started -> {
+                            _uiState.update { it.copy(generationStage = "Starting...") }
                         }
-                    }
 
-                    is GenerationEvent.Generating -> {
-                        _uiState.update {
-                            it.copy(
-                                progress = event.progress.toInt(),
-                                generationStage = "Generating code... ${event.progress.toInt()}%"
-                            )
+                        is GenerationEvent.LoadingTemplate -> {
+                            _uiState.update {
+                                it.copy(generationStage = "Loading ${event.templateType.name.lowercase()} template...")
+                            }
                         }
-                    }
 
-                    is GenerationEvent.Progress -> {
-                        _uiState.update {
-                            it.copy(
-                                progress = event.progress.toInt(),
-                                generationStage = event.stage
-                            )
+                        is GenerationEvent.Generating -> {
+                            _uiState.update {
+                                it.copy(
+                                    progress = event.progress.toInt(),
+                                    generationStage = "Generating code... ${event.progress.toInt()}%"
+                                )
+                            }
                         }
-                    }
 
-                    is GenerationEvent.PartialResult -> {
-                        _uiState.update {
-                            it.copy(
-                                partialResult = event.partial,
-                                generationStage = "Generating... (${event.partial.length} chars)"
-                            )
+                        is GenerationEvent.Progress -> {
+                            _uiState.update {
+                                it.copy(
+                                    progress = event.progress.toInt(),
+                                    generationStage = event.stage
+                                )
+                            }
                         }
-                    }
 
-                    is GenerationEvent.Validating -> {
-                        _uiState.update { it.copy(generationStage = "Validating output...") }
-                    }
-
-                    is GenerationEvent.InjectingTemplate -> {
-                        _uiState.update { it.copy(generationStage = "Injecting content...") }
-                    }
-
-                    is GenerationEvent.Completed -> {
-                        _uiState.update {
-                            it.copy(
-                                isGenerating = false,
-                                progress = 100,
-                                generatedHtml = event.html,
-                                metrics = event.metrics,
-                                generationStage = "Complete!",
-                                partialResult = null
-                            )
+                        is GenerationEvent.PartialResult -> {
+                            _uiState.update {
+                                it.copy(
+                                    partialResult = event.partial,
+                                    generationStage = "Generating... (${event.partial.length} chars)"
+                                )
+                            }
                         }
-                    }
 
-                    is GenerationEvent.Failed -> {
-                        _uiState.update {
-                            it.copy(
-                                isGenerating = false,
-                                error = "Generation failed at ${event.stage}: ${event.error.message}",
-                                generationStage = "Failed"
-                            )
+                        is GenerationEvent.Validating -> {
+                            _uiState.update { it.copy(generationStage = "Validating output...") }
+                        }
+
+                        is GenerationEvent.InjectingTemplate -> {
+                            _uiState.update { it.copy(generationStage = "Injecting content...") }
+                        }
+
+                        is GenerationEvent.Completed -> {
+                            _uiState.update {
+                                it.copy(
+                                    isGenerating = false,
+                                    progress = 100,
+                                    generatedHtml = event.html,
+                                    metrics = event.metrics,
+                                    generationStage = "Complete!",
+                                    partialResult = null
+                                )
+                            }
+                        }
+
+                        is GenerationEvent.Failed -> {
+                            _uiState.update {
+                                it.copy(
+                                    isGenerating = false,
+                                    error = "Generation failed at ${event.stage}: ${event.error.message}",
+                                    generationStage = "Failed"
+                                )
+                            }
                         }
                     }
                 }
-            }
         }
     }
 
