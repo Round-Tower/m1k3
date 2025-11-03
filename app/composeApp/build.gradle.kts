@@ -1,5 +1,4 @@
 import org.jetbrains.compose.desktop.application.dsl.TargetFormat
-import org.jetbrains.kotlin.gradle.ExperimentalWasmDsl
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
@@ -28,20 +27,13 @@ kotlin {
             isStatic = true
         }
     }
-    
+
+    // JVM target for desktop testing (optional)
     jvm()
-    
-    js {
-        browser()
-        binaries.executable()
-    }
-    
-    @OptIn(ExperimentalWasmDsl::class)
-    wasmJs {
-        browser()
-        binaries.executable()
-    }
-    
+
+    // Note: JS and WASM targets removed - not needed for mobile app
+    // and incompatible with SQLDelight database dependency
+
     sourceSets {
         androidMain.dependencies {
             implementation(compose.preview)
@@ -71,11 +63,23 @@ kotlin {
 
             // SceneView for 3D avatar rendering
             implementation(libs.sceneview)
+
+            // Coding module for code generation
+            implementation(project(":codingModule"))
+
+            // Play Core for dynamic feature delivery
+            implementation("com.google.android.play:core:1.10.3")
+            implementation("com.google.android.play:core-ktx:1.8.1")
+
+            // TODO: JVector for HNSW vector similarity search (not yet in Maven Central)
+            // Using linear search fallback for now (fine for <10K vectors)
+            // implementation("io.github.jbellis:jvector-base:1.0.0")
         }
         commonMain.dependencies {
             implementation(compose.runtime)
             implementation(compose.foundation)
             implementation(compose.material3)
+            implementation(compose.materialIconsExtended)
             implementation(compose.ui)
             implementation(compose.components.resources)
             implementation(compose.components.uiToolingPreview)
@@ -87,7 +91,6 @@ kotlin {
             implementation(libs.sqldelight.coroutines)
             implementation(libs.kotlinx.serialization.json)
             implementation(libs.kotlinx.datetime)
-            implementation(libs.kotlinx.coroutinesSwing)
         }
         commonTest.dependencies {
             implementation(libs.kotlin.test)
@@ -120,6 +123,9 @@ android {
         // Instrumented test runner
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
+
+    // Dynamic feature modules
+    dynamicFeatures += setOf(":gemmaEmbedding")
     packaging {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
@@ -138,6 +144,9 @@ android {
 
 dependencies {
     debugImplementation(compose.uiTooling)
+
+    // LeakCanary for memory leak detection (debug only)
+    debugImplementation("com.squareup.leakcanary:leakcanary-android:2.12")
 
     // 間 AI - Testing dependencies
     androidTestImplementation(libs.androidx.testExt.junit)

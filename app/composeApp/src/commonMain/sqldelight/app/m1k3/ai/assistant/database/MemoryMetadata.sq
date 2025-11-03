@@ -1,8 +1,12 @@
 -- PHASE0-011: MemoryMetadata Table Schema
 --
 -- MemoryMetadata stores metadata about semantic memories in M1K3 AI.
--- Actual 384-dimensional embeddings are stored in separate BLOB storage
--- and indexed with HNSW (JVector) for fast similarity search.
+-- Actual embeddings are stored in separate BLOB storage and indexed with HNSW for fast similarity search.
+--
+-- Default: 384-dimensional (MiniLM-L6-v2) - built-in, 80MB
+-- Optional: 512-dimensional (Embedding Gemma 300M) - dynamic delivery, 180MB
+--
+-- Both models supported via embedding_model field.
 --
 -- This table provides:
 -- - Metadata for embedding lookups
@@ -32,7 +36,7 @@ CREATE TABLE IF NOT EXISTS MemoryMetadata (
 
     -- Embedding metadata (actual vectors stored externally)
     embedding_id TEXT NOT NULL, -- ID in HNSW index
-    embedding_model TEXT NOT NULL DEFAULT 'minilm-l6', -- Model used for embedding
+    embedding_model TEXT NOT NULL DEFAULT 'all-MiniLM-L6-v2', -- Model used: minilm (384-dim) or gemma (512-dim)
 
     -- Memory access tracking
     access_count INTEGER NOT NULL DEFAULT 0, -- Times retrieved via RAG

@@ -35,3 +35,5 @@ plugins {
 include(":composeApp")
 include(":server")
 include(":shared")
+include(":codingModule")
+include(":gemmaEmbedding")
