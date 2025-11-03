@@ -72,6 +72,8 @@ fun CodeGenerationScreen(
             CodeGenerationTopBar(
                 isModelLoaded = uiState.isModelLoaded,
                 isGenerating = uiState.isGenerating,
+                autoSelectedModel = uiState.autoSelectedModel,
+                modelSelectionReason = uiState.modelSelectionReason,
                 onLoadModel = { viewModel.loadModel() },
                 onUnloadModel = { viewModel.unloadModel() }
             )
@@ -111,6 +113,8 @@ fun CodeGenerationScreen(
 private fun CodeGenerationTopBar(
     isModelLoaded: Boolean,
     isGenerating: Boolean,
+    autoSelectedModel: CodingModel?,
+    modelSelectionReason: String,
     onLoadModel: () -> Unit,
     onUnloadModel: () -> Unit
 ) {
@@ -122,6 +126,29 @@ private fun CodeGenerationTopBar(
             )
         },
         actions = {
+            // Smart model indicator (NEW)
+            if (autoSelectedModel != null) {
+                AssistChip(
+                    onClick = { /* Show model info dialog */ },
+                    label = {
+                        Text(
+                            autoSelectedModel.displayName,
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                    },
+                    leadingIcon = {
+                        Icon(
+                            imageVector = Icons.Filled.AutoAwesome,
+                            contentDescription = "Auto-selected model",
+                            tint = MaterialTheme.colorScheme.tertiary,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    },
+                    modifier = Modifier.padding(end = 4.dp)
+                )
+            }
+
             // Model status indicator
             AssistChip(
                 onClick = { if (isModelLoaded) onUnloadModel() else onLoadModel() },
@@ -197,7 +224,17 @@ private fun ConfigurationView(
             isGenerating = uiState.isGenerating
         )
 
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Smart Model Selection Indicator (NEW)
+        AnimatedVisibility(visible = uiState.autoSelectedModel != null) {
+            ModelSelectionInfoCard(
+                model = uiState.autoSelectedModel,
+                reason = uiState.modelSelectionReason
+            )
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
 
         // Topic Input
         TopicInputSection(
@@ -484,6 +521,53 @@ private fun ResultsView(
                 Icon(Icons.Filled.Share, contentDescription = null)
                 Spacer(Modifier.width(4.dp))
                 Text("Export")
+            }
+        }
+    }
+}
+
+/**
+ * Smart Model Selection Info Card (NEW)
+ *
+ * Displays which model was auto-selected and why.
+ * Educates users about the intelligent model routing system.
+ */
+@Composable
+private fun ModelSelectionInfoCard(
+    model: CodingModel?,
+    reason: String
+) {
+    if (model == null) return
+
+    Card(
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.tertiaryContainer
+        ),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier.padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = Icons.Filled.AutoAwesome,
+                contentDescription = "Auto-selected",
+                tint = MaterialTheme.colorScheme.onTertiaryContainer,
+                modifier = Modifier.size(24.dp)
+            )
+            Spacer(modifier = Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    "Using ${model.displayName}",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onTertiaryContainer
+                )
+                Text(
+                    reason,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.8f)
+                )
             }
         }
     }
