@@ -318,6 +318,17 @@ Based on the ONNX model specifications:
 ### Bug Fixes
 - ✅ `gemmaEmbedding/build.gradle.kts` - Added missing kotlinx-coroutines dependencies
 
+### Performance Logging Added
+- ✅ Model loading: Size, dimensions, max tokens
+- ✅ Embedding generation: Time (ms), text length, tokens processed
+- ✅ Batch operations: Total time, average per embedding, throughput (embeddings/sec)
+- ✅ Placeholder mode: Clearly labeled with warning emoji
+
+### Git Commit
+- ✅ Commit hash: `50dba23`
+- ✅ 30 files changed, 6,210 insertions
+- ✅ Comprehensive commit message with full implementation details
+
 ---
 
 ## Summary
