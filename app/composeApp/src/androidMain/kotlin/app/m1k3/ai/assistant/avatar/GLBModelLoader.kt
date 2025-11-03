@@ -68,7 +68,10 @@ object GLBModelLoader {
     /**
      * Get pre-configured metadata for known models
      *
-     * Returns hardcoded metadata for Quirky Series animals.
+     * Returns hardcoded metadata for:
+     * - Mask (static model with procedural animations)
+     * - Quirky Series animals (animated models)
+     *
      * Falls back to default metadata for unknown models.
      *
      * @param modelPath Asset path
@@ -76,6 +79,7 @@ object GLBModelLoader {
      */
     private fun getPreconfiguredMetadata(modelPath: String): ModelMetadata {
         return when {
+            modelPath.contains("Mask", ignoreCase = true) -> createMaskMetadata(modelPath)
             modelPath.contains("Colobus") -> createColobusMetadata(modelPath)
             modelPath.contains("Sparrow") -> createSparrowMetadata(modelPath)
             modelPath.contains("Gecko") -> createGeckoMetadata(modelPath)
@@ -87,6 +91,31 @@ object GLBModelLoader {
             else -> createDefaultMetadata(modelPath)
         }
     }
+
+    /**
+     * Create metadata for Mask (static model)
+     *
+     * Static model with NO animations or skeleton.
+     * Uses ProceduralAnimator for code-based animations.
+     *
+     * Technical Details:
+     * - Vertices: 1,451
+     * - Triangles: 2,748
+     * - Materials: 1 (with embedded texture)
+     * - Animations: 0 (static mesh)
+     * - License: CC-BY-4.0 by IzLoM39 (Sketchfab)
+     */
+    private fun createMaskMetadata(modelPath: String) = ModelMetadata(
+        boundingBox = BoundingBox(
+            min = Position3D(-0.4f, -0.4f, -0.4f),
+            max = Position3D(0.4f, 0.4f, 0.4f)
+        ),
+        animations = emptyList(),  // Static model - no baked animations
+        materials = listOf(MaterialInfo("MaskMaterial", 0, true)),
+        hasSkeleton = false,  // No skeleton/bones
+        triangleCount = 2748,
+        modelPath = modelPath
+    )
 
     /**
      * Create metadata for Colobus monkey

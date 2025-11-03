@@ -19,12 +19,17 @@ package app.m1k3.ai.assistant.avatar
  *
  * Describes a 3D model and its properties.
  *
- * @param id Unique identifier (e.g., "colobus", "sparrow")
- * @param name Display name (e.g., "Colobus Monkey")
- * @param path Asset path (e.g., "models/Colobus_Animations.glb")
+ * @param id Unique identifier (e.g., "mask", "colobus", "sparrow")
+ * @param name Display name (e.g., "Mask", "Colobus Monkey")
+ * @param path Asset path (e.g., "models/Mask.glb", "models/Colobus_Animations.glb")
  * @param description Optional description
  * @param thumbnail Optional thumbnail path
- * @param category Model category (e.g., "mammal", "bird", "fish")
+ * @param category Model category (e.g., "static", "mammal", "bird", "fish")
+ * @param modelType Whether model is STATIC or ANIMATED
+ * @param hasAnimations Whether model has baked skeleton animations
+ * @param supportsEmotions Whether model can display emotions
+ * @param defaultForNewUsers Whether this is recommended starting model
+ * @param attribution Optional license attribution
  */
 data class ModelConfig(
     val id: String,
@@ -32,7 +37,12 @@ data class ModelConfig(
     val path: String,
     val description: String = "",
     val thumbnail: String? = null,
-    val category: String = "animal"
+    val category: String = "animal",
+    val modelType: ModelType = ModelType.ANIMATED,
+    val hasAnimations: Boolean = true,
+    val supportsEmotions: Boolean = true,
+    val defaultForNewUsers: Boolean = false,
+    val attribution: String? = null
 ) {
     /**
      * Check if this is the default model
@@ -48,14 +58,38 @@ data class ModelConfig(
 
     companion object {
         /**
-         * Colobus monkey (default)
+         * Simple mask (default for new users)
+         *
+         * Static model with procedural animations (no skeleton).
+         * Perfect starting point for low-end devices or new users.
+         *
+         * License: CC-BY-4.0 by IzLoM39 (Sketchfab)
+         */
+        val MASK = ModelConfig(
+            id = "mask",
+            name = "Mask",
+            path = "models/Mask.glb",
+            description = "Simple mask with procedural animations (rotation, scale, color)",
+            category = "static",
+            modelType = ModelType.STATIC,
+            hasAnimations = false,
+            supportsEmotions = true,
+            defaultForNewUsers = true,
+            attribution = "CC-BY-4.0 by IzLoM39 (Sketchfab)"
+        )
+
+        /**
+         * Colobus monkey (animated)
          */
         val COLOBUS = ModelConfig(
             id = "colobus",
             name = "Colobus Monkey",
             path = "models/Colobus_Animations.glb",
             description = "Black and white colobus monkey with 18 animations",
-            category = "mammal"
+            category = "mammal",
+            modelType = ModelType.ANIMATED,
+            hasAnimations = true,
+            supportsEmotions = true
         )
 
         /**
@@ -145,15 +179,20 @@ data class ModelConfig(
 object ModelRegistry {
 
     /**
-     * Default model ID
+     * Default model ID (Mask - simple starting point)
      */
-    const val DEFAULT_MODEL_ID = "colobus"
+    const val DEFAULT_MODEL_ID = "mask"
 
     /**
-     * Pre-configured models (Quirky Series FREE Animals v1.4)
+     * Pre-configured models
+     *
+     * Includes:
+     * - Mask (static, procedural animations)
+     * - Quirky Series FREE Animals v1.4 (animated, eco-consciousness showcase)
      */
     private val predefinedModels = listOf(
-        ModelConfig.COLOBUS,
+        ModelConfig.MASK,        // Static model (default for new users)
+        ModelConfig.COLOBUS,     // Animated models (eco-consciousness showcase)
         ModelConfig.SPARROW,
         ModelConfig.GECKO,
         ModelConfig.HERRING,
@@ -185,12 +224,15 @@ object ModelRegistry {
     }
 
     /**
-     * Get default model (Colobus)
+     * Get default model (Mask)
+     *
+     * Returns the simple mask model as starting point for new users.
+     * Use this for best first-time experience on all devices.
      *
      * @return Default model configuration
      */
     fun getDefault(): ModelConfig {
-        return ModelConfig.COLOBUS
+        return ModelConfig.MASK
     }
 
     /**

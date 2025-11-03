@@ -141,9 +141,152 @@ fun Avatar3DView(
  * 3D avatar view content (actual rendering)
  *
  * Separated from Avatar3DView for cleaner loading state handling.
+ * Branches to static or animated rendering based on model type.
  */
 @Composable
 private fun Avatar3DViewContent(
+    state: AvatarState,
+    metadata: ModelMetadata,
+    modelConfig: ModelConfig,
+    enableInteraction: Boolean,
+    autoRotate: Boolean,
+    modifier: Modifier = Modifier
+) {
+    // Detect model type
+    val isStaticModel = modelConfig.modelType == ModelType.STATIC || metadata.animations.isEmpty()
+
+    if (isStaticModel) {
+        // Render static model with procedural animations (mask)
+        RenderStaticModel(
+            state = state,
+            metadata = metadata,
+            modelConfig = modelConfig,
+            enableInteraction = enableInteraction,
+            modifier = modifier
+        )
+    } else {
+        // Render animated model with skeleton animations (animals)
+        RenderAnimatedModel(
+            state = state,
+            metadata = metadata,
+            modelConfig = modelConfig,
+            enableInteraction = enableInteraction,
+            autoRotate = autoRotate,
+            modifier = modifier
+        )
+    }
+}
+
+/**
+ * Render static model with procedural animations
+ *
+ * For models without skeleton/bones (e.g., Mask).
+ * Uses ProceduralAnimator for code-based animations:
+ * - Rotation (emotion-based speed)
+ * - Scale pulse (activity-based)
+ * - Color tint (emotion-based)
+ */
+@Composable
+private fun RenderStaticModel(
+    state: AvatarState,
+    metadata: ModelMetadata,
+    modelConfig: ModelConfig,
+    enableInteraction: Boolean,
+    modifier: Modifier = Modifier
+) {
+    val engine = rememberEngine()
+    val modelLoader = rememberModelLoader(engine)
+
+    // Create procedural animator
+    val animator = remember(state.emotion, state.activity) {
+        ProceduralAnimator(state)
+    }
+
+    // Calculate optimal camera
+    val optimalCamera = remember(metadata) {
+        CameraAutoFit.calculate(
+            metadata = metadata,
+            cameraAngle = 15f
+        )
+    }
+
+    val cameraState = rememberCameraControllerState(optimalCamera)
+    val cameraNode = rememberCameraNode(engine).apply {
+        cameraState.applyCameraNode(this)
+    }
+
+    // Track animation start time
+    var startTime by remember { mutableLongStateOf(System.nanoTime()) }
+
+    // Reset start time when state changes
+    LaunchedEffect(state) {
+        startTime = System.nanoTime()
+    }
+
+    // Create model node
+    val childNodes = rememberNodes {
+        add(
+            ModelNode(
+                modelInstance = modelLoader.createModelInstance(modelConfig.path),
+                scaleToUnits = 1.0f
+            ).apply {
+                position = io.github.sceneview.math.Position(0f, 0f, 0f)
+                println("✅ Static model loaded: ${modelConfig.name}")
+            }
+        )
+    }
+
+    Box(
+        modifier = modifier
+            .then(
+                if (enableInteraction) {
+                    Modifier.interactiveCamera(
+                        state = cameraState,
+                        enabled = true
+                    )
+                } else Modifier
+            )
+    ) {
+        Scene(
+            modifier = Modifier.fillMaxSize(),
+            engine = engine,
+            modelLoader = modelLoader,
+            cameraNode = cameraNode,
+            childNodes = childNodes,
+            onFrame = { frameTimeNanos ->
+                // Update camera
+                cameraState.applyCameraNode(cameraNode)
+
+                // Apply procedural animations
+                val node = childNodes.firstOrNull() as? ModelNode
+                if (node != null) {
+                    val elapsedSeconds = (frameTimeNanos - startTime) / 1_000_000_000.0f
+
+                    // Rotation (emotion-based speed)
+                    val rotationY = animator.getRotationY(elapsedSeconds)
+                    node.rotation = io.github.sceneview.math.Rotation(0f, rotationY, 0f)
+
+                    // Scale pulse (activity-based)
+                    val scale = animator.getScale(elapsedSeconds)
+                    node.scale = io.github.sceneview.math.Scale(scale, scale, scale)
+
+                    // TODO: Color tint (if material API available)
+                    // val colorTint = animator.getColorTintWithActivity()
+                    // node.materialInstance?.setParameter("baseColorTint", colorTint)
+                }
+            }
+        )
+    }
+}
+
+/**
+ * Render animated model with skeleton animations
+ *
+ * For models with baked animations (e.g., Quirky Series animals).
+ * Uses animation state machine for lifelike behavior.
+ */
+@Composable
+private fun RenderAnimatedModel(
     state: AvatarState,
     metadata: ModelMetadata,
     modelConfig: ModelConfig,
