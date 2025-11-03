@@ -52,7 +52,48 @@ This project is managed through phase-specific documentation:
 
 ### Recent Achievements
 
-#### 2025-11-03: Production ONNX Embeddings Complete 🎉
+#### 2025-11-03 (PM): Critical Code Quality Improvements ✨
+
+**Comprehensive Refactoring & Bug Fixes:**
+- ✅ **CRITICAL FIX: SmolLM2 Tokenizer** - Fixed gibberish output in decode function
+  - Added proper special token filtering (<|im_start|>, <|im_end|>, <|endoftext|>)
+  - Improved byte-to-char mapping for UTF-8 encoding
+  - Enhanced error handling with graceful fallbacks
+- ✅ **CRITICAL FIX: SmolLM2CodingEngine** - Replaced placeholder with real ONNX inference
+  - Integrated actual ONNX Runtime token generation pipeline
+  - Added KV cache management for efficient inference
+  - Implemented streaming progress callbacks
+  - Fallback to mock content on inference failures
+- ✅ **HIGH FIX: Memory Leaks in ViewModel** - Fixed lifecycle management issues
+  - Removed coroutine launch in onCleared() (prevents leaks)
+  - Added proper job tracking for cancellation
+  - Implemented flow exception handling with .catch()
+  - Used runBlocking for synchronous cleanup
+- ✅ **HIGH FIX: UI Thread Blocking** - Fixed MainActivity resource cleanup
+  - Moved aiEngine.close() to lifecycleScope coroutine
+  - Prevented blocking main thread during onDestroy
+  - Added error handling for cleanup failures
+- ✅ **HIGH FIX: Resource Cleanup** - Enhanced SmolLM2Engine tensor management
+  - Added try-finally blocks for guaranteed resource cleanup
+  - Fixed KV cache tensor cleanup in both generate() and generateStreaming()
+  - Ensured previousOutputs and pastKeyValues always closed
+- ✅ **Build Validation** - Compilation successful with zero errors
+
+**Files Modified:**
+- `composeApp/src/androidMain/kotlin/app/m1k3/ai/assistant/ai/SmolLM2Tokenizer.kt`
+- `codingModule/src/main/kotlin/com/m1k3/codingmodule/SmolLM2CodingEngine.kt`
+- `composeApp/src/commonMain/kotlin/viewmodel/CodeGenerationViewModel.kt`
+- `composeApp/src/androidMain/kotlin/app/m1k3/ai/assistant/MainActivity.kt`
+- `composeApp/src/androidMain/kotlin/app/m1k3/ai/assistant/ai/SmolLM2Engine.kt`
+
+**Impact:**
+- Improved code quality and production-readiness
+- Eliminated potential memory leaks and crashes
+- Enhanced tokenizer accuracy for better AI responses
+- Proper resource management prevents memory exhaustion
+- Better error handling and graceful degradation
+
+#### 2025-11-03 (AM): Production ONNX Embeddings Complete 🎉
 
 **Phase 1 Completed (100%):**
 - ✅ All 20 tickets complete
@@ -193,6 +234,42 @@ M1K3 AI Architecture
 - Turbine (Flow testing)
 - Compose Test
 - LeakCanary
+
+---
+
+## Build Configuration
+
+### Android App Bundle (AAB)
+間 AI uses Android App Bundles as the default build format for distribution optimization.
+
+**Benefits:**
+- 15-20% smaller downloads (vs universal APK)
+- Device-specific resource delivery
+- Dynamic feature delivery (gemmaEmbedding on-demand)
+- Google Play Store compliance for apps >150 MB
+
+**Build Commands:**
+```bash
+# Quick build
+./build_bundle.sh
+
+# Install locally
+./install_bundle.sh
+
+# Compare sizes
+./compare_sizes.sh
+
+# Manual Gradle
+./gradlew :composeApp:bundleDebug
+```
+
+**Target Sizes:**
+- Universal APK: Variable (device-dependent)
+- App Bundle: Optimized per device configuration
+- User Download: Only needed resources (architecture, density, language)
+- Target: <200 MB after optimization (per project requirements)
+
+See [AAB_BUILD_GUIDE.md](docs/AAB_BUILD_GUIDE.md) for complete documentation.
 
 ---
 

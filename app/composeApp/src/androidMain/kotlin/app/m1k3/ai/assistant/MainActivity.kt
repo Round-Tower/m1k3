@@ -145,9 +145,26 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
+        // Cleanup resources synchronously with timeout to prevent ANR
+        // Note: lifecycleScope is cancelled before onDestroy(), so we use runBlocking
+        try {
+            kotlinx.coroutines.runBlocking(kotlinx.coroutines.Dispatchers.IO) {
+                kotlinx.coroutines.withTimeout(5000) {  // 5 second timeout
+                    try {
+                        // Close database driver (lightweight operation)
+                        driver?.close()
+
+                        // Close AI engine (ONNX cleanup on IO thread)
+                        aiEngine.close()
+                    } catch (e: Exception) {
+                        println("⚠️ Error during cleanup: ${e.message}")
+                    }
+                }
+            }
+        } catch (e: kotlinx.coroutines.TimeoutCancellationException) {
+            println("⚠️ Cleanup timeout - forcing shutdown")
+        }
         super.onDestroy()
-        driver?.close()
-        aiEngine.close()
     }
 }
 
@@ -231,7 +248,7 @@ fun MaAIDemo(onChatClick: () -> Unit, onDebugClick: () -> Unit = {}, knowledgeSt
                     AvatarView(
                         state = avatarState,
                         showInfo = true,
-                        use3D = true,  // Enable 3D Colobus monkey
+                        use3D = false,  // DISABLED: 3D causes SIGSEGV crashes during navigation
                         onClick = {
                             avatarVM.flashEmotion(AvatarEmotion.EXCITED, 1500)
                         }

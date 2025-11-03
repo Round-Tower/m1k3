@@ -9,6 +9,8 @@ import kotlinx.coroutines.launch
 /**
  * ViewModel for code generation screen with Smart Model Auto-Selection
  *
+ * This is a platform-specific ViewModel. See androidMain for Android implementation.
+ *
  * Manages:
  * - Multi-engine system (SmolLM2-360M + Qwen2.5-Coder-0.5B)
  * - Smart auto-selection based on template type
@@ -31,11 +33,10 @@ import kotlinx.coroutines.launch
  * - PRESENTATION → SmolLM2-360M (storytelling, visual flow)
  * - SVG_CHART → Qwen2.5-Coder (data handling, calculations)
  * - GAME → Qwen2.5-Coder (game logic, algorithms)
+ *
+ * Platform-specific implementation requires Context on Android
+ * See: androidMain/kotlin/viewmodel/CodeGenerationViewModel.android.kt
  */
-expect class CodeGenerationViewModel : ViewModel {
-    // Platform-specific implementation requires Context on Android
-    // This will be implemented in androidMain
-}
 
 /**
  * Shared ViewModel logic (platform-agnostic)
@@ -192,8 +193,8 @@ abstract class BaseCodeGenerationViewModel : ViewModel() {
             )
         )
 
-        // Start generation
-        viewModelScope.launch {
+        // Start generation and track the job for cancellation
+        generationJob = viewModelScope.launch {
             _uiState.update {
                 it.copy(
                     isGenerating = true,
@@ -218,12 +219,23 @@ abstract class BaseCodeGenerationViewModel : ViewModel() {
                 return@launch
             }
 
-            currentEngine!!.generateCode(request).collect { event ->
-                // Emit to SharedFlow for UI to observe
-                _generationEvents.emit(event)
+            currentEngine!!.generateCode(request)
+                .catch { e ->
+                    // Handle flow exceptions
+                    _uiState.update {
+                        it.copy(
+                            isGenerating = false,
+                            error = "Generation error: ${e.message}",
+                            generationStage = "Failed"
+                        )
+                    }
+                }
+                .collect { event ->
+                    // Emit to SharedFlow for UI to observe
+                    _generationEvents.emit(event)
 
-                // Update state based on event
-                when (event) {
+                    // Update state based on event
+                    when (event) {
                     is GenerationEvent.Started -> {
                         _uiState.update { it.copy(generationStage = "Starting...") }
                     }
@@ -237,8 +249,17 @@ abstract class BaseCodeGenerationViewModel : ViewModel() {
                     is GenerationEvent.Generating -> {
                         _uiState.update {
                             it.copy(
-                                progress = event.progress,
-                                generationStage = "Generating code... ${event.progress}%"
+                                progress = event.progress.toInt(),
+                                generationStage = "Generating code... ${event.progress.toInt()}%"
+                            )
+                        }
+                    }
+
+                    is GenerationEvent.Progress -> {
+                        _uiState.update {
+                            it.copy(
+                                progress = event.progress.toInt(),
+                                generationStage = event.stage
                             )
                         }
                     }
@@ -287,12 +308,18 @@ abstract class BaseCodeGenerationViewModel : ViewModel() {
         }
     }
 
+    // Track the generation job for cancellation
+    private var generationJob: kotlinx.coroutines.Job? = null
+
     /**
      * Cancel ongoing generation
      */
     fun cancelGeneration() {
-        // Note: Actual cancellation would require Flow cancellation
-        // For now, just reset state
+        // Cancel the coroutine job running generation
+        generationJob?.cancel()
+        generationJob = null
+
+        // Reset state
         _uiState.update {
             it.copy(
                 isGenerating = false,
@@ -405,12 +432,18 @@ abstract class BaseCodeGenerationViewModel : ViewModel() {
 
     override fun onCleared() {
         super.onCleared()
-        // Unload model when ViewModel is cleared
-        viewModelScope.launch {
-            currentEngine?.unloadModel()
-            currentEngine = null
-            currentModel = null
-        }
+        // Lightweight cleanup - just null out references
+        // viewModelScope is already cancelled at this point
+        // Heavy cleanup (ONNX session) should happen in Activity.onDestroy() with proper lifecycle
+
+        // Cancel any ongoing generation job
+        generationJob?.cancel()
+        generationJob = null
+
+        // Null out engine references to allow GC
+        // Note: Actual ONNX cleanup happens in Activity lifecycle with timeout protection
+        currentEngine = null
+        currentModel = null
     }
 
     // Extension function for cleaner state updates

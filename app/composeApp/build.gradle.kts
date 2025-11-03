@@ -136,6 +136,24 @@ android {
             isMinifyEnabled = false
         }
     }
+
+    // App Bundle configuration for optimized distribution
+    bundle {
+        language {
+            // Disable language splits to include all languages in base
+            // (Can enable later for further size optimization)
+            enableSplit = false
+        }
+        density {
+            // Enable density splits for screen-specific resources
+            enableSplit = true
+        }
+        abi {
+            // Enable ABI splits for architecture-specific native libraries
+            enableSplit = true
+        }
+    }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11

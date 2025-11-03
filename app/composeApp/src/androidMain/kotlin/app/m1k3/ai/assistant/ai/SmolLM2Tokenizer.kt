@@ -42,7 +42,14 @@ class SmolLM2Tokenizer(private val context: Context) {
     fun initialize() {
         try {
             // Load vocabulary (token -> ID mapping)
+            println("📚 Loading SmolLM2 tokenizer vocabulary...")
             vocabMap = loadVocabulary()
+
+            if (vocabMap.isEmpty()) {
+                println("⚠️  vocab.json is empty or failed to load, using fallback")
+                vocabMap = createSimpleVocab()
+            }
+
             idToToken = vocabMap.entries.associate { (k, v) -> v to k }
 
             // Load BPE merges
@@ -50,13 +57,20 @@ class SmolLM2Tokenizer(private val context: Context) {
 
             isInitialized = true
 
-            println("✅ Tokenizer initialized")
-            println("   Vocabulary size: ${vocabMap.size}")
-            println("   Merges: ${merges.size}")
+            val usingFallback = vocabMap.size < 1000  // Real GPT-2 vocab has 49152 tokens
+            if (usingFallback) {
+                println("⚠️  Using fallback vocabulary (${vocabMap.size} tokens)")
+                println("   NOTE: Text may not have spaces - real vocab.json needed")
+            } else {
+                println("✅ Tokenizer initialized with GPT-2 BPE")
+                println("   Vocabulary size: ${vocabMap.size}")
+                println("   Merges: ${merges.size}")
+            }
 
         } catch (e: Exception) {
             // Fallback to simple character-level tokenization if files missing
-            println("⚠️  Tokenizer files not found, using simple tokenization")
+            println("⚠️  Tokenizer initialization error: ${e.message}")
+            println("   Using fallback simple tokenization")
             vocabMap = createSimpleVocab()
             idToToken = vocabMap.entries.associate { (k, v) -> v to k }
             isInitialized = true
@@ -131,38 +145,65 @@ class SmolLM2Tokenizer(private val context: Context) {
             idToToken[id.toInt()]
         }
 
-        // Join tokens
-        val tokenString = tokens.joinToString("")
+        // Filter out special tokens from output
+        val filteredTokens = tokens.filter { token ->
+            token != BOS_TOKEN &&
+            token != EOS_TOKEN &&
+            token != PAD_TOKEN &&
+            token != "<unk>" &&
+            token != "<pad>"
+        }
 
-        // Convert back to bytes
+        // Join tokens (BPE tokens concatenate without spaces)
+        val tokenString = filteredTokens.joinToString("")
+
+        // Convert back to bytes using GPT-2 byte decoder
         val bytes = mutableListOf<Byte>()
-        val chars: CharSequence = tokenString
-        for (char in chars) {
+        for (char in tokenString) {
             val byte = charToByte(char.code)
             if (byte != null) {
                 bytes.add(byte)
+            } else {
+                // If char doesn't map to a byte, it might be a regular character
+                // Handle UTF-8 encoding properly
+                val charBytes = char.toString().toByteArray(Charsets.UTF_8)
+                bytes.addAll(charBytes.toList())
             }
         }
 
-        // Convert bytes to string
+        // Convert bytes to UTF-8 string
         return try {
-            bytes.toByteArray().toString(Charsets.UTF_8)
+            val result = bytes.toByteArray().toString(Charsets.UTF_8)
+            // Clean up any residual special tokens that made it through
+            result
+                .replace(BOS_TOKEN, "")
+                .replace(EOS_TOKEN, "")
+                .replace(PAD_TOKEN, "")
+                .trim()
         } catch (e: Exception) {
-            // Fallback: just join the tokens with spaces
-            tokens.joinToString(" ")
+            println("⚠️ Tokenizer decode error: ${e.message}")
+            // Fallback: return tokens as-is (without special tokens)
+            filteredTokens.joinToString("")
         }
     }
 
     /**
      * Convert character back to byte (inverse of byteToChar)
+     *
+     * GPT-2 byte encoding maps:
+     * - Printable ASCII (33-126) → same
+     * - Latin-1 supplement (161-172, 174-255) → same
+     * - Everything else (0-32, 127-160, 173) → 256 + byte
      */
     private fun charToByte(charCode: Int): Byte? {
         return when (charCode) {
+            // Direct mappings (printable chars)
             in 33..126 -> charCode.toByte()  // Printable ASCII
             in 161..172 -> charCode.toByte()  // Latin-1 supplement
             in 174..255 -> charCode.toByte()  // Latin-1 supplement
-            in 256..511 -> (charCode - 256).toByte()  // From private use area
-            else -> null
+            // Private use area mappings (all other bytes)
+            in 256..511 -> (charCode - 256).toByte()  // Maps 256-511 → 0-255
+            else -> null  // Invalid char code
         }
     }
 
@@ -212,18 +253,28 @@ class SmolLM2Tokenizer(private val context: Context) {
 
     /**
      * Create simple vocabulary for testing without tokenizer files
+     *
+     * NOTE: This is a fallback for when proper GPT-2 BPE vocab is unavailable.
+     * Includes space character and common punctuation to prevent text concatenation.
      */
     private fun createSimpleVocab(): Map<String, Int> {
-        val commonWords = listOf(
+        val commonTokens = listOf(
+            // Special tokens
             "<pad>", "<|im_start|>", "<|im_end|>", "<unk>",
+
+            // Whitespace and punctuation (CRITICAL for readability)
+            " ", ".", ",", "!", "?", "\n", "\t",
+
+            // Common words (without leading space - space is separate token)
             "hello", "hi", "how", "are", "you", "i", "am", "fine",
-            "what", "is", "your", "name", "my", "间", "ai",
+            "what", "is", "your", "name", "my", "间", "ai", "m1k3",
             "can", "help", "me", "yes", "no", "please", "thank", "thanks",
             "the", "a", "an", "and", "or", "but", "in", "on", "at",
-            "to", "for", "of", "with", "by", "from", "as", "about"
+            "to", "for", "of", "with", "by", "from", "as", "about",
+            "this", "that", "it", "not", "be", "do", "have", "has"
         )
 
-        return commonWords.mapIndexed { index, word -> word to index }.toMap()
+        return commonTokens.mapIndexed { index, word -> word to index }.toMap()
     }
 }
 

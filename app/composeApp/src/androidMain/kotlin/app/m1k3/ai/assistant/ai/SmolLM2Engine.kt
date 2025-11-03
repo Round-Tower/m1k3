@@ -210,17 +210,10 @@ $prompt<|im_end|>
             println("   📝 Tokenized prompt: ${inputIds.size} tokens")
             println("🔍 [DEBUG] Token IDs (first 10): ${inputIds.take(10).joinToString(", ")}")
 
-            // 3. Create input tensor
+            // 3. Run inference with proper resource management
             val env = ortEnvironment ?: throw IllegalStateException("Environment not initialized")
-            val inputTensor = OnnxTensor.createTensor(
-                env,
-                arrayOf(inputIds)
-            )
 
-            // 4. Prepare model inputs
-            val inputs = mapOf("input_ids" to inputTensor)
-
-            // 5. Run inference (autoregressive generation with KV cache)
+            // 4. Autoregressive generation with KV cache
             val generatedIds = mutableListOf<Long>()
             generatedIds.addAll(inputIds.toList())
 
@@ -236,7 +229,8 @@ $prompt<|im_end|>
 
             println("🔍 [DEBUG] Starting autoregressive generation loop (max $maxTokens tokens)...")
 
-            for (i in 0 until maxTokens) {
+            try {
+                for (i in 0 until maxTokens) {
                 if (i % 10 == 0) {
                     println("🔍 [DEBUG] Token $i/${maxTokens} | Sequence length: ${generatedIds.size} | KV cache len: $currentSeqLen")
                 }
@@ -362,12 +356,13 @@ $prompt<|im_end|>
                 }
             }
 
-            // Clean up the final outputs container
-            previousOutputs?.close()
+            } finally {
+                // Clean up resources in finally block to ensure cleanup even if exception occurs
+                previousOutputs?.close()
+                pastKeyValues?.values?.forEach { it.close() }
+            }
 
-            inputTensor.close()
-
-            // 6. Decode generated tokens (skip the input prompt)
+            // 5. Decode generated tokens (skip the input prompt)
             val responseTokens = generatedIds.drop(inputIds.size).toLongArray()
             println("🔍 [DEBUG] Generated ${responseTokens.size} new tokens")
             println("🔍 [DEBUG] Response token IDs (first 10): ${responseTokens.take(10).joinToString(", ")}")
@@ -507,8 +502,9 @@ $prompt<|im_end|>
 
             println("🔍 [STREAMING] Starting token-by-token generation...")
 
-            // 4. Generate tokens one at a time
-            for (i in 0 until maxTokens) {
+            // 4. Generate tokens one at a time with proper resource management
+            try {
+                for (i in 0 until maxTokens) {
                 val isFirstToken = (i == 0)
                 val currentIds = if (isFirstToken) {
                     generatedIds.toLongArray()
@@ -628,8 +624,11 @@ $prompt<|im_end|>
                 }
             }
 
-            // Clean up the final outputs container
-            previousOutputs?.close()
+            } finally {
+                // Clean up resources in finally block to ensure cleanup even if exception occurs
+                previousOutputs?.close()
+                pastKeyValues?.values?.forEach { it.close() }
+            }
 
             val totalTime = System.currentTimeMillis() - startTime
             val tokensGenerated = generatedIds.size - inputIds.size
