@@ -173,14 +173,12 @@ class SmolLM2Tokenizer(private val context: Context) {
             if (byte != null) {
                 bytes.add(byte)
             } else {
-                // DEBUG: Log unmapped characters
-                if (char.code == 288) {  // Ġ (space character in GPT-2)
-                    println("⚠️ DEBUG: Char 'Ġ' (288) not mapped by charToByte!")
-                }
-                // If char doesn't map to a byte, it might be a regular character
-                // Handle UTF-8 encoding properly
-                val charBytes = char.toString().toByteArray(Charsets.UTF_8)
-                bytes.addAll(charBytes.toList())
+                // This should never happen with proper GPT-2 BPE vocab!
+                // All valid GPT-2 tokens should map to bytes via charToByte()
+                println("⚠️ WARNING: Unmapped character U+${char.code.toString(16).uppercase()} ('$char')")
+                println("   This indicates the vocab or decode logic has an issue!")
+                // Skip unmapped characters - don't use UTF-8 fallback
+                // (UTF-8 encoding breaks GPT-2 byte decoding for special chars like 'Ġ')
             }
         }
 
@@ -226,6 +224,90 @@ class SmolLM2Tokenizer(private val context: Context) {
      * Get vocabulary size
      */
     fun getVocabSize(): Int = vocabMap.size
+
+    /**
+     * Test round-trip encoding/decoding to verify tokenizer correctness
+     *
+     * This validates that:
+     * 1. Text encodes to token IDs correctly
+     * 2. Token IDs decode back to the original text
+     * 3. Spaces are preserved (GPT-2 'Ġ' character handling)
+     * 4. Special tokens work correctly
+     *
+     * @return true if all tests pass, false otherwise
+     */
+    fun testRoundTrip(): Boolean {
+        if (!isInitialized) {
+            println("❌ Tokenizer not initialized - cannot run round-trip test")
+            return false
+        }
+
+        println("\n" + "=".repeat(60))
+        println("🧪 TOKENIZER ROUND-TRIP TEST")
+        println("=".repeat(60))
+
+        val testCases = listOf(
+            "Hello world",
+            "I am M1K3, your AI assistant.",
+            "The quick brown fox jumps over the lazy dog.",
+            "Testing spaces and punctuation: hello, how are you?",
+            "Special chars: @#$%^&*()",
+            "Numbers: 1234567890"
+        )
+
+        var allPassed = true
+
+        testCases.forEachIndexed { index, originalText ->
+            println("\n📝 Test ${index + 1}: \"$originalText\"")
+
+            try {
+                // Encode
+                val tokens = encode(originalText)
+                println("   Tokens (${tokens.size}): ${tokens.take(20).joinToString(", ")}")
+
+                // Decode
+                val decodedText = decode(tokens)
+                println("   Decoded: \"$decodedText\"")
+
+                // Compare
+                val matches = decodedText.trim() == originalText.trim()
+                if (matches) {
+                    println("   ✅ PASS - Perfect round-trip!")
+                } else {
+                    println("   ❌ FAIL - Mismatch detected!")
+                    println("      Expected: \"$originalText\"")
+                    println("      Got:      \"$decodedText\"")
+
+                    // Character-by-character comparison
+                    val minLen = minOf(originalText.length, decodedText.length)
+                    for (i in 0 until minLen) {
+                        if (originalText[i] != decodedText[i]) {
+                            println("      First diff at position $i:")
+                            println("         Expected: '${originalText[i]}' (U+${originalText[i].code.toString(16).uppercase()})")
+                            println("         Got:      '${decodedText[i]}' (U+${decodedText[i].code.toString(16).uppercase()})")
+                            break
+                        }
+                    }
+                    allPassed = false
+                }
+
+            } catch (e: Exception) {
+                println("   ❌ ERROR: ${e.message}")
+                e.printStackTrace()
+                allPassed = false
+            }
+        }
+
+        println("\n" + "=".repeat(60))
+        if (allPassed) {
+            println("✅ ALL TESTS PASSED - Tokenizer is working correctly!")
+        } else {
+            println("❌ SOME TESTS FAILED - Tokenizer needs fixes!")
+        }
+        println("=".repeat(60) + "\n")
+
+        return allPassed
+    }
 
     // Helper functions
 
