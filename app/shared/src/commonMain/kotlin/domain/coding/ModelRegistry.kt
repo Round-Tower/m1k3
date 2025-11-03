@@ -1,6 +1,73 @@
 package domain.coding
 
 /**
+ * Template types for code generation
+ */
+enum class TemplateType {
+    QUIZ,
+    GAME,
+    SVG_CHART,
+    PRESENTATION
+}
+
+/**
+ * Audience level for generated content
+ */
+enum class AudienceLevel {
+    BEGINNER,       // Simple explanations, basic concepts
+    GENERAL,        // General audience, balanced approach
+    ADVANCED,       // Technical depth, expert terms
+    EXPERT          // Maximum technical precision
+}
+
+/**
+ * Generation request
+ */
+data class GenerationRequest(
+    val templateType: TemplateType,
+    val topic: String,
+    val config: GenerationConfig
+)
+
+/**
+ * Generation configuration
+ */
+data class GenerationConfig(
+    val targetAudience: AudienceLevel = AudienceLevel.GENERAL,
+    val temperature: Float = 0.7f,
+    val topP: Float = 0.9f,
+    val maxTokens: Int = 2048,
+    val includeComments: Boolean = false
+)
+
+/**
+ * Generation events for reactive UI updates
+ */
+sealed class GenerationEvent {
+    data class Started(val templateType: TemplateType) : GenerationEvent()
+    data class LoadingTemplate(val templateType: TemplateType) : GenerationEvent()
+    data class Generating(val progress: Float) : GenerationEvent()
+    data class Progress(val stage: String, val progress: Float) : GenerationEvent()
+    data class PartialResult(val partial: String) : GenerationEvent()
+    data object Validating : GenerationEvent()
+    data object InjectingTemplate : GenerationEvent()
+    data class Completed(val html: String, val metrics: GenerationMetrics) : GenerationEvent()
+    data class Failed(val error: Throwable, val stage: String = "Unknown") : GenerationEvent()
+}
+
+/**
+ * Generation metrics
+ */
+data class GenerationMetrics(
+    val durationMs: Long,
+    val tokensGenerated: Int,
+    val tokensPerSecond: Float,
+    val templateLoadTimeMs: Long = 0,
+    val inferenceTimeMs: Long = 0,
+    val validationTimeMs: Long = 0
+)
+
+/**
  * Model Registry - Smart Auto-Selection for Code Generation
  *
  * Automatically selects the best AI model for each template type:
@@ -180,6 +247,25 @@ enum class CodingModel {
             QWEN_CODER_0_5B -> "Coding specialist"
         }
 }
+
+/**
+ * Detailed model information
+ *
+ * @property name Full model name
+ * @property version Model version
+ * @property sizeBytes Model size in bytes
+ * @property contextWindow Context window in tokens
+ * @property supportedLanguages List of supported programming languages
+ * @property capabilities List of model capabilities
+ */
+data class ModelInfo(
+    val name: String,
+    val version: String,
+    val sizeBytes: Long,
+    val contextWindow: Int,
+    val supportedLanguages: List<String>,
+    val capabilities: List<String>
+)
 
 /**
  * Model comparison result

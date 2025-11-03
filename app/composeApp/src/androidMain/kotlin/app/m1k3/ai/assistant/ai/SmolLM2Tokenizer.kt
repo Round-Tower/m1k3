@@ -145,6 +145,12 @@ class SmolLM2Tokenizer(private val context: Context) {
             idToToken[id.toInt()]
         }
 
+        // DEBUG: Log first few tokens to see what we're getting
+        if (tokens.isNotEmpty()) {
+            val firstFewTokens = tokens.take(10)
+            println("🔍 DEBUG: First tokens: ${firstFewTokens.joinToString(", ") { "\"$it\"" }}")
+        }
+
         // Filter out special tokens from output
         val filteredTokens = tokens.filter { token ->
             token != BOS_TOKEN &&
@@ -157,6 +163,9 @@ class SmolLM2Tokenizer(private val context: Context) {
         // Join tokens (BPE tokens concatenate without spaces)
         val tokenString = filteredTokens.joinToString("")
 
+        // DEBUG: Log token string to see if spaces are present
+        println("🔍 DEBUG: Token string (first 100 chars): ${tokenString.take(100)}")
+
         // Convert back to bytes using GPT-2 byte decoder
         val bytes = mutableListOf<Byte>()
         for (char in tokenString) {
@@ -164,6 +173,10 @@ class SmolLM2Tokenizer(private val context: Context) {
             if (byte != null) {
                 bytes.add(byte)
             } else {
+                // DEBUG: Log unmapped characters
+                if (char.code == 288) {  // Ġ (space character in GPT-2)
+                    println("⚠️ DEBUG: Char 'Ġ' (288) not mapped by charToByte!")
+                }
                 // If char doesn't map to a byte, it might be a regular character
                 // Handle UTF-8 encoding properly
                 val charBytes = char.toString().toByteArray(Charsets.UTF_8)
@@ -174,6 +187,8 @@ class SmolLM2Tokenizer(private val context: Context) {
         // Convert bytes to UTF-8 string
         return try {
             val result = bytes.toByteArray().toString(Charsets.UTF_8)
+            println("🔍 DEBUG: Decoded result (first 100 chars): ${result.take(100)}")
+
             // Clean up any residual special tokens that made it through
             result
                 .replace(BOS_TOKEN, "")

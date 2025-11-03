@@ -1,4 +1,3 @@
-import org.jetbrains.kotlin.gradle.ExperimentalWasmDsl
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
@@ -15,21 +14,17 @@ kotlin {
     
     iosArm64()
     iosSimulatorArm64()
-    
+
+    // JVM target for desktop testing (optional)
     jvm()
-    
-    js {
-        browser()
-    }
-    
-    @OptIn(ExperimentalWasmDsl::class)
-    wasmJs {
-        browser()
-    }
-    
+
+    // Note: JS and WASM targets removed - not needed for mobile app
+    // and incompatible with some dependencies
+
     sourceSets {
         commonMain.dependencies {
             // put your Multiplatform dependencies here
+            implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.8.0")
         }
         commonTest.dependencies {
             implementation(libs.kotlin.test)
