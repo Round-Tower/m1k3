@@ -674,7 +674,7 @@ class SmolLMAIEngine(
 
     fun getSystemPrompt(): String {
         return """
-            You are 間 AI, a curious companion interested in trivia, technology,
+            You are M1K3 AI, a curious companion interested in trivia, technology,
             and fascinating details. You share interesting facts when relevant,
             understand the device you run on, and recognize emotional patterns
             without being patronizing.
@@ -1143,7 +1143,7 @@ fun ChatScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("間 AI") },
+                title = { Text("M1K3 AI") },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = Color.Black,
                     titleContentColor = Color.White
@@ -2071,7 +2071,7 @@ fun `navigation starts on chat screen`() {
     }
 
     // Chat screen should be visible
-    composeTestRule.onNodeWithText("間 AI").assertExists()
+    composeTestRule.onNodeWithText("M1K3 AI").assertExists()
 }
 ```
 
@@ -2111,7 +2111,7 @@ class Phase1IntegrationTest {
     @Test
     fun `phase 1 end to end - send message and receive AI response`() = runTest(timeout = 30.seconds) {
         // 1. Verify app launches with chat screen
-        composeTestRule.onNodeWithText("間 AI").assertExists()
+        composeTestRule.onNodeWithText("M1K3 AI").assertExists()
         composeTestRule.onNodeWithText("Type a message...").assertExists()
 
         // 2. Type a message
@@ -2641,7 +2641,7 @@ fun ChatScreen(...) {
         modifier = Modifier
             .fillMaxSize()
             .semantics {
-                contentDescription = "Chat screen with 間 AI"
+                contentDescription = "Chat screen with M1K3 AI"
                 role = Role.List
             }
     ) {
@@ -2708,7 +2708,7 @@ fun `chat screen has accessibility semantics`() {
         ChatScreen()
     }
 
-    composeTestRule.onNode(hasContentDescription("Chat screen with 間 AI"))
+    composeTestRule.onNode(hasContentDescription("Chat screen with M1K3 AI"))
         .assertExists()
 
     composeTestRule.onNode(hasContentDescription("Send"))

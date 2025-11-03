@@ -3,12 +3,12 @@ package app.m1k3.ai.assistant.design.tokens
 import androidx.compose.ui.unit.dp
 
 /**
- * 間 AI Spacing System
+ * M1K3 AI Spacing System
  *
  * 8-point grid system (base unit: 4dp)
  * Ensures consistent spacing throughout the app and simplifies layout decisions.
  *
- * Philosophy: "Negative space (間) is as important as content"
+ * Philosophy: "Negative space (M1K3) is as important as content"
  * - Use generous spacing for breathing room
  * - Consistent rhythm creates calm, focused UI
  * - Less clutter = better comprehension

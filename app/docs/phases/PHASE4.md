@@ -528,7 +528,7 @@ class MultiModalEngine(
         conversationHistory: List<Message>
     ): String {
         return buildString {
-            appendLine("You are 間 AI analyzing an image.")
+            appendLine("You are M1K3 AI analyzing an image.")
             appendLine()
 
             appendLine("**Image Analysis:**")
@@ -807,7 +807,7 @@ fun PermissionDeniedScreen(
         Spacer(modifier = Modifier.height(8.dp))
 
         Text(
-            text = "間 AI needs camera access to analyze images",
+            text = "M1K3 AI needs camera access to analyze images",
             style = MaterialTheme.typography.bodyMedium,
             textAlign = TextAlign.Center
         )

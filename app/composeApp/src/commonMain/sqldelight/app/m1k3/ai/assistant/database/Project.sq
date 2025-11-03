@@ -1,6 +1,6 @@
 -- PHASE0-009: Project Table Schema
 --
--- Projects are the top-level organizational unit in 間 AI.
+-- Projects are the top-level organizational unit in M1K3 AI.
 -- Each project maintains its own conversation context and memories.
 --
 -- Privacy: All data stored encrypted at rest (SQLCipher AES-256)

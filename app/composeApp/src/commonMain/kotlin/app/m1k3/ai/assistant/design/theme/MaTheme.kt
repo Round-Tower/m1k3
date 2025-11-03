@@ -7,7 +7,7 @@ import app.m1k3.ai.assistant.design.tokens.MaColors
 import app.m1k3.ai.assistant.design.tokens.MaTypography
 
 /**
- * 間 AI Theme
+ * M1K3 AI Theme
  *
  * Pure AMOLED black design system with M1K3 orange branding.
  * Optimized for battery efficiency, readability, and wabi-sabi aesthetic.
@@ -20,7 +20,7 @@ import app.m1k3.ai.assistant.design.tokens.MaTypography
  */
 
 /**
- * 間 AI Dark Color Scheme
+ * M1K3 AI Dark Color Scheme
  *
  * Maps our design tokens to Material3's color roles.
  * This allows us to use Material3 components while maintaining our brand identity.
@@ -37,9 +37,9 @@ private val MaDarkColorScheme = darkColorScheme(
     // ============================================
     // Secondary Colors (Subtle grays)
     // ============================================
-    secondary = MaColors.TextSecondary,
+    secondary = MaColors.Black,
     onSecondary = MaColors.Black,
-    secondaryContainer = MaColors.BgTertiary,
+    secondaryContainer = MaColors.Black,
     onSecondaryContainer = MaColors.TextPrimary,
 
     // ============================================
@@ -56,10 +56,10 @@ private val MaDarkColorScheme = darkColorScheme(
     background = MaColors.BgPrimary,
     onBackground = MaColors.TextPrimary,
 
-    surface = MaColors.BgSecondary,
+    surface = MaColors.BgPrimary,
     onSurface = MaColors.TextPrimary,
 
-    surfaceVariant = MaColors.BgTertiary,
+    surfaceVariant = MaColors.BgPrimary,
     onSurfaceVariant = MaColors.TextSecondary,
 
     surfaceTint = MaColors.Orange,

@@ -32,7 +32,7 @@ class ManifestPrivacyTest {
         assertFalse(
             hasInternetPermission,
             "CRITICAL PRIVACY VIOLATION: App has INTERNET permission. " +
-                    "間 AI MUST be 100% local. Remove android.permission.INTERNET immediately."
+                    "M1K3 AI MUST be 100% local. Remove android.permission.INTERNET immediately."
         )
     }
 
@@ -97,7 +97,7 @@ class ManifestPrivacyTest {
         assertFalse(
             hasNetworkServices,
             "App declares network-related services. " +
-                    "間 AI must be 100% local with zero network dependencies."
+                    "M1K3 AI must be 100% local with zero network dependencies."
         )
     }
 

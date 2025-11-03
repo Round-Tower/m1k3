@@ -8,7 +8,7 @@
 
 ## Overview
 
-Phase 2 builds the memory system that makes 間 AI context-aware:
+Phase 2 builds the memory system that makes M1K3 AI context-aware:
 - **Embedding Engine:** MiniLM-L6 (384-dim vectors)
 - **Vector Database:** HNSW index for fast similarity search
 - **Memory Manager:** Importance scoring, semantic chunking

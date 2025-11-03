@@ -9,7 +9,7 @@
 
 ## Executive Summary
 
-We've achieved a **major milestone** in the 間 AI development: **token-by-token streaming inference is now fully functional!** This means SmolLM2-360M-Instruct can generate responses in real-time, with tokens appearing in the UI as they're generated, without crashes or errors.
+We've achieved a **major milestone** in the M1K3 AI development: **token-by-token streaming inference is now fully functional!** This means SmolLM2-360M-Instruct can generate responses in real-time, with tokens appearing in the UI as they're generated, without crashes or errors.
 
 ### What This Means
 - ✅ Core AI infrastructure is **production-ready**

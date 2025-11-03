@@ -1,13 +1,13 @@
-# 間 AI Project Management - Master Overview
+# M1K3 AI Project Management - Master Overview
 
 ## Executive Summary
 
-**Project:** 間 AI - Privacy-First On-Device AI Companion
+**Project:** M1K3 AI - Privacy-First On-Device AI Companion
 **Timeline:** 16 weeks (Phases 0-6)
 **Total Tickets:** 135 tickets across 6 phases
 **Model:** SmolLM2-360M (180MB quantized) + MiniLM-L6 (90MB)
 **Target:** Android API 27+ (mid-range devices, 6GB RAM)
-**Philosophy:** 間 (ma) - negative space, wabi-sabi, computational sufficiency
+**Philosophy:** M1K3 (ma) - negative space, wabi-sabi, computational sufficiency
 
 ---
 
@@ -106,7 +106,7 @@ This project is managed through phase-specific documentation:
 ### Core Components
 
 ```
-間 AI Architecture
+M1K3 AI Architecture
 ├── Data Layer (Phase 0)
 │   ├── SQLDelight (4 tables)
 │   ├── Vector Database (HNSW)
@@ -298,25 +298,25 @@ This project is managed through phase-specific documentation:
 
 **Knowledge Base:**
 - **M1K3:** `knowledge/comprehensive_knowledge_base.json` (1.6MB, 37,350 lines)
-- **間 AI:** Port to SQLDelight at build time
+- **M1K3 AI:** Port to SQLDelight at build time
 - **Categories:** 20 categories, 1,341+ documents
 - **Usage:** Trivia engine, RAG, educational content
 
 **Database Schema:**
 - **M1K3:** DuckDB with VSS extension
-- **間 AI:** SQLDelight with HNSW (similar structure)
+- **M1K3 AI:** SQLDelight with HNSW (similar structure)
 - **Vector:** 384-dimensional embeddings (compatible)
 - **Tables:** Projects, Messages, MemoryMetadata, Settings
 
 **Embedding Model:**
 - **Both:** MiniLM-L6 (all-MiniLM-L6-v2)
 - **M1K3:** SentenceTransformers (Python)
-- **間 AI:** ONNX Runtime (Kotlin/Android)
+- **M1K3 AI:** ONNX Runtime (Kotlin/Android)
 - **Dimensions:** 384 (fully compatible)
 
 ### Divergent Components
 
-| Component | M1K3 (Python) | 間 AI (Kotlin) | Reason |
+| Component | M1K3 (Python) | M1K3 AI (Kotlin) | Reason |
 |-----------|---------------|----------------|---------|
 | **AI Model** | TinyLlama-1.1B-Chat | SmolLM2-360M | Mobile size constraint |
 | **TTS** | KittenTTS, VibeVoice | Android TTS API | Platform optimization |
@@ -432,6 +432,49 @@ app/
 - **Profiling:** Android Studio Profiler, LeakCanary
 - **Accessibility:** axe DevTools, Accessibility Scanner
 - **CI/CD:** GitHub Actions
+
+---
+
+## Known Issues & Technical Debt
+
+### 3D Avatar Multi-Screen Navigation
+**Status:** 🟡 Blocked
+**Priority:** P2 (Enhancement)
+**Discovered:** 2025-11-03
+**Affects:** Avatar3DView.android.kt, ChatScreen.kt
+
+**Issue:**
+SIGSEGV crashes occur when navigating between MainActivity and ChatScreen when both screens display 3D avatars using Filament engine.
+
+**Symptoms:**
+- "Engine destroyed × 2" in logs
+- Fatal signal 11 (SIGSEGV), code 1 (SEGV_MAPERR), fault addr 0x2a8
+- Crash in libgltfio-jni.so (Filament native library)
+
+**Attempted Solutions:**
+- ✅ SharedEngine CompositionLocal pattern implemented (single engine at app root)
+- ❌ Still experiencing crashes during rapid navigation
+
+**Current Workaround:**
+- ChatScreen reverted to 2D MiniAvatarIndicator (ChatScreen.kt:161-167)
+- MainActivity continues using 3D Avatar3DView successfully
+
+**Root Cause (Hypothesis):**
+Filament engine lifecycle management when multiple SceneView instances are composed/disposed rapidly. CompositionLocal prevents multiple engine creation but SceneView disposal may trigger premature cleanup.
+
+**Next Steps:**
+- Investigate SceneView DisposableEffect behavior
+- Review Filament engine reference counting
+- Consider delayed disposal pattern or engine pooling
+- Consult SceneView library maintainers
+
+**Files:**
+- `composeApp/src/androidMain/kotlin/app/m1k3/ai/assistant/avatar/Avatar3DView.android.kt`
+- `composeApp/src/androidMain/kotlin/app/m1k3/ai/assistant/avatar/SharedEngine.kt`
+- `composeApp/src/androidMain/kotlin/app/m1k3/ai/assistant/ui/ChatScreen.kt`
+
+**Documentation:**
+- See PHASE0.md "Additional Work" section for details
 
 ---
 

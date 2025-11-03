@@ -1,5 +1,5 @@
-# 間 AI Architecture
-**Project Codename: 間 Vision (Ma Vision)**
+# M1K3 AI Architecture
+**Project Codename: M1K3 Vision (Ma Vision)**
 
 *Architecture as of November 2025*
 

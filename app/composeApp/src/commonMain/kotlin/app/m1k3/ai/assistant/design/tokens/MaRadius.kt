@@ -3,7 +3,7 @@ package app.m1k3.ai.assistant.design.tokens
 import androidx.compose.ui.unit.dp
 
 /**
- * 間 AI Border Radius System
+ * M1K3 AI Border Radius System
  *
  * Consistent corner rounding for components.
  * Creates visual hierarchy and softens the brutalist/terminal aesthetic.

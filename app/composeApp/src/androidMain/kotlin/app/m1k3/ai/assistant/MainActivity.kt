@@ -107,9 +107,10 @@ class MainActivity : ComponentActivity() {
         }
 
         setContent {
-            MaTheme {
-                var showChat by remember { mutableStateOf(false) }
-                var showDebug by remember { mutableStateOf(false) }
+            ProvideSharedEngine {
+                MaTheme {
+                    var showChat by remember { mutableStateOf(false) }
+                    var showDebug by remember { mutableStateOf(false) }
 
                 Surface(
                     modifier = Modifier.fillMaxSize(),
@@ -138,6 +139,7 @@ class MainActivity : ComponentActivity() {
                         }
                     }
                 }
+            }
             }
         }
     }
@@ -180,7 +182,7 @@ fun MaAIDemo(onChatClick: () -> Unit, onDebugClick: () -> Unit = {}, knowledgeSt
                     ) {
                         Column {
                             Text(
-                                "M1K3 AI",
+                                "M1K3",
                                 style = MaTypography.headlineSmall,
                                 fontWeight = FontWeight.Bold,
                                 color = MaColors.TextPrimary
@@ -220,7 +222,7 @@ fun MaAIDemo(onChatClick: () -> Unit, onDebugClick: () -> Unit = {}, knowledgeSt
                 .padding(MaSpacing.base),
             verticalArrangement = Arrangement.spacedBy(MaSpacing.md)
         ) {
-            // Avatar Display
+            // Avatar Display - 3D Colobus Monkey with third eye perspective
             item {
                 Box(
                     modifier = Modifier.fillMaxWidth(),
@@ -229,6 +231,7 @@ fun MaAIDemo(onChatClick: () -> Unit, onDebugClick: () -> Unit = {}, knowledgeSt
                     AvatarView(
                         state = avatarState,
                         showInfo = true,
+                        use3D = true,  // Enable 3D Colobus monkey
                         onClick = {
                             avatarVM.flashEmotion(AvatarEmotion.EXCITED, 1500)
                         }

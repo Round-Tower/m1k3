@@ -30,7 +30,7 @@ class BuildConfigTest {
         assertEquals(
             "app.m1k3.ai.assistant",
             packageName,
-            "Package name must be app.m1k3.ai.assistant (間 AI namespace with ASO keywords)"
+            "Package name must be app.m1k3.ai.assistant (M1K3 AI namespace with ASO keywords)"
         )
     }
 

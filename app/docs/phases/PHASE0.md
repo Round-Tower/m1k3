@@ -30,11 +30,21 @@
 - 1,341 trivia facts queryable via SQLDelight
 - Foundation ready for Phase 1 AI integration
 
+**Additional Work (Post-Phase 0):**
+- 🎨 **3D Avatar System** - Implemented GLB model loader with Filament engine
+  - ✅ Avatar3DView.android.kt with ModelRegistry support
+  - ✅ Colobus monkey 3D model integration
+  - ✅ SharedEngine.kt CompositionLocal pattern for engine sharing
+  - ⚠️ **Known Issue:** SIGSEGV crashes during multi-screen navigation (MainActivity ↔ ChatScreen)
+  - 🔄 **Temporary Solution:** Reverted ChatScreen to use 2D MiniAvatarIndicator
+  - 📝 **Technical Debt:** 3D avatar engine lifecycle needs further investigation before multi-screen usage
+  - 📍 **Files:** Avatar3DView.android.kt, SharedEngine.kt, ChatScreen.kt (line 161-167)
+
 ---
 
 ## Overview
 
-Phase 0 establishes the foundational infrastructure for 間 AI:
+Phase 0 establishes the foundational infrastructure for M1K3 AI:
 - **Privacy-first architecture** (remove internet permission)
 - **Build system configuration** (dependencies, ProGuard)
 - **Database layer** (SQLDelight with 5 tables)
@@ -68,7 +78,7 @@ Remove INTERNET permission from AndroidManifest.xml to enforce privacy-first arc
     PRIVACY ARCHITECTURE: No INTERNET permission
     This app processes all data locally. The absence of internet permission
     makes network communication technically impossible, enforcing our
-    privacy-first philosophy of 間 AI.
+    privacy-first philosophy of M1K3 AI.
     -->
 
     <!-- Only local permissions -->
@@ -321,7 +331,7 @@ fun App() {
             color = MaterialTheme.colorScheme.background
         ) {
             Text(
-                text = "間 AI",
+                text = "M1K3 AI",
                 modifier = Modifier.padding(16.dp),
                 style = MaterialTheme.typography.headlineLarge
             )
@@ -345,7 +355,7 @@ fun `app composes without errors`() {
         App()
     }
 
-    composeTestRule.onNodeWithText("間 AI").assertExists()
+    composeTestRule.onNodeWithText("M1K3 AI").assertExists()
 }
 ```
 

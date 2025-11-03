@@ -12,7 +12,7 @@ import kotlin.uuid.Uuid
 /**
  * PHASE0-012: Knowledge Base Importer
  *
- * Imports M1K3's comprehensive knowledge base (1,341+ documents) into 間 AI.
+ * Imports M1K3's comprehensive knowledge base (1,341+ documents) into M1K3 AI.
  * Provides expert knowledge for RAG across 20 categories.
  *
  * Import Process:

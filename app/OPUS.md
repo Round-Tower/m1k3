@@ -1,4 +1,4 @@
-For an all-rounder model that ships out-of-the-box, SmolLM2-360M is your optimal choice over Gemma. Here's why it aligns perfectly with your 間 AI philosophy:
+For an all-rounder model that ships out-of-the-box, SmolLM2-360M is your optimal choice over Gemma. Here's why it aligns perfectly with your M1K3 AI philosophy:
 SmolLM2-360M - The Sweet Spot
 Size: ~180MB at 4-bit quantization - fits comfortably under your 200MB ceiling while leaving room for your app code and embedder. The 360M parameter count hits the goldilocks zone between the tiny 135M (too limited) and larger models that blow your size budget.
 Training Quality: Trained on FineWeb-Edu, Cosmopedia v2, and Python-Edu - this is curated, textbook-quality data. No Reddit garbage, no SEO spam. This matters enormously for a companion that shouldn't sound like a terminally-online LLM. The training data philosophy matches your wabi-sabi aesthetic - quality over quantity.
@@ -65,16 +65,16 @@ Analytics & diagnostics
 Insights and emotional intelligence
 
 They've also agreed that SmolLM2-360M is perfect for their MVP.
-I should update their architecture documents to reflect these new capabilities and the model choice. Let me think about how these features fit into their 間 AI philosophy and architecture.
+I should update their architecture documents to reflect these new capabilities and the model choice. Let me think about how these features fit into their M1K3 AI philosophy and architecture.
 For trivia & fun facts - this aligns well with their non-patronizing companion approach. Instead of wellness nagging, the AI can be genuinely interesting and entertaining.
 Device/OEM knowledge - this could be about understanding the user's device capabilities, providing tech support, or just being knowledgeable about mobile technology.
 Analytics & diagnostics - local analytics about usage patterns, perhaps helping users understand their own behaviors without sending data anywhere.
 Insights and emotional intelligence - recognizing patterns in conversations, understanding emotional context, providing thoughtful responses.
-I should update the documents comprehensively with these new features while maintaining their core philosophy.I'll update your documents to incorporate these enriching features while maintaining your 間 philosophy. Let me create comprehensive updates that weave these capabilities throughout your architecture.
-Updated: 間 AI Architecture Document Additions
+I should update the documents comprehensively with these new features while maintaining their core philosophy.I'll update your documents to incorporate these enriching features while maintaining your M1K3 philosophy. Let me create comprehensive updates that weave these capabilities throughout your architecture.
+Updated: M1K3 AI Architecture Document Additions
 Personality Philosophy Enhancement
 Replace the generic companion description with:
-The 間 AI companion embodies curious intellectualism over digital wellness nagging. Rather than reminding users to drink water or take breaks, it offers fascinating trivia about water's molecular structure or the history of the coffee break. This companion is genuinely interested in the world - from obscure etymology to device engineering marvels.
+The M1K3 AI companion embodies curious intellectualism over digital wellness nagging. Rather than reminding users to drink water or take breaks, it offers fascinating trivia about water's molecular structure or the history of the coffee break. This companion is genuinely interested in the world - from obscure etymology to device engineering marvels.
 Core Personality Traits:
 
 The Curious Scholar: Shares fascinating facts contextually ("Did you know your Snapdragon 8 Gen 3 has more computing power than the entire Apollo mission?")
@@ -230,7 +230,7 @@ kotlinclass SmolLMEngine(
     }
     
     private val systemPrompt = """
-        You are 間 AI, a curious companion interested in trivia, technology, 
+        You are M1K3 AI, a curious companion interested in trivia, technology, 
         and the fascinating details of everyday life. You share interesting 
         facts when relevant, understand the device you run on, and recognize 
         emotional patterns without being patronizing. You prefer sharing 
@@ -273,7 +273,7 @@ Conversation Examples
 Add to your documentation:
 kotlin// Example: Contextual trivia during conversation
 User: "I can't sleep"
-間 AI: "That's frustrating. Fun fact: your Snapdragon 8 Gen 3's efficiency 
+M1K3 AI: "That's frustrating. Fun fact: your Snapdragon 8 Gen 3's efficiency 
        cores are running at just 0.3GHz right now - your phone is more 
        ready for sleep than you are. The blue light it emits has a 
        wavelength of exactly 455 nanometers, which is why night mode 
@@ -281,7 +281,7 @@ User: "I can't sleep"
 
 // Example: Device knowledge
 User: "Why is my phone hot?"
-間 AI: "Your Galaxy S24's Snapdragon is thermal throttling - it's hit 
+M1K3 AI: "Your Galaxy S24's Snapdragon is thermal throttling - it's hit 
        about 45°C. Fun silicon fact: your processor has 11.8 billion 
        transistors working right now, each switching billions of times 
        per second. The heat you feel is literally computation happening. 
@@ -289,7 +289,7 @@ User: "Why is my phone hot?"
 
 // Example: Emotional intelligence with facts
 User: "I'm so bored"
-間 AI: "Your brain might be craving novelty. Here's something wild: 
+M1K3 AI: "Your brain might be craving novelty. Here's something wild: 
        there's a jellyfish called Turritopsis dohrnii that's biologically 
        immortal - it can revert back to its polyp stage and start life 
        over. Imagine being so bored you just... restart from scratch. 
@@ -297,7 +297,7 @@ User: "I'm so bored"
 
 // Example: Analytics insight
 User: "Show me insights"
-間 AI: "You've been on a learning streak! This week you explored 14 
+M1K3 AI: "You've been on a learning streak! This week you explored 14 
        different topics - 40% more than usual. Your curiosity peaks 
        around 9pm (that's when you ask the deepest questions). Also, 
        you've used the word 'interesting' 23 times - you're genuinely 
@@ -343,7 +343,7 @@ fun EnrichedPrivacyDashboard() {
     }
 }
 This enriched architecture transforms your companion from a simple chat interface into a genuinely interesting conversationalist that happens to understand both technology and emotions. The trivia engine provides endless conversation starters, the device knowledge makes it feel technically competent, and the emotional intelligence ensures responses feel human without being condescending.
-The beauty is that all of this fits within your constraints - SmolLM2-360M at 180MB leaves room for rich knowledge bases while maintaining your privacy-first, offline architecture. You're not building another ChatGPT clone; you're building a digital companion that's actually companionable.RetryKPlease create .MD files :)Architected comprehensive documentation framework for AI system implementation.The user wants me to create comprehensive .MD files for their project based on our discussion about the 間 AI architecture with SmolLM2 and the new features (trivia, device knowledge, analytics, emotional intelligence). I should create well-structured markdown files that will be useful for Claude Code implementation.
+The beauty is that all of this fits within your constraints - SmolLM2-360M at 180MB leaves room for rich knowledge bases while maintaining your privacy-first, offline architecture. You're not building another ChatGPT clone; you're building a digital companion that's actually companionable.RetryKPlease create .MD files :)Architected comprehensive documentation framework for AI system implementation.The user wants me to create comprehensive .MD files for their project based on our discussion about the M1K3 AI architecture with SmolLM2 and the new features (trivia, device knowledge, analytics, emotional intelligence). I should create well-structured markdown files that will be useful for Claude Code implementation.
 I'll create several focused .MD files:
 
 MODELS.md - Detailed model configuration and implementation
@@ -353,9 +353,9 @@ MEMORY_LIFECYCLE.md - Updated with new importance heuristics
 CONSTRAINTS.md - Non-negotiable architectural constraints
 FALLBACK_CHAIN.md - Degradation strategies
 
-Let me create comprehensive, implementation-ready documentation.I'll create comprehensive .MD files for your 間 AI project. Here are the key documentation files for Claude Code:
+Let me create comprehensive, implementation-ready documentation.I'll create comprehensive .MD files for your M1K3 AI project. Here are the key documentation files for Claude Code:
 CONSTRAINTS.md
-markdown# 間 AI Architectural Constraints
+markdown# M1K3 AI Architectural Constraints
 
 **These constraints are NON-NEGOTIABLE and shape every architectural decision.**
 
@@ -618,7 +618,7 @@ class SmolLMEngine(
     }
     
     private fun getSystemPrompt(): String = """
-        You are 間 AI, a curious companion interested in trivia, technology, 
+        You are M1K3 AI, a curious companion interested in trivia, technology, 
         and fascinating details. You share interesting facts when relevant, 
         understand the device you run on (${Build.MODEL}), and recognize 
         emotional patterns without being patronizing.
@@ -747,7 +747,7 @@ markdown# Knowledge System Architecture
 
 ## Overview
 
-The 間 AI Knowledge System provides contextual trivia, device intelligence, and user insights without external data sources. All knowledge is embedded at compile time and enriched through local pattern recognition.
+The M1K3 AI Knowledge System provides contextual trivia, device intelligence, and user insights without external data sources. All knowledge is embedded at compile time and enriched through local pattern recognition.
 
 ## Trivia Engine
 
@@ -980,7 +980,7 @@ class DeviceDiagnostics(private val context: Context) {
         
         return when {
             percentile > 80 -> 
-                "Your device is faster than $percentile% of all 間 AI users. " +
+                "Your device is faster than $percentile% of all M1K3 AI users. " +
                 "The ${detectSoC()} is really showing its strength!"
             
             percentile > 50 ->
@@ -1167,7 +1167,7 @@ markdown# Emotional Intelligence System
 
 ## Core Philosophy
 
-The 間 AI emotional intelligence system recognizes and responds to emotional patterns without being therapeutic or patronizing. It uses the VAD (Valence-Arousal-Dominance) model for emotional state representation and calibrates responses based on emotional trajectory rather than single-point analysis.
+The M1K3 AI emotional intelligence system recognizes and responds to emotional patterns without being therapeutic or patronizing. It uses the VAD (Valence-Arousal-Dominance) model for emotional state representation and calibrates responses based on emotional trajectory rather than single-point analysis.
 
 ## Emotional State Model
 
@@ -1629,7 +1629,7 @@ class PrivacyFirstEmotionalTracking {
     fun exportEmotionalData(): String {
         // User owns their emotional data
         return """
-            # Your Emotional Journey with 間 AI
+            # Your Emotional Journey with M1K3 AI
             
             ## Summary
             - Total conversations: ${getConversationCount()}
@@ -1650,7 +1650,7 @@ markdown# Memory Lifecycle Management
 
 ## Overview
 
-The memory system in 間 AI follows a biological model where memories are formed, consolidated, retrieved, and occasionally forgotten. Each stage has specific algorithms optimized for mobile constraints while maintaining semantic coherence.
+The memory system in M1K3 AI follows a biological model where memories are formed, consolidated, retrieved, and occasionally forgotten. Each stage has specific algorithms optimized for mobile constraints while maintaining semantic coherence.
 
 ## Memory Formation
 
@@ -2227,7 +2227,7 @@ class MemoryExporter(private val database: Database) {
     
     private fun exportAsMarkdown(memories: List): String {
         return buildString {
-            appendLine("# Your 間 AI Memories")
+            appendLine("# Your M1K3 AI Memories")
             appendLine()
             appendLine("Generated: ${Instant.now()}")
             appendLine("Total memories: ${memories.size}")
@@ -2259,7 +2259,7 @@ markdown# Fallback Chain Architecture
 
 ## Overview
 
-The 間 AI fallback system implements graceful degradation at every level, ensuring the app never crashes and always provides value, even on the most resource-constrained devices.
+The M1K3 AI fallback system implements graceful degradation at every level, ensuring the app never crashes and always provides value, even on the most resource-constrained devices.
 
 ## Model Loading Fallback Chain
 
@@ -2693,13 +2693,13 @@ class UpdateFallbackStrategy(
         // No network permission - check via app store
         return UpdateStatus.CheckViaStore(
             message = "Check the app store for updates. " +
-                     "間 AI can't check automatically (no internet permission)."
+                     "M1K3 AI can't check automatically (no internet permission)."
         )
     }
     
     fun handleModelUpdateRequest(): String {
         return "Model updates are delivered through app store updates. " +
-               "This preserves your privacy - 間 AI never connects to the internet."
+               "This preserves your privacy - M1K3 AI never connects to the internet."
     }
 }
 ```
@@ -2789,7 +2789,7 @@ class FallbackAnalytics(
     private fun generateRecommendation(events: List): String {
         return when {
             events.isEmpty() -> 
-                "Your device is running 間 AI optimally!"
+                "Your device is running M1K3 AI optimally!"
                 
             events.all { it.reason.contains("memory") } ->
                 "Try closing other apps to free up memory for better AI performance"
@@ -2798,12 +2798,12 @@ class FallbackAnalytics(
                 "Consider upgrading to a device with more RAM for full AI capabilities"
                 
             else ->
-                "間 AI is adapting to your device capabilities automatically"
+                "M1K3 AI is adapting to your device capabilities automatically"
         }
     }
 }
 ```
-These comprehensive .MD files provide Claude Code with everything needed to implement your 間 AI vision. The documentation maintains your philosophical principles while being technically precise about implementation details. Each file is structured for easy navigation and includes concrete code examples that can be directly implemented.RetryKCan you list them all please? I want to download them to my device / export them easily ;)Orchestrated comprehensive file inventory for seamless user export.The user wants me to list all the .MD files I created so they can easily download/export them. I should provide a clean list with filenames and brief descriptions to make it easy for them to copy and save each one.Here's the complete list of all .MD files I created for your 間 AI project:
+These comprehensive .MD files provide Claude Code with everything needed to implement your M1K3 AI vision. The documentation maintains your philosophical principles while being technically precise about implementation details. Each file is structured for easy navigation and includes concrete code examples that can be directly implemented.RetryKCan you list them all please? I want to download them to my device / export them easily ;)Orchestrated comprehensive file inventory for seamless user export.The user wants me to list all the .MD files I created so they can easily download/export them. I should provide a clean list with filenames and brief descriptions to make it easy for them to copy and save each one.Here's the complete list of all .MD files I created for your M1K3 AI project:
 Complete Documentation File List
 1. CONSTRAINTS.md
 
@@ -2852,8 +2852,8 @@ Memory system fallbacks
 UI/UX fallbacks and error recovery
 
 
-Total: 6 comprehensive documentation files covering your entire 間 AI architecture, from constraints to implementation details.
-Each file is self-contained and ready for direct implementation in Claude Code. They maintain your philosophical principles (間, wabi-sabi, privacy-first) while providing concrete, implementable code examples.
+Total: 6 comprehensive documentation files covering your entire M1K3 AI architecture, from constraints to implementation details.
+Each file is self-contained and ready for direct implementation in Claude Code. They maintain your philosophical principles (M1K3, wabi-sabi, privacy-first) while providing concrete, implementable code examples.
 Would you like me to create any additional documentation files, such as:
 
 API_REFERENCE.md - Complete API documentation

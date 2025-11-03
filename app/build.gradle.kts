@@ -10,7 +10,7 @@ plugins {
     alias(libs.plugins.kotlinMultiplatform) apply false
     alias(libs.plugins.ktor) apply false
 
-    // 間 AI Plugins
+    // M1K3 AI Plugins
     alias(libs.plugins.sqldelight) apply false
     alias(libs.plugins.kotlinSerialization) apply false
 }

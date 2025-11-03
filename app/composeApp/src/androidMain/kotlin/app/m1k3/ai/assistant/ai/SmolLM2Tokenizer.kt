@@ -7,7 +7,7 @@ import java.io.BufferedReader
 import java.io.InputStreamReader
 
 /**
- * 間 AI - SmolLM2 Tokenizer
+ * M1K3 AI - SmolLM2 Tokenizer
  *
  * BPE tokenizer for SmolLM2-360M-Instruct model.
  * Converts text to token IDs and vice versa.

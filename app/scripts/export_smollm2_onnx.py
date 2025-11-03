@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-間 AI - SmolLM2-360M ONNX Export Script
+M1K3 AI - SmolLM2-360M ONNX Export Script
 
 Exports SmolLM2-360M-Instruct to ONNX format for mobile inference.
 
@@ -43,7 +43,7 @@ def export_smollm2_to_onnx(output_dir: Path, quantize: bool = True):
 
     model_id = "HuggingFaceTB/SmolLM2-360M-Instruct"
 
-    print("🤖 間 AI - SmolLM2 ONNX Export")
+    print("🤖 M1K3 AI - SmolLM2 ONNX Export")
     print("=" * 50)
     print(f"📦 Model: {model_id}")
     print(f"📁 Output: {output_dir}")
@@ -118,7 +118,7 @@ def export_smollm2_to_onnx(output_dir: Path, quantize: bool = True):
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Export SmolLM2-360M to ONNX for 間 AI"
+        description="Export SmolLM2-360M to ONNX for M1K3 AI"
     )
     parser.add_argument(
         "--output",

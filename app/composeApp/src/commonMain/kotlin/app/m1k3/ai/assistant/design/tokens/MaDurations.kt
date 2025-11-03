@@ -1,7 +1,7 @@
 package app.m1k3.ai.assistant.design.tokens
 
 /**
- * 間 AI Animation Duration System
+ * M1K3 AI Animation Duration System
  *
  * Consistent timing for animations and transitions.
  * Creates fluid, intentional motion without feeling sluggish.

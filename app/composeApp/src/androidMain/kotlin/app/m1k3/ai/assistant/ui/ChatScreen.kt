@@ -1,6 +1,7 @@
 package app.m1k3.ai.assistant.ui
 
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.*
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.foundation.background
@@ -135,6 +136,7 @@ fun ChatScreen(
     }
 
     Scaffold(
+        modifier = Modifier.padding(24.dp).animateContentSize(),
         topBar = {
             TopAppBar(
                 title = {
@@ -156,16 +158,18 @@ fun ChatScreen(
                                 color = if (engineInitialized) MaColors.Orange else MaColors.TextSecondary
                             )
                         }
-                        // Mini avatar indicator
+                        // TODO: Replace with Avatar3DViewCompact when Filament engine sharing is fixed
+                        // Currently using 2D MiniAvatarIndicator to avoid SIGSEGV crashes during navigation
                         MiniAvatarIndicator(
                             state = avatarState,
-                            modifier = Modifier.size(48.dp)
+                            modifier = Modifier.size(120.dp, 100.dp),
+                            showGlow = true
                         )
                     }
                 },
                 navigationIcon = {
                     TextButton(onClick = onBackClick) {
-                        Text("← Back", style = MaterialTheme.typography.titleMedium)
+                        Text("Back", style = MaterialTheme.typography.titleMedium)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -344,6 +348,7 @@ fun ChatScreen(
         LazyColumn(
             state = listState,
             modifier = Modifier
+                .animateContentSize()
                 .fillMaxSize()
                 .padding(padding)
                 .padding(horizontal = 16.dp),

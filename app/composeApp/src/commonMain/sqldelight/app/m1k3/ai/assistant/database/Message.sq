@@ -1,6 +1,6 @@
 -- PHASE0-010: Message Table Schema
 --
--- Messages represent individual conversation turns in 間 AI.
+-- Messages represent individual conversation turns in M1K3 AI.
 -- Each message is linked to a Project and can have:
 -- - Text content (user or assistant)
 -- - Attached images (multi-modal)

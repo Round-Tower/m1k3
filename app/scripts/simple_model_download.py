@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-間 AI - Simple Model File Downloader
+M1K3 AI - Simple Model File Downloader
 
 Downloads just the essential SmolLM2-360M files needed for mobile demo.
 Skips complex ONNX conversion due to dependency conflicts.
@@ -31,7 +31,7 @@ def download_model_files():
     output_dir = Path("models/smollm2-360m")
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    print("🤖 間 AI - SmolLM2 Model Downloader")
+    print("🤖 M1K3 AI - SmolLM2 Model Downloader")
     print("=" * 50)
     print(f"📦 Model: {model_id}")
     print(f"📁 Output: {output_dir}")

@@ -1,5 +1,6 @@
 package app.m1k3.ai.assistant.avatar
 
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
@@ -10,8 +11,8 @@ import androidx.compose.ui.unit.dp
 import app.m1k3.ai.assistant.design.tokens.MaColors
 import app.m1k3.ai.assistant.design.tokens.MaTypography
 import io.github.sceneview.Scene
+import io.github.sceneview.loaders.ModelLoader
 import io.github.sceneview.node.ModelNode
-import io.github.sceneview.rememberEngine
 import io.github.sceneview.rememberModelLoader
 import io.github.sceneview.rememberNodes
 import io.github.sceneview.rememberCameraNode
@@ -35,6 +36,13 @@ import kotlinx.coroutines.delay
  * - CameraAutoFit (optimal camera positioning)
  * - InteractiveCameraController (touch gestures)
  * - AnimationIntrospector (fuzzy animation matching)
+ *
+ * TODO: Fix multi-screen navigation crashes
+ * - SharedEngine CompositionLocal pattern implemented but still experiencing SIGSEGV crashes
+ * - Crash occurs when navigating between MainActivity and ChatScreen (both use 3D avatars)
+ * - Error: "Engine destroyed × 2" followed by SEGV_MAPERR in libgltfio-jni.so
+ * - Current workaround: ChatScreen uses 2D MiniAvatarIndicator instead
+ * - Investigation needed: Filament engine lifecycle, SceneView disposal, CompositionLocal cleanup
  */
 
 /**
@@ -58,7 +66,8 @@ fun Avatar3DView(
     autoRotate: Boolean = false,
     showLoadingIndicator: Boolean = true
 ) {
-    val engine = rememberEngine()
+    // Use shared engine from CompositionLocal (one engine for entire app)
+    val engine = LocalSharedEngine.current!!
     val modelLoader = rememberModelLoader(engine)
 
     // Load model metadata
@@ -194,7 +203,8 @@ private fun RenderStaticModel(
     enableInteraction: Boolean,
     modifier: Modifier = Modifier
 ) {
-    val engine = rememberEngine()
+    // Use shared engine from CompositionLocal (one engine for entire app)
+    val engine = LocalSharedEngine.current!!
     val modelLoader = rememberModelLoader(engine)
 
     // Create procedural animator
@@ -221,6 +231,32 @@ private fun RenderStaticModel(
     // Reset start time when state changes
     LaunchedEffect(state) {
         startTime = System.nanoTime()
+    }
+
+    // Emotion-triggered head turn animation
+    val initialRotation = remember { animator.getEmotionAngle() }
+    var previousEmotion by remember { mutableStateOf(state.emotion) }
+    var currentRotation by remember { mutableFloatStateOf(initialRotation) }
+    var targetRotation by remember { mutableFloatStateOf(initialRotation) }
+    var rotationAnimProgress by remember { mutableFloatStateOf(1f) }
+
+    // Trigger head turn when emotion changes
+    LaunchedEffect(state.emotion) {
+        if (state.emotion != previousEmotion) {
+            targetRotation = animator.getEmotionAngle()
+            rotationAnimProgress = 0f
+            previousEmotion = state.emotion
+
+            println("🔄 Emotion changed: ${state.emotion}, rotating from ${currentRotation.toInt()}° → ${targetRotation.toInt()}°")
+
+            animate(
+                initialValue = 0f,
+                targetValue = 1f,
+                animationSpec = tween(durationMillis = 500, easing = FastOutSlowInEasing)
+            ) { value, _ ->
+                rotationAnimProgress = value
+            }
+        }
     }
 
     // Create model node
@@ -262,11 +298,14 @@ private fun RenderStaticModel(
                 if (node != null) {
                     val elapsedSeconds = (frameTimeNanos - startTime) / 1_000_000_000.0f
 
-                    // Rotation (emotion-based speed)
-                    val rotationY = animator.getRotationY(elapsedSeconds)
-                    node.rotation = io.github.sceneview.math.Rotation(0f, rotationY, 0f)
+                    // Emotion-triggered head turn (smooth rotation when emotion changes)
+                    if (rotationAnimProgress < 1f) {
+                        val startAngle = currentRotation
+                        currentRotation = startAngle + (targetRotation - startAngle) * rotationAnimProgress
+                    }
+                    node.rotation = io.github.sceneview.math.Rotation(0f, currentRotation, 0f)
 
-                    // Scale pulse (activity-based)
+                    // Scale pulse (activity-based breathing)
                     val scale = animator.getScale(elapsedSeconds)
                     node.scale = io.github.sceneview.math.Scale(scale, scale, scale)
 
@@ -294,7 +333,8 @@ private fun RenderAnimatedModel(
     autoRotate: Boolean,
     modifier: Modifier = Modifier
 ) {
-    val engine = rememberEngine()
+    // Use shared engine from CompositionLocal (one engine for entire app)
+    val engine = LocalSharedEngine.current!!
     val modelLoader = rememberModelLoader(engine)
 
     // Calculate optimal camera (elevated 15° above model, looking down)

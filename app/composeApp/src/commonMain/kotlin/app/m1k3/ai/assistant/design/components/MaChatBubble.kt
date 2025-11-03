@@ -1,5 +1,6 @@
 package app.m1k3.ai.assistant.design.components
 
+import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
@@ -20,9 +21,10 @@ import app.m1k3.ai.assistant.design.tokens.MaTypography
 import kotlinx.datetime.Instant
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
+import kotlin.time.ExperimentalTime
 
 /**
- * 間 AI Chat Bubble Components
+ * M1K3 Bubble Components
  *
  * Message bubbles for chat conversations:
  * - MaChatBubbleUser: Orange-accented user messages (right-aligned)
@@ -113,12 +115,13 @@ fun MaChatBubbleAI(
 ) {
     Row(
         modifier = modifier
+            .animateContentSize()
             .fillMaxWidth()
             .padding(horizontal = MaSpacing.base, vertical = MaSpacing.sm),
         horizontalArrangement = Arrangement.Start
     ) {
         Column(
-            modifier = Modifier.widthIn(max = 280.dp),
+            modifier = Modifier.animateContentSize(),
             horizontalAlignment = Alignment.Start
         ) {
             Box(
@@ -130,8 +133,12 @@ fun MaChatBubbleAI(
                         shape = RoundedCornerShape(MaRadius.md)
                     )
                     .padding(horizontal = MaSpacing.md, vertical = MaSpacing.base)
+                    .animateContentSize()
             ) {
-                Column(verticalArrangement = Arrangement.spacedBy(MaSpacing.sm)) {
+                Column(
+                    modifier = Modifier.animateContentSize(),
+                    verticalArrangement = Arrangement.spacedBy(MaSpacing.sm)
+                ) {
                     Text(
                         text = text,
                         style = MaTypography.bodyLarge,
@@ -167,6 +174,7 @@ fun MaChatBubbleAI(
  * @param timestamp Unix timestamp in milliseconds
  * @return Formatted time string (e.g., "14:32")
  */
+@OptIn(ExperimentalTime::class)
 private fun formatTimestamp(timestamp: Long): String {
     val instant = Instant.fromEpochMilliseconds(timestamp)
     val localDateTime = instant.toLocalDateTime(TimeZone.currentSystemDefault())

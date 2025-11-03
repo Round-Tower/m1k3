@@ -58,10 +58,10 @@ data class ModelConfig(
 
     companion object {
         /**
-         * Simple mask (default for new users)
+         * Simple mask (alternative avatar)
          *
          * Static model with procedural animations (no skeleton).
-         * Perfect starting point for low-end devices or new users.
+         * Alternative option for low-end devices or minimalist preference.
          *
          * License: CC-BY-4.0 by IzLoM39 (Sketchfab)
          */
@@ -74,12 +74,15 @@ data class ModelConfig(
             modelType = ModelType.STATIC,
             hasAnimations = false,
             supportsEmotions = true,
-            defaultForNewUsers = true,
+            defaultForNewUsers = false,
             attribution = "CC-BY-4.0 by IzLoM39 (Sketchfab)"
         )
 
         /**
-         * Colobus monkey (animated)
+         * Colobus monkey (animated) - DEFAULT
+         *
+         * Eco-consciousness showcase with lifelike animations.
+         * Perfect starting point showcasing the full avatar system.
          */
         val COLOBUS = ModelConfig(
             id = "colobus",
@@ -89,7 +92,8 @@ data class ModelConfig(
             category = "mammal",
             modelType = ModelType.ANIMATED,
             hasAnimations = true,
-            supportsEmotions = true
+            supportsEmotions = true,
+            defaultForNewUsers = true
         )
 
         /**
@@ -179,20 +183,21 @@ data class ModelConfig(
 object ModelRegistry {
 
     /**
-     * Default model ID (Mask - simple starting point)
+     * Default model ID (Colobus - eco-consciousness showcase)
      */
-    const val DEFAULT_MODEL_ID = "mask"
+    const val DEFAULT_MODEL_ID = "colobus"
 
     /**
      * Pre-configured models
      *
      * Includes:
-     * - Mask (static, procedural animations)
-     * - Quirky Series FREE Animals v1.4 (animated, eco-consciousness showcase)
+     * - Colobus monkey (DEFAULT - animated, eco-consciousness showcase)
+     * - Quirky Series FREE Animals v1.4 (7 additional animated models)
+     * - Mask (static, procedural animations alternative)
      */
     private val predefinedModels = listOf(
-        ModelConfig.MASK,        // Static model (default for new users)
-        ModelConfig.COLOBUS,     // Animated models (eco-consciousness showcase)
+        ModelConfig.MASK,        // Static model (alternative)
+        ModelConfig.COLOBUS,     // Animated models (DEFAULT, eco-consciousness showcase)
         ModelConfig.SPARROW,
         ModelConfig.GECKO,
         ModelConfig.HERRING,
@@ -224,15 +229,15 @@ object ModelRegistry {
     }
 
     /**
-     * Get default model (Mask)
+     * Get default model (Colobus Monkey)
      *
-     * Returns the simple mask model as starting point for new users.
-     * Use this for best first-time experience on all devices.
+     * Returns the Colobus monkey as the default avatar, showcasing
+     * full animated capabilities and eco-consciousness credentials.
      *
      * @return Default model configuration
      */
     fun getDefault(): ModelConfig {
-        return ModelConfig.MASK
+        return ModelConfig.COLOBUS
     }
 
     /**

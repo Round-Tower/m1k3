@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-間 AI - SmolLM2-360M ONNX Download Script
+M1K3 AI - SmolLM2-360M ONNX Download Script
 
 Downloads pre-converted ONNX model from Hugging Face Hub.
 This is simpler than local conversion and avoids dependency issues.
@@ -32,7 +32,7 @@ def download_smollm2_onnx(output_dir: Path):
     if not HAS_HF_HUB:
         raise RuntimeError("huggingface_hub not installed")
 
-    print("🤖 間 AI - SmolLM2 ONNX Download")
+    print("🤖 M1K3 AI - SmolLM2 ONNX Download")
     print("=" * 50)
     print()
 
@@ -128,7 +128,7 @@ def create_mock_onnx_model(output_dir: Path):
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Download SmolLM2-360M ONNX for 間 AI"
+        description="Download SmolLM2-360M ONNX for M1K3 AI"
     )
     parser.add_argument(
         "--output",

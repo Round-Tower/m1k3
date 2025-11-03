@@ -1,33 +1,10 @@
 {
   "permissions": {
     "allow": [
-      "Bash(tree:*)",
-      "Bash(find:*)",
-      "Bash(./gradlew composeApp:assembleDebug:*)",
-      "Bash(./gradlew:*)",
-      "Bash(git worktree:*)",
-      "WebSearch",
-      "Bash(git add:*)",
-      "Bash(python scripts/export_smollm2_onnx.py:*)",
-      "Bash(pip install:*)",
-      "Bash(python:*)",
-      "Bash(adb shell:*)",
-      "Bash(adb shell am start:*)",
-      "Bash(adb exec-out:*)",
-      "Bash(ma_ai_with_chat_button.png)",
-      "Bash(ma_ai_main_screen.png)",
-      "mcp__m1k3-tts__speak",
-      "Bash(ma_ai_scrolled.png)",
-      "Bash(pkill:*)",
-      "Bash(cat:*)",
-      "Bash(python3:*)",
-      "Bash(adb logcat:*)",
-      "Bash(ma_ai_onnx_runtime_123.png)",
-      "Bash(ma_ai_final_test.png)",
-      "Bash(ma_ai_kv_cache_test.png)",
-      "Bash(ma_ai_chat_kv_test.png)",
-      "Bash(adb devices:*)",
-      "Bash(git commit -m \"$(cat <<''EOF''\nfix(ai): Use FloatBuffer for empty KV cache tensors\n\nAttempting to fix KV cache tensor creation using FloatBuffer with explicit shape.\n\nApproach: Create empty FloatBuffer(0) with shape [1, 5, 0, 64]\nThis should allow seq_len=0 without \"zero dimension\" errors.\n\nStatus: Build succeeds, needs testing on device\n\nNote: This KV cache issue is complex. May need to consider:\n1. Different ONNX model without KV cache requirement\n2. Using mock inference until proper solution found\n3. Exploring alternative SmolLM2 exports\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>\nEOF\n)\")"
+      "Bash(ollama list:*)",
+      "Bash(npx gltf-transform:*)",
+      "Bash(./gradlew :composeApp:compileDebugKotlinAndroid:*)",
+      "Bash(ollama show:*)"
     ],
     "deny": [],
     "ask": []

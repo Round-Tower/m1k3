@@ -104,11 +104,15 @@ object GLBModelLoader {
      * - Materials: 1 (with embedded texture)
      * - Animations: 0 (static mesh)
      * - License: CC-BY-4.0 by IzLoM39 (Sketchfab)
+     *
+     * Bounding Box: Actual geometry dimensions from GLB file (gltf-transform inspect)
+     * - Dimensions: 190.5 × 177.2 × 125.3 units
+     * - Center: (0, 41.76, -0.55) - slightly above origin
      */
     private fun createMaskMetadata(modelPath: String) = ModelMetadata(
         boundingBox = BoundingBox(
-            min = Position3D(-0.4f, -0.4f, -0.4f),
-            max = Position3D(0.4f, 0.4f, 0.4f)
+            min = Position3D(-95.25645f, -46.86496f, -63.18576f),
+            max = Position3D(95.25645f, 130.38197f, 62.07919f)
         ),
         animations = emptyList(),  // Static model - no baked animations
         materials = listOf(MaterialInfo("MaskMaterial", 0, true)),

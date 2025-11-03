@@ -1,6 +1,6 @@
 -- PHASE0-011: MemoryMetadata Table Schema
 --
--- MemoryMetadata stores metadata about semantic memories in 間 AI.
+-- MemoryMetadata stores metadata about semantic memories in M1K3 AI.
 -- Actual 384-dimensional embeddings are stored in separate BLOB storage
 -- and indexed with HNSW (JVector) for fast similarity search.
 --

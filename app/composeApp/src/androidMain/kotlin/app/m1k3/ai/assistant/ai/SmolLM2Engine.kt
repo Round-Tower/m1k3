@@ -10,7 +10,7 @@ import java.nio.ByteBuffer
 import java.nio.ByteOrder
 
 /**
- * 間 AI - SmolLM2 Inference Engine
+ * M1K3 AI - SmolLM2 Inference Engine
  *
  * Runs SmolLM2-360M locally on device using ONNX Runtime.
  *
@@ -34,21 +34,50 @@ class SmolLM2Engine(private val context: Context) {
 
     private var isInitialized = false
 
+    // Device-adaptive settings
+    private val deviceRamGB: Long by lazy {
+        val activityManager = context.getSystemService(Context.ACTIVITY_SERVICE) as android.app.ActivityManager
+        val memInfo = android.app.ActivityManager.MemoryInfo()
+        activityManager.getMemoryInfo(memInfo)
+        memInfo.totalMem / (1024 * 1024 * 1024)
+    }
+
+    /**
+     * Get optimal context window based on device RAM
+     * SmolLM2-360M supports up to 24K tokens, but we limit based on device capability
+     */
+    private fun getOptimalContextWindow(): Int {
+        return when {
+            deviceRamGB >= 12 -> 24000  // 12GB+: Full context (flagship devices)
+            deviceRamGB >= 8 -> 16000   // 8-12GB: Large context (high-end)
+            deviceRamGB >= 6 -> 8000    // 6-8GB: Medium context (mid-range)
+            deviceRamGB >= 4 -> 4000    // 4-6GB: Small context (budget)
+            else -> 2000                 // <4GB: Minimal context (very budget)
+        }
+    }
+
+    /**
+     * Get optimal max tokens for generation based on device RAM
+     */
+    private fun getOptimalMaxTokens(): Int {
+        return when {
+            deviceRamGB >= 12 -> 512   // 12GB+: Long responses
+            deviceRamGB >= 8 -> 384    // 8-12GB: Medium-long responses
+            deviceRamGB >= 6 -> 256    // 6-8GB: Medium responses
+            deviceRamGB >= 4 -> 128    // 4-6GB: Short responses
+            else -> 64                  // <4GB: Very short responses
+        }
+    }
+
     /**
      * Get device context for dynamic system prompts
      */
     private fun getDeviceContext(): String {
         val deviceModel = android.os.Build.MODEL
         val androidVersion = android.os.Build.VERSION.RELEASE
-        val sdkInt = android.os.Build.VERSION.SDK_INT
+        val contextWindow = getOptimalContextWindow()
 
-        // Get RAM info
-        val activityManager = context.getSystemService(Context.ACTIVITY_SERVICE) as android.app.ActivityManager
-        val memInfo = android.app.ActivityManager.MemoryInfo()
-        activityManager.getMemoryInfo(memInfo)
-        val totalRamGB = memInfo.totalMem / (1024 * 1024 * 1024)
-
-        return "$deviceModel (Android $androidVersion, ${totalRamGB}GB RAM)"
+        return "$deviceModel (Android $androidVersion, ${deviceRamGB}GB RAM, ${contextWindow} token context)"
     }
 
     /**
@@ -368,6 +397,7 @@ $prompt<|im_end|>
 
     /**
      * Sample next token from logits using temperature sampling
+     * When temperature = 0.0, uses greedy decoding (argmax)
      */
     private fun sampleNextToken(logitsObj: Any, temperature: Float): Long {
         // Extract logits from ONNX output
@@ -381,7 +411,12 @@ $prompt<|im_end|>
             else -> throw IllegalStateException("Unexpected logits format")
         }
 
-        // Apply temperature
+        // Greedy decoding (temperature = 0.0)
+        if (temperature == 0.0f) {
+            return logits.indices.maxByOrNull { logits[it] }?.toLong() ?: 0L
+        }
+
+        // Temperature sampling
         val scaledLogits = logits.map { it / temperature }
 
         // Softmax
@@ -445,9 +480,16 @@ $prompt<|im_end|>
 <|im_start|>assistant
 """
 
+            println("🔍 [STREAMING] Formatted prompt:")
+            println("---BEGIN PROMPT---")
+            println(formattedPrompt)
+            println("---END PROMPT---")
+
             // 2. Tokenize input
             val inputIds = tok.encode(formattedPrompt)
             println("   📝 Tokenized prompt: ${inputIds.size} tokens")
+            println("   🔍 First 20 token IDs: ${inputIds.take(20).joinToString(", ")}")
+            println("   🔍 Last 10 token IDs: ${inputIds.takeLast(10).joinToString(", ")}")
 
             val env = ortEnvironment ?: throw IllegalStateException("Environment not initialized")
 
@@ -514,6 +556,10 @@ $prompt<|im_end|>
                 val logitsObj = outputs.get(0).value
                 val nextTokenId = sampleNextToken(logitsObj, temperature)
 
+                if (i < 5) {
+                    println("🔍 [STREAMING] Generated token ID: $nextTokenId")
+                }
+
                 // Check for EOS
                 if (nextTokenId == 2L) {
                     println("🔍 [STREAMING] EOS token detected, stopping")
@@ -529,6 +575,20 @@ $prompt<|im_end|>
 
                 // Decode and emit the new token immediately
                 val newTokenText = tok.decode(longArrayOf(nextTokenId))
+
+                // Check for special tokens that indicate end of assistant response
+                if (newTokenText.contains("<|im_end|>") ||
+                    newTokenText.contains("<|im_start|>") ||
+                    newTokenText.contains("<|endoftext|>")) {
+                    println("🔍 [STREAMING] Special token detected: \"$newTokenText\", stopping generation")
+                    currentTensor.close()
+                    attentionMaskTensor.close()
+                    positionIdsTensor.close()
+                    outputs.close()
+                    previousOutputs?.close()
+                    break
+                }
+
                 if (newTokenText.isNotEmpty()) {
                     if (i == 0 || i % 5 == 0) {
                         println("🔍 [STREAMING] Token $i: \"$newTokenText\"")

@@ -56,15 +56,14 @@ fun AvatarDebugScreen(
     var enableInteraction by remember { mutableStateOf(true) }
     var showModelInfo by remember { mutableStateOf(false) }
 
-    val avatarState by remember {
-        derivedStateOf {
-            AvatarState(
-                emotion = currentEmotion,
-                activity = currentActivity,
-                intensity = intensity,
-                message = if (use3D) selectedModel.name else "2D Canvas Robot"
-            )
-        }
+    // Avatar state - recreates when any dependency changes
+    val avatarState = remember(currentEmotion, currentActivity, intensity, use3D, selectedModel) {
+        AvatarState(
+            emotion = currentEmotion,
+            activity = currentActivity,
+            intensity = intensity,
+            message = if (use3D) selectedModel.name else "2D Canvas Robot"
+        )
     }
 
     Scaffold(
@@ -110,8 +109,7 @@ fun AvatarDebugScreen(
             ) {
                 Column(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(MaSpacing.base),
+                        .fillMaxWidth(),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     // Avatar (with 3D model support)
@@ -127,7 +125,7 @@ fun AvatarDebugScreen(
                             state = avatarState,
                             showInfo = true,
                             use3D = false,
-                            modifier = Modifier.size(280.dp)
+                            modifier = Modifier.fillMaxSize()
                         )
                     }
 

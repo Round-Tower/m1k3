@@ -4,7 +4,7 @@ import app.m1k3.ai.assistant.database.MaDatabase
 import kotlinx.datetime.Clock
 
 /**
- * 間 AI - Database Demo
+ * M1K3 AI - Database Demo
  *
  * Demonstrates working SQLDelight database with:
  * - Project creation
@@ -25,7 +25,7 @@ class DatabaseDemo(private val database: MaDatabase) {
         // Create demo project
         database.projectQueries.insertProject(
             id = projectId,
-            name = "間 AI Demo",
+            name = "M1K3 AI Demo",
             description = "Privacy-first AI assistant demonstration",
             created_at = now,
             updated_at = now,
@@ -41,7 +41,7 @@ class DatabaseDemo(private val database: MaDatabase) {
             id = "msg_001",
             project_id = projectId,
             role = "assistant",
-            content = "Welcome to 間 AI! I'm your privacy-first assistant running 100% locally on your device.",
+            content = "Welcome to M1K3 AI! I'm your privacy-first assistant running 100% locally on your device.",
             timestamp = now,
             tokens = 25,
             image_uri = null,

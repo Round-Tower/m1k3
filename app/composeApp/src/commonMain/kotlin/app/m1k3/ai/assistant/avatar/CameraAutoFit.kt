@@ -61,16 +61,24 @@ object CameraAutoFit {
      * @param fov Field of view in degrees (default: 45°)
      * @param padding Padding multiplier (default: 1.5x)
      * @param cameraAngle Vertical angle offset in degrees (default: 0° = level with center)
+     * @param focusOffset Vertical focus offset as fraction of height (default: 0.0 = center, 0.3 = face area)
      * @return Optimal camera configuration
      */
     fun calculate(
         metadata: ModelMetadata,
         fov: Float = DEFAULT_FOV,
         padding: Float = DEFAULT_PADDING,
-        cameraAngle: Float = 0f
+        cameraAngle: Float = 0f,
+        focusOffset: Float = 0.0f
     ): CameraConfig {
-        // Get model center as lookAt point
-        val center = metadata.center
+        // Calculate focus point (with optional vertical offset for face/forehead focus)
+        val baseCenter = metadata.center
+        val verticalOffset = metadata.boundingBox.height * focusOffset
+        val focusPoint = Position3D(
+            x = baseCenter.x,
+            y = baseCenter.y + verticalOffset,
+            z = baseCenter.z
+        )
 
         // Calculate required distance to fit model in view
         val distance = calculateDistance(
@@ -81,14 +89,14 @@ object CameraAutoFit {
 
         // Calculate camera position with optional vertical angle
         val position = calculateCameraPosition(
-            center = center,
+            center = focusPoint,
             distance = distance,
             verticalAngle = cameraAngle
         )
 
         return CameraConfig(
             position = position,
-            lookAt = center,
+            lookAt = focusPoint,  // Camera looks at focus point (face area if offset > 0)
             distance = distance,
             fov = fov
         )

@@ -3,7 +3,7 @@ package app.m1k3.ai.assistant.design.tokens
 import androidx.compose.ui.graphics.Color
 
 /**
- * 間 AI Color Palette
+ * M1K3 AI Color Palette
  *
  * AMOLED black optimized design system with M1K3 branding.
  * Pure black (#000000) saves 15-20% battery on AMOLED displays.

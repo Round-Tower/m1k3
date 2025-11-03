@@ -36,39 +36,35 @@ class ProceduralAnimator(
 ) {
 
     /**
-     * Get Y-axis rotation angle (degrees) based on emotion
+     * Get target rotation angle for emotion-triggered head turns
      *
-     * Rotation speed varies by emotion to convey personality:
-     * - **Happy/Excited** - Fast spin (45-90°/sec) - energetic
-     * - **Neutral** - Medium spin (30°/sec) - calm
-     * - **Sad/Sleepy** - Slow spin (10-15°/sec) - lethargic
-     * - **Angry** - Fast jittery spin (60°/sec) - agitated
+     * Each emotion has a fixed angle representing a "head turn" direction.
+     * When emotion changes, the mask smoothly rotates from current → target angle.
      *
-     * @param elapsedSeconds Time since animation started
-     * @return Rotation angle in degrees (0-360, wraps)
+     * Angle mapping:
+     * - **NEUTRAL** - 0° (center, facing forward)
+     * - **HAPPY** - 25° (slight right turn, optimistic)
+     * - **EXCITED** - 45° (stronger right turn, energetic)
+     * - **SAD** - -25° (slight left turn, withdrawn)
+     * - **SLEEPY** - -15° (drooping left)
+     * - **ANGRY** - 90° (sharp right, aggressive)
+     * - **SURPRISED** - -45° (quick left turn, startled)
+     * - **LOVE** - 15° (gentle right, affectionate)
+     * - **THINKING** - -30° (contemplative left)
+     *
+     * @return Target angle in degrees
      */
-    fun getRotationY(elapsedSeconds: Float): Float {
-        val degreesPerSecond = getRotationSpeed()
-        val angle = (elapsedSeconds * degreesPerSecond) % 360f
-        return angle
-    }
-
-    /**
-     * Get rotation speed in degrees per second
-     *
-     * Maps emotions to rotation speeds for personality expression.
-     */
-    fun getRotationSpeed(): Float {
+    fun getEmotionAngle(): Float {
         return when (state.emotion) {
-            AvatarEmotion.HAPPY -> 45f        // 8s per rotation
-            AvatarEmotion.EXCITED -> 90f      // 4s per rotation
-            AvatarEmotion.SAD -> 10f          // 36s per rotation
-            AvatarEmotion.SLEEPY -> 5f        // 72s per rotation (very slow)
-            AvatarEmotion.ANGRY -> 60f        // 6s per rotation (agitated)
-            AvatarEmotion.SURPRISED -> 75f    // 4.8s per rotation
-            AvatarEmotion.LOVE -> 30f         // 12s per rotation (gentle)
-            AvatarEmotion.THINKING -> 20f     // 18s per rotation (slow)
-            AvatarEmotion.NEUTRAL -> 30f      // 12s per rotation
+            AvatarEmotion.NEUTRAL -> 0f
+            AvatarEmotion.HAPPY -> 25f
+            AvatarEmotion.EXCITED -> 45f
+            AvatarEmotion.SAD -> -25f
+            AvatarEmotion.SLEEPY -> -15f
+            AvatarEmotion.ANGRY -> 90f
+            AvatarEmotion.SURPRISED -> -45f
+            AvatarEmotion.LOVE -> 15f
+            AvatarEmotion.THINKING -> -30f
         }
     }
 
@@ -102,15 +98,16 @@ class ProceduralAnimator(
      * Get scale pulse amplitude based on activity
      *
      * Higher activity = larger pulses for visibility.
+     * Reduced from testing values (20-50%) to reasonable production values (8-15%).
      */
     fun getScaleAmplitude(): Float {
         return when (state.activity) {
-            AvatarActivity.SPEAKING -> 0.08f    // 8% pulse
-            AvatarActivity.GENERATING -> 0.05f  // 5% pulse
-            AvatarActivity.THINKING -> 0.03f    // 3% pulse
-            AvatarActivity.LISTENING -> 0.02f   // 2% pulse
-            AvatarActivity.ERROR -> 0.10f       // 10% pulse (alert!)
-            AvatarActivity.IDLE -> 0.02f        // 2% breathing
+            AvatarActivity.SPEAKING -> 0.15f    // 15% pulse - obvious speaking effect
+            AvatarActivity.GENERATING -> 0.12f  // 12% pulse - active thinking
+            AvatarActivity.THINKING -> 0.10f    // 10% pulse - concentration
+            AvatarActivity.LISTENING -> 0.08f   // 8% pulse - attentive
+            AvatarActivity.ERROR -> 0.18f       // 18% pulse - alert!
+            AvatarActivity.IDLE -> 0.10f        // 10% breathing - gentle resting
         }
     }
 
@@ -173,22 +170,6 @@ class ProceduralAnimator(
             floatArrayOf(1.0f, 0.0f, 0.0f, 0.5f)  // Bright red for errors
         } else {
             getColorTint()
-        }
-    }
-
-    /**
-     * Get rotation axis for variety
-     *
-     * Most emotions rotate on Y-axis (vertical spin).
-     * Some emotions add subtle wobble on other axes.
-     *
-     * @return Triple of (X-axis, Y-axis, Z-axis) rotation speeds in °/sec
-     */
-    fun getRotationAxis(): Triple<Float, Float, Float> {
-        return when (state.emotion) {
-            AvatarEmotion.SURPRISED -> Triple(5f, getRotationSpeed(), 0f)  // Slight head shake
-            AvatarEmotion.ANGRY -> Triple(0f, getRotationSpeed(), 3f)      // Slight roll
-            else -> Triple(0f, getRotationSpeed(), 0f)                     // Pure Y-axis spin
         }
     }
 

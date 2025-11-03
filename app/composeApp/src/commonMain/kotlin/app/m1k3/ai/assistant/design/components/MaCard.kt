@@ -14,7 +14,7 @@ import app.m1k3.ai.assistant.design.tokens.MaRadius
 import app.m1k3.ai.assistant.design.tokens.MaSpacing
 
 /**
- * 間 AI Glassmorphic Card Component
+ * M1K3 AI Glassmorphic Card Component
  *
  * Elevated card with liquid glass aesthetic.
  * Semi-transparent background with subtle borders.
@@ -32,7 +32,7 @@ import app.m1k3.ai.assistant.design.tokens.MaSpacing
 fun MaCard(
     modifier: Modifier = Modifier,
     onClick: (() -> Unit)? = null,
-    shape: Shape = RoundedCornerShape(MaRadius.md),
+    shape: Shape = RoundedCornerShape(MaRadius.none),
     content: @Composable ColumnScope.() -> Unit
 ) {
     Card(
