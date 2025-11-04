@@ -249,7 +249,7 @@ fun ChatScreen(
                                 aiEngine.generateStreaming(
                                     prompt = enhancedPrompt.enhancedQuery,  // Use enhanced prompt with knowledge
                                     maxTokens = 256,  // TODO: Use aiEngine.getOptimalMaxTokens()
-                                    temperature = 0.7f  // Balanced sampling for natural, diverse output
+                                    temperature = 0.5f  // Balanced sampling - coherent but diverse
                                 ) { token ->
                                     // Append each token as it arrives
                                     streamedText += token
