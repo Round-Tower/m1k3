@@ -378,7 +378,15 @@ docker-compose up --build
 **Target Release:** Beta v0.1.0 (Week 16)
 **Progress:** 8/135 tickets (6%) - **Streaming Inference Working!** ✅
 
-### 🎉 **Latest Milestone:** Streaming Inference (2025-11-02)
+### 🎉 **Latest Milestone:** Knowledge Base Consolidation (2025-11-04)
+- ✅ **1,401 documents** loaded (1,391 comprehensive + 10 M1K3 system knowledge)
+- ✅ **24 categories** across 4 domains (Technical, Educational, Expertise, System)
+- ✅ **M1K3 self-awareness** - Can explain its own capabilities
+- ✅ **Multi-source KB loading** - Clean architecture for multiple knowledge bases
+- ✅ **Enhanced system prompt** - Device context + category breakdown
+- 📄 See [SESSION_NOTES_2025_11_04.md](app/SESSION_NOTES_2025_11_04.md) for details
+
+### 🎉 **Previous Milestone:** Streaming Inference (2025-11-02)
 - ✅ **Real-time token-by-token AI generation** working end-to-end
 - ✅ **Fixed SIGSEGV crash** in ONNX Runtime KV cache management
 - ✅ **Fixed threading violations** in Compose UI updates
@@ -412,7 +420,7 @@ docker-compose up --build
 - **24K context window** - Long conversation support
 - **Semantic memory** - HNSW vector index (384-dimensional embeddings)
 - **Importance scoring** - Intelligent memory prioritization
-- **RAG integration** - M1K3's 1,341+ document knowledge base
+- **RAG integration** - 1,401 documents across 24 categories (1,391 comprehensive + 10 M1K3 system)
 
 ### Multi-Modal Intelligence
 - **CameraX integration** - Image capture and analysis
@@ -643,6 +651,64 @@ docker-compose up --build
 - **Minimal APK** - <200MB including models (every byte counts)
 - **No telemetry** - Can't improve what we don't measure (and that's okay)
 - **Accessibility** - Screen readers and inclusive design from day one
+
+---
+
+## Development Notes
+
+### ⚠️ Knowledge Base Force Re-Import (TEMPORARY)
+
+**Location:** `app/composeApp/src/androidMain/kotlin/app/m1k3/ai/assistant/MainActivity.kt:78`
+
+**Current Implementation:**
+```kotlin
+// TEMPORARY: Force re-import to load consolidated KB (1,391 docs) + M1K3 system KB (10 docs)
+val forceReimport = existingCount > 0 && existingCount < 1400
+```
+
+**Purpose:** Development aid to automatically update knowledge base when adding new content
+
+**⚠️ MUST REMOVE BEFORE PRODUCTION RELEASE**
+
+**Proposed Solution: Knowledge Base Versioning System**
+
+```kotlin
+// Recommended implementation for production:
+data class KnowledgeBaseVersion(
+    val comprehensive: String = "1.1.0",  // 1,391 documents
+    val system: String = "1.0.0",         // 10 documents
+    val combined: String = "1.1.0"        // Overall version
+)
+
+// In MainActivity.kt:
+val currentVersion = KnowledgeBaseVersion()
+val storedVersion = prefs.getString("kb_version", "0.0.0")
+
+if (storedVersion != currentVersion.combined) {
+    println("🔄 Knowledge base update detected: $storedVersion → ${currentVersion.combined}")
+    database.triviaFactQueries.deleteAllFacts()
+    // Import both KBs...
+    prefs.putString("kb_version", currentVersion.combined)
+}
+```
+
+**Version Format:** `MAJOR.MINOR.PATCH`
+- **MAJOR:** Breaking changes to schema or major content reorganization
+- **MINOR:** New categories, substantial content additions (50+ documents)
+- **PATCH:** Bug fixes, small content updates (<50 documents)
+
+**Benefits:**
+- ✅ Explicit version tracking
+- ✅ User-visible KB version in settings
+- ✅ Selective updates (only changed KBs)
+- ✅ Migration path for schema changes
+- ✅ Safe for production releases
+
+**Action Items:**
+1. Remove `forceReimport` logic before beta release
+2. Implement `KnowledgeBaseVersion` in comprehensive_knowledge_base.json and m1k3_system_knowledge.json
+3. Add version tracking to SharedPreferences
+4. Create KB migration system for schema changes
 
 ---
 
