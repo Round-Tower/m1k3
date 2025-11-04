@@ -184,6 +184,65 @@ WHERE project_id = ?
   AND content LIKE '%' || ? || '%'
 ORDER BY timestamp DESC;
 
+-- Advanced search: Content search with optional project filter
+searchMessagesAllProjects:
+SELECT * FROM Message
+WHERE content LIKE '%' || ? || '%'
+ORDER BY timestamp DESC
+LIMIT ?;
+
+-- Advanced search: With project filter and limit
+searchMessagesInProject:
+SELECT * FROM Message
+WHERE project_id = ?
+  AND content LIKE '%' || ? || '%'
+ORDER BY timestamp DESC
+LIMIT ?;
+
+-- Advanced search: With conversation filter
+searchMessagesInConversation:
+SELECT * FROM Message
+WHERE conversation_id = ?
+  AND content LIKE '%' || ? || '%'
+ORDER BY timestamp DESC
+LIMIT ?;
+
+-- Advanced search: With date range (start only, all projects)
+searchMessagesAfterTimestamp:
+SELECT * FROM Message
+WHERE content LIKE '%' || ? || '%'
+  AND timestamp >= ?
+ORDER BY timestamp DESC
+LIMIT ?;
+
+-- Advanced search: With full date range (all projects)
+searchMessagesInDateRange:
+SELECT * FROM Message
+WHERE content LIKE '%' || ? || '%'
+  AND timestamp >= ?
+  AND timestamp <= ?
+ORDER BY timestamp DESC
+LIMIT ?;
+
+-- Advanced search: With project and date range (start only)
+searchMessagesInProjectAfterTimestamp:
+SELECT * FROM Message
+WHERE project_id = ?
+  AND content LIKE '%' || ? || '%'
+  AND timestamp >= ?
+ORDER BY timestamp DESC
+LIMIT ?;
+
+-- Advanced search: With project and full date range
+searchMessagesInProjectInDateRange:
+SELECT * FROM Message
+WHERE project_id = ?
+  AND content LIKE '%' || ? || '%'
+  AND timestamp >= ?
+  AND timestamp <= ?
+ORDER BY timestamp DESC
+LIMIT ?;
+
 -- Get last assistant message (for conversation continuity)
 getLastAssistantMessage:
 SELECT * FROM Message
