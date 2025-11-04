@@ -58,8 +58,10 @@ class SmolLM2Engine(private val context: Context) {
 
     /**
      * Get optimal max tokens for generation based on device RAM
+     *
+     * Public API for UI to get device-appropriate max tokens
      */
-    private fun getOptimalMaxTokens(): Int {
+    fun getOptimalMaxTokens(): Int {
         return when {
             deviceRamGB >= 12 -> 512   // 12GB+: Long responses
             deviceRamGB >= 8 -> 384    // 8-12GB: Medium-long responses

@@ -244,11 +244,11 @@ fun ChatScreen(
                                     println("📚 [RAG] Enhanced prompt length: ${enhancedPrompt.enhancedQuery.length} chars")
                                 }
 
-                                // Use device-adaptive max tokens (will be exposed from engine)
-                                // For now, use 256 which is reasonable for 6GB+ devices
+                                // Use device-adaptive max tokens based on RAM
+                                // 12GB+: 512 tokens, 8-12GB: 384, 6-8GB: 256, 4-6GB: 128, <4GB: 64
                                 aiEngine.generateStreaming(
                                     prompt = enhancedPrompt.enhancedQuery,  // Use enhanced prompt with knowledge
-                                    maxTokens = 256,  // TODO: Use aiEngine.getOptimalMaxTokens()
+                                    maxTokens = aiEngine.getOptimalMaxTokens(),  // Device-adaptive
                                     temperature = 0.5f  // Balanced sampling - coherent but diverse
                                 ) { token ->
                                     // Append each token as it arrives
