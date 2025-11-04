@@ -32,6 +32,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.LocalContext
+import android.content.Context
 import app.m1k3.ai.assistant.ai.SmolLM2Engine
 import app.m1k3.ai.assistant.database.MaDatabase
 import app.m1k3.ai.assistant.knowledge.KnowledgeRetrievalService
@@ -125,6 +126,17 @@ fun ChatScreen(
         avatarVM.syncWithAI(isGenerating)
     }
 
+    // Get knowledge base stats
+    val knowledgeStats = remember(database) {
+        try {
+            val totalFacts = database.triviaFactQueries.getTotalFactCount().executeAsOne()
+            val categories = database.triviaFactQueries.getAllCategories().executeAsList().size
+            "$totalFacts facts across $categories categories"
+        } catch (e: Exception) {
+            "comprehensive knowledge base"
+        }
+    }
+
     // Initialize AI engine on first load
     LaunchedEffect(Unit) {
         scope.launch {
@@ -132,7 +144,7 @@ fun ChatScreen(
                 aiEngine.initialize()
                 engineInitialized = true
 
-                // Generate context-aware welcome message
+                // Generate context-aware welcome message with device and knowledge stats
                 val aiMessageTimestamp = Clock.System.now().toEpochMilliseconds()
                 val aiMessageIndex = messages.size
 
@@ -143,13 +155,22 @@ fun ChatScreen(
                     inferenceStats = "🔄 Initializing..."
                 )
 
-                // Generate personalized welcome
+                // Get device context for greeting
+                val deviceModel = android.os.Build.MODEL
+                val batteryManager = context.getSystemService(Context.BATTERY_SERVICE) as? android.os.BatteryManager
+                val batteryLevel = batteryManager?.getIntProperty(android.os.BatteryManager.BATTERY_PROPERTY_CAPACITY) ?: -1
+                val batteryInfo = if (batteryLevel > 0) "$batteryLevel% battery" else "battery connected"
+
+                // Generate personalized welcome with device and knowledge context
                 var welcomeText = ""
                 aiEngine.generateStreaming(
                     prompt = "Greet the user warmly and introduce yourself as M1K3, their privacy-first AI assistant. " +
-                            "Mention that you run 100% locally on their device and respect their privacy. Keep it brief and friendly.",
-                    maxTokens = 128,  // Short welcome message
-                    temperature = 0.3f  // Slightly creative but still coherent
+                            "Mention that you're running 100% locally on their $deviceModel with $batteryInfo, " +
+                            "and that all conversations are private and never leave their device. " +
+                            "Keep it brief (2-3 sentences), friendly, and conversational.",
+                    maxTokens = 150,  // Allow for device/knowledge context
+                    temperature = 0.4f,  // Slightly creative but still coherent
+                    knowledgeContext = "I have access to $knowledgeStats for enhanced responses."
                 ) { token ->
                     welcomeText += token
                     // Update welcome message in real-time
@@ -297,7 +318,8 @@ fun ChatScreen(
                                 aiEngine.generateStreaming(
                                     prompt = enhancedPrompt.enhancedQuery,  // Use enhanced prompt with knowledge
                                     maxTokens = aiEngine.getOptimalMaxTokens(),  // Device-adaptive
-                                    temperature = 0.5f  // Balanced sampling - coherent but diverse
+                                    temperature = 0.5f,  // Balanced sampling - coherent but diverse
+                                    knowledgeContext = "I have access to $knowledgeStats for enhanced responses."
                                 ) { token ->
                                     // Append each token as it arrives
                                     streamedText += token

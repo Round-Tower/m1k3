@@ -79,20 +79,38 @@ class SmolLM2Engine(private val context: Context) {
         val androidVersion = android.os.Build.VERSION.RELEASE
         val contextWindow = getOptimalContextWindow()
 
-        return "$deviceModel (Android $androidVersion, ${deviceRamGB}GB RAM, ${contextWindow} token context)"
+        // Get battery stats
+        val batteryManager = context.getSystemService(Context.BATTERY_SERVICE) as? android.os.BatteryManager
+        val batteryLevel = batteryManager?.getIntProperty(android.os.BatteryManager.BATTERY_PROPERTY_CAPACITY) ?: -1
+        val batteryStatus = if (batteryLevel > 0) "${batteryLevel}% battery" else "battery status unknown"
+
+        // Get SoC info (simplified)
+        val soc = android.os.Build.HARDWARE // e.g., "tensor" for Pixel 6 Pro
+
+        return "$deviceModel (Android $androidVersion, ${deviceRamGB}GB RAM, $batteryStatus, $soc SoC, ${contextWindow} token context)"
     }
 
     /**
-     * Build default M1K3 system prompt with device context
+     * Build default M1K3 system prompt with device context and knowledge base info
      */
-    private fun getDefaultSystemPrompt(userContext: Map<String, String>? = null): String {
+    private fun getDefaultSystemPrompt(
+        userContext: Map<String, String>? = null,
+        knowledgeContext: String? = null
+    ): String {
         val deviceInfo = getDeviceContext()
         val userName = userContext?.get("name")
 
-        return if (userName != null) {
+        val basePrompt = if (userName != null) {
             "You are M1K3 (Mike), $userName's privacy-first AI assistant running 100% locally on $deviceInfo. You never transmit data and respect user privacy."
         } else {
             "You are M1K3 (Mike), a privacy-first AI assistant running 100% locally on $deviceInfo. You never transmit data and respect user privacy."
+        }
+
+        // Append knowledge context if provided
+        return if (knowledgeContext != null) {
+            "$basePrompt\n\n$knowledgeContext"
+        } else {
+            basePrompt
         }
     }
 
@@ -169,6 +187,7 @@ class SmolLM2Engine(private val context: Context) {
      * @param temperature Sampling temperature (0.0-1.0, default: 0.7)
      * @param systemPrompt Custom system prompt (default: dynamic M1K3 prompt with device context)
      * @param userContext Optional user personalization context (e.g., name, timezone)
+     * @param knowledgeContext Optional knowledge base context (e.g., "I have access to 1,341 facts...")
      * @return AI-generated response
      */
     suspend fun generate(
@@ -176,7 +195,8 @@ class SmolLM2Engine(private val context: Context) {
         maxTokens: Int = 256,  // Increased from 128 to 256 for better quality
         temperature: Float = 0.7f,
         systemPrompt: String? = null,  // null = use default M1K3 prompt
-        userContext: Map<String, String>? = null
+        userContext: Map<String, String>? = null,
+        knowledgeContext: String? = null
     ): GenerationResult = withContext(Dispatchers.Default) {
         if (!isInitialized) {
             throw IllegalStateException("Engine not initialized. Call initialize() first.")
@@ -188,8 +208,8 @@ class SmolLM2Engine(private val context: Context) {
             val session = ortSession ?: throw IllegalStateException("ONNX session not initialized")
             val tok = tokenizer ?: throw IllegalStateException("Tokenizer not initialized")
 
-            // Use custom system prompt or build default M1K3 prompt with device context
-            val finalSystemPrompt = systemPrompt ?: getDefaultSystemPrompt(userContext)
+            // Use custom system prompt or build default M1K3 prompt with device context and knowledge
+            val finalSystemPrompt = systemPrompt ?: getDefaultSystemPrompt(userContext, knowledgeContext)
 
             println("🔍 [DEBUG] Starting generation...")
             println("   Prompt: \"$prompt\"")
@@ -471,6 +491,7 @@ $prompt<|im_end|>
         temperature: Float = 0.7f,
         systemPrompt: String? = null,
         userContext: Map<String, String>? = null,
+        knowledgeContext: String? = null,
         onToken: suspend (String) -> Unit
     ) = withContext(Dispatchers.Default) {
         if (!isInitialized) {
@@ -483,8 +504,8 @@ $prompt<|im_end|>
             val session = ortSession ?: throw IllegalStateException("ONNX session not initialized")
             val tok = tokenizer ?: throw IllegalStateException("Tokenizer not initialized")
 
-            // Use custom system prompt or build default M1K3 prompt
-            val finalSystemPrompt = systemPrompt ?: getDefaultSystemPrompt(userContext)
+            // Use custom system prompt or build default M1K3 prompt with device context and knowledge
+            val finalSystemPrompt = systemPrompt ?: getDefaultSystemPrompt(userContext, knowledgeContext)
 
             println("🔍 [STREAMING] Starting generation...")
             println("   Prompt: \"$prompt\"")
