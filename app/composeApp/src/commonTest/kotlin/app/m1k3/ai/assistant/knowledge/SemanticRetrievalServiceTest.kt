@@ -21,7 +21,7 @@ class SemanticRetrievalServiceTest {
     // ============================================================
 
     @Test
-    fun `retrieve - AI query returns AI facts with high similarity`() = runTest {
+    fun `retrieve AI query returns AI facts with high similarity`() = runTest {
         // Setup
         val database = createMockDatabase()
         val embeddingEngine = createMockEmbeddingEngine()
@@ -50,7 +50,7 @@ class SemanticRetrievalServiceTest {
     }
 
     @Test
-    fun `retrieve - filters out low similarity results`() = runTest {
+    fun `retrieve filters out low similarity results`() = runTest {
         // Setup
         val database = createMockDatabase()
         val embeddingEngine = createMockEmbeddingEngine()
@@ -70,7 +70,7 @@ class SemanticRetrievalServiceTest {
     }
 
     @Test
-    fun `retrieve - empty query returns empty list`() = runTest {
+    fun `retrieve empty query returns empty list`() = runTest {
         val database = createMockDatabase()
         val embeddingEngine = createMockEmbeddingEngine()
         val service = SemanticRetrievalService(database, embeddingEngine)
@@ -80,7 +80,7 @@ class SemanticRetrievalServiceTest {
     }
 
     @Test
-    fun `retrieve - respects limit parameter`() = runTest {
+    fun `retrieve respects limit parameter`() = runTest {
         val database = createMockDatabase()
         val embeddingEngine = createMockEmbeddingEngine()
         val service = SemanticRetrievalService(database, embeddingEngine)
@@ -115,7 +115,7 @@ class SemanticRetrievalServiceTest {
     // ============================================================
 
     @Test
-    fun `getRetrievalDebugInfo - provides similarity scores`() = runTest {
+    fun `getRetrievalDebugInfo provides similarity scores`() = runTest {
         val database = createMockDatabase()
         val embeddingEngine = createMockEmbeddingEngine()
         val service = SemanticRetrievalService(database, embeddingEngine)
@@ -135,7 +135,7 @@ class SemanticRetrievalServiceTest {
     }
 
     @Test
-    fun `getRetrievalDebugInfo - shows threshold pass/fail`() = runTest {
+    fun `getRetrievalDebugInfo shows threshold pass fail`() = runTest {
         val database = createMockDatabase()
         val embeddingEngine = createMockEmbeddingEngine()
         val service = SemanticRetrievalService(database, embeddingEngine)
@@ -151,7 +151,7 @@ class SemanticRetrievalServiceTest {
     }
 
     @Test
-    fun `getRetrievalDebugInfo - formatSummary is readable`() = runTest {
+    fun `getRetrievalDebugInfo formatSummary is readable`() = runTest {
         val database = createMockDatabase()
         val embeddingEngine = createMockEmbeddingEngine()
         val service = SemanticRetrievalService(database, embeddingEngine)
@@ -210,7 +210,7 @@ class SemanticRetrievalServiceTest {
     // ============================================================
 
     @Test
-    fun `real scenario - teach me about AI retrieves AI facts`() = runTest {
+    fun `real scenario teach me about AI retrieves AI facts`() = runTest {
         val database = createMockDatabase()
         val embeddingEngine = createMockEmbeddingEngine()
         val service = SemanticRetrievalService(database, embeddingEngine)
@@ -234,7 +234,7 @@ class SemanticRetrievalServiceTest {
     }
 
     @Test
-    fun `real scenario - irrelevant facts filtered out`() = runTest {
+    fun `real scenario irrelevant facts filtered out`() = runTest {
         val database = createMockDatabase()
         val embeddingEngine = createMockEmbeddingEngine()
         val service = SemanticRetrievalService(database, embeddingEngine)

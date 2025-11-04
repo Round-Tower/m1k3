@@ -40,6 +40,7 @@ class DatabaseDemo(private val database: MaDatabase) {
         database.messageQueries.insertMessage(
             id = "msg_001",
             project_id = projectId,
+            conversation_id = null, // Chat History: Not linked to conversation yet
             role = "assistant",
             content = "Welcome to M1K3 AI! I'm your privacy-first assistant running 100% locally on your device.",
             timestamp = now,

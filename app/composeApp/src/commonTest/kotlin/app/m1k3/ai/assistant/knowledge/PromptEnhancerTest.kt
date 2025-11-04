@@ -60,7 +60,7 @@ class PromptEnhancerTest {
 
         val result = PromptEnhancer.enhancePrompt(
             userQuery = "Tell me about AI",
-            retrievedFacts = facts,
+            retrievedFacts = facts.map { it.toRetrievedFact() },
             minSimilarity = 0.6f
         )
 
@@ -79,7 +79,7 @@ class PromptEnhancerTest {
 
         val result = PromptEnhancer.enhancePrompt(
             userQuery = "Tell me about AI",
-            retrievedFacts = facts,
+            retrievedFacts = facts.map { it.toRetrievedFact() },
             minSimilarity = 0.6f
         )
 
@@ -101,7 +101,7 @@ class PromptEnhancerTest {
 
         val result = PromptEnhancer.enhancePrompt(
             userQuery = "Tell me about AI",
-            retrievedFacts = facts
+            retrievedFacts = facts.map { it.toRetrievedFact() }
         )
 
         // Should show similarity as percentage (89%)
@@ -141,7 +141,7 @@ class PromptEnhancerTest {
 
         val result = PromptEnhancer.enhancePrompt(
             userQuery = "Tell me about AI",
-            retrievedFacts = facts
+            retrievedFacts = facts.map { it.toRetrievedFact() }
         )
 
         // Check for key guardrail phrases
@@ -159,7 +159,7 @@ class PromptEnhancerTest {
 
         val result = PromptEnhancer.enhancePrompt(
             userQuery = "Tell me about AI",
-            retrievedFacts = facts
+            retrievedFacts = facts.map { it.toRetrievedFact() }
         )
 
         // Should explicitly tell model it can ignore irrelevant knowledge
@@ -178,11 +178,11 @@ class PromptEnhancerTest {
 
         val result = PromptEnhancer.enhancePrompt(
             userQuery = "Tell me about AI",
-            retrievedFacts = facts
+            retrievedFacts = facts.map { it.toRetrievedFact() }
         )
 
         val preview = result.knowledgePreview.first()
-        assertEquals(0.85f, preview.similarityScore, 0.01f)
+        assertEquals(0.85f, preview.similarityScore!!, 0.01f)
     }
 
     @Test
@@ -239,7 +239,7 @@ class PromptEnhancerTest {
 
         val result = PromptEnhancer.enhancePrompt(
             userQuery = "Can you teach me about artificial intelligence?",
-            retrievedFacts = facts,
+            retrievedFacts = facts.map { it.toRetrievedFact() },
             minSimilarity = 0.6f
         )
 
@@ -290,18 +290,24 @@ class PromptEnhancerTest {
         answer: String,
         category: String = "ai_ml"
     ): RetrievedFact {
+        val now = System.currentTimeMillis()
         return RetrievedFact(
             fact = TriviaFact(
                 id = "fact_${question.hashCode()}",
+                category = category,
                 question = question,
                 answer = answer,
-                category = category,
+                question_variants = null,
                 importance = 0.8,
-                tags = "test",
-                created_at = System.currentTimeMillis(),
-                last_accessed_at = null,
+                confidence = 1.0,
                 access_count = 0,
-                embedding_vector = null
+                last_accessed_at = null,
+                embedding_id = null,
+                has_embedding = 0,
+                embedding_vector = null,
+                source = "test",
+                created_at = now,
+                updated_at = now
             ),
             relevanceScore = 0.8,
             retrievalMethod = "keyword"
@@ -313,18 +319,26 @@ class PromptEnhancerTest {
         similarity: Float,
         category: String = "ai_ml"
     ): SemanticRetrievedFact {
+        val now = System.currentTimeMillis()
+        // Mock embedding as byte array (384-dim float32 = 1536 bytes)
+        val mockEmbedding = ByteArray(1536) { 0 }
         return SemanticRetrievedFact(
             fact = TriviaFact(
                 id = "fact_${question.hashCode()}",
+                category = category,
                 question = question,
                 answer = "Answer to $question",
-                category = category,
+                question_variants = null,
                 importance = 0.8,
-                tags = "test",
-                created_at = System.currentTimeMillis(),
-                last_accessed_at = null,
+                confidence = 1.0,
                 access_count = 0,
-                embedding_vector = "0.1,0.2,0.3" // Mock embedding
+                last_accessed_at = null,
+                embedding_id = "emb_${question.hashCode()}",
+                has_embedding = 1,
+                embedding_vector = mockEmbedding,
+                source = "test",
+                created_at = now,
+                updated_at = now
             ),
             relevanceScore = (similarity * 0.7 + 0.8 * 0.3), // Combined score
             retrievalMethod = "semantic_embedding",

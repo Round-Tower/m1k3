@@ -94,6 +94,8 @@ kotlin {
         }
         commonTest.dependencies {
             implementation(libs.kotlin.test)
+            implementation(libs.kotlinx.coroutinesTest)
+            implementation(libs.sqldelight.driver.jdbc)
         }
         iosMain.dependencies {
             // 間 AI - iOS-specific dependencies
@@ -133,7 +135,15 @@ android {
     }
     buildTypes {
         getByName("release") {
+            // PHASE1.5: Enable ProGuard for APK size optimization
+            // TEMPORARY: Disabled due to gemmaEmbedding module duplicate class issue
+            // TODO: Fix GemmaEmbeddingEngine$WhenMappings duplication between base and feature modules
             isMinifyEnabled = false
+            isShrinkResources = false
+            // proguardFiles(
+            //     getDefaultProguardFile("proguard-android-optimize.txt"),
+            //     "proguard-rules.pro"
+            // )
         }
     }
 

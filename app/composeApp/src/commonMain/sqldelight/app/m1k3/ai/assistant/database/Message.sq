@@ -12,6 +12,7 @@
 CREATE TABLE IF NOT EXISTS Message (
     id TEXT NOT NULL PRIMARY KEY,
     project_id TEXT NOT NULL,
+    conversation_id INTEGER, -- Chat History: Link to ConversationMetadata
     role TEXT NOT NULL, -- 'user' or 'assistant'
     content TEXT NOT NULL,
     timestamp INTEGER NOT NULL, -- Unix timestamp in milliseconds
@@ -29,7 +30,8 @@ CREATE TABLE IF NOT EXISTS Message (
     rag_sources TEXT, -- JSON array of knowledge sources used
     rag_confidence REAL, -- 0.0 to 1.0
 
-    FOREIGN KEY (project_id) REFERENCES Project(id) ON DELETE CASCADE
+    FOREIGN KEY (project_id) REFERENCES Project(id) ON DELETE CASCADE,
+    FOREIGN KEY (conversation_id) REFERENCES ConversationMetadata(id) ON DELETE CASCADE
 );
 
 -- Indexes for efficient message retrieval
@@ -37,6 +39,10 @@ CREATE TABLE IF NOT EXISTS Message (
 -- Most important: Get messages for a project by timestamp
 CREATE INDEX IF NOT EXISTS idx_message_project_timestamp
 ON Message(project_id, timestamp DESC);
+
+-- Chat History: Get messages for a conversation
+CREATE INDEX IF NOT EXISTS idx_message_conversation
+ON Message(conversation_id, timestamp ASC);
 
 -- For sentiment analysis queries (Phase 5)
 CREATE INDEX IF NOT EXISTS idx_message_sentiment
@@ -54,6 +60,7 @@ insertMessage:
 INSERT INTO Message (
     id,
     project_id,
+    conversation_id,
     role,
     content,
     timestamp,
@@ -66,7 +73,7 @@ INSERT INTO Message (
     sentiment_intensity,
     rag_sources,
     rag_confidence
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 
 -- Get message by ID
 getMessageById:
@@ -76,6 +83,12 @@ SELECT * FROM Message WHERE id = ?;
 getMessagesForProject:
 SELECT * FROM Message
 WHERE project_id = ?
+ORDER BY timestamp ASC;
+
+-- Chat History: Get all messages for a conversation
+getMessagesByConversation:
+SELECT * FROM Message
+WHERE conversation_id = ?
 ORDER BY timestamp ASC;
 
 -- Get recent messages for a project (limited context window)
