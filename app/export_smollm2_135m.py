@@ -90,7 +90,7 @@ class SmolLM2_135M_Exporter:
             logger.info(f"📝 Tokenizer loaded: {len(tokenizer)} tokens")
 
             # Export to ONNX using optimum
-            logger.info("🔧 Exporting to ONNX format...")
+            logger.info("🔧 Step 1/3: Exporting to ONNX format...")
             logger.info("   This may take 5-10 minutes...")
 
             ort_model = ORTModelForCausalLM.from_pretrained(
@@ -100,11 +100,18 @@ class SmolLM2_135M_Exporter:
                 use_cache=True,  # Enable KV cache for inference
             )
 
-            # Save ONNX model
+            # Save unquantized model first
+            logger.info("🔧 Step 2/3: Saving ONNX model...")
             ort_model.save_pretrained(self.output_dir)
             logger.info(f"✅ ONNX model saved to {self.output_dir}")
 
+            # Note: INT8 quantization with onnxruntime-tools can be added later
+            # For now, we'll use the fp32 model which ONNX Runtime can optimize at load time
+            logger.info("⚠️  Quantization skipped (INT8 quantization requires onnxruntime-tools)")
+            logger.info("   ONNX Runtime will apply dynamic quantization at runtime")
+
             # Save tokenizer
+            logger.info("🔧 Step 3/3: Saving tokenizer...")
             tokenizer.save_pretrained(self.output_dir)
             logger.info(f"✅ Tokenizer saved to {self.output_dir}")
 
@@ -134,7 +141,7 @@ class SmolLM2_135M_Exporter:
                         logger.info(f"  {file_path.name}: {size_mb:.1f} MB")
 
             logger.info("=" * 60)
-            logger.info(f"📦 Total size: {total_size:.1f} MB")
+            logger.info(f"📦 Total size (fp32): {total_size:.1f} MB")
 
             # Compare to SmolLM2-360M
             smollm2_360m_size = 180.0

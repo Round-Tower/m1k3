@@ -16,7 +16,9 @@
       "Bash(python export_gemma3_270m.py:*)",
       "Bash(adb:*)",
       "Bash(jq:*)",
-      "Bash(ANDROID_SERIAL=1C211FDEE001UT ./gradlew :composeApp:installDebug:*)"
+      "Bash(ANDROID_SERIAL=1C211FDEE001UT ./gradlew :composeApp:installDebug:*)",
+      "Bash(python scripts/export_smollm2_onnx.py:*)",
+      "Bash(cat:*)"
     ],
     "deny": [],
     "ask": []

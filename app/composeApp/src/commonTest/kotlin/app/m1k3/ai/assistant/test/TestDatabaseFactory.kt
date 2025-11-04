@@ -1,55 +1,22 @@
 package app.m1k3.ai.assistant.test
 
-import app.cash.sqldelight.db.SqlDriver
-import app.cash.sqldelight.driver.jdbc.sqlite.JdbcSqliteDriver
 import app.m1k3.ai.assistant.database.MaDatabase
 
 /**
- * Test Database Factory - In-Memory Database for Unit Tests
+ * Test Database Factory - Cross-platform test database creation
  *
- * Provides simple in-memory SQLite databases for fast unit testing.
- * No encryption needed for test databases.
- *
- * **Usage:**
- * ```kotlin
- * val database = TestDatabaseFactory.createInMemoryDatabase()
- * // Use database for testing
- * ```
+ * Uses expect/actual pattern to provide platform-specific in-memory databases:
+ * - JVM: JDBC SQLite driver (fast, hermetic)
+ * - Android: Android SQLite driver (matches production)
  */
-object TestDatabaseFactory {
-
+expect object TestDatabaseFactory {
     /**
-     * Create an in-memory SQLite database for testing.
+     * Create an in-memory database for testing.
      *
-     * Database is fully initialized with schema and ready to use.
-     * Each call creates a new, independent database instance.
+     * The database is automatically populated with schema and ready for use.
+     * Each call creates a fresh database instance with no persisted data.
      *
-     * @return MaDatabase instance backed by in-memory SQLite
+     * @return MaDatabase configured for testing
      */
-    fun createInMemoryDatabase(): MaDatabase {
-        val driver: SqlDriver = JdbcSqliteDriver(JdbcSqliteDriver.IN_MEMORY)
-
-        // Create schema
-        MaDatabase.Schema.create(driver)
-
-        return MaDatabase(driver)
-    }
-
-    /**
-     * Create and populate a test database with sample data.
-     *
-     * Useful for integration tests that need pre-populated data.
-     *
-     * @return MaDatabase with sample data
-     */
-    fun createPopulatedDatabase(): MaDatabase {
-        val database = createInMemoryDatabase()
-
-        // TODO: Add sample data population methods
-        // populateSampleProjects(database)
-        // populateSampleMessages(database)
-        // populateSampleTrivia(database)
-
-        return database
-    }
+    fun createInMemoryDatabase(): MaDatabase
 }

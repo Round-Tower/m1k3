@@ -72,23 +72,25 @@ class SemanticRetrievalService(
         val rankedFacts = mutableListOf<SemanticRetrievedFact>()
 
         for (fact in allFacts) {
-            // TODO: In Phase 2, embeddings will be stored separately in vector index
-            // For now, we'll use a placeholder similarity based on category matching
-            // This is a temporary implementation until Phase 2 vector storage is complete
+            // PHASE1.5-005: Use actual embeddings stored in database
+            // Get fact embedding from database or generate on-demand
+            val factEmbedding = getOrGenerateFactEmbedding(fact)
 
-            // Calculate similarity score (placeholder - will use actual embeddings in Phase 2)
-            val similarity = calculatePlaceholderSimilarity(query, fact)
+            if (factEmbedding != null) {
+                // Calculate actual cosine similarity using embeddings
+                val similarity = embeddingEngine.cosineSimilarity(queryEmbedding, factEmbedding)
 
-            // Apply threshold filter
-            if (similarity >= minSimilarity) {
-                rankedFacts.add(
-                    SemanticRetrievedFact(
-                        fact = fact,
-                        relevanceScore = calculateSemanticRelevance(similarity, fact.importance),
-                        retrievalMethod = "semantic_embedding",
-                        similarityScore = similarity
+                // Apply threshold filter
+                if (similarity >= minSimilarity) {
+                    rankedFacts.add(
+                        SemanticRetrievedFact(
+                            fact = fact,
+                            relevanceScore = calculateSemanticRelevance(similarity, fact.importance),
+                            retrievalMethod = "semantic_embedding",
+                            similarityScore = similarity
+                        )
                     )
-                )
+                }
             }
         }
 
@@ -156,8 +158,13 @@ class SemanticRetrievalService(
         val allSimilarities = mutableListOf<DebugResult>()
 
         for (fact in allFacts) {
-            // TODO: Use actual embeddings in Phase 2
-            val similarity = calculatePlaceholderSimilarity(query, fact)
+            // PHASE1.5-005: Use actual embeddings for debug info
+            val factEmbedding = getOrGenerateFactEmbedding(fact)
+            val similarity = if (factEmbedding != null) {
+                embeddingEngine.cosineSimilarity(queryEmbedding, factEmbedding)
+            } else {
+                0f // No embedding available
+            }
 
             allSimilarities.add(
                 DebugResult(
@@ -209,33 +216,74 @@ class SemanticRetrievalService(
     }
 
     /**
-     * Calculate placeholder similarity (temporary until Phase 2 embeddings).
+     * Get or generate embedding for a fact.
      *
-     * This is a simplified similarity calculation based on keyword matching
-     * to allow the system to work until Phase 2 vector storage is complete.
+     * PHASE1.5-005: Implements on-demand embedding generation with caching.
+     * - First checks database for stored embedding
+     * - If not found, generates embedding and stores it
+     * - Returns null if embedding generation fails
      *
-     * @param query User query
-     * @param fact Trivia fact
-     * @return Similarity score (0.0 to 1.0)
+     * @param fact Trivia fact to get embedding for
+     * @return Embedding vector or null if unavailable
      */
-    private fun calculatePlaceholderSimilarity(query: String, fact: TriviaFact): Float {
-        val queryLower = query.lowercase()
-        val questionLower = fact.question.lowercase()
-        val answerLower = fact.answer.lowercase()
+    private suspend fun getOrGenerateFactEmbedding(fact: TriviaFact): FloatArray? {
+        // Check if fact already has embedding stored
+        if (fact.has_embedding == 1L) {
+            // Try to retrieve from database
+            val embeddingBytesWrapper = database.triviaFactQueries
+                .getFactEmbeddingVector(fact.id)
+                .executeAsOneOrNull()
 
-        // Simple keyword overlap
-        val queryWords = queryLower.split("\\s+".toRegex()).filter { it.length > 2 }
-        val factWords = (questionLower + " " + answerLower).split("\\s+".toRegex()).filter { it.length > 2 }
+            if (embeddingBytesWrapper != null && embeddingBytesWrapper.embedding_vector != null) {
+                // Deserialize BLOB to FloatArray
+                return deserializeEmbedding(embeddingBytesWrapper.embedding_vector)
+            }
+        }
 
-        if (queryWords.isEmpty() || factWords.isEmpty()) return 0.5f
+        // Generate embedding on-demand
+        val text = "${fact.question} ${fact.answer}".take(2048) // Limit to max tokens
+        val embeddingResult = embeddingEngine.embed(text, EmbeddingTaskType.DOCUMENT)
 
-        val overlap = queryWords.count { word -> factWords.any { it.contains(word) || word.contains(it) } }
-        val similarity = (overlap.toFloat() / queryWords.size.toFloat()).coerceIn(0f, 1f)
+        if (embeddingResult.isSuccess) {
+            val embedding = embeddingResult.getOrThrow()
 
-        // Boost if category is relevant
-        val categoryBoost = if (fact.category == "ai_ml" && queryLower.contains("ai")) 0.2f else 0f
+            // Store in database for future use
+            val embeddingBytes = serializeEmbedding(embedding)
+            database.triviaFactQueries.updateFactEmbeddingVector(
+                embedding_vector = embeddingBytes,
+                id = fact.id
+            )
 
-        return (similarity + categoryBoost).coerceIn(0f, 1f)
+            return embedding
+        }
+
+        return null
+    }
+
+    /**
+     * Serialize FloatArray to ByteArray for BLOB storage.
+     *
+     * Format: IEEE 754 single-precision (4 bytes per float)
+     * 384 dimensions × 4 bytes = 1,536 bytes
+     */
+    private fun serializeEmbedding(embedding: FloatArray): ByteArray {
+        val buffer = java.nio.ByteBuffer.allocate(embedding.size * 4)
+        buffer.order(java.nio.ByteOrder.LITTLE_ENDIAN)
+        embedding.forEach { buffer.putFloat(it) }
+        return buffer.array()
+    }
+
+    /**
+     * Deserialize ByteArray from BLOB storage to FloatArray.
+     */
+    private fun deserializeEmbedding(bytes: ByteArray): FloatArray {
+        val buffer = java.nio.ByteBuffer.wrap(bytes)
+        buffer.order(java.nio.ByteOrder.LITTLE_ENDIAN)
+        val embedding = FloatArray(bytes.size / 4)
+        for (i in embedding.indices) {
+            embedding[i] = buffer.getFloat()
+        }
+        return embedding
     }
 
     /**

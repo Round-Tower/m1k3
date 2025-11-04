@@ -40,6 +40,7 @@ CREATE TABLE IF NOT EXISTS TriviaFact (
     -- Embedding metadata (for semantic search)
     embedding_id TEXT, -- Optional: ID in HNSW index
     has_embedding INTEGER NOT NULL DEFAULT 0,
+    embedding_vector BLOB, -- Raw embedding bytes (384-dim float32 = 1536 bytes)
 
     -- Source metadata
     source TEXT, -- Origin (e.g., 'm1k3_kb_v1', 'user_generated')
@@ -82,10 +83,11 @@ INSERT INTO TriviaFact (
     last_accessed_at,
     embedding_id,
     has_embedding,
+    embedding_vector,
     source,
     created_at,
     updated_at
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 
 -- Get fact by ID
 getTriviaFactById:
@@ -156,6 +158,19 @@ SET
     embedding_id = ?,
     has_embedding = 1
 WHERE id = ?;
+
+-- Update embedding vector (PHASE1.5-005: Store raw embeddings for semantic search)
+updateFactEmbeddingVector:
+UPDATE TriviaFact
+SET
+    embedding_vector = ?,
+    has_embedding = 1
+WHERE id = ?;
+
+-- Get embedding vector by fact ID
+getFactEmbeddingVector:
+SELECT embedding_vector FROM TriviaFact
+WHERE id = ? AND has_embedding = 1;
 
 -- Delete fact
 deleteTriviaFact:

@@ -35,12 +35,14 @@ class MiniLmEmbeddingEngine(
 
     companion object {
         private const val TAG = "MiniLmEmbeddingEngine"
-        private const val MODEL_PATH = "models/minilm/model.onnx"
+        // PHASE1.5: Using optimized paraphrase-MiniLM-L3-v2 INT8 quantized (17.6 MB vs 87 MB)
+        private const val MODEL_PATH = "models/minilm/model_quantized.onnx"
         private const val VOCAB_PATH = "models/minilm/vocab.txt"
         private const val MAX_SEQUENCE_LENGTH = 256
     }
 
-    override val modelName: String = "all-MiniLM-L6-v2"
+    // PHASE1.5: Updated to reflect optimized L3 model
+    override val modelName: String = "paraphrase-MiniLM-L3-v2-int8"
     override val embeddingDimensions: Int = 384
     override val maxTokens: Int = MAX_SEQUENCE_LENGTH
 

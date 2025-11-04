@@ -95,6 +95,9 @@ kotlin {
         commonTest.dependencies {
             implementation(libs.kotlin.test)
             implementation(libs.kotlinx.coroutinesTest)
+        }
+        jvmTest.dependencies {
+            // JDBC SQLite driver for JVM unit tests only (in-memory database)
             implementation(libs.sqldelight.driver.jdbc)
         }
         iosMain.dependencies {
@@ -182,6 +185,9 @@ dependencies {
     androidTestImplementation(libs.kotlin.test)
     testImplementation(libs.junit)
     testImplementation(libs.kotlin.test)
+    testImplementation(libs.robolectric)
+    testImplementation(libs.androidx.test.core)
+    testImplementation(libs.sqldelight.driver.jdbc) // JDBC driver for unit tests (JVM)
 }
 
 compose.desktop {

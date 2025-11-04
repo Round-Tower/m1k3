@@ -54,6 +54,10 @@ INSERT INTO ConversationMetadata (
     is_archived
 ) VALUES (?, ?, ?, ?, ?, ?, ?);
 
+-- Get last inserted ID (for auto-increment primary key)
+getLastInsertId:
+SELECT last_insert_rowid();
+
 -- Get conversation by ID
 getConversationById:
 SELECT * FROM ConversationMetadata WHERE id = ?;
@@ -65,7 +69,7 @@ WHERE is_archived = 0
 ORDER BY last_message_at DESC;
 
 -- Get active conversations for a specific project
-getActiveConversationsByProject:
+getConversationsByProject:
 SELECT * FROM ConversationMetadata
 WHERE project_id = ? AND is_archived = 0
 ORDER BY last_message_at DESC;
@@ -76,17 +80,17 @@ SELECT * FROM ConversationMetadata
 WHERE is_archived = 1
 ORDER BY last_message_at DESC;
 
--- Update conversation metadata (after new message)
-updateConversationMetadata:
+-- Increment message count (after new message added)
+incrementMessageCount:
 UPDATE ConversationMetadata
 SET
     last_message_at = ?,
-    message_count = ?,
-    token_count = ?
+    message_count = message_count + 1,
+    token_count = token_count + ?
 WHERE id = ?;
 
 -- Update conversation title
-updateConversationTitle:
+updateTitle:
 UPDATE ConversationMetadata
 SET title = ?
 WHERE id = ?;
@@ -97,8 +101,8 @@ UPDATE ConversationMetadata
 SET is_archived = 1
 WHERE id = ?;
 
--- Unarchive conversation
-unarchiveConversation:
+-- Unarchive conversation (restore)
+restoreConversation:
 UPDATE ConversationMetadata
 SET is_archived = 0
 WHERE id = ?;
@@ -126,19 +130,19 @@ WHERE is_archived = 0;
 getConversationStats:
 SELECT
     COUNT(*) AS total_conversations,
+    COUNT(CASE WHEN is_archived = 0 THEN 1 END) AS active_conversations,
+    COUNT(CASE WHEN is_archived = 1 THEN 1 END) AS archived_conversations,
     SUM(message_count) AS total_messages,
     SUM(token_count) AS total_tokens,
-    AVG(CAST(message_count AS REAL)) AS avg_messages_per_conv
-FROM ConversationMetadata
-WHERE is_archived = 0;
+    AVG(CAST(message_count AS REAL)) AS avg_messages_per_conversation
+FROM ConversationMetadata;
 
 -- Search conversations by title
 searchConversationsByTitle:
 SELECT * FROM ConversationMetadata
 WHERE title LIKE '%' || ? || '%'
   AND is_archived = 0
-ORDER BY last_message_at DESC
-LIMIT ?;
+ORDER BY last_message_at DESC;
 
 -- Get most recent conversation for a project
 getLatestConversation:

@@ -67,6 +67,7 @@ class KnowledgeBaseImporter(
                             last_accessed_at = null,
                             embedding_id = null,
                             has_embedding = 0L, // SQLite INTEGER: 0 = false, 1 = true
+                            embedding_vector = null, // PHASE1.5-005: Embeddings generated on-demand
                             source = "m1k3_kb_v1",
                             created_at = Clock.System.now().toEpochMilliseconds(),
                             updated_at = Clock.System.now().toEpochMilliseconds()
