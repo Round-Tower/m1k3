@@ -126,14 +126,26 @@ fun ChatScreen(
         avatarVM.syncWithAI(isGenerating)
     }
 
-    // Get knowledge base stats
-    val knowledgeStats = remember(database) {
+    // Get knowledge base stats with category breakdown
+    val knowledgeContext = remember(database) {
         try {
             val totalFacts = database.triviaFactQueries.getTotalFactCount().executeAsOne()
-            val categories = database.triviaFactQueries.getAllCategories().executeAsList().size
-            "$totalFacts facts across $categories categories"
+            val categories = database.triviaFactQueries.getAllCategories().executeAsList()
+
+            // Group categories by domain for cleaner presentation
+            val technical = categories.filter { it in listOf("math", "code_debugging", "technical", "casual", "creative_writing") }
+            val educational = categories.filter { it in listOf("history", "science", "geography", "movies", "music", "sports", "food", "technology", "lifestyle") }
+            val expertise = categories.filter { it in listOf("device_technology", "wifi_networking", "security_privacy", "diagnostics", "education", "trivia") }
+
+            buildString {
+                append("I have access to $totalFacts facts across ${categories.size} categories:\n")
+                if (technical.isNotEmpty()) append("• Technical: ${technical.joinToString(", ") { it.replace("_", " ").capitalize() }}\n")
+                if (educational.isNotEmpty()) append("• Educational: ${educational.joinToString(", ") { it.replace("_", " ").capitalize() }}\n")
+                if (expertise.isNotEmpty()) append("• Expertise: ${expertise.joinToString(", ") { it.replace("_", " ").capitalize() }}\n")
+                append("\nUse this knowledge to provide informed, helpful responses.")
+            }
         } catch (e: Exception) {
-            "comprehensive knowledge base"
+            "I have access to a comprehensive knowledge base covering technical expertise, educational content, and troubleshooting guides."
         }
     }
 
@@ -170,7 +182,7 @@ fun ChatScreen(
                             "Keep it brief (2-3 sentences), friendly, and conversational.",
                     maxTokens = 150,  // Allow for device/knowledge context
                     temperature = 0.4f,  // Slightly creative but still coherent
-                    knowledgeContext = "I have access to $knowledgeStats for enhanced responses."
+                    knowledgeContext = knowledgeContext
                 ) { token ->
                     welcomeText += token
                     // Update welcome message in real-time
@@ -319,7 +331,7 @@ fun ChatScreen(
                                     prompt = enhancedPrompt.enhancedQuery,  // Use enhanced prompt with knowledge
                                     maxTokens = aiEngine.getOptimalMaxTokens(),  // Device-adaptive
                                     temperature = 0.5f,  // Balanced sampling - coherent but diverse
-                                    knowledgeContext = "I have access to $knowledgeStats for enhanced responses."
+                                    knowledgeContext = knowledgeContext
                                 ) { token ->
                                     // Append each token as it arrives
                                     streamedText += token
