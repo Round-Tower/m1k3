@@ -1,10 +1,10 @@
 # Phase 1.5: Model Evaluation & RAG Optimization
 
 **Duration:** 1 week (Week 7)
-**Total Tickets:** 8 tickets
-**Estimated Hours:** 32 hours
-**Priority Distribution:** P0: 5 tickets, P1: 2 tickets, P2: 1 ticket
-**Status:** 🔴 Not Started (0/8, 0%)
+**Total Tickets:** 12 tickets (8 original + 4 new)
+**Estimated Hours:** 48 hours (revised)
+**Priority Distribution:** P0: 6 tickets, P1: 4 tickets, P2: 2 tickets
+**Status:** 🟡 In Progress (6/12, 50%)
 
 ---
 
@@ -27,6 +27,66 @@ Phase 1.5 is a critical sprint inserted between Phase 2 (Memory) and Phase 3 (Kn
 - Phase 2 embeddings confirmed operational (MiniLM-L6 + HNSW working)
 - Phase 3 assumes working RAG - must fix before expanding knowledge features
 - Gemma 3:270m offers potential improvements: smaller size (120MB vs 180MB), massive context (256K vs 24K), vision capabilities
+
+---
+
+## 🚨 Critical Findings: APK Size Analysis (2025-11-04)
+
+### Problem: Current APK Exceeds 200MB Budget
+
+**Current State:**
+```
+SmolLM2-360M (q4f16):      180 MB
+MiniLM-L6 (embeddings):     90 MB
+App code + assets:          20 MB
+────────────────────────────────
+Total APK Size:            290 MB ❌ (45% over budget!)
+```
+
+**Gemma 3:270m Size Reality Check:**
+```
+Model: google/gemma-3-270m-it (ONNX q4f16)
+Expected:  120 MB (based on parameter count)
+Actual:    427 MB ❌ (3.5x larger than expected!)
+
+Reasons for size bloat:
+1. Vocabulary: 256K tokens (vs SmolLM2 49K) = ~200MB overhead
+2. Context embeddings: 256K context requires larger KV cache
+3. ONNX export overhead: Additional operators for vision readiness
+```
+
+**Critical Decisions Made:**
+
+1. **Defer Gemma 3 to Dynamic Delivery**
+   - 427 MB too large for initial APK
+   - Ship as downloadable "Advanced Model" feature
+   - User opts-in via Settings → AI Models → Download Gemma 3
+
+2. **Pivot to SmolLM2-135M**
+   - Smaller sibling: 135M params vs 360M
+   - Expected size: ~70-80 MB (vs 180 MB = 56% reduction!)
+   - Trade-off: Slightly lower quality for size constraint
+
+3. **Optimize MiniLM Embeddings**
+   - Current: all-MiniLM-L6-v2 (90 MB, 384-dim)
+   - Target: paraphrase-MiniLM-L3-v2 (50 MB, 384-dim)
+   - Alternative: INT8 quantization (90MB → 45 MB)
+
+**Revised Size Budget:**
+```
+SmolLM2-135M (q4f16):       70 MB  ✅
+MiniLM-L3 (optimized):      50 MB  ✅
+App code + assets:          20 MB
+Knowledge base:             30 MB
+────────────────────────────────
+Total APK Size:            170 MB  ✅ (15% under budget!)
+```
+
+**New Tickets Added:**
+- **PHASE1.5-005**: Evaluate SmolLM2-135M vs 360M (quality/performance)
+- **PHASE1.5-006**: Optimize MiniLM embeddings (90MB → 50MB)
+- **PHASE1.5-007**: Design dynamic model delivery for Gemma 3
+- **PHASE1.5-009**: APK size audit and ProGuard optimization
 
 ---
 
@@ -164,11 +224,11 @@ if (isCasualChat(query)) {
 
 ## Tickets
 
-### PHASE1.5-001: Gemma 3:270m ONNX Export & Quantization ⚠️ CRITICAL
+### PHASE1.5-001: Gemma 3:270m ONNX Export & Quantization ⚠️ DEFERRED
 
-**Priority:** P0
+**Priority:** P0 → P2 (Deferred to dynamic delivery)
 **Estimated Hours:** 6h
-**Status:** [ ]
+**Status:** [DEFERRED] Export tooling created, model too large for APK
 
 **Description:**
 Export Gemma 3:270m from HuggingFace to ONNX format with INT4 quantization for mobile deployment.
@@ -250,7 +310,7 @@ def export_gemma3_270m():
 
 **Priority:** P0
 **Estimated Hours:** 5h
-**Status:** [ ]
+**Status:** [✅ COMPLETE] Framework created, ready for dynamic delivery
 
 **Description:**
 Create Gemma3Engine class paralleling SmolLM2Engine architecture for fair comparison.
@@ -800,6 +860,351 @@ Expand knowledge base with 20+ AI/ML educational facts so "teach me about AI" qu
 
 **Dependencies:** PHASE1.5-005 (Semantic retrieval for testing)
 **Blocks:** None (improves RAG quality)
+
+---
+
+### PHASE1.5-005 (NEW): Evaluate SmolLM2-135M Model ⚠️ CRITICAL
+
+**Priority:** P0
+**Estimated Hours:** 6h
+**Status:** [ ] Not started
+
+**Description:**
+Export and benchmark SmolLM2-135M against our current SmolLM2-360M to determine if the smaller model is acceptable for the 200MB APK constraint.
+
+**Model Specs:**
+- **Parameters:** 135M (vs 360M - 62% smaller)
+- **Expected Size:** ~70-80 MB q4f16 (vs 180 MB - 56% reduction!)
+- **Context:** Same 24K tokens
+- **Trade-off:** Slightly lower quality for size savings
+
+**Technical Approach:**
+```python
+# export_smollm2_135m.py
+from transformers import AutoModelForCausalLM, AutoTokenizer
+from optimum.onnxruntime import ORTModelForCausalLM
+
+model_id = "HuggingFaceTB/SmolLM2-135M-Instruct"
+output_dir = "models/smollm2-135m-onnx"
+
+# Export to ONNX with q4f16 quantization
+ort_model = ORTModelForCausalLM.from_pretrained(
+    model_id,
+    export=True,
+    provider="CPUExecutionProvider"
+)
+# Quantize and save
+```
+
+**Comparison Metrics:**
+1. **Performance**: Tokens/sec, first token latency, memory usage
+2. **Quality**: 20-prompt test suite (same as PHASE1.5-004)
+3. **Size**: Actual APK size with 135M vs 360M
+
+**Acceptance Criteria:**
+- [ ] SmolLM2-135M exported to ONNX (q4f16)
+- [ ] Model size confirmed <80 MB
+- [ ] Performance benchmark vs 360M (expect faster due to size)
+- [ ] Quality comparison (accept if >85% of 360M quality)
+- [ ] Final recommendation: 135M vs 360M for production
+
+**Decision Criteria:**
+- If 135M quality >85% of 360M → **Use 135M** (meets size budget)
+- If 135M quality <85% of 360M → Keep 360M, optimize elsewhere
+
+**Tests:**
+- [ ] `SmolLM2ComparisonTest.kt`: Side-by-side benchmark
+- [ ] `QualityRegressionTest.kt`: 20-prompt comparison
+- [ ] `APKSizeTest.kt`: Measure actual APK sizes
+
+**Files Created:**
+- `app/export_smollm2_135m.py`
+- `app/models/smollm2-135m-onnx/`
+- `app/docs/SMOLLM2_135M_EVAL.md` - Comparison report
+
+**Dependencies:** None (parallel track)
+**Blocks:** Final model selection for Phase 3+
+
+---
+
+### PHASE1.5-006 (NEW): Optimize MiniLM Embedding Model ⚠️ CRITICAL
+
+**Priority:** P0
+**Estimated Hours:** 4h
+**Status:** [ ] Not started
+
+**Description:**
+Reduce MiniLM embedding model size from 90 MB to 50-60 MB through model swapping or quantization.
+
+**Current State:**
+```
+Model: sentence-transformers/all-MiniLM-L6-v2
+Size: 90 MB (ONNX fp32)
+Dimensions: 384
+Performance: 122ms embedding generation
+```
+
+**Optimization Options:**
+
+**Option 1: Smaller Model (Recommended)**
+```
+Model: sentence-transformers/paraphrase-MiniLM-L3-v2
+Size: ~50 MB (ONNX fp32)
+Dimensions: 384 (same!)
+Trade-off: Slightly lower semantic accuracy
+Benefit: Plug-in replacement (same API)
+```
+
+**Option 2: INT8 Quantization**
+```
+Model: all-MiniLM-L6-v2 (INT8)
+Size: ~45 MB (50% reduction)
+Dimensions: 384
+Trade-off: Minimal accuracy loss (<2%)
+Benefit: Keep same model, just quantized
+```
+
+**Option 3: Hybrid (Best of Both)**
+```
+Model: paraphrase-MiniLM-L3-v2 (INT8)
+Size: ~25 MB (72% reduction!)
+Trade-off: Moderate accuracy loss (~5-8%)
+Benefit: Maximum size savings
+```
+
+**Implementation:**
+```kotlin
+// Test all three options
+val models = listOf(
+    "paraphrase-MiniLM-L3-v2" to "fp32",
+    "all-MiniLM-L6-v2" to "int8",
+    "paraphrase-MiniLM-L3-v2" to "int8"
+)
+
+// Benchmark semantic retrieval quality
+for ((model, quant) in models) {
+    val precision = testSemanticRetrieval(model, quant)
+    val size = measureModelSize(model, quant)
+    println("$model ($quant): ${precision}% precision, ${size}MB")
+}
+```
+
+**Acceptance Criteria:**
+- [ ] Evaluate 3 optimization options (L3-fp32, L6-int8, L3-int8)
+- [ ] Semantic retrieval quality test (>90% precision maintained)
+- [ ] Model size confirmed <60 MB
+- [ ] Performance acceptable (<150ms embedding)
+- [ ] Final recommendation with justification
+
+**Decision Criteria:**
+- If L3-fp32 precision >92% → **Use L3-fp32** (50 MB, safest)
+- If L6-int8 precision >95% → **Use L6-int8** (45 MB, best quality)
+- If APK still over budget → **Use L3-int8** (25 MB, aggressive)
+
+**Tests:**
+- [ ] `EmbeddingModelComparisonTest.kt`: Quality benchmarks
+- [ ] `EmbeddingSizeTest.kt`: Measure actual sizes
+- [ ] `SemanticRetrievalRegressionTest.kt`: End-to-end retrieval test
+
+**Files Created:**
+- `app/export_minilm_optimized.py` - Export script
+- `app/docs/MINILM_OPTIMIZATION.md` - Comparison report
+
+**Dependencies:** PHASE1.5-005 (semantic retrieval working)
+**Blocks:** APK size finalization
+
+---
+
+### PHASE1.5-007 (NEW): Design Dynamic Model Delivery System
+
+**Priority:** P1
+**Estimated Hours:** 5h
+**Status:** [ ] Not started
+
+**Description:**
+Design architecture for downloading and managing large AI models (like Gemma 3:270m @ 427 MB) after app installation.
+
+**Requirements:**
+1. **User Experience**
+   - Settings → AI Models → Browse available models
+   - Show model specs: size, params, context, capabilities
+   - Download progress (MB downloaded / total MB)
+   - Pause/resume support
+   - WiFi-only option (prevent cellular data usage)
+
+2. **Storage Management**
+   - Detect available storage before download
+   - Warn if <1GB free space
+   - Allow model deletion to reclaim space
+   - Track model usage (swap out unused models)
+
+3. **Model Switching**
+   - Hot-swap between models (no app restart)
+   - Graceful fallback if model load fails
+   - Model validation (checksum verification)
+
+**Architecture:**
+
+```kotlin
+// ModelDownloadManager.kt
+class ModelDownloadManager(
+    private val context: Context,
+    private val downloadManager: DownloadManager
+) {
+    suspend fun downloadModel(
+        model: DownloadableModel,
+        onProgress: (DownloadProgress) -> Unit
+    ): Result<File>
+
+    suspend fun verifyModel(modelFile: File): Boolean
+    suspend fun deleteModel(modelId: String)
+    fun getInstalledModels(): List<InstalledModel>
+}
+
+// DownloadableModel.kt
+sealed class DownloadableModel(
+    val id: String,
+    val displayName: String,
+    val sizeMB: Int,
+    val downloadUrl: String,
+    val checksum: String
+) {
+    object Gemma3_270M : DownloadableModel(
+        id = "gemma3-270m",
+        displayName = "Gemma 3 270M (Advanced)",
+        sizeMB = 427,
+        downloadUrl = "https://huggingface.co/.../model_q4f16.onnx",
+        checksum = "sha256:..."
+    )
+}
+```
+
+**UI Flow:**
+```
+Settings → AI Models
+  ├─ Installed Models
+  │  └─ SmolLM2 135M (Active) [70 MB]
+  │
+  └─ Available for Download
+     ├─ Gemma 3 270M [427 MB]  [Download]
+     │  ✓ 256K context window
+     │  ✓ Vision capabilities
+     │  ⚠️ Requires 500 MB free space
+     │
+     └─ SmolLM2 360M [180 MB]  [Download]
+        ✓ Larger than 135M, better quality
+```
+
+**Acceptance Criteria:**
+- [ ] Architecture design document
+- [ ] ModelDownloadManager API spec
+- [ ] Settings UI mockups
+- [ ] Storage management strategy
+- [ ] Model registry integration plan
+- [ ] Security considerations (HTTPS, checksums)
+
+**Deliverables:**
+- `app/docs/DYNAMIC_MODEL_DELIVERY.md` - Design doc
+- `app/docs/diagrams/model_download_flow.svg` - User flow diagram
+- `app/shared/src/commonMain/kotlin/ai/ma/models/ModelDownloadManager.kt` - Interface
+
+**Dependencies:** PHASE1.5-003 (Model registry exists)
+**Blocks:** Future Gemma 3 integration (Phase 5+)
+
+---
+
+### PHASE1.5-009 (NEW): APK Size Optimization Audit
+
+**Priority:** P1
+**Estimated Hours:** 3h
+**Status:** [ ] Not started
+
+**Description:**
+Comprehensive audit of APK size with ProGuard optimization, asset compression, and unused resource removal.
+
+**Optimization Checklist:**
+
+**1. ProGuard/R8 Optimization**
+```gradle
+// build.gradle.kts
+android {
+    buildTypes {
+        release {
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
+        }
+    }
+}
+```
+
+**2. Asset Compression**
+- ONNX models: Already quantized (no further compression)
+- Knowledge base JSON: gzip compression (~30% reduction)
+- Tokenizer files: Remove unused special tokens
+
+**3. Unused Resource Removal**
+- Scan for unused drawable resources
+- Remove unused string translations
+- Remove unused AndroidX library features
+
+**4. Native Library Stripping**
+- Keep only arm64-v8a (primary Android target)
+- Remove x86/x86_64 (emulator-only, 40% size reduction)
+- Use APK splits for multi-architecture support
+
+**Size Analysis:**
+```
+Before Optimization:
+  App code:         50 MB
+  ONNX Runtime:     30 MB (includes x86)
+  Resources:        10 MB
+  ──────────────────────
+  Base APK:         90 MB
+
+After Optimization:
+  App code:         30 MB (ProGuard)
+  ONNX Runtime:     18 MB (arm64 only)
+  Resources:         6 MB (stripped)
+  ──────────────────────
+  Base APK:         54 MB ✅ (40% reduction!)
+```
+
+**Revised Total APK Size:**
+```
+Base APK (optimized):     54 MB
+SmolLM2-135M:             70 MB
+MiniLM-L3 (int8):         25 MB
+Knowledge base:           20 MB (gzipped)
+──────────────────────────────
+Total APK:               169 MB ✅ (16% under budget!)
+```
+
+**Acceptance Criteria:**
+- [ ] ProGuard enabled with optimizations
+- [ ] Native libraries stripped to arm64-v8a only
+- [ ] Unused resources removed (lint analysis)
+- [ ] Knowledge base gzip compressed
+- [ ] APK Analyzer report generated
+- [ ] Final APK size <170 MB
+
+**Tests:**
+- [ ] `APKSizeTest.kt`: Measure release APK size
+- [ ] `ProGuardTest.kt`: Verify no runtime crashes
+- [ ] `ResourceUsageTest.kt`: Validate all used resources present
+
+**Files Modified:**
+- `app/composeApp/build.gradle.kts` - ProGuard config
+- `app/composeApp/proguard-rules.pro` - Keep rules
+
+**Files Created:**
+- `app/docs/APK_SIZE_REPORT.md` - Optimization results
+
+**Dependencies:** PHASE1.5-005, PHASE1.5-006 (final models selected)
+**Blocks:** Phase 6 release preparation
 
 ---
 
