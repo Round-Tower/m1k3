@@ -4,7 +4,14 @@
       "Bash(ollama list:*)",
       "Bash(npx gltf-transform:*)",
       "Bash(./gradlew :composeApp:compileDebugKotlinAndroid:*)",
-      "Bash(ollama show:*)"
+      "Bash(ollama show:*)",
+      "Bash(./gradlew:*)",
+      "Bash(adb uninstall:*)",
+      "Bash(chmod:*)",
+      "Bash(git commit:*)",
+      "Bash(adb devices:*)",
+      "Bash(python scripts/test_smollm2_reference.py:*)",
+      "Bash(git add:*)"
     ],
     "deny": [],
     "ask": []

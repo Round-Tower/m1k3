@@ -179,6 +179,8 @@ class MiniLmEmbeddingEngine(
             // Create ONNX tensors (BERT models expect Long/Int64 inputs)
             val inputIdsLong = tokenizerOutput.inputIds.map { it.toLong() }.toLongArray()
             val attentionMaskLong = tokenizerOutput.attentionMask.map { it.toLong() }.toLongArray()
+            // token_type_ids: all zeros for single-sequence input (required by BERT models)
+            val tokenTypeIdsLong = LongArray(MAX_SEQUENCE_LENGTH) { 0L }
 
             val shape = longArrayOf(1, MAX_SEQUENCE_LENGTH.toLong())
 
@@ -194,10 +196,17 @@ class MiniLmEmbeddingEngine(
                 shape
             )
 
-            // Run inference
+            val tokenTypeIdsTensor = OnnxTensor.createTensor(
+                ortEnvironment!!,
+                java.nio.LongBuffer.wrap(tokenTypeIdsLong),
+                shape
+            )
+
+            // Run inference with all required inputs
             val inputs = mapOf(
                 "input_ids" to inputIdsTensor,
-                "attention_mask" to attentionMaskTensor
+                "attention_mask" to attentionMaskTensor,
+                "token_type_ids" to tokenTypeIdsTensor
             )
 
             val outputs = ortSession!!.run(inputs)
@@ -215,6 +224,7 @@ class MiniLmEmbeddingEngine(
             // Clean up tensors
             inputIdsTensor.close()
             attentionMaskTensor.close()
+            tokenTypeIdsTensor.close()
             outputs.close()
 
             val normalized = normalize(embedding)

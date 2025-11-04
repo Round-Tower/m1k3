@@ -3,9 +3,9 @@
 ## Executive Summary
 
 **Project:** M1K3 AI - Privacy-First On-Device AI Companion
-**Timeline:** 16 weeks (Phases 0-6)
-**Total Tickets:** 135 tickets across 6 phases
-**Model:** SmolLM2-360M (180MB quantized) + MiniLM-L6 (90MB)
+**Timeline:** 16 weeks (Phases 0-6 + Phase 1.5)
+**Total Tickets:** 143 tickets across 7 phases (135 original + 8 Phase 1.5)
+**Models Under Evaluation:** SmolLM2-360M (180MB) vs Gemma 3:270m (120MB) + MiniLM-L6 (90MB)
 **Target:** Android API 27+ (mid-range devices, 6GB RAM)
 **Philosophy:** M1K3 (ma) - negative space, wabi-sabi, computational sufficiency
 
@@ -17,11 +17,12 @@ This project is managed through phase-specific documentation:
 
 - **[Phase 0: Foundation & Infrastructure](docs/phases/PHASE0.md)** (15 tickets, Weeks 1-2)
 - **[Phase 1: Core AI Engine](docs/phases/PHASE1.md)** (20 tickets, Weeks 3-5)
-- **[Phase 2: Memory & Embedding System](docs/phases/PHASE2.md)** (25 tickets, Weeks 6-8)
-- **[Phase 3: Knowledge Systems](docs/phases/PHASE3.md)** (15 tickets, Weeks 9-10)
-- **[Phase 4: Multi-Modal & Projects](docs/phases/PHASE4.md)** (20 tickets, Weeks 11-12)
-- **[Phase 5: Advanced Features & Polish](docs/phases/PHASE5.md)** (30 tickets, Weeks 13-15)
-- **[Phase 6: Integration Testing & Release](docs/phases/PHASE6.md)** (10 tickets, Week 16)
+- **[Phase 2: Memory & Embedding System](docs/phases/PHASE2.md)** (25 tickets, Week 6)
+- **[Phase 1.5: Model Evaluation & RAG Optimization](docs/phases/PHASE1.5.md)** ⭐ **NEW** (8 tickets, Week 7)
+- **[Phase 3: Knowledge Systems](docs/phases/PHASE3.md)** (15 tickets, Weeks 8-9)
+- **[Phase 4: Multi-Modal & Projects](docs/phases/PHASE4.md)** (20 tickets, Weeks 10-11)
+- **[Phase 5: Advanced Features & Polish](docs/phases/PHASE5.md)** (30 tickets, Weeks 12-14)
+- **[Phase 6: Integration Testing & Release](docs/phases/PHASE6.md)** (10 tickets, Weeks 15-16)
 
 ---
 
@@ -29,12 +30,13 @@ This project is managed through phase-specific documentation:
 
 ### Overall Status
 
-**Current Phase:** Phase 1 Complete + Phase 2 Started (Early)
-**Overall Progress:** ~40/135 tickets (~30%)
+**Current Phase:** Phase 2 Completing (~56%) → Phase 1.5 Next
+**Overall Progress:** ~40/143 tickets (~28%)
 **Started:** 2025-11-01
-**Last Updated:** 2025-11-03
+**Last Updated:** 2025-11-04
 
 🎉 **Major Milestone:** Production ONNX embeddings operational! 🎉
+⭐ **Phase 1.5 Added:** Model evaluation (Gemma3 vs SmolLM2) + RAG fixes
 
 ### Phase Completion
 
@@ -42,15 +44,54 @@ This project is managed through phase-specific documentation:
 |-------|------|----------|---------|--------|----------|
 | **0** | **Foundation & Infrastructure** | Weeks 1-2 | 15 | 🟢 **COMPLETE** | **15/15 (100%)** |
 | **1** | **Core AI Engine** | Weeks 3-5 | 20 | 🟢 **COMPLETE** | **20/20 (100%)** |
-| **2** | **Memory & Embedding System** | Weeks 6-8 | 25 | 🔴 **IN PROGRESS** | **~14/25 (~56%)** |
-| 3 | Knowledge Systems | Weeks 9-10 | 15 | ⚪ Pending | 0/15 (0%) |
-| 4 | Multi-Modal & Projects | Weeks 11-12 | 20 | ⚪ Pending | 0/20 (0%) |
-| 5 | Advanced Features & Polish | Weeks 13-15 | 30 | ⚪ Pending | 0/30 (0%) |
-| 6 | Integration Testing & Release | Week 16 | 10 | ⚪ Pending | 0/10 (0%) |
+| **2** | **Memory & Embedding System** | Week 6 | 25 | 🔴 **IN PROGRESS** | **~14/25 (~56%)** |
+| **1.5** | **Model Eval & RAG Optimization** ⭐ | Week 7 | 8 | ⚪ **PENDING** | **0/8 (0%)** |
+| 3 | Knowledge Systems | Weeks 8-9 | 15 | ⚪ Pending | 0/15 (0%) |
+| 4 | Multi-Modal & Projects | Weeks 10-11 | 20 | ⚪ Pending | 0/20 (0%) |
+| 5 | Advanced Features & Polish | Weeks 12-14 | 30 | ⚪ Pending | 0/30 (0%) |
+| 6 | Integration Testing & Release | Weeks 15-16 | 10 | ⚪ Pending | 0/10 (0%) |
 
 **Legend:** 🔴 In Progress | 🟢 Complete | ⚪ Not Started | 🟡 Blocked
 
 ### Recent Achievements
+
+#### 2025-11-04: Phase 1.5 Planning Complete 🎯
+
+**Strategic Phase Addition:**
+- ⭐ **NEW: Phase 1.5 - Model Evaluation & RAG Optimization** (8 tickets, Week 7)
+- 📊 **Gemma 3:270m Integration** - ONNX export, quantization, benchmarking vs SmolLM2
+- 🔧 **RAG System Fixes** - Replace keyword-based retrieval with semantic search (MiniLM-L6 + HNSW)
+- 🎯 **Prompt Guardrails** - Allow model to ignore irrelevant retrieved knowledge
+- 📈 **Adaptive Generation** - 1024 tokens for educational queries (vs fixed 256)
+
+**Key Decisions:**
+- Focus on Gemma3 only (defer Qwen2.5 to Phase 5)
+- Ship only winning model (keeps APK <200MB)
+- Medium testing rigor (20 prompts, automated + manual)
+- Phase 2 embeddings + vector search confirmed operational
+
+**Strategic Problems Being Solved:**
+1. **Poor RAG Retrieval** - Current: "teach me about AI" → "online shopping" (similarity 0.3)
+   - Fix: Semantic search with 0.6+ threshold → retrieves actual AI facts (similarity 0.85+)
+2. **Broken Prompt Template** - Current: Forces model to use irrelevant knowledge
+   - Fix: Guardrails allow ignoring low-quality retrievals
+3. **Max Tokens Too Short** - Current: 256 tokens cuts off educational explanations
+   - Fix: Adaptive 1024 tokens for "teach me" queries
+
+**Timeline Impact:**
+- Net: +0 weeks (accommodated by compressing Phase 3 and Phase 5)
+- Revised: Week 6 Phase 2 → Week 7 Phase 1.5 → Weeks 8-9 Phase 3
+
+**Documentation:**
+- Created [PHASE1.5.md](docs/phases/PHASE1.5.md) - Complete phase specification
+- Updated PROJECT_MANAGEMENT.md - 143 tickets across 7 phases
+
+**Next Steps:**
+- Complete Phase 2 (Week 6) - HNSW vector index finalization
+- Begin Phase 1.5 (Week 7) - Gemma3 export + semantic RAG implementation
+- Final model selection decision (end of Week 7)
+
+---
 
 #### 2025-11-03 (PM): Critical Code Quality Improvements ✨
 

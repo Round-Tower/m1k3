@@ -31,10 +31,15 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.platform.LocalContext
 import app.m1k3.ai.assistant.ai.SmolLM2Engine
 import app.m1k3.ai.assistant.database.MaDatabase
 import app.m1k3.ai.assistant.knowledge.KnowledgeRetrievalService
+import app.m1k3.ai.assistant.knowledge.SemanticRetrievalService
 import app.m1k3.ai.assistant.knowledge.PromptEnhancer
+import app.m1k3.ai.assistant.embedding.EmbeddingEngine
+import app.m1k3.ai.assistant.embedding.EmbeddingModelManager
+import kotlinx.coroutines.runBlocking
 import app.m1k3.ai.assistant.design.components.MaChatBubbleUser
 import app.m1k3.ai.assistant.design.components.MaChatBubbleAI
 import app.m1k3.ai.assistant.design.tokens.MaColors
@@ -76,8 +81,44 @@ fun ChatScreen(
     val avatarVM = rememberAvatarViewModel()
     val avatarState by avatarVM.collectAsState()
 
-    // Initialize knowledge retrieval service
-    val retrievalService = remember { KnowledgeRetrievalService(database) }
+    // Get Android Context for embedding engine initialization
+    val context = LocalContext.current
+
+    // Initialize knowledge retrieval service - PHASE1.5: Semantic retrieval with embeddings
+    val embeddingEngine = remember(context) {
+        runBlocking {
+            try {
+                val manager = EmbeddingModelManager(context)
+                val engine = manager.getEmbeddingEngine()
+                // Load the model
+                val loadResult = engine.loadModel()
+                if (loadResult.isSuccess) {
+                    println("✅ [RAG] Loaded embedding engine: ${engine.modelName}")
+                    engine
+                } else {
+                    println("⚠️ [RAG] Failed to load embedding model: ${loadResult.exceptionOrNull()?.message}")
+                    null
+                }
+            } catch (e: Exception) {
+                println("⚠️ [RAG] Failed to initialize embedding engine: ${e.message}")
+                null
+            }
+        }
+    }
+
+    val semanticRetrievalService = remember(database, embeddingEngine) {
+        if (embeddingEngine != null) {
+            println("✅ [RAG] Using SemanticRetrievalService with ${embeddingEngine.modelName} embeddings")
+            SemanticRetrievalService(database, embeddingEngine)
+        } else {
+            println("⚠️ [RAG] Embedding engine not available, using placeholder similarity")
+            null
+        }
+    }
+
+    val keywordRetrievalService = remember(database) {
+        KnowledgeRetrievalService(database)
+    }
 
     // Sync avatar with AI generation state
     LaunchedEffect(isGenerating) {
@@ -233,9 +274,16 @@ fun ChatScreen(
                                 var tokenCount = 0
                                 var ragInfo = ""
 
-                                // RAG: Retrieve relevant knowledge before generation
-                                val retrievedFacts = retrievalService.retrieve(prompt, limit = 3)
-                                val enhancedPrompt = PromptEnhancer.enhancePrompt(prompt, retrievedFacts)
+                                // RAG: Retrieve relevant knowledge before generation (PHASE1.5: Semantic retrieval)
+                                val retrievedFacts = if (semanticRetrievalService != null) {
+                                    // Use semantic retrieval with embeddings
+                                    semanticRetrievalService.retrieve(prompt, limit = 3, minSimilarity = 0.6f)
+                                        .map { it.toRetrievedFact() } // Convert to RetrievedFact for compatibility
+                                } else {
+                                    // Fallback to keyword-based retrieval
+                                    keywordRetrievalService.retrieve(prompt, limit = 3)
+                                }
+                                val enhancedPrompt = PromptEnhancer.enhancePrompt(prompt, retrievedFacts, minSimilarity = 0.6f)
 
                                 // Track RAG usage for display
                                 if (enhancedPrompt.hasKnowledge) {

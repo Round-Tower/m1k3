@@ -129,7 +129,7 @@ fun MaChatBubbleAI(
                     .glassmorphic(
                         backgroundColor = if (isError) MaColors.ErrorBg else MaColors.BgElevated,
                         borderColor = if (isError) MaColors.Error else MaColors.BorderLight,
-                        borderWidth = 1.dp,
+                        borderWidth = 0.dp,
                         shape = RoundedCornerShape(MaRadius.md)
                     )
                     .padding(horizontal = MaSpacing.md, vertical = MaSpacing.base)
