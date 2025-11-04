@@ -303,7 +303,11 @@ $prompt<|im_end|>
 
                 // Get logits and sample next token
                 val logitsObj = outputs.get(0).value
-                val nextTokenId = sampleNextToken(logitsObj, temperature)
+                val nextTokenId = sampleNextToken(
+                    logitsObj,
+                    temperature,
+                    previousTokens = generatedIds  // Pass previously generated tokens for repetition penalty
+                )
 
                 if (i < 5) {
                     println("🔍 [DEBUG] Generated token ID: $nextTokenId")
@@ -394,16 +398,34 @@ $prompt<|im_end|>
      * Sample next token from logits using temperature sampling
      * When temperature = 0.0, uses greedy decoding (argmax)
      */
-    private fun sampleNextToken(logitsObj: Any, temperature: Float): Long {
+    private fun sampleNextToken(
+        logitsObj: Any,
+        temperature: Float,
+        previousTokens: List<Long> = emptyList(),
+        repetitionPenalty: Float = 1.2f  // 1.0 = no penalty, higher = stronger penalty
+    ): Long {
         // Extract logits from ONNX output
         @Suppress("UNCHECKED_CAST")
         val logits = when (logitsObj) {
             is Array<*> -> {
                 val batch = logitsObj[0] as Array<*>
                 val lastToken = batch[batch.size - 1] as FloatArray
-                lastToken
+                lastToken.copyOf()  // Make a copy so we can modify it
             }
             else -> throw IllegalStateException("Unexpected logits format")
+        }
+
+        // Apply repetition penalty to recently generated tokens
+        if (repetitionPenalty != 1.0f && previousTokens.isNotEmpty()) {
+            // Penalize last 50 tokens to prevent repetition
+            val recentTokens = previousTokens.takeLast(50)
+            for (tokenId in recentTokens) {
+                val idx = tokenId.toInt()
+                if (idx >= 0 && idx < logits.size) {
+                    // Divide logit by penalty (reduces probability)
+                    logits[idx] /= repetitionPenalty
+                }
+            }
         }
 
         // Greedy decoding (temperature = 0.0)
@@ -550,15 +572,21 @@ $prompt<|im_end|>
                 // Run inference
                 val outputs = session.run(inputs)
                 val logitsObj = outputs.get(0).value
-                val nextTokenId = sampleNextToken(logitsObj, temperature)
+                val nextTokenId = sampleNextToken(
+                    logitsObj,
+                    temperature,
+                    previousTokens = generatedIds  // Pass previously generated tokens for repetition penalty
+                )
 
-                if (i < 5) {
-                    println("🔍 [STREAMING] Generated token ID: $nextTokenId")
+                // Debug logging for token generation
+                if (i < 5 || i % 20 == 0) {
+                    println("🔍 [STREAMING] Token #$i: ID=$nextTokenId (${generatedIds.size} tokens so far)")
                 }
 
-                // Check for EOS
+                // Check for EOS token (ID = 2)
                 if (nextTokenId == 2L) {
-                    println("🔍 [STREAMING] EOS token detected, stopping")
+                    println("✅ [STREAMING] EOS TOKEN DETECTED (ID=2) - Natural stop after $i tokens!")
+                    println("   This is good! The model chose to end naturally.")
                     currentTensor.close()
                     attentionMaskTensor.close()
                     positionIdsTensor.close()
@@ -587,7 +615,9 @@ $prompt<|im_end|>
 
                 if (newTokenText.isNotEmpty()) {
                     if (i == 0 || i % 5 == 0) {
-                        println("🔍 [STREAMING] Token $i: \"$newTokenText\"")
+                        // Make spaces visible in logs
+                        val visibleText = newTokenText.replace(" ", "␣")
+                        println("🔍 [STREAMING] Token $i: \"$visibleText\" (${newTokenText.length} chars)")
                     }
                     onToken(newTokenText)
                 }

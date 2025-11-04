@@ -169,13 +169,23 @@ class SmolLM2Tokenizer(private val context: Context) {
         // Convert back to bytes using GPT-2 byte decoder
         val bytes = mutableListOf<Byte>()
         for (char in tokenString) {
-            val byte = charToByte(char.code)
+            val charCode = char.code
+            val byte = charToByte(charCode)
+
+            // DEBUG: Log space character conversion specifically
+            if (charCode == 288) {  // 'Ġ' (GPT-2 space)
+                println("🔍 DEBUG: Found space char 'Ġ' (U+0120)")
+                println("   charToByte(288) = $byte")
+                println("   Expected: 32 (space byte)")
+            }
+
             if (byte != null) {
                 bytes.add(byte)
             } else {
                 // This should never happen with proper GPT-2 BPE vocab!
                 // All valid GPT-2 tokens should map to bytes via charToByte()
-                println("⚠️ WARNING: Unmapped character U+${char.code.toString(16).uppercase()} ('$char')")
+                println("⚠️ WARNING: Unmapped character U+${charCode.toString(16).uppercase()} ('$char')")
+                println("   charToByte($charCode) returned null")
                 println("   This indicates the vocab or decode logic has an issue!")
                 // Skip unmapped characters - don't use UTF-8 fallback
                 // (UTF-8 encoding breaks GPT-2 byte decoding for special chars like 'Ġ')
@@ -188,11 +198,12 @@ class SmolLM2Tokenizer(private val context: Context) {
             println("🔍 DEBUG: Decoded result (first 100 chars): ${result.take(100)}")
 
             // Clean up any residual special tokens that made it through
+            // IMPORTANT: Do NOT trim() here! GPT-2 tokens often have leading/trailing spaces
+            // that are semantically significant (e.g., "Ġwhich" = " which")
             result
                 .replace(BOS_TOKEN, "")
                 .replace(EOS_TOKEN, "")
                 .replace(PAD_TOKEN, "")
-                .trim()
         } catch (e: Exception) {
             println("⚠️ Tokenizer decode error: ${e.message}")
             // Fallback: return tokens as-is (without special tokens)
