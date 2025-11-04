@@ -74,7 +74,15 @@ class MainActivity : ComponentActivity() {
                 // Check if knowledge already imported
                 val existingCount = database!!.triviaFactQueries.getTotalFactCount().executeAsOne()
 
-                if (existingCount == 0L) {
+                // TEMPORARY: Force re-import to get all 20 categories
+                val forceReimport = existingCount > 0 && existingCount < 1300
+
+                if (forceReimport) {
+                    println("🔄 [M1K3] Force re-importing knowledge base (current: $existingCount docs, expected: 1,341)")
+                    database!!.triviaFactQueries.deleteAllFacts()
+                }
+
+                if (existingCount == 0L || forceReimport) {
                     println("📚 [M1K3] Importing comprehensive knowledge base (1,341+ documents)...")
 
                     // Load comprehensive knowledge base from Compose Resources

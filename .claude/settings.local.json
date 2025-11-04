@@ -11,7 +11,12 @@
       "Bash(git commit:*)",
       "Bash(adb devices:*)",
       "Bash(python scripts/test_smollm2_reference.py:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(source:*)",
+      "Bash(python export_gemma3_270m.py:*)",
+      "Bash(adb:*)",
+      "Bash(jq:*)",
+      "Bash(ANDROID_SERIAL=1C211FDEE001UT ./gradlew :composeApp:installDebug:*)"
     ],
     "deny": [],
     "ask": []

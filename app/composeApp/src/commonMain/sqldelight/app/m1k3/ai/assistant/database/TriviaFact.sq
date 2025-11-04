@@ -169,6 +169,10 @@ DELETE FROM TriviaFact WHERE category = ?;
 deleteFactsBySource:
 DELETE FROM TriviaFact WHERE source = ?;
 
+-- Delete ALL facts (for re-import)
+deleteAllFacts:
+DELETE FROM TriviaFact;
+
 -- Get total fact count
 getTotalFactCount:
 SELECT COUNT(*) FROM TriviaFact;
