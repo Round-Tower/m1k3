@@ -513,6 +513,7 @@ $prompt<|im_end|>
             // 3. Initialize generation state
             val generatedIds = mutableListOf<Long>()
             generatedIds.addAll(inputIds.toList())
+            var accumulatedText = ""  // Track full generated text to detect multi-token special sequences
 
             val numLayers = 32
             val numHeads = 5
@@ -599,12 +600,14 @@ $prompt<|im_end|>
 
                 // Decode and emit the new token immediately
                 val newTokenText = tok.decode(longArrayOf(nextTokenId))
+                accumulatedText += newTokenText  // Track full generated text
 
-                // Check for special tokens that indicate end of assistant response
-                if (newTokenText.contains("<|im_end|>") ||
-                    newTokenText.contains("<|im_start|>") ||
-                    newTokenText.contains("<|endoftext|>")) {
-                    println("🔍 [STREAMING] Special token detected: \"$newTokenText\", stopping generation")
+                // Check accumulated text for special tokens (they may be generated as multiple tokens)
+                if (accumulatedText.contains("<|im_end|>") ||
+                    accumulatedText.contains("<|im_start|>") ||
+                    accumulatedText.contains("<|endoftext|>")) {
+                    println("✅ [STREAMING] Special token detected in accumulated text, stopping generation")
+                    println("   Accumulated: \"${accumulatedText.takeLast(50)}\"")
                     currentTensor.close()
                     attentionMaskTensor.close()
                     positionIdsTensor.close()
