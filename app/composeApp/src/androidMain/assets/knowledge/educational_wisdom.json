@@ -1,0 +1,236 @@
+{
+  "metadata": {
+    "version": "1.0.0",
+    "created": "2025-11-04",
+    "description": "Educational content covering science, wisdom, self-help, and storytelling",
+    "total_facts": 50,
+    "categories": ["science", "wisdom", "self_help", "storytelling", "education"]
+  },
+  "facts": [
+    {
+      "id": "science_001",
+      "category": "science",
+      "subcategory": "physics",
+      "question": "What is quantum entanglement?",
+      "answer": "Quantum entanglement is a phenomenon where two or more particles become correlated in such a way that the state of one particle instantaneously affects the state of another, regardless of distance. Einstein called it 'spooky action at a distance.' This doesn't violate relativity because no information is transmitted faster than light. Entanglement is fundamental to quantum computing and quantum cryptography.",
+      "importance": 0.88,
+      "tags": ["quantum", "physics", "entanglement", "science", "advanced"]
+    },
+    {
+      "id": "science_002",
+      "category": "science",
+      "subcategory": "biology",
+      "question": "How does photosynthesis work?",
+      "answer": "Photosynthesis is the process plants use to convert light energy into chemical energy. It occurs in two stages: (1) Light reactions capture sunlight in chloroplasts and split water molecules, releasing oxygen. (2) Calvin cycle uses the energy to convert CO2 into glucose. The overall equation is: 6CO2 + 6H2O + light → C6H12O6 + 6O2. This process produces the oxygen we breathe and forms the base of most food chains.",
+      "importance": 0.92,
+      "tags": ["biology", "plants", "photosynthesis", "energy", "ecology"]
+    },
+    {
+      "id": "science_003",
+      "category": "science",
+      "subcategory": "chemistry",
+      "question": "What are chemical bonds and why do they form?",
+      "answer": "Chemical bonds form when atoms share or transfer electrons to achieve stable electron configurations. The three main types are: (1) Covalent bonds - atoms share electrons (like in water H2O). (2) Ionic bonds - atoms transfer electrons (like in salt NaCl). (3) Metallic bonds - electrons move freely between atoms (in metals). Bonds form because atoms with full outer electron shells are more stable, following the octet rule.",
+      "importance": 0.85,
+      "tags": ["chemistry", "bonds", "atoms", "electrons", "molecules"]
+    },
+    {
+      "id": "science_004",
+      "category": "science",
+      "subcategory": "astronomy",
+      "question": "What is a black hole?",
+      "answer": "A black hole is a region of spacetime where gravity is so strong that nothing, not even light, can escape. They form when massive stars collapse after dying. The boundary is called the event horizon - once you cross it, you cannot return. At the center is the singularity, a point of infinite density. Black holes come in sizes from stellar mass (3-100 solar masses) to supermassive (millions to billions of solar masses) found at galaxy centers.",
+      "importance": 0.90,
+      "tags": ["astronomy", "black holes", "gravity", "space", "physics"]
+    },
+    {
+      "id": "science_005",
+      "category": "science",
+      "subcategory": "neuroscience",
+      "question": "How does the brain form memories?",
+      "answer": "Memory formation involves three stages: (1) Encoding - sensory information is processed. (2) Consolidation - memories are strengthened through repeated neural firing patterns. (3) Retrieval - accessing stored information. Long-term memories involve physical changes in synapses (connections between neurons) through a process called long-term potentiation. The hippocampus plays a crucial role in converting short-term memories to long-term storage.",
+      "importance": 0.87,
+      "tags": ["neuroscience", "memory", "brain", "learning", "cognition"]
+    },
+    {
+      "id": "wisdom_001",
+      "category": "wisdom",
+      "subcategory": "stoicism",
+      "question": "What is stoic philosophy and how can it help in daily life?",
+      "answer": "Stoicism teaches that we should focus only on what we can control - our thoughts, actions, and responses - while accepting what we cannot control. Marcus Aurelius wrote: 'You have power over your mind, not outside events.' Key practices include: (1) Negative visualization - imagining loss to appreciate what you have. (2) The dichotomy of control - distinguishing controllable from uncontrollable. (3) Voluntary discomfort - practicing resilience. This philosophy helps reduce anxiety and increase resilience.",
+      "importance": 0.91,
+      "tags": ["stoicism", "philosophy", "wisdom", "resilience", "mindfulness"]
+    },
+    {
+      "id": "wisdom_002",
+      "category": "wisdom",
+      "subcategory": "eastern_philosophy",
+      "question": "What is the concept of Wu Wei in Taoism?",
+      "answer": "Wu Wei (無為) means 'effortless action' or 'non-forcing.' It's not about doing nothing, but acting in harmony with the natural flow of things. Like water flowing around obstacles, wu wei teaches us to work with circumstances rather than against them. The Tao Te Ching says: 'The sage does not try to be great and therefore is great.' This principle applies to problem-solving, relationships, and personal growth - finding the path of least resistance while still moving forward.",
+      "importance": 0.86,
+      "tags": ["taoism", "wu wei", "eastern philosophy", "harmony", "flow"]
+    },
+    {
+      "id": "wisdom_003",
+      "category": "wisdom",
+      "subcategory": "ethics",
+      "question": "What is the difference between ethics and morality?",
+      "answer": "While often used interchangeably, ethics typically refers to external systems of rules and principles (like professional codes of conduct), while morality is personal, internal beliefs about right and wrong. Ethics are often codified and enforced by groups or professions. Morality is shaped by culture, religion, and personal experience. For example, medical ethics are standardized rules, while a doctor's personal moral beliefs about end-of-life care might vary.",
+      "importance": 0.82,
+      "tags": ["ethics", "morality", "philosophy", "values", "principles"]
+    },
+    {
+      "id": "wisdom_004",
+      "category": "wisdom",
+      "subcategory": "critical_thinking",
+      "question": "What are cognitive biases and why should we be aware of them?",
+      "answer": "Cognitive biases are systematic patterns of deviation from rational judgment. Common ones include: (1) Confirmation bias - seeking information that confirms existing beliefs. (2) Dunning-Kruger effect - overestimating competence in areas where you lack expertise. (3) Anchoring bias - over-relying on first information received. (4) Availability heuristic - overestimating likelihood of events you can easily recall. Awareness helps us make better decisions by questioning our automatic thinking.",
+      "importance": 0.89,
+      "tags": ["cognitive bias", "critical thinking", "psychology", "decision making", "rationality"]
+    },
+    {
+      "id": "wisdom_005",
+      "category": "wisdom",
+      "subcategory": "existentialism",
+      "question": "What did Sartre mean by 'existence precedes essence'?",
+      "answer": "Sartre's famous phrase means that humans first exist, then define themselves through choices and actions. Unlike a chair (designed with purpose), humans have no predetermined nature or purpose. We are 'condemned to be free' - responsible for creating our own meaning. This brings both anxiety (from radical freedom) and empowerment (you can become who you choose). Your essence (who you are) emerges from your existence (what you do), not the reverse.",
+      "importance": 0.84,
+      "tags": ["existentialism", "sartre", "philosophy", "freedom", "meaning"]
+    },
+    {
+      "id": "self_help_001",
+      "category": "self_help",
+      "subcategory": "productivity",
+      "question": "What is the Pomodoro Technique and how does it improve focus?",
+      "answer": "The Pomodoro Technique involves working in focused 25-minute intervals (pomodoros) with 5-minute breaks. After 4 pomodoros, take a longer 15-30 minute break. Benefits: (1) Reduces mental fatigue through regular breaks. (2) Creates urgency that improves concentration. (3) Makes large tasks less overwhelming. (4) Helps track how you spend time. The timer creates a commitment device - you're more likely to stay focused knowing a break is coming soon.",
+      "importance": 0.88,
+      "tags": ["productivity", "pomodoro", "time management", "focus", "techniques"]
+    },
+    {
+      "id": "self_help_002",
+      "category": "self_help",
+      "subcategory": "habits",
+      "question": "How long does it really take to form a new habit?",
+      "answer": "The often-cited '21 days' is a myth. Research by Phillippa Lally found the average is 66 days, ranging from 18 to 254 days depending on complexity. Habit formation involves: (1) Cue - trigger that starts the behavior. (2) Routine - the behavior itself. (3) Reward - benefit you get. To build habits: start small (2 minutes), be consistent, use habit stacking (attach new habit to existing one), and focus on identity ('I am a runner' vs 'I want to run').",
+      "importance": 0.90,
+      "tags": ["habits", "behavior change", "self improvement", "psychology", "consistency"]
+    },
+    {
+      "id": "self_help_003",
+      "category": "self_help",
+      "subcategory": "emotional_intelligence",
+      "question": "What are the components of emotional intelligence?",
+      "answer": "Daniel Goleman identified 5 components: (1) Self-awareness - recognizing your emotions and their impact. (2) Self-regulation - managing disruptive emotions and adapting to change. (3) Motivation - passion for work beyond money/status. (4) Empathy - understanding others' emotional makeup. (5) Social skills - managing relationships and building networks. High EQ predicts success better than IQ in many contexts. It can be developed through practice and reflection.",
+      "importance": 0.92,
+      "tags": ["emotional intelligence", "EQ", "psychology", "self awareness", "empathy"]
+    },
+    {
+      "id": "self_help_004",
+      "category": "self_help",
+      "subcategory": "mindfulness",
+      "question": "What is mindfulness meditation and what are its benefits?",
+      "answer": "Mindfulness is paying attention to the present moment without judgment. In meditation, you focus on breath or sensations, gently returning when mind wanders. Benefits backed by research: (1) Reduces stress and anxiety. (2) Improves focus and attention span. (3) Enhances emotional regulation. (4) Increases gray matter in brain regions for learning and memory. (5) Lowers blood pressure. Start with just 5 minutes daily. The practice is about noticing when you're distracted and coming back, not achieving perfect focus.",
+      "importance": 0.91,
+      "tags": ["mindfulness", "meditation", "mental health", "stress", "wellbeing"]
+    },
+    {
+      "id": "self_help_005",
+      "category": "self_help",
+      "subcategory": "growth_mindset",
+      "question": "What is the difference between growth and fixed mindset?",
+      "answer": "Carol Dweck's research shows: Fixed mindset believes abilities are innate and unchangeable ('I'm not good at math'). Growth mindset believes abilities can be developed through effort ('I'm not good at math yet'). People with growth mindset: (1) Embrace challenges. (2) Persist through setbacks. (3) See effort as path to mastery. (4) Learn from criticism. (5) Find inspiration in others' success. To develop it: use 'yet,' focus on process over outcome, and reframe failures as learning opportunities.",
+      "importance": 0.93,
+      "tags": ["growth mindset", "learning", "psychology", "development", "resilience"]
+    },
+    {
+      "id": "storytelling_001",
+      "category": "storytelling",
+      "subcategory": "narrative_structure",
+      "question": "What is the Hero's Journey story structure?",
+      "answer": "Joseph Campbell's Hero's Journey is a universal story pattern found across cultures: (1) Ordinary World - hero's normal life. (2) Call to Adventure - problem or opportunity arises. (3) Refusal of Call - initial reluctance. (4) Meeting the Mentor - guidance received. (5) Crossing Threshold - commitment to journey. (6) Tests and Allies - challenges and companions. (7) Ordeal - major crisis. (8) Reward - achievement after ordeal. (9) Return - bringing wisdom home. Examples: Star Wars, Harry Potter, The Matrix.",
+      "importance": 0.87,
+      "tags": ["storytelling", "hero's journey", "narrative", "writing", "mythology"]
+    },
+    {
+      "id": "storytelling_002",
+      "category": "storytelling",
+      "subcategory": "creative_writing",
+      "question": "How do you create compelling characters in fiction?",
+      "answer": "Compelling characters have: (1) Clear motivation - what they want and why. (2) Internal conflict - contradictions that create complexity. (3) Character arc - how they change through the story. (4) Unique voice - distinct way of speaking and thinking. (5) Flaws and vulnerabilities - perfection is boring. (6) Backstory - past experiences that shape them. Show character through actions and choices, not just description. The best characters want something, fear something, and hide something.",
+      "importance": 0.85,
+      "tags": ["creative writing", "characters", "fiction", "storytelling", "narrative"]
+    },
+    {
+      "id": "storytelling_003",
+      "category": "storytelling",
+      "subcategory": "plot_devices",
+      "question": "What is Chekhov's Gun principle in storytelling?",
+      "answer": "Chekhov's Gun states: 'If you show a gun in Act 1, it must be fired by Act 3.' More broadly, every element in a story should serve a purpose. Don't introduce details that don't matter. This creates: (1) Tighter, more focused narratives. (2) Satisfying payoffs for readers. (3) Economy of storytelling. However, some irrelevant details can add realism - balance is key. The principle teaches intentionality: include things for a reason, not just decoration.",
+      "importance": 0.80,
+      "tags": ["storytelling", "plot", "chekhov's gun", "writing", "technique"]
+    },
+    {
+      "id": "storytelling_004",
+      "category": "storytelling",
+      "subcategory": "dialogue",
+      "question": "How do you write realistic and engaging dialogue?",
+      "answer": "Good dialogue: (1) Reveals character - each person should sound distinct. (2) Advances plot - conversations should move story forward. (3) Creates conflict - tension is more interesting than agreement. (4) Sounds natural - read aloud to test flow. (5) Uses subtext - what's NOT said is often important. Avoid: info dumps, perfect grammar (people speak casually), and having everyone sound the same. Dialogue tags: 'said' is usually best - readers skip over it. Focus on what characters say, not how they say it.",
+      "importance": 0.83,
+      "tags": ["dialogue", "writing", "storytelling", "characters", "technique"]
+    },
+    {
+      "id": "storytelling_005",
+      "category": "storytelling",
+      "subcategory": "world_building",
+      "question": "What are key elements of effective world-building in fiction?",
+      "answer": "Great world-building includes: (1) Consistent rules - magic/tech systems should be logical. (2) History and culture - societies have depth beyond the plot. (3) Geography and environment - setting affects story and characters. (4) Social structures - politics, economics, power dynamics. (5) Show, don't dump - reveal world through story, not exposition. Iceberg principle: know 90% of your world but show only 10%. The best worlds feel lived-in and affect characters' choices. Balance uniqueness with familiarity so readers can relate.",
+      "importance": 0.86,
+      "tags": ["world building", "fantasy", "sci-fi", "writing", "storytelling"]
+    },
+    {
+      "id": "education_001",
+      "category": "education",
+      "subcategory": "learning_techniques",
+      "question": "What is spaced repetition and why is it effective for learning?",
+      "answer": "Spaced repetition involves reviewing material at increasing intervals: 1 day, 3 days, 1 week, 2 weeks, 1 month, etc. It exploits the spacing effect - we remember better when study sessions are spread out. Each time you successfully recall, the next interval lengthens. Benefits: (1) Combats forgetting curve. (2) More efficient than cramming. (3) Builds long-term retention. (4) Identifies weak areas. Apps like Anki use this. The difficulty of retrieval strengthens memory - struggling to remember helps learning.",
+      "importance": 0.90,
+      "tags": ["learning", "spaced repetition", "memory", "study techniques", "education"]
+    },
+    {
+      "id": "education_002",
+      "category": "education",
+      "subcategory": "critical_thinking",
+      "question": "What is the Socratic method of teaching?",
+      "answer": "The Socratic method teaches through asking questions rather than giving answers. Socrates would: (1) Ask for clarification of beliefs. (2) Challenge assumptions with counter-examples. (3) Examine evidence and reasoning. (4) Question implications and consequences. (5) Lead students to realize contradictions in their thinking. This develops critical thinking because students arrive at understanding themselves rather than memorizing. It works best for conceptual subjects and developing analytical skills, less so for factual knowledge.",
+      "importance": 0.84,
+      "tags": ["socratic method", "teaching", "critical thinking", "education", "philosophy"]
+    },
+    {
+      "id": "education_003",
+      "category": "education",
+      "subcategory": "meta_learning",
+      "question": "What is meta-learning or learning how to learn?",
+      "answer": "Meta-learning is understanding and optimizing how you learn. Key strategies: (1) Identify your learning style (but don't limit yourself). (2) Use active recall - test yourself instead of re-reading. (3) Employ the Feynman Technique - explain concepts simply. (4) Practice deliberate practice - focused improvement on weak areas. (5) Understand chunking - breaking complex info into manageable pieces. (6) Get enough sleep - memory consolidation happens during sleep. Meta-cognition (thinking about thinking) is crucial for lifelong learning.",
+      "importance": 0.92,
+      "tags": ["meta learning", "learning strategies", "education", "study skills", "cognition"]
+    },
+    {
+      "id": "education_004",
+      "category": "education",
+      "subcategory": "memory_techniques",
+      "question": "What is the Memory Palace technique?",
+      "answer": "Memory Palace (Method of Loci) uses spatial memory to remember information. Steps: (1) Choose a familiar location (your house). (2) Create a mental route through it. (3) Place vivid, unusual mental images along the route representing what you need to remember. (4) To recall, mentally walk the route and 'see' the images. This works because: (1) Spatial memory is strong in humans. (2) Unusual images are memorable. (3) Organization aids retrieval. Ancient orators used this to memorize hours-long speeches without notes.",
+      "importance": 0.85,
+      "tags": ["memory palace", "memory techniques", "learning", "mnemonics", "education"]
+    },
+    {
+      "id": "education_005",
+      "category": "education",
+      "subcategory": "motivation",
+      "question": "What is intrinsic versus extrinsic motivation in learning?",
+      "answer": "Intrinsic motivation comes from within - you learn because it's interesting, enjoyable, or meaningful. Extrinsic motivation comes from external rewards - grades, money, recognition. Research shows: (1) Intrinsic motivation leads to deeper learning and persistence. (2) Extrinsic rewards can undermine intrinsic interest (overjustification effect). (3) Autonomy, mastery, and purpose (Dan Pink) drive intrinsic motivation. To foster it: (1) Connect learning to personal goals. (2) Provide choice and autonomy. (3) Focus on progress and growth. (4) Make learning relevant.",
+      "importance": 0.88,
+      "tags": ["motivation", "learning", "intrinsic", "extrinsic", "education", "psychology"]
+    }
+  ]
+}
