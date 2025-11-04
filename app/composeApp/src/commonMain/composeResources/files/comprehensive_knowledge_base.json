@@ -2,7 +2,7 @@
   "version": "1.0",
   "metadata": {
     "created_at": "2025-08-22 20:22:13",
-    "total_documents": 1341,
+    "total_documents": 1391,
     "categories": {
       "mathematical_calculation": 84,
       "code_debugging": 82,
@@ -23,7 +23,9 @@
       "security_privacy": 80,
       "diagnostic_troubleshooting": 55,
       "educational_tutoring": 90,
-      "trivia_facts": 70
+      "trivia_facts": 70,
+      "ai_ml_facts": 25,
+      "educational_wisdom": 25
     },
     "intents": {
       "mathematical_calculation": 84,
@@ -35,13 +37,13 @@
       "instruction_request": 27,
       "troubleshooting": 109
     },
-    "updated_at": "2025-08-22 20:43:53"
+    "updated_at": "2025-11-04 21:34:30"
   },
   "documents": [
     {
       "id": "synthetic_mathematical_calculation_0_1755890533",
-      "title": "Multiplication Problem: 6 × 9",
-      "content": "To multiply 6 × 9, think of it as adding 6 to itself 9 times. 6 × 9 = 54. Multiplication is repeated addition.",
+      "title": "Multiplication Problem: 6 \u00d7 9",
+      "content": "To multiply 6 \u00d7 9, think of it as adding 6 to itself 9 times. 6 \u00d7 9 = 54. Multiplication is repeated addition.",
       "category": "mathematical_calculation",
       "intent": "mathematical_calculation",
       "metadata": {
@@ -65,8 +67,8 @@
     },
     {
       "id": "synthetic_mathematical_calculation_1_1755890533",
-      "title": "Multiplication Problem: 14 × 9",
-      "content": "To multiply 14 × 9, think of it as adding 14 to itself 9 times. 14 × 9 = 126. Multiplication is repeated addition.",
+      "title": "Multiplication Problem: 14 \u00d7 9",
+      "content": "To multiply 14 \u00d7 9, think of it as adding 14 to itself 9 times. 14 \u00d7 9 = 126. Multiplication is repeated addition.",
       "category": "mathematical_calculation",
       "intent": "mathematical_calculation",
       "metadata": {
@@ -91,7 +93,7 @@
     {
       "id": "synthetic_mathematical_calculation_2_1755890533",
       "title": "Percentage Calculation: 10% of 155",
-      "content": "To find 10% of 155, multiply by 0.1: 155 × 0.1 = 15.5. Percentages are fractions out of 100.",
+      "content": "To find 10% of 155, multiply by 0.1: 155 \u00d7 0.1 = 15.5. Percentages are fractions out of 100.",
       "category": "mathematical_calculation",
       "intent": "mathematical_calculation",
       "metadata": {
@@ -142,7 +144,7 @@
     {
       "id": "synthetic_mathematical_calculation_4_1755890533",
       "title": "Percentage Calculation: 30% of 15",
-      "content": "To find 30% of 15, multiply by 0.3: 15 × 0.3 = 4.5. Percentages are fractions out of 100.",
+      "content": "To find 30% of 15, multiply by 0.3: 15 \u00d7 0.3 = 4.5. Percentages are fractions out of 100.",
       "category": "mathematical_calculation",
       "intent": "mathematical_calculation",
       "metadata": {
@@ -193,7 +195,7 @@
     {
       "id": "synthetic_mathematical_calculation_6_1755890533",
       "title": "Percentage Calculation: 25% of 95",
-      "content": "To find 25% of 95, multiply by 0.25: 95 × 0.25 = 23.75. Percentages are fractions out of 100.",
+      "content": "To find 25% of 95, multiply by 0.25: 95 \u00d7 0.25 = 23.75. Percentages are fractions out of 100.",
       "category": "mathematical_calculation",
       "intent": "mathematical_calculation",
       "metadata": {
@@ -218,8 +220,8 @@
     },
     {
       "id": "synthetic_mathematical_calculation_7_1755890533",
-      "title": "Multiplication Problem: 10 × 5",
-      "content": "To multiply 10 × 5, think of it as adding 10 to itself 5 times. 10 × 5 = 50. Multiplication is repeated addition.",
+      "title": "Multiplication Problem: 10 \u00d7 5",
+      "content": "To multiply 10 \u00d7 5, think of it as adding 10 to itself 5 times. 10 \u00d7 5 = 50. Multiplication is repeated addition.",
       "category": "mathematical_calculation",
       "intent": "mathematical_calculation",
       "metadata": {
@@ -243,8 +245,8 @@
     },
     {
       "id": "synthetic_mathematical_calculation_8_1755890533",
-      "title": "Multiplication Problem: 5 × 4",
-      "content": "To multiply 5 × 4, think of it as adding 5 to itself 4 times. 5 × 4 = 20. Multiplication is repeated addition.",
+      "title": "Multiplication Problem: 5 \u00d7 4",
+      "content": "To multiply 5 \u00d7 4, think of it as adding 5 to itself 4 times. 5 \u00d7 4 = 20. Multiplication is repeated addition.",
       "category": "mathematical_calculation",
       "intent": "mathematical_calculation",
       "metadata": {
@@ -268,8 +270,8 @@
     },
     {
       "id": "synthetic_mathematical_calculation_9_1755890533",
-      "title": "Multiplication Problem: 3 × 6",
-      "content": "To multiply 3 × 6, think of it as adding 3 to itself 6 times. 3 × 6 = 18. Multiplication is repeated addition.",
+      "title": "Multiplication Problem: 3 \u00d7 6",
+      "content": "To multiply 3 \u00d7 6, think of it as adding 3 to itself 6 times. 3 \u00d7 6 = 18. Multiplication is repeated addition.",
       "category": "mathematical_calculation",
       "intent": "mathematical_calculation",
       "metadata": {
@@ -344,7 +346,7 @@
     {
       "id": "synthetic_mathematical_calculation_12_1755890533",
       "title": "Percentage Calculation: 50% of 195",
-      "content": "To find 50% of 195, multiply by 0.5: 195 × 0.5 = 97.5. Percentages are fractions out of 100.",
+      "content": "To find 50% of 195, multiply by 0.5: 195 \u00d7 0.5 = 97.5. Percentages are fractions out of 100.",
       "category": "mathematical_calculation",
       "intent": "mathematical_calculation",
       "metadata": {
@@ -369,8 +371,8 @@
     },
     {
       "id": "synthetic_mathematical_calculation_13_1755890533",
-      "title": "Multiplication Problem: 5 × 2",
-      "content": "To multiply 5 × 2, think of it as adding 5 to itself 2 times. 5 × 2 = 10. Multiplication is repeated addition.",
+      "title": "Multiplication Problem: 5 \u00d7 2",
+      "content": "To multiply 5 \u00d7 2, think of it as adding 5 to itself 2 times. 5 \u00d7 2 = 10. Multiplication is repeated addition.",
       "category": "mathematical_calculation",
       "intent": "mathematical_calculation",
       "metadata": {
@@ -419,8 +421,8 @@
     },
     {
       "id": "synthetic_mathematical_calculation_15_1755890533",
-      "title": "Multiplication Problem: 6 × 14",
-      "content": "To multiply 6 × 14, think of it as adding 6 to itself 14 times. 6 × 14 = 84. Multiplication is repeated addition.",
+      "title": "Multiplication Problem: 6 \u00d7 14",
+      "content": "To multiply 6 \u00d7 14, think of it as adding 6 to itself 14 times. 6 \u00d7 14 = 84. Multiplication is repeated addition.",
       "category": "mathematical_calculation",
       "intent": "mathematical_calculation",
       "metadata": {
@@ -469,8 +471,8 @@
     },
     {
       "id": "synthetic_mathematical_calculation_17_1755890533",
-      "title": "Multiplication Problem: 6 × 6",
-      "content": "To multiply 6 × 6, think of it as adding 6 to itself 6 times. 6 × 6 = 36. Multiplication is repeated addition.",
+      "title": "Multiplication Problem: 6 \u00d7 6",
+      "content": "To multiply 6 \u00d7 6, think of it as adding 6 to itself 6 times. 6 \u00d7 6 = 36. Multiplication is repeated addition.",
       "category": "mathematical_calculation",
       "intent": "mathematical_calculation",
       "metadata": {
@@ -495,7 +497,7 @@
     {
       "id": "synthetic_mathematical_calculation_18_1755890533",
       "title": "Percentage Calculation: 20% of 75",
-      "content": "To find 20% of 75, multiply by 0.2: 75 × 0.2 = 15.0. Percentages are fractions out of 100.",
+      "content": "To find 20% of 75, multiply by 0.2: 75 \u00d7 0.2 = 15.0. Percentages are fractions out of 100.",
       "category": "mathematical_calculation",
       "intent": "mathematical_calculation",
       "metadata": {
@@ -520,8 +522,8 @@
     },
     {
       "id": "synthetic_mathematical_calculation_19_1755890533",
-      "title": "Division: 112 ÷ 4",
-      "content": "When we divide 112 ÷ 4, we're asking 'how many 4s fit into 112?' The answer is 28. Division is the inverse of multiplication.",
+      "title": "Division: 112 \u00f7 4",
+      "content": "When we divide 112 \u00f7 4, we're asking 'how many 4s fit into 112?' The answer is 28. Division is the inverse of multiplication.",
       "category": "mathematical_calculation",
       "intent": "mathematical_calculation",
       "metadata": {
@@ -570,8 +572,8 @@
     },
     {
       "id": "synthetic_mathematical_calculation_21_1755890533",
-      "title": "Division: 126 ÷ 7",
-      "content": "When we divide 126 ÷ 7, we're asking 'how many 7s fit into 126?' The answer is 18. Division is the inverse of multiplication.",
+      "title": "Division: 126 \u00f7 7",
+      "content": "When we divide 126 \u00f7 7, we're asking 'how many 7s fit into 126?' The answer is 18. Division is the inverse of multiplication.",
       "category": "mathematical_calculation",
       "intent": "mathematical_calculation",
       "metadata": {
@@ -620,8 +622,8 @@
     },
     {
       "id": "synthetic_mathematical_calculation_23_1755890533",
-      "title": "Multiplication Problem: 2 × 14",
-      "content": "To multiply 2 × 14, think of it as adding 2 to itself 14 times. 2 × 14 = 28. Multiplication is repeated addition.",
+      "title": "Multiplication Problem: 2 \u00d7 14",
+      "content": "To multiply 2 \u00d7 14, think of it as adding 2 to itself 14 times. 2 \u00d7 14 = 28. Multiplication is repeated addition.",
       "category": "mathematical_calculation",
       "intent": "mathematical_calculation",
       "metadata": {
@@ -645,8 +647,8 @@
     },
     {
       "id": "synthetic_mathematical_calculation_24_1755890533",
-      "title": "Multiplication Problem: 9 × 3",
-      "content": "To multiply 9 × 3, think of it as adding 9 to itself 3 times. 9 × 3 = 27. Multiplication is repeated addition.",
+      "title": "Multiplication Problem: 9 \u00d7 3",
+      "content": "To multiply 9 \u00d7 3, think of it as adding 9 to itself 3 times. 9 \u00d7 3 = 27. Multiplication is repeated addition.",
       "category": "mathematical_calculation",
       "intent": "mathematical_calculation",
       "metadata": {
@@ -745,8 +747,8 @@
     },
     {
       "id": "synthetic_mathematical_calculation_28_1755890533",
-      "title": "Multiplication Problem: 13 × 9",
-      "content": "To multiply 13 × 9, think of it as adding 13 to itself 9 times. 13 × 9 = 117. Multiplication is repeated addition.",
+      "title": "Multiplication Problem: 13 \u00d7 9",
+      "content": "To multiply 13 \u00d7 9, think of it as adding 13 to itself 9 times. 13 \u00d7 9 = 117. Multiplication is repeated addition.",
       "category": "mathematical_calculation",
       "intent": "mathematical_calculation",
       "metadata": {
@@ -820,8 +822,8 @@
     },
     {
       "id": "synthetic_mathematical_calculation_31_1755890533",
-      "title": "Multiplication Problem: 8 × 5",
-      "content": "To multiply 8 × 5, think of it as adding 8 to itself 5 times. 8 × 5 = 40. Multiplication is repeated addition.",
+      "title": "Multiplication Problem: 8 \u00d7 5",
+      "content": "To multiply 8 \u00d7 5, think of it as adding 8 to itself 5 times. 8 \u00d7 5 = 40. Multiplication is repeated addition.",
       "category": "mathematical_calculation",
       "intent": "mathematical_calculation",
       "metadata": {
@@ -895,8 +897,8 @@
     },
     {
       "id": "synthetic_mathematical_calculation_34_1755890533",
-      "title": "Division: 12 ÷ 6",
-      "content": "When we divide 12 ÷ 6, we're asking 'how many 6s fit into 12?' The answer is 2. Division is the inverse of multiplication.",
+      "title": "Division: 12 \u00f7 6",
+      "content": "When we divide 12 \u00f7 6, we're asking 'how many 6s fit into 12?' The answer is 2. Division is the inverse of multiplication.",
       "category": "mathematical_calculation",
       "intent": "mathematical_calculation",
       "metadata": {
@@ -920,8 +922,8 @@
     },
     {
       "id": "synthetic_mathematical_calculation_35_1755890533",
-      "title": "Multiplication Problem: 11 × 9",
-      "content": "To multiply 11 × 9, think of it as adding 11 to itself 9 times. 11 × 9 = 99. Multiplication is repeated addition.",
+      "title": "Multiplication Problem: 11 \u00d7 9",
+      "content": "To multiply 11 \u00d7 9, think of it as adding 11 to itself 9 times. 11 \u00d7 9 = 99. Multiplication is repeated addition.",
       "category": "mathematical_calculation",
       "intent": "mathematical_calculation",
       "metadata": {
@@ -1551,7 +1553,7 @@
     {
       "id": "synthetic_code_debugging_59_1755890533",
       "title": "Java Performance Issue: memory leaks",
-      "content": "Performance issue: memory leaks in Java. This commonly occurs when O(n²) complexity. Optimization approach: use list comprehension. Monitor performance with profiling tools.",
+      "content": "Performance issue: memory leaks in Java. This commonly occurs when O(n\u00b2) complexity. Optimization approach: use list comprehension. Monitor performance with profiling tools.",
       "category": "code_debugging",
       "intent": "code_debugging",
       "metadata": {
@@ -1566,7 +1568,7 @@
         "template_variables": {
           "language": "Java",
           "issue_type": "memory leaks",
-          "cause": "O(n²) complexity",
+          "cause": "O(n\u00b2) complexity",
           "optimization": "use list comprehension"
         },
         "generated_at": "2025-08-22 20:22:13"
@@ -13053,8 +13055,8 @@
     },
     {
       "id": "synthetic_mathematical_calculation_0_1755891822",
-      "title": "Multiplication Problem: 3 × 5",
-      "content": "To multiply 3 × 5, think of it as adding 3 to itself 5 times. 3 × 5 = 15. Multiplication is repeated addition.",
+      "title": "Multiplication Problem: 3 \u00d7 5",
+      "content": "To multiply 3 \u00d7 5, think of it as adding 3 to itself 5 times. 3 \u00d7 5 = 15. Multiplication is repeated addition.",
       "category": "mathematical_calculation",
       "intent": "mathematical_calculation",
       "metadata": {
@@ -13128,8 +13130,8 @@
     },
     {
       "id": "synthetic_mathematical_calculation_3_1755891822",
-      "title": "Division: 140 ÷ 7",
-      "content": "When we divide 140 ÷ 7, we're asking 'how many 7s fit into 140?' The answer is 20. Division is the inverse of multiplication.",
+      "title": "Division: 140 \u00f7 7",
+      "content": "When we divide 140 \u00f7 7, we're asking 'how many 7s fit into 140?' The answer is 20. Division is the inverse of multiplication.",
       "category": "mathematical_calculation",
       "intent": "mathematical_calculation",
       "metadata": {
@@ -13154,7 +13156,7 @@
     {
       "id": "synthetic_mathematical_calculation_4_1755891822",
       "title": "Percentage Calculation: 10% of 90",
-      "content": "To find 10% of 90, multiply by 0.1: 90 × 0.1 = 9.0. Percentages are fractions out of 100.",
+      "content": "To find 10% of 90, multiply by 0.1: 90 \u00d7 0.1 = 9.0. Percentages are fractions out of 100.",
       "category": "mathematical_calculation",
       "intent": "mathematical_calculation",
       "metadata": {
@@ -13180,7 +13182,7 @@
     {
       "id": "synthetic_mathematical_calculation_5_1755891822",
       "title": "Percentage Calculation: 75% of 120",
-      "content": "To find 75% of 120, multiply by 0.75: 120 × 0.75 = 90.0. Percentages are fractions out of 100.",
+      "content": "To find 75% of 120, multiply by 0.75: 120 \u00d7 0.75 = 90.0. Percentages are fractions out of 100.",
       "category": "mathematical_calculation",
       "intent": "mathematical_calculation",
       "metadata": {
@@ -13205,8 +13207,8 @@
     },
     {
       "id": "synthetic_mathematical_calculation_6_1755891822",
-      "title": "Division: 176 ÷ 2",
-      "content": "When we divide 176 ÷ 2, we're asking 'how many 2s fit into 176?' The answer is 88. Division is the inverse of multiplication.",
+      "title": "Division: 176 \u00f7 2",
+      "content": "When we divide 176 \u00f7 2, we're asking 'how many 2s fit into 176?' The answer is 88. Division is the inverse of multiplication.",
       "category": "mathematical_calculation",
       "intent": "mathematical_calculation",
       "metadata": {
@@ -13305,8 +13307,8 @@
     },
     {
       "id": "synthetic_mathematical_calculation_10_1755891822",
-      "title": "Multiplication Problem: 14 × 6",
-      "content": "To multiply 14 × 6, think of it as adding 14 to itself 6 times. 14 × 6 = 84. Multiplication is repeated addition.",
+      "title": "Multiplication Problem: 14 \u00d7 6",
+      "content": "To multiply 14 \u00d7 6, think of it as adding 14 to itself 6 times. 14 \u00d7 6 = 84. Multiplication is repeated addition.",
       "category": "mathematical_calculation",
       "intent": "mathematical_calculation",
       "metadata": {
@@ -13356,7 +13358,7 @@
     {
       "id": "synthetic_mathematical_calculation_12_1755891822",
       "title": "Percentage Calculation: 25% of 175",
-      "content": "To find 25% of 175, multiply by 0.25: 175 × 0.25 = 43.75. Percentages are fractions out of 100.",
+      "content": "To find 25% of 175, multiply by 0.25: 175 \u00d7 0.25 = 43.75. Percentages are fractions out of 100.",
       "category": "mathematical_calculation",
       "intent": "mathematical_calculation",
       "metadata": {
@@ -13406,8 +13408,8 @@
     },
     {
       "id": "synthetic_mathematical_calculation_14_1755891822",
-      "title": "Division: 18 ÷ 9",
-      "content": "When we divide 18 ÷ 9, we're asking 'how many 9s fit into 18?' The answer is 2. Division is the inverse of multiplication.",
+      "title": "Division: 18 \u00f7 9",
+      "content": "When we divide 18 \u00f7 9, we're asking 'how many 9s fit into 18?' The answer is 2. Division is the inverse of multiplication.",
       "category": "mathematical_calculation",
       "intent": "mathematical_calculation",
       "metadata": {
@@ -13457,7 +13459,7 @@
     {
       "id": "synthetic_mathematical_calculation_16_1755891822",
       "title": "Percentage Calculation: 90% of 60",
-      "content": "To find 90% of 60, multiply by 0.9: 60 × 0.9 = 54.0. Percentages are fractions out of 100.",
+      "content": "To find 90% of 60, multiply by 0.9: 60 \u00d7 0.9 = 54.0. Percentages are fractions out of 100.",
       "category": "mathematical_calculation",
       "intent": "mathematical_calculation",
       "metadata": {
@@ -13508,7 +13510,7 @@
     {
       "id": "synthetic_mathematical_calculation_18_1755891822",
       "title": "Percentage Calculation: 20% of 85",
-      "content": "To find 20% of 85, multiply by 0.2: 85 × 0.2 = 17.0. Percentages are fractions out of 100.",
+      "content": "To find 20% of 85, multiply by 0.2: 85 \u00d7 0.2 = 17.0. Percentages are fractions out of 100.",
       "category": "mathematical_calculation",
       "intent": "mathematical_calculation",
       "metadata": {
@@ -13558,8 +13560,8 @@
     },
     {
       "id": "synthetic_mathematical_calculation_20_1755891822",
-      "title": "Division: 190 ÷ 5",
-      "content": "When we divide 190 ÷ 5, we're asking 'how many 5s fit into 190?' The answer is 38. Division is the inverse of multiplication.",
+      "title": "Division: 190 \u00f7 5",
+      "content": "When we divide 190 \u00f7 5, we're asking 'how many 5s fit into 190?' The answer is 38. Division is the inverse of multiplication.",
       "category": "mathematical_calculation",
       "intent": "mathematical_calculation",
       "metadata": {
@@ -13633,8 +13635,8 @@
     },
     {
       "id": "synthetic_mathematical_calculation_23_1755891822",
-      "title": "Division: 78 ÷ 6",
-      "content": "When we divide 78 ÷ 6, we're asking 'how many 6s fit into 78?' The answer is 13. Division is the inverse of multiplication.",
+      "title": "Division: 78 \u00f7 6",
+      "content": "When we divide 78 \u00f7 6, we're asking 'how many 6s fit into 78?' The answer is 13. Division is the inverse of multiplication.",
       "category": "mathematical_calculation",
       "intent": "mathematical_calculation",
       "metadata": {
@@ -13684,7 +13686,7 @@
     {
       "id": "synthetic_mathematical_calculation_25_1755891822",
       "title": "Percentage Calculation: 50% of 180",
-      "content": "To find 50% of 180, multiply by 0.5: 180 × 0.5 = 90.0. Percentages are fractions out of 100.",
+      "content": "To find 50% of 180, multiply by 0.5: 180 \u00d7 0.5 = 90.0. Percentages are fractions out of 100.",
       "category": "mathematical_calculation",
       "intent": "mathematical_calculation",
       "metadata": {
@@ -13735,7 +13737,7 @@
     {
       "id": "synthetic_mathematical_calculation_27_1755891822",
       "title": "Percentage Calculation: 50% of 175",
-      "content": "To find 50% of 175, multiply by 0.5: 175 × 0.5 = 87.5. Percentages are fractions out of 100.",
+      "content": "To find 50% of 175, multiply by 0.5: 175 \u00d7 0.5 = 87.5. Percentages are fractions out of 100.",
       "category": "mathematical_calculation",
       "intent": "mathematical_calculation",
       "metadata": {
@@ -13760,8 +13762,8 @@
     },
     {
       "id": "synthetic_mathematical_calculation_28_1755891822",
-      "title": "Multiplication Problem: 11 × 8",
-      "content": "To multiply 11 × 8, think of it as adding 11 to itself 8 times. 11 × 8 = 88. Multiplication is repeated addition.",
+      "title": "Multiplication Problem: 11 \u00d7 8",
+      "content": "To multiply 11 \u00d7 8, think of it as adding 11 to itself 8 times. 11 \u00d7 8 = 88. Multiplication is repeated addition.",
       "category": "mathematical_calculation",
       "intent": "mathematical_calculation",
       "metadata": {
@@ -13811,7 +13813,7 @@
     {
       "id": "synthetic_mathematical_calculation_30_1755891822",
       "title": "Percentage Calculation: 10% of 50",
-      "content": "To find 10% of 50, multiply by 0.1: 50 × 0.1 = 5.0. Percentages are fractions out of 100.",
+      "content": "To find 10% of 50, multiply by 0.1: 50 \u00d7 0.1 = 5.0. Percentages are fractions out of 100.",
       "category": "mathematical_calculation",
       "intent": "mathematical_calculation",
       "metadata": {
@@ -13862,7 +13864,7 @@
     {
       "id": "synthetic_mathematical_calculation_32_1755891822",
       "title": "Percentage Calculation: 25% of 85",
-      "content": "To find 25% of 85, multiply by 0.25: 85 × 0.25 = 21.25. Percentages are fractions out of 100.",
+      "content": "To find 25% of 85, multiply by 0.25: 85 \u00d7 0.25 = 21.25. Percentages are fractions out of 100.",
       "category": "mathematical_calculation",
       "intent": "mathematical_calculation",
       "metadata": {
@@ -13912,8 +13914,8 @@
     },
     {
       "id": "synthetic_mathematical_calculation_34_1755891822",
-      "title": "Division: 84 ÷ 2",
-      "content": "When we divide 84 ÷ 2, we're asking 'how many 2s fit into 84?' The answer is 42. Division is the inverse of multiplication.",
+      "title": "Division: 84 \u00f7 2",
+      "content": "When we divide 84 \u00f7 2, we're asking 'how many 2s fit into 84?' The answer is 42. Division is the inverse of multiplication.",
       "category": "mathematical_calculation",
       "intent": "mathematical_calculation",
       "metadata": {
@@ -13937,8 +13939,8 @@
     },
     {
       "id": "synthetic_mathematical_calculation_35_1755891822",
-      "title": "Multiplication Problem: 11 × 3",
-      "content": "To multiply 11 × 3, think of it as adding 11 to itself 3 times. 11 × 3 = 33. Multiplication is repeated addition.",
+      "title": "Multiplication Problem: 11 \u00d7 3",
+      "content": "To multiply 11 \u00d7 3, think of it as adding 11 to itself 3 times. 11 \u00d7 3 = 33. Multiplication is repeated addition.",
       "category": "mathematical_calculation",
       "intent": "mathematical_calculation",
       "metadata": {
@@ -13963,7 +13965,7 @@
     {
       "id": "synthetic_mathematical_calculation_36_1755891822",
       "title": "Percentage Calculation: 25% of 75",
-      "content": "To find 25% of 75, multiply by 0.25: 75 × 0.25 = 18.75. Percentages are fractions out of 100.",
+      "content": "To find 25% of 75, multiply by 0.25: 75 \u00d7 0.25 = 18.75. Percentages are fractions out of 100.",
       "category": "mathematical_calculation",
       "intent": "mathematical_calculation",
       "metadata": {
@@ -13989,7 +13991,7 @@
     {
       "id": "synthetic_mathematical_calculation_37_1755891822",
       "title": "Percentage Calculation: 50% of 165",
-      "content": "To find 50% of 165, multiply by 0.5: 165 × 0.5 = 82.5. Percentages are fractions out of 100.",
+      "content": "To find 50% of 165, multiply by 0.5: 165 \u00d7 0.5 = 82.5. Percentages are fractions out of 100.",
       "category": "mathematical_calculation",
       "intent": "mathematical_calculation",
       "metadata": {
@@ -14039,8 +14041,8 @@
     },
     {
       "id": "synthetic_mathematical_calculation_39_1755891822",
-      "title": "Multiplication Problem: 11 × 2",
-      "content": "To multiply 11 × 2, think of it as adding 11 to itself 2 times. 11 × 2 = 22. Multiplication is repeated addition.",
+      "title": "Multiplication Problem: 11 \u00d7 2",
+      "content": "To multiply 11 \u00d7 2, think of it as adding 11 to itself 2 times. 11 \u00d7 2 = 22. Multiplication is repeated addition.",
       "category": "mathematical_calculation",
       "intent": "mathematical_calculation",
       "metadata": {
@@ -14064,8 +14066,8 @@
     },
     {
       "id": "synthetic_mathematical_calculation_40_1755891822",
-      "title": "Multiplication Problem: 13 × 10",
-      "content": "To multiply 13 × 10, think of it as adding 13 to itself 10 times. 13 × 10 = 130. Multiplication is repeated addition.",
+      "title": "Multiplication Problem: 13 \u00d7 10",
+      "content": "To multiply 13 \u00d7 10, think of it as adding 13 to itself 10 times. 13 \u00d7 10 = 130. Multiplication is repeated addition.",
       "category": "mathematical_calculation",
       "intent": "mathematical_calculation",
       "metadata": {
@@ -14114,8 +14116,8 @@
     },
     {
       "id": "synthetic_mathematical_calculation_42_1755891822",
-      "title": "Multiplication Problem: 12 × 10",
-      "content": "To multiply 12 × 10, think of it as adding 12 to itself 10 times. 12 × 10 = 120. Multiplication is repeated addition.",
+      "title": "Multiplication Problem: 12 \u00d7 10",
+      "content": "To multiply 12 \u00d7 10, think of it as adding 12 to itself 10 times. 12 \u00d7 10 = 120. Multiplication is repeated addition.",
       "category": "mathematical_calculation",
       "intent": "mathematical_calculation",
       "metadata": {
@@ -14139,8 +14141,8 @@
     },
     {
       "id": "synthetic_mathematical_calculation_43_1755891822",
-      "title": "Multiplication Problem: 13 × 4",
-      "content": "To multiply 13 × 4, think of it as adding 13 to itself 4 times. 13 × 4 = 52. Multiplication is repeated addition.",
+      "title": "Multiplication Problem: 13 \u00d7 4",
+      "content": "To multiply 13 \u00d7 4, think of it as adding 13 to itself 4 times. 13 \u00d7 4 = 52. Multiplication is repeated addition.",
       "category": "mathematical_calculation",
       "intent": "mathematical_calculation",
       "metadata": {
@@ -14192,7 +14194,7 @@
     {
       "id": "synthetic_code_debugging_45_1755891822",
       "title": "Java Performance Issue: slow loops",
-      "content": "Performance issue: slow loops in Java. This commonly occurs when O(n²) complexity. Optimization approach: use list comprehension. Monitor performance with profiling tools.",
+      "content": "Performance issue: slow loops in Java. This commonly occurs when O(n\u00b2) complexity. Optimization approach: use list comprehension. Monitor performance with profiling tools.",
       "category": "code_debugging",
       "intent": "code_debugging",
       "metadata": {
@@ -14207,7 +14209,7 @@
         "template_variables": {
           "language": "Java",
           "issue_type": "slow loops",
-          "cause": "O(n²) complexity",
+          "cause": "O(n\u00b2) complexity",
           "optimization": "use list comprehension"
         },
         "generated_at": "2025-08-22 20:43:42"
@@ -14218,7 +14220,7 @@
     {
       "id": "synthetic_code_debugging_46_1755891822",
       "title": "Python Performance Issue: memory leaks",
-      "content": "Performance issue: memory leaks in Python. This commonly occurs when O(n²) complexity. Optimization approach: implement garbage collection. Monitor performance with profiling tools.",
+      "content": "Performance issue: memory leaks in Python. This commonly occurs when O(n\u00b2) complexity. Optimization approach: implement garbage collection. Monitor performance with profiling tools.",
       "category": "code_debugging",
       "intent": "code_debugging",
       "metadata": {
@@ -14233,7 +14235,7 @@
         "template_variables": {
           "language": "Python",
           "issue_type": "memory leaks",
-          "cause": "O(n²) complexity",
+          "cause": "O(n\u00b2) complexity",
           "optimization": "implement garbage collection"
         },
         "generated_at": "2025-08-22 20:43:42"
@@ -14963,7 +14965,7 @@
     {
       "id": "synthetic_code_debugging_74_1755891822",
       "title": "Java Performance Issue: inefficient algorithms",
-      "content": "Performance issue: inefficient algorithms in Java. This commonly occurs when O(n²) complexity. Optimization approach: implement garbage collection. Monitor performance with profiling tools.",
+      "content": "Performance issue: inefficient algorithms in Java. This commonly occurs when O(n\u00b2) complexity. Optimization approach: implement garbage collection. Monitor performance with profiling tools.",
       "category": "code_debugging",
       "intent": "code_debugging",
       "metadata": {
@@ -14978,7 +14980,7 @@
         "template_variables": {
           "language": "Java",
           "issue_type": "inefficient algorithms",
-          "cause": "O(n²) complexity",
+          "cause": "O(n\u00b2) complexity",
           "optimization": "implement garbage collection"
         },
         "generated_at": "2025-08-22 20:43:42"
@@ -15123,7 +15125,7 @@
     {
       "id": "synthetic_code_debugging_80_1755891822",
       "title": "Java Performance Issue: slow loops",
-      "content": "Performance issue: slow loops in Java. This commonly occurs when O(n²) complexity. Optimization approach: optimize algorithm complexity. Monitor performance with profiling tools.",
+      "content": "Performance issue: slow loops in Java. This commonly occurs when O(n\u00b2) complexity. Optimization approach: optimize algorithm complexity. Monitor performance with profiling tools.",
       "category": "code_debugging",
       "intent": "code_debugging",
       "metadata": {
@@ -15138,7 +15140,7 @@
         "template_variables": {
           "language": "Java",
           "issue_type": "slow loops",
-          "cause": "O(n²) complexity",
+          "cause": "O(n\u00b2) complexity",
           "optimization": "optimize algorithm complexity"
         },
         "generated_at": "2025-08-22 20:43:42"
@@ -37346,6 +37348,1008 @@
       },
       "embedding": null,
       "created_at": "2025-08-22 20:43:53"
+    },
+    {
+      "id": "ai_ml_001",
+      "title": "What is Artificial Intelligence?",
+      "content": "Artificial Intelligence (AI) is the simulation of human intelligence processes by machines, especially computer systems. These processes include learning (acquiring information and rules for using it), reasoning (using rules to reach approximate or definite conclusions), and self-correction. AI powers virtual assistants, recommendation systems, autonomous vehicles, medical diagnosis, and many other applications in our daily lives.",
+      "category": "ai_ml_facts",
+      "intent": "explanation_request",
+      "metadata": {
+        "tags": [
+          "ai",
+          "definition",
+          "basics",
+          "introduction",
+          "fundamentals"
+        ],
+        "difficulty": "intermediate",
+        "synthetic": false
+      },
+      "embedding": null,
+      "created_at": "2025-11-04T21:34:30.125381"
+    },
+    {
+      "id": "ai_ml_002",
+      "title": "What is Machine Learning?",
+      "content": "Machine Learning (ML) is a subset of AI that enables systems to learn and improve from experience without being explicitly programmed. ML algorithms use statistical techniques to identify patterns in data and make predictions or decisions based on those patterns. Examples include email spam filters, image recognition systems, product recommendations, and language models like this assistant.",
+      "category": "ai_ml_facts",
+      "intent": "explanation_request",
+      "metadata": {
+        "tags": [
+          "ml",
+          "machine learning",
+          "learning",
+          "training",
+          "algorithms"
+        ],
+        "difficulty": "intermediate",
+        "synthetic": false
+      },
+      "embedding": null,
+      "created_at": "2025-11-04T21:34:30.125445"
+    },
+    {
+      "id": "ai_ml_003",
+      "title": "What are Neural Networks?",
+      "content": "Neural networks are computing systems inspired by the biological neural networks in animal brains. They consist of interconnected nodes (neurons) organized in layers: an input layer, one or more hidden layers, and an output layer. Each connection has a weight that adjusts as learning proceeds. Deep neural networks with many layers power modern AI breakthroughs in computer vision, natural language processing, and game playing.",
+      "category": "ai_ml_facts",
+      "intent": "explanation_request",
+      "metadata": {
+        "tags": [
+          "neural networks",
+          "deep learning",
+          "neurons",
+          "architecture",
+          "layers"
+        ],
+        "difficulty": "intermediate",
+        "synthetic": false
+      },
+      "embedding": null,
+      "created_at": "2025-11-04T21:34:30.125449"
+    },
+    {
+      "id": "ai_ml_004",
+      "title": "What is Natural Language Processing?",
+      "content": "Natural Language Processing (NLP) is the branch of AI that helps computers understand, interpret, and generate human language in a valuable way. NLP combines computational linguistics with statistical, machine learning, and deep learning models. Applications include chatbots, machine translation, sentiment analysis, text summarization, and question answering. This assistant uses NLP to understand your questions and generate helpful responses.",
+      "category": "ai_ml_facts",
+      "intent": "explanation_request",
+      "metadata": {
+        "tags": [
+          "nlp",
+          "language",
+          "text",
+          "processing",
+          "linguistics"
+        ],
+        "difficulty": "intermediate",
+        "synthetic": false
+      },
+      "embedding": null,
+      "created_at": "2025-11-04T21:34:30.125452"
+    },
+    {
+      "id": "ai_ml_005",
+      "title": "What is On-Device AI?",
+      "content": "On-device AI, also called edge AI, runs AI models directly on smartphones, tablets, or computers without sending data to the cloud. Benefits include: (1) Privacy - your data never leaves your device, (2) Speed - no network latency means faster responses, (3) Offline functionality - works without internet connection, and (4) Lower costs - no cloud computing fees. This assistant is 100% on-device for your privacy and security.",
+      "category": "ai_ml_facts",
+      "intent": "explanation_request",
+      "metadata": {
+        "tags": [
+          "on-device",
+          "edge ai",
+          "privacy",
+          "local",
+          "mobile ai",
+          "offline"
+        ],
+        "difficulty": "intermediate",
+        "synthetic": false
+      },
+      "embedding": null,
+      "created_at": "2025-11-04T21:34:30.125455"
+    },
+    {
+      "id": "ai_ml_006",
+      "title": "What is Supervised Learning?",
+      "content": "Supervised learning is a type of machine learning where the algorithm learns from labeled training data. Each training example consists of an input and the desired output (label). The algorithm learns to map inputs to outputs by finding patterns in the labeled examples. Common applications include image classification (cat vs dog), spam detection (spam vs not spam), and medical diagnosis (disease vs healthy).",
+      "category": "ai_ml_facts",
+      "intent": "explanation_request",
+      "metadata": {
+        "tags": [
+          "supervised learning",
+          "labeled data",
+          "classification",
+          "training"
+        ],
+        "difficulty": "intermediate",
+        "synthetic": false
+      },
+      "embedding": null,
+      "created_at": "2025-11-04T21:34:30.125458"
+    },
+    {
+      "id": "ai_ml_007",
+      "title": "What is Unsupervised Learning?",
+      "content": "Unsupervised learning is machine learning with unlabeled data. The algorithm tries to find hidden patterns or structures in the data without being told what to look for. Common techniques include clustering (grouping similar items together), dimensionality reduction (simplifying complex data), and anomaly detection (finding unusual patterns). Applications include customer segmentation, recommendation systems, and data compression.",
+      "category": "ai_ml_facts",
+      "intent": "explanation_request",
+      "metadata": {
+        "tags": [
+          "unsupervised learning",
+          "clustering",
+          "patterns",
+          "unlabeled data"
+        ],
+        "difficulty": "intermediate",
+        "synthetic": false
+      },
+      "embedding": null,
+      "created_at": "2025-11-04T21:34:30.125460"
+    },
+    {
+      "id": "ai_ml_008",
+      "title": "What are Transformers in AI?",
+      "content": "Transformers are a type of neural network architecture introduced in 2017 that revolutionized natural language processing. Unlike previous architectures, transformers use self-attention mechanisms to process entire sequences at once, making them highly parallel and efficient. They power modern language models like GPT, BERT, and this assistant. Transformers excel at understanding context and relationships between words in text, enabling breakthrough performance in translation, summarization, and generation tasks.",
+      "category": "ai_ml_facts",
+      "intent": "explanation_request",
+      "metadata": {
+        "tags": [
+          "transformers",
+          "attention",
+          "architecture",
+          "language models",
+          "bert",
+          "gpt"
+        ],
+        "difficulty": "intermediate",
+        "synthetic": false
+      },
+      "embedding": null,
+      "created_at": "2025-11-04T21:34:30.125463"
+    },
+    {
+      "id": "ai_ml_009",
+      "title": "What is Training vs Inference in AI?",
+      "content": "Training is the process of teaching an AI model by feeding it large amounts of data and adjusting its parameters to minimize errors. This happens once (or periodically) and requires significant computational resources. Inference is using the trained model to make predictions on new data - this is what happens when you interact with an AI assistant. Inference is much faster and requires less computing power, which is why on-device inference is possible on mobile phones.",
+      "category": "ai_ml_facts",
+      "intent": "explanation_request",
+      "metadata": {
+        "tags": [
+          "training",
+          "inference",
+          "model",
+          "deployment",
+          "prediction"
+        ],
+        "difficulty": "intermediate",
+        "synthetic": false
+      },
+      "embedding": null,
+      "created_at": "2025-11-04T21:34:30.125465"
+    },
+    {
+      "id": "ai_ml_010",
+      "title": "What is Model Quantization?",
+      "content": "Model quantization is a technique to reduce the size and computational requirements of AI models by representing weights and activations with fewer bits. For example, converting from 32-bit floating point (FP32) to 8-bit integers (INT8) or even 4-bit (INT4). This can reduce model size by 4-8x with minimal accuracy loss, making large models fit on mobile devices. This assistant uses quantized models to run efficiently on your phone.",
+      "category": "ai_ml_facts",
+      "intent": "explanation_request",
+      "metadata": {
+        "tags": [
+          "quantization",
+          "compression",
+          "optimization",
+          "mobile",
+          "efficiency"
+        ],
+        "difficulty": "intermediate",
+        "synthetic": false
+      },
+      "embedding": null,
+      "created_at": "2025-11-04T21:34:30.125468"
+    },
+    {
+      "id": "ai_ml_011",
+      "title": "What is Computer Vision?",
+      "content": "Computer Vision is a field of AI that trains computers to interpret and understand visual information from the world. It involves acquiring, processing, analyzing, and understanding digital images or videos. Applications include facial recognition, object detection, autonomous driving, medical image analysis, and augmented reality. Modern computer vision relies heavily on convolutional neural networks (CNNs) to recognize patterns in images.",
+      "category": "ai_ml_facts",
+      "intent": "explanation_request",
+      "metadata": {
+        "tags": [
+          "computer vision",
+          "image processing",
+          "cnn",
+          "recognition",
+          "detection"
+        ],
+        "difficulty": "intermediate",
+        "synthetic": false
+      },
+      "embedding": null,
+      "created_at": "2025-11-04T21:34:30.125470"
+    },
+    {
+      "id": "ai_ml_012",
+      "title": "What is Reinforcement Learning?",
+      "content": "Reinforcement Learning (RL) is a type of machine learning where an agent learns to make decisions by interacting with an environment. The agent receives rewards for good actions and penalties for bad ones, gradually learning the optimal strategy. RL powers game-playing AI (like AlphaGo), robotics, recommendation systems, and autonomous systems. Unlike supervised learning, RL learns from experience rather than labeled examples.",
+      "category": "ai_ml_facts",
+      "intent": "explanation_request",
+      "metadata": {
+        "tags": [
+          "reinforcement learning",
+          "rewards",
+          "agent",
+          "environment",
+          "decision making"
+        ],
+        "difficulty": "intermediate",
+        "synthetic": false
+      },
+      "embedding": null,
+      "created_at": "2025-11-04T21:34:30.125473"
+    },
+    {
+      "id": "ai_ml_013",
+      "title": "What are Large Language Models?",
+      "content": "Large Language Models (LLMs) are AI models with billions of parameters trained on massive amounts of text data. They can understand and generate human-like text, answer questions, write code, summarize documents, and perform many language tasks. Examples include GPT-4, Claude, and smaller models like this assistant. LLMs use transformer architecture and are trained to predict the next word in a sequence, which surprisingly enables them to develop broad language understanding and reasoning abilities.",
+      "category": "ai_ml_facts",
+      "intent": "explanation_request",
+      "metadata": {
+        "tags": [
+          "llm",
+          "language models",
+          "gpt",
+          "claude",
+          "text generation",
+          "ai models"
+        ],
+        "difficulty": "intermediate",
+        "synthetic": false
+      },
+      "embedding": null,
+      "created_at": "2025-11-04T21:34:30.125475"
+    },
+    {
+      "id": "ai_ml_014",
+      "title": "What is Transfer Learning?",
+      "content": "Transfer Learning is a technique where a model trained on one task is repurposed for a related task. Instead of training from scratch, you start with a pre-trained model and fine-tune it on your specific data. This saves time, computational resources, and often achieves better results with less data. For example, a model trained on millions of general images can be fine-tuned to recognize specific medical conditions with just thousands of medical images.",
+      "category": "ai_ml_facts",
+      "intent": "explanation_request",
+      "metadata": {
+        "tags": [
+          "transfer learning",
+          "fine-tuning",
+          "pre-training",
+          "adaptation"
+        ],
+        "difficulty": "intermediate",
+        "synthetic": false
+      },
+      "embedding": null,
+      "created_at": "2025-11-04T21:34:30.125479"
+    },
+    {
+      "id": "ai_ml_015",
+      "title": "What is AI Ethics?",
+      "content": "AI Ethics addresses the moral implications and societal impact of artificial intelligence. Key concerns include: (1) Bias and fairness - ensuring AI doesn't discriminate, (2) Privacy - protecting personal data, (3) Transparency - making AI decisions explainable, (4) Accountability - determining responsibility for AI actions, (5) Safety - preventing harmful AI behavior, and (6) Job displacement - addressing economic impacts. Responsible AI development considers these ethical dimensions from the start.",
+      "category": "ai_ml_facts",
+      "intent": "explanation_request",
+      "metadata": {
+        "tags": [
+          "ethics",
+          "bias",
+          "fairness",
+          "privacy",
+          "responsibility",
+          "safety"
+        ],
+        "difficulty": "intermediate",
+        "synthetic": false
+      },
+      "embedding": null,
+      "created_at": "2025-11-04T21:34:30.125481"
+    },
+    {
+      "id": "ai_ml_016",
+      "title": "What is Overfitting in Machine Learning?",
+      "content": "Overfitting occurs when a model learns the training data too well, including its noise and peculiarities, making it perform poorly on new, unseen data. It's like memorizing answers to practice questions instead of understanding the underlying concepts. Signs include high training accuracy but low test accuracy. Solutions include using more training data, regularization techniques, simpler models, cross-validation, and early stopping during training.",
+      "category": "ai_ml_facts",
+      "intent": "explanation_request",
+      "metadata": {
+        "tags": [
+          "overfitting",
+          "generalization",
+          "training",
+          "validation",
+          "regularization"
+        ],
+        "difficulty": "intermediate",
+        "synthetic": false
+      },
+      "embedding": null,
+      "created_at": "2025-11-04T21:34:30.125484"
+    },
+    {
+      "id": "ai_ml_017",
+      "title": "What are Embeddings?",
+      "content": "Embeddings are dense vector representations of data (like words, sentences, or images) in a continuous space where similar items are close together. For text, word embeddings like Word2Vec or sentence embeddings capture semantic meaning - for example, 'king' and 'queen' would have similar vectors. This assistant uses embeddings to understand the meaning of your questions and find relevant information from its knowledge base, enabling semantic search rather than simple keyword matching.",
+      "category": "ai_ml_facts",
+      "intent": "explanation_request",
+      "metadata": {
+        "tags": [
+          "embeddings",
+          "vectors",
+          "semantic",
+          "representation",
+          "word2vec"
+        ],
+        "difficulty": "intermediate",
+        "synthetic": false
+      },
+      "embedding": null,
+      "created_at": "2025-11-04T21:34:30.125487"
+    },
+    {
+      "id": "ai_ml_018",
+      "title": "What is Retrieval-Augmented Generation?",
+      "content": "Retrieval-Augmented Generation (RAG) is a technique that combines information retrieval with text generation. When you ask a question, the system first searches a knowledge base for relevant information, then uses that information to generate a more accurate and grounded response. This reduces hallucinations (making up facts) and allows AI to access up-to-date or specialized information beyond its training data. This assistant uses RAG to provide more accurate answers based on its knowledge base.",
+      "category": "ai_ml_facts",
+      "intent": "explanation_request",
+      "metadata": {
+        "tags": [
+          "rag",
+          "retrieval",
+          "generation",
+          "knowledge base",
+          "grounding"
+        ],
+        "difficulty": "intermediate",
+        "synthetic": false
+      },
+      "embedding": null,
+      "created_at": "2025-11-04T21:34:30.125490"
+    },
+    {
+      "id": "ai_ml_019",
+      "title": "What is Prompt Engineering?",
+      "content": "Prompt Engineering is the art and science of crafting effective inputs (prompts) to get desired outputs from AI language models. Good prompts are clear, specific, and provide context. Techniques include few-shot learning (showing examples), chain-of-thought prompting (asking for step-by-step reasoning), and role prompting (asking the AI to take on a specific persona). Well-engineered prompts can dramatically improve AI performance without changing the underlying model.",
+      "category": "ai_ml_facts",
+      "intent": "explanation_request",
+      "metadata": {
+        "tags": [
+          "prompt engineering",
+          "prompting",
+          "instructions",
+          "interaction"
+        ],
+        "difficulty": "intermediate",
+        "synthetic": false
+      },
+      "embedding": null,
+      "created_at": "2025-11-04T21:34:30.125493"
+    },
+    {
+      "id": "ai_ml_020",
+      "title": "What are AI Model Parameters?",
+      "content": "Parameters are the learned values in a neural network that the model adjusts during training. They include weights (connection strengths between neurons) and biases (offset values). The number of parameters roughly indicates model capacity - more parameters can capture more complex patterns but require more memory and computation. For example, GPT-3 has 175 billion parameters, while this assistant uses a much smaller model (under 1 billion parameters) optimized to run efficiently on your device.",
+      "category": "ai_ml_facts",
+      "intent": "explanation_request",
+      "metadata": {
+        "tags": [
+          "parameters",
+          "weights",
+          "model size",
+          "capacity",
+          "training"
+        ],
+        "difficulty": "intermediate",
+        "synthetic": false
+      },
+      "embedding": null,
+      "created_at": "2025-11-04T21:34:30.125495"
+    },
+    {
+      "id": "ai_ml_021",
+      "title": "What is the difference between AI, ML, and Deep Learning?",
+      "content": "AI (Artificial Intelligence) is the broadest concept - any technique enabling computers to mimic human intelligence. ML (Machine Learning) is a subset of AI focused on learning from data without explicit programming. Deep Learning is a subset of ML using neural networks with multiple layers (hence 'deep'). Think of them as nested concepts: Deep Learning \u2282 Machine Learning \u2282 Artificial Intelligence. For example, rule-based expert systems are AI but not ML, decision trees are ML but not deep learning, and transformers are deep learning.",
+      "category": "ai_ml_facts",
+      "intent": "explanation_request",
+      "metadata": {
+        "tags": [
+          "ai",
+          "ml",
+          "deep learning",
+          "differences",
+          "hierarchy",
+          "concepts"
+        ],
+        "difficulty": "intermediate",
+        "synthetic": false
+      },
+      "embedding": null,
+      "created_at": "2025-11-04T21:34:30.125498"
+    },
+    {
+      "id": "ai_ml_022",
+      "title": "What is AI Hallucination?",
+      "content": "AI hallucination occurs when language models generate false or nonsensical information presented as fact. This happens because models are trained to predict plausible-sounding text, not necessarily accurate text. They can confidently state incorrect facts, fabricate citations, or make up information. Hallucinations are reduced by: (1) using retrieval-augmented generation (RAG) to ground responses in real data, (2) smaller, more focused models, (3) careful prompt engineering, and (4) user awareness and fact-checking.",
+      "category": "ai_ml_facts",
+      "intent": "explanation_request",
+      "metadata": {
+        "tags": [
+          "hallucination",
+          "accuracy",
+          "reliability",
+          "limitations",
+          "grounding"
+        ],
+        "difficulty": "intermediate",
+        "synthetic": false
+      },
+      "embedding": null,
+      "created_at": "2025-11-04T21:34:30.125502"
+    },
+    {
+      "id": "ai_ml_023",
+      "title": "What is Model Context Window?",
+      "content": "A context window is the maximum amount of text (measured in tokens) that a language model can process at once. It includes both your input and the model's response. For example, a 2048-token context window might allow ~1500 words of conversation history. Larger context windows enable longer conversations and processing of bigger documents, but require more memory and computation. Modern models range from 2K tokens to 256K+ tokens. This assistant adapts its context window based on your device's available memory.",
+      "category": "ai_ml_facts",
+      "intent": "explanation_request",
+      "metadata": {
+        "tags": [
+          "context window",
+          "tokens",
+          "memory",
+          "conversation",
+          "length"
+        ],
+        "difficulty": "intermediate",
+        "synthetic": false
+      },
+      "embedding": null,
+      "created_at": "2025-11-04T21:34:30.125505"
+    },
+    {
+      "id": "ai_ml_024",
+      "title": "What is Few-Shot Learning?",
+      "content": "Few-shot learning enables AI models to learn new tasks from just a few examples, mimicking human learning ability. Instead of requiring thousands of labeled examples, few-shot models can adapt with 1-10 examples. This is especially useful in language models - you can provide a few examples of a task in your prompt, and the model will understand and perform similar tasks. For instance, showing 3 examples of translation can enable the model to translate new sentences.",
+      "category": "ai_ml_facts",
+      "intent": "explanation_request",
+      "metadata": {
+        "tags": [
+          "few-shot",
+          "learning",
+          "examples",
+          "adaptation",
+          "transfer"
+        ],
+        "difficulty": "intermediate",
+        "synthetic": false
+      },
+      "embedding": null,
+      "created_at": "2025-11-04T21:34:30.125507"
+    },
+    {
+      "id": "ai_ml_025",
+      "title": "What is AI Model Fine-Tuning?",
+      "content": "Fine-tuning is the process of taking a pre-trained AI model and further training it on a specific dataset or task. This adapts the general model to perform better on your particular use case. For example, a general language model can be fine-tuned on medical texts to become a medical assistant, or on code to become a programming helper. Fine-tuning is faster and requires less data than training from scratch, and often produces better results for specialized tasks.",
+      "category": "ai_ml_facts",
+      "intent": "explanation_request",
+      "metadata": {
+        "tags": [
+          "fine-tuning",
+          "adaptation",
+          "specialization",
+          "training",
+          "customization"
+        ],
+        "difficulty": "intermediate",
+        "synthetic": false
+      },
+      "embedding": null,
+      "created_at": "2025-11-04T21:34:30.125510"
+    },
+    {
+      "id": "science_001",
+      "title": "What is quantum entanglement?",
+      "content": "Quantum entanglement is a phenomenon where two or more particles become correlated in such a way that the state of one particle instantaneously affects the state of another, regardless of distance. Einstein called it 'spooky action at a distance.' This doesn't violate relativity because no information is transmitted faster than light. Entanglement is fundamental to quantum computing and quantum cryptography.",
+      "category": "educational_wisdom",
+      "intent": "educational_tutoring",
+      "metadata": {
+        "tags": [
+          "quantum",
+          "physics",
+          "entanglement",
+          "science",
+          "advanced"
+        ],
+        "difficulty": "beginner",
+        "synthetic": false
+      },
+      "embedding": null,
+      "created_at": "2025-11-04T21:34:30.126041"
+    },
+    {
+      "id": "science_002",
+      "title": "How does photosynthesis work?",
+      "content": "Photosynthesis is the process plants use to convert light energy into chemical energy. It occurs in two stages: (1) Light reactions capture sunlight in chloroplasts and split water molecules, releasing oxygen. (2) Calvin cycle uses the energy to convert CO2 into glucose. The overall equation is: 6CO2 + 6H2O + light \u2192 C6H12O6 + 6O2. This process produces the oxygen we breathe and forms the base of most food chains.",
+      "category": "educational_wisdom",
+      "intent": "educational_tutoring",
+      "metadata": {
+        "tags": [
+          "biology",
+          "plants",
+          "photosynthesis",
+          "energy",
+          "ecology"
+        ],
+        "difficulty": "beginner",
+        "synthetic": false
+      },
+      "embedding": null,
+      "created_at": "2025-11-04T21:34:30.126050"
+    },
+    {
+      "id": "science_003",
+      "title": "What are chemical bonds and why do they form?",
+      "content": "Chemical bonds form when atoms share or transfer electrons to achieve stable electron configurations. The three main types are: (1) Covalent bonds - atoms share electrons (like in water H2O). (2) Ionic bonds - atoms transfer electrons (like in salt NaCl). (3) Metallic bonds - electrons move freely between atoms (in metals). Bonds form because atoms with full outer electron shells are more stable, following the octet rule.",
+      "category": "educational_wisdom",
+      "intent": "educational_tutoring",
+      "metadata": {
+        "tags": [
+          "chemistry",
+          "bonds",
+          "atoms",
+          "electrons",
+          "molecules"
+        ],
+        "difficulty": "beginner",
+        "synthetic": false
+      },
+      "embedding": null,
+      "created_at": "2025-11-04T21:34:30.126055"
+    },
+    {
+      "id": "science_004",
+      "title": "What is a black hole?",
+      "content": "A black hole is a region of spacetime where gravity is so strong that nothing, not even light, can escape. They form when massive stars collapse after dying. The boundary is called the event horizon - once you cross it, you cannot return. At the center is the singularity, a point of infinite density. Black holes come in sizes from stellar mass (3-100 solar masses) to supermassive (millions to billions of solar masses) found at galaxy centers.",
+      "category": "educational_wisdom",
+      "intent": "educational_tutoring",
+      "metadata": {
+        "tags": [
+          "astronomy",
+          "black holes",
+          "gravity",
+          "space",
+          "physics"
+        ],
+        "difficulty": "beginner",
+        "synthetic": false
+      },
+      "embedding": null,
+      "created_at": "2025-11-04T21:34:30.126058"
+    },
+    {
+      "id": "science_005",
+      "title": "How does the brain form memories?",
+      "content": "Memory formation involves three stages: (1) Encoding - sensory information is processed. (2) Consolidation - memories are strengthened through repeated neural firing patterns. (3) Retrieval - accessing stored information. Long-term memories involve physical changes in synapses (connections between neurons) through a process called long-term potentiation. The hippocampus plays a crucial role in converting short-term memories to long-term storage.",
+      "category": "educational_wisdom",
+      "intent": "educational_tutoring",
+      "metadata": {
+        "tags": [
+          "neuroscience",
+          "memory",
+          "brain",
+          "learning",
+          "cognition"
+        ],
+        "difficulty": "beginner",
+        "synthetic": false
+      },
+      "embedding": null,
+      "created_at": "2025-11-04T21:34:30.126062"
+    },
+    {
+      "id": "wisdom_001",
+      "title": "What is stoic philosophy and how can it help in daily life?",
+      "content": "Stoicism teaches that we should focus only on what we can control - our thoughts, actions, and responses - while accepting what we cannot control. Marcus Aurelius wrote: 'You have power over your mind, not outside events.' Key practices include: (1) Negative visualization - imagining loss to appreciate what you have. (2) The dichotomy of control - distinguishing controllable from uncontrollable. (3) Voluntary discomfort - practicing resilience. This philosophy helps reduce anxiety and increase resilience.",
+      "category": "educational_wisdom",
+      "intent": "educational_tutoring",
+      "metadata": {
+        "tags": [
+          "stoicism",
+          "philosophy",
+          "wisdom",
+          "resilience",
+          "mindfulness"
+        ],
+        "difficulty": "beginner",
+        "synthetic": false
+      },
+      "embedding": null,
+      "created_at": "2025-11-04T21:34:30.126066"
+    },
+    {
+      "id": "wisdom_002",
+      "title": "What is the concept of Wu Wei in Taoism?",
+      "content": "Wu Wei (\u7121\u70ba) means 'effortless action' or 'non-forcing.' It's not about doing nothing, but acting in harmony with the natural flow of things. Like water flowing around obstacles, wu wei teaches us to work with circumstances rather than against them. The Tao Te Ching says: 'The sage does not try to be great and therefore is great.' This principle applies to problem-solving, relationships, and personal growth - finding the path of least resistance while still moving forward.",
+      "category": "educational_wisdom",
+      "intent": "educational_tutoring",
+      "metadata": {
+        "tags": [
+          "taoism",
+          "wu wei",
+          "eastern philosophy",
+          "harmony",
+          "flow"
+        ],
+        "difficulty": "beginner",
+        "synthetic": false
+      },
+      "embedding": null,
+      "created_at": "2025-11-04T21:34:30.126069"
+    },
+    {
+      "id": "wisdom_003",
+      "title": "What is the difference between ethics and morality?",
+      "content": "While often used interchangeably, ethics typically refers to external systems of rules and principles (like professional codes of conduct), while morality is personal, internal beliefs about right and wrong. Ethics are often codified and enforced by groups or professions. Morality is shaped by culture, religion, and personal experience. For example, medical ethics are standardized rules, while a doctor's personal moral beliefs about end-of-life care might vary.",
+      "category": "educational_wisdom",
+      "intent": "educational_tutoring",
+      "metadata": {
+        "tags": [
+          "ethics",
+          "morality",
+          "philosophy",
+          "values",
+          "principles"
+        ],
+        "difficulty": "beginner",
+        "synthetic": false
+      },
+      "embedding": null,
+      "created_at": "2025-11-04T21:34:30.126072"
+    },
+    {
+      "id": "wisdom_004",
+      "title": "What are cognitive biases and why should we be aware of them?",
+      "content": "Cognitive biases are systematic patterns of deviation from rational judgment. Common ones include: (1) Confirmation bias - seeking information that confirms existing beliefs. (2) Dunning-Kruger effect - overestimating competence in areas where you lack expertise. (3) Anchoring bias - over-relying on first information received. (4) Availability heuristic - overestimating likelihood of events you can easily recall. Awareness helps us make better decisions by questioning our automatic thinking.",
+      "category": "educational_wisdom",
+      "intent": "educational_tutoring",
+      "metadata": {
+        "tags": [
+          "cognitive bias",
+          "critical thinking",
+          "psychology",
+          "decision making",
+          "rationality"
+        ],
+        "difficulty": "beginner",
+        "synthetic": false
+      },
+      "embedding": null,
+      "created_at": "2025-11-04T21:34:30.126075"
+    },
+    {
+      "id": "wisdom_005",
+      "title": "What did Sartre mean by 'existence precedes essence'?",
+      "content": "Sartre's famous phrase means that humans first exist, then define themselves through choices and actions. Unlike a chair (designed with purpose), humans have no predetermined nature or purpose. We are 'condemned to be free' - responsible for creating our own meaning. This brings both anxiety (from radical freedom) and empowerment (you can become who you choose). Your essence (who you are) emerges from your existence (what you do), not the reverse.",
+      "category": "educational_wisdom",
+      "intent": "educational_tutoring",
+      "metadata": {
+        "tags": [
+          "existentialism",
+          "sartre",
+          "philosophy",
+          "freedom",
+          "meaning"
+        ],
+        "difficulty": "beginner",
+        "synthetic": false
+      },
+      "embedding": null,
+      "created_at": "2025-11-04T21:34:30.126078"
+    },
+    {
+      "id": "self_help_001",
+      "title": "What is the Pomodoro Technique and how does it improve focus?",
+      "content": "The Pomodoro Technique involves working in focused 25-minute intervals (pomodoros) with 5-minute breaks. After 4 pomodoros, take a longer 15-30 minute break. Benefits: (1) Reduces mental fatigue through regular breaks. (2) Creates urgency that improves concentration. (3) Makes large tasks less overwhelming. (4) Helps track how you spend time. The timer creates a commitment device - you're more likely to stay focused knowing a break is coming soon.",
+      "category": "educational_wisdom",
+      "intent": "educational_tutoring",
+      "metadata": {
+        "tags": [
+          "productivity",
+          "pomodoro",
+          "time management",
+          "focus",
+          "techniques"
+        ],
+        "difficulty": "beginner",
+        "synthetic": false
+      },
+      "embedding": null,
+      "created_at": "2025-11-04T21:34:30.126081"
+    },
+    {
+      "id": "self_help_002",
+      "title": "How long does it really take to form a new habit?",
+      "content": "The often-cited '21 days' is a myth. Research by Phillippa Lally found the average is 66 days, ranging from 18 to 254 days depending on complexity. Habit formation involves: (1) Cue - trigger that starts the behavior. (2) Routine - the behavior itself. (3) Reward - benefit you get. To build habits: start small (2 minutes), be consistent, use habit stacking (attach new habit to existing one), and focus on identity ('I am a runner' vs 'I want to run').",
+      "category": "educational_wisdom",
+      "intent": "educational_tutoring",
+      "metadata": {
+        "tags": [
+          "habits",
+          "behavior change",
+          "self improvement",
+          "psychology",
+          "consistency"
+        ],
+        "difficulty": "beginner",
+        "synthetic": false
+      },
+      "embedding": null,
+      "created_at": "2025-11-04T21:34:30.126084"
+    },
+    {
+      "id": "self_help_003",
+      "title": "What are the components of emotional intelligence?",
+      "content": "Daniel Goleman identified 5 components: (1) Self-awareness - recognizing your emotions and their impact. (2) Self-regulation - managing disruptive emotions and adapting to change. (3) Motivation - passion for work beyond money/status. (4) Empathy - understanding others' emotional makeup. (5) Social skills - managing relationships and building networks. High EQ predicts success better than IQ in many contexts. It can be developed through practice and reflection.",
+      "category": "educational_wisdom",
+      "intent": "educational_tutoring",
+      "metadata": {
+        "tags": [
+          "emotional intelligence",
+          "EQ",
+          "psychology",
+          "self awareness",
+          "empathy"
+        ],
+        "difficulty": "beginner",
+        "synthetic": false
+      },
+      "embedding": null,
+      "created_at": "2025-11-04T21:34:30.126087"
+    },
+    {
+      "id": "self_help_004",
+      "title": "What is mindfulness meditation and what are its benefits?",
+      "content": "Mindfulness is paying attention to the present moment without judgment. In meditation, you focus on breath or sensations, gently returning when mind wanders. Benefits backed by research: (1) Reduces stress and anxiety. (2) Improves focus and attention span. (3) Enhances emotional regulation. (4) Increases gray matter in brain regions for learning and memory. (5) Lowers blood pressure. Start with just 5 minutes daily. The practice is about noticing when you're distracted and coming back, not achieving perfect focus.",
+      "category": "educational_wisdom",
+      "intent": "educational_tutoring",
+      "metadata": {
+        "tags": [
+          "mindfulness",
+          "meditation",
+          "mental health",
+          "stress",
+          "wellbeing"
+        ],
+        "difficulty": "beginner",
+        "synthetic": false
+      },
+      "embedding": null,
+      "created_at": "2025-11-04T21:34:30.126090"
+    },
+    {
+      "id": "self_help_005",
+      "title": "What is the difference between growth and fixed mindset?",
+      "content": "Carol Dweck's research shows: Fixed mindset believes abilities are innate and unchangeable ('I'm not good at math'). Growth mindset believes abilities can be developed through effort ('I'm not good at math yet'). People with growth mindset: (1) Embrace challenges. (2) Persist through setbacks. (3) See effort as path to mastery. (4) Learn from criticism. (5) Find inspiration in others' success. To develop it: use 'yet,' focus on process over outcome, and reframe failures as learning opportunities.",
+      "category": "educational_wisdom",
+      "intent": "educational_tutoring",
+      "metadata": {
+        "tags": [
+          "growth mindset",
+          "learning",
+          "psychology",
+          "development",
+          "resilience"
+        ],
+        "difficulty": "beginner",
+        "synthetic": false
+      },
+      "embedding": null,
+      "created_at": "2025-11-04T21:34:30.126093"
+    },
+    {
+      "id": "storytelling_001",
+      "title": "What is the Hero's Journey story structure?",
+      "content": "Joseph Campbell's Hero's Journey is a universal story pattern found across cultures: (1) Ordinary World - hero's normal life. (2) Call to Adventure - problem or opportunity arises. (3) Refusal of Call - initial reluctance. (4) Meeting the Mentor - guidance received. (5) Crossing Threshold - commitment to journey. (6) Tests and Allies - challenges and companions. (7) Ordeal - major crisis. (8) Reward - achievement after ordeal. (9) Return - bringing wisdom home. Examples: Star Wars, Harry Potter, The Matrix.",
+      "category": "educational_wisdom",
+      "intent": "educational_tutoring",
+      "metadata": {
+        "tags": [
+          "storytelling",
+          "hero's journey",
+          "narrative",
+          "writing",
+          "mythology"
+        ],
+        "difficulty": "beginner",
+        "synthetic": false
+      },
+      "embedding": null,
+      "created_at": "2025-11-04T21:34:30.126096"
+    },
+    {
+      "id": "storytelling_002",
+      "title": "How do you create compelling characters in fiction?",
+      "content": "Compelling characters have: (1) Clear motivation - what they want and why. (2) Internal conflict - contradictions that create complexity. (3) Character arc - how they change through the story. (4) Unique voice - distinct way of speaking and thinking. (5) Flaws and vulnerabilities - perfection is boring. (6) Backstory - past experiences that shape them. Show character through actions and choices, not just description. The best characters want something, fear something, and hide something.",
+      "category": "educational_wisdom",
+      "intent": "educational_tutoring",
+      "metadata": {
+        "tags": [
+          "creative writing",
+          "characters",
+          "fiction",
+          "storytelling",
+          "narrative"
+        ],
+        "difficulty": "beginner",
+        "synthetic": false
+      },
+      "embedding": null,
+      "created_at": "2025-11-04T21:34:30.126099"
+    },
+    {
+      "id": "storytelling_003",
+      "title": "What is Chekhov's Gun principle in storytelling?",
+      "content": "Chekhov's Gun states: 'If you show a gun in Act 1, it must be fired by Act 3.' More broadly, every element in a story should serve a purpose. Don't introduce details that don't matter. This creates: (1) Tighter, more focused narratives. (2) Satisfying payoffs for readers. (3) Economy of storytelling. However, some irrelevant details can add realism - balance is key. The principle teaches intentionality: include things for a reason, not just decoration.",
+      "category": "educational_wisdom",
+      "intent": "educational_tutoring",
+      "metadata": {
+        "tags": [
+          "storytelling",
+          "plot",
+          "chekhov's gun",
+          "writing",
+          "technique"
+        ],
+        "difficulty": "beginner",
+        "synthetic": false
+      },
+      "embedding": null,
+      "created_at": "2025-11-04T21:34:30.126103"
+    },
+    {
+      "id": "storytelling_004",
+      "title": "How do you write realistic and engaging dialogue?",
+      "content": "Good dialogue: (1) Reveals character - each person should sound distinct. (2) Advances plot - conversations should move story forward. (3) Creates conflict - tension is more interesting than agreement. (4) Sounds natural - read aloud to test flow. (5) Uses subtext - what's NOT said is often important. Avoid: info dumps, perfect grammar (people speak casually), and having everyone sound the same. Dialogue tags: 'said' is usually best - readers skip over it. Focus on what characters say, not how they say it.",
+      "category": "educational_wisdom",
+      "intent": "educational_tutoring",
+      "metadata": {
+        "tags": [
+          "dialogue",
+          "writing",
+          "storytelling",
+          "characters",
+          "technique"
+        ],
+        "difficulty": "beginner",
+        "synthetic": false
+      },
+      "embedding": null,
+      "created_at": "2025-11-04T21:34:30.126106"
+    },
+    {
+      "id": "storytelling_005",
+      "title": "What are key elements of effective world-building in fiction?",
+      "content": "Great world-building includes: (1) Consistent rules - magic/tech systems should be logical. (2) History and culture - societies have depth beyond the plot. (3) Geography and environment - setting affects story and characters. (4) Social structures - politics, economics, power dynamics. (5) Show, don't dump - reveal world through story, not exposition. Iceberg principle: know 90% of your world but show only 10%. The best worlds feel lived-in and affect characters' choices. Balance uniqueness with familiarity so readers can relate.",
+      "category": "educational_wisdom",
+      "intent": "educational_tutoring",
+      "metadata": {
+        "tags": [
+          "world building",
+          "fantasy",
+          "sci-fi",
+          "writing",
+          "storytelling"
+        ],
+        "difficulty": "beginner",
+        "synthetic": false
+      },
+      "embedding": null,
+      "created_at": "2025-11-04T21:34:30.126109"
+    },
+    {
+      "id": "education_001",
+      "title": "What is spaced repetition and why is it effective for learning?",
+      "content": "Spaced repetition involves reviewing material at increasing intervals: 1 day, 3 days, 1 week, 2 weeks, 1 month, etc. It exploits the spacing effect - we remember better when study sessions are spread out. Each time you successfully recall, the next interval lengthens. Benefits: (1) Combats forgetting curve. (2) More efficient than cramming. (3) Builds long-term retention. (4) Identifies weak areas. Apps like Anki use this. The difficulty of retrieval strengthens memory - struggling to remember helps learning.",
+      "category": "educational_wisdom",
+      "intent": "educational_tutoring",
+      "metadata": {
+        "tags": [
+          "learning",
+          "spaced repetition",
+          "memory",
+          "study techniques",
+          "education"
+        ],
+        "difficulty": "beginner",
+        "synthetic": false
+      },
+      "embedding": null,
+      "created_at": "2025-11-04T21:34:30.126112"
+    },
+    {
+      "id": "education_002",
+      "title": "What is the Socratic method of teaching?",
+      "content": "The Socratic method teaches through asking questions rather than giving answers. Socrates would: (1) Ask for clarification of beliefs. (2) Challenge assumptions with counter-examples. (3) Examine evidence and reasoning. (4) Question implications and consequences. (5) Lead students to realize contradictions in their thinking. This develops critical thinking because students arrive at understanding themselves rather than memorizing. It works best for conceptual subjects and developing analytical skills, less so for factual knowledge.",
+      "category": "educational_wisdom",
+      "intent": "educational_tutoring",
+      "metadata": {
+        "tags": [
+          "socratic method",
+          "teaching",
+          "critical thinking",
+          "education",
+          "philosophy"
+        ],
+        "difficulty": "beginner",
+        "synthetic": false
+      },
+      "embedding": null,
+      "created_at": "2025-11-04T21:34:30.126116"
+    },
+    {
+      "id": "education_003",
+      "title": "What is meta-learning or learning how to learn?",
+      "content": "Meta-learning is understanding and optimizing how you learn. Key strategies: (1) Identify your learning style (but don't limit yourself). (2) Use active recall - test yourself instead of re-reading. (3) Employ the Feynman Technique - explain concepts simply. (4) Practice deliberate practice - focused improvement on weak areas. (5) Understand chunking - breaking complex info into manageable pieces. (6) Get enough sleep - memory consolidation happens during sleep. Meta-cognition (thinking about thinking) is crucial for lifelong learning.",
+      "category": "educational_wisdom",
+      "intent": "educational_tutoring",
+      "metadata": {
+        "tags": [
+          "meta learning",
+          "learning strategies",
+          "education",
+          "study skills",
+          "cognition"
+        ],
+        "difficulty": "beginner",
+        "synthetic": false
+      },
+      "embedding": null,
+      "created_at": "2025-11-04T21:34:30.126121"
+    },
+    {
+      "id": "education_004",
+      "title": "What is the Memory Palace technique?",
+      "content": "Memory Palace (Method of Loci) uses spatial memory to remember information. Steps: (1) Choose a familiar location (your house). (2) Create a mental route through it. (3) Place vivid, unusual mental images along the route representing what you need to remember. (4) To recall, mentally walk the route and 'see' the images. This works because: (1) Spatial memory is strong in humans. (2) Unusual images are memorable. (3) Organization aids retrieval. Ancient orators used this to memorize hours-long speeches without notes.",
+      "category": "educational_wisdom",
+      "intent": "educational_tutoring",
+      "metadata": {
+        "tags": [
+          "memory palace",
+          "memory techniques",
+          "learning",
+          "mnemonics",
+          "education"
+        ],
+        "difficulty": "beginner",
+        "synthetic": false
+      },
+      "embedding": null,
+      "created_at": "2025-11-04T21:34:30.126124"
+    },
+    {
+      "id": "education_005",
+      "title": "What is intrinsic versus extrinsic motivation in learning?",
+      "content": "Intrinsic motivation comes from within - you learn because it's interesting, enjoyable, or meaningful. Extrinsic motivation comes from external rewards - grades, money, recognition. Research shows: (1) Intrinsic motivation leads to deeper learning and persistence. (2) Extrinsic rewards can undermine intrinsic interest (overjustification effect). (3) Autonomy, mastery, and purpose (Dan Pink) drive intrinsic motivation. To foster it: (1) Connect learning to personal goals. (2) Provide choice and autonomy. (3) Focus on progress and growth. (4) Make learning relevant.",
+      "category": "educational_wisdom",
+      "intent": "educational_tutoring",
+      "metadata": {
+        "tags": [
+          "motivation",
+          "learning",
+          "intrinsic",
+          "extrinsic",
+          "education",
+          "psychology"
+        ],
+        "difficulty": "beginner",
+        "synthetic": false
+      },
+      "embedding": null,
+      "created_at": "2025-11-04T21:34:30.126127"
     }
   ]
 }

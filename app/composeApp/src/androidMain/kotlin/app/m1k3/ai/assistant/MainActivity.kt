@@ -74,34 +74,43 @@ class MainActivity : ComponentActivity() {
                 // Check if knowledge already imported
                 val existingCount = database!!.triviaFactQueries.getTotalFactCount().executeAsOne()
 
-                // TEMPORARY: Force re-import to get all 20 categories
-                val forceReimport = existingCount > 0 && existingCount < 1300
+                // TEMPORARY: Force re-import to load consolidated KB (1,391 docs) + M1K3 system KB (10 docs)
+                val forceReimport = existingCount > 0 && existingCount < 1400
 
                 if (forceReimport) {
-                    println("🔄 [M1K3] Force re-importing knowledge base (current: $existingCount docs, expected: 1,341)")
+                    println("🔄 [M1K3] Force re-importing knowledge base (current: $existingCount docs, expected: 1,401)")
                     database!!.triviaFactQueries.deleteAllFacts()
                 }
 
                 if (existingCount == 0L || forceReimport) {
-                    println("📚 [M1K3] Importing comprehensive knowledge base (1,341+ documents)...")
+                    println("📚 [M1K3] Importing knowledge bases (1,401 documents from 2 sources)...")
 
-                    // Load comprehensive knowledge base from Compose Resources
-                    // Path: composeResources/myapplication.composeapp.generated.resources/files/comprehensive_knowledge_base.json
-                    val kbJson = assets.open("composeResources/myapplication.composeapp.generated.resources/files/comprehensive_knowledge_base.json").use { input ->
+                    // 1. Load comprehensive knowledge base (1,391 docs)
+                    val comprehensiveJson = assets.open("composeResources/myapplication.composeapp.generated.resources/files/comprehensive_knowledge_base.json").use { input ->
                         BufferedReader(InputStreamReader(input)).use { reader ->
                             reader.readText()
                         }
                     }
 
-                    // Import knowledge
-                    val result = importer.importKnowledgeBase(kbJson)
-                    println(result.toString())
+                    val comprehensiveResult = importer.importKnowledgeBase(comprehensiveJson)
+                    println("📚 Comprehensive KB: ${comprehensiveResult.imported} documents imported")
 
-                    // Verify import
+                    // 2. Load M1K3 system knowledge base (10 docs)
+                    val systemJson = assets.open("composeResources/myapplication.composeapp.generated.resources/files/m1k3_system_knowledge.json").use { input ->
+                        BufferedReader(InputStreamReader(input)).use { reader ->
+                            reader.readText()
+                        }
+                    }
+
+                    val systemResult = importer.importKnowledgeBase(systemJson)
+                    println("🤖 M1K3 System KB: ${systemResult.imported} documents imported")
+
+                    // Verify combined import
                     val verification = importer.verifyImport()
                     println(verification.toString())
 
-                    knowledgeImportStatus = "✅ Knowledge ready: ${result.imported} documents"
+                    val totalImported = comprehensiveResult.imported + systemResult.imported
+                    knowledgeImportStatus = "✅ Knowledge ready: $totalImported documents (${comprehensiveResult.imported} comprehensive + ${systemResult.imported} system)"
                 } else {
                     println("📚 [M1K3] Knowledge base already loaded ($existingCount documents)")
                     knowledgeImportStatus = "✅ Knowledge ready: $existingCount documents"

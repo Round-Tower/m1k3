@@ -133,15 +133,17 @@ fun ChatScreen(
             val categories = database.triviaFactQueries.getAllCategories().executeAsList()
 
             // Group categories by domain for cleaner presentation
-            val technical = categories.filter { it in listOf("mathematical_calculation", "code_debugging", "explanation_request", "casual_conversation", "creative_writing") }
-            val educational = categories.filter { it in listOf("historical_facts", "science_facts", "geography_facts", "movies_tv", "music_culture", "sports_recreation", "food_culture", "technology_trends", "lifestyle_wellness") }
+            val technical = categories.filter { it in listOf("mathematical_calculation", "code_debugging", "explanation_request", "casual_conversation", "creative_writing", "ai_ml_facts") }
+            val educational = categories.filter { it in listOf("historical_facts", "science_facts", "geography_facts", "movies_tv", "music_culture", "sports_recreation", "food_culture", "technology_trends", "lifestyle_wellness", "educational_wisdom") }
             val expertise = categories.filter { it in listOf("device_technology", "wifi_networking", "security_privacy", "diagnostic_troubleshooting", "educational_tutoring", "trivia_facts") }
+            val system = categories.filter { it in listOf("m1k3_capabilities", "m1k3_technical") }
 
             buildString {
                 append("I have access to $totalFacts facts across ${categories.size} categories:\n")
                 if (technical.isNotEmpty()) append("• Technical: ${technical.joinToString(", ") { it.replace("_", " ").capitalize() }}\n")
                 if (educational.isNotEmpty()) append("• Educational: ${educational.joinToString(", ") { it.replace("_", " ").capitalize() }}\n")
                 if (expertise.isNotEmpty()) append("• Expertise: ${expertise.joinToString(", ") { it.replace("_", " ").capitalize() }}\n")
+                if (system.isNotEmpty()) append("• System Knowledge: ${system.joinToString(", ") { it.replace("_", " ").capitalize() }}\n")
                 append("\nUse this knowledge to provide informed, helpful responses.")
             }
         } catch (e: Exception) {
