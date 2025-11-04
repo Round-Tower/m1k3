@@ -40,8 +40,7 @@ class Gemma3Exporter:
     Exports Gemma 3:270m to ONNX format with mobile optimizations.
     """
 
-    MODEL_ID = "google/gemma-2-2b-it"  # Note: Using Gemma 2 as Gemma 3 not yet released
-    # TODO: Update to "google/gemma-3-270m-it" when available
+    MODEL_ID = "google/gemma-3-270m-it"  # ✅ Real Gemma 3:270m (270M params)
 
     def __init__(self, output_dir: str = "models/gemma3-270m-onnx"):
         self.output_dir = Path(output_dir)
