@@ -74,7 +74,7 @@ fun Phase2DebugScreenUI(
                 },
                 navigationIcon = {
                     IconButton(onClick = {
-                        haptics.performHapticFeedback(HapticFeedbackType.CLICK)
+                        haptics.performHapticFeedback(HapticFeedbackType.LIGHT)
                         onBackClick()
                     }) {
                         Icon(
@@ -85,7 +85,7 @@ fun Phase2DebugScreenUI(
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaColors.Surface
+                    containerColor = MaColors.BgPrimary
                 )
             )
         }
@@ -94,15 +94,15 @@ fun Phase2DebugScreenUI(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
-                .padding(MaSpacing.medium)
+                .padding(MaSpacing.md)
                 .verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(MaSpacing.medium)
+            verticalArrangement = Arrangement.spacedBy(MaSpacing.md)
         ) {
             // Quick Actions Card
             MaCard {
                 Column(
-                    modifier = Modifier.padding(MaSpacing.medium),
-                    verticalArrangement = Arrangement.spacedBy(MaSpacing.small)
+                    modifier = Modifier.padding(MaSpacing.md),
+                    verticalArrangement = Arrangement.spacedBy(MaSpacing.sm)
                 ) {
                     Text(
                         "Quick Actions",
@@ -113,7 +113,7 @@ fun Phase2DebugScreenUI(
 
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(MaSpacing.small)
+                        horizontalArrangement = Arrangement.spacedBy(MaSpacing.sm)
                     ) {
                         MaButtonPrimary(
                             text = if (isRunningTests) "Running..." else "Run All Tests",
@@ -154,8 +154,8 @@ fun Phase2DebugScreenUI(
             testResults?.let { results ->
                 MaCard {
                     Column(
-                        modifier = Modifier.padding(MaSpacing.medium),
-                        verticalArrangement = Arrangement.spacedBy(MaSpacing.small)
+                        modifier = Modifier.padding(MaSpacing.md),
+                        verticalArrangement = Arrangement.spacedBy(MaSpacing.sm)
                     ) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
@@ -182,12 +182,12 @@ fun Phase2DebugScreenUI(
                                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
                                     style = MaTypography.labelMedium,
                                     fontWeight = FontWeight.Bold,
-                                    color = MaColors.OnPrimary
+                                    color = MaColors.White
                                 )
                             }
                         }
 
-                        Divider(color = MaColors.Border, modifier = Modifier.padding(vertical = MaSpacing.small))
+                        Divider(color = MaColors.BorderLight, modifier = Modifier.padding(vertical = MaSpacing.sm))
 
                         results.tests.forEach { test ->
                             TestResultRow(test.name, test.passed, test.details)
@@ -200,8 +200,8 @@ fun Phase2DebugScreenUI(
             demoStats?.let { stats ->
                 MaCard {
                     Column(
-                        modifier = Modifier.padding(MaSpacing.medium),
-                        verticalArrangement = Arrangement.spacedBy(MaSpacing.small)
+                        modifier = Modifier.padding(MaSpacing.md),
+                        verticalArrangement = Arrangement.spacedBy(MaSpacing.sm)
                     ) {
                         Text(
                             "Demo Data Created",
@@ -210,13 +210,13 @@ fun Phase2DebugScreenUI(
                             color = MaColors.TextPrimary
                         )
 
-                        Divider(color = MaColors.Border, modifier = Modifier.padding(vertical = MaSpacing.small))
+                        Divider(color = MaColors.BorderLight, modifier = Modifier.padding(vertical = MaSpacing.sm))
 
                         StatRow("Conversations", "${stats.conversationsCreated}")
                         StatRow("Messages", "${stats.messagesCreated}")
                         StatRow("Tokens Processed", "${stats.tokensProcessed}")
 
-                        Spacer(modifier = Modifier.height(MaSpacing.small))
+                        Spacer(modifier = Modifier.height(MaSpacing.sm))
 
                         Text(
                             "Environmental Savings",
@@ -235,8 +235,8 @@ fun Phase2DebugScreenUI(
             // Feature Overview Card
             MaCard {
                 Column(
-                    modifier = Modifier.padding(MaSpacing.medium),
-                    verticalArrangement = Arrangement.spacedBy(MaSpacing.small)
+                    modifier = Modifier.padding(MaSpacing.md),
+                    verticalArrangement = Arrangement.spacedBy(MaSpacing.sm)
                 ) {
                     Text(
                         "Phase 2 Features",
@@ -245,7 +245,7 @@ fun Phase2DebugScreenUI(
                         color = MaColors.TextPrimary
                     )
 
-                    Divider(color = MaColors.Border, modifier = Modifier.padding(vertical = MaSpacing.small))
+                    Divider(color = MaColors.BorderLight, modifier = Modifier.padding(vertical = MaSpacing.sm))
 
                     FeatureRow("💬", "Conversation Management", "Create, update, delete conversations")
                     FeatureRow("🔍", "Search", "Keyword + semantic search (future)")
@@ -267,7 +267,7 @@ private fun TestResultRow(
     Row(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.Top,
-        horizontalArrangement = Arrangement.spacedBy(MaSpacing.small)
+        horizontalArrangement = Arrangement.spacedBy(MaSpacing.sm)
     ) {
         Text(
             text = if (passed) "✅" else "❌",
@@ -318,7 +318,7 @@ private fun FeatureRow(
     Row(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.Top,
-        horizontalArrangement = Arrangement.spacedBy(MaSpacing.small)
+        horizontalArrangement = Arrangement.spacedBy(MaSpacing.sm)
     ) {
         Text(
             text = icon,

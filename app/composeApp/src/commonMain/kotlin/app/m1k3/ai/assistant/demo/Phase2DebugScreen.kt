@@ -220,13 +220,9 @@ class Phase2DebugScreen(private val database: MaDatabase) {
 
             // Record metrics
             ecoMetricsRepo.recordMetrics(
-                projectId = projectId,
+                savings = savings,
                 sessionId = sessionId,
-                tokens = 1000,
-                waterMl = savings.waterMlSaved,
-                energyWh = savings.energyWhSaved,
-                co2G = savings.co2GSaved,
-                timestamp = now
+                projectId = projectId
             )
 
             // Get lifetime stats
@@ -235,14 +231,14 @@ class Phase2DebugScreen(private val database: MaDatabase) {
             // Verify
             val passed = lifetimeStats != null &&
                     lifetimeStats.totalTokens >= 1000 &&
-                    lifetimeStats.totalWaterMl >= savings.waterMlSaved &&
-                    lifetimeStats.totalEnergyWh >= savings.energyWhSaved
+                    lifetimeStats.totalWaterMl >= savings.waterSavedMl &&
+                    lifetimeStats.totalEnergyWh >= savings.energySavedWh
 
             TestResult(
                 name = "Eco Metrics",
                 passed = passed,
                 details = if (passed) {
-                    "✅ Recorded 1000 tokens, saved: ${savings.waterMlSaved}ml water, ${savings.energyWhSaved}Wh energy, ${savings.co2GSaved}g CO2"
+                    "✅ Recorded 1000 tokens, saved: ${savings.waterSavedMl}ml water, ${savings.energySavedWh}Wh energy, ${savings.co2PreventedG}g CO2"
                 } else {
                     "❌ Failed: lifetimeStats=$lifetimeStats"
                 }
@@ -349,22 +345,18 @@ class Phase2DebugScreen(private val database: MaDatabase) {
         // Record eco metrics
         val savings = EcoCalculator.calculateSavings(1500)
         ecoMetricsRepo.recordMetrics(
-            projectId = projectId,
+            savings = savings,
             sessionId = "demo_session",
-            tokens = 1500,
-            waterMl = savings.waterMlSaved,
-            energyWh = savings.energyWhSaved,
-            co2G = savings.co2GSaved,
-            timestamp = Clock.System.now().toEpochMilliseconds()
+            projectId = projectId
         )
 
         return DemoDataStats(
             conversationsCreated = 5,
             messagesCreated = 15,
             tokensProcessed = 1500,
-            waterSaved = savings.waterMlSaved,
-            energySaved = savings.energyWhSaved,
-            co2Saved = savings.co2GSaved
+            waterSaved = savings.waterSavedMl.toLong(),
+            energySaved = savings.energySavedWh.toLong(),
+            co2Saved = savings.co2PreventedG.toLong()
         )
     }
 }
