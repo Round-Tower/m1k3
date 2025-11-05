@@ -15,6 +15,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.navigation.NavType
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
+import app.m1k3.ai.assistant.navigation.BottomNavigationBar
+import app.m1k3.ai.assistant.navigation.Screen
 import app.m1k3.ai.assistant.ai.SmolLM2Engine
 import app.m1k3.ai.assistant.database.AndroidDatabaseFactory
 import app.m1k3.ai.assistant.database.DatabaseConfig
@@ -128,59 +135,114 @@ class MainActivity : ComponentActivity() {
         setContent {
             ProvideSharedEngine {
                 MaTheme {
-                    var showChat by remember { mutableStateOf(false) }
-                    var showDebug by remember { mutableStateOf(false) }
-                    var showHistory by remember { mutableStateOf(false) }
-                    var showEcoStats by remember { mutableStateOf(false) }
+                    val navController = rememberNavController()
 
-                Surface(
-                    modifier = Modifier.fillMaxSize(),
-                    color = MaterialTheme.colorScheme.background
-                ) {
-                    when {
-                        showDebug -> {
-                            AvatarDebugScreen(
-                                onBackClick = { showDebug = false }
-                            )
+                    Scaffold(
+                        bottomBar = {
+                            BottomNavigationBar(navController = navController)
                         }
-                        showHistory && database != null -> {
-                            HistoryScreen(
-                                database = database!!,
-                                projectId = "default",
-                                onBackClick = { showHistory = false },
-                                onConversationClick = { conversationId ->
-                                    // TODO: Navigate to conversation detail screen (Phase 3)
-                                    println("🔍 Navigate to conversation: $conversationId")
+                    ) { paddingValues ->
+                        NavHost(
+                            navController = navController,
+                            startDestination = Screen.Demo.route,
+                            modifier = Modifier.padding(paddingValues)
+                        ) {
+                            // Demo Screen
+                            composable(Screen.Demo.route) {
+                                MaAIDemo(
+                                    onChatClick = { navController.navigate(Screen.Chat.route) },
+                                    onDebugClick = { navController.navigate(Screen.Avatar.route) },
+                                    knowledgeStatus = knowledgeImportStatus
+                                )
+                            }
+
+                            // Chat Screen
+                            composable(Screen.Chat.route) {
+                                if (database != null) {
+                                    ChatScreen(
+                                        onBackClick = { navController.navigateUp() },
+                                        onDebugClick = { navController.navigate(Screen.Avatar.route) },
+                                        onHistoryClick = { navController.navigate(Screen.History.route) },
+                                        onEcoStatsClick = { navController.navigate(Screen.EcoStats.route) },
+                                        aiEngine = aiEngine,
+                                        database = database!!
+                                    )
                                 }
-                            )
-                        }
-                        showEcoStats && database != null -> {
-                            EcoStatsScreen(
-                                database = database!!,
-                                projectId = "default",
-                                onBackClick = { showEcoStats = false }
-                            )
-                        }
-                        showChat && database != null -> {
-                            ChatScreen(
-                                onBackClick = { showChat = false },
-                                onDebugClick = { showDebug = true },
-                                onHistoryClick = { showHistory = true },
-                                onEcoStatsClick = { showEcoStats = true },
-                                aiEngine = aiEngine,
-                                database = database!!
-                            )
-                        }
-                        else -> {
-                            MaAIDemo(
-                                onChatClick = { showChat = true },
-                                onDebugClick = { showDebug = true },
-                                knowledgeStatus = knowledgeImportStatus
-                            )
+                            }
+
+                            // History Screen
+                            composable(Screen.History.route) {
+                                if (database != null) {
+                                    HistoryScreen(
+                                        database = database!!,
+                                        projectId = "default",
+                                        onBackClick = { navController.navigateUp() },
+                                        onConversationClick = { conversationId ->
+                                            navController.navigate("conversation/$conversationId")
+                                        }
+                                    )
+                                }
+                            }
+
+                            // Eco Stats Screen
+                            composable(Screen.EcoStats.route) {
+                                if (database != null) {
+                                    EcoStatsScreen(
+                                        database = database!!,
+                                        projectId = "default",
+                                        onBackClick = { navController.navigateUp() }
+                                    )
+                                }
+                            }
+
+                            // Avatar Screen (replaces AvatarDebugScreen)
+                            composable(Screen.Avatar.route) {
+                                AvatarDebugScreen(
+                                    onBackClick = { navController.navigateUp() }
+                                )
+                            }
+
+                            // Settings Screen
+                            composable(Screen.Settings.route) {
+                                app.m1k3.ai.assistant.ui.SettingsScreen()
+                            }
+
+                            // Conversation Detail Screen
+                            composable(
+                                route = Screen.ConversationDetail.route,
+                                arguments = listOf(
+                                    navArgument(Screen.ConversationDetail.argConversationId) {
+                                        type = NavType.LongType
+                                    }
+                                )
+                            ) { backStackEntry ->
+                                val conversationId = backStackEntry.arguments?.getLong(
+                                    Screen.ConversationDetail.argConversationId
+                                ) ?: 0L
+
+                                // TODO: Create ConversationDetailScreen in Phase 3
+                                Box(
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Column(
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                                    ) {
+                                        Text(
+                                            "Conversation Detail",
+                                            style = MaterialTheme.typography.headlineMedium
+                                        )
+                                        Text("ID: $conversationId")
+                                        TextButton(onClick = { navController.navigateUp() }) {
+                                            Text("← Back")
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
                 }
-            }
             }
         }
     }
