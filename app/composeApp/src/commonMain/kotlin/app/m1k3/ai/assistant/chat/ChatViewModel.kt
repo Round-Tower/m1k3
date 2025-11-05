@@ -56,11 +56,18 @@ class ChatViewModel(
     private val _state = MutableStateFlow(ChatState())
     val state: StateFlow<ChatState> = _state.asStateFlow()
 
+    // Message state for chat UI
+    private val _messages = MutableStateFlow<List<ChatMessage>>(emptyList())
+    val messages: StateFlow<List<ChatMessage>> = _messages.asStateFlow()
+
     // Current session tracking
     private val sessionId = "chat_session_${Clock.System.now().toEpochMilliseconds()}"
     private var currentConversationId: Long? = null
 
     init {
+        // Load conversation history FIRST
+        loadMessages()
+
         // Create or resume conversation
         scope.launch {
             try {
@@ -74,6 +81,66 @@ class ChatViewModel(
                     error = "Failed to initialize conversation: ${e.message}"
                 )
             }
+        }
+    }
+
+    /**
+     * Load conversation history from database.
+     * Called automatically on initialization.
+     */
+    private fun loadMessages() {
+        scope.launch {
+            try {
+                val dbMessages = database.messageQueries
+                    .getMessagesForProject(projectId)
+                    .executeAsList()
+
+                val chatMessages = dbMessages.map { it.toChatMessage() }
+                _messages.value = chatMessages
+
+                println("✅ [ChatViewModel] Loaded ${chatMessages.size} messages from database")
+            } catch (e: Exception) {
+                println("❌ [ChatViewModel] Failed to load messages: ${e.message}")
+                _state.value = _state.value.copy(
+                    error = "Failed to load conversation history: ${e.message}"
+                )
+            }
+        }
+    }
+
+    /**
+     * Convert database Message to UI ChatMessage.
+     */
+    private fun app.m1k3.ai.assistant.database.Message.toChatMessage(): ChatMessage {
+        return ChatMessage(
+            text = this.content,
+            isUser = this.role == "user",
+            timestamp = this.timestamp,
+            isError = false,
+            inferenceStats = if (this.tokens != null && this.role == "assistant") {
+                "⚡ ${this.tokens} tokens"
+            } else null,
+            ragSources = this.rag_sources
+        )
+    }
+
+    /**
+     * Add a message to the UI state.
+     * Used when generating new messages during the session.
+     */
+    fun addMessage(message: ChatMessage) {
+        _messages.value = _messages.value + message
+    }
+
+    /**
+     * Update a message in the UI state.
+     * Used for streaming updates during generation.
+     */
+    fun updateMessage(index: Int, message: ChatMessage) {
+        val updatedList = _messages.value.toMutableList()
+        if (index in updatedList.indices) {
+            updatedList[index] = message
+            _messages.value = updatedList
         }
     }
 
@@ -247,6 +314,20 @@ data class SessionEcoStats(
         }
     }
 }
+
+/**
+ * Chat message data class for UI.
+ *
+ * Represents a single message in the chat conversation.
+ */
+data class ChatMessage(
+    val text: String,
+    val isUser: Boolean,
+    val timestamp: Long,
+    val isError: Boolean = false,
+    val inferenceStats: String? = null,
+    val ragSources: String? = null  // Phase 3: RAG source tracking
+)
 
 /**
  * Create and remember chat view model.

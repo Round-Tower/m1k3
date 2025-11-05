@@ -77,7 +77,6 @@ fun ChatScreen(
     aiEngine: SmolLM2Engine,
     database: MaDatabase
 ) {
-    var messages by remember { mutableStateOf<List<ChatMessage>>(emptyList()) }
     var inputText by remember { mutableStateOf("") }
     var isGenerating by remember { mutableStateOf(false) }
     var engineInitialized by remember { mutableStateOf(false) }
@@ -92,9 +91,10 @@ fun ChatScreen(
     val avatarVM = rememberAvatarViewModel()
     val avatarState by avatarVM.collectAsState()
 
-    // ChatViewModel for eco tracking (Phase 2)
+    // ChatViewModel for eco tracking (Phase 2) and message state (Phase 3)
     val chatViewModel = rememberChatViewModel(database, projectId = "default")
     val chatState by chatViewModel.collectAsState()
+    val messages by chatViewModel.messages.collectAsState()
 
     // Get Android Context for embedding engine initialization
     val context = LocalContext.current
@@ -173,61 +173,63 @@ fun ChatScreen(
                 aiEngine.initialize()
                 engineInitialized = true
 
-                // Generate context-aware welcome message with device and knowledge stats
-                val aiMessageTimestamp = Clock.System.now().toEpochMilliseconds()
-                val aiMessageIndex = messages.size
+                // ONLY generate welcome if no messages exist (avoid duplicates on load)
+                if (chatViewModel.messages.value.isEmpty()) {
+                    // Generate context-aware welcome message with device and knowledge stats
+                    val aiMessageTimestamp = Clock.System.now().toEpochMilliseconds()
 
-                messages = messages + ChatMessage(
-                    text = "...",
-                    isUser = false,
-                    timestamp = aiMessageTimestamp,
-                    inferenceStats = "🔄 Initializing..."
-                )
+                    chatViewModel.addMessage(app.m1k3.ai.assistant.chat.ChatMessage(
+                        text = "...",
+                        isUser = false,
+                        timestamp = aiMessageTimestamp,
+                        inferenceStats = "🔄 Initializing..."
+                    ))
 
-                // Get device context for greeting
-                val deviceModel = android.os.Build.MODEL
-                val batteryManager = context.getSystemService(Context.BATTERY_SERVICE) as? android.os.BatteryManager
-                val batteryLevel = batteryManager?.getIntProperty(android.os.BatteryManager.BATTERY_PROPERTY_CAPACITY) ?: -1
-                val batteryInfo = if (batteryLevel > 0) "$batteryLevel% battery" else "battery connected"
+                    val aiMessageIndex = chatViewModel.messages.value.size - 1
 
-                // Generate personalized welcome with device and knowledge context
-                var welcomeText = ""
-                aiEngine.generateStreaming(
-                    prompt = "Greet the user warmly and introduce yourself as M1K3, their privacy-first AI assistant. " +
-                            "Mention that you're running 100% locally on their $deviceModel with $batteryInfo, " +
-                            "and that all conversations are private and never leave their device. " +
-                            "Keep it brief (2-3 sentences), friendly, and conversational.",
-                    maxTokens = 150,  // Allow for device/knowledge context
-                    temperature = 0.4f,  // Slightly creative but still coherent
-                    knowledgeContext = knowledgeContext
-                ) { token ->
-                    welcomeText += token
-                    // Update welcome message in real-time
-                    withContext(Dispatchers.Main) {
-                        val updatedMessages = messages.toMutableList()
-                        updatedMessages[aiMessageIndex] = ChatMessage(
-                            text = welcomeText,
-                            isUser = false,
-                            timestamp = aiMessageTimestamp
-                        )
-                        messages = updatedMessages
+                    // Get device context for greeting
+                    val deviceModel = android.os.Build.MODEL
+                    val batteryManager = context.getSystemService(Context.BATTERY_SERVICE) as? android.os.BatteryManager
+                    val batteryLevel = batteryManager?.getIntProperty(android.os.BatteryManager.BATTERY_PROPERTY_CAPACITY) ?: -1
+                    val batteryInfo = if (batteryLevel > 0) "$batteryLevel% battery" else "battery connected"
+
+                    // Generate personalized welcome with device and knowledge context
+                    var welcomeText = ""
+                    aiEngine.generateStreaming(
+                        prompt = "Greet the user warmly and introduce yourself as M1K3, their privacy-first AI assistant. " +
+                                "Mention that you're running 100% locally on their $deviceModel with $batteryInfo, " +
+                                "and that all conversations are private and never leave their device. " +
+                                "Keep it brief (2-3 sentences), friendly, and conversational.",
+                        maxTokens = 150,  // Allow for device/knowledge context
+                        temperature = 0.4f,  // Slightly creative but still coherent
+                        knowledgeContext = knowledgeContext
+                    ) { token ->
+                        welcomeText += token
+                        // Update welcome message in real-time
+                        withContext(Dispatchers.Main) {
+                            chatViewModel.updateMessage(aiMessageIndex, app.m1k3.ai.assistant.chat.ChatMessage(
+                                text = welcomeText,
+                                isUser = false,
+                                timestamp = aiMessageTimestamp
+                            ))
+                        }
                     }
                 }
 
             } catch (e: Exception) {
-                messages = messages + ChatMessage(
+                chatViewModel.addMessage(app.m1k3.ai.assistant.chat.ChatMessage(
                     text = "⚠️ AI engine initialization failed: ${e.message}. " +
                             "Make sure the ONNX model is in assets/",
                     isUser = false,
                     timestamp = Clock.System.now().toEpochMilliseconds(),
                     isError = true
-                )
+                ))
             }
         }
     }
 
     Scaffold(
-        modifier = Modifier.padding(24.dp).animateContentSize(),
+        modifier = Modifier.animateContentSize(),
         topBar = {
             TopAppBar(
                 title = {
@@ -253,47 +255,18 @@ fun ChatScreen(
                         // Currently using 2D MiniAvatarIndicator to avoid SIGSEGV crashes during navigation
                         MiniAvatarIndicator(
                             state = avatarState,
-                            modifier = Modifier.size(120.dp, 100.dp),
+                            modifier = Modifier.size(120.dp, 120.dp).padding(16.dp),
                             showGlow = true
                         )
                     }
                 },
-                navigationIcon = {
-                    TextButton(onClick = onBackClick) {
-                        Text("Back", style = MaterialTheme.typography.titleMedium)
-                    }
-                },
                 actions = {
-                    // History button
-                    IconButton(onClick = onHistoryClick) {
-                        Icon(
-                            imageVector = Icons.Default.List,
-                            contentDescription = "View conversation history",
-                            tint = MaColors.TextSecondary
-                        )
-                    }
-                    // Eco Stats button
-                    IconButton(onClick = onEcoStatsClick) {
-                        Icon(
-                            imageVector = Icons.Default.Info,
-                            contentDescription = "View eco statistics",
-                            tint = MaColors.TextSecondary
-                        )
-                    }
+                    // TODO
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaColors.BgPrimary
                 )
             )
-        },
-        floatingActionButton = {
-            FloatingActionButton(
-                onClick = onDebugClick,
-                containerColor = MaColors.Orange,
-                contentColor = MaColors.White
-            ) {
-                Text("🎨", style = MaterialTheme.typography.headlineMedium)
-            }
         },
         bottomBar = {
             ChatInputBar(
@@ -301,12 +274,12 @@ fun ChatScreen(
                 onTextChange = { inputText = it },
                 onSend = {
                     if (inputText.isNotBlank() && !isGenerating && engineInitialized) {
-                        val userMessage = ChatMessage(
+                        val userMessage = app.m1k3.ai.assistant.chat.ChatMessage(
                             text = inputText,
                             isUser = true,
                             timestamp = Clock.System.now().toEpochMilliseconds()
                         )
-                        messages = messages + userMessage
+                        chatViewModel.addMessage(userMessage)
 
                         // Record user message (no tokens, no eco-metrics)
                         chatViewModel.recordMessage(
@@ -327,14 +300,15 @@ fun ChatScreen(
                             try {
                                 // Add placeholder AI message that will be updated during streaming
                                 val aiMessageTimestamp = Clock.System.now().toEpochMilliseconds()
-                                val aiMessageIndex = messages.size
 
-                                messages = messages + ChatMessage(
+                                chatViewModel.addMessage(app.m1k3.ai.assistant.chat.ChatMessage(
                                     text = "...",
                                     isUser = false,
                                     timestamp = aiMessageTimestamp,
                                     inferenceStats = "🔄 Generating..."
-                                )
+                                ))
+
+                                val aiMessageIndex = chatViewModel.messages.value.size - 1
 
                                 // Auto-scroll to show the new message
                                 try {
@@ -442,25 +416,23 @@ fun ChatScreen(
 
                                     // Update the message in real-time on the MAIN thread
                                     withContext(Dispatchers.Main) {
-                                        val updatedMessages = messages.toMutableList()
-                                        updatedMessages[aiMessageIndex] = ChatMessage(
+                                        chatViewModel.updateMessage(aiMessageIndex, app.m1k3.ai.assistant.chat.ChatMessage(
                                             text = streamedText,
                                             isUser = false,
                                             timestamp = aiMessageTimestamp,
                                             inferenceStats = "⚡ Streaming... ($tokenCount tokens)"
-                                        )
-                                        messages = updatedMessages
+                                        ))
 
                                         // Auto-scroll to keep the message visible
                                         // Use scrollToItem (instant) during streaming to avoid MutatorMutex conflicts
                                         // that would cancel the generation coroutine with CancellationException
-                                        if (tokenCount % 3 == 0) {  // Scroll every 3 tokens to reduce UI updates
-                                            try {
-                                                listState.scrollToItem(messages.size - 1)
-                                            } catch (e: Exception) {
-                                                // Ignore scroll failures - inference must continue regardless
-                                            }
-                                        }
+//                                        if (tokenCount % 3 == 0) {  // Scroll every 3 tokens to reduce UI updates
+//                                            try {
+//                                                listState.scrollToItem(chatViewModel.messages.value.size - 1)
+//                                            } catch (e: Exception) {
+//                                                // Ignore scroll failures - inference must continue regardless
+//                                            }
+//                                        }
                                     }
                                 }
 
@@ -480,15 +452,13 @@ fun ChatScreen(
                                     }
                                 }
 
-                                val updatedMessages = messages.toMutableList()
-                                updatedMessages[aiMessageIndex] = ChatMessage(
+                                chatViewModel.updateMessage(aiMessageIndex, app.m1k3.ai.assistant.chat.ChatMessage(
                                     text = streamedText.ifEmpty { "..." },
                                     isUser = false,
                                     timestamp = aiMessageTimestamp,
                                     inferenceStats = statsText,
                                     ragSources = ragSources  // Phase 3: Track RAG sources
-                                )
-                                messages = updatedMessages
+                                ))
 
                                 // Record assistant message with eco-metrics and RAG metadata (Phase 3)
                                 chatViewModel.recordMessage(
@@ -508,7 +478,7 @@ fun ChatScreen(
 
                                 // Final scroll with animation (safe since streaming is done)
                                 try {
-                                    listState.animateScrollToItem(messages.size - 1)
+                                    listState.animateScrollToItem(chatViewModel.messages.value.size - 1)
                                 } catch (e: Exception) {
                                     // Scroll animation failed, but inference already completed
                                 }
@@ -519,12 +489,12 @@ fun ChatScreen(
                                 // Error haptic feedback
                                 haptics.error()
 
-                                messages = messages + ChatMessage(
+                                chatViewModel.addMessage(app.m1k3.ai.assistant.chat.ChatMessage(
                                     text = "Error: ${e.message}",
                                     isUser = false,
                                     timestamp = Clock.System.now().toEpochMilliseconds(),
                                     isError = true
-                                )
+                                ))
                             } finally {
                                 isGenerating = false
                                 // Return to idle after a delay
@@ -595,7 +565,7 @@ fun ChatScreen(
 }
 
 @Composable
-fun ChatBubble(message: ChatMessage) {
+fun ChatBubble(message: app.m1k3.ai.assistant.chat.ChatMessage) {
     if (message.isUser) {
         MaChatBubbleUser(
             text = message.text,
@@ -836,15 +806,3 @@ fun ChatInputBar(
         }
     }
 }
-
-/**
- * Chat message data class
- */
-data class ChatMessage(
-    val text: String,
-    val isUser: Boolean,
-    val timestamp: Long,
-    val isError: Boolean = false,
-    val inferenceStats: String? = null,
-    val ragSources: String? = null  // Phase 3: RAG source tracking
-)
