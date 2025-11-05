@@ -54,7 +54,6 @@ fun MiniAvatarIndicator(
             .defaultMinSize(48.dp, 48.dp)  // Minimum size, but respects external size modifier
             .scale(activityAnim.scale)
             .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
-            .glassmorphic(shape = CircleShape)
             .graphicsLayer {
                 translationX = activityAnim.offsetX
                 translationY = activityAnim.offsetY
@@ -67,11 +66,11 @@ fun MiniAvatarIndicator(
             Canvas(
                 modifier = Modifier
                     .fillMaxSize()  // Fill parent size instead of hardcoded 80dp
-                    .graphicsLayer { alpha = glowPulse * 0.8f }  // Increased from 0.5f
+                    .graphicsLayer { alpha = glowPulse * 0.5f }
             ) {
                 drawCircle(
-                    color = state.displayColor.copy(alpha = 0.6f),  // Increased from 0.3f
-                    radius = size.minDimension / 2
+                    color = state.displayColor.copy(alpha = 0.1f),
+                    radius = size.minDimension / 3
                 )
             }
         }

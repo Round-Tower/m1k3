@@ -12,6 +12,8 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.navigation.NavController
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.compose.currentBackStackEntryAsState
+import app.m1k3.ai.assistant.design.theme.MaTheme
+import app.m1k3.ai.assistant.design.tokens.MaColors
 
 /**
  * 間 AI - Bottom Navigation Bar
@@ -60,7 +62,10 @@ fun BottomNavigationBar(
                     )
                 },
                 label = {
-                    Text(text = item.label)
+                    Text(
+                        text = item.label,
+                        color = MaColors.White
+                    )
                 },
                 selected = isSelected,
                 onClick = {
@@ -69,7 +74,7 @@ fun BottomNavigationBar(
                         navController.navigateToBottomNav(item.screen)
                     }
                 },
-                alwaysShowLabel = false
+                alwaysShowLabel = true
             )
         }
     }

@@ -19,7 +19,8 @@
       "Bash(ANDROID_SERIAL=1C211FDEE001UT ./gradlew :composeApp:installDebug:*)",
       "Bash(python scripts/export_smollm2_onnx.py:*)",
       "Bash(cat:*)",
-      "Bash(find:*)"
+      "Bash(find:*)",
+      "WebSearch"
     ],
     "deny": [],
     "ask": []

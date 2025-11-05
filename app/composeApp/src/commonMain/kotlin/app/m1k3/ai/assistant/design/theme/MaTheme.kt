@@ -29,9 +29,9 @@ private val MaDarkColorScheme = darkColorScheme(
     // ============================================
     // Primary Colors (M1K3 Orange)
     // ============================================
-    primary = MaColors.Orange,
+    primary = MaColors.White.copy(alpha = 0.7f),
     onPrimary = MaColors.White,
-    primaryContainer = MaColors.OrangeDim,
+    primaryContainer = MaColors.White.copy(alpha = 0.7f),
     onPrimaryContainer = MaColors.White,
 
     // ============================================
