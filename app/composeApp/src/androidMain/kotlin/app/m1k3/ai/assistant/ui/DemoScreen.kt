@@ -20,6 +20,7 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 
 /**
@@ -283,5 +284,16 @@ private fun PulsingCircle() {
             tint = MaterialTheme.colorScheme.onPrimary,
             modifier = Modifier.size(64.dp)
         )
+    }
+}
+
+/**
+ * Preview for Demo Screen
+ */
+@Preview(showBackground = true, showSystemUi = true)
+@Composable
+private fun DemoScreenPreview() {
+    MaterialTheme {
+        DemoScreen(onGetStarted = {})
     }
 }
