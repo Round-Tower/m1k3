@@ -1,5 +1,6 @@
 package app.m1k3.ai.assistant.ui
 
+import android.content.Context
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
@@ -9,6 +10,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
@@ -33,6 +35,11 @@ fun SettingsScreen(
     modifier: Modifier = Modifier
 ) {
     val haptics = LocalHapticFeedback.current
+    val context = LocalContext.current
+    val prefs = remember { context.getSharedPreferences("ma_ai_prefs", Context.MODE_PRIVATE) }
+
+    // RAG toggle state
+    var ragEnabled by remember { mutableStateOf(prefs.getBoolean("rag_enabled", true)) }
 
     LazyColumn(
         modifier = modifier
@@ -100,6 +107,82 @@ fun SettingsScreen(
                     onClick = {
                         haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                         // TODO: Show context settings
+                    }
+                )
+            }
+        }
+
+        // Knowledge & RAG Section
+        item {
+            SettingsSection(
+                title = "Knowledge & RAG",
+                icon = Icons.Default.MenuBook
+            ) {
+                // RAG Toggle
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.AutoAwesome,
+                                contentDescription = null,
+                                modifier = Modifier.size(20.dp),
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                            Text(
+                                text = "RAG (Retrieval-Augmented Generation)",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "Enhance responses with 1,401 expert documents across 24 categories",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+
+                    Switch(
+                        checked = ragEnabled,
+                        onCheckedChange = { enabled ->
+                            ragEnabled = enabled
+                            prefs.edit().putBoolean("rag_enabled", enabled).apply()
+                            haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                            println("⚙️ [Settings] RAG ${if (enabled) "enabled" else "disabled"}")
+                        }
+                    )
+                }
+
+                Divider(modifier = Modifier.padding(horizontal = 16.dp))
+
+                SettingsItem(
+                    title = "Knowledge Base",
+                    subtitle = "1,401 documents • 24 categories",
+                    icon = Icons.Default.Book,
+                    onClick = {
+                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                        // TODO: Show knowledge base browser
+                    }
+                )
+
+                SettingsItem(
+                    title = "Intent Classification",
+                    subtitle = "20 query types • Adaptive retrieval",
+                    icon = Icons.Default.Category,
+                    onClick = {
+                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                        // TODO: Show intent classifier details
                     }
                 )
             }

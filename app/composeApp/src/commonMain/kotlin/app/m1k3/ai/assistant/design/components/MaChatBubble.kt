@@ -103,6 +103,7 @@ fun MaChatBubbleUser(
  * @param timestamp Unix timestamp (milliseconds)
  * @param inferenceStats Optional stats string (e.g., "42 tok/s • 256 tokens • 6.1s")
  * @param isError Whether message is an error (shows red accent)
+ * @param ragSources Optional RAG sources (Phase 3)
  * @param modifier Optional modifier
  */
 @Composable
@@ -111,6 +112,7 @@ fun MaChatBubbleAI(
     timestamp: Long,
     inferenceStats: String? = null,
     isError: Boolean = false,
+    ragSources: String? = null,
     modifier: Modifier = Modifier
 ) {
     Row(
@@ -153,6 +155,28 @@ fun MaChatBubbleAI(
                             color = MaColors.TextDisabled,
                             fontWeight = FontWeight.Medium
                         )
+                    }
+
+                    // RAG sources (Phase 3 - if available)
+                    if (ragSources != null) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = MaSpacing.xs),
+                            horizontalArrangement = Arrangement.spacedBy(MaSpacing.xs),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "📚",
+                                style = MaTypography.labelSmall
+                            )
+                            Text(
+                                text = ragSources,
+                                style = MaTypography.labelSmall,
+                                color = MaColors.Orange,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
                     }
                 }
             }

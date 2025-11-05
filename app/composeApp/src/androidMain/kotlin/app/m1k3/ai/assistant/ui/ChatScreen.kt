@@ -38,6 +38,7 @@ import app.m1k3.ai.assistant.database.MaDatabase
 import app.m1k3.ai.assistant.knowledge.KnowledgeRetrievalService
 import app.m1k3.ai.assistant.knowledge.SemanticRetrievalService
 import app.m1k3.ai.assistant.knowledge.PromptEnhancer
+import app.m1k3.ai.assistant.rag.RAGManager
 import app.m1k3.ai.assistant.embedding.EmbeddingEngine
 import app.m1k3.ai.assistant.embedding.EmbeddingModelManager
 import kotlinx.coroutines.runBlocking
@@ -98,6 +99,10 @@ fun ChatScreen(
     // Get Android Context for embedding engine initialization
     val context = LocalContext.current
 
+    // RAG preference (Phase 3)
+    val prefs = remember { context.getSharedPreferences("ma_ai_prefs", android.content.Context.MODE_PRIVATE) }
+    val ragEnabled by remember { derivedStateOf { prefs.getBoolean("rag_enabled", true) } }
+
     // Initialize knowledge retrieval service - PHASE1.5: Semantic retrieval with embeddings
     val embeddingEngine = remember(context) {
         runBlocking {
@@ -120,18 +125,15 @@ fun ChatScreen(
         }
     }
 
-    val semanticRetrievalService = remember(database, embeddingEngine) {
+    // RAG Manager - Phase 3: Intent-aware knowledge retrieval
+    val ragManager = remember(database, embeddingEngine) {
         if (embeddingEngine != null) {
-            println("✅ [RAG] Using SemanticRetrievalService with ${embeddingEngine.modelName} embeddings")
-            SemanticRetrievalService(database, embeddingEngine)
+            println("✅ [RAG] Using RAGManager with ${embeddingEngine.modelName} embeddings + Intent Classification")
+            RAGManager(database, embeddingEngine)
         } else {
-            println("⚠️ [RAG] Embedding engine not available, using placeholder similarity")
+            println("⚠️ [RAG] Embedding engine not available, RAG disabled")
             null
         }
-    }
-
-    val keywordRetrievalService = remember(database) {
-        KnowledgeRetrievalService(database)
     }
 
     // Sync avatar with AI generation state
@@ -346,29 +348,90 @@ fun ChatScreen(
                                 var streamedText = ""
                                 var tokenCount = 0
                                 var ragInfo = ""
+                                var ragSources: String? = null
+                                var ragConfidence: Double? = null
 
-                                // RAG: Retrieve relevant knowledge before generation (PHASE1.5: Semantic retrieval)
-                                val retrievedFacts = if (semanticRetrievalService != null) {
-                                    // Use semantic retrieval with embeddings
-                                    semanticRetrievalService.retrieve(prompt, limit = 3, minSimilarity = 0.6f)
-                                        .map { it.toRetrievedFact() } // Convert to RetrievedFact for compatibility
-                                } else {
-                                    // Fallback to keyword-based retrieval
-                                    keywordRetrievalService.retrieve(prompt, limit = 3)
+                                // Phase 3 RAG: Intent-aware knowledge retrieval with enriched prompt
+                                val systemPrompt = "You are M1K3, a privacy-first AI assistant running 100% locally. " +
+                                        "Be helpful, concise, and informative. " +
+                                        knowledgeContext
+
+                                // RAG with error handling and quality validation
+                                val ragResult = try {
+                                    if (ragManager != null && ragEnabled) {
+                                        val result = ragManager.enrichPrompt(
+                                            userQuery = prompt,
+                                            systemPrompt = systemPrompt,
+                                            enableRAG = true
+                                        )
+
+                                        // Quality validation: Filter out low-quality facts (<0.65 similarity)
+                                        if (result.ragApplied) {
+                                            val highQualityFacts = result.retrievedFacts.filter { it.similarity >= 0.65f }
+                                            if (highQualityFacts.size < result.retrievedFacts.size) {
+                                                println("⚠️ [RAG] Filtered ${result.retrievedFacts.size - highQualityFacts.size} low-quality facts (<0.65 similarity)")
+                                            }
+
+                                            // If no high-quality facts remain, fall back to system prompt
+                                            if (highQualityFacts.isEmpty()) {
+                                                println("⚠️ [RAG] No high-quality facts found, using base prompt")
+                                                result.copy(
+                                                    enrichedPrompt = systemPrompt,
+                                                    retrievedFacts = emptyList(),
+                                                    ragApplied = false
+                                                )
+                                            } else {
+                                                result.copy(retrievedFacts = highQualityFacts)
+                                            }
+                                        } else {
+                                            result
+                                        }
+                                    } else {
+                                        if (!ragEnabled) {
+                                            println("⚙️ [RAG] Disabled by user preference")
+                                        } else {
+                                            println("⚠️ [RAG] Manager not available (embedding engine not initialized)")
+                                        }
+                                        RAGManager.RAGResult(
+                                            enrichedPrompt = systemPrompt,
+                                            intent = app.m1k3.ai.assistant.rag.IntentClassifier.Intent.GENERAL,
+                                            confidence = 0f,
+                                            retrievedFacts = emptyList(),
+                                            ragApplied = false
+                                        )
+                                    }
+                                } catch (e: Exception) {
+                                    println("❌ [RAG] Enrichment failed: ${e.message}")
+                                    e.printStackTrace()
+                                    // Fall back to system prompt without crashing
+                                    RAGManager.RAGResult(
+                                        enrichedPrompt = systemPrompt,
+                                        intent = app.m1k3.ai.assistant.rag.IntentClassifier.Intent.GENERAL,
+                                        confidence = 0f,
+                                        retrievedFacts = emptyList(),
+                                        ragApplied = false
+                                    )
                                 }
-                                val enhancedPrompt = PromptEnhancer.enhancePrompt(prompt, retrievedFacts, minSimilarity = 0.6f)
 
-                                // Track RAG usage for display
-                                if (enhancedPrompt.hasKnowledge) {
-                                    ragInfo = PromptEnhancer.formatKnowledgeSummary(retrievedFacts)
-                                    println("📚 [RAG] $ragInfo")
-                                    println("📚 [RAG] Enhanced prompt length: ${enhancedPrompt.enhancedQuery.length} chars")
+                                // Build final prompt: enriched system prompt + user query
+                                val finalPrompt = "${ragResult.enrichedPrompt}\n\nUser: $prompt\nAssistant:"
+
+                                // Track RAG usage for display and database
+                                if (ragResult.ragApplied) {
+                                    ragInfo = "${ragResult.intent.category} (${(ragResult.confidence * 100).toInt()}%) • ${ragResult.retrievedFacts.size} facts"
+                                    ragSources = ragManager?.formatRAGSources(ragResult.retrievedFacts)
+                                    ragConfidence = ragManager?.calculateRAGConfidence(ragResult.retrievedFacts)
+                                    println("📚 [RAG] Intent: ${ragResult.intent.category} (confidence: ${(ragResult.confidence * 100).toInt()}%)")
+                                    println("📚 [RAG] Retrieved ${ragResult.retrievedFacts.size} facts")
+                                    println("📚 [RAG] Enhanced prompt length: ${finalPrompt.length} chars")
+                                } else {
+                                    println("📚 [RAG] No retrieval for intent: ${ragResult.intent.category}")
                                 }
 
                                 // Use device-adaptive max tokens based on RAM
                                 // 12GB+: 512 tokens, 8-12GB: 384, 6-8GB: 256, 4-6GB: 128, <4GB: 64
                                 aiEngine.generateStreaming(
-                                    prompt = enhancedPrompt.enhancedQuery,  // Use enhanced prompt with knowledge
+                                    prompt = finalPrompt,  // Use RAG-enriched prompt
                                     maxTokens = aiEngine.getOptimalMaxTokens(),  // Device-adaptive
                                     temperature = 0.5f,  // Balanced sampling - coherent but diverse
                                     knowledgeContext = knowledgeContext
@@ -422,15 +485,18 @@ fun ChatScreen(
                                     text = streamedText.ifEmpty { "..." },
                                     isUser = false,
                                     timestamp = aiMessageTimestamp,
-                                    inferenceStats = statsText
+                                    inferenceStats = statsText,
+                                    ragSources = ragSources  // Phase 3: Track RAG sources
                                 )
                                 messages = updatedMessages
 
-                                // Record assistant message with eco-metrics
+                                // Record assistant message with eco-metrics and RAG metadata (Phase 3)
                                 chatViewModel.recordMessage(
                                     content = streamedText.ifEmpty { "..." },
                                     role = "assistant",
-                                    tokens = tokenCount
+                                    tokens = tokenCount,
+                                    ragSources = ragSources,
+                                    ragConfidence = ragConfidence
                                 )
 
                                 // Detect emotion from AI response
@@ -540,7 +606,8 @@ fun ChatBubble(message: ChatMessage) {
             text = message.text,
             timestamp = message.timestamp,
             inferenceStats = message.inferenceStats,
-            isError = message.isError
+            isError = message.isError,
+            ragSources = message.ragSources  // Phase 3: Display RAG sources
         )
     }
 }
@@ -778,5 +845,6 @@ data class ChatMessage(
     val isUser: Boolean,
     val timestamp: Long,
     val isError: Boolean = false,
-    val inferenceStats: String? = null
+    val inferenceStats: String? = null,
+    val ragSources: String? = null  // Phase 3: RAG source tracking
 )

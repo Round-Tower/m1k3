@@ -90,11 +90,15 @@ class ChatViewModel(
      * @param content Message content
      * @param role Message role ("user" or "assistant")
      * @param tokens Token count (for eco calculations)
+     * @param ragSources RAG knowledge sources (Phase 3)
+     * @param ragConfidence RAG confidence score (Phase 3)
      */
     fun recordMessage(
         content: String,
         role: String,
-        tokens: Int
+        tokens: Int,
+        ragSources: String? = null,
+        ragConfidence: Double? = null
     ) {
         scope.launch {
             try {
@@ -123,8 +127,8 @@ class ChatViewModel(
                     sentiment_dominance = null,
                     sentiment_emotion = null,
                     sentiment_intensity = null,
-                    rag_sources = null,
-                    rag_confidence = null
+                    rag_sources = ragSources,
+                    rag_confidence = ragConfidence
                 )
 
                 // Record eco-metrics for assistant responses
