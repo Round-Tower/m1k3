@@ -29,6 +29,8 @@ import app.m1k3.ai.assistant.avatar.*
 import app.m1k3.ai.assistant.knowledge.KnowledgeBaseImporter
 import app.m1k3.ai.assistant.ui.ChatScreen
 import app.m1k3.ai.assistant.ui.AvatarDebugScreen
+import app.m1k3.ai.assistant.ui.HistoryScreen
+import app.m1k3.ai.assistant.ui.EcoStatsScreen
 import kotlinx.coroutines.launch
 import java.io.BufferedReader
 import java.io.InputStreamReader
@@ -128,6 +130,8 @@ class MainActivity : ComponentActivity() {
                 MaTheme {
                     var showChat by remember { mutableStateOf(false) }
                     var showDebug by remember { mutableStateOf(false) }
+                    var showHistory by remember { mutableStateOf(false) }
+                    var showEcoStats by remember { mutableStateOf(false) }
 
                 Surface(
                     modifier = Modifier.fillMaxSize(),
@@ -139,10 +143,30 @@ class MainActivity : ComponentActivity() {
                                 onBackClick = { showDebug = false }
                             )
                         }
+                        showHistory && database != null -> {
+                            HistoryScreen(
+                                database = database!!,
+                                projectId = "default",
+                                onBackClick = { showHistory = false },
+                                onConversationClick = { conversationId ->
+                                    // TODO: Navigate to conversation detail screen (Phase 3)
+                                    println("🔍 Navigate to conversation: $conversationId")
+                                }
+                            )
+                        }
+                        showEcoStats && database != null -> {
+                            EcoStatsScreen(
+                                database = database!!,
+                                projectId = "default",
+                                onBackClick = { showEcoStats = false }
+                            )
+                        }
                         showChat && database != null -> {
                             ChatScreen(
                                 onBackClick = { showChat = false },
                                 onDebugClick = { showDebug = true },
+                                onHistoryClick = { showHistory = true },
+                                onEcoStatsClick = { showEcoStats = true },
                                 aiEngine = aiEngine,
                                 database = database!!
                             )

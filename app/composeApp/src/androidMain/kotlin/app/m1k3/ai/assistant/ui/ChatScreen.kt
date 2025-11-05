@@ -48,6 +48,13 @@ import app.m1k3.ai.assistant.design.tokens.MaSpacing
 import app.m1k3.ai.assistant.design.tokens.MaTypography
 import app.m1k3.ai.assistant.design.haptics.rememberHapticFeedback
 import app.m1k3.ai.assistant.avatar.*
+import app.m1k3.ai.assistant.chat.rememberChatViewModel
+import app.m1k3.ai.assistant.chat.collectAsState
+import app.m1k3.ai.assistant.ui.components.EcoIndicator
+import app.m1k3.ai.assistant.ui.components.EcoIndicatorVariant
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.List
+import androidx.compose.material.icons.filled.Info
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -64,6 +71,8 @@ import kotlinx.datetime.Clock
 fun ChatScreen(
     onBackClick: () -> Unit,
     onDebugClick: () -> Unit = {},
+    onHistoryClick: () -> Unit = {},
+    onEcoStatsClick: () -> Unit = {},
     aiEngine: SmolLM2Engine,
     database: MaDatabase
 ) {
@@ -81,6 +90,10 @@ fun ChatScreen(
     // Avatar state management
     val avatarVM = rememberAvatarViewModel()
     val avatarState by avatarVM.collectAsState()
+
+    // ChatViewModel for eco tracking (Phase 2)
+    val chatViewModel = rememberChatViewModel(database, projectId = "default")
+    val chatState by chatViewModel.collectAsState()
 
     // Get Android Context for embedding engine initialization
     val context = LocalContext.current
@@ -248,6 +261,24 @@ fun ChatScreen(
                         Text("Back", style = MaterialTheme.typography.titleMedium)
                     }
                 },
+                actions = {
+                    // History button
+                    IconButton(onClick = onHistoryClick) {
+                        Icon(
+                            imageVector = Icons.Default.List,
+                            contentDescription = "View conversation history",
+                            tint = MaColors.TextSecondary
+                        )
+                    }
+                    // Eco Stats button
+                    IconButton(onClick = onEcoStatsClick) {
+                        Icon(
+                            imageVector = Icons.Default.Info,
+                            contentDescription = "View eco statistics",
+                            tint = MaColors.TextSecondary
+                        )
+                    }
+                },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaColors.BgPrimary
                 )
@@ -274,6 +305,13 @@ fun ChatScreen(
                             timestamp = Clock.System.now().toEpochMilliseconds()
                         )
                         messages = messages + userMessage
+
+                        // Record user message (no tokens, no eco-metrics)
+                        chatViewModel.recordMessage(
+                            content = inputText,
+                            role = "user",
+                            tokens = 0
+                        )
 
                         // Detect emotion from user message
                         avatarVM.processMessage(inputText, isUserMessage = true)
@@ -388,6 +426,13 @@ fun ChatScreen(
                                 )
                                 messages = updatedMessages
 
+                                // Record assistant message with eco-metrics
+                                chatViewModel.recordMessage(
+                                    content = streamedText.ifEmpty { "..." },
+                                    role = "assistant",
+                                    tokens = tokenCount
+                                )
+
                                 // Detect emotion from AI response
                                 avatarVM.processMessage(streamedText, isUserMessage = false)
                                 avatarVM.startSpeaking()
@@ -429,31 +474,53 @@ fun ChatScreen(
             )
         }
     ) { padding ->
-        LazyColumn(
-            state = listState,
+        Column(
             modifier = Modifier
-                .animateContentSize()
                 .fillMaxSize()
                 .padding(padding)
-                .padding(horizontal = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-            contentPadding = PaddingValues(vertical = 16.dp)
         ) {
-            items(messages) { message ->
-                ChatBubble(message)
+            // Eco Indicator - Real-time environmental impact
+            if (chatState.sessionEcoStats.messageCount > 0) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    EcoIndicator(
+                        stats = chatState.sessionEcoStats,
+                        onClick = onEcoStatsClick,
+                        variant = EcoIndicatorVariant.COMPACT
+                    )
+                }
             }
 
-            // Loading indicator
-            if (isGenerating) {
-                item {
-                    Box(
-                        modifier = Modifier.fillMaxWidth(),
-                        contentAlignment = Alignment.CenterStart
-                    ) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(24.dp),
-                            strokeWidth = 2.dp
-                        )
+            // Messages list
+            LazyColumn(
+                state = listState,
+                modifier = Modifier
+                    .animateContentSize()
+                    .fillMaxSize()
+                    .padding(horizontal = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+                contentPadding = PaddingValues(vertical = 16.dp)
+            ) {
+                items(messages) { message ->
+                    ChatBubble(message)
+                }
+
+                // Loading indicator
+                if (isGenerating) {
+                    item {
+                        Box(
+                            modifier = Modifier.fillMaxWidth(),
+                            contentAlignment = Alignment.CenterStart
+                        ) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(24.dp),
+                                strokeWidth = 2.dp
+                            )
+                        }
                     }
                 }
             }
