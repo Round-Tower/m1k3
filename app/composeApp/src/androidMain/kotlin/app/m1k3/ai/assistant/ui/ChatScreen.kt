@@ -253,6 +253,7 @@ fun ChatScreen(
                                 "Keep it brief (2-3 sentences), friendly, and conversational.",
                         config = app.m1k3.ai.assistant.ai.GenerationConfig(
                             temperature = 0.5f, // Slightly creative but still coherent
+                            // Use static KB summary for welcome message (no RAG needed)
                             knowledgeContext = knowledgeContext
                         )
                     ) { token ->
@@ -511,7 +512,8 @@ fun ChatScreen(
                                         systemPrompt = enrichedSystemPrompt,  // System instructions (with RAG if applicable)
                                         maxTokens = aiEngine.getOptimalMaxTokens(), // Device-adaptive
                                         temperature = 0.9f, // INCREASED from 0.5f - Higher temperature reduces repetition loops
-                                        knowledgeContext = knowledgeContext
+                                        // Only pass static KB summary if RAG didn't retrieve anything
+                                        knowledgeContext = if (ragResult.ragApplied) null else knowledgeContext
                                     )
                                 ) { token ->
                                     // Clean chat template tokens before appending (defense-in-depth)

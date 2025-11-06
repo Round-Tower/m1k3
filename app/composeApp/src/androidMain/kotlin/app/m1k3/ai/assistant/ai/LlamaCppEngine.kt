@@ -142,17 +142,21 @@ class LlamaCppEngine(private val context: Context) : BaseLlmEngine {
         try {
             // Build system prompt with prompt engineering for behavioral control
             val systemPrompt = buildSystemPrompt(config)
-            val knowledgeContext = config.knowledgeContext ?: ""
+
+            // Always use knowledgeContext in the context parameter
+            // Llamatik will handle combining system + context + user appropriately
+            val contextParam = config.knowledgeContext ?: ""
 
             println("🔍 [LlamaCppEngine] Starting generation...")
             println("   Prompt: \"$prompt\"")
-            println("   System: \"${systemPrompt.take(100)}...\"")
+            println("   System: \"${systemPrompt.take(150)}...\"")
+            println("   Context: ${if (contextParam.isNotEmpty()) "${contextParam.take(150)}..." else "empty"}")
 
             // Use streaming internally and collect full response
             suspendCancellableCoroutine<Unit> { continuation ->
                 LlamaBridge.generateWithContextStream(
                     system = systemPrompt,
-                    context = knowledgeContext,
+                    context = contextParam,
                     user = prompt,
                     onDelta = { delta ->
                         responseBuilder.append(delta)
@@ -218,10 +222,15 @@ class LlamaCppEngine(private val context: Context) : BaseLlmEngine {
         try {
             // Build system prompt with prompt engineering for behavioral control
             val systemPrompt = buildSystemPrompt(config)
-            val knowledgeContext = config.knowledgeContext ?: ""
+
+            // Always use knowledgeContext in the context parameter
+            // Llamatik will handle combining system + context + user appropriately
+            val contextParam = config.knowledgeContext ?: ""
 
             println("🔍 [LlamaCppEngine] Starting streaming generation...")
             println("   Prompt: \"$prompt\"")
+            println("   System: \"${systemPrompt.take(150)}...\"")
+            println("   Context: ${if (contextParam.isNotEmpty()) "${contextParam.take(150)}..." else "empty"}")
 
             var tokenCount = 0
 
@@ -229,7 +238,7 @@ class LlamaCppEngine(private val context: Context) : BaseLlmEngine {
             suspendCancellableCoroutine<Unit> { continuation ->
                 LlamaBridge.generateWithContextStream(
                     system = systemPrompt,
-                    context = knowledgeContext,
+                    context = contextParam,
                     user = prompt,
                     onDelta = { delta ->
                         onToken(delta)  // Stream to UI
@@ -331,9 +340,12 @@ class LlamaCppEngine(private val context: Context) : BaseLlmEngine {
         }
 
         // Custom system prompt overrides default
+        // If custom systemPrompt is provided (e.g., RAG-enhanced), use it as-is
+        // (RAG-enhanced prompts already contain the relevant facts)
         val finalBase = config.systemPrompt ?: (basePrompt + behaviorGuidance)
 
-        // Append knowledge context if provided
+        // Append knowledge context if provided (only when not using custom RAG prompt)
+        // Note: ChatScreen now conditionally passes knowledgeContext based on ragResult.ragApplied
         return if (config.knowledgeContext != null) {
             "$finalBase\n\n${config.knowledgeContext}"
         } else {
