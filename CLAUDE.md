@@ -373,12 +373,23 @@ docker-compose up --build
 
 ## Status: 🚀 ACTIVE DEVELOPMENT
 
-**Current Phase:** Phase 2 (Chat History & Eco Credentials) - **COMPLETE!** 🎉
+**Current Phase:** AI Engine Migration & Abstraction - **IN PROGRESS** 🔄
 **Timeline:** 16 weeks (6 phases)
 **Target Release:** Beta v0.1.0 (Week 16)
 **Progress:** 12/135 tickets (9%) - **62 Passing Tests!** ✅
 
-### 🎉 **Latest Milestone:** Phase 2 Complete - Chat History & Eco Metrics (2025-11-04)
+### 🎉 **Latest Milestone:** Llamatik 0.8.1 Integration & BaseLlmEngine Abstraction (2025-11-06)
+- ✅ **Llamatik 0.8.1** - Stable llama.cpp binding successfully integrated (no crashes!)
+- ✅ **BaseLlmEngine interface** - Abstract AI engine interface for easy swapping (177 lines)
+- ✅ **LlamaCppEngine** - Rewritten to use Llamatik API with prompt engineering (353 lines)
+- ✅ **Testing infrastructure** - 36 test cases + MockLlmEngine for deterministic testing
+- ✅ **GenerationConfig** - Unified configuration with graceful degradation
+- ✅ **Migration success** - ONNX hallucinations → InferKt crash (SIGABRT) → Llamatik stable
+- ⚠️ **Trade-offs** - Lost fine-grained control (temperature, topP, topK) but gained stability
+- 🔧 **Workaround** - Prompt engineering for behavioral control ("Be concise..." vs "Be creative...")
+- 📄 See commit 8f4e204 for complete migration details
+
+### 🎉 **Previous Milestone:** Phase 2 Complete - Chat History & Eco Metrics (2025-11-04)
 - ✅ **ConversationRepository** - Chat history management (19/19 tests passing)
 - ✅ **EcoMetricsRepository** - Environmental impact tracking (16/16 tests passing)
 - ✅ **EcoCalculator** - Carbon/water/energy calculations (27/27 tests passing)
@@ -476,11 +487,17 @@ docker-compose up --build
 - **Target:** Android API 27+ (8.0+), iOS 15+ (future)
 
 ### AI/ML Stack
-- **ONNX Runtime 1.17.0** - Mobile inference engine
-- **SmolLM2-360M-Instruct** - Primary language model (180MB quantized)
+- **Llamatik 0.8.1** - llama.cpp binding for GGUF models (stable, simple API)
+- **SmolLM2-135M-Instruct Q4_K_M** - Primary language model (101MB GGUF)
+- **ONNX Runtime 1.17.0** - Mobile inference engine (legacy/fallback)
 - **MiniLM-L6** - Sentence embeddings (90MB, 384-dim)
 - **JVector** - HNSW vector similarity search
 - **ML Kit** - On-device vision (OCR, object detection, labels)
+
+**Migration History:**
+- v1 (ONNX Runtime): SmolLM2-135M severe hallucinations (tokenizer issues)
+- v2 (InferKt 0.0.2): Native crash SIGABRT in llama_batch_free (memory corruption)
+- v3 (Llamatik 0.8.1): ✅ Current - Stable, no crashes, prompt engineering for control
 
 ### Data Layer
 - **SQLDelight 2.0.0** - Type-safe SQL for Kotlin Multiplatform
