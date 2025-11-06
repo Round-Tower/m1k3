@@ -35,7 +35,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import app.m1k3.ai.assistant.ai.SmolLM2Engine
+import app.m1k3.ai.assistant.ai.BaseLlmEngine
 import app.m1k3.ai.assistant.avatar.*
 import app.m1k3.ai.assistant.chat.collectAsState
 import app.m1k3.ai.assistant.chat.rememberChatViewModel
@@ -66,7 +66,7 @@ fun ChatScreen(
     onDebugClick: () -> Unit = {},
     onHistoryClick: () -> Unit = {},
     onEcoStatsClick: () -> Unit = {},
-    aiEngine: SmolLM2Engine,
+    aiEngine: BaseLlmEngine,
     database: MaDatabase,
 ) {
     var inputText by remember { mutableStateOf("") }
@@ -251,21 +251,21 @@ fun ChatScreen(
                                 "Mention that you're running 100% locally on their $deviceModel with $batteryInfo, " +
                                 "and that all conversations are private and never leave their device. " +
                                 "Keep it brief (2-3 sentences), friendly, and conversational.",
-                        temperature = 0.5f, // Slightly creative but still coherent
-                        knowledgeContext = knowledgeContext,
+                        config = app.m1k3.ai.assistant.ai.GenerationConfig(
+                            temperature = 0.5f, // Slightly creative but still coherent
+                            knowledgeContext = knowledgeContext
+                        )
                     ) { token ->
                         welcomeText += token
                         // Update welcome message in real-time
-                        withContext(Dispatchers.Main) {
-                            chatViewModel.updateMessage(
-                                aiMessageIndex,
-                                app.m1k3.ai.assistant.chat.ChatMessage(
-                                    text = welcomeText,
-                                    isUser = false,
-                                    timestamp = aiMessageTimestamp,
-                                ),
-                            )
-                        }
+                        chatViewModel.updateMessage(
+                            aiMessageIndex,
+                            app.m1k3.ai.assistant.chat.ChatMessage(
+                                text = welcomeText,
+                                isUser = false,
+                                timestamp = aiMessageTimestamp,
+                            ),
+                        )
                     }
                 }
             } catch (e: Exception) {
@@ -323,7 +323,23 @@ fun ChatScreen(
                     }
                 },
                 actions = {
-                    // TODO
+                    // 🗑️ TEMPORARY DEBUG: Clear conversation history button
+                    // TODO: Remove before production - for testing model hallucination fixes
+                    IconButton(
+                        onClick = {
+                            scope.launch {
+                                println("🗑️ [DEBUG] Manually clearing conversation history")
+                                chatViewModel.clearConversation()
+                                haptics.success()
+                            }
+                        }
+                    ) {
+                        Text(
+                            text = "🗑️",
+                            style = MaTypography.bodyLarge,
+                            color = MaColors.Orange
+                        )
+                    }
                 },
                 colors =
                     TopAppBarDefaults.topAppBarColors(
@@ -481,14 +497,22 @@ fun ChatScreen(
                                     println("📚 [RAG] No retrieval for intent: ${ragResult.intent.category}")
                                 }
 
+                                // DEBUG: Log exact prompts being sent to model
+                                println("🔍 [PROMPT-DEBUG] System prompt length: ${enrichedSystemPrompt.length} chars")
+                                println("🔍 [PROMPT-DEBUG] System prompt preview (first 200 chars): ${enrichedSystemPrompt.take(200)}")
+                                println("🔍 [PROMPT-DEBUG] User prompt: \"$prompt\"")
+                                println("🔍 [PROMPT-DEBUG] Knowledge context: $knowledgeContext")
+
                                 // Use device-adaptive max tokens based on RAM
                                 // 12GB+: 512 tokens, 8-12GB: 384, 6-8GB: 256, 4-6GB: 128, <4GB: 64
                                 aiEngine.generateStreaming(
-                                    systemPrompt = enrichedSystemPrompt,  // System instructions (with RAG if applicable)
                                     prompt = prompt,  // User's question ONLY (no labels, no duplication)
-                                    maxTokens = aiEngine.getOptimalMaxTokens(), // Device-adaptive
-                                    temperature = 0.5f, // Balanced sampling - coherent but diverse
-                                    knowledgeContext = knowledgeContext,
+                                    config = app.m1k3.ai.assistant.ai.GenerationConfig(
+                                        systemPrompt = enrichedSystemPrompt,  // System instructions (with RAG if applicable)
+                                        maxTokens = aiEngine.getOptimalMaxTokens(), // Device-adaptive
+                                        temperature = 0.9f, // INCREASED from 0.5f - Higher temperature reduces repetition loops
+                                        knowledgeContext = knowledgeContext
+                                    )
                                 ) { token ->
                                     // Clean chat template tokens before appending (defense-in-depth)
                                     val cleanedToken = token
@@ -502,29 +526,27 @@ fun ChatScreen(
                                     streamedText += cleanedToken
                                     tokenCount++
 
-                                    // Update the message in real-time on the MAIN thread
-                                    withContext(Dispatchers.Main) {
-                                        chatViewModel.updateMessage(
-                                            aiMessageIndex,
-                                            app.m1k3.ai.assistant.chat.ChatMessage(
-                                                text = streamedText,
-                                                isUser = false,
-                                                timestamp = aiMessageTimestamp,
-                                                inferenceStats = "⚡ Streaming... ($tokenCount tokens)",
-                                            ),
-                                        )
+                                    // Update the message in real-time
+                                    chatViewModel.updateMessage(
+                                        aiMessageIndex,
+                                        app.m1k3.ai.assistant.chat.ChatMessage(
+                                            text = streamedText,
+                                            isUser = false,
+                                            timestamp = aiMessageTimestamp,
+                                            inferenceStats = "⚡ Streaming... ($tokenCount tokens)",
+                                        ),
+                                    )
 
-                                        // Auto-scroll to keep the message visible
-                                        // Use scrollToItem (instant) during streaming to avoid MutatorMutex conflicts
-                                        // that would cancel the generation coroutine with CancellationException
-//                                        if (tokenCount % 3 == 0) {  // Scroll every 3 tokens to reduce UI updates
-//                                            try {
-//                                                listState.scrollToItem(chatViewModel.messages.value.size - 1)
-//                                            } catch (e: Exception) {
-//                                                // Ignore scroll failures - inference must continue regardless
-//                                            }
+                                    // Auto-scroll to keep the message visible
+                                    // Use scrollToItem (instant) during streaming to avoid MutatorMutex conflicts
+                                    // that would cancel the generation coroutine with CancellationException
+//                                    if (tokenCount % 3 == 0) {  // Scroll every 3 tokens to reduce UI updates
+//                                        try {
+//                                            listState.scrollToItem(chatViewModel.messages.value.size - 1)
+//                                        } catch (e: Exception) {
+//                                            // Ignore scroll failures - inference must continue regardless
 //                                        }
-                                    }
+//                                    }
                                 }
 
                                 // Final update with complete stats
@@ -660,7 +682,7 @@ fun ChatScreen(
                     item {
                         Box(
                             modifier = Modifier.fillMaxWidth(),
-                            contentAlignment = Alignment.CenterStart,
+                            contentAlignment = Alignment.CenterStart
                         ) {
                             CircularProgressIndicator(
                                 modifier = Modifier.size(24.dp),

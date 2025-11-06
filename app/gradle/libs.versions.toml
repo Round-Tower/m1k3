@@ -1,5 +1,5 @@
 [versions]
-agp = "8.11.2"
+agp = "8.13.0"
 android-compileSdk = "36"
 android-minSdk = "27"
 android-targetSdk = "36"
@@ -22,7 +22,7 @@ logback = "1.5.20"
 
 # M1K3 AI Dependencies
 sqldelight = "2.0.2"
-onnxruntime = "1.23.1"
+onnxruntime = "1.23.2"
 camerax = "1.4.0"
 mlkit-vision = "17.0.2"
 mlkit-text = "19.0.0"

@@ -22,7 +22,8 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import app.m1k3.ai.assistant.navigation.BottomNavigationBar
 import app.m1k3.ai.assistant.navigation.Screen
-import app.m1k3.ai.assistant.ai.SmolLM2Engine
+import app.m1k3.ai.assistant.ai.BaseLlmEngine
+import app.m1k3.ai.assistant.ai.LlamaCppEngine
 import app.m1k3.ai.assistant.database.AndroidDatabaseFactory
 import app.m1k3.ai.assistant.database.DatabaseConfig
 import app.m1k3.ai.assistant.database.MaDatabase
@@ -52,7 +53,7 @@ import java.io.InputStreamReader
  * - "Negative space" philosophy
  */
 class MainActivity : ComponentActivity() {
-    private lateinit var aiEngine: SmolLM2Engine
+    private lateinit var aiEngine: BaseLlmEngine
     private var driver: app.cash.sqldelight.db.SqlDriver? = null
     private var database: MaDatabase? = null
     private var knowledgeImportStatus by mutableStateOf<String?>(null)
@@ -66,7 +67,7 @@ class MainActivity : ComponentActivity() {
         // Configure system bars for AMOLED black theme
         WindowCompat.setDecorFitsSystemWindows(window, false)
 
-        aiEngine = SmolLM2Engine(this)
+        aiEngine = LlamaCppEngine(this)
 
         // Import knowledge base on first startup
         lifecycleScope.launch {

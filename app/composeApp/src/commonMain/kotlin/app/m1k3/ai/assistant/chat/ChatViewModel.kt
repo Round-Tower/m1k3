@@ -264,6 +264,52 @@ class ChatViewModel(
             sessionEcoStats = SessionEcoStats()
         )
     }
+
+    /**
+     * Clear all conversation history for the current project.
+     *
+     * ⚠️ WARNING: This is a destructive operation and cannot be undone.
+     * Use for debugging and testing only.
+     *
+     * This method:
+     * 1. Deletes all messages for the project from database
+     * 2. Clears the UI message list
+     * 3. Resets conversation ID (will create new conversation on next message)
+     * 4. Resets session stats
+     */
+    fun clearConversation() {
+        scope.launch {
+            try {
+                println("🗑️ [ChatViewModel] Clearing conversation history for project: $projectId")
+
+                // Delete all messages from database
+                database.messageQueries.deleteMessagesForProject(projectId)
+
+                // Delete all conversations for this project
+                val conversations = conversationRepo.getConversationsByProject(projectId)
+                conversations.forEach { conv ->
+                    conversationRepo.deleteConversation(conv.id)
+                }
+
+                // Clear UI state
+                _messages.value = emptyList()
+
+                // Reset conversation ID (will create new on next message)
+                currentConversationId = null
+
+                // Reset session stats
+                resetSessionStats()
+
+                println("✅ [ChatViewModel] Conversation history cleared successfully")
+            } catch (e: Exception) {
+                println("❌ [ChatViewModel] Failed to clear conversation: ${e.message}")
+                e.printStackTrace()
+                _state.value = _state.value.copy(
+                    error = "Failed to clear conversation: ${e.message}"
+                )
+            }
+        }
+    }
 }
 
 /**

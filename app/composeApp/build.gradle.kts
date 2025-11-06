@@ -44,7 +44,9 @@ kotlin {
             // TODO: Re-enable SQLCipher once we resolve native library setup
             // implementation(libs.sqlcipher)
             implementation(libs.androidx.security.crypto)
-            implementation(libs.onnxruntime.android)
+
+            // Inference engines
+            implementation(libs.onnxruntime.android)  // Keep for Gemma3Engine (Phase 4)
 
             // CameraX
             implementation(libs.camerax.core)
@@ -92,6 +94,10 @@ kotlin {
             implementation(libs.sqldelight.coroutines)
             implementation(libs.kotlinx.serialization.json)
             implementation(libs.kotlinx.datetime)
+
+            // Llamatik - KMP llama.cpp binding for GGUF models
+            // Published on Maven Central: https://mvnrepository.com/artifact/com.llamatik/library/0.8.1
+            implementation("com.llamatik:library:0.8.1")
         }
         commonTest.dependencies {
             implementation(libs.kotlin.test)

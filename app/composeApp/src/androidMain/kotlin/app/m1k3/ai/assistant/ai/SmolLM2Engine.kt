@@ -115,6 +115,9 @@ class SmolLM2Engine(private val context: Context) {
         }
     }
 
+    // 🧪 EXPERIMENTAL: Flag to test different prompt formats
+    private val USE_PLAIN_FORMAT = false  // Keep using ChatML for now
+
     /**
      * Build ChatML-formatted prompt with explicit newlines.
      *
@@ -148,6 +151,30 @@ class SmolLM2Engine(private val context: Context) {
     }
 
     /**
+     * 🧪 EXPERIMENTAL: Build plain prompt format (no special tokens)
+     *
+     * Test hypothesis: SmolLM2-135M may not be properly fine-tuned for ChatML,
+     * even though model card claims "Instruct" variant.
+     *
+     * Format: Simple labeled conversation format
+     * System: {instructions}
+     * User: {question}
+     * Assistant:
+     */
+    private fun buildPlainPrompt(
+        systemPrompt: String,
+        userPrompt: String
+    ): String = buildString {
+        append("System: ")
+        append(systemPrompt)
+        append("\n\n")
+        append("User: ")
+        append(userPrompt)
+        append("\n\n")
+        append("Assistant:")
+    }
+
+    /**
      * Initialize the AI engine.
      * Must be called before inference.
      */
@@ -165,13 +192,17 @@ class SmolLM2Engine(private val context: Context) {
             // 2. Configure session options for mobile optimization
             val sessionOptions = OrtSession.SessionOptions()
             sessionOptions.apply {
+                // Force CPU execution provider (avoid NNAPI mixed execution issues)
+                // ONNX Runtime was falling back to CPU for some nodes, causing incorrect inference
+                addCPU(true)  // Use CPU execution provider explicitly
+
                 setIntraOpNumThreads(4)  // Tensor G1 has 4 high-performance cores
                 setInterOpNumThreads(2)
                 setOptimizationLevel(OrtSession.SessionOptions.OptLevel.ALL_OPT)
                 setMemoryPatternOptimization(true)
                 // Note: setCpuArenaAllocator not available in this ONNX Runtime version
             }
-            println("   ✓ Session options configured (4 threads, full optimization)")
+            println("   ✓ Session options configured (CPU-only, 4 threads, full optimization)")
 
             // 3. Copy ONNX model to internal storage (avoids OOM when loading large model)
             val modelFile = java.io.File(context.filesDir, "smollm2-135m-q4f16.onnx")
@@ -249,11 +280,16 @@ class SmolLM2Engine(private val context: Context) {
             println("   Temperature: $temperature")
             println("   System prompt: \"$finalSystemPrompt\"")
 
-            // 1. Format prompt with ChatML template (using explicit newlines)
-            val formattedPrompt = buildChatMLPrompt(finalSystemPrompt, prompt)
+            // 1. Format prompt (ChatML or plain format based on experimental flag)
+            val formattedPrompt = if (USE_PLAIN_FORMAT) {
+                println("🧪 [EXPERIMENTAL] Using PLAIN prompt format (no ChatML special tokens)")
+                buildPlainPrompt(finalSystemPrompt, prompt)
+            } else {
+                buildChatMLPrompt(finalSystemPrompt, prompt)
+            }
 
-            println("🔍 [CHATML] Formatted prompt (${formattedPrompt.length} chars)")
-            println("🔍 [CHATML] Preview: ${formattedPrompt.take(100).replace("\n", "\\n")}")
+            println("🔍 [PROMPT-FORMAT] Formatted prompt (${formattedPrompt.length} chars)")
+            println("🔍 [PROMPT-FORMAT] Preview: ${formattedPrompt.take(100).replace("\n", "\\n")}")
 
             // 2. Tokenize input
             val inputIds = tok.encode(formattedPrompt)
@@ -325,14 +361,15 @@ class SmolLM2Engine(private val context: Context) {
                 )
 
                 // Add KV cache tensors
+                // NOTE: ONNX Runtime 1.17.0 expects FLOAT32 KV cache for all quantized models
                 if (isFirstToken || pastKeyValues == null) {
                     // First token: Use empty KV cache
                     for (layer in 0 until numLayers) {
                         val emptyKeyCache = ByteBuffer.allocateDirect(0).order(ByteOrder.nativeOrder())
                         val emptyValueCache = ByteBuffer.allocateDirect(0).order(ByteOrder.nativeOrder())
                         val shape = longArrayOf(1, numHeads.toLong(), 0, headDim.toLong())
-                        inputs["past_key_values.$layer.key"] = OnnxTensor.createTensor(env, emptyKeyCache, shape, ai.onnxruntime.OnnxJavaType.FLOAT16)
-                        inputs["past_key_values.$layer.value"] = OnnxTensor.createTensor(env, emptyValueCache, shape, ai.onnxruntime.OnnxJavaType.FLOAT16)
+                        inputs["past_key_values.$layer.key"] = OnnxTensor.createTensor(env, emptyKeyCache, shape, ai.onnxruntime.OnnxJavaType.FLOAT)
+                        inputs["past_key_values.$layer.value"] = OnnxTensor.createTensor(env, emptyValueCache, shape, ai.onnxruntime.OnnxJavaType.FLOAT)
                     }
                 } else {
                     // Subsequent tokens: Reuse KV cache from previous iteration
@@ -541,11 +578,16 @@ class SmolLM2Engine(private val context: Context) {
             println("   Max tokens: $maxTokens")
             println("   Temperature: $temperature")
 
-            // 1. Format prompt with ChatML template (using explicit newlines)
-            val formattedPrompt = buildChatMLPrompt(finalSystemPrompt, prompt)
+            // 1. Format prompt (ChatML or plain format based on experimental flag)
+            val formattedPrompt = if (USE_PLAIN_FORMAT) {
+                println("🧪 [EXPERIMENTAL] Using PLAIN prompt format (no ChatML special tokens)")
+                buildPlainPrompt(finalSystemPrompt, prompt)
+            } else {
+                buildChatMLPrompt(finalSystemPrompt, prompt)
+            }
 
-            println("🔍 [CHATML-STREAMING] Formatted prompt (${formattedPrompt.length} chars)")
-            println("🔍 [CHATML-STREAMING] Preview: ${formattedPrompt.replace("\n", "\\n")}")
+            println("🔍 [PROMPT-FORMAT-STREAMING] Formatted prompt (${formattedPrompt.length} chars)")
+            println("🔍 [PROMPT-FORMAT-STREAMING] Preview: ${formattedPrompt.replace("\n", "\\n")}")
 
             // 2. Tokenize input
             val inputIds = tok.encode(formattedPrompt)
@@ -601,13 +643,14 @@ class SmolLM2Engine(private val context: Context) {
                 )
 
                 // Add KV cache
+                // NOTE: ONNX Runtime 1.17.0 expects FLOAT32 KV cache for all quantized models
                 if (isFirstToken || pastKeyValues == null) {
                     for (layer in 0 until numLayers) {
                         val emptyKeyCache = ByteBuffer.allocateDirect(0).order(ByteOrder.nativeOrder())
                         val emptyValueCache = ByteBuffer.allocateDirect(0).order(ByteOrder.nativeOrder())
                         val shape = longArrayOf(1, numHeads.toLong(), 0, headDim.toLong())
-                        inputs["past_key_values.$layer.key"] = OnnxTensor.createTensor(env, emptyKeyCache, shape, ai.onnxruntime.OnnxJavaType.FLOAT16)
-                        inputs["past_key_values.$layer.value"] = OnnxTensor.createTensor(env, emptyValueCache, shape, ai.onnxruntime.OnnxJavaType.FLOAT16)
+                        inputs["past_key_values.$layer.key"] = OnnxTensor.createTensor(env, emptyKeyCache, shape, ai.onnxruntime.OnnxJavaType.FLOAT)
+                        inputs["past_key_values.$layer.value"] = OnnxTensor.createTensor(env, emptyValueCache, shape, ai.onnxruntime.OnnxJavaType.FLOAT)
                     }
                 } else {
                     for (layer in 0 until numLayers) {
@@ -791,23 +834,6 @@ class SmolLM2Engine(private val context: Context) {
         outputIds.add(maxIdx.toLong())
         return outputIds.toLongArray()
     } */
-}
-
-/**
- * AI generation result
- */
-data class GenerationResult(
-    val text: String,
-    val tokensGenerated: Int,
-    val inferenceTimeMs: Long,
-    val tokensPerSecond: Float
-) {
-    override fun toString(): String = """
-        Generated: "$text"
-        Tokens: $tokensGenerated
-        Time: ${inferenceTimeMs}ms
-        Speed: ${"%.1f".format(tokensPerSecond)} tokens/sec
-    """.trimIndent()
 }
 
 /**
