@@ -12,9 +12,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import app.m1k3.ai.assistant.design.tokens.MaFontFamilyCaption
 
 /**
  * 間 AI - Settings Screen
@@ -31,9 +34,7 @@ import androidx.compose.ui.unit.dp
  * Privacy-first settings with full transparency and user control.
  */
 @Composable
-fun SettingsScreen(
-    modifier: Modifier = Modifier
-) {
+fun SettingsScreen(modifier: Modifier = Modifier) {
     val haptics = LocalHapticFeedback.current
     val context = LocalContext.current
     val prefs = remember { context.getSharedPreferences("ma_ai_prefs", Context.MODE_PRIVATE) }
@@ -42,17 +43,18 @@ fun SettingsScreen(
     var ragEnabled by remember { mutableStateOf(prefs.getBoolean("rag_enabled", true)) }
 
     LazyColumn(
-        modifier = modifier
-            .fillMaxSize()
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+        modifier =
+            modifier
+                .fillMaxSize()
+                .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         // Header
         item {
             Text(
                 text = "Settings",
                 style = MaterialTheme.typography.headlineMedium,
-                fontWeight = FontWeight.Bold
+                fontWeight = FontWeight.Bold,
             )
         }
 
@@ -60,7 +62,7 @@ fun SettingsScreen(
         item {
             SettingsSection(
                 title = "Privacy",
-                icon = Icons.Default.Lock
+                icon = Icons.Default.Lock,
             ) {
                 SettingsItem(
                     title = "Privacy Dashboard",
@@ -69,7 +71,7 @@ fun SettingsScreen(
                     onClick = {
                         haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                         // TODO: Navigate to privacy dashboard
-                    }
+                    },
                 )
 
                 SettingsItem(
@@ -79,7 +81,7 @@ fun SettingsScreen(
                     onClick = {
                         haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                         // TODO: Show encryption details
-                    }
+                    },
                 )
             }
         }
@@ -88,7 +90,7 @@ fun SettingsScreen(
         item {
             SettingsSection(
                 title = "AI Model",
-                icon = Icons.Default.Memory
+                icon = Icons.Default.Memory,
             ) {
                 SettingsItem(
                     title = "SmolLM2-360M",
@@ -97,7 +99,7 @@ fun SettingsScreen(
                     onClick = {
                         haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                         // TODO: Show model details
-                    }
+                    },
                 )
 
                 SettingsItem(
@@ -107,7 +109,7 @@ fun SettingsScreen(
                     onClick = {
                         haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                         // TODO: Show context settings
-                    }
+                    },
                 )
             }
         }
@@ -116,40 +118,48 @@ fun SettingsScreen(
         item {
             SettingsSection(
                 title = "Knowledge & RAG",
-                icon = Icons.Default.MenuBook
+                icon = Icons.Default.MenuBook,
             ) {
                 // RAG Toggle
                 Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Column(
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier.weight(1f),
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
                             Icon(
                                 imageVector = Icons.Default.AutoAwesome,
                                 contentDescription = null,
                                 modifier = Modifier.size(20.dp),
-                                tint = MaterialTheme.colorScheme.primary
+                                tint = MaterialTheme.colorScheme.primary,
                             )
                             Text(
                                 text = "RAG (Retrieval-Augmented Generation)",
                                 style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.SemiBold
+                                fontWeight = FontWeight.SemiBold,
                             )
                         }
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
                             text = "Enhance responses with 1,401 expert documents across 24 categories",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            style =
+                                TextStyle(
+                                    fontFamily = MaFontFamilyCaption,
+                                    fontWeight = FontWeight.Normal,
+                                    fontSize = 12.sp,
+                                    lineHeight = 16.sp,
+                                    letterSpacing = 0.25.sp,
+                                ),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
 
@@ -160,7 +170,7 @@ fun SettingsScreen(
                             prefs.edit().putBoolean("rag_enabled", enabled).apply()
                             haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                             println("⚙️ [Settings] RAG ${if (enabled) "enabled" else "disabled"}")
-                        }
+                        },
                     )
                 }
 
@@ -173,7 +183,7 @@ fun SettingsScreen(
                     onClick = {
                         haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                         // TODO: Show knowledge base browser
-                    }
+                    },
                 )
 
                 SettingsItem(
@@ -183,7 +193,7 @@ fun SettingsScreen(
                     onClick = {
                         haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                         // TODO: Show intent classifier details
-                    }
+                    },
                 )
             }
         }
@@ -192,7 +202,7 @@ fun SettingsScreen(
         item {
             SettingsSection(
                 title = "Data",
-                icon = Icons.Default.Storage
+                icon = Icons.Default.Storage,
             ) {
                 SettingsItem(
                     title = "Export Conversations",
@@ -201,7 +211,7 @@ fun SettingsScreen(
                     onClick = {
                         haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                         // TODO: Export functionality
-                    }
+                    },
                 )
 
                 SettingsItem(
@@ -211,7 +221,7 @@ fun SettingsScreen(
                     onClick = {
                         haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                         // TODO: Import functionality
-                    }
+                    },
                 )
 
                 SettingsItem(
@@ -222,7 +232,7 @@ fun SettingsScreen(
                         haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                         // TODO: Clear data with confirmation
                     },
-                    isDestructive = true
+                    isDestructive = true,
                 )
             }
         }
@@ -231,7 +241,7 @@ fun SettingsScreen(
         item {
             SettingsSection(
                 title = "About",
-                icon = Icons.Default.Info
+                icon = Icons.Default.Info,
             ) {
                 SettingsItem(
                     title = "Version",
@@ -240,7 +250,7 @@ fun SettingsScreen(
                     onClick = {
                         haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                         // TODO: Show version details
-                    }
+                    },
                 )
 
                 SettingsItem(
@@ -250,7 +260,7 @@ fun SettingsScreen(
                     onClick = {
                         haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                         // TODO: Show licenses
-                    }
+                    },
                 )
 
                 SettingsItem(
@@ -260,7 +270,7 @@ fun SettingsScreen(
                     onClick = {
                         haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                         // TODO: Show privacy policy
-                    }
+                    },
                 )
             }
         }
@@ -279,35 +289,35 @@ fun SettingsScreen(
 private fun SettingsSection(
     title: String,
     icon: androidx.compose.ui.graphics.vector.ImageVector,
-    content: @Composable ColumnScope.() -> Unit
+    content: @Composable ColumnScope.() -> Unit,
 ) {
     Column(
-        verticalArrangement = Arrangement.spacedBy(8.dp)
+        verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp),
-            modifier = Modifier.padding(bottom = 8.dp)
+            modifier = Modifier.padding(bottom = 8.dp),
         ) {
             Icon(
                 imageVector = icon,
                 contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary
+                tint = MaterialTheme.colorScheme.primary,
             )
             Text(
                 text = title,
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSurface
+                color = MaterialTheme.colorScheme.onSurface,
             )
         }
 
         Card(
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth(),
         ) {
             Column(
                 modifier = Modifier.padding(8.dp),
-                content = content
+                content = content,
             )
         }
     }
@@ -322,46 +332,47 @@ private fun SettingsItem(
     subtitle: String,
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     onClick: () -> Unit,
-    isDestructive: Boolean = false
+    isDestructive: Boolean = false,
 ) {
     Surface(
         onClick = onClick,
         modifier = Modifier.fillMaxWidth(),
-        color = MaterialTheme.colorScheme.surface
+        color = MaterialTheme.colorScheme.surface,
     ) {
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(12.dp),
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(12.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
-            verticalAlignment = Alignment.CenterVertically
+            verticalAlignment = Alignment.CenterVertically,
         ) {
             Icon(
                 imageVector = icon,
                 contentDescription = null,
-                tint = if (isDestructive) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
+                tint = if (isDestructive) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
             )
 
             Column(
                 modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(4.dp)
+                verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
                 Text(
                     text = title,
                     style = MaterialTheme.typography.bodyLarge,
-                    color = if (isDestructive) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface
+                    color = if (isDestructive) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
                 )
                 Text(
                     text = subtitle,
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
 
             Icon(
                 imageVector = Icons.Default.ChevronRight,
                 contentDescription = "Navigate",
-                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
     }

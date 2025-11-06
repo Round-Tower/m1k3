@@ -16,14 +16,17 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import app.m1k3.ai.assistant.chat.SessionEcoStats
 import app.m1k3.ai.assistant.design.components.MaCard
-import app.m1k3.ai.assistant.design.haptics.HapticFeedbackType
 import app.m1k3.ai.assistant.design.haptics.HapticFeedbackController
+import app.m1k3.ai.assistant.design.haptics.HapticFeedbackType
 import app.m1k3.ai.assistant.design.haptics.rememberHapticFeedback
 import app.m1k3.ai.assistant.design.tokens.MaColors
+import app.m1k3.ai.assistant.design.tokens.MaFontFamilyCaption
 import app.m1k3.ai.assistant.design.tokens.MaSpacing
 import app.m1k3.ai.assistant.design.tokens.MaTypography
 
@@ -49,7 +52,7 @@ fun EcoIndicator(
     stats: SessionEcoStats,
     onClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
-    variant: EcoIndicatorVariant = EcoIndicatorVariant.COMPACT
+    variant: EcoIndicatorVariant = EcoIndicatorVariant.COMPACT,
 ) {
     val haptics = rememberHapticFeedback()
 
@@ -57,17 +60,17 @@ fun EcoIndicator(
     val animatedWater by animateIntAsState(
         targetValue = stats.waterMl.toInt(),
         animationSpec = tween(durationMillis = 500, easing = FastOutSlowInEasing),
-        label = "water_animation"
+        label = "water_animation",
     )
     val animatedEnergy by animateIntAsState(
         targetValue = stats.energyWh.toInt(),
         animationSpec = tween(durationMillis = 500, easing = FastOutSlowInEasing),
-        label = "energy_animation"
+        label = "energy_animation",
     )
     val animatedCO2 by animateIntAsState(
         targetValue = stats.co2G.toInt(),
         animationSpec = tween(durationMillis = 500, easing = FastOutSlowInEasing),
-        label = "co2_animation"
+        label = "co2_animation",
     )
 
     // Pulse animation when values update
@@ -80,34 +83,38 @@ fun EcoIndicator(
 
     val scale by animateFloatAsState(
         targetValue = if (pulseKey > 0) 1.05f else 1f,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioMediumBouncy,
-            stiffness = Spring.StiffnessMedium
-        ),
-        label = "pulse_animation"
+        animationSpec =
+            spring(
+                dampingRatio = Spring.DampingRatioMediumBouncy,
+                stiffness = Spring.StiffnessMedium,
+            ),
+        label = "pulse_animation",
     )
 
     when (variant) {
-        EcoIndicatorVariant.COMPACT -> CompactEcoIndicator(
-            waterMl = animatedWater.toLong(),
-            energyWh = animatedEnergy.toLong(),
-            co2G = animatedCO2.toLong(),
-            onClick = onClick,
-            scale = scale,
-            haptics = haptics,
-            modifier = modifier
-        )
-        EcoIndicatorVariant.EXPANDED -> ExpandedEcoIndicator(
-            stats = stats.copy(
+        EcoIndicatorVariant.COMPACT ->
+            CompactEcoIndicator(
                 waterMl = animatedWater.toLong(),
                 energyWh = animatedEnergy.toLong(),
-                co2G = animatedCO2.toLong()
-            ),
-            onClick = onClick,
-            scale = scale,
-            haptics = haptics,
-            modifier = modifier
-        )
+                co2G = animatedCO2.toLong(),
+                onClick = onClick,
+                scale = scale,
+                haptics = haptics,
+                modifier = modifier,
+            )
+        EcoIndicatorVariant.EXPANDED ->
+            ExpandedEcoIndicator(
+                stats =
+                    stats.copy(
+                        waterMl = animatedWater.toLong(),
+                        energyWh = animatedEnergy.toLong(),
+                        co2G = animatedCO2.toLong(),
+                    ),
+                onClick = onClick,
+                scale = scale,
+                haptics = haptics,
+                modifier = modifier,
+            )
     }
 }
 
@@ -122,51 +129,52 @@ private fun CompactEcoIndicator(
     onClick: (() -> Unit)?,
     scale: Float,
     haptics: HapticFeedbackController,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     Box(
-        modifier = modifier
-            .scale(scale)
-            .then(
-                if (onClick != null) {
-                    Modifier.clickable {
-                        haptics.performHapticFeedback(HapticFeedbackType.LIGHT)
-                        onClick()
-                    }
-                } else {
-                    Modifier
-                }
-            )
+        modifier =
+            modifier
+                .scale(scale)
+                .then(
+                    if (onClick != null) {
+                        Modifier.clickable {
+                            haptics.performHapticFeedback(HapticFeedbackType.LIGHT)
+                            onClick()
+                        }
+                    } else {
+                        Modifier
+                    },
+                ),
     ) {
         Row(
-            modifier = Modifier
-                .background(
-                    color = MaColors.BgElevated,
-                    shape = RoundedCornerShape(12.dp)
-                )
-                .padding(horizontal = MaSpacing.md, vertical = MaSpacing.sm),
+            modifier =
+                Modifier
+                    .background(
+                        color = MaColors.BgElevated,
+                        shape = RoundedCornerShape(12.dp),
+                    ).padding(horizontal = MaSpacing.md, vertical = MaSpacing.sm),
             horizontalArrangement = Arrangement.spacedBy(MaSpacing.md),
-            verticalAlignment = Alignment.CenterVertically
+            verticalAlignment = Alignment.CenterVertically,
         ) {
             // Water
             EcoMetric(
                 emoji = "💧",
                 value = formatWaterCompact(waterMl),
-                color = Color(0xFF4FC3F7) // Light blue
+                color = Color(0xFF4FC3F7), // Light blue
             )
 
             // Energy
             EcoMetric(
                 emoji = "⚡",
                 value = formatEnergyCompact(energyWh),
-                color = Color(0xFFFFA726) // Orange
+                color = Color(0xFFFFA726), // Orange
             )
 
             // CO2
             EcoMetric(
                 emoji = "🌱",
                 value = formatCO2Compact(co2G),
-                color = Color(0xFF66BB6A) // Green
+                color = Color(0xFF66BB6A), // Green
             )
 
             // Info icon (if clickable)
@@ -175,7 +183,7 @@ private fun CompactEcoIndicator(
                     imageVector = Icons.Default.Info,
                     contentDescription = "View details",
                     tint = MaColors.TextMuted,
-                    modifier = Modifier.size(16.dp)
+                    modifier = Modifier.size(16.dp),
                 )
             }
         }
@@ -191,34 +199,38 @@ private fun ExpandedEcoIndicator(
     onClick: (() -> Unit)?,
     scale: Float,
     haptics: HapticFeedbackController,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     MaCard(
         modifier = modifier.scale(scale),
-        onClick = if (onClick != null) {
-            {
-                haptics.performHapticFeedback(HapticFeedbackType.LIGHT)
-                onClick()
-            }
-        } else null
+        onClick =
+            if (onClick != null) {
+                {
+                    haptics.performHapticFeedback(HapticFeedbackType.LIGHT)
+                    onClick()
+                }
+            } else {
+                null
+            },
     ) {
         Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(MaSpacing.md),
-            verticalArrangement = Arrangement.spacedBy(MaSpacing.sm)
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(MaSpacing.md),
+            verticalArrangement = Arrangement.spacedBy(MaSpacing.sm),
         ) {
             // Header
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
                     text = "🌿 Environmental Savings",
                     style = MaTypography.titleSmall,
                     fontWeight = FontWeight.Bold,
-                    color = MaColors.TextPrimary
+                    color = MaColors.TextPrimary,
                 )
 
                 if (onClick != null) {
@@ -226,14 +238,14 @@ private fun ExpandedEcoIndicator(
                         imageVector = Icons.Default.Info,
                         contentDescription = "View details",
                         tint = MaColors.TextMuted,
-                        modifier = Modifier.size(18.dp)
+                        modifier = Modifier.size(18.dp),
                     )
                 }
             }
 
             HorizontalDivider(
                 color = MaColors.BorderLight,
-                thickness = 1.dp
+                thickness = 1.dp,
             )
 
             // Metrics
@@ -241,40 +253,41 @@ private fun ExpandedEcoIndicator(
                 emoji = "💧",
                 label = "Water Saved",
                 value = stats.formatWater(),
-                color = Color(0xFF4FC3F7)
+                color = Color(0xFF4FC3F7),
             )
 
             EcoMetricRow(
                 emoji = "⚡",
                 label = "Energy Saved",
                 value = stats.formatEnergy(),
-                color = Color(0xFFFFA726)
+                color = Color(0xFFFFA726),
             )
 
             EcoMetricRow(
                 emoji = "🌱",
                 label = "CO2 Prevented",
                 value = stats.formatCO2(),
-                color = Color(0xFF66BB6A)
+                color = Color(0xFF66BB6A),
             )
 
             // Footer stats
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = MaSpacing.xs),
-                horizontalArrangement = Arrangement.SpaceBetween
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(top = MaSpacing.xs),
+                horizontalArrangement = Arrangement.SpaceBetween,
             ) {
                 Text(
                     text = "${stats.messageCount} messages",
                     style = MaTypography.bodySmall,
-                    color = MaColors.TextMuted
+                    color = MaColors.TextMuted,
                 )
 
                 Text(
                     text = "${stats.totalTokens} tokens",
                     style = MaTypography.bodySmall,
-                    color = MaColors.TextMuted
+                    color = MaColors.TextMuted,
                 )
             }
         }
@@ -288,21 +301,21 @@ private fun ExpandedEcoIndicator(
 private fun EcoMetric(
     emoji: String,
     value: String,
-    color: Color
+    color: Color,
 ) {
     Row(
         horizontalArrangement = Arrangement.spacedBy(MaSpacing.xs),
-        verticalAlignment = Alignment.CenterVertically
+        verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
             text = emoji,
-            style = MaTypography.bodySmall
+            style = MaTypography.bodySmall,
         )
         Text(
             text = value,
             style = MaTypography.bodySmall,
             fontWeight = FontWeight.Medium,
-            color = color
+            color = color,
         )
     }
 }
@@ -315,34 +328,42 @@ private fun EcoMetricRow(
     emoji: String,
     label: String,
     value: String,
-    color: Color
+    color: Color,
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
+        verticalAlignment = Alignment.CenterVertically,
     ) {
         Row(
             horizontalArrangement = Arrangement.spacedBy(MaSpacing.sm),
-            verticalAlignment = Alignment.CenterVertically
+            verticalAlignment = Alignment.CenterVertically,
         ) {
             Box(
-                modifier = Modifier
-                    .size(32.dp)
-                    .clip(CircleShape)
-                    .background(color.copy(alpha = 0.2f)),
-                contentAlignment = Alignment.Center
+                modifier =
+                    Modifier
+                        .size(32.dp)
+                        .clip(CircleShape)
+                        .background(color.copy(alpha = 0.2f)),
+                contentAlignment = Alignment.Center,
             ) {
                 Text(
                     text = emoji,
-                    style = MaTypography.bodyMedium
+                    style = MaTypography.bodyMedium,
                 )
             }
 
             Text(
                 text = label,
-                style = MaTypography.bodyMedium,
-                color = MaColors.TextSecondary
+                style =
+                    TextStyle(
+                        fontFamily = MaFontFamilyCaption,
+                        fontWeight = FontWeight.Normal,
+                        fontSize = 12.sp,
+                        lineHeight = 16.sp,
+                        letterSpacing = 0.25.sp,
+                    ),
+                color = MaColors.TextSecondary,
             )
         }
 
@@ -350,7 +371,7 @@ private fun EcoMetricRow(
             text = value,
             style = MaTypography.bodyMedium,
             fontWeight = FontWeight.Bold,
-            color = color
+            color = color,
         )
     }
 }
@@ -358,29 +379,26 @@ private fun EcoMetricRow(
 /**
  * Compact formatting helpers
  */
-private fun formatWaterCompact(waterMl: Long): String {
-    return when {
+private fun formatWaterCompact(waterMl: Long): String =
+    when {
         waterMl >= 1000 -> "${waterMl / 1000}L"
         waterMl == 0L -> "0ml"
         else -> "${waterMl}ml"
     }
-}
 
-private fun formatEnergyCompact(energyWh: Long): String {
-    return when {
+private fun formatEnergyCompact(energyWh: Long): String =
+    when {
         energyWh >= 1000 -> "${energyWh / 1000}kWh"
         energyWh == 0L -> "0Wh"
         else -> "${energyWh}Wh"
     }
-}
 
-private fun formatCO2Compact(co2G: Long): String {
-    return when {
+private fun formatCO2Compact(co2G: Long): String =
+    when {
         co2G >= 1000 -> "${co2G / 1000}kg"
         co2G == 0L -> "0g"
         else -> "${co2G}g"
     }
-}
 
 /**
  * Display variant options
@@ -390,7 +408,7 @@ enum class EcoIndicatorVariant {
     COMPACT,
 
     /** Expanded card with detailed labels */
-    EXPANDED
+    EXPANDED,
 }
 
 /**
@@ -398,32 +416,56 @@ enum class EcoIndicatorVariant {
  */
 @Composable
 fun EcoIndicatorPreview() {
-    val sampleStats = SessionEcoStats(
-        totalTokens = 1250,
-        waterMl = 2500,
-        energyWh = 1800,
-        co2G = 1200,
-        messageCount = 5
-    )
+    val sampleStats =
+        SessionEcoStats(
+            totalTokens = 1250,
+            waterMl = 2500,
+            energyWh = 1800,
+            co2G = 1200,
+            messageCount = 5,
+        )
 
     Column(
-        modifier = Modifier
-            .background(MaColors.BgPrimary)
-            .padding(MaSpacing.md),
-        verticalArrangement = Arrangement.spacedBy(MaSpacing.md)
+        modifier =
+            Modifier
+                .background(MaColors.BgPrimary)
+                .padding(MaSpacing.md),
+        verticalArrangement = Arrangement.spacedBy(MaSpacing.md),
     ) {
-        Text("Compact Variant:", color = MaColors.TextPrimary)
+        Text(
+            "Compact Variant:",
+            style =
+                TextStyle(
+                    fontFamily = MaFontFamilyCaption,
+                    fontWeight = FontWeight.Normal,
+                    fontSize = 12.sp,
+                    lineHeight = 16.sp,
+                    letterSpacing = 0.25.sp,
+                ),
+            color = MaColors.TextPrimary,
+        )
         EcoIndicator(
             stats = sampleStats,
             variant = EcoIndicatorVariant.COMPACT,
-            onClick = { println("Clicked!") }
+            onClick = { println("Clicked!") },
         )
 
-        Text("Expanded Variant:", color = MaColors.TextPrimary)
+        Text(
+            "Expanded Variant:",
+            style =
+                TextStyle(
+                    fontFamily = MaFontFamilyCaption,
+                    fontWeight = FontWeight.Normal,
+                    fontSize = 12.sp,
+                    lineHeight = 16.sp,
+                    letterSpacing = 0.25.sp,
+                ),
+            color = MaColors.TextPrimary,
+        )
         EcoIndicator(
             stats = sampleStats,
             variant = EcoIndicatorVariant.EXPANDED,
-            onClick = { println("Clicked!") }
+            onClick = { println("Clicked!") },
         )
     }
 }

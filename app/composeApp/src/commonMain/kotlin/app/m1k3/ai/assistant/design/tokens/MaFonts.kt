@@ -1,6 +1,5 @@
 package app.m1k3.ai.assistant.design.tokens
 
-import androidx.compose.runtime.Composable
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 
@@ -34,14 +33,21 @@ expect val MaFontFamilyBody: FontFamily
 expect val MaFontFamilyMono: FontFamily
 
 /**
+ * Caption font family - for captions and secondary text
+ *
+ * Uses Doto font family for distinctive, readable captions
+ */
+expect val MaFontFamilyCaption: FontFamily
+
+/**
  * Font weights used throughout the app
  */
 object MaFontWeights {
-    val Light = FontWeight.Light        // 300
-    val Normal = FontWeight.Normal      // 400
-    val Medium = FontWeight.Medium      // 500
-    val SemiBold = FontWeight.SemiBold  // 600
-    val Bold = FontWeight.Bold          // 700
+    val Light = FontWeight.Light // 300
+    val Normal = FontWeight.Normal // 400
+    val Medium = FontWeight.Medium // 500
+    val SemiBold = FontWeight.SemiBold // 600
+    val Bold = FontWeight.Bold // 700
     val ExtraBold = FontWeight.ExtraBold // 800
 }
 
@@ -64,6 +70,12 @@ object MaFontWeights {
  *     "42 tok/s • 256 tokens",
  *     fontFamily = MaFontFamilyMono,
  *     fontWeight = MaFontWeights.Medium
+ * )
+ *
+ * Text(
+ *     "Caption text",
+ *     fontFamily = MaFontFamilyCaption,
+ *     fontWeight = MaFontWeights.Normal
  * )
  * ```
  */

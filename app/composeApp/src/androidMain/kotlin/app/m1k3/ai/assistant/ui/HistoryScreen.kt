@@ -6,9 +6,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
@@ -17,19 +15,21 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import app.m1k3.ai.assistant.database.MaDatabase
-import app.m1k3.ai.assistant.history.*
-import app.m1k3.ai.assistant.design.components.MaCard
 import app.m1k3.ai.assistant.design.components.MaButtonPrimary
 import app.m1k3.ai.assistant.design.components.MaButtonSecondary
+import app.m1k3.ai.assistant.design.components.MaCard
 import app.m1k3.ai.assistant.design.haptics.HapticFeedbackType
 import app.m1k3.ai.assistant.design.haptics.rememberHapticFeedback
 import app.m1k3.ai.assistant.design.tokens.MaColors
+import app.m1k3.ai.assistant.design.tokens.MaFontFamilyCaption
 import app.m1k3.ai.assistant.design.tokens.MaSpacing
 import app.m1k3.ai.assistant.design.tokens.MaTypography
-import kotlinx.coroutines.launch
+import app.m1k3.ai.assistant.history.*
 import kotlinx.datetime.Instant
 
 /**
@@ -49,23 +49,24 @@ fun HistoryScreen(
     database: MaDatabase,
     projectId: String,
     onBackClick: () -> Unit = {},
-    onConversationClick: (Long) -> Unit = {}
+    onConversationClick: (Long) -> Unit = {},
 ) {
     val haptics = rememberHapticFeedback()
     val scope = rememberCoroutineScope()
 
     // Initialize ViewModel
-    val viewModel = remember(projectId) {
-        val conversationRepo = ConversationRepository(database)
-        val searchRepo = SearchRepository(database)
-        val exportManager = ExportManager(database)
-        HistoryViewModel(
-            conversationRepository = conversationRepo,
-            searchRepository = searchRepo,
-            exportManager = exportManager,
-            scope = scope
-        )
-    }
+    val viewModel =
+        remember(projectId) {
+            val conversationRepo = ConversationRepository(database)
+            val searchRepo = SearchRepository(database)
+            val exportManager = ExportManager(database)
+            HistoryViewModel(
+                conversationRepository = conversationRepo,
+                searchRepository = searchRepo,
+                exportManager = exportManager,
+                scope = scope,
+            )
+        }
 
     val state by viewModel.state.collectAsState()
 
@@ -87,12 +88,19 @@ fun HistoryScreen(
                             "💬 Conversation History",
                             style = MaTypography.titleLarge,
                             fontWeight = FontWeight.Bold,
-                            color = MaColors.TextPrimary
+                            color = MaColors.TextPrimary,
                         )
                         Text(
                             "${state.conversations.size} conversations",
-                            style = MaTypography.bodySmall,
-                            color = MaColors.TextSecondary
+                            style =
+                                TextStyle(
+                                    fontFamily = MaFontFamilyCaption,
+                                    fontWeight = FontWeight.Normal,
+                                    fontSize = 12.sp,
+                                    lineHeight = 16.sp,
+                                    letterSpacing = 0.25.sp,
+                                ),
+                            color = MaColors.TextSecondary,
                         )
                     }
                 },
@@ -104,33 +112,37 @@ fun HistoryScreen(
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = "Back",
-                            tint = MaColors.TextPrimary
+                            tint = MaColors.TextPrimary,
                         )
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaColors.BgPrimary
-                )
+                colors =
+                    TopAppBarDefaults.topAppBarColors(
+                        containerColor = MaColors.BgPrimary,
+                    ),
             )
-        }
+        },
     ) { paddingValues ->
         Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .padding(paddingValues),
         ) {
             Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(MaSpacing.md)
+                modifier =
+                    Modifier
+                        .fillMaxSize()
+                        .padding(MaSpacing.md),
             ) {
                 // Search bar
                 SearchBar(
                     query = state.searchQuery,
                     onQueryChange = { viewModel.searchConversations(it) },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(bottom = MaSpacing.md)
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = MaSpacing.md),
                 )
 
                 // Error display
@@ -138,7 +150,7 @@ fun HistoryScreen(
                     ErrorCard(
                         message = error,
                         onDismiss = { viewModel.clearError() },
-                        modifier = Modifier.padding(bottom = MaSpacing.md)
+                        modifier = Modifier.padding(bottom = MaSpacing.md),
                     )
                 }
 
@@ -146,10 +158,10 @@ fun HistoryScreen(
                 if (state.isLoading) {
                     Box(
                         modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center
+                        contentAlignment = Alignment.Center,
                     ) {
                         CircularProgressIndicator(
-                            color = MaColors.Orange
+                            color = MaColors.Orange,
                         )
                     }
                 }
@@ -160,14 +172,14 @@ fun HistoryScreen(
                         results = state.searchResults!!,
                         onResultClick = { result ->
                             result.conversationId?.let { onConversationClick(it) }
-                        }
+                        },
                     )
                 } else {
                     ConversationsList(
                         conversations = state.conversations,
                         onConversationClick = onConversationClick,
                         onDeleteClick = { showDeleteDialog = it },
-                        onExportClick = { showExportDialog = it }
+                        onExportClick = { showExportDialog = it },
                     )
                 }
             }
@@ -180,7 +192,7 @@ fun HistoryScreen(
                         viewModel.deleteConversation(conversationId)
                         showDeleteDialog = null
                     },
-                    onDismiss = { showDeleteDialog = null }
+                    onDismiss = { showDeleteDialog = null },
                 )
             }
 
@@ -194,7 +206,7 @@ fun HistoryScreen(
                         println("Exported: ${exported?.take(100)}...")
                         showExportDialog = null
                     },
-                    onDismiss = { showExportDialog = null }
+                    onDismiss = { showExportDialog = null },
                 )
             }
         }
@@ -208,53 +220,55 @@ fun HistoryScreen(
 private fun SearchBar(
     query: String,
     onQueryChange: (String) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     MaCard(modifier = modifier) {
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(MaSpacing.md),
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(MaSpacing.md),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(MaSpacing.sm)
+            horizontalArrangement = Arrangement.spacedBy(MaSpacing.sm),
         ) {
             Icon(
                 imageVector = Icons.Default.Search,
                 contentDescription = "Search",
                 tint = MaColors.TextSecondary,
-                modifier = Modifier.size(20.dp)
+                modifier = Modifier.size(20.dp),
             )
 
             BasicTextField(
                 value = query,
                 onValueChange = onQueryChange,
                 modifier = Modifier.weight(1f),
-                textStyle = MaTypography.bodyMedium.copy(
-                    color = MaColors.TextPrimary
-                ),
+                textStyle =
+                    MaTypography.bodyMedium.copy(
+                        color = MaColors.TextPrimary,
+                    ),
                 cursorBrush = SolidColor(MaColors.Orange),
                 decorationBox = { innerTextField ->
                     if (query.isEmpty()) {
                         Text(
                             "Search conversations...",
                             style = MaTypography.bodyMedium,
-                            color = MaColors.TextMuted
+                            color = MaColors.TextMuted,
                         )
                     }
                     innerTextField()
-                }
+                },
             )
 
             if (query.isNotEmpty()) {
                 IconButton(
                     onClick = { onQueryChange("") },
-                    modifier = Modifier.size(24.dp)
+                    modifier = Modifier.size(24.dp),
                 ) {
                     Icon(
                         imageVector = Icons.Default.Clear,
                         contentDescription = "Clear search",
                         tint = MaColors.TextSecondary,
-                        modifier = Modifier.size(18.dp)
+                        modifier = Modifier.size(18.dp),
                     )
                 }
             }
@@ -270,23 +284,23 @@ private fun ConversationsList(
     conversations: List<ConversationInfo>,
     onConversationClick: (Long) -> Unit,
     onDeleteClick: (Long) -> Unit,
-    onExportClick: (Long) -> Unit
+    onExportClick: (Long) -> Unit,
 ) {
     if (conversations.isEmpty()) {
         EmptyState(
             message = "No conversations yet",
-            subtitle = "Start chatting to see your history here"
+            subtitle = "Start chatting to see your history here",
         )
     } else {
         LazyColumn(
-            verticalArrangement = Arrangement.spacedBy(MaSpacing.sm)
+            verticalArrangement = Arrangement.spacedBy(MaSpacing.sm),
         ) {
             items(conversations, key = { it.id }) { conversation ->
                 ConversationCard(
                     conversation = conversation,
                     onClick = { onConversationClick(conversation.id) },
                     onDeleteClick = { onDeleteClick(conversation.id) },
-                    onExportClick = { onExportClick(conversation.id) }
+                    onExportClick = { onExportClick(conversation.id) },
                 )
             }
         }
@@ -301,7 +315,7 @@ private fun ConversationCard(
     conversation: ConversationInfo,
     onClick: () -> Unit,
     onDeleteClick: () -> Unit,
-    onExportClick: () -> Unit
+    onExportClick: () -> Unit,
 ) {
     val haptics = rememberHapticFeedback()
     var expanded by remember { mutableStateOf(false) }
@@ -310,18 +324,19 @@ private fun ConversationCard(
         onClick = {
             haptics.performHapticFeedback(HapticFeedbackType.LIGHT)
             onClick()
-        }
+        },
     ) {
         Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(MaSpacing.md)
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(MaSpacing.md),
         ) {
             // Title and message count
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.Top
+                verticalAlignment = Alignment.Top,
             ) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
@@ -329,24 +344,38 @@ private fun ConversationCard(
                         style = MaTypography.titleMedium,
                         fontWeight = FontWeight.Medium,
                         color = MaColors.TextPrimary,
-                        maxLines = 2
+                        maxLines = 2,
                     )
 
                     Spacer(modifier = Modifier.height(MaSpacing.xs))
 
                     Row(
-                        horizontalArrangement = Arrangement.spacedBy(MaSpacing.md)
+                        horizontalArrangement = Arrangement.spacedBy(MaSpacing.md),
                     ) {
                         Text(
                             text = "${conversation.messageCount} messages",
-                            style = MaTypography.bodySmall,
-                            color = MaColors.TextSecondary
+                            style =
+                                TextStyle(
+                                    fontFamily = MaFontFamilyCaption,
+                                    fontWeight = FontWeight.Normal,
+                                    fontSize = 12.sp,
+                                    lineHeight = 16.sp,
+                                    letterSpacing = 0.25.sp,
+                                ),
+                            color = MaColors.TextSecondary,
                         )
 
                         Text(
                             text = "${conversation.tokenCount} tokens",
-                            style = MaTypography.bodySmall,
-                            color = MaColors.TextSecondary
+                            style =
+                                TextStyle(
+                                    fontFamily = MaFontFamilyCaption,
+                                    fontWeight = FontWeight.Normal,
+                                    fontSize = 12.sp,
+                                    lineHeight = 16.sp,
+                                    letterSpacing = 0.25.sp,
+                                ),
+                            color = MaColors.TextSecondary,
                         )
                     }
                 }
@@ -356,13 +385,17 @@ private fun ConversationCard(
                         haptics.performHapticFeedback(HapticFeedbackType.LIGHT)
                         expanded = !expanded
                     },
-                    modifier = Modifier.size(32.dp)
+                    modifier = Modifier.size(32.dp),
                 ) {
                     Icon(
-                        imageVector = if (expanded) Icons.Default.KeyboardArrowUp
-                                      else Icons.Default.KeyboardArrowDown,
+                        imageVector =
+                            if (expanded) {
+                                Icons.Default.KeyboardArrowUp
+                            } else {
+                                Icons.Default.KeyboardArrowDown
+                            },
                         contentDescription = if (expanded) "Collapse" else "Expand",
-                        tint = MaColors.TextSecondary
+                        tint = MaColors.TextSecondary,
                     )
                 }
             }
@@ -372,26 +405,26 @@ private fun ConversationCard(
             Text(
                 text = formatTimestamp(conversation.lastMessageAt),
                 style = MaTypography.bodySmall,
-                color = MaColors.TextMuted
+                color = MaColors.TextMuted,
             )
 
             // Expanded actions
             AnimatedVisibility(
                 visible = expanded,
                 enter = fadeIn(),
-                exit = fadeOut()
+                exit = fadeOut(),
             ) {
                 Column {
                     Spacer(modifier = Modifier.height(MaSpacing.md))
 
                     HorizontalDivider(
                         color = MaColors.BorderLight,
-                        modifier = Modifier.padding(vertical = MaSpacing.sm)
+                        modifier = Modifier.padding(vertical = MaSpacing.sm),
                     )
 
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(MaSpacing.sm)
+                        horizontalArrangement = Arrangement.spacedBy(MaSpacing.sm),
                     ) {
                         MaButtonSecondary(
                             text = "Export",
@@ -399,7 +432,7 @@ private fun ConversationCard(
                                 haptics.performHapticFeedback(HapticFeedbackType.LIGHT)
                                 onExportClick()
                             },
-                            modifier = Modifier.weight(1f)
+                            modifier = Modifier.weight(1f),
                         )
 
                         MaButtonSecondary(
@@ -408,7 +441,7 @@ private fun ConversationCard(
                                 haptics.performHapticFeedback(HapticFeedbackType.LIGHT)
                                 onDeleteClick()
                             },
-                            modifier = Modifier.weight(1f)
+                            modifier = Modifier.weight(1f),
                         )
                     }
                 }
@@ -423,21 +456,21 @@ private fun ConversationCard(
 @Composable
 private fun SearchResultsList(
     results: List<SearchResult>,
-    onResultClick: (SearchResult) -> Unit
+    onResultClick: (SearchResult) -> Unit,
 ) {
     if (results.isEmpty()) {
         EmptyState(
             message = "No results found",
-            subtitle = "Try a different search term"
+            subtitle = "Try a different search term",
         )
     } else {
         LazyColumn(
-            verticalArrangement = Arrangement.spacedBy(MaSpacing.sm)
+            verticalArrangement = Arrangement.spacedBy(MaSpacing.sm),
         ) {
             items(results, key = { it.id }) { result ->
                 SearchResultCard(
                     result = result,
-                    onClick = { onResultClick(result) }
+                    onClick = { onResultClick(result) },
                 )
             }
         }
@@ -450,7 +483,7 @@ private fun SearchResultsList(
 @Composable
 private fun SearchResultCard(
     result: SearchResult,
-    onClick: () -> Unit
+    onClick: () -> Unit,
 ) {
     val haptics = rememberHapticFeedback()
 
@@ -458,30 +491,31 @@ private fun SearchResultCard(
         onClick = {
             haptics.performHapticFeedback(HapticFeedbackType.LIGHT)
             onClick()
-        }
+        },
     ) {
         Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(MaSpacing.md)
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(MaSpacing.md),
         ) {
             // Relevance score
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
                     text = result.role.uppercase(),
                     style = MaTypography.labelSmall,
                     fontWeight = FontWeight.Bold,
-                    color = if (result.role == "user") MaColors.Orange else MaColors.TextSecondary
+                    color = if (result.role == "user") MaColors.Orange else MaColors.TextSecondary,
                 )
 
                 Text(
                     text = "${(result.relevanceScore * 100).toInt()}% match",
                     style = MaTypography.labelSmall,
-                    color = MaColors.TextMuted
+                    color = MaColors.TextMuted,
                 )
             }
 
@@ -492,7 +526,7 @@ private fun SearchResultCard(
                 text = result.content,
                 style = MaTypography.bodyMedium,
                 color = MaColors.TextPrimary,
-                maxLines = 3
+                maxLines = 3,
             )
 
             Spacer(modifier = Modifier.height(MaSpacing.sm))
@@ -501,7 +535,7 @@ private fun SearchResultCard(
             Text(
                 text = formatTimestamp(result.timestamp),
                 style = MaTypography.bodySmall,
-                color = MaColors.TextMuted
+                color = MaColors.TextMuted,
             )
         }
     }
@@ -514,7 +548,7 @@ private fun SearchResultCard(
 private fun DeleteConfirmationDialog(
     conversation: ConversationInfo?,
     onConfirm: () -> Unit,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -522,13 +556,13 @@ private fun DeleteConfirmationDialog(
             Text(
                 "Delete Conversation?",
                 style = MaTypography.titleMedium,
-                fontWeight = FontWeight.Bold
+                fontWeight = FontWeight.Bold,
             )
         },
         text = {
             Text(
                 "\"${conversation?.title}\" and all ${conversation?.messageCount} messages will be permanently deleted.",
-                style = MaTypography.bodyMedium
+                style = MaTypography.bodyMedium,
             )
         },
         confirmButton = {
@@ -542,7 +576,7 @@ private fun DeleteConfirmationDialog(
             }
         },
         containerColor = MaColors.BgElevated,
-        textContentColor = MaColors.TextPrimary
+        textContentColor = MaColors.TextPrimary,
     )
 }
 
@@ -553,7 +587,7 @@ private fun DeleteConfirmationDialog(
 private fun ExportDialog(
     conversation: ConversationInfo?,
     onExport: (ExportFormat) -> Unit,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -561,16 +595,16 @@ private fun ExportDialog(
             Text(
                 "Export Conversation",
                 style = MaTypography.titleMedium,
-                fontWeight = FontWeight.Bold
+                fontWeight = FontWeight.Bold,
             )
         },
         text = {
             Column(
-                verticalArrangement = Arrangement.spacedBy(MaSpacing.sm)
+                verticalArrangement = Arrangement.spacedBy(MaSpacing.sm),
             ) {
                 Text(
                     "Choose export format for \"${conversation?.title}\":",
-                    style = MaTypography.bodyMedium
+                    style = MaTypography.bodyMedium,
                 )
 
                 Spacer(modifier = Modifier.height(MaSpacing.sm))
@@ -578,13 +612,13 @@ private fun ExportDialog(
                 MaButtonPrimary(
                     text = "JSON (Machine-readable)",
                     onClick = { onExport(ExportFormat.JSON) },
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
                 )
 
                 MaButtonSecondary(
                     text = "Markdown (Human-readable)",
                     onClick = { onExport(ExportFormat.MARKDOWN) },
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
                 )
             }
         },
@@ -595,7 +629,7 @@ private fun ExportDialog(
             }
         },
         containerColor = MaColors.BgElevated,
-        textContentColor = MaColors.TextPrimary
+        textContentColor = MaColors.TextPrimary,
     )
 }
 
@@ -606,30 +640,31 @@ private fun ExportDialog(
 private fun ErrorCard(
     message: String,
     onDismiss: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     MaCard(modifier = modifier) {
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(MaSpacing.md),
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(MaSpacing.md),
             horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+            verticalAlignment = Alignment.CenterVertically,
         ) {
             Row(
                 modifier = Modifier.weight(1f),
                 horizontalArrangement = Arrangement.spacedBy(MaSpacing.sm),
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.CenterVertically,
             ) {
                 Icon(
                     imageVector = Icons.Default.Warning,
                     contentDescription = "Error",
-                    tint = MaColors.Error
+                    tint = MaColors.Error,
                 )
                 Text(
                     text = message,
                     style = MaTypography.bodyMedium,
-                    color = MaColors.Error
+                    color = MaColors.Error,
                 )
             }
 
@@ -637,7 +672,7 @@ private fun ErrorCard(
                 Icon(
                     imageVector = Icons.Default.Close,
                     contentDescription = "Dismiss",
-                    tint = MaColors.Error
+                    tint = MaColors.Error,
                 )
             }
         }
@@ -651,26 +686,26 @@ private fun ErrorCard(
 private fun EmptyState(
     message: String,
     subtitle: String,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     Box(
         modifier = modifier.fillMaxSize(),
-        contentAlignment = Alignment.Center
+        contentAlignment = Alignment.Center,
     ) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(MaSpacing.sm)
+            verticalArrangement = Arrangement.spacedBy(MaSpacing.sm),
         ) {
             Text(
                 text = message,
                 style = MaTypography.titleMedium,
                 fontWeight = FontWeight.Medium,
-                color = MaColors.TextSecondary
+                color = MaColors.TextSecondary,
             )
             Text(
                 text = subtitle,
                 style = MaTypography.bodyMedium,
-                color = MaColors.TextMuted
+                color = MaColors.TextMuted,
             )
         }
     }
@@ -681,7 +716,9 @@ private fun EmptyState(
  */
 private fun formatTimestamp(timestampMs: Long): String {
     val instant = Instant.fromEpochMilliseconds(timestampMs)
-    val now = kotlinx.datetime.Clock.System.now()
+    val now =
+        kotlinx.datetime.Clock.System
+            .now()
 
     val diffMs = now.toEpochMilliseconds() - timestampMs
     val diffMinutes = diffMs / 60000

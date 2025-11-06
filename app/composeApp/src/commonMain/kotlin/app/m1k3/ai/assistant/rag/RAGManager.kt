@@ -158,11 +158,11 @@ class RAGManager(
                 appendLine()
             }
 
-            appendLine("**Instructions:**")
-            appendLine("- Use the above knowledge to provide accurate, informed responses")
-            appendLine("- Cite sources when referencing specific facts")
-            appendLine("- Combine retrieved knowledge with your reasoning")
-            appendLine("- If knowledge doesn't fully answer the question, acknowledge limitations")
+            appendLine("**RAG Instructions:**")
+            appendLine("1. **Relevance:** Facts 80%+ = high confidence, 60-79% = use with caution, <60% = ignore")
+            appendLine("2. **Usage:** Only use directly relevant facts. If no facts fit, respond from general knowledge only.")
+            appendLine("3. **Quality:** Cite sources when using facts (e.g., \"According to device troubleshooting...\"). Be honest if knowledge insufficient.")
+            appendLine("4. **Priority:** One highly relevant fact (85%) beats three moderately relevant facts (65%).")
             appendLine()
         }
 

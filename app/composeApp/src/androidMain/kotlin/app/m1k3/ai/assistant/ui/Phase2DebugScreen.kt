@@ -9,18 +9,21 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import app.m1k3.ai.assistant.database.MaDatabase
+import app.m1k3.ai.assistant.demo.DemoDataStats
 import app.m1k3.ai.assistant.demo.Phase2DebugScreen
 import app.m1k3.ai.assistant.demo.Phase2TestResults
-import app.m1k3.ai.assistant.demo.DemoDataStats
 import app.m1k3.ai.assistant.design.components.MaButtonPrimary
 import app.m1k3.ai.assistant.design.components.MaButtonSecondary
 import app.m1k3.ai.assistant.design.components.MaCard
 import app.m1k3.ai.assistant.design.haptics.HapticFeedbackType
 import app.m1k3.ai.assistant.design.haptics.rememberHapticFeedback
 import app.m1k3.ai.assistant.design.tokens.MaColors
+import app.m1k3.ai.assistant.design.tokens.MaFontFamilyCaption
 import app.m1k3.ai.assistant.design.tokens.MaSpacing
 import app.m1k3.ai.assistant.design.tokens.MaTypography
 import kotlinx.coroutines.Dispatchers
@@ -43,7 +46,7 @@ import kotlinx.coroutines.withContext
 @Composable
 fun Phase2DebugScreenUI(
     database: MaDatabase,
-    onBackClick: () -> Unit = {}
+    onBackClick: () -> Unit = {},
 ) {
     val haptics = rememberHapticFeedback()
     val scope = rememberCoroutineScope()
@@ -63,12 +66,19 @@ fun Phase2DebugScreenUI(
                             "🧪 Phase 2 Debug Lab",
                             style = MaTypography.titleLarge,
                             fontWeight = FontWeight.Bold,
-                            color = MaColors.TextPrimary
+                            color = MaColors.TextPrimary,
                         )
                         Text(
                             "Chat History & Eco Credentials",
-                            style = MaTypography.bodySmall,
-                            color = MaColors.TextSecondary
+                            style =
+                                TextStyle(
+                                    fontFamily = MaFontFamilyCaption,
+                                    fontWeight = FontWeight.Normal,
+                                    fontSize = 12.sp,
+                                    lineHeight = 16.sp,
+                                    letterSpacing = 0.25.sp,
+                                ),
+                            color = MaColors.TextSecondary,
                         )
                     }
                 },
@@ -80,40 +90,42 @@ fun Phase2DebugScreenUI(
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = "Back",
-                            tint = MaColors.TextPrimary
+                            tint = MaColors.TextPrimary,
                         )
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaColors.BgPrimary
-                )
+                colors =
+                    TopAppBarDefaults.topAppBarColors(
+                        containerColor = MaColors.BgPrimary,
+                    ),
             )
-        }
+        },
     ) { paddingValues ->
         Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
-                .padding(MaSpacing.md)
-                .verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(MaSpacing.md)
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .padding(paddingValues)
+                    .padding(MaSpacing.md)
+                    .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(MaSpacing.md),
         ) {
             // Quick Actions Card
             MaCard {
                 Column(
                     modifier = Modifier.padding(MaSpacing.md),
-                    verticalArrangement = Arrangement.spacedBy(MaSpacing.sm)
+                    verticalArrangement = Arrangement.spacedBy(MaSpacing.sm),
                 ) {
                     Text(
                         "Quick Actions",
                         style = MaTypography.titleMedium,
                         fontWeight = FontWeight.Bold,
-                        color = MaColors.TextPrimary
+                        color = MaColors.TextPrimary,
                     )
 
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(MaSpacing.sm)
+                        horizontalArrangement = Arrangement.spacedBy(MaSpacing.sm),
                     ) {
                         MaButtonPrimary(
                             text = if (isRunningTests) "Running..." else "Run All Tests",
@@ -121,14 +133,15 @@ fun Phase2DebugScreenUI(
                                 haptics.performHapticFeedback(HapticFeedbackType.SUCCESS)
                                 scope.launch {
                                     isRunningTests = true
-                                    testResults = withContext(Dispatchers.Default) {
-                                        debugScreen.runAllTests()
-                                    }
+                                    testResults =
+                                        withContext(Dispatchers.Default) {
+                                            debugScreen.runAllTests()
+                                        }
                                     isRunningTests = false
                                 }
                             },
                             enabled = !isRunningTests,
-                            modifier = Modifier.weight(1f)
+                            modifier = Modifier.weight(1f),
                         )
 
                         MaButtonSecondary(
@@ -137,14 +150,15 @@ fun Phase2DebugScreenUI(
                                 haptics.performHapticFeedback(HapticFeedbackType.SUCCESS)
                                 scope.launch {
                                     isCreatingDemo = true
-                                    demoStats = withContext(Dispatchers.Default) {
-                                        debugScreen.createDemoData()
-                                    }
+                                    demoStats =
+                                        withContext(Dispatchers.Default) {
+                                            debugScreen.createDemoData()
+                                        }
                                     isCreatingDemo = false
                                 }
                             },
                             enabled = !isCreatingDemo,
-                            modifier = Modifier.weight(1f)
+                            modifier = Modifier.weight(1f),
                         )
                     }
                 }
@@ -155,34 +169,35 @@ fun Phase2DebugScreenUI(
                 MaCard {
                     Column(
                         modifier = Modifier.padding(MaSpacing.md),
-                        verticalArrangement = Arrangement.spacedBy(MaSpacing.sm)
+                        verticalArrangement = Arrangement.spacedBy(MaSpacing.sm),
                     ) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
+                            verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Text(
                                 "Test Results",
                                 style = MaTypography.titleMedium,
                                 fontWeight = FontWeight.Bold,
-                                color = MaColors.TextPrimary
+                                color = MaColors.TextPrimary,
                             )
 
                             Surface(
                                 shape = MaterialTheme.shapes.small,
-                                color = if (results.successRate == 100.0) {
-                                    MaColors.Success
-                                } else {
-                                    MaColors.Warning
-                                }
+                                color =
+                                    if (results.successRate == 100.0) {
+                                        MaColors.Success
+                                    } else {
+                                        MaColors.Warning
+                                    },
                             ) {
                                 Text(
                                     "${results.passedCount}/${results.totalCount} (${String.format("%.1f", results.successRate)}%)",
                                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
                                     style = MaTypography.labelMedium,
                                     fontWeight = FontWeight.Bold,
-                                    color = MaColors.White
+                                    color = MaColors.White,
                                 )
                             }
                         }
@@ -201,13 +216,13 @@ fun Phase2DebugScreenUI(
                 MaCard {
                     Column(
                         modifier = Modifier.padding(MaSpacing.md),
-                        verticalArrangement = Arrangement.spacedBy(MaSpacing.sm)
+                        verticalArrangement = Arrangement.spacedBy(MaSpacing.sm),
                     ) {
                         Text(
                             "Demo Data Created",
                             style = MaTypography.titleMedium,
                             fontWeight = FontWeight.Bold,
-                            color = MaColors.TextPrimary
+                            color = MaColors.TextPrimary,
                         )
 
                         Divider(color = MaColors.BorderLight, modifier = Modifier.padding(vertical = MaSpacing.sm))
@@ -222,7 +237,7 @@ fun Phase2DebugScreenUI(
                             "Environmental Savings",
                             style = MaTypography.titleSmall,
                             fontWeight = FontWeight.Bold,
-                            color = MaColors.TextPrimary
+                            color = MaColors.TextPrimary,
                         )
 
                         StatRow("💧 Water Saved", "${stats.waterSaved} ml")
@@ -236,13 +251,13 @@ fun Phase2DebugScreenUI(
             MaCard {
                 Column(
                     modifier = Modifier.padding(MaSpacing.md),
-                    verticalArrangement = Arrangement.spacedBy(MaSpacing.sm)
+                    verticalArrangement = Arrangement.spacedBy(MaSpacing.sm),
                 ) {
                     Text(
                         "Phase 2 Features",
                         style = MaTypography.titleMedium,
                         fontWeight = FontWeight.Bold,
-                        color = MaColors.TextPrimary
+                        color = MaColors.TextPrimary,
                     )
 
                     Divider(color = MaColors.BorderLight, modifier = Modifier.padding(vertical = MaSpacing.sm))
@@ -262,49 +277,52 @@ fun Phase2DebugScreenUI(
 private fun TestResultRow(
     name: String,
     passed: Boolean,
-    details: String
+    details: String,
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.Top,
-        horizontalArrangement = Arrangement.spacedBy(MaSpacing.sm)
+        horizontalArrangement = Arrangement.spacedBy(MaSpacing.sm),
     ) {
         Text(
             text = if (passed) "✅" else "❌",
-            style = MaTypography.bodyMedium
+            style = MaTypography.bodyMedium,
         )
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = name,
                 style = MaTypography.bodyMedium,
                 fontWeight = FontWeight.Medium,
-                color = MaColors.TextPrimary
+                color = MaColors.TextPrimary,
             )
             Text(
                 text = details,
                 style = MaTypography.bodySmall,
-                color = MaColors.TextSecondary
+                color = MaColors.TextSecondary,
             )
         }
     }
 }
 
 @Composable
-private fun StatRow(label: String, value: String) {
+private fun StatRow(
+    label: String,
+    value: String,
+) {
     Row(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween
+        horizontalArrangement = Arrangement.SpaceBetween,
     ) {
         Text(
             text = label,
             style = MaTypography.bodyMedium,
-            color = MaColors.TextSecondary
+            color = MaColors.TextSecondary,
         )
         Text(
             text = value,
             style = MaTypography.bodyMedium,
             fontWeight = FontWeight.Medium,
-            color = MaColors.TextPrimary
+            color = MaColors.TextPrimary,
         )
     }
 }
@@ -313,28 +331,28 @@ private fun StatRow(label: String, value: String) {
 private fun FeatureRow(
     icon: String,
     name: String,
-    description: String
+    description: String,
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.Top,
-        horizontalArrangement = Arrangement.spacedBy(MaSpacing.sm)
+        horizontalArrangement = Arrangement.spacedBy(MaSpacing.sm),
     ) {
         Text(
             text = icon,
-            style = MaTypography.bodyLarge
+            style = MaTypography.bodyLarge,
         )
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = name,
                 style = MaTypography.bodyMedium,
                 fontWeight = FontWeight.Medium,
-                color = MaColors.TextPrimary
+                color = MaColors.TextPrimary,
             )
             Text(
                 text = description,
                 style = MaTypography.bodySmall,
-                color = MaColors.TextSecondary
+                color = MaColors.TextSecondary,
             )
         }
     }

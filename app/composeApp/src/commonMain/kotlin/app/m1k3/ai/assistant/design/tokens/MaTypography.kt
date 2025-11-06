@@ -2,168 +2,197 @@ package app.m1k3.ai.assistant.design.tokens
 
 import androidx.compose.material3.Typography
 import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 
 /**
  * M1K3 AI Typography System
  *
- * Custom branded typography with Google Fonts:
- * - Inter: Modern geometric sans-serif for branding (displays, headlines, titles)
+ * Custom branded typography with local fonts:
+ * - Silkscreen: M1K3 brand font (regular weight for optimal legibility)
  * - Roboto: Android default for body text (optimal readability)
  * - JetBrains Mono: Technical monospace for stats/code
+ * - Doto: Caption font for secondary text and descriptions
  *
  * Material3 type scale optimized for mobile readability and terminal aesthetic.
  * Scale: 7 levels from 12sp (label) to 57sp (display)
  * Line heights: 1.25-1.5x for optimal readability
  */
-val MaTypography = Typography(
-    // ============================================
-    // Display Styles - Large marketing/hero text
-    // Uses Inter (brand font) for strong visual identity
-    // ============================================
+val MaTypography =
+    Typography(
+        // ============================================
+        // Display Styles - Large marketing/hero text
+        // Uses Silkscreen (brand font) for strong visual identity
+        // ============================================
+        displayLarge =
+            TextStyle(
+                fontFamily = MaFontFamilyBrand,
+                fontWeight = FontWeight.Normal,
+                fontSize = 57.sp,
+                lineHeight = 64.sp,
+                letterSpacing = (-0.25).sp,
+            ),
+        displayMedium =
+            TextStyle(
+                fontFamily = MaFontFamilyBrand,
+                fontWeight = FontWeight.Normal,
+                fontSize = 45.sp,
+                lineHeight = 52.sp,
+                letterSpacing = 0.sp,
+            ),
+        displaySmall =
+            TextStyle(
+                fontFamily = MaFontFamilyBrand,
+                fontWeight = FontWeight.Normal,
+                fontSize = 36.sp,
+                lineHeight = 44.sp,
+                letterSpacing = 0.sp,
+            ),
+        // ============================================
+        // Headline Styles - Section headers
+        // Uses Silkscreen for branded section headers
+        // ============================================
+        headlineLarge =
+            TextStyle(
+                fontFamily = MaFontFamilyBrand,
+                fontWeight = FontWeight.Normal,
+                fontSize = 32.sp,
+                lineHeight = 40.sp,
+                letterSpacing = 0.sp,
+            ),
+        headlineMedium =
+            TextStyle(
+                fontFamily = MaFontFamilyBrand,
+                fontWeight = FontWeight.Normal,
+                fontSize = 28.sp,
+                lineHeight = 36.sp,
+                letterSpacing = 0.sp,
+            ),
+        headlineSmall =
+            TextStyle(
+                fontFamily = MaFontFamilyBrand,
+                fontWeight = FontWeight.Normal,
+                fontSize = 24.sp,
+                lineHeight = 32.sp,
+                letterSpacing = 0.sp,
+            ),
+        // ============================================
+        // Title Styles - Component headers, app bars
+        // Uses Silkscreen for consistent branding in UI components
+        // ============================================
+        titleLarge =
+            TextStyle(
+                fontFamily = MaFontFamilyBrand,
+                fontWeight = FontWeight.Normal,
+                fontSize = 22.sp,
+                lineHeight = 28.sp,
+                letterSpacing = 0.sp,
+            ),
+        titleMedium =
+            TextStyle(
+                fontFamily = MaFontFamilyBrand,
+                fontWeight = FontWeight.Normal,
+                fontSize = 16.sp,
+                lineHeight = 24.sp,
+                letterSpacing = 0.15.sp,
+            ),
+        titleSmall =
+            TextStyle(
+                fontFamily = MaFontFamilyBrand,
+                fontWeight = FontWeight.Normal,
+                fontSize = 14.sp,
+                lineHeight = 20.sp,
+                letterSpacing = 0.1.sp,
+            ),
+        // ============================================
+        // Body Styles - Main content text
+        // Uses system Roboto for optimal readability
+        // ============================================
+        bodyLarge =
+            TextStyle(
+                fontFamily = MaFontFamilyBody,
+                fontWeight = FontWeight.Normal,
+                fontSize = 16.sp,
+                lineHeight = 24.sp,
+                letterSpacing = 0.5.sp,
+            ),
+        bodyMedium =
+            TextStyle(
+                fontFamily = MaFontFamilyBody,
+                fontWeight = FontWeight.Normal,
+                fontSize = 14.sp,
+                lineHeight = 20.sp,
+                letterSpacing = 0.25.sp,
+            ),
+        bodySmall =
+            TextStyle(
+                fontFamily = MaFontFamilyBody,
+                fontWeight = FontWeight.Normal,
+                fontSize = 12.sp,
+                lineHeight = 16.sp,
+                letterSpacing = 0.4.sp,
+            ),
+        // ============================================
+        // Label Styles - Buttons, chips, badges
+        // Uses system Roboto for UI consistency
+        // ============================================
+        labelLarge =
+            TextStyle(
+                fontFamily = MaFontFamilyBody,
+                fontWeight = FontWeight.Medium,
+                fontSize = 14.sp,
+                lineHeight = 20.sp,
+                letterSpacing = 0.1.sp,
+            ),
+        labelMedium =
+            TextStyle(
+                fontFamily = MaFontFamilyBody,
+                fontWeight = FontWeight.Medium,
+                fontSize = 12.sp,
+                lineHeight = 16.sp,
+                letterSpacing = 0.5.sp,
+            ),
+        labelSmall =
+            TextStyle(
+                fontFamily = MaFontFamilyBody,
+                fontWeight = FontWeight.Medium,
+                fontSize = 11.sp,
+                lineHeight = 16.sp,
+                letterSpacing = 0.5.sp,
+            ),
+    )
 
-    displayLarge = TextStyle(
-        fontFamily = MaFontFamilyBrand,
-        fontWeight = FontWeight.Bold,
-        fontSize = 57.sp,
-        lineHeight = 64.sp,
-        letterSpacing = (-0.25).sp
-    ),
+// ============================================
+// Caption Styles - Secondary text, descriptions
+// Uses Doto font for distinctive, readable captions
+// ============================================
 
-    displayMedium = TextStyle(
-        fontFamily = MaFontFamilyBrand,
-        fontWeight = FontWeight.Bold,
-        fontSize = 45.sp,
-        lineHeight = 52.sp,
-        letterSpacing = 0.sp
-    ),
-
-    displaySmall = TextStyle(
-        fontFamily = MaFontFamilyBrand,
-        fontWeight = FontWeight.SemiBold,
-        fontSize = 36.sp,
-        lineHeight = 44.sp,
-        letterSpacing = 0.sp
-    ),
-
-    // ============================================
-    // Headline Styles - Section headers
-    // Uses Inter for branded section headers
-    // ============================================
-
-    headlineLarge = TextStyle(
-        fontFamily = MaFontFamilyBrand,
-        fontWeight = FontWeight.Bold,
-        fontSize = 32.sp,
-        lineHeight = 40.sp,
-        letterSpacing = 0.sp
-    ),
-
-    headlineMedium = TextStyle(
-        fontFamily = MaFontFamilyBrand,
-        fontWeight = FontWeight.SemiBold,
-        fontSize = 28.sp,
-        lineHeight = 36.sp,
-        letterSpacing = 0.sp
-    ),
-
-    headlineSmall = TextStyle(
-        fontFamily = MaFontFamilyBrand,
-        fontWeight = FontWeight.SemiBold,
-        fontSize = 24.sp,
-        lineHeight = 32.sp,
-        letterSpacing = 0.sp
-    ),
-
-    // ============================================
-    // Title Styles - Component headers, app bars
-    // Uses Inter for consistent branding in UI components
-    // ============================================
-
-    titleLarge = TextStyle(
-        fontFamily = MaFontFamilyBrand,
-        fontWeight = FontWeight.Medium,
-        fontSize = 22.sp,
-        lineHeight = 28.sp,
-        letterSpacing = 0.sp
-    ),
-
-    titleMedium = TextStyle(
-        fontFamily = MaFontFamilyBrand,
-        fontWeight = FontWeight.Medium,
-        fontSize = 16.sp,
-        lineHeight = 24.sp,
-        letterSpacing = 0.15.sp
-    ),
-
-    titleSmall = TextStyle(
-        fontFamily = MaFontFamilyBrand,
+val MaTypographyCaptionLarge =
+    TextStyle(
+        fontFamily = MaFontFamilyCaption,
         fontWeight = FontWeight.Medium,
         fontSize = 14.sp,
         lineHeight = 20.sp,
-        letterSpacing = 0.1.sp
-    ),
+        letterSpacing = 0.1.sp,
+    )
 
-    // ============================================
-    // Body Styles - Main content text
-    // Uses system Roboto for optimal readability
-    // ============================================
-
-    bodyLarge = TextStyle(
-        fontFamily = MaFontFamilyBody,
-        fontWeight = FontWeight.Normal,
-        fontSize = 16.sp,
-        lineHeight = 24.sp,
-        letterSpacing = 0.5.sp
-    ),
-
-    bodyMedium = TextStyle(
-        fontFamily = MaFontFamilyBody,
-        fontWeight = FontWeight.Normal,
-        fontSize = 14.sp,
-        lineHeight = 20.sp,
-        letterSpacing = 0.25.sp
-    ),
-
-    bodySmall = TextStyle(
-        fontFamily = MaFontFamilyBody,
+val MaTypographyCaptionMedium =
+    TextStyle(
+        fontFamily = MaFontFamilyCaption,
         fontWeight = FontWeight.Normal,
         fontSize = 12.sp,
         lineHeight = 16.sp,
-        letterSpacing = 0.4.sp
-    ),
+        letterSpacing = 0.25.sp,
+    )
 
-    // ============================================
-    // Label Styles - Buttons, chips, badges
-    // Uses system Roboto for UI consistency
-    // ============================================
-
-    labelLarge = TextStyle(
-        fontFamily = MaFontFamilyBody,
-        fontWeight = FontWeight.Medium,
-        fontSize = 14.sp,
-        lineHeight = 20.sp,
-        letterSpacing = 0.1.sp
-    ),
-
-    labelMedium = TextStyle(
-        fontFamily = MaFontFamilyBody,
-        fontWeight = FontWeight.Medium,
-        fontSize = 12.sp,
-        lineHeight = 16.sp,
-        letterSpacing = 0.5.sp
-    ),
-
-    labelSmall = TextStyle(
-        fontFamily = MaFontFamilyBody,
-        fontWeight = FontWeight.Medium,
+val MaTypographyCaptionSmall =
+    TextStyle(
+        fontFamily = MaFontFamilyCaption,
+        fontWeight = FontWeight.Normal,
         fontSize = 11.sp,
         lineHeight = 16.sp,
-        letterSpacing = 0.5.sp
+        letterSpacing = 0.4.sp,
     )
-)
 
 /**
  * Typography Usage Guidelines
@@ -173,12 +202,18 @@ val MaTypography = Typography(
  * Title: Component headers, dialog titles, app bar (titleLarge/Medium/Small)
  * Body: Paragraph text, list items, chat messages (bodyLarge/Medium/Small)
  * Label: Buttons, chips, metadata, badges (labelLarge/Medium/Small)
+ * Caption: Secondary text, descriptions, metadata (captionLarge/Medium/Small)
  *
  * Example Usage:
  * ```kotlin
  * Text(
  *     text = "M1K3 AI",
  *     style = MaterialTheme.typography.displayLarge
+ * )
+ *
+ * Text(
+ *     text = "Secondary description",
+ *     style = MaterialTheme.typography.captionMedium
  * )
  * ```
  */
