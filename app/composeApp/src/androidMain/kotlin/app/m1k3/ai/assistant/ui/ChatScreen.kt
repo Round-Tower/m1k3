@@ -247,12 +247,11 @@ fun ChatScreen(
                     var welcomeText = ""
                     aiEngine.generateStreaming(
                         prompt =
-                            "Greet the user warmly and introduce yourself as M1K3, their privacy-first AI assistant. " +
+                            "Greet the user. " +
                                 "Mention that you're running 100% locally on their $deviceModel with $batteryInfo, " +
                                 "and that all conversations are private and never leave their device. " +
                                 "Keep it brief (2-3 sentences), friendly, and conversational.",
-                        maxTokens = 150, // Allow for device/knowledge context
-                        temperature = 0.4f, // Slightly creative but still coherent
+                        temperature = 0.5f, // Slightly creative but still coherent
                         knowledgeContext = knowledgeContext,
                     ) { token ->
                         welcomeText += token
@@ -395,8 +394,8 @@ fun ChatScreen(
                                 // Phase 3 RAG: Intent-aware knowledge retrieval with enriched prompt
                                 val systemPrompt =
                                     "You are M1K3, a privacy-first AI assistant running 100% locally. " +
-                                        "Be helpful, concise, and informative. " +
-                                        knowledgeContext
+                                        "Be helpful, concise, and informative. "
+//                                        knowledgeContext
 
                                 // RAG with error handling and quality validation
                                 val ragResult =
@@ -459,8 +458,13 @@ fun ChatScreen(
                                         )
                                     }
 
-                                // Build final prompt: enriched system prompt + user query
-                                val finalPrompt = "${ragResult.enrichedPrompt}\n\nUser: $prompt\nAssistant:"
+                                // Use RAG-enriched system prompt if RAG was applied
+                                // Otherwise use base system prompt
+                                val enrichedSystemPrompt = if (ragResult.ragApplied) {
+                                    ragResult.enrichedPrompt  // Contains RAG knowledge + base instructions
+                                } else {
+                                    systemPrompt  // Just base M1K3 instructions
+                                }
 
                                 // Track RAG usage for display and database
                                 if (ragResult.ragApplied) {
@@ -472,7 +476,7 @@ fun ChatScreen(
                                         "📚 [RAG] Intent: ${ragResult.intent.category} (confidence: ${(ragResult.confidence * 100).toInt()}%)",
                                     )
                                     println("📚 [RAG] Retrieved ${ragResult.retrievedFacts.size} facts")
-                                    println("📚 [RAG] Enhanced prompt length: ${finalPrompt.length} chars")
+                                    println("📚 [RAG] Enhanced system prompt length: ${enrichedSystemPrompt.length} chars")
                                 } else {
                                     println("📚 [RAG] No retrieval for intent: ${ragResult.intent.category}")
                                 }
@@ -480,13 +484,22 @@ fun ChatScreen(
                                 // Use device-adaptive max tokens based on RAM
                                 // 12GB+: 512 tokens, 8-12GB: 384, 6-8GB: 256, 4-6GB: 128, <4GB: 64
                                 aiEngine.generateStreaming(
-                                    prompt = finalPrompt, // Use RAG-enriched prompt
+                                    systemPrompt = enrichedSystemPrompt,  // System instructions (with RAG if applicable)
+                                    prompt = prompt,  // User's question ONLY (no labels, no duplication)
                                     maxTokens = aiEngine.getOptimalMaxTokens(), // Device-adaptive
                                     temperature = 0.5f, // Balanced sampling - coherent but diverse
                                     knowledgeContext = knowledgeContext,
                                 ) { token ->
-                                    // Append each token as it arrives
-                                    streamedText += token
+                                    // Clean chat template tokens before appending (defense-in-depth)
+                                    val cleanedToken = token
+                                        .replace("<|im_start|>", "")
+                                        .replace("<|im_end|>", "")
+                                        .replace("<|endoftext|>", "")
+                                        .replace("<|", "")  // Partial fragments
+                                        .replace("|>", "")
+
+                                    // Append each cleaned token as it arrives
+                                    streamedText += cleanedToken
                                     tokenCount++
 
                                     // Update the message in real-time on the MAIN thread
@@ -551,6 +564,16 @@ fun ChatScreen(
                                     ragSources = ragSources,
                                     ragConfidence = ragConfidence,
                                 )
+
+                                // Log complete response for debugging
+                                println("✅ [RESPONSE-COMPLETE] Generation finished")
+                                println("   📝 Full response: \"$streamedText\"")
+                                println("   📊 Stats: ${streamedText.length} chars / $tokenCount tokens")
+                                println("   ⚡ Performance: ${"%.1f".format(tokensPerSec)} tok/s in ${totalTime}ms")
+                                println("   🔍 Special tokens: ${if (streamedText.contains("<|") || streamedText.contains("|>")) "DETECTED ⚠️" else "clean ✓"}")
+                                if (ragInfo.isNotEmpty()) {
+                                    println("   📚 RAG: $ragInfo")
+                                }
 
                                 // Detect emotion from AI response
                                 avatarVM.processMessage(streamedText, isUserMessage = false)

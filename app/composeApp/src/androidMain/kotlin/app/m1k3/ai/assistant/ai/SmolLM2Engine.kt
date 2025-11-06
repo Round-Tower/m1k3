@@ -116,6 +116,38 @@ class SmolLM2Engine(private val context: Context) {
     }
 
     /**
+     * Build ChatML-formatted prompt with explicit newlines.
+     *
+     * ChatML specification:
+     * - Format: <|im_start|>role\ncontent<|im_end|>\n
+     * - NO extra whitespace (raw strings with indentation break this!)
+     * - Explicit \n characters for newlines
+     *
+     * Reference: https://huggingface.co/HuggingFaceTB/SmolLM2-135M-Instruct
+     *
+     * @param systemPrompt System instructions for the model
+     * @param userPrompt User's input message
+     * @return Properly formatted ChatML prompt
+     */
+    private fun buildChatMLPrompt(
+        systemPrompt: String,
+        userPrompt: String
+    ): String = buildString {
+        // System message
+        append("<|im_start|>system\n")
+        append(systemPrompt)
+        append("<|im_end|>\n")
+
+        // User message
+        append("<|im_start|>user\n")
+        append(userPrompt)
+        append("<|im_end|>\n")
+
+        // Assistant prefix (model completes this)
+        append("<|im_start|>assistant\n")
+    }
+
+    /**
      * Initialize the AI engine.
      * Must be called before inference.
      */
@@ -217,15 +249,11 @@ class SmolLM2Engine(private val context: Context) {
             println("   Temperature: $temperature")
             println("   System prompt: \"$finalSystemPrompt\"")
 
-            // 1. Format prompt with instruction template (ChatML format)
-            val formattedPrompt = """<|im_start|>system
-$finalSystemPrompt<|im_end|>
-<|im_start|>user
-$prompt<|im_end|>
-<|im_start|>assistant
-"""
+            // 1. Format prompt with ChatML template (using explicit newlines)
+            val formattedPrompt = buildChatMLPrompt(finalSystemPrompt, prompt)
 
-            println("🔍 [DEBUG] Formatted prompt length: ${formattedPrompt.length} chars")
+            println("🔍 [CHATML] Formatted prompt (${formattedPrompt.length} chars)")
+            println("🔍 [CHATML] Preview: ${formattedPrompt.take(100).replace("\n", "\\n")}")
 
             // 2. Tokenize input
             val inputIds = tok.encode(formattedPrompt)
@@ -508,22 +536,16 @@ $prompt<|im_end|>
             val finalSystemPrompt = systemPrompt ?: getDefaultSystemPrompt(userContext, knowledgeContext)
 
             println("🔍 [STREAMING] Starting generation...")
+            println("   System Prompt: \"$finalSystemPrompt\"")
             println("   Prompt: \"$prompt\"")
             println("   Max tokens: $maxTokens")
             println("   Temperature: $temperature")
 
-            // 1. Format prompt with ChatML
-            val formattedPrompt = """<|im_start|>system
-            $finalSystemPrompt<|im_end|>
-            <|im_start|>user
-            $prompt<|im_end|>
-            <|im_start|>assistant
-            """
+            // 1. Format prompt with ChatML template (using explicit newlines)
+            val formattedPrompt = buildChatMLPrompt(finalSystemPrompt, prompt)
 
-            println("🔍 [STREAMING] Formatted prompt:")
-            println("---BEGIN PROMPT---")
-            println(formattedPrompt)
-            println("---END PROMPT---")
+            println("🔍 [CHATML-STREAMING] Formatted prompt (${formattedPrompt.length} chars)")
+            println("🔍 [CHATML-STREAMING] Preview: ${formattedPrompt.replace("\n", "\\n")}")
 
             // 2. Tokenize input
             val inputIds = tok.encode(formattedPrompt)
@@ -621,16 +643,35 @@ $prompt<|im_end|>
 
                 generatedIds.add(nextTokenId)
 
-                // Decode and emit the new token immediately
+                // Decode and accumulate the new token
                 val newTokenText = tok.decode(longArrayOf(nextTokenId))
                 accumulatedText += newTokenText  // Track full generated text
 
-                // Check accumulated text for special tokens (they may be generated as multiple tokens)
+                // Check accumulated text for special tokens BEFORE emitting (they may be generated as multiple tokens)
                 if (accumulatedText.contains("<|im_end|>") ||
                     accumulatedText.contains("<|im_start|>") ||
                     accumulatedText.contains("<|endoftext|>")) {
                     println("✅ [STREAMING] Special token detected in accumulated text, stopping generation")
                     println("   Accumulated: \"${accumulatedText.takeLast(50)}\"")
+
+                    // Strip special tokens from accumulated text
+                    val cleanedText = accumulatedText
+                        .substringBefore("<|im_end|>")
+                        .substringBefore("<|im_start|>")
+                        .substringBefore("<|endoftext|>")
+
+                    // Calculate how much text was already emitted
+                    val alreadyEmittedLength = accumulatedText.length - newTokenText.length
+
+                    // If there's cleaned text that hasn't been emitted yet, emit it
+                    if (cleanedText.length > alreadyEmittedLength) {
+                        val finalChunk = cleanedText.substring(alreadyEmittedLength)
+                        if (finalChunk.isNotEmpty()) {
+                            println("🔍 [STREAMING] Emitting final cleaned chunk: \"$finalChunk\"")
+                            onToken(finalChunk)
+                        }
+                    }
+
                     currentTensor.close()
                     attentionMaskTensor.close()
                     positionIdsTensor.close()
@@ -639,13 +680,23 @@ $prompt<|im_end|>
                     break
                 }
 
-                if (newTokenText.isNotEmpty()) {
+                // Buffer check: Don't emit if we might be building a special token
+                // Look for patterns that indicate we're in the middle of a special token sequence
+                val recentText = accumulatedText.takeLast(20)
+                val potentialSpecialTokenPatterns = listOf("<|", "|>", "im_", "end", "start", "text")
+                val mightBeSpecialToken = potentialSpecialTokenPatterns.any { pattern ->
+                    recentText.contains(pattern) && !recentText.endsWith(" ")
+                }
+
+                if (newTokenText.isNotEmpty() && !mightBeSpecialToken) {
                     if (i == 0 || i % 5 == 0) {
                         // Make spaces visible in logs
                         val visibleText = newTokenText.replace(" ", "␣")
                         println("🔍 [STREAMING] Token $i: \"$visibleText\" (${newTokenText.length} chars)")
                     }
                     onToken(newTokenText)
+                } else if (mightBeSpecialToken) {
+                    println("⏸️  [STREAMING] Buffering token (might be special token): \"${newTokenText}\"")
                 }
 
                 // Close the PREVIOUS outputs container (now that we've used its cached tensors)
@@ -690,6 +741,13 @@ $prompt<|im_end|>
             val tokensGenerated = generatedIds.size - inputIds.size
             println("   ⚡ Streamed ${tokensGenerated} tokens in ${totalTime}ms")
             println("   🚀 Speed: ${"%.1f".format((tokensGenerated * 1000.0f) / totalTime)} tok/s")
+
+            // Decode and log final response for engine-level debugging
+            val finalResponseTokens = generatedIds.drop(inputIds.size).toLongArray()
+            val finalResponseText = tok.decode(finalResponseTokens)
+            println("   📝 [ENGINE] Full response: \"$finalResponseText\"")
+            println("   🔍 [ENGINE] Length: ${finalResponseText.length} chars / ${finalResponseTokens.size} tokens")
+            println("   🧹 [ENGINE] Contains special tokens: ${finalResponseText.contains("<|") || finalResponseText.contains("|>")}")
 
         } catch (e: Exception) {
             println("❌ Streaming inference failed: ${e.message}")

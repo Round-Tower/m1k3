@@ -200,10 +200,22 @@ class SmolLM2Tokenizer(private val context: Context) {
             // Clean up any residual special tokens that made it through
             // IMPORTANT: Do NOT trim() here! GPT-2 tokens often have leading/trailing spaces
             // that are semantically significant (e.g., "Ġwhich" = " which")
-            result
-                .replace(BOS_TOKEN, "")
-                .replace(EOS_TOKEN, "")
-                .replace(PAD_TOKEN, "")
+            //
+            // ChatML special tokens may be encoded as multiple sub-tokens in GPT-2 BPE:
+            // "<|im_start|>" → ["<|", "im", "_start", "|>"]
+            // We need to remove both complete tokens AND their fragments
+            val cleanedResult = result
+                .replace(BOS_TOKEN, "")          // "<|im_start|>"
+                .replace(EOS_TOKEN, "")          // "<|im_end|>"
+                .replace(PAD_TOKEN, "")          // "<|endoftext|>"
+                .replace("<|", "")               // Partial token start
+                .replace("|>", "")               // Partial token end
+                .replace("im_start", "")         // Middle fragments
+                .replace("im_end", "")           // Middle fragments
+                .replace("endoftext", "")        // Middle fragments
+
+            println("🔍 DEBUG: After cleaning (first 100 chars): ${cleanedResult.take(100)}")
+            cleanedResult
         } catch (e: Exception) {
             println("⚠️ Tokenizer decode error: ${e.message}")
             // Fallback: return tokens as-is (without special tokens)
