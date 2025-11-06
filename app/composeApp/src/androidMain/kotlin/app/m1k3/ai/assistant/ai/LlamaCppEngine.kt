@@ -153,22 +153,55 @@ class LlamaCppEngine(private val context: Context) : BaseLlmEngine {
             println("   Context: ${if (contextParam.isNotEmpty()) "${contextParam.take(150)}..." else "empty"}")
 
             // Use streaming internally and collect full response
+            val stopTokens = listOf("<end_of_turn>", "</s>", "<|endoftext|>", "<|im_end|>")
+            var shouldStop = false
+            var hasResumed = false
+
             suspendCancellableCoroutine<Unit> { continuation ->
                 LlamaBridge.generateWithContextStream(
                     system = systemPrompt,
                     context = contextParam,
                     user = prompt,
                     onDelta = { delta ->
+                        if (shouldStop) return@generateWithContextStream
+
                         responseBuilder.append(delta)
                         tokenCount++
+
+                        // Check if we've hit a stop token
+                        val currentText = responseBuilder.toString()
+                        for (stopToken in stopTokens) {
+                            if (currentText.contains(stopToken)) {
+                                shouldStop = true
+                                println("🛑 [LlamaCppEngine] Stop token detected: \"$stopToken\"")
+
+                                // Truncate response at stop token
+                                val textBeforeStop = currentText.substringBefore(stopToken)
+                                responseBuilder.clear()
+                                responseBuilder.append(textBeforeStop)
+
+                                // Resume only if not already resumed
+                                if (!hasResumed) {
+                                    hasResumed = true
+                                    continuation.resume(Unit)
+                                }
+                                return@generateWithContextStream
+                            }
+                        }
                     },
                     onDone = {
-                        println("   ✅ Generation complete")
-                        continuation.resume(Unit)
+                        if (!hasResumed) {
+                            hasResumed = true
+                            println("   ✅ Generation complete")
+                            continuation.resume(Unit)
+                        }
                     },
                     onError = { error ->
-                        println("   ❌ Generation error: $error")
-                        continuation.resume(Unit)
+                        if (!hasResumed) {
+                            hasResumed = true
+                            println("   ❌ Generation error: $error")
+                            continuation.resume(Unit)
+                        }
                     }
                 )
             }
@@ -233,6 +266,10 @@ class LlamaCppEngine(private val context: Context) : BaseLlmEngine {
             println("   Context: ${if (contextParam.isNotEmpty()) "${contextParam.take(150)}..." else "empty"}")
 
             var tokenCount = 0
+            val stopTokens = listOf("<end_of_turn>", "</s>", "<|endoftext|>", "<|im_end|>")
+            val responseBuffer = StringBuilder()
+            var shouldStop = false
+            var hasResumed = false
 
             // Stream tokens with Llamatik
             suspendCancellableCoroutine<Unit> { continuation ->
@@ -241,16 +278,52 @@ class LlamaCppEngine(private val context: Context) : BaseLlmEngine {
                     context = contextParam,
                     user = prompt,
                     onDelta = { delta ->
-                        onToken(delta)  // Stream to UI
+                        if (shouldStop) return@generateWithContextStream
+
+                        // Accumulate tokens to detect stop sequences
+                        responseBuffer.append(delta)
                         tokenCount++
+
+                        // Check if we've hit a stop token
+                        val currentText = responseBuffer.toString()
+                        for (stopToken in stopTokens) {
+                            if (currentText.contains(stopToken)) {
+                                shouldStop = true
+                                println("🛑 [LlamaCppEngine] Stop token detected: \"$stopToken\"")
+                                println("   Stopping generation early at $tokenCount tokens")
+
+                                // Send only text before stop token
+                                val textBeforeStop = currentText.substringBefore(stopToken)
+                                if (textBeforeStop.isNotEmpty()) {
+                                    // Clear buffer and send final clean text
+                                    responseBuffer.clear()
+                                    responseBuffer.append(textBeforeStop)
+                                }
+
+                                // Resume only if not already resumed
+                                if (!hasResumed) {
+                                    hasResumed = true
+                                    continuation.resume(Unit)
+                                }
+                                return@generateWithContextStream
+                            }
+                        }
+
+                        onToken(delta)  // Stream to UI
                     },
                     onDone = {
-                        println("✅ [LlamaCppEngine] Streaming complete ($tokenCount tokens)")
-                        continuation.resume(Unit)
+                        if (!hasResumed) {
+                            hasResumed = true
+                            println("✅ [LlamaCppEngine] Streaming complete ($tokenCount tokens)")
+                            continuation.resume(Unit)
+                        }
                     },
                     onError = { error ->
-                        println("❌ [LlamaCppEngine] Streaming failed: $error")
-                        continuation.resume(Unit)
+                        if (!hasResumed) {
+                            hasResumed = true
+                            println("❌ [LlamaCppEngine] Streaming failed: $error")
+                            continuation.resume(Unit)
+                        }
                     }
                 )
             }
