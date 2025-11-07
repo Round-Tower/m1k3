@@ -32,6 +32,7 @@ import kotlin.coroutines.resume
  * - 🔧 Workaround: Prompt engineering for behavioral control
  *
  * **Model:** SmolLM2-135M-Instruct Q4_K_M (101 MB)
+ * **Context Window:** 8K tokens
  * **Library:** Llamatik 0.8.1
  *
  * **Usage:**
@@ -63,14 +64,14 @@ class LlamaCppEngine(private val context: Context) : BaseLlmEngine {
     }
 
     /**
-     * Initialize llama.cpp engine with SmolLM2-135M GGUF model.
+     * Initialize llama.cpp engine with Gemma 3 270M GGUF model.
      *
      * Steps:
      * 1. Copy GGUF model from assets to internal storage (if not exists)
      * 2. Initialize Llamatik with model path
      *
      * Note: Llamatik's initGenerateModel() handles all configuration internally.
-     * We lose fine-grained control over context window, threads, etc.
+     * Gemma 3 270M provides 32K token context window (4x larger than SmolLM2-135M).
      *
      * @throws RuntimeException if initialization fails
      */
@@ -88,7 +89,9 @@ class LlamaCppEngine(private val context: Context) : BaseLlmEngine {
             val modelFile = File(context.filesDir, "smollm2-135m-q4.gguf")
 
             if (!modelFile.exists()) {
-                println("   📥 Copying GGUF model to internal storage (one-time operation)...")
+                println("   📥 Copying SmolLM2-135M GGUF to internal storage (one-time operation)...")
+                println("   Model: Q4_K_M quantization (101 MB)")
+                println("   Context: 8K tokens")
                 context.assets.open("models/smollm2-135m-q4.gguf").use { input ->
                     modelFile.outputStream().use { output ->
                         input.copyTo(output, bufferSize = 8192)
@@ -96,7 +99,7 @@ class LlamaCppEngine(private val context: Context) : BaseLlmEngine {
                 }
                 println("   ✓ Model copied (${modelFile.length() / 1024 / 1024} MB)")
             } else {
-                println("   ✓ Model already in storage (${modelFile.length() / 1024 / 1024} MB)")
+                println("   ✓ SmolLM2-135M already in storage (${modelFile.length() / 1024 / 1024} MB)")
             }
 
             // 2. Initialize Llamatik with model path
@@ -143,7 +146,7 @@ class LlamaCppEngine(private val context: Context) : BaseLlmEngine {
             // Build system prompt with prompt engineering for behavioral control
             val systemPrompt = buildSystemPrompt(config)
 
-            // Always use knowledgeContext in the context parameter
+            // Use knowledgeContext in the context parameter
             // Llamatik will handle combining system + context + user appropriately
             val contextParam = config.knowledgeContext ?: ""
 
@@ -165,6 +168,11 @@ class LlamaCppEngine(private val context: Context) : BaseLlmEngine {
                     onDelta = { delta ->
                         if (shouldStop) return@generateWithContextStream
 
+                        // Log each delta for debugging
+                        if (tokenCount < 5) {
+                            println("   🔤 Delta $tokenCount: \"$delta\"")
+                        }
+
                         responseBuilder.append(delta)
                         tokenCount++
 
@@ -173,7 +181,7 @@ class LlamaCppEngine(private val context: Context) : BaseLlmEngine {
                         for (stopToken in stopTokens) {
                             if (currentText.contains(stopToken)) {
                                 shouldStop = true
-                                println("🛑 [LlamaCppEngine] Stop token detected: \"$stopToken\"")
+                                println("🛑 [LlamaCppEngine] Stop token detected: \"$stopToken\" after $tokenCount tokens")
 
                                 // Truncate response at stop token
                                 val textBeforeStop = currentText.substringBefore(stopToken)
@@ -256,7 +264,7 @@ class LlamaCppEngine(private val context: Context) : BaseLlmEngine {
             // Build system prompt with prompt engineering for behavioral control
             val systemPrompt = buildSystemPrompt(config)
 
-            // Always use knowledgeContext in the context parameter
+            // Use knowledgeContext in the context parameter
             // Llamatik will handle combining system + context + user appropriately
             val contextParam = config.knowledgeContext ?: ""
 
@@ -280,6 +288,11 @@ class LlamaCppEngine(private val context: Context) : BaseLlmEngine {
                     onDelta = { delta ->
                         if (shouldStop) return@generateWithContextStream
 
+                        // Log first few deltas for debugging
+                        if (tokenCount < 5) {
+                            println("   🔤 Streaming delta $tokenCount: \"$delta\"")
+                        }
+
                         // Accumulate tokens to detect stop sequences
                         responseBuffer.append(delta)
                         tokenCount++
@@ -289,7 +302,7 @@ class LlamaCppEngine(private val context: Context) : BaseLlmEngine {
                         for (stopToken in stopTokens) {
                             if (currentText.contains(stopToken)) {
                                 shouldStop = true
-                                println("🛑 [LlamaCppEngine] Stop token detected: \"$stopToken\"")
+                                println("🛑 [LlamaCppEngine] Stop token detected: \"$stopToken\" after $tokenCount tokens")
                                 println("   Stopping generation early at $tokenCount tokens")
 
                                 // Send only text before stop token
