@@ -493,11 +493,274 @@ object AvatarEngine {
             }
         }
     }
+
+    // === ECO-INTEGRATED RENDERING ===
+
+    /**
+     * Draw complete pixel pet with eco integration
+     *
+     * Includes environment background, stat bars, and robot avatar
+     */
+    fun DrawScope.drawPixelPet(
+        petState: PixelPetState,
+        avatarState: AvatarState,
+        geometry: RobotGeometry = RobotGeometry(),
+        animation: AvatarAnimation = AvatarAnimation(),
+        showStatBars: Boolean = true,
+        showEnvironment: Boolean = true,
+        showPixelGrid: Boolean = false,
+        showResolutionDebug: Boolean = false,
+        useRoundedPixels: Boolean = true
+    ) {
+        // 1. Draw pixel art pet with adaptive resolution and rounded pixels
+        drawPixelArtPet(
+            petState = petState,
+            avatarState = avatarState,
+            showEnvironment = showEnvironment,
+            showPixelGrid = showPixelGrid,
+            showResolutionDebug = showResolutionDebug,
+            useRoundedPixels = useRoundedPixels
+        )
+
+        // 2. Draw stat bars (bottom)
+        if (showStatBars) {
+            drawStatBars(petState)
+        }
+
+        // 3. Draw evolution aura (if advanced stage)
+        if (petState.evolutionStage.ordinal >= EvolutionStage.ADVANCED.ordinal) {
+            drawEvolutionAura(petState.evolutionStage, avatarState.animationProgress)
+        }
+    }
+
+    /**
+     * Draw environment background based on evolution stage
+     */
+    fun DrawScope.drawEnvironmentBackground(
+        environment: Environment,
+        stage: EvolutionStage
+    ) {
+        when (environment) {
+            Environment.VOID -> {
+                // Simple dark gradient
+                drawRect(
+                    color = Color(0xFF0A0A0A),
+                    size = size
+                )
+            }
+            Environment.OFFICE -> {
+                // Modern office: floor + window hints
+                drawRect(Color(0xFF1A1A1A), size = size) // Dark floor
+                drawRect(Color(0xFF2A2A2A), Offset(0f, 0f), Size(size.width, size.height * 0.3f)) // Window hint
+            }
+            Environment.GARDEN -> {
+                // Green tones with grass
+                drawRect(Color(0xFF0D1F0D), size = size) // Dark green
+                // Simple grass representation
+                drawRect(Color(0xFF1A3A1A), Offset(0f, size.height * 0.7f), Size(size.width, size.height * 0.3f))
+            }
+            Environment.LAB -> {
+                // Tech lab: blue tones with grid
+                drawRect(Color(0xFF0A0F1F), size = size)
+                // Grid lines
+                val gridSpacing = 40f
+                for (i in 0..((size.width / gridSpacing).toInt())) {
+                    drawLine(
+                        Color(0xFF1A2F4F),
+                        Offset(i * gridSpacing, 0f),
+                        Offset(i * gridSpacing, size.height),
+                        strokeWidth = 1f
+                    )
+                }
+            }
+            Environment.SPACE_STATION -> {
+                // Space: deep black with stars
+                drawRect(Color.Black, size = size)
+                // Draw random stars
+                repeat(30) {
+                    val x = (0..size.width.toInt()).random().toFloat()
+                    val y = (0..size.height.toInt()).random().toFloat()
+                    drawCircle(Color.White, radius = 1f, center = Offset(x, y))
+                }
+            }
+        }
+    }
+
+    /**
+     * Draw stat bars showing health, energy, and happiness
+     */
+    fun DrawScope.drawStatBars(petState: PixelPetState) {
+        val barHeight = 8f
+        val barSpacing = 4f
+        val barWidth = size.width * 0.8f
+        val startX = (size.width - barWidth) / 2f
+        val startY = size.height - (barHeight * 3 + barSpacing * 2 + 16f)
+
+        // Health bar (red/green gradient)
+        drawStatBar(
+            value = petState.health,
+            max = 100f,
+            color = Color(0xFF4CAF50), // Green
+            backgroundColor = Color(0xFF1A1A1A),
+            position = Offset(startX, startY),
+            barSize = Size(barWidth, barHeight)
+        )
+
+        // Energy bar (yellow)
+        drawStatBar(
+            value = petState.energy,
+            max = 100f,
+            color = Color(0xFFFFEB3B), // Yellow
+            backgroundColor = Color(0xFF1A1A1A),
+            position = Offset(startX, startY + barHeight + barSpacing),
+            barSize = Size(barWidth, barHeight)
+        )
+
+        // Happiness bar (pink)
+        drawStatBar(
+            value = petState.happiness,
+            max = 100f,
+            color = Color(0xFFE91E63), // Pink
+            backgroundColor = Color(0xFF1A1A1A),
+            position = Offset(startX, startY + (barHeight + barSpacing) * 2),
+            barSize = Size(barWidth, barHeight)
+        )
+    }
+
+    /**
+     * Draw a single stat bar with value
+     */
+    private fun DrawScope.drawStatBar(
+        value: Float,
+        max: Float,
+        color: Color,
+        backgroundColor: Color,
+        position: Offset,
+        barSize: Size
+    ) {
+        val fillRatio = (value / max).coerceIn(0f, 1f)
+
+        // Background
+        drawRoundRect(
+            color = backgroundColor,
+            topLeft = position,
+            size = barSize,
+            cornerRadius = CornerRadius(barSize.height / 2f)
+        )
+
+        // Fill
+        if (fillRatio > 0f) {
+            drawRoundRect(
+                color = color,
+                topLeft = position,
+                size = Size(barSize.width * fillRatio, barSize.height),
+                cornerRadius = CornerRadius(barSize.height / 2f)
+            )
+        }
+
+        // Border
+        drawRoundRect(
+            color = color.copy(alpha = 0.5f),
+            topLeft = position,
+            size = barSize,
+            cornerRadius = CornerRadius(barSize.height / 2f),
+            style = Stroke(width = 1f)
+        )
+    }
+
+    /**
+     * Draw evolution aura for advanced stages
+     */
+    fun DrawScope.drawEvolutionAura(stage: EvolutionStage, animationProgress: Float) {
+        val centerX = size.width / 2f
+        val centerY = size.height / 2f
+
+        val intensity = sin(animationProgress * Math.PI * 2).toFloat() * 0.3f + 0.7f
+
+        val auraColor = when (stage) {
+            EvolutionStage.ADVANCED -> Color(0xFF4169E1).copy(alpha = 0.1f * intensity)
+            EvolutionStage.EXPERT -> Color(0xFFE25303).copy(alpha = 0.15f * intensity)
+            EvolutionStage.LEGENDARY -> Color(0xFFFFD700).copy(alpha = 0.2f * intensity)
+            else -> return
+        }
+
+        // Pulsing circles
+        for (i in 1..3) {
+            val radius = 100f + (i * 30f) + (animationProgress * 20f)
+            drawCircle(
+                color = auraColor,
+                radius = radius,
+                center = Offset(centerX, centerY)
+            )
+        }
+    }
+
+    /**
+     * Draw particle effect
+     */
+    fun DrawScope.drawParticle(particle: ParticleEffect, animationProgress: Float) {
+        val x = size.width * (particle.x / 100f)
+        val y = size.height * (particle.y / 100f)
+
+        // Calculate age ratio (0 = just spawned, 1 = about to die)
+        val currentTime = kotlinx.datetime.Clock.System.now().toEpochMilliseconds()
+        val age = currentTime - particle.spawnTime
+        val ageRatio = (age.toFloat() / particle.lifetime).coerceIn(0f, 1f)
+        val alpha = 1f - ageRatio // Fade out over lifetime
+
+        when (particle.type) {
+            ParticleType.WATER_DROPLET -> {
+                // Blue droplet falling
+                val yOffset = ageRatio * 50f // Fall down
+                drawCircle(
+                    color = Color(0xFF2196F3).copy(alpha = alpha),
+                    radius = 3f,
+                    center = Offset(x, y + yOffset)
+                )
+            }
+            ParticleType.ENERGY_SPARKLE -> {
+                // Yellow sparkle pulsing
+                val pulsScale = 1f + sin(animationProgress * Math.PI * 4).toFloat() * 0.3f
+                drawCircle(
+                    color = Color(0xFFFFEB3B).copy(alpha = alpha),
+                    radius = 4f * pulsScale,
+                    center = Offset(x, y)
+                )
+            }
+            ParticleType.CO2_LEAF -> {
+                // Green leaf floating up
+                val yOffset = -ageRatio * 40f // Float up
+                drawCircle(
+                    color = Color(0xFF4CAF50).copy(alpha = alpha),
+                    radius = 3f,
+                    center = Offset(x, y + yOffset)
+                )
+            }
+            ParticleType.HEART -> {
+                // Pink heart (interaction feedback)
+                drawCircle(
+                    color = Color(0xFFE91E63).copy(alpha = alpha),
+                    radius = 5f,
+                    center = Offset(x, y - ageRatio * 30f) // Rise up
+                )
+            }
+            ParticleType.STAR -> {
+                // Gold star (evolution)
+                val scale = 1f + (1f - ageRatio) * 2f // Burst outward
+                drawCircle(
+                    color = Color(0xFFFFD700).copy(alpha = alpha),
+                    radius = 3f * scale,
+                    center = Offset(x, y)
+                )
+            }
+        }
+    }
 }
 
 /**
  * Usage Example:
  * ```kotlin
+ * // Basic robot avatar
  * Canvas(modifier = Modifier.size(280.dp)) {
  *     with(AvatarEngine) {
  *         drawRobotAvatar(
@@ -507,6 +770,26 @@ object AvatarEngine {
  *                 intensity = 0.8f
  *             )
  *         )
+ *     }
+ * }
+ *
+ * // Pixel pet with eco integration
+ * Canvas(modifier = Modifier.fillMaxSize()) {
+ *     with(AvatarEngine) {
+ *         val petState by petViewModel.petState.collectAsState()
+ *         val particles by petViewModel.particleEffects.collectAsState()
+ *
+ *         drawPixelPet(
+ *             petState = petState,
+ *             avatarState = AvatarState.fromActivity(AvatarActivity.IDLE),
+ *             showStatBars = true,
+ *             showEnvironment = true
+ *         )
+ *
+ *         // Draw particles on top
+ *         particles.forEach { particle ->
+ *             drawParticle(particle, animationProgress)
+ *         }
  *     }
  * }
  * ```

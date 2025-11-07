@@ -2,6 +2,7 @@ package app.m1k3.ai.assistant.avatar
 
 import androidx.compose.runtime.*
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -28,8 +29,14 @@ class AvatarViewModel(private val scope: CoroutineScope) {
     private val recentMessages = mutableListOf<String>()
     private val maxMessageHistory = 5
 
+    // Idle timeout management
+    private var idleTimeoutJob: Job? = null
+    private val idleTimeoutMs: Long = 5000 // 5 seconds
+
     /**
      * Set avatar emotion manually
+     *
+     * Cancels idle timeout since this is an active state change.
      *
      * @param emotion Target emotion
      * @param intensity Emotion intensity (0.0 to 1.0)
@@ -40,6 +47,9 @@ class AvatarViewModel(private val scope: CoroutineScope) {
         intensity: Float = 0.7f,
         message: String? = null
     ) {
+        // Cancel idle timeout on manual emotion change
+        idleTimeoutJob?.cancel()
+
         _avatarState.value = _avatarState.value.copy(
             emotion = emotion,
             intensity = intensity.coerceIn(0f, 1f),
@@ -51,11 +61,15 @@ class AvatarViewModel(private val scope: CoroutineScope) {
      * Set avatar activity (IDLE, THINKING, GENERATING, etc.)
      *
      * Automatically adjusts emotion to match activity if appropriate.
+     * Starts idle timeout when activity becomes IDLE.
      *
      * @param activity Target activity state
      */
     fun setActivity(activity: AvatarActivity) {
         val currentState = _avatarState.value
+
+        // Cancel any existing idle timeout
+        idleTimeoutJob?.cancel()
 
         // Update activity
         val newState = if (activity != currentState.activity) {
@@ -78,6 +92,44 @@ class AvatarViewModel(private val scope: CoroutineScope) {
         }
 
         _avatarState.value = newState
+
+        // Start idle timeout if activity is IDLE
+        if (activity == AvatarActivity.IDLE) {
+            startIdleTimeout()
+        }
+    }
+
+    /**
+     * Start idle timeout timer
+     *
+     * After 5 seconds of IDLE activity, resets avatar to neutral state.
+     */
+    private fun startIdleTimeout() {
+        idleTimeoutJob = scope.launch {
+            delay(idleTimeoutMs)
+            // Only reset if still IDLE after delay
+            if (_avatarState.value.activity == AvatarActivity.IDLE) {
+                resetToIdleState()
+            }
+        }
+    }
+
+    /**
+     * Reset avatar to neutral idle state
+     *
+     * Called after idle timeout expires. Resets:
+     * - Emotion to NEUTRAL
+     * - Intensity to minimal (0.3)
+     * - Activity stays IDLE
+     * - Clears status message
+     */
+    private fun resetToIdleState() {
+        _avatarState.value = _avatarState.value.copy(
+            emotion = AvatarEmotion.NEUTRAL,
+            intensity = 0.3f,
+            activity = AvatarActivity.IDLE,
+            message = null
+        )
     }
 
     /**
