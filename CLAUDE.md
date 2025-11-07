@@ -378,7 +378,16 @@ docker-compose up --build
 **Target Release:** Beta v0.1.0 (Week 16)
 **Progress:** 12/135 tickets (9%) - **62 Passing Tests!** ✅
 
-### 🎉 **Latest Milestone:** Llamatik 0.8.1 Integration & BaseLlmEngine Abstraction (2025-11-06)
+### 🎉 **Latest Milestone:** Avatar Pixel Art Rendering System (2025-11-07)
+- ✅ **Rounded pixels** - 1px padding + 15% corner radius at all resolutions (16x16 to 64x64)
+- ✅ **Activity-based sprites** - 6 sprite variants (LISTENING, THINKING, GENERATING, SPEAKING, ERROR, IDLE)
+- ✅ **Smart sprite selection** - Activity state prioritized over emotion for contextual feedback
+- ✅ **Idle timeout system** - 5-second auto-reset to neutral state with coroutine management
+- ✅ **UI toggle control** - Demo screen settings for rounded pixels on/off
+- ✅ **Architecture** - 5 files modified, 2,126 insertions (PixelArtRenderer, AvatarViewModel, etc.)
+- 📄 See commit bd82383 for complete implementation
+
+### 🎉 **Previous Milestone:** Llamatik 0.8.1 Integration & BaseLlmEngine Abstraction (2025-11-06)
 - ✅ **Llamatik 0.8.1** - Stable llama.cpp binding successfully integrated (no crashes!)
 - ✅ **BaseLlmEngine interface** - Abstract AI engine interface for easy swapping (177 lines)
 - ✅ **LlamaCppEngine** - Rewritten to use Llamatik API with prompt engineering (353 lines)

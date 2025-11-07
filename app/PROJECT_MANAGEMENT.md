@@ -30,12 +30,13 @@ This project is managed through phase-specific documentation:
 
 ### Overall Status
 
-**Current Phase:** Phase 2 In Progress (~60%) - Importance Scoring Complete!
-**Overall Progress:** ~41/143 tickets (~29%)
+**Current Phase:** Phase 2 In Progress (~60%) - Avatar System Enhanced!
+**Overall Progress:** ~42/143 tickets (~29%)
 **Started:** 2025-11-01
 **Last Updated:** 2025-11-07
 
-🎉 **Latest Milestone:** PHASE2-007 Importance Calculator implemented with TDD! 🎉
+🎨 **Latest Milestone:** Avatar pixel art rendering with activity-based animations! 🎨
+🎯 **Previous:** PHASE2-007 Importance Calculator implemented with TDD
 ⭐ **Phase 1.5 Added:** Model evaluation (Gemma3 vs SmolLM2) + RAG fixes
 
 ### Phase Completion
@@ -54,6 +55,59 @@ This project is managed through phase-specific documentation:
 **Legend:** 🔴 In Progress | 🟢 Complete | ⚪ Not Started | 🟡 Blocked
 
 ### Recent Achievements
+
+#### 2025-11-07: Avatar Pixel Art Rendering System Complete 🎨
+
+**Implementation Summary:**
+- ✅ **Rounded Pixels** - 1px padding + 15% corner radius at all resolutions (16x16 to 64x64)
+- ✅ **Activity-Based Sprites** - 6 new sprite variants for different AI activities
+- ✅ **Smart Sprite Selection** - Activity prioritized over emotion for contextual visuals
+- ✅ **Idle Timeout System** - 5-second auto-reset to neutral state
+- ✅ **UI Toggle Control** - Demo screen settings for rounded pixels on/off
+
+**Activity Sprite Variants:**
+1. **LISTENING_IDLE** - Antenna/ears lit up during user input
+2. **THINKING_PROCESS** - Thinking sparkles during analysis
+3. **GENERATING_ACTIVE** - Energy pulsing during response creation
+4. **SPEAKING_MOUTH** - Open mouth animation during TTS output
+5. **ERROR_GLITCH** - Glitchy/distorted appearance on errors
+6. **IDLE_BREATHING** - Neutral breathing state at rest
+
+**Sprite Selection Logic:**
+- **Priority 1:** Activity state (LISTENING, THINKING, GENERATING, SPEAKING, ERROR)
+- **Priority 2:** Emotion-based sprites when IDLE
+- Activity sprites override emotion when AI is actively working
+- Maintains backward compatibility with evolution stages (BASIC → LEGENDARY)
+
+**Idle Timeout Behavior:**
+- 5-second coroutine-based timer starts when activity becomes IDLE
+- Auto-resets to NEUTRAL emotion + 0.3 intensity after timeout
+- Cancels timer on any activity or emotion change
+- Proper cleanup with Job cancellation
+
+**Visual Polish:**
+- `drawRoundRect()` with CornerRadius for smooth pixel edges
+- Configurable via `useRoundedPixels` parameter (default: true)
+- Fallback to square pixels when disabled
+- Consistent across all rendering contexts (pet view, debug screen, compact view)
+
+**Architecture:**
+- **PixelArtRenderer.kt (661 lines)** - Core rendering logic + 6 activity sprites
+- **AvatarViewModel.kt (+52 lines)** - Idle timeout monitoring with coroutines
+- **AvatarEngine.kt (+283 lines)** - Parameter propagation for useRoundedPixels
+- **AvatarView.kt (+317 lines)** - PixelPetView parameter support
+- **PixelPetDemoScreen.kt (813 lines)** - Demo screen with toggle controls
+
+**Impact:**
+- Avatar now reflects real-time AI activity state visually
+- Enhanced user feedback during AI processing stages
+- Polished visual aesthetic with rounded pixels
+- Foundation for future animation system expansion
+
+**Files Modified:** 5 files, 2,126 insertions
+**Commit:** bd82383 - `feat(avatar): Add rounded pixels with activity-based animations and idle timeout`
+
+---
 
 #### 2025-11-07: PHASE2-007 Importance Scoring Algorithm Complete 🎯
 
