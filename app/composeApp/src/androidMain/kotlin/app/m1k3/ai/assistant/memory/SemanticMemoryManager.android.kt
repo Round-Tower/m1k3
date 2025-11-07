@@ -3,6 +3,8 @@ package app.m1k3.ai.assistant.memory
 import android.content.Context
 import android.util.Log
 import app.m1k3.ai.assistant.database.MaDatabase
+import app.m1k3.ai.assistant.domain.memory.ConversationContext
+import app.m1k3.ai.assistant.domain.memory.ImportanceCalculator
 import app.m1k3.ai.assistant.embedding.EmbeddingEngine
 import app.m1k3.ai.assistant.embedding.EmbeddingTaskType
 import app.m1k3.ai.assistant.embedding.GemmaEmbeddingEngine
@@ -56,6 +58,7 @@ class SemanticMemoryManager(
     }
 
     private val vectorSearch = VectorSearchManager(context, embeddingEngine.embeddingDimensions, projectId)
+    private val importanceCalculator = ImportanceCalculator()
     private var isInitialized = false
 
     /**
@@ -87,19 +90,25 @@ class SemanticMemoryManager(
     /**
      * Create memory from message content
      *
+     * Automatically calculates importance using ImportanceCalculator heuristics.
+     *
      * @param messageId Source message ID
      * @param content Message text
-     * @param importance Importance score (0.0 to 1.0)
+     * @param context Conversation context for importance calculation
      * @return Number of memory chunks created
      */
     suspend fun createMemoryFromMessage(
         messageId: String,
         content: String,
-        importance: Float
+        context: ConversationContext = ConversationContext()
     ): Result<Int> = withContext(Dispatchers.IO) {
         try {
             require(isInitialized) { "Memory system not initialized" }
-            require(importance in 0f..1f) { "Importance must be between 0.0 and 1.0" }
+
+            // Calculate importance using heuristics
+            val importance = importanceCalculator.calculateImportance(content, context)
+
+            Log.d(TAG, "Calculated importance for message $messageId: $importance")
 
             // Skip low-importance content
             if (importance < MIN_IMPORTANCE) {

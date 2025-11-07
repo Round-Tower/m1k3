@@ -20,7 +20,14 @@
       "Bash(python scripts/export_smollm2_onnx.py:*)",
       "Bash(cat:*)",
       "Bash(find:*)",
-      "WebSearch"
+      "WebSearch",
+      "Bash(composeApp/src/androidMain/assets/models/smollm2-135m-q4f16.onnx.broken-backup)",
+      "Bash(composeApp/src/androidMain/assets/models/smollm2-135m-q4f16.onnx)",
+      "WebFetch(domain:github.com)",
+      "Bash(curl:*)",
+      "WebFetch(domain:central.sonatype.com)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Bash(unzip:*)"
     ],
     "deny": [],
     "ask": []
