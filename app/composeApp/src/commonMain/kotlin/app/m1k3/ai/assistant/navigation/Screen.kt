@@ -45,11 +45,6 @@ sealed class Screen(val route: String) {
     data object Avatar : Screen("avatar")
 
     /**
-     * 3D WebView screen - Three.js WebGL avatar rendering proof of concept
-     */
-    data object Avatar3DWebView : Screen("avatar_3d_webview")
-
-    /**
      * Settings screen - App configuration and preferences
      */
     data object Settings : Screen("settings")

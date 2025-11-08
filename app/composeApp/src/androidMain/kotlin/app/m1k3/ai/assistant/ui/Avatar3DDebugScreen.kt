@@ -43,8 +43,7 @@ import app.m1k3.ai.assistant.design.tokens.MaTypography
 @Composable
 fun Avatar3DDebugScreen(
     database: MaDatabase,
-    onBackClick: () -> Unit = {},
-    on3DWebViewClick: () -> Unit = {}
+    onBackClick: () -> Unit = {}
 ) {
     val haptics = rememberHapticFeedback()
 
@@ -92,15 +91,6 @@ fun Avatar3DDebugScreen(
                     navigationIcon = {
                         TextButton(onClick = onBackClick) {
                             Text("← Back", style = MaterialTheme.typography.titleMedium)
-                        }
-                    },
-                    actions = {
-                        TextButton(onClick = on3DWebViewClick) {
-                            Text(
-                                "WebView 3D →",
-                                style = MaterialTheme.typography.titleMedium,
-                                color = MaColors.Orange
-                            )
                         }
                     },
                     colors = TopAppBarDefaults.topAppBarColors(
