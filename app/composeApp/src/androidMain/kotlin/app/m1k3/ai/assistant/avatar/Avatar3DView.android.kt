@@ -26,6 +26,7 @@ import kotlinx.coroutines.delay
  * - Interactive controls (pinch-zoom, orbit, pan)
  * - Dynamic animation mapping (AnimationIntrospector)
  * - Multi-model support (ModelRegistry)
+ * - Reference-counted Filament engine (prevents multi-screen crashes)
  *
  * Renders any GLB/GLTF model with intelligent defaults.
  * Supports emotion-based animations and real-time state updates.
@@ -36,13 +37,14 @@ import kotlinx.coroutines.delay
  * - CameraAutoFit (optimal camera positioning)
  * - InteractiveCameraController (touch gestures)
  * - AnimationIntrospector (fuzzy animation matching)
+ * - FilamentEngineManager (reference-counted engine lifecycle)
  *
- * TODO: Fix multi-screen navigation crashes
- * - SharedEngine CompositionLocal pattern implemented but still experiencing SIGSEGV crashes
- * - Crash occurs when navigating between MainActivity and ChatScreen (both use 3D avatars)
- * - Error: "Engine destroyed × 2" followed by SEGV_MAPERR in libgltfio-jni.so
- * - Current workaround: ChatScreen uses 2D MiniAvatarIndicator instead
- * - Investigation needed: Filament engine lifecycle, SceneView disposal, CompositionLocal cleanup
+ * **Multi-Screen Crash Fix:**
+ * - ✅ FIXED: Reference-counted engine manager prevents "Engine destroyed × 2" crashes
+ * - Manual engine lifecycle (not rememberEngine()) with acquire/release pattern
+ * - Engine survives screen navigation, destroyed only in MainActivity.onDestroy()
+ * - Each 3D view calls AcquireEngine() to increment ref count
+ * - Safe for multiple screens with 3D avatars (MainActivity + ChatScreen)
  */
 
 /**
@@ -68,6 +70,10 @@ fun Avatar3DView(
 ) {
     // Use shared engine from CompositionLocal (one engine for entire app)
     val engine = LocalSharedEngine.current!!
+
+    // Acquire engine reference (increment ref count, auto-release on dispose)
+    AcquireEngine()
+
     val modelLoader = rememberModelLoader(engine)
 
     // Load model metadata
@@ -205,6 +211,10 @@ private fun RenderStaticModel(
 ) {
     // Use shared engine from CompositionLocal (one engine for entire app)
     val engine = LocalSharedEngine.current!!
+
+    // Acquire engine reference (increment ref count, auto-release on dispose)
+    AcquireEngine()
+
     val modelLoader = rememberModelLoader(engine)
 
     // Create procedural animator
@@ -335,6 +345,10 @@ private fun RenderAnimatedModel(
 ) {
     // Use shared engine from CompositionLocal (one engine for entire app)
     val engine = LocalSharedEngine.current!!
+
+    // Acquire engine reference (increment ref count, auto-release on dispose)
+    AcquireEngine()
+
     val modelLoader = rememberModelLoader(engine)
 
     // Calculate optimal camera (elevated 15° above model, looking down)

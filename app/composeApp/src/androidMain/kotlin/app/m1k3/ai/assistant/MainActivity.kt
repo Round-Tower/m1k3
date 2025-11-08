@@ -281,6 +281,9 @@ class MainActivity : ComponentActivity() {
 
                         // Close AI engine (ONNX cleanup on IO thread)
                         aiEngine.close()
+
+                        // Destroy Filament engine (CRITICAL: prevents memory leaks)
+                        app.m1k3.ai.assistant.avatar.FilamentEngineManager.forceDestroy()
                     } catch (e: Exception) {
                         println("⚠️ Error during cleanup: ${e.message}")
                     }
@@ -373,7 +376,7 @@ fun MaAIDemo(onChatClick: () -> Unit, onDebugClick: () -> Unit = {}, knowledgeSt
                     AvatarView(
                         state = avatarState,
                         showInfo = true,
-                        use3D = false,  // DISABLED: 3D causes SIGSEGV crashes during navigation
+                        use3D = true,  // ✅ ENABLED: Reference-counted engine prevents crashes
                         onClick = {
                             avatarVM.flashEmotion(AvatarEmotion.EXCITED, 1500)
                         }
