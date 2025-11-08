@@ -206,6 +206,16 @@ actual fun AvatarWebViewScreen(
                             }
                         }
                     },
+                    onTestMorphCube = {
+                        webViewNavigator.evaluateJavaScript("window.testMinimalMorph();") { result ->
+                            println("[間 AI WebView] Minimal morph test started")
+                        }
+                    },
+                    onTestCurrentModel = {
+                        webViewNavigator.evaluateJavaScript("window.testCurrentModelMorph();") { result ->
+                            println("[間 AI WebView] Current model morph test started")
+                        }
+                    },
                     currentFPS = currentFPS,
                     currentModelName = currentModelName
                 )

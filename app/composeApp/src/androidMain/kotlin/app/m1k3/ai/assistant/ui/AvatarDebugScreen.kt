@@ -56,7 +56,7 @@ fun AvatarDebugScreen(
     var currentEmotion by remember { mutableStateOf(AvatarEmotion.NEUTRAL) }
     var currentActivity by remember { mutableStateOf(AvatarActivity.IDLE) }
     var intensity by remember { mutableFloatStateOf(0.5f) }
-    var use3D by remember { mutableStateOf(false) }
+    var use3D by remember { mutableStateOf(true) }  // DEFAULT: Filament 3D (production-ready)
     var showAdvanced by remember { mutableStateOf(false) }
 
     // NEW: 3D model selection and camera controls
@@ -737,6 +737,127 @@ private fun AvatarDebugContent(
                             },
                             modifier = Modifier.weight(1f)
                         )
+                    }
+                }
+            }
+
+            // Animation Tests (only show in 3D mode)
+            AnimatedVisibility(visible = use3D) {
+                MaCard(
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(MaSpacing.base)
+                    ) {
+                        Text(
+                            "Animation Tests (Direct)",
+                            style = MaTypography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaColors.TextPrimary
+                        )
+                        Text(
+                            "Test specific animations instantly",
+                            style = MaTypography.bodySmall,
+                            color = MaColors.TextSecondary
+                        )
+                        Spacer(modifier = Modifier.height(MaSpacing.sm))
+
+                        // Row 1: Idle animations
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(MaSpacing.xs)
+                        ) {
+                            MaButtonSecondary(
+                                text = "Idle A",
+                                onClick = {
+                                    onActivityChange(AvatarActivity.LISTENING)  // → Idle_A
+                                    haptics.performHapticFeedback(HapticFeedbackType.LIGHT)
+                                },
+                                modifier = Modifier.weight(1f)
+                            )
+                            MaButtonSecondary(
+                                text = "Idle B",
+                                onClick = {
+                                    onEmotionChange(AvatarEmotion.HAPPY)  // → Idle_B
+                                    haptics.performHapticFeedback(HapticFeedbackType.LIGHT)
+                                },
+                                modifier = Modifier.weight(1f)
+                            )
+                            MaButtonSecondary(
+                                text = "Idle C",
+                                onClick = {
+                                    onActivityChange(AvatarActivity.IDLE)  // → Idle_C
+                                    haptics.performHapticFeedback(HapticFeedbackType.LIGHT)
+                                },
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(MaSpacing.xs))
+
+                        // Row 2: Active animations
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(MaSpacing.xs)
+                        ) {
+                            MaButtonSecondary(
+                                text = "🌀 Spin",
+                                onClick = {
+                                    onActivityChange(AvatarActivity.THINKING)  // → Spin
+                                    haptics.performHapticFeedback(HapticFeedbackType.LIGHT)
+                                },
+                                modifier = Modifier.weight(1f)
+                            )
+                            MaButtonSecondary(
+                                text = "🏃 Run",
+                                onClick = {
+                                    onActivityChange(AvatarActivity.GENERATING)  // → Run
+                                    haptics.performHapticFeedback(HapticFeedbackType.LIGHT)
+                                },
+                                modifier = Modifier.weight(1f)
+                            )
+                            MaButtonSecondary(
+                                text = "⚡ Bounce",
+                                onClick = {
+                                    onEmotionChange(AvatarEmotion.EXCITED)  // → Bounce
+                                    haptics.performHapticFeedback(HapticFeedbackType.LIGHT)
+                                },
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(MaSpacing.xs))
+
+                        // Row 3: Emotive animations
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(MaSpacing.xs)
+                        ) {
+                            MaButtonSecondary(
+                                text = "💬 Clicked",
+                                onClick = {
+                                    onActivityChange(AvatarActivity.SPEAKING)  // → Clicked
+                                    haptics.performHapticFeedback(HapticFeedbackType.LIGHT)
+                                },
+                                modifier = Modifier.weight(1f)
+                            )
+                            MaButtonSecondary(
+                                text = "🪑 Sit",
+                                onClick = {
+                                    onEmotionChange(AvatarEmotion.SAD)  // → Sit
+                                    haptics.performHapticFeedback(HapticFeedbackType.LIGHT)
+                                },
+                                modifier = Modifier.weight(1f)
+                            )
+                            MaButtonSecondary(
+                                text = "⚔️ Attack",
+                                onClick = {
+                                    onEmotionChange(AvatarEmotion.ANGRY)  // → Attack
+                                    haptics.performHapticFeedback(HapticFeedbackType.LIGHT)
+                                },
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
                     }
                 }
             }

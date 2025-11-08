@@ -247,6 +247,161 @@
         }
 
         // ===========================
+        // MINIMAL MORPH TEST (DIAGNOSTIC)
+        // ===========================
+
+        /**
+         * Creates a minimal test cube with one morph target to diagnose if morphs work at all.
+         * This is a critical diagnostic tool to determine if the issue is:
+         *   - Three.js/WebView configuration (cube doesn't animate)
+         *   - Complex GLB model structure (cube animates but real models don't)
+         */
+        window.testMinimalMorph = function() {
+            console.log('[間 AI 3D] 🧪 Creating minimal morph test cube...');
+
+            // Remove existing model
+            if (currentModel) {
+                scene.remove(currentModel);
+                currentModel = null;
+            }
+
+            // Stop any existing test animation
+            if (window.morphTestInterval) {
+                clearInterval(window.morphTestInterval);
+            }
+
+            // Create test cube geometry (1x1x1 box)
+            const geometry = new THREE.BoxGeometry(1, 1, 1);
+            const positions = geometry.attributes.position.array;
+
+            // Clone positions for morph target (stretch top vertices)
+            const morphPositions = new Float32Array(positions.length);
+            morphPositions.set(positions);
+
+            // Stretch top 4 vertices in Y-axis (2x height)
+            // BoxGeometry vertex indices for top face: 1, 13, 25, 37 (Y component)
+            [1, 13, 25, 37].forEach(i => morphPositions[i] *= 2);
+
+            // Add morph target to geometry
+            geometry.morphAttributes.position = [
+                new THREE.BufferAttribute(morphPositions, 3)
+            ];
+
+            // Create material (morphTargets: true required for Three.js r128)
+            const material = new THREE.MeshStandardMaterial({
+                color: 0xff0000,
+                morphTargets: true,  // CRITICAL for r128
+                side: THREE.FrontSide
+            });
+
+            // Create mesh with morph target
+            currentModel = new THREE.Mesh(geometry, material);
+            currentModel.position.set(0, 1, 0);
+            currentModel.castShadow = true;
+            currentModel.receiveShadow = true;
+            currentModel.morphTargetInfluences = [0]; // Start at 0% morph
+
+            scene.add(currentModel);
+
+            console.log('[間 AI 3D] ✅ Test cube created');
+            console.log('[間 AI 3D] 📊 Morph targets:', currentModel.geometry.morphAttributes.position ? currentModel.geometry.morphAttributes.position.length : 0);
+            console.log('[間 AI 3D] 📊 Initial influence:', currentModel.morphTargetInfluences[0]);
+            console.log('[間 AI 3D] 📺 WATCH: Cube should stretch/shrink vertically');
+
+            // Animate morph: 0 → 1 → 0 over 2 seconds (repeating)
+            let startTime = Date.now();
+            const animateMorph = () => {
+                const elapsed = Date.now() - startTime;
+                const cycle = (elapsed % 2000) / 2000; // 0 to 1
+                const morph = Math.abs(cycle * 2 - 1); // 0 → 1 → 0
+
+                if (currentModel && currentModel.morphTargetInfluences) {
+                    currentModel.morphTargetInfluences[0] = morph;
+
+                    // Log every 30 frames (~2Hz)
+                    if (Math.random() < 0.033) {
+                        console.log('[間 AI 3D] 📊 Morph influence:', morph.toFixed(3));
+                    }
+                }
+            };
+
+            // Run animation loop at ~60fps
+            window.morphTestInterval = setInterval(animateMorph, 16);
+
+            console.log('[間 AI 3D] 🎬 Animation started');
+            console.log('[間 AI 3D] ');
+            console.log('[間 AI 3D] ===== DIAGNOSTIC INTERPRETATION =====');
+            console.log('[間 AI 3D] ✅ IF cube stretches/shrinks: Morphs work! Problem is GLB export.');
+            console.log('[間 AI 3D] ❌ IF cube stays same size: Three.js or WebView issue.');
+            console.log('[間 AI 3D] =====================================');
+        };
+
+        /**
+         * Stop the minimal morph test animation
+         */
+        window.stopMinimalMorphTest = function() {
+            if (window.morphTestInterval) {
+                clearInterval(window.morphTestInterval);
+                console.log('[間 AI 3D] ⏹️  Test stopped');
+            }
+        };
+
+        /**
+         * Manual morph test on current model
+         * Tests if morphs are actually rendering by setting eyes.happy to 100%
+         */
+        window.testCurrentModelMorph = function(scale = 1.0) {
+            if (!window.meshesWithMorphs || window.meshesWithMorphs.length === 0) {
+                console.log('[間 AI 3D] ❌ No meshes with morph targets found');
+                return;
+            }
+
+            console.log('[間 AI 3D] 🧪 Testing morph on current model (scale:', scale, ')...');
+
+            window.meshesWithMorphs.forEach(mesh => {
+                const morphDict = mesh.morphTargetDictionary;
+                const influences = mesh.morphTargetInfluences;
+
+                console.log('[間 AI 3D] 📊 Mesh:', mesh.name || 'unnamed');
+                console.log('[間 AI 3D] 📊 Material.morphTargets:', mesh.material.morphTargets);
+                console.log('[間 AI 3D] 📊 Morph count:', Object.keys(morphDict).length);
+
+                // Test eyes.happy
+                const happyIdx = morphDict['eyes.happy'];
+                if (happyIdx !== undefined) {
+                    const before = influences[happyIdx];
+                    influences[happyIdx] = 1.0 * scale;
+                    console.log('[間 AI 3D] 😊 Set eyes.happy:', before, '→', 1.0 * scale);
+                } else {
+                    console.log('[間 AI 3D] ⚠️  eyes.happy not found');
+                }
+
+                // Test eyes.blink
+                const blinkIdx = morphDict['eyes.blink'];
+                if (blinkIdx !== undefined) {
+                    const before = influences[blinkIdx];
+                    influences[blinkIdx] = 0.5 * scale;
+                    console.log('[間 AI 3D] 👁️  Set eyes.blink:', before, '→', 0.5 * scale);
+                } else {
+                    console.log('[間 AI 3D] ⚠️  eyes.blink not found');
+                }
+
+                // Log first morph target data for debugging
+                if (mesh.geometry.morphAttributes.position && mesh.geometry.morphAttributes.position.length > 0) {
+                    const firstMorphData = mesh.geometry.morphAttributes.position[0];
+                    const basePos = mesh.geometry.attributes.position;
+                    console.log('[間 AI 3D] 🔍 Base position count:', basePos.count);
+                    console.log('[間 AI 3D] 🔍 Morph position count:', firstMorphData.count);
+                    console.log('[間 AI 3D] 🔍 First base vertex:', basePos.array[0], basePos.array[1], basePos.array[2]);
+                    console.log('[間 AI 3D] 🔍 First morph vertex:', firstMorphData.array[0], firstMorphData.array[1], firstMorphData.array[2]);
+                }
+            });
+
+            console.log('[間 AI 3D] ✅ Morph test complete - check if eyes changed!');
+            console.log('[間 AI 3D] 💡 Try: window.testCurrentModelMorph(0.1) for 10% strength');
+        };
+
+        // ===========================
         // WINDOW RESIZE
         // ===========================
 
@@ -374,7 +529,18 @@
 
                 console.log('[間 AI 3D] State updated:', state);
 
-                // Update visual representation
+                // NEW: Play skeletal animation based on activity (prioritize) or emotion
+                const animName = ACTIVITY_ANIMATION_MAP[currentActivity] ||
+                                 EMOTION_ANIMATION_MAP[currentEmotion.toLowerCase()] ||
+                                 'Idle_A';  // Fallback
+
+                if (playAnimationByName(animName)) {
+                    console.log('[間 AI 3D] 🎬 Activity:', currentActivity, '→ Animation:', animName);
+                } else {
+                    console.log('[間 AI 3D] ⚠️  Failed to play animation:', animName);
+                }
+
+                // Update visual representation (emissive color only)
                 updateAvatarVisuals(state);
             } catch (error) {
                 console.error('[間 AI 3D] Failed to parse state:', error);
@@ -439,7 +605,8 @@
 
                     console.log('[間 AI 3D] Model bounds:', size, 'scale:', scale, 'floor Y:', box.min.y);
 
-                    // Enable shadows and force single-sided rendering
+                    // Enable shadows, morphs, and force single-sided rendering
+                    let morphMaterialsEnabled = 0;
                     currentModel.traverse((child) => {
                         if (child.isMesh) {
                             child.castShadow = true;
@@ -449,10 +616,38 @@
                             // GLB materials have doubleSided=true which causes morph distortion
                             if (child.material) {
                                 child.material.side = THREE.FrontSide;
+
+                                // CRITICAL FIX: Enable morphTargets on material (required for Three.js r128)
+                                // Without this, morph target rendering is completely broken!
+                                if (child.morphTargetDictionary && Object.keys(child.morphTargetDictionary).length > 0) {
+                                    const hadMorphTargets = child.material.morphTargets;
+                                    const hadMorphNormals = child.material.morphNormals;
+
+                                    child.material.morphTargets = true;
+
+                                    // EXPERIMENT: Try WITHOUT morphNormals to see if stretching goes away
+                                    // The normals exist but may be causing distortion
+                                    child.material.morphNormals = false;
+                                    morphMaterialsEnabled++;
+
+                                    console.log('[間 AI 3D] 🔧 Material morphTargets:', hadMorphTargets, '→ true');
+                                    console.log('[間 AI 3D] 🔧 Material morphNormals:', hadMorphNormals, '→ false (testing without)');
+
+                                    // Check if normals exist in morph data
+                                    if (child.geometry.morphAttributes.normal) {
+                                        console.log('[間 AI 3D] ✅ Morph normals exist but disabled for testing');
+                                    } else {
+                                        console.log('[間 AI 3D] ⚠️  No morph normals in geometry');
+                                    }
+                                }
+
                                 child.material.needsUpdate = true;
                             }
                         }
                     });
+                    if (morphMaterialsEnabled > 0) {
+                        console.log('[間 AI 3D] ✅ Enabled morphTargets on', morphMaterialsEnabled, 'material(s)');
+                    }
 
                     scene.add(currentModel);
 
@@ -568,6 +763,96 @@
         window.getCurrentFPS = function() {
             return fps;
         };
+
+        // ====================================================================================
+        // SKELETAL ANIMATION CONTROL API (Matches Filament implementation)
+        // ====================================================================================
+
+        // Activity → Animation mapping (same as Avatar3DEngine.kt)
+        const ACTIVITY_ANIMATION_MAP = {
+            'LISTENING': 'Idle_A',      // Calm listening pose
+            'THINKING': 'Spin',         // Contemplative spin
+            'GENERATING': 'Run',        // Active generation
+            'SPEAKING': 'Clicked',      // Talking animation
+            'ERROR': 'Death',           // Error state
+            'IDLE': 'Idle_C'           // Default resting state
+        };
+
+        // Emotion → Animation mapping (same as Avatar3DEngine.kt)
+        const EMOTION_ANIMATION_MAP = {
+            'happy': 'Idle_B',          // Happy idle
+            'sad': 'Sit',               // Sad sitting
+            'excited': 'Bounce',        // Energetic bounce
+            'angry': 'Attack',          // Aggressive attack
+            'surprised': 'Jump',        // Startled jump
+            'love': 'Idle_B',           // Happy idle
+            'thinking': 'Spin',         // Contemplative
+            'sleepy': 'Sit',            // Tired sitting
+            'neutral': 'Idle_A'         // Neutral stance
+        };
+
+        // Play animation by name (case-insensitive fuzzy match)
+        window.playAnimationByName = function(animName, loop = true) {
+            if (!mixer || !currentModel) {
+                console.log('[間 AI 3D] ⚠️  No mixer/model - cannot play animation');
+                return false;
+            }
+
+            // Find animation (case-insensitive partial match)
+            const allAnims = mixer._root.animations || [];
+            const anim = allAnims.find(clip =>
+                clip.name.toLowerCase().includes(animName.toLowerCase())
+            );
+
+            if (!anim) {
+                console.log('[間 AI 3D] ⚠️  Animation not found:', animName);
+                console.log('[間 AI 3D] Available animations:', allAnims.map(a => a.name));
+                return false;
+            }
+
+            // Stop all current actions
+            mixer.stopAllAction();
+
+            // Clone animation to avoid modifying original
+            const clonedClip = anim.clone();
+
+            // IMPORTANT: Remove morph target tracks to prevent morph interference
+            clonedClip.tracks = clonedClip.tracks.filter(track => {
+                return !track.name.includes('.morphTargetInfluences');
+            });
+
+            // Play new animation
+            const action = mixer.clipAction(clonedClip);
+            action.setLoop(loop ? THREE.LoopRepeat : THREE.LoopOnce, Infinity);
+            action.reset().play();
+
+            console.log('[間 AI 3D] 🎬 Playing animation:', anim.name, '(loop:', loop + ')');
+            return true;
+        };
+
+        // Get current playing animation name
+        window.getCurrentAnimation = function() {
+            if (!mixer) return null;
+
+            // Find first active action
+            for (const action of mixer._actions) {
+                if (action.isRunning()) {
+                    return action.getClip().name;
+                }
+            }
+            return null;
+        };
+
+        // ====================================================================================
+        // MORPH TARGET SYSTEM (DISABLED - Kept for future debugging)
+        // ====================================================================================
+        // The morph rendering is currently broken (stretching issue).
+        // Skeletal animations provide superior emotion expression anyway.
+        // This code is preserved for potential future fixes with:
+        // - VRM format conversion
+        // - Three.js r170+ upgrade
+        // - Different export settings
+        // ====================================================================================
 
         // Emotion to morph target mapping (based on discovered 29 blend shapes)
         const EMOTION_MORPH_MAP = {
@@ -686,25 +971,26 @@
             if (!currentModel) return;
 
             const emotion = state.emotion.toLowerCase();
-            const activity = state.activity || 'IDLE';  // ← NOW USING ACTIVITY!
+            const activity = state.activity || 'IDLE';
             const intensity = state.intensity || 1.0;
 
-            // Apply morph targets for facial expressions
-            if (window.meshesWithMorphs && window.meshesWithMorphs.length > 0) {
-                // Merge emotion and activity morphs (activity takes priority)
-                const emotionMorphs = EMOTION_MORPH_MAP[emotion] || {};
-                const activityMorphs = ACTIVITY_MORPH_MAP[activity] || {};
+            // ===========================
+            // MORPH TARGETS - DISABLED
+            // ===========================
+            // Morph rendering is currently broken (stretching issue).
+            // Keeping code for future debugging (VRM format, Three.js upgrade, etc.)
+            // Skeletal animations provide superior emotion expression.
+            //
+            // if (window.meshesWithMorphs && window.meshesWithMorphs.length > 0) {
+            //     const emotionMorphs = EMOTION_MORPH_MAP[emotion] || {};
+            //     const activityMorphs = ACTIVITY_MORPH_MAP[activity] || {};
+            //     const finalMorphMap = { ...emotionMorphs, ...activityMorphs };
+            //     window.meshesWithMorphs.forEach(mesh => {
+            //         applyMorphTargets(mesh, finalMorphMap, intensity);
+            //     });
+            // }
 
-                // Activity morphs override emotion morphs for same morph targets
-                const finalMorphMap = { ...emotionMorphs, ...activityMorphs };
-
-                window.meshesWithMorphs.forEach(mesh => {
-                    applyMorphTargets(mesh, finalMorphMap, intensity);
-                });
-                console.log('[間 AI 3D] 😊 Applied emotion:', emotion, 'activity:', activity, 'intensity:', intensity);
-            }
-
-            // Also change color based on emotion (emissive glow)
+            // Change emissive color based on emotion
             const emotionColors = {
                 'happy': 0xFFD700,
                 'sad': 0x4169E1,

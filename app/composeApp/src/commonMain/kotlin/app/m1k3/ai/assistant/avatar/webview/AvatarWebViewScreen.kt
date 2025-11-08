@@ -109,6 +109,8 @@ expect fun AvatarWebViewScreen(
 fun WebViewDemoControls(
     avatarViewModel: AvatarViewModel,
     onLoadModel: (AnimalModel) -> Unit,
+    onTestMorphCube: () -> Unit,
+    onTestCurrentModel: () -> Unit,
     currentFPS: Int,
     currentModelName: String,
     modifier: Modifier = Modifier
@@ -173,7 +175,7 @@ fun WebViewDemoControls(
                         color = MaColors.TextPrimary
                     )
                     Text(
-                        text = "29 morphs + 18 animations",
+                        text = "18 skeletal animations (morphs disabled)",
                         style = MaTypography.bodySmall,
                         color = MaColors.TextSecondary
                     )
@@ -195,7 +197,7 @@ fun WebViewDemoControls(
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 Text(
-                    text = "Emotion Controls",
+                    text = "Emotion Controls (Skeletal Animations)",
                     style = MaTypography.bodyMedium,
                     color = MaColors.TextPrimary
                 )
@@ -299,7 +301,7 @@ fun WebViewDemoControls(
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 Text(
-                    text = "Activity Controls",
+                    text = "Activity Controls (Skeletal Animations)",
                     style = MaTypography.bodyMedium,
                     color = MaColors.TextPrimary
                 )
@@ -409,6 +411,33 @@ fun WebViewDemoControls(
                         ) {
                             Text("${animal.emoji}")
                         }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // Diagnostic Test Buttons
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Button(
+                        onClick = onTestMorphCube,
+                        modifier = Modifier.weight(1f),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaColors.Error  // Red to indicate diagnostic
+                        )
+                    ) {
+                        Text("🧪 Test Cube")
+                    }
+                    Button(
+                        onClick = onTestCurrentModel,
+                        modifier = Modifier.weight(1f),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaColors.Orange
+                        )
+                    ) {
+                        Text("🧪 Test Model")
                     }
                 }
             }
