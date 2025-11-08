@@ -37,7 +37,7 @@ import app.m1k3.ai.assistant.avatar.*
 import app.m1k3.ai.assistant.avatar.webview.AvatarWebViewScreen
 import app.m1k3.ai.assistant.knowledge.KnowledgeBaseImporter
 import app.m1k3.ai.assistant.ui.ChatScreen
-import app.m1k3.ai.assistant.ui.AvatarDebugScreen
+import app.m1k3.ai.assistant.ui.Avatar3DDebugScreen
 import app.m1k3.ai.assistant.ui.HistoryScreen
 import app.m1k3.ai.assistant.ui.EcoStatsScreen
 import kotlinx.coroutines.launch
@@ -197,10 +197,10 @@ class MainActivity : ComponentActivity() {
                                 }
                             }
 
-                            // Avatar Screen (replaces AvatarDebugScreen)
+                            // Avatar Screen (3D Debug Screen)
                             composable(Screen.Avatar.route) {
                                 database?.let { db ->
-                                    AvatarDebugScreen(
+                                    Avatar3DDebugScreen(
                                         database = db,
                                         onBackClick = { navController.navigateUp() },
                                         on3DWebViewClick = { navController.navigate(Screen.Avatar3DWebView.route) }

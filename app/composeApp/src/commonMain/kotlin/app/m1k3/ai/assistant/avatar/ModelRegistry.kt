@@ -97,13 +97,13 @@ data class ModelConfig(
         )
 
         /**
-         * Sparrow (bird)
+         * Sparrow (bird) - Optimal version with mesh + 18 animations
          */
         val SPARROW = ModelConfig(
             id = "sparrow",
             name = "Sparrow",
             path = "models/Sparrow_Animations.glb",
-            description = "Small bird with flying and perching animations",
+            description = "Small bird with flying and perching animations (269 KB optimal)",
             category = "bird"
         )
 

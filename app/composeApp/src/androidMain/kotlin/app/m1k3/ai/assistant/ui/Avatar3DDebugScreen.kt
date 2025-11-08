@@ -24,13 +24,13 @@ import app.m1k3.ai.assistant.design.tokens.MaSpacing
 import app.m1k3.ai.assistant.design.tokens.MaTypography
 
 /**
- * 間 AI Avatar Debug Screen
+ * 間 AI Avatar 3D Debug Screen
  *
- * Comprehensive testing interface for the avatar system:
- * - Toggle between 2D Canvas and 3D models
- * - **NEW:** Select from 8 Quirky Series animals (Colobus, Sparrow, Gecko, etc.)
- * - **NEW:** Interactive camera controls (pinch-zoom, orbit, pan)
- * - **NEW:** Model metadata viewer
+ * Comprehensive testing interface for the 3D avatar system:
+ * - Toggle between 2D Canvas and 3D Filament rendering
+ * - Select from 9 models (8 Quirky Series animals + Mask)
+ * - Interactive camera controls (pinch-zoom, orbit, pan)
+ * - Model metadata viewer
  * - Test all 9 emotions with intensity control
  * - Test all 6 activities
  * - Real-time state visualization
@@ -41,16 +41,12 @@ import app.m1k3.ai.assistant.design.tokens.MaTypography
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AvatarDebugScreen(
+fun Avatar3DDebugScreen(
     database: MaDatabase,
     onBackClick: () -> Unit = {},
     on3DWebViewClick: () -> Unit = {}
 ) {
     val haptics = rememberHapticFeedback()
-
-    // Tab state
-    var selectedTab by remember { mutableStateOf(0) }
-    val tabs = listOf("🎨 Avatar Debug", "🌱 Pixel Pet Demo")
 
     // Avatar state
     var currentEmotion by remember { mutableStateOf(AvatarEmotion.NEUTRAL) }
@@ -81,17 +77,13 @@ fun AvatarDebugScreen(
                     title = {
                         Column {
                             Text(
-                                tabs[selectedTab],
+                                "🎨 Avatar Debug",
                                 style = MaTypography.titleLarge,
                                 fontWeight = FontWeight.Bold,
                                 color = MaColors.TextPrimary
                             )
                             Text(
-                                if (selectedTab == 0) {
-                                    if (use3D) "Testing ${selectedModel.name} • ${if (enableInteraction) "Interactive" else "Static"}" else "Testing 2D Canvas Robot"
-                                } else {
-                                    "Eco-Integrated Virtual Companion"
-                                },
+                                if (use3D) "Testing ${selectedModel.name} • ${if (enableInteraction) "Interactive" else "Static"}" else "Testing 2D Canvas Robot",
                                 style = MaTypography.bodySmall,
                                 color = MaColors.Orange
                             )
@@ -115,63 +107,31 @@ fun AvatarDebugScreen(
                         containerColor = MaColors.BgPrimary
                     )
                 )
-
-                // Tab Row
-                TabRow(
-                    selectedTabIndex = selectedTab,
-                    containerColor = MaColors.BgPrimary,
-                    contentColor = MaColors.Orange
-                ) {
-                    tabs.forEachIndexed { index, title ->
-                        Tab(
-                            selected = selectedTab == index,
-                            onClick = {
-                                selectedTab = index
-                                haptics.performHapticFeedback(HapticFeedbackType.MEDIUM)
-                            },
-                            text = {
-                                Text(
-                                    text = title,
-                                    style = if (selectedTab == index) MaTypography.titleSmall else MaTypography.bodyMedium,
-                                    fontWeight = if (selectedTab == index) FontWeight.Bold else FontWeight.Normal
-                                )
-                            }
-                        )
-                    }
-                }
             }
         }
     ) { padding ->
-        // Tab content
-        when (selectedTab) {
-            0 -> AvatarDebugContent(
-                padding = padding,
-                currentEmotion = currentEmotion,
-                onEmotionChange = { currentEmotion = it },
-                currentActivity = currentActivity,
-                onActivityChange = { currentActivity = it },
-                intensity = intensity,
-                onIntensityChange = { intensity = it },
-                use3D = use3D,
-                onUse3DChange = { use3D = it },
-                showAdvanced = showAdvanced,
-                onShowAdvancedChange = { showAdvanced = it },
-                selectedModel = selectedModel,
-                onModelChange = { selectedModel = it },
-                enableInteraction = enableInteraction,
-                onEnableInteractionChange = { enableInteraction = it },
-                showModelInfo = showModelInfo,
-                onShowModelInfoChange = { showModelInfo = it },
-                avatarState = avatarState,
-                haptics = haptics
-            )
-            1 -> PixelPetDemoScreen(
-                database = database,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding)
-            )
-        }
+        // Main content
+        AvatarDebugContent(
+            padding = padding,
+            currentEmotion = currentEmotion,
+            onEmotionChange = { currentEmotion = it },
+            currentActivity = currentActivity,
+            onActivityChange = { currentActivity = it },
+            intensity = intensity,
+            onIntensityChange = { intensity = it },
+            use3D = use3D,
+            onUse3DChange = { use3D = it },
+            showAdvanced = showAdvanced,
+            onShowAdvancedChange = { showAdvanced = it },
+            selectedModel = selectedModel,
+            onModelChange = { selectedModel = it },
+            enableInteraction = enableInteraction,
+            onEnableInteractionChange = { enableInteraction = it },
+            showModelInfo = showModelInfo,
+            onShowModelInfoChange = { showModelInfo = it },
+            avatarState = avatarState,
+            haptics = haptics
+        )
     }
 }
 
