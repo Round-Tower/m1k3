@@ -34,6 +34,7 @@ import app.m1k3.ai.assistant.design.tokens.MaColors
 import app.m1k3.ai.assistant.design.tokens.MaSpacing
 import app.m1k3.ai.assistant.design.tokens.MaTypography
 import app.m1k3.ai.assistant.avatar.*
+import app.m1k3.ai.assistant.avatar.webview.AvatarWebViewScreen
 import app.m1k3.ai.assistant.knowledge.KnowledgeBaseImporter
 import app.m1k3.ai.assistant.ui.ChatScreen
 import app.m1k3.ai.assistant.ui.AvatarDebugScreen
@@ -198,7 +199,27 @@ class MainActivity : ComponentActivity() {
 
                             // Avatar Screen (replaces AvatarDebugScreen)
                             composable(Screen.Avatar.route) {
-                                AvatarDebugScreen(
+                                database?.let { db ->
+                                    AvatarDebugScreen(
+                                        database = db,
+                                        onBackClick = { navController.navigateUp() },
+                                        on3DWebViewClick = { navController.navigate(Screen.Avatar3DWebView.route) }
+                                    )
+                                } ?: run {
+                                    // Show loading state if database not initialized
+                                    Box(
+                                        modifier = Modifier.fillMaxSize(),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text("Loading database...")
+                                    }
+                                }
+                            }
+
+                            // 3D WebView Screen - Three.js POC
+                            composable(Screen.Avatar3DWebView.route) {
+                                AvatarWebViewScreen(
+                                    avatarViewModel = rememberAvatarViewModel(),
                                     onBackClick = { navController.navigateUp() }
                                 )
                             }

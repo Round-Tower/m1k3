@@ -12,6 +12,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import app.m1k3.ai.assistant.avatar.*
+import app.m1k3.ai.assistant.avatar.demo.PixelPetDemoScreen
+import app.m1k3.ai.assistant.database.MaDatabase
 import app.m1k3.ai.assistant.design.components.MaButtonPrimary
 import app.m1k3.ai.assistant.design.components.MaButtonSecondary
 import app.m1k3.ai.assistant.design.components.MaCard
@@ -40,9 +42,15 @@ import app.m1k3.ai.assistant.design.tokens.MaTypography
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AvatarDebugScreen(
-    onBackClick: () -> Unit = {}
+    database: MaDatabase,
+    onBackClick: () -> Unit = {},
+    on3DWebViewClick: () -> Unit = {}
 ) {
     val haptics = rememberHapticFeedback()
+
+    // Tab state
+    var selectedTab by remember { mutableStateOf(0) }
+    val tabs = listOf("🎨 Avatar Debug", "🌱 Pixel Pet Demo")
 
     // Avatar state
     var currentEmotion by remember { mutableStateOf(AvatarEmotion.NEUTRAL) }
@@ -68,41 +76,135 @@ fun AvatarDebugScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = {
-                    Column {
-                        Text(
-                            "🎨 Avatar Debug Lab",
-                            style = MaTypography.titleLarge,
-                            fontWeight = FontWeight.Bold,
-                            color = MaColors.TextPrimary
-                        )
-                        Text(
-                            if (use3D) "Testing ${selectedModel.name} • ${if (enableInteraction) "Interactive" else "Static"}" else "Testing 2D Canvas Robot",
-                            style = MaTypography.bodySmall,
-                            color = MaColors.Orange
-                        )
-                    }
-                },
-                navigationIcon = {
-                    TextButton(onClick = onBackClick) {
-                        Text("← Back", style = MaterialTheme.typography.titleMedium)
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaColors.BgPrimary
+            Column {
+                TopAppBar(
+                    title = {
+                        Column {
+                            Text(
+                                tabs[selectedTab],
+                                style = MaTypography.titleLarge,
+                                fontWeight = FontWeight.Bold,
+                                color = MaColors.TextPrimary
+                            )
+                            Text(
+                                if (selectedTab == 0) {
+                                    if (use3D) "Testing ${selectedModel.name} • ${if (enableInteraction) "Interactive" else "Static"}" else "Testing 2D Canvas Robot"
+                                } else {
+                                    "Eco-Integrated Virtual Companion"
+                                },
+                                style = MaTypography.bodySmall,
+                                color = MaColors.Orange
+                            )
+                        }
+                    },
+                    navigationIcon = {
+                        TextButton(onClick = onBackClick) {
+                            Text("← Back", style = MaterialTheme.typography.titleMedium)
+                        }
+                    },
+                    actions = {
+                        TextButton(onClick = on3DWebViewClick) {
+                            Text(
+                                "WebView 3D →",
+                                style = MaterialTheme.typography.titleMedium,
+                                color = MaColors.Orange
+                            )
+                        }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = MaColors.BgPrimary
+                    )
                 )
-            )
+
+                // Tab Row
+                TabRow(
+                    selectedTabIndex = selectedTab,
+                    containerColor = MaColors.BgPrimary,
+                    contentColor = MaColors.Orange
+                ) {
+                    tabs.forEachIndexed { index, title ->
+                        Tab(
+                            selected = selectedTab == index,
+                            onClick = {
+                                selectedTab = index
+                                haptics.performHapticFeedback(HapticFeedbackType.MEDIUM)
+                            },
+                            text = {
+                                Text(
+                                    text = title,
+                                    style = if (selectedTab == index) MaTypography.titleSmall else MaTypography.bodyMedium,
+                                    fontWeight = if (selectedTab == index) FontWeight.Bold else FontWeight.Normal
+                                )
+                            }
+                        )
+                    }
+                }
+            }
         }
     ) { padding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .verticalScroll(rememberScrollState())
-                .padding(MaSpacing.base),
-            verticalArrangement = Arrangement.spacedBy(MaSpacing.base)
-        ) {
+        // Tab content
+        when (selectedTab) {
+            0 -> AvatarDebugContent(
+                padding = padding,
+                currentEmotion = currentEmotion,
+                onEmotionChange = { currentEmotion = it },
+                currentActivity = currentActivity,
+                onActivityChange = { currentActivity = it },
+                intensity = intensity,
+                onIntensityChange = { intensity = it },
+                use3D = use3D,
+                onUse3DChange = { use3D = it },
+                showAdvanced = showAdvanced,
+                onShowAdvancedChange = { showAdvanced = it },
+                selectedModel = selectedModel,
+                onModelChange = { selectedModel = it },
+                enableInteraction = enableInteraction,
+                onEnableInteractionChange = { enableInteraction = it },
+                showModelInfo = showModelInfo,
+                onShowModelInfoChange = { showModelInfo = it },
+                avatarState = avatarState,
+                haptics = haptics
+            )
+            1 -> PixelPetDemoScreen(
+                database = database,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding)
+            )
+        }
+    }
+}
+
+@Composable
+private fun AvatarDebugContent(
+    padding: PaddingValues,
+    currentEmotion: AvatarEmotion,
+    onEmotionChange: (AvatarEmotion) -> Unit,
+    currentActivity: AvatarActivity,
+    onActivityChange: (AvatarActivity) -> Unit,
+    intensity: Float,
+    onIntensityChange: (Float) -> Unit,
+    use3D: Boolean,
+    onUse3DChange: (Boolean) -> Unit,
+    showAdvanced: Boolean,
+    onShowAdvancedChange: (Boolean) -> Unit,
+    selectedModel: ModelConfig,
+    onModelChange: (ModelConfig) -> Unit,
+    enableInteraction: Boolean,
+    onEnableInteractionChange: (Boolean) -> Unit,
+    showModelInfo: Boolean,
+    onShowModelInfoChange: (Boolean) -> Unit,
+    avatarState: AvatarState,
+    haptics: app.m1k3.ai.assistant.design.haptics.HapticFeedbackController
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(padding)
+            .verticalScroll(rememberScrollState())
+            .padding(MaSpacing.base),
+        verticalArrangement = Arrangement.spacedBy(MaSpacing.base)
+    ) {
             // Avatar Display
             MaCard(
                 modifier = Modifier.fillMaxWidth()
@@ -168,7 +270,7 @@ fun AvatarDebugScreen(
                     Switch(
                         checked = use3D,
                         onCheckedChange = {
-                            use3D = it
+                            onUse3DChange(it)
                             haptics.performHapticFeedback(HapticFeedbackType.MEDIUM)
                         },
                         colors = SwitchDefaults.colors(
@@ -219,7 +321,7 @@ fun AvatarDebugScreen(
                                             MaButtonSecondary(
                                                 text = model.name,
                                                 onClick = {
-                                                    selectedModel = model
+                                                    onModelChange(model)
                                                     haptics.performHapticFeedback(HapticFeedbackType.MEDIUM)
                                                 },
                                                 modifier = Modifier.weight(1f)
@@ -239,7 +341,7 @@ fun AvatarDebugScreen(
                             MaButtonSecondary(
                                 text = if (showModelInfo) "▼ Hide Model Info" else "▶ Show Model Info",
                                 onClick = {
-                                    showModelInfo = !showModelInfo
+                                    onShowModelInfoChange(!showModelInfo)
                                     haptics.performHapticFeedback(HapticFeedbackType.LIGHT)
                                 },
                                 modifier = Modifier.fillMaxWidth()
@@ -314,7 +416,7 @@ fun AvatarDebugScreen(
                                 Switch(
                                     checked = enableInteraction,
                                     onCheckedChange = {
-                                        enableInteraction = it
+                                        onEnableInteractionChange(it)
                                         haptics.performHapticFeedback(HapticFeedbackType.MEDIUM)
                                     },
                                     colors = SwitchDefaults.colors(
@@ -368,7 +470,7 @@ fun AvatarDebugScreen(
                                     MaButtonPrimary(
                                         text = "${emotion.emoji} ${emotion.displayName}",
                                         onClick = {
-                                            currentEmotion = emotion
+                                            onEmotionChange(emotion)
                                             haptics.performHapticFeedback(HapticFeedbackType.LIGHT)
                                         },
                                         modifier = Modifier.weight(1f),
@@ -378,7 +480,7 @@ fun AvatarDebugScreen(
                                     MaButtonSecondary(
                                         text = "${emotion.emoji} ${emotion.displayName}",
                                         onClick = {
-                                            currentEmotion = emotion
+                                            onEmotionChange(emotion)
                                             haptics.performHapticFeedback(HapticFeedbackType.LIGHT)
                                         },
                                         modifier = Modifier.weight(1f)
@@ -427,7 +529,7 @@ fun AvatarDebugScreen(
                                     MaButtonPrimary(
                                         text = activity.displayName,
                                         onClick = {
-                                            currentActivity = activity
+                                            onActivityChange(activity)
                                             haptics.performHapticFeedback(HapticFeedbackType.LIGHT)
                                         },
                                         modifier = Modifier.weight(1f),
@@ -437,7 +539,7 @@ fun AvatarDebugScreen(
                                     MaButtonSecondary(
                                         text = activity.displayName,
                                         onClick = {
-                                            currentActivity = activity
+                                            onActivityChange(activity)
                                             haptics.performHapticFeedback(HapticFeedbackType.LIGHT)
                                         },
                                         modifier = Modifier.weight(1f)
@@ -474,7 +576,7 @@ fun AvatarDebugScreen(
 
                     Slider(
                         value = intensity,
-                        onValueChange = { intensity = it },
+                        onValueChange = { onIntensityChange(it) },
                         valueRange = 0f..1f,
                         colors = SliderDefaults.colors(
                             thumbColor = MaColors.Orange,
@@ -494,7 +596,7 @@ fun AvatarDebugScreen(
 
             // Advanced Debug Info
             MaCard(
-                onClick = { showAdvanced = !showAdvanced },
+                onClick = { onShowAdvancedChange(!showAdvanced) },
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(
@@ -592,9 +694,9 @@ fun AvatarDebugScreen(
                         MaButtonPrimary(
                             text = "😊 Happy Path",
                             onClick = {
-                                currentEmotion = AvatarEmotion.HAPPY
-                                currentActivity = AvatarActivity.SPEAKING
-                                intensity = 0.8f
+                                onEmotionChange(AvatarEmotion.HAPPY)
+                                onActivityChange(AvatarActivity.SPEAKING)
+                                onIntensityChange(0.8f)
                                 haptics.performHapticFeedback(HapticFeedbackType.SUCCESS)
                             },
                             modifier = Modifier.weight(1f)
@@ -602,9 +704,9 @@ fun AvatarDebugScreen(
                         MaButtonPrimary(
                             text = "🤔 Thinking",
                             onClick = {
-                                currentEmotion = AvatarEmotion.THINKING
-                                currentActivity = AvatarActivity.THINKING
-                                intensity = 0.6f
+                                onEmotionChange(AvatarEmotion.THINKING)
+                                onActivityChange(AvatarActivity.THINKING)
+                                onIntensityChange(0.6f)
                                 haptics.performHapticFeedback(HapticFeedbackType.SUCCESS)
                             },
                             modifier = Modifier.weight(1f)
@@ -618,9 +720,9 @@ fun AvatarDebugScreen(
                         MaButtonPrimary(
                             text = "⚡ Generating",
                             onClick = {
-                                currentEmotion = AvatarEmotion.EXCITED
-                                currentActivity = AvatarActivity.GENERATING
-                                intensity = 0.9f
+                                onEmotionChange(AvatarEmotion.EXCITED)
+                                onActivityChange(AvatarActivity.GENERATING)
+                                onIntensityChange(0.9f)
                                 haptics.performHapticFeedback(HapticFeedbackType.SUCCESS)
                             },
                             modifier = Modifier.weight(1f)
@@ -628,9 +730,9 @@ fun AvatarDebugScreen(
                         MaButtonSecondary(
                             text = "❌ Error",
                             onClick = {
-                                currentEmotion = AvatarEmotion.ANGRY
-                                currentActivity = AvatarActivity.ERROR
-                                intensity = 1.0f
+                                onEmotionChange(AvatarEmotion.ANGRY)
+                                onActivityChange(AvatarActivity.ERROR)
+                                onIntensityChange(1.0f)
                                 haptics.performHapticFeedback(HapticFeedbackType.ERROR)
                             },
                             modifier = Modifier.weight(1f)
@@ -640,7 +742,6 @@ fun AvatarDebugScreen(
             }
         }
     }
-}
 
 @Composable
 private fun DebugInfoRow(label: String, value: String) {

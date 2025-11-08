@@ -1,6 +1,7 @@
 package app.m1k3.ai.assistant.chat
 
 import androidx.compose.runtime.*
+import app.m1k3.ai.assistant.avatar.PetViewModel
 import app.m1k3.ai.assistant.database.MaDatabase
 import app.m1k3.ai.assistant.eco.EcoCalculator
 import app.m1k3.ai.assistant.eco.EcoMetricsRepository
@@ -26,11 +27,18 @@ import kotlinx.datetime.Clock
  * - Conversation history integration
  * - Message persistence to database
  * - Real-time environmental savings display
+ * - Pixel pet integration (feeds pet with eco credits after each response)
  *
  * **Usage Example:**
  * ```kotlin
- * val chatVM = rememberChatViewModel(database, projectId)
- * val state by chatVM.collectAsState()
+ * // Without pixel pet
+ * val chatVM = ChatViewModel(database, projectId, scope)
+ *
+ * // With pixel pet integration
+ * val petVM = PetViewModel(ecoRepo, scope)
+ * val chatVM = ChatViewModel(database, projectId, scope, petVM)
+ *
+ * val state by chatVM.state.collectAsState()
  *
  * // After AI generates response
  * chatVM.recordMessage(
@@ -38,6 +46,7 @@ import kotlinx.datetime.Clock
  *     role = "assistant",
  *     tokens = tokenCount
  * )
+ * // Pet automatically receives eco credits and shows particle animations
  *
  * // Display eco stats
  * Text("💧 Saved: ${state.sessionEcoStats.waterMl}ml water")
@@ -46,7 +55,8 @@ import kotlinx.datetime.Clock
 class ChatViewModel(
     private val database: MaDatabase,
     private val projectId: String,
-    private val scope: CoroutineScope
+    private val scope: CoroutineScope,
+    private val petViewModel: PetViewModel? = null  // Optional pixel pet integration
 ) {
     // Repositories
     private val conversationRepo = ConversationRepository(database)
@@ -217,6 +227,10 @@ class ChatViewModel(
                             messageCount = currentStats.messageCount + 1
                         )
                     )
+
+                    // 🆕 Pixel Pet Integration: Feed pet with eco savings
+                    // This triggers immediate stat boosts and particle animations
+                    petViewModel?.onEcoMetricsRecorded(savings)
                 }
 
                 // Update conversation metadata

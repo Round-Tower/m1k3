@@ -98,6 +98,9 @@ kotlin {
             // Llamatik - KMP llama.cpp binding for GGUF models
             // Published on Maven Central: https://mvnrepository.com/artifact/com.llamatik/library/0.8.1
             implementation("com.llamatik:library:0.8.1")
+
+            // WebView for Three.js 3D avatar rendering
+            implementation("io.github.kevinnzou:compose-webview-multiplatform:2.0.3")
         }
         commonTest.dependencies {
             implementation(libs.kotlin.test)

@@ -27,7 +27,16 @@
       "Bash(curl:*)",
       "WebFetch(domain:central.sonatype.com)",
       "WebFetch(domain:raw.githubusercontent.com)",
-      "Bash(unzip:*)"
+      "Bash(unzip:*)",
+      "Bash(huggingface-cli download:*)",
+      "Bash(hf download:*)",
+      "Bash(tee:*)",
+      "WebFetch(domain:www.llamatik.com)",
+      "Bash(python:*)",
+      "WebFetch(domain:www.omabuarts.com)",
+      "Bash(/Applications/Blender.app/Contents/MacOS/Blender:*)",
+      "Bash(python3:*)",
+      "Bash(gltf-transform inspect:*)"
     ],
     "deny": [],
     "ask": []
