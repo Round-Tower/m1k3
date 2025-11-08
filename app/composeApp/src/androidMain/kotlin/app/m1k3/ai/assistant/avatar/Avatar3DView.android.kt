@@ -211,10 +211,6 @@ private fun RenderStaticModel(
 ) {
     // Use shared engine from CompositionLocal (one engine for entire app)
     val engine = LocalSharedEngine.current!!
-
-    // Acquire engine reference (increment ref count, auto-release on dispose)
-    AcquireEngine()
-
     val modelLoader = rememberModelLoader(engine)
 
     // Create procedural animator
@@ -345,10 +341,6 @@ private fun RenderAnimatedModel(
 ) {
     // Use shared engine from CompositionLocal (one engine for entire app)
     val engine = LocalSharedEngine.current!!
-
-    // Acquire engine reference (increment ref count, auto-release on dispose)
-    AcquireEngine()
-
     val modelLoader = rememberModelLoader(engine)
 
     // Calculate optimal camera (elevated 15° above model, looking down)
