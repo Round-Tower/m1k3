@@ -15,20 +15,28 @@ class MemoryRepositoryTest {
 
     @BeforeTest
     fun setup() {
-        database = TestDatabaseFactory.createTestDatabase()
+        database = TestDatabaseFactory.createInMemoryDatabase()
         repository = MemoryRepository(database)
 
         // Create test project
+        val now = System.currentTimeMillis()
         database.projectQueries.insertProject(
             id = "test-project",
             name = "Test Project",
-            created_at = System.currentTimeMillis()
+            description = "Test project for memory repository",
+            created_at = now,
+            updated_at = now,
+            is_archived = 0,
+            color = null,
+            icon = null,
+            message_count = 0,
+            total_tokens = 0
         )
     }
 
     @AfterTest
     fun teardown() {
-        database.close()
+        // Note: Test database doesn't need explicit close for in-memory DB
     }
 
     @Test

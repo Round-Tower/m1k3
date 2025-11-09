@@ -25,7 +25,7 @@ class MemoryManagerTest {
 
     @BeforeTest
     fun setup() {
-        database = TestDatabaseFactory.createTestDatabase()
+        database = TestDatabaseFactory.createInMemoryDatabase()
         repository = MemoryRepository(database)
         chunker = SemanticChunker(SimpleTokenCounter())
         importanceCalculator = ImportanceCalculator()
@@ -47,16 +47,24 @@ class MemoryManagerTest {
         memoryManager.vectorSearch = mockVectorSearch
 
         // Create test project
+        val now = System.currentTimeMillis()
         database.projectQueries.insertProject(
             id = "test-project",
             name = "Test Project",
-            created_at = System.currentTimeMillis()
+            description = "Test project for memory manager",
+            created_at = now,
+            updated_at = now,
+            is_archived = 0,
+            color = null,
+            icon = null,
+            message_count = 0,
+            total_tokens = 0
         )
     }
 
     @AfterTest
     fun teardown() {
-        database.close()
+        // Note: Test database doesn't need explicit close for in-memory DB
     }
 
     @Test
@@ -64,13 +72,8 @@ class MemoryManagerTest {
         val content = "a".repeat(800) + "."  // ~200 tokens, will be chunked
 
         val context = ConversationContext(
-            messageCount = 5,
-            userMessageCount = 3,
-            assistantMessageCount = 2,
-            hasQuestion = true,
-            hasCodeBlock = false,
-            averageLength = 100.0,
-            recentTopics = emptyList()
+            triviaWasShared = false,
+            isCurrentConversation = true
         )
 
         val result = memoryManager.createMemoriesFromMessage(
@@ -98,13 +101,8 @@ class MemoryManagerTest {
         val content = "ok"  // Very short, low importance
 
         val context = ConversationContext(
-            messageCount = 1,
-            userMessageCount = 1,
-            assistantMessageCount = 0,
-            hasQuestion = false,
-            hasCodeBlock = false,
-            averageLength = 10.0,
-            recentTopics = emptyList()
+            triviaWasShared = false,
+            isCurrentConversation = true
         )
 
         val result = memoryManager.createMemoriesFromMessage(
@@ -123,13 +121,8 @@ class MemoryManagerTest {
         // First create some memories
         val content1 = "a".repeat(800) + "."  // High importance content
         val context = ConversationContext(
-            messageCount = 5,
-            userMessageCount = 3,
-            assistantMessageCount = 2,
-            hasQuestion = true,
-            hasCodeBlock = false,
-            averageLength = 100.0,
-            recentTopics = emptyList()
+            triviaWasShared = false,
+            isCurrentConversation = true
         )
 
         memoryManager.createMemoriesFromMessage(
@@ -157,13 +150,8 @@ class MemoryManagerTest {
         // Create memory
         val content = "a".repeat(800) + "."
         val context = ConversationContext(
-            messageCount = 5,
-            userMessageCount = 3,
-            assistantMessageCount = 2,
-            hasQuestion = true,
-            hasCodeBlock = false,
-            averageLength = 100.0,
-            recentTopics = emptyList()
+            triviaWasShared = false,
+            isCurrentConversation = true
         )
 
         memoryManager.createMemoriesFromMessage(
@@ -219,13 +207,8 @@ class MemoryManagerTest {
         // Create memory
         val content = "a".repeat(800) + "."
         val context = ConversationContext(
-            messageCount = 5,
-            userMessageCount = 3,
-            assistantMessageCount = 2,
-            hasQuestion = true,
-            hasCodeBlock = false,
-            averageLength = 100.0,
-            recentTopics = emptyList()
+            triviaWasShared = false,
+            isCurrentConversation = true
         )
 
         memoryManager.createMemoriesFromMessage(
@@ -288,13 +271,8 @@ class MemoryManagerTest {
         // Create some memories
         val content = "a".repeat(800) + "."
         val context = ConversationContext(
-            messageCount = 5,
-            userMessageCount = 3,
-            assistantMessageCount = 2,
-            hasQuestion = true,
-            hasCodeBlock = false,
-            averageLength = 100.0,
-            recentTopics = emptyList()
+            triviaWasShared = false,
+            isCurrentConversation = true
         )
 
         memoryManager.createMemoriesFromMessage(
