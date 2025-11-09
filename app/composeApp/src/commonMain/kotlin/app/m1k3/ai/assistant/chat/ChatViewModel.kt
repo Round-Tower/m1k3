@@ -6,6 +6,8 @@ import app.m1k3.ai.assistant.database.MaDatabase
 import app.m1k3.ai.assistant.eco.EcoCalculator
 import app.m1k3.ai.assistant.eco.EcoMetricsRepository
 import app.m1k3.ai.assistant.history.ConversationRepository
+import app.m1k3.ai.assistant.memory.MemoryManager
+import app.m1k3.ai.assistant.domain.memory.ConversationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -28,6 +30,7 @@ import kotlinx.datetime.Clock
  * - Message persistence to database
  * - Real-time environmental savings display
  * - Pixel pet integration (feeds pet with eco credits after each response)
+ * - Semantic memory integration (optional, Phase 2)
  *
  * **Usage Example:**
  * ```kotlin
@@ -56,7 +59,8 @@ class ChatViewModel(
     private val database: MaDatabase,
     private val projectId: String,
     private val scope: CoroutineScope,
-    private val petViewModel: PetViewModel? = null  // Optional pixel pet integration
+    private val petViewModel: PetViewModel? = null,  // Optional pixel pet integration
+    private val memoryManager: MemoryManager? = null  // Optional semantic memory (Phase 2)
 ) {
     // Repositories
     private val conversationRepo = ConversationRepository(database)
@@ -233,6 +237,39 @@ class ChatViewModel(
                     petViewModel?.onEcoMetricsRecorded(savings)
                 }
 
+                // 🆕 Phase 2: Create semantic memory from message (if enabled)
+                memoryManager?.let { manager ->
+                    try {
+                        // Build conversation context for importance calculation
+                        // Note: ConversationContext is simple in Phase 2 (triviaWasShared, isCurrentConversation)
+                        // More sophisticated context extraction will come in Phase 3
+                        val conversationContext = ConversationContext(
+                            triviaWasShared = false,  // TODO: Track trivia sharing (Phase 3)
+                            isCurrentConversation = true  // All messages in ChatViewModel are current
+                        )
+
+                        // Create memory chunks from message
+                        val result = manager.createMemoriesFromMessage(
+                            messageId = messageId,
+                            content = content,
+                            role = role,
+                            conversationContext = conversationContext
+                        )
+
+                        if (result.isSuccess) {
+                            val count = result.getOrThrow()
+                            if (count > 0) {
+                                println("✅ [ChatViewModel] Created $count memory chunks for message")
+                            }
+                        } else {
+                            println("⚠️ [ChatViewModel] Failed to create memories: ${result.exceptionOrNull()?.message}")
+                        }
+                    } catch (e: Exception) {
+                        println("⚠️ [ChatViewModel] Memory creation error: ${e.message}")
+                        // Don't fail the message recording if memory fails
+                    }
+                }
+
                 // Update conversation metadata
                 currentConversationId?.let { convId ->
                     // Update title with first user message
@@ -277,6 +314,44 @@ class ChatViewModel(
         _state.value = _state.value.copy(
             sessionEcoStats = SessionEcoStats()
         )
+    }
+
+    /**
+     * Retrieve relevant memories for a query.
+     *
+     * **Phase 2: Memory Retrieval Hook**
+     * This method provides semantic memory context for AI generation.
+     * Call this before generating a response to include relevant memories.
+     *
+     * Example usage:
+     * ```kotlin
+     * val contextResult = chatVM.retrieveMemories("What did we discuss about X?")
+     * if (contextResult.isSuccess) {
+     *     val memories = contextResult.getOrThrow().selectedMemories
+     *     val contextText = contextResult.getOrThrow().formatAsContext()
+     *     // Include contextText in system prompt
+     * }
+     * ```
+     *
+     * @param queryText User's current message
+     * @param topK Number of candidate memories to retrieve (default 20)
+     * @return Result with ContextResult containing ranked memories within token budget
+     */
+    suspend fun retrieveMemories(
+        queryText: String,
+        topK: Int = 20
+    ): Result<app.m1k3.ai.assistant.memory.ContextResult> {
+        return memoryManager?.retrieveRelevantMemories(queryText, topK)
+            ?: Result.failure(IllegalStateException("Memory manager not initialized"))
+    }
+
+    /**
+     * Get memory statistics for debugging.
+     *
+     * @return Memory statistics or null if memory manager not initialized
+     */
+    fun getMemoryStats(): app.m1k3.ai.assistant.memory.MemoryRepositoryStats? {
+        return memoryManager?.getMemoryStats()
     }
 
     /**
