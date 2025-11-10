@@ -153,7 +153,7 @@ class MainActivity : ComponentActivity() {
                     ) { paddingValues ->
                         NavHost(
                             navController = navController,
-                            startDestination = Screen.Demo.route,
+                            startDestination = Screen.Chat.route,
                             modifier = Modifier.padding(paddingValues)
                         ) {
                             // Demo Screen
