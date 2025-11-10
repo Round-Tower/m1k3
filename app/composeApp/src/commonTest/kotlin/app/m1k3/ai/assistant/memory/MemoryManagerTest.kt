@@ -180,13 +180,8 @@ class MemoryManagerTest {
         repeat(5) { i ->
             val content = "a".repeat(800) + "."
             val context = ConversationContext(
-                messageCount = 5,
-                userMessageCount = 3,
-                assistantMessageCount = 2,
-                hasQuestion = true,
-                hasCodeBlock = false,
-                averageLength = 100.0,
-                recentTopics = emptyList()
+                triviaWasShared = false,
+                isCurrentConversation = true
             )
 
             memoryManager.createMemoriesFromMessage(
