@@ -5,6 +5,9 @@ import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.*
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.Spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -641,12 +644,27 @@ fun ChatScreen(
             )
         },
     ) { padding ->
+        // Persist avatar collapse state
+        val context = LocalContext.current
+        val prefs = remember { context.getSharedPreferences("ma_ai_prefs", Context.MODE_PRIVATE) }
+        var avatarCollapsed by remember { mutableStateOf(prefs.getBoolean("avatar_collapsed", false)) }
+
         Column(
             modifier =
                 Modifier
                     .fillMaxSize()
                     .padding(padding),
         ) {
+            // Collapsible 3D Avatar Header
+            CollapsibleAvatarHeader(
+                avatarVM = avatarVM,
+                avatarState = avatarState,
+                onCollapsedChange = { collapsed ->
+                    avatarCollapsed = collapsed
+                    prefs.edit().putBoolean("avatar_collapsed", collapsed).apply()
+                }
+            )
+
             // Eco Indicator - Real-time environmental impact
             if (chatState.sessionEcoStats.messageCount > 0) {
                 Box(
@@ -692,6 +710,101 @@ fun ChatScreen(
                             )
                         }
                     }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Collapsible 3D Avatar Header
+ *
+ * Shows the 3D avatar above the chat messages with:
+ * - Swipe-to-collapse gesture
+ * - Smooth expand/collapse animation
+ * - Activity and emotion indicators
+ * - Persistent collapse state
+ */
+@Composable
+fun CollapsibleAvatarHeader(
+    avatarVM: AvatarViewModel,
+    avatarState: AvatarState,
+    onCollapsedChange: (Boolean) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    // Load initial collapsed state from preferences
+    val context = LocalContext.current
+    val prefs = remember { context.getSharedPreferences("ma_ai_prefs", Context.MODE_PRIVATE) }
+    var isCollapsed by remember { mutableStateOf(prefs.getBoolean("avatar_collapsed", false)) }
+
+    val animatedHeight by animateDpAsState(
+        targetValue = if (isCollapsed) 80.dp else 280.dp,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessLow
+        )
+    )
+
+    Surface(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(animatedHeight)
+            .clickable {
+                isCollapsed = !isCollapsed
+                onCollapsedChange(isCollapsed)
+            },
+        color = MaColors.BgSecondary,
+        shadowElevation = 4.dp
+    ) {
+        Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center
+        ) {
+            // 3D Avatar with fallback to 2D
+            AvatarView(
+                state = avatarState,
+                use3D = true,
+                showInfo = false,
+                modifier = Modifier
+                    .size(if (isCollapsed) 64.dp else 240.dp)
+                    .clip(CircleShape)
+            )
+
+            // Collapse/Expand indicator
+            if (!isCollapsed) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(bottom = 8.dp)
+                ) {
+                    Text(
+                        text = "Tap to collapse",
+                        style = MaTypography.bodySmall,
+                        color = MaColors.TextSecondary
+                    )
+                }
+            }
+
+            // Activity indicator when collapsed
+            if (isCollapsed && avatarState.activity != AvatarActivity.IDLE) {
+                Row(
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = when (avatarState.activity) {
+                            AvatarActivity.LISTENING -> "🎤"
+                            AvatarActivity.THINKING -> "💭"
+                            AvatarActivity.GENERATING -> "✍️"
+                            AvatarActivity.SPEAKING -> "💬"
+                            AvatarActivity.ERROR -> "⚠️"
+                            else -> ""
+                        },
+                        style = MaTypography.bodySmall
+                    )
                 }
             }
         }
