@@ -27,6 +27,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.platform.LocalContext
@@ -284,74 +285,183 @@ fun ChatScreen(
         }
     }
 
-    Scaffold(
-        modifier = Modifier.animateContentSize(),
-        topBar = {
-            TopAppBar(
-                title = {
-                    Row(
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = MaSpacing.md),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Column {
-                            Text(
-                                "M1K3",
-                                style = MaTypography.titleLarge,
-                                fontWeight = FontWeight.Bold,
-                                color = MaColors.TextPrimary,
-                            )
-                            Text(
-                                if (engineInitialized) "🟢 Ready" else "🔄 Loading...",
-                                style =
-                                    TextStyle(
-                                        fontFamily = MaFontFamilyCaption,
-                                        fontWeight = FontWeight.Normal,
-                                        fontSize = 12.sp,
-                                        lineHeight = 16.sp,
-                                        letterSpacing = 0.25.sp,
-                                    ),
-                                color = if (engineInitialized) MaColors.Orange else MaColors.TextSecondary,
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .animateContentSize()
+    ) {
+        // Background: Messages list (behind overlays)
+        Column(
+            modifier = Modifier.fillMaxSize()
+        ) {
+            // Eco Indicator - Real-time environmental impact
+            if (chatState.sessionEcoStats.messageCount > 0) {
+                Box(
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 8.dp)
+                            .padding(top = 120.dp), // Account for toolbar overlay
+                    contentAlignment = Alignment.Center,
+                ) {
+                    EcoIndicator(
+                        stats = chatState.sessionEcoStats,
+                        onClick = onEcoStatsClick,
+                        variant = EcoIndicatorVariant.COMPACT,
+                    )
+                }
+            }
+
+            // Messages list
+            LazyColumn(
+                state = listState,
+                modifier =
+                    Modifier
+                        .animateContentSize()
+                        .fillMaxSize()
+                        .padding(horizontal = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+                contentPadding = PaddingValues(
+                    top = if (chatState.sessionEcoStats.messageCount > 0) 180.dp else 120.dp, // Account for toolbar + eco indicator
+                    bottom = 100.dp, // Account for input bar overlay
+                ),
+            ) {
+                items(messages) { message ->
+                    ChatBubble(message)
+                }
+
+                // Loading indicator
+                if (isGenerating) {
+                    item {
+                        Box(
+                            modifier = Modifier.fillMaxWidth(),
+                            contentAlignment = Alignment.CenterStart
+                        ) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(24.dp),
+                                strokeWidth = 2.dp,
                             )
                         }
-                        // 3D Avatar with activity/emotion feedback
+                    }
+                }
+            }
+        }
+
+        // Top overlay: Toolbar with blur and gradient
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .align(Alignment.TopCenter)
+        ) {
+            // Gradient overlay for liquid glass effect
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(120.dp)
+                    .background(
+                        brush = Brush.verticalGradient(
+                            colors = listOf(
+                                MaColors.BgPrimary.copy(alpha = 0.95f),
+                                MaColors.BgPrimary.copy(alpha = 0.85f),
+                                MaColors.BgPrimary.copy(alpha = 0.0f)
+                            )
+                        )
+                    )
+            )
+
+            // Toolbar content
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                color = MaColors.BgPrimary.copy(alpha = 0.75f),
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = MaSpacing.md, vertical = 12.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column {
+                        Text(
+                            "M1K3",
+                            style = MaTypography.titleLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = MaColors.TextPrimary,
+                        )
+                        Text(
+                            if (engineInitialized) "🟢 Ready" else "🔄 Loading...",
+                            style =
+                                TextStyle(
+                                    fontFamily = MaFontFamilyCaption,
+                                    fontWeight = FontWeight.Normal,
+                                    fontSize = 12.sp,
+                                    lineHeight = 16.sp,
+                                    letterSpacing = 0.25.sp,
+                                ),
+                            color = if (engineInitialized) MaColors.Orange else MaColors.TextSecondary,
+                        )
+                    }
+
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        // 🗑️ TEMPORARY DEBUG: Clear conversation history button
+                        // TODO: Remove before production - for testing model hallucination fixes
+                        IconButton(
+                            onClick = {
+                                scope.launch {
+                                    println("🗑️ [DEBUG] Manually clearing conversation history")
+                                    chatViewModel.clearConversation()
+                                    haptics.success()
+                                }
+                            }
+                        ) {
+                            Text(
+                                text = "🗑️",
+                                style = MaTypography.bodyLarge,
+                                color = MaColors.Orange
+                            )
+                        }
+
+                        // 3D Avatar with activity/emotion feedback (reduced size to prevent clipping)
                         AvatarView(
                             state = avatarState,
                             use3D = true,
                             showInfo = false,
                             modifier = Modifier
-                                .size(100.dp)
-                                .padding(8.dp)
+                                .size(64.dp) // Reduced from 100.dp to prevent clipping
+                                .padding(4.dp)
                                 .clip(CircleShape)
                         )
                     }
-                },
-                actions = {
-                    // 🗑️ TEMPORARY DEBUG: Clear conversation history button
-                    // TODO: Remove before production - for testing model hallucination fixes
-                    IconButton(
-                        onClick = {
-                            scope.launch {
-                                println("🗑️ [DEBUG] Manually clearing conversation history")
-                                chatViewModel.clearConversation()
-                                haptics.success()
-                            }
-                        }
-                    ) {
-                        Text(
-                            text = "🗑️",
-                            style = MaTypography.bodyLarge,
-                            color = MaColors.Orange
+                }
+            }
+        }
+
+        // Bottom overlay: Input bar with blur and gradient
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .align(Alignment.BottomCenter)
+        ) {
+            // Gradient overlay for liquid glass effect
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(100.dp)
+                    .background(
+                        brush = Brush.verticalGradient(
+                            colors = listOf(
+                                MaColors.BgPrimary.copy(alpha = 0.0f),
+                                MaColors.BgPrimary.copy(alpha = 0.85f),
+                                MaColors.BgPrimary.copy(alpha = 0.95f)
+                            )
                         )
-                    }
-                },
-                colors =
-                    TopAppBarDefaults.topAppBarColors(
-                        containerColor = MaColors.BgPrimary,
-                    ),
+                    )
             )
-        },
-        bottomBar = {
+
+            // Input bar content
             ChatInputBar(
                 text = inputText,
                 onTextChange = { inputText = it },
@@ -642,61 +752,6 @@ fun ChatScreen(
                 },
                 enabled = engineInitialized && !isGenerating,
             )
-        },
-    ) { padding ->
-        Column(
-            modifier =
-                Modifier
-                    .fillMaxSize()
-                    .padding(padding),
-        ) {
-            // Eco Indicator - Real-time environmental impact
-            if (chatState.sessionEcoStats.messageCount > 0) {
-                Box(
-                    modifier =
-                        Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 8.dp),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    EcoIndicator(
-                        stats = chatState.sessionEcoStats,
-                        onClick = onEcoStatsClick,
-                        variant = EcoIndicatorVariant.COMPACT,
-                    )
-                }
-            }
-
-            // Messages list
-            LazyColumn(
-                state = listState,
-                modifier =
-                    Modifier
-                        .animateContentSize()
-                        .fillMaxSize()
-                        .padding(horizontal = 16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-                contentPadding = PaddingValues(vertical = 16.dp),
-            ) {
-                items(messages) { message ->
-                    ChatBubble(message)
-                }
-
-                // Loading indicator
-                if (isGenerating) {
-                    item {
-                        Box(
-                            modifier = Modifier.fillMaxWidth(),
-                            contentAlignment = Alignment.CenterStart
-                        ) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(24.dp),
-                                strokeWidth = 2.dp,
-                            )
-                        }
-                    }
-                }
-            }
         }
     }
 }
@@ -808,7 +863,7 @@ fun ChatInputBar(
 
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        color = MaColors.BgPrimary,
+        color = MaColors.BgPrimary.copy(alpha = 0.0f), // Transparent to show gradient overlay
     ) {
         Box(
             modifier =
