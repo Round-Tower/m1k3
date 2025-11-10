@@ -31,6 +31,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -299,6 +300,7 @@ fun ChatScreen(
                 Box(
                     modifier =
                         Modifier
+                            .testTag("eco_indicator")
                             .fillMaxWidth()
                             .padding(horizontal = 16.dp, vertical = 8.dp)
                             .padding(top = 120.dp), // Account for toolbar overlay
@@ -317,6 +319,7 @@ fun ChatScreen(
                 state = listState,
                 modifier =
                     Modifier
+                        .testTag("message_list")
                         .animateContentSize()
                         .fillMaxSize()
                         .padding(horizontal = 16.dp),
@@ -334,7 +337,9 @@ fun ChatScreen(
                 if (isGenerating) {
                     item {
                         Box(
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .testTag("loading_indicator"),
                             contentAlignment = Alignment.CenterStart
                         ) {
                             CircularProgressIndicator(
@@ -430,6 +435,7 @@ fun ChatScreen(
                             use3D = true,
                             showInfo = false,
                             modifier = Modifier
+                                .testTag("avatar")
                                 .size(64.dp) // Reduced from 100.dp to prevent clipping
                                 .padding(4.dp)
                                 .clip(CircleShape)
@@ -892,6 +898,7 @@ fun ChatInputBar(
                 onValueChange = onTextChange,
                 modifier =
                     Modifier
+                        .testTag("input_field")
                         .fillMaxWidth()
                         .heightIn(min = 56.dp, max = 180.dp)
                         .scale(fieldScale)
@@ -948,6 +955,7 @@ fun ChatInputBar(
             Box(
                 modifier =
                     Modifier
+                        .testTag("send_button")
                         .align(Alignment.CenterEnd)
                         .padding(end = 8.dp)
                         .size(40.dp)
