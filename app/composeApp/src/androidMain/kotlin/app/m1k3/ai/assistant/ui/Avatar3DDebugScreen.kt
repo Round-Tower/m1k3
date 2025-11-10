@@ -577,7 +577,7 @@ private fun AvatarDebugContent(
                             modifier = Modifier.padding(top = MaSpacing.sm),
                             verticalArrangement = Arrangement.spacedBy(MaSpacing.xs)
                         ) {
-                            Divider(color = MaColors.BorderLight)
+                            HorizontalDivider(color = MaColors.BorderLight)
                             Spacer(modifier = Modifier.height(MaSpacing.xs))
 
                             DebugInfoRow("Emotion", currentEmotion.name)

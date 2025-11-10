@@ -4,10 +4,13 @@ import android.content.Context
 import ai.onnxruntime.OnnxTensor
 import ai.onnxruntime.OrtEnvironment
 import ai.onnxruntime.OrtSession
+import app.m1k3.ai.assistant.utils.Logger
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
+
+private val logger = Logger.withTag("SmolLM2Engine")
 
 /**
  * M1K3 AI - SmolLM2 Inference Engine
@@ -182,12 +185,11 @@ class SmolLM2Engine(private val context: Context) {
         if (isInitialized) return@withContext
 
         try {
-            println("🤖 Initializing SmolLM2 engine...")
-            println("   Device: ${android.os.Build.MODEL}")
+            logger.i { "Initializing SmolLM2 engine (Device: ${android.os.Build.MODEL})" }
 
             // 1. Initialize ONNX Runtime Environment
             ortEnvironment = OrtEnvironment.getEnvironment()
-            println("   ✓ ONNX Runtime environment created")
+            logger.d { "ONNX Runtime environment created" }
 
             // 2. Configure session options for mobile optimization
             val sessionOptions = OrtSession.SessionOptions()
@@ -202,42 +204,38 @@ class SmolLM2Engine(private val context: Context) {
                 setMemoryPatternOptimization(true)
                 // Note: setCpuArenaAllocator not available in this ONNX Runtime version
             }
-            println("   ✓ Session options configured (CPU-only, 4 threads, full optimization)")
+            logger.d { "Session options configured (CPU-only, 4 threads, full optimization)" }
 
             // 3. Copy ONNX model to internal storage (avoids OOM when loading large model)
             val modelFile = java.io.File(context.filesDir, "smollm2-135m-q4f16.onnx")
 
             if (!modelFile.exists()) {
-                println("   📥 Copying model to internal storage (one-time operation)...")
+                logger.i { "Copying model to internal storage (one-time operation)" }
                 context.assets.open("models/smollm2-135m-q4f16.onnx").use { input ->
                     modelFile.outputStream().use { output ->
                         input.copyTo(output, bufferSize = 8192)
                     }
                 }
-                println("   ✓ Model copied (${modelFile.length() / 1024 / 1024} MB)")
+                logger.i { "Model copied (${modelFile.length() / 1024 / 1024} MB)" }
             } else {
-                println("   ✓ Model already in storage (${modelFile.length() / 1024 / 1024} MB)")
+                logger.d { "Model already in storage (${modelFile.length() / 1024 / 1024} MB)" }
             }
 
             // 4. Create ONNX session from file path (memory efficient)
             ortSession = ortEnvironment!!.createSession(modelFile.absolutePath, sessionOptions)
-            println("   ✓ ONNX session created")
+            logger.d { "ONNX session created" }
 
             // 5. Initialize tokenizer
             tokenizer = SmolLM2Tokenizer(context)
             tokenizer?.initialize()
-            println("   ✓ Tokenizer initialized")
+            logger.d { "Tokenizer initialized" }
 
-            println("✅ SmolLM2 engine ready!")
-            println("   Model: ${modelFile.name}")
-            println("   Size: ${modelFile.length() / 1024 / 1024} MB")
-            println("   Backend: ONNX Runtime 1.17.0")
+            logger.i { "SmolLM2 engine ready! (Model: ${modelFile.name}, Size: ${modelFile.length() / 1024 / 1024} MB, Backend: ONNX Runtime 1.17.0)" }
 
             isInitialized = true
 
         } catch (e: Exception) {
-            println("❌ Failed to initialize SmolLM2 engine: ${e.message}")
-            e.printStackTrace()
+            logger.e(e) { "Failed to initialize SmolLM2 engine" }
             throw RuntimeException("Failed to initialize SmolLM2 engine", e)
         }
     }
@@ -274,27 +272,21 @@ class SmolLM2Engine(private val context: Context) {
             // Use custom system prompt or build default M1K3 prompt with device context and knowledge
             val finalSystemPrompt = systemPrompt ?: getDefaultSystemPrompt(userContext, knowledgeContext)
 
-            println("🔍 [DEBUG] Starting generation...")
-            println("   Prompt: \"$prompt\"")
-            println("   Max tokens: $maxTokens")
-            println("   Temperature: $temperature")
-            println("   System prompt: \"$finalSystemPrompt\"")
+            logger.d { "Starting generation (prompt=\"$prompt\", maxTokens=$maxTokens, temp=$temperature, system=\"${finalSystemPrompt.take(100)}...\")" }
 
             // 1. Format prompt (ChatML or plain format based on experimental flag)
             val formattedPrompt = if (USE_PLAIN_FORMAT) {
-                println("🧪 [EXPERIMENTAL] Using PLAIN prompt format (no ChatML special tokens)")
+                logger.d { "Using PLAIN prompt format (no ChatML special tokens)" }
                 buildPlainPrompt(finalSystemPrompt, prompt)
             } else {
                 buildChatMLPrompt(finalSystemPrompt, prompt)
             }
 
-            println("🔍 [PROMPT-FORMAT] Formatted prompt (${formattedPrompt.length} chars)")
-            println("🔍 [PROMPT-FORMAT] Preview: ${formattedPrompt.take(100).replace("\n", "\\n")}")
+            logger.v { "Formatted prompt (${formattedPrompt.length} chars): ${formattedPrompt.take(100).replace("\n", "\\n")}" }
 
             // 2. Tokenize input
             val inputIds = tok.encode(formattedPrompt)
-            println("   📝 Tokenized prompt: ${inputIds.size} tokens")
-            println("🔍 [DEBUG] Token IDs (first 10): ${inputIds.take(10).joinToString(", ")}")
+            logger.d { "Tokenized prompt: ${inputIds.size} tokens (first 10 IDs: ${inputIds.take(10).joinToString(", ")})" }
 
             // 3. Run inference with proper resource management
             val env = ortEnvironment ?: throw IllegalStateException("Environment not initialized")
@@ -313,12 +305,12 @@ class SmolLM2Engine(private val context: Context) {
             var previousOutputs: OrtSession.Result? = null  // Track previous outputs container
             var currentSeqLen = 0  // Track sequence length in KV cache
 
-            println("🔍 [DEBUG] Starting autoregressive generation loop (max $maxTokens tokens)...")
+            logger.d { "Starting autoregressive generation loop (max $maxTokens tokens)" }
 
             try {
                 for (i in 0 until maxTokens) {
                 if (i % 10 == 0) {
-                    println("🔍 [DEBUG] Token $i/${maxTokens} | Sequence length: ${generatedIds.size} | KV cache len: $currentSeqLen")
+                    logger.v { "Token $i/${maxTokens} | Sequence length: ${generatedIds.size} | KV cache len: $currentSeqLen" }
                 }
 
                 // For first token, process entire prompt. For subsequent tokens, only process new token
@@ -385,7 +377,7 @@ class SmolLM2Engine(private val context: Context) {
                 val inferenceTime = System.currentTimeMillis() - inferenceStart
 
                 if (i < 3 || i % 10 == 0) {
-                    println("🔍 [DEBUG] Inference ${i+1} took ${inferenceTime}ms")
+                    logger.v { "Inference ${i+1} took ${inferenceTime}ms" }
                 }
 
                 // Get logits and sample next token
@@ -397,12 +389,12 @@ class SmolLM2Engine(private val context: Context) {
                 )
 
                 if (i < 5) {
-                    println("🔍 [DEBUG] Generated token ID: $nextTokenId")
+                    logger.v { "Generated token ID: $nextTokenId" }
                 }
 
                 // Check for end-of-sequence
                 if (nextTokenId == 2L) {  // EOS token
-                    println("🔍 [DEBUG] EOS token detected, stopping generation")
+                    logger.d { "EOS token detected, stopping generation" }
                     currentTensor.close()
                     attentionMaskTensor.close()
                     positionIdsTensor.close()
@@ -455,17 +447,16 @@ class SmolLM2Engine(private val context: Context) {
 
             // 5. Decode generated tokens (skip the input prompt)
             val responseTokens = generatedIds.drop(inputIds.size).toLongArray()
-            println("🔍 [DEBUG] Generated ${responseTokens.size} new tokens")
-            println("🔍 [DEBUG] Response token IDs (first 10): ${responseTokens.take(10).joinToString(", ")}")
+            logger.d { "Generated ${responseTokens.size} new tokens (first 10 IDs: ${responseTokens.take(10).joinToString(", ")})" }
 
             val responseText = tok.decode(responseTokens)
 
             val inferenceTime = System.currentTimeMillis() - startTime
             val tokensGenerated = responseTokens.size
 
-            println("   ⚡ Generated ${tokensGenerated} tokens in ${inferenceTime}ms")
-            println("   🚀 Speed: ${"%.1f".format((tokensGenerated * 1000.0f) / inferenceTime)} tok/s")
-            println("🔍 [DEBUG] Response text: \"$responseText\"")
+            val tokensPerSec = (tokensGenerated * 1000.0f) / inferenceTime
+            logger.i { "Generated ${tokensGenerated} tokens in ${inferenceTime}ms (${"%.1f".format(tokensPerSec)} tok/s)" }
+            logger.d { "Response text: \"$responseText\"" }
 
             GenerationResult(
                 text = responseText.trim(),
@@ -475,8 +466,7 @@ class SmolLM2Engine(private val context: Context) {
             )
 
         } catch (e: Exception) {
-            println("❌ Inference failed: ${e.message}")
-            e.printStackTrace()
+            logger.e(e) { "Inference failed" }
             throw RuntimeException("Inference failed", e)
         }
     }
@@ -572,28 +562,21 @@ class SmolLM2Engine(private val context: Context) {
             // Use custom system prompt or build default M1K3 prompt with device context and knowledge
             val finalSystemPrompt = systemPrompt ?: getDefaultSystemPrompt(userContext, knowledgeContext)
 
-            println("🔍 [STREAMING] Starting generation...")
-            println("   System Prompt: \"$finalSystemPrompt\"")
-            println("   Prompt: \"$prompt\"")
-            println("   Max tokens: $maxTokens")
-            println("   Temperature: $temperature")
+            logger.d { "Starting streaming generation (system=\"${finalSystemPrompt.take(100)}...\", prompt=\"$prompt\", maxTokens=$maxTokens, temp=$temperature)" }
 
             // 1. Format prompt (ChatML or plain format based on experimental flag)
             val formattedPrompt = if (USE_PLAIN_FORMAT) {
-                println("🧪 [EXPERIMENTAL] Using PLAIN prompt format (no ChatML special tokens)")
+                logger.d { "Using PLAIN prompt format (no ChatML special tokens)" }
                 buildPlainPrompt(finalSystemPrompt, prompt)
             } else {
                 buildChatMLPrompt(finalSystemPrompt, prompt)
             }
 
-            println("🔍 [PROMPT-FORMAT-STREAMING] Formatted prompt (${formattedPrompt.length} chars)")
-            println("🔍 [PROMPT-FORMAT-STREAMING] Preview: ${formattedPrompt.replace("\n", "\\n")}")
+            logger.v { "Formatted streaming prompt (${formattedPrompt.length} chars): ${formattedPrompt.replace("\n", "\\n")}" }
 
             // 2. Tokenize input
             val inputIds = tok.encode(formattedPrompt)
-            println("   📝 Tokenized prompt: ${inputIds.size} tokens")
-            println("   🔍 First 20 token IDs: ${inputIds.take(20).joinToString(", ")}")
-            println("   🔍 Last 10 token IDs: ${inputIds.takeLast(10).joinToString(", ")}")
+            logger.d { "Tokenized prompt: ${inputIds.size} tokens (first 20: ${inputIds.take(20).joinToString(", ")}, last 10: ${inputIds.takeLast(10).joinToString(", ")})" }
 
             val env = ortEnvironment ?: throw IllegalStateException("Environment not initialized")
 
@@ -611,7 +594,7 @@ class SmolLM2Engine(private val context: Context) {
             var previousOutputs: OrtSession.Result? = null  // Track previous outputs container
             var currentSeqLen = 0
 
-            println("🔍 [STREAMING] Starting token-by-token generation...")
+            logger.d { "Starting token-by-token generation" }
 
             // 4. Generate tokens one at a time with proper resource management
             try {
@@ -670,12 +653,12 @@ class SmolLM2Engine(private val context: Context) {
 
                 // Debug logging for token generation
                 if (i < 5 || i % 20 == 0) {
-                    println("🔍 [STREAMING] Token #$i: ID=$nextTokenId (${generatedIds.size} tokens so far)")
+                    logger.v { "Token #$i: ID=$nextTokenId (${generatedIds.size} tokens so far)" }
                 }
 
                 // Check for EOS token (ID = 2)
                 if (nextTokenId == 2L) {
-                    println("✅ [STREAMING] EOS TOKEN DETECTED (ID=2) - Natural stop after $i tokens!")
+                    logger.d { "EOS TOKEN DETECTED (ID=2) - Natural stop after $i tokens" }
                     currentTensor.close()
                     attentionMaskTensor.close()
                     positionIdsTensor.close()
@@ -694,8 +677,7 @@ class SmolLM2Engine(private val context: Context) {
                 if (accumulatedText.contains("<|im_end|>") ||
                     accumulatedText.contains("<|im_start|>") ||
                     accumulatedText.contains("<|endoftext|>")) {
-                    println("✅ [STREAMING] Special token detected in accumulated text, stopping generation")
-                    println("   Accumulated: \"${accumulatedText.takeLast(50)}\"")
+                    logger.d { "Special token detected in accumulated text, stopping generation (accumulated: \"${accumulatedText.takeLast(50)}\")" }
 
                     // Strip special tokens from accumulated text
                     val cleanedText = accumulatedText
@@ -710,7 +692,7 @@ class SmolLM2Engine(private val context: Context) {
                     if (cleanedText.length > alreadyEmittedLength) {
                         val finalChunk = cleanedText.substring(alreadyEmittedLength)
                         if (finalChunk.isNotEmpty()) {
-                            println("🔍 [STREAMING] Emitting final cleaned chunk: \"$finalChunk\"")
+                            logger.v { "Emitting final cleaned chunk: \"$finalChunk\"" }
                             onToken(finalChunk)
                         }
                     }
@@ -735,11 +717,11 @@ class SmolLM2Engine(private val context: Context) {
                     if (i == 0 || i % 5 == 0) {
                         // Make spaces visible in logs
                         val visibleText = newTokenText.replace(" ", "␣")
-                        println("🔍 [STREAMING] Token $i: \"$visibleText\" (${newTokenText.length} chars)")
+                        logger.v { "Token $i: \"$visibleText\" (${newTokenText.length} chars)" }
                     }
                     onToken(newTokenText)
                 } else if (mightBeSpecialToken) {
-                    println("⏸️  [STREAMING] Buffering token (might be special token): \"${newTokenText}\"")
+                    logger.v { "Buffering token (might be special token): \"${newTokenText}\"" }
                 }
 
                 // Close the PREVIOUS outputs container (now that we've used its cached tensors)
@@ -782,19 +764,17 @@ class SmolLM2Engine(private val context: Context) {
 
             val totalTime = System.currentTimeMillis() - startTime
             val tokensGenerated = generatedIds.size - inputIds.size
-            println("   ⚡ Streamed ${tokensGenerated} tokens in ${totalTime}ms")
-            println("   🚀 Speed: ${"%.1f".format((tokensGenerated * 1000.0f) / totalTime)} tok/s")
+            val tokensPerSec = (tokensGenerated * 1000.0f) / totalTime
+            logger.i { "Streamed ${tokensGenerated} tokens in ${totalTime}ms (${"%.1f".format(tokensPerSec)} tok/s)" }
 
             // Decode and log final response for engine-level debugging
             val finalResponseTokens = generatedIds.drop(inputIds.size).toLongArray()
             val finalResponseText = tok.decode(finalResponseTokens)
-            println("   📝 [ENGINE] Full response: \"$finalResponseText\"")
-            println("   🔍 [ENGINE] Length: ${finalResponseText.length} chars / ${finalResponseTokens.size} tokens")
-            println("   🧹 [ENGINE] Contains special tokens: ${finalResponseText.contains("<|") || finalResponseText.contains("|>")}")
+            val hasSpecialTokens = finalResponseText.contains("<|") || finalResponseText.contains("|>")
+            logger.d { "Full response: \"$finalResponseText\" (${finalResponseText.length} chars / ${finalResponseTokens.size} tokens, special tokens: $hasSpecialTokens)" }
 
         } catch (e: Exception) {
-            println("❌ Streaming inference failed: ${e.message}")
-            e.printStackTrace()
+            logger.e(e) { "Streaming inference failed" }
             throw RuntimeException("Streaming inference failed", e)
         }
     }
@@ -806,7 +786,7 @@ class SmolLM2Engine(private val context: Context) {
         ortSession?.close()
         ortEnvironment?.close()
         isInitialized = false
-        println("🛑 SmolLM2 engine closed")
+        logger.i { "SmolLM2 engine closed" }
     }
 
     // Helper functions (commented out for mock inference)

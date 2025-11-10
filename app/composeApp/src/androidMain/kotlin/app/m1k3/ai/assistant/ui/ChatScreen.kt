@@ -189,22 +189,22 @@ fun ChatScreen(
                     append("I have access to $totalFacts facts across ${categories.size} categories:\n")
                     if (technical.isNotEmpty()) {
                         append(
-                            "• Technical: ${technical.joinToString(", ") { it.replace("_", " ").capitalize() }}\n",
+                            "• Technical: ${technical.joinToString(", ") { it.replace("_", " ").replaceFirstChar { if (it.isLowerCase()) it.titlecase() else it.toString() } }}\n",
                         )
                     }
                     if (educational.isNotEmpty()) {
                         append(
-                            "• Educational: ${educational.joinToString(", ") { it.replace("_", " ").capitalize() }}\n",
+                            "• Educational: ${educational.joinToString(", ") { it.replace("_", " ").replaceFirstChar { if (it.isLowerCase()) it.titlecase() else it.toString() } }}\n",
                         )
                     }
                     if (expertise.isNotEmpty()) {
                         append(
-                            "• Expertise: ${expertise.joinToString(", ") { it.replace("_", " ").capitalize() }}\n",
+                            "• Expertise: ${expertise.joinToString(", ") { it.replace("_", " ").replaceFirstChar { if (it.isLowerCase()) it.titlecase() else it.toString() } }}\n",
                         )
                     }
                     if (system.isNotEmpty()) {
                         append(
-                            "• System Knowledge: ${system.joinToString(", ") { it.replace("_", " ").capitalize() }}\n",
+                            "• System Knowledge: ${system.joinToString(", ") { it.replace("_", " ").replaceFirstChar { if (it.isLowerCase()) it.titlecase() else it.toString() } }}\n",
                         )
                     }
                     append("\nUse this knowledge to provide informed, helpful responses.")

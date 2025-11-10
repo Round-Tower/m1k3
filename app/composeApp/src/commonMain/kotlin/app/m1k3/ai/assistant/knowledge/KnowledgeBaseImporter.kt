@@ -1,6 +1,7 @@
 package app.m1k3.ai.assistant.knowledge
 
 import app.m1k3.ai.assistant.database.MaDatabase
+import app.m1k3.ai.assistant.utils.Logger
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.datetime.Clock
@@ -8,6 +9,8 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
+
+private val logger = Logger.withTag("KnowledgeBaseImporter")
 
 /**
  * PHASE0-012: Knowledge Base Importer
@@ -79,7 +82,7 @@ class KnowledgeBaseImporter(
 
                 } catch (e: Exception) {
                     errorCount++
-                    println("⚠️ Failed to import document ${doc.id}: ${e.message}")
+                    logger.w(e) { "Failed to import document ${doc.id}" }
                 }
             }
 

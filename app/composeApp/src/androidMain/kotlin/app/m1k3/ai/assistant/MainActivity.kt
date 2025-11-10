@@ -40,8 +40,12 @@ import app.m1k3.ai.assistant.ui.ChatScreen
 import app.m1k3.ai.assistant.ui.Avatar3DDebugScreen
 import app.m1k3.ai.assistant.ui.HistoryScreen
 import app.m1k3.ai.assistant.ui.EcoStatsScreen
+import app.m1k3.ai.assistant.di.allModules
+import app.m1k3.ai.assistant.utils.Logger
 import com.google.android.filament.utils.Utils
 import kotlinx.coroutines.launch
+import org.koin.android.ext.koin.androidContext
+import org.koin.core.context.startKoin
 import java.io.BufferedReader
 import java.io.InputStreamReader
 
@@ -59,20 +63,29 @@ class MainActivity : ComponentActivity() {
     private var driver: app.cash.sqldelight.db.SqlDriver? = null
     private var database: MaDatabase? = null
     private var knowledgeImportStatus by mutableStateOf<String?>(null)
+    private val logger = Logger.withTag("MainActivity")
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        // Initialize Koin dependency injection
+        try {
+            startKoin {
+                androidContext(this@MainActivity)
+                modules(allModules)
+            }
+            logger.i { "Koin DI initialized successfully" }
+        } catch (e: Exception) {
+            logger.e(e) { "Failed to initialize Koin DI - falling back to manual DI" }
+        }
+
         // Initialize Filament native libraries FIRST (before any Engine.create() calls)
         // This loads the native .so libraries required for 3D rendering
         Utils.init()
-        println("✅ [Filament] Native libraries initialized")
+        logger.i { "Filament native libraries initialized" }
 
         // Enable edge-to-edge for immersive full-screen experience
         enableEdgeToEdge()
-
-        // Configure system bars for AMOLED black theme
-        WindowCompat.setDecorFitsSystemWindows(window, false)
 
         aiEngine = LlamaCppEngine(this)
 
@@ -95,12 +108,12 @@ class MainActivity : ComponentActivity() {
                 val forceReimport = existingCount > 0 && existingCount < 1400
 
                 if (forceReimport) {
-                    println("🔄 [M1K3] Force re-importing knowledge base (current: $existingCount docs, expected: 1,401)")
+                    logger.i { "Force re-importing knowledge base (current: $existingCount docs, expected: 1,401)" }
                     database!!.triviaFactQueries.deleteAllFacts()
                 }
 
                 if (existingCount == 0L || forceReimport) {
-                    println("📚 [M1K3] Importing knowledge bases (1,401 documents from 2 sources)...")
+                    logger.i { "Importing knowledge bases (1,401 documents from 2 sources)" }
 
                     // 1. Load comprehensive knowledge base (1,391 docs)
                     val comprehensiveJson = assets.open("composeResources/myapplication.composeapp.generated.resources/files/comprehensive_knowledge_base.json").use { input ->
@@ -110,7 +123,7 @@ class MainActivity : ComponentActivity() {
                     }
 
                     val comprehensiveResult = importer.importKnowledgeBase(comprehensiveJson)
-                    println("📚 Comprehensive KB: ${comprehensiveResult.imported} documents imported")
+                    logger.i { "Comprehensive KB: ${comprehensiveResult.imported} documents imported" }
 
                     // 2. Load M1K3 system knowledge base (10 docs)
                     val systemJson = assets.open("composeResources/myapplication.composeapp.generated.resources/files/m1k3_system_knowledge.json").use { input ->
@@ -120,21 +133,21 @@ class MainActivity : ComponentActivity() {
                     }
 
                     val systemResult = importer.importKnowledgeBase(systemJson)
-                    println("🤖 M1K3 System KB: ${systemResult.imported} documents imported")
+                    logger.i { "M1K3 System KB: ${systemResult.imported} documents imported" }
 
                     // Verify combined import
                     val verification = importer.verifyImport()
-                    println(verification.toString())
+                    logger.d { verification.toString() }
 
                     val totalImported = comprehensiveResult.imported + systemResult.imported
                     knowledgeImportStatus = "✅ Knowledge ready: $totalImported documents (${comprehensiveResult.imported} comprehensive + ${systemResult.imported} system)"
                 } else {
-                    println("📚 [M1K3] Knowledge base already loaded ($existingCount documents)")
+                    logger.i { "Knowledge base already loaded ($existingCount documents)" }
                     knowledgeImportStatus = "✅ Knowledge ready: $existingCount documents"
                 }
 
             } catch (e: Exception) {
-                println("❌ [M1K3] Knowledge import failed: ${e.message}")
+                logger.e(e) { "Knowledge import failed" }
                 e.printStackTrace()
                 knowledgeImportStatus = "⚠️ Knowledge unavailable"
             }
@@ -283,12 +296,12 @@ class MainActivity : ComponentActivity() {
                         // Destroy Filament engine (CRITICAL: prevents memory leaks)
                         app.m1k3.ai.assistant.avatar.FilamentEngineManager.forceDestroy()
                     } catch (e: Exception) {
-                        println("⚠️ Error during cleanup: ${e.message}")
+                        logger.w(e) { "Error during cleanup" }
                     }
                 }
             }
         } catch (e: kotlinx.coroutines.TimeoutCancellationException) {
-            println("⚠️ Cleanup timeout - forcing shutdown")
+            logger.w { "Cleanup timeout - forcing shutdown" }
         }
         super.onDestroy()
     }

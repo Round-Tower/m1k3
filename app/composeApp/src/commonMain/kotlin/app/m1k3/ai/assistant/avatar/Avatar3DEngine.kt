@@ -93,10 +93,11 @@ object Avatar3DEngine {
      * - 1.0f = normal speed
      * - 0.7f = 30% slower (more graceful)
      * - 0.5f = 50% slower (very slow)
+     * - 0.4f = 60% slower (relaxed, calm)
      *
      * This is applied in addition to intensity-based speed adjustments.
      */
-    const val ANIMATION_SPEED_SCALE = 0.7f
+    const val ANIMATION_SPEED_SCALE = 0.4f
 
     /**
      * Get animation info for current avatar state (LEGACY)

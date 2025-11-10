@@ -1,5 +1,6 @@
 package app.m1k3.ai.assistant.chat
 
+import app.m1k3.ai.assistant.eco.EcoMetricsRepository
 import app.m1k3.ai.assistant.history.ConversationRepository
 import app.m1k3.ai.assistant.test.TestDatabaseFactory
 import kotlinx.coroutines.CoroutineScope
@@ -19,7 +20,11 @@ class ChatViewModelTest {
     fun `initial state is empty`() {
         // Arrange
         val database = TestDatabaseFactory.createInMemoryDatabase()
+        val conversationRepo = ConversationRepository(database)
+        val ecoMetricsRepo = EcoMetricsRepository(database)
         val viewModel = ChatViewModel(
+            conversationRepo = conversationRepo,
+            ecoMetricsRepo = ecoMetricsRepo,
             database = database,
             projectId = "test_project",
             scope = CoroutineScope(Dispatchers.Default)
@@ -40,8 +45,11 @@ class ChatViewModelTest {
         runBlocking {
             // Arrange
             val database = TestDatabaseFactory.createInMemoryDatabase()
+            val conversationRepo = ConversationRepository(database)
+            val ecoMetricsRepo = EcoMetricsRepository(database)
             val viewModel = ChatViewModel(
-                database = database,
+                conversationRepo = conversationRepo,
+                ecoMetricsRepo = ecoMetricsRepo,
                 projectId = "test_project",
                 scope = CoroutineScope(Dispatchers.Default)
             )
@@ -69,7 +77,11 @@ class ChatViewModelTest {
         runBlocking {
         // Arrange
         val database = TestDatabaseFactory.createInMemoryDatabase()
+        val conversationRepo = ConversationRepository(database)
+        val ecoMetricsRepo = EcoMetricsRepository(database)
         val viewModel = ChatViewModel(
+            conversationRepo = conversationRepo,
+            ecoMetricsRepo = ecoMetricsRepo,
             database = database,
             projectId = "test_project",
             scope = CoroutineScope(Dispatchers.Default)
@@ -96,7 +108,11 @@ class ChatViewModelTest {
         runBlocking {
         // Arrange
         val database = TestDatabaseFactory.createInMemoryDatabase()
+        val conversationRepo = ConversationRepository(database)
+        val ecoMetricsRepo = EcoMetricsRepository(database)
         val viewModel = ChatViewModel(
+            conversationRepo = conversationRepo,
+            ecoMetricsRepo = ecoMetricsRepo,
             database = database,
             projectId = "test_project",
             scope = CoroutineScope(Dispatchers.Default)
@@ -125,7 +141,11 @@ class ChatViewModelTest {
         runBlocking {
         // Arrange
         val database = TestDatabaseFactory.createInMemoryDatabase()
+        val conversationRepo = ConversationRepository(database)
+        val ecoMetricsRepo = EcoMetricsRepository(database)
         val viewModel = ChatViewModel(
+            conversationRepo = conversationRepo,
+            ecoMetricsRepo = ecoMetricsRepo,
             database = database,
             projectId = "test_project",
             scope = CoroutineScope(Dispatchers.Default)
@@ -207,7 +227,11 @@ class ChatViewModelTest {
     fun `clearError resets error state`() {
         // Arrange
         val database = TestDatabaseFactory.createInMemoryDatabase()
+        val conversationRepo = ConversationRepository(database)
+        val ecoMetricsRepo = EcoMetricsRepository(database)
         val viewModel = ChatViewModel(
+            conversationRepo = conversationRepo,
+            ecoMetricsRepo = ecoMetricsRepo,
             database = database,
             projectId = "test_project",
             scope = CoroutineScope(Dispatchers.Default)
@@ -224,7 +248,11 @@ class ChatViewModelTest {
     fun `resetSessionStats clears all statistics`() {
         // Arrange
         val database = TestDatabaseFactory.createInMemoryDatabase()
+        val conversationRepo = ConversationRepository(database)
+        val ecoMetricsRepo = EcoMetricsRepository(database)
         val viewModel = ChatViewModel(
+            conversationRepo = conversationRepo,
+            ecoMetricsRepo = ecoMetricsRepo,
             database = database,
             projectId = "test_project",
             scope = CoroutineScope(Dispatchers.Default)

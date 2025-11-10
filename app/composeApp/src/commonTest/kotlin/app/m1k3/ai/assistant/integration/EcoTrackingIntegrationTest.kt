@@ -38,13 +38,15 @@ class EcoTrackingIntegrationTest {
     @BeforeTest
     fun setup() {
         database = TestDatabaseFactory.createInMemoryDatabase()
+        ecoMetricsRepository = EcoMetricsRepository(database)
+        conversationRepository = ConversationRepository(database)
         chatViewModel = ChatViewModel(
+            conversationRepo = conversationRepository,
+            ecoMetricsRepo = ecoMetricsRepository,
             database = database,
             projectId = "integration_test_project",
             scope = CoroutineScope(Dispatchers.Default)
         )
-        ecoMetricsRepository = EcoMetricsRepository(database)
-        conversationRepository = ConversationRepository(database)
     }
 
     @Test

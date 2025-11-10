@@ -5,8 +5,11 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.staticCompositionLocalOf
+import app.m1k3.ai.assistant.utils.Logger
 import com.google.android.filament.Engine
 import java.util.concurrent.atomic.AtomicInteger
+
+private val logger = Logger.withTag("SharedEngine")
 
 /**
  * 間 AI Shared Engine Provider - Reference-Counted Edition
@@ -62,10 +65,10 @@ object FilamentEngineManager {
         synchronized(lock) {
             if (engine == null) {
                 engine = Engine.create()
-                println("🔧 [FilamentEngine] Created new engine instance")
+                logger.d { "[FilamentEngine] Created new engine instance" }
             }
             val count = refCount.incrementAndGet()
-            println("🔧 [FilamentEngine] Acquired (refCount=$count)")
+            logger.d { "[FilamentEngine] Acquired (refCount=$count)" }
             return engine!!
         }
     }
@@ -79,7 +82,7 @@ object FilamentEngineManager {
     fun release() {
         synchronized(lock) {
             val count = refCount.decrementAndGet()
-            println("🔧 [FilamentEngine] Released (refCount=$count)")
+            logger.d { "[FilamentEngine] Released (refCount=$count)" }
 
             // NOTE: We do NOT destroy the engine here to prevent multi-screen crashes
             // Engine will be destroyed explicitly in MainActivity.onDestroy()
@@ -96,7 +99,7 @@ object FilamentEngineManager {
     fun forceDestroy() {
         synchronized(lock) {
             engine?.let {
-                println("🔧 [FilamentEngine] Force destroying engine (refCount=${refCount.get()})")
+                logger.i { "[FilamentEngine] Force destroying engine (refCount=${refCount.get()})" }
                 it.destroy()
                 engine = null
                 refCount.set(0)
@@ -145,7 +148,7 @@ fun ProvideSharedEngine(content: @Composable () -> Unit) {
     // DO NOT use DisposableEffect here - engine must survive screen navigation
     // Engine will be destroyed explicitly in MainActivity.onDestroy()
 
-    println("🔧 [SharedEngine] Providing shared engine to composition tree")
+    logger.d { "[SharedEngine] Providing shared engine to composition tree" }
 
     // Provide to all descendants
     CompositionLocalProvider(LocalSharedEngine provides sharedEngine) {

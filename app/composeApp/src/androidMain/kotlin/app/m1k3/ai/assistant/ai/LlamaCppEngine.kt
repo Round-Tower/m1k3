@@ -1,12 +1,15 @@
 package app.m1k3.ai.assistant.ai
 
 import android.content.Context
+import app.m1k3.ai.assistant.utils.Logger
 import com.llamatik.library.platform.LlamaBridge
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import java.io.File
 import kotlin.coroutines.resume
+
+private val logger = Logger.withTag("LlamaCppEngine")
 
 /**
  * LlamaCppEngine - llama.cpp-based AI inference engine via Llamatik
@@ -81,38 +84,33 @@ class LlamaCppEngine(private val context: Context) : BaseLlmEngine {
         }
 
         try {
-            println("🚀 [LlamaCppEngine] Starting initialization...")
-            println("   Device RAM: ${deviceRamGB}GB")
-            println("   Library: Llamatik 0.8.1")
+            logger.i { "Starting initialization (Device RAM: ${deviceRamGB}GB, Library: Llamatik 0.8.1)" }
 
             // 1. Copy GGUF model from assets to internal storage
             val modelFile = File(context.filesDir, "smollm2-135m-q4.gguf")
 
             if (!modelFile.exists()) {
-                println("   📥 Copying SmolLM2-135M GGUF to internal storage (one-time operation)...")
-                println("   Model: Q4_K_M quantization (101 MB)")
-                println("   Context: 8K tokens")
+                logger.i { "Copying SmolLM2-135M GGUF to internal storage (Q4_K_M, 101 MB, 8K context)" }
                 context.assets.open("models/smollm2-135m-q4.gguf").use { input ->
                     modelFile.outputStream().use { output ->
                         input.copyTo(output, bufferSize = 8192)
                     }
                 }
-                println("   ✓ Model copied (${modelFile.length() / 1024 / 1024} MB)")
+                logger.i { "Model copied (${modelFile.length() / 1024 / 1024} MB)" }
             } else {
-                println("   ✓ SmolLM2-135M already in storage (${modelFile.length() / 1024 / 1024} MB)")
+                logger.d { "SmolLM2-135M already in storage (${modelFile.length() / 1024 / 1024} MB)" }
             }
 
             // 2. Initialize Llamatik with model path
             // Note: Llamatik handles all configuration internally (context window, threads, etc.)
-            println("   📖 Loading model with Llamatik...")
+            logger.i { "Loading model with Llamatik" }
             LlamaBridge.initGenerateModel(modelFile.absolutePath)
 
             isInitialized = true
-            println("✅ [LlamaCppEngine] Initialization complete")
-            println("   ⚠️  Note: Temperature/sampling control via prompt engineering only")
+            logger.i { "Initialization complete (Note: Temperature/sampling control via prompt engineering only)" }
 
         } catch (e: Exception) {
-            println("❌ [LlamaCppEngine] Initialization failed: ${e.message}")
+            logger.e(e) { "Initialization failed" }
             e.printStackTrace()
             isInitialized = false
             throw RuntimeException("Failed to initialize LlamaCppEngine", e)
@@ -150,10 +148,7 @@ class LlamaCppEngine(private val context: Context) : BaseLlmEngine {
             // Llamatik will handle combining system + context + user appropriately
             val contextParam = config.knowledgeContext ?: ""
 
-            println("🔍 [LlamaCppEngine] Starting generation...")
-            println("   Prompt: \"$prompt\"")
-            println("   System: \"${systemPrompt.take(150)}...\"")
-            println("   Context: ${if (contextParam.isNotEmpty()) "${contextParam.take(150)}..." else "empty"}")
+            logger.d { "Starting generation (prompt=\"$prompt\", system=\"${systemPrompt.take(150)}...\", context=${if (contextParam.isNotEmpty()) "\"${contextParam.take(150)}...\"" else "empty"})" }
 
             // Use streaming internally and collect full response
             val stopTokens = listOf("<end_of_turn>", "</s>", "<|endoftext|>", "<|im_end|>")
@@ -170,7 +165,7 @@ class LlamaCppEngine(private val context: Context) : BaseLlmEngine {
 
                         // Log each delta for debugging
                         if (tokenCount < 5) {
-                            println("   🔤 Delta $tokenCount: \"$delta\"")
+                            logger.v { "Delta $tokenCount: \"$delta\"" }
                         }
 
                         responseBuilder.append(delta)
@@ -181,7 +176,7 @@ class LlamaCppEngine(private val context: Context) : BaseLlmEngine {
                         for (stopToken in stopTokens) {
                             if (currentText.contains(stopToken)) {
                                 shouldStop = true
-                                println("🛑 [LlamaCppEngine] Stop token detected: \"$stopToken\" after $tokenCount tokens")
+                                logger.d { "Stop token detected: \"$stopToken\" after $tokenCount tokens" }
 
                                 // Truncate response at stop token
                                 val textBeforeStop = currentText.substringBefore(stopToken)
@@ -200,14 +195,14 @@ class LlamaCppEngine(private val context: Context) : BaseLlmEngine {
                     onDone = {
                         if (!hasResumed) {
                             hasResumed = true
-                            println("   ✅ Generation complete")
+                            logger.d { "Generation complete" }
                             continuation.resume(Unit)
                         }
                     },
                     onError = { error ->
                         if (!hasResumed) {
                             hasResumed = true
-                            println("   ❌ Generation error: $error")
+                            logger.e { "Generation error: $error" }
                             continuation.resume(Unit)
                         }
                     }
@@ -221,10 +216,7 @@ class LlamaCppEngine(private val context: Context) : BaseLlmEngine {
 
             val fullResponse = responseBuilder.toString()
 
-            println("✅ [LlamaCppEngine] Generation complete")
-            println("   Response length: ${fullResponse.length} chars")
-            println("   Tokens: $tokenCount")
-            println("   Time: ${inferenceTimeMs}ms (${String.format("%.1f", tokensPerSecond)} tok/s)")
+            logger.i { "Generation complete (length=${fullResponse.length} chars, tokens=$tokenCount, time=${inferenceTimeMs}ms, ${String.format("%.1f", tokensPerSecond)} tok/s)" }
 
             GenerationResult(
                 text = fullResponse,
@@ -234,7 +226,7 @@ class LlamaCppEngine(private val context: Context) : BaseLlmEngine {
             )
 
         } catch (e: Exception) {
-            println("❌ [LlamaCppEngine] Generation failed: ${e.message}")
+            logger.e(e) { "Generation failed" }
             e.printStackTrace()
             throw RuntimeException("Generation failed", e)
         }
@@ -268,10 +260,7 @@ class LlamaCppEngine(private val context: Context) : BaseLlmEngine {
             // Llamatik will handle combining system + context + user appropriately
             val contextParam = config.knowledgeContext ?: ""
 
-            println("🔍 [LlamaCppEngine] Starting streaming generation...")
-            println("   Prompt: \"$prompt\"")
-            println("   System: \"${systemPrompt.take(150)}...\"")
-            println("   Context: ${if (contextParam.isNotEmpty()) "${contextParam.take(150)}..." else "empty"}")
+            logger.d { "Starting streaming generation (prompt=\"$prompt\", system=\"${systemPrompt.take(150)}...\", context=${if (contextParam.isNotEmpty()) "\"${contextParam.take(150)}...\"" else "empty"})" }
 
             var tokenCount = 0
             val stopTokens = listOf("<end_of_turn>", "</s>", "<|endoftext|>", "<|im_end|>")
@@ -290,7 +279,7 @@ class LlamaCppEngine(private val context: Context) : BaseLlmEngine {
 
                         // Log first few deltas for debugging
                         if (tokenCount < 5) {
-                            println("   🔤 Streaming delta $tokenCount: \"$delta\"")
+                            logger.v { "Streaming delta $tokenCount: \"$delta\"" }
                         }
 
                         // Accumulate tokens to detect stop sequences
@@ -302,8 +291,7 @@ class LlamaCppEngine(private val context: Context) : BaseLlmEngine {
                         for (stopToken in stopTokens) {
                             if (currentText.contains(stopToken)) {
                                 shouldStop = true
-                                println("🛑 [LlamaCppEngine] Stop token detected: \"$stopToken\" after $tokenCount tokens")
-                                println("   Stopping generation early at $tokenCount tokens")
+                                logger.d { "Stop token detected: \"$stopToken\" after $tokenCount tokens" }
 
                                 // Send only text before stop token
                                 val textBeforeStop = currentText.substringBefore(stopToken)
@@ -327,14 +315,14 @@ class LlamaCppEngine(private val context: Context) : BaseLlmEngine {
                     onDone = {
                         if (!hasResumed) {
                             hasResumed = true
-                            println("✅ [LlamaCppEngine] Streaming complete ($tokenCount tokens)")
+                            logger.i { "Streaming complete ($tokenCount tokens)" }
                             continuation.resume(Unit)
                         }
                     },
                     onError = { error ->
                         if (!hasResumed) {
                             hasResumed = true
-                            println("❌ [LlamaCppEngine] Streaming failed: $error")
+                            logger.e { "Streaming error: $error" }
                             continuation.resume(Unit)
                         }
                     }
@@ -342,8 +330,7 @@ class LlamaCppEngine(private val context: Context) : BaseLlmEngine {
             }
 
         } catch (e: Exception) {
-            println("❌ [LlamaCppEngine] Streaming failed: ${e.message}")
-            e.printStackTrace()
+            logger.e(e) { "Streaming failed" }
             throw RuntimeException("Streaming failed", e)
         }
     }
@@ -377,10 +364,9 @@ class LlamaCppEngine(private val context: Context) : BaseLlmEngine {
             // Llamatik doesn't provide cleanup API
             // Just mark as uninitialized
             isInitialized = false
-            println("✅ [LlamaCppEngine] Resources released (marked as uninitialized)")
+            logger.i { "Resources released (marked as uninitialized)" }
         } catch (e: Exception) {
-            println("❌ [LlamaCppEngine] Release failed: ${e.message}")
-            e.printStackTrace()
+            logger.e(e) { "Release failed" }
         }
     }
 

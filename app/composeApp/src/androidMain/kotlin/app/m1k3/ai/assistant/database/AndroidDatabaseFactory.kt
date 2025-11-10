@@ -24,7 +24,8 @@ import android.util.Base64
  *
  * Privacy Guarantee: Passphrase encrypted at rest.
  */
-class AndroidDatabaseFactory(private val context: Context) : DatabaseFactory {
+@Suppress("DEPRECATION")
+class AndroidDatabaseFactory(private val context: Context) : OldDatabaseFactory {
 
     private val masterKey: MasterKey by lazy {
         MasterKey.Builder(context)

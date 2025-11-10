@@ -8,12 +8,15 @@ import app.m1k3.ai.assistant.eco.EcoMetricsRepository
 import app.m1k3.ai.assistant.history.ConversationRepository
 import app.m1k3.ai.assistant.memory.MemoryManager
 import app.m1k3.ai.assistant.domain.memory.ConversationContext
+import app.m1k3.ai.assistant.utils.Logger
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.datetime.Clock
+
+private val logger = Logger.withTag("ChatViewModel")
 
 /**
  * ChatViewModel - Manages chat state with eco tracking integration
@@ -34,12 +37,14 @@ import kotlinx.datetime.Clock
  *
  * **Usage Example:**
  * ```kotlin
- * // Without pixel pet
- * val chatVM = ChatViewModel(database, projectId, scope)
+ * // Without pixel pet (using Koin DI)
+ * val conversationRepo = ConversationRepository(database)
+ * val ecoMetricsRepo = EcoMetricsRepository(database)
+ * val chatVM = ChatViewModel(conversationRepo, ecoMetricsRepo, database, projectId, scope)
  *
  * // With pixel pet integration
  * val petVM = PetViewModel(ecoRepo, scope)
- * val chatVM = ChatViewModel(database, projectId, scope, petVM)
+ * val chatVM = ChatViewModel(conversationRepo, ecoMetricsRepo, database, projectId, scope, petVM)
  *
  * val state by chatVM.state.collectAsState()
  *
@@ -56,15 +61,16 @@ import kotlinx.datetime.Clock
  * ```
  */
 class ChatViewModel(
-    private val database: MaDatabase,
+    private val conversationRepo: ConversationRepository,
+    private val ecoMetricsRepo: EcoMetricsRepository,
+    private val database: MaDatabase,  // Still needed for direct message queries (TODO: wrap in MessageRepository)
     private val projectId: String,
     private val scope: CoroutineScope,
     private val petViewModel: PetViewModel? = null,  // Optional pixel pet integration
     private val memoryManager: MemoryManager? = null  // Optional semantic memory (Phase 2)
 ) {
-    // Repositories
-    private val conversationRepo = ConversationRepository(database)
-    private val ecoMetricsRepo = EcoMetricsRepository(database)
+    // Note: Repositories injected via constructor instead of created internally
+    // Database still needed for message operations (will be wrapped in MessageRepository in Phase 3)
 
     // State flows
     private val _state = MutableStateFlow(ChatState())
@@ -112,9 +118,9 @@ class ChatViewModel(
                 val chatMessages = dbMessages.map { it.toChatMessage() }
                 _messages.value = chatMessages
 
-                println("✅ [ChatViewModel] Loaded ${chatMessages.size} messages from database")
+                logger.i { "Loaded ${chatMessages.size} messages from database" }
             } catch (e: Exception) {
-                println("❌ [ChatViewModel] Failed to load messages: ${e.message}")
+                logger.e(e) { "Failed to load messages" }
                 _state.value = _state.value.copy(
                     error = "Failed to load conversation history: ${e.message}"
                 )
@@ -259,13 +265,13 @@ class ChatViewModel(
                         if (result.isSuccess) {
                             val count = result.getOrThrow()
                             if (count > 0) {
-                                println("✅ [ChatViewModel] Created $count memory chunks for message")
+                                logger.d { "Created $count memory chunks for message" }
                             }
                         } else {
-                            println("⚠️ [ChatViewModel] Failed to create memories: ${result.exceptionOrNull()?.message}")
+                            logger.w { "Failed to create memories: ${result.exceptionOrNull()?.message}" }
                         }
                     } catch (e: Exception) {
-                        println("⚠️ [ChatViewModel] Memory creation error: ${e.message}")
+                        logger.w(e) { "Memory creation error" }
                         // Don't fail the message recording if memory fails
                     }
                 }
@@ -369,7 +375,7 @@ class ChatViewModel(
     fun clearConversation() {
         scope.launch {
             try {
-                println("🗑️ [ChatViewModel] Clearing conversation history for project: $projectId")
+                logger.i { "Clearing conversation history for project: $projectId" }
 
                 // Delete all messages from database
                 database.messageQueries.deleteMessagesForProject(projectId)
@@ -389,9 +395,9 @@ class ChatViewModel(
                 // Reset session stats
                 resetSessionStats()
 
-                println("✅ [ChatViewModel] Conversation history cleared successfully")
+                logger.i { "Conversation history cleared successfully" }
             } catch (e: Exception) {
-                println("❌ [ChatViewModel] Failed to clear conversation: ${e.message}")
+                logger.e(e) { "Failed to clear conversation" }
                 e.printStackTrace()
                 _state.value = _state.value.copy(
                     error = "Failed to clear conversation: ${e.message}"
@@ -478,7 +484,13 @@ fun rememberChatViewModel(
 ): ChatViewModel {
     val scope = rememberCoroutineScope()
     return remember(projectId) {
+        // Create repositories from database (until Koin is fully enabled)
+        val conversationRepo = ConversationRepository(database)
+        val ecoMetricsRepo = EcoMetricsRepository(database)
+
         ChatViewModel(
+            conversationRepo = conversationRepo,
+            ecoMetricsRepo = ecoMetricsRepo,
             database = database,
             projectId = projectId,
             scope = scope

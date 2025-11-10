@@ -202,7 +202,7 @@ fun Phase2DebugScreenUI(
                             }
                         }
 
-                        Divider(color = MaColors.BorderLight, modifier = Modifier.padding(vertical = MaSpacing.sm))
+                        HorizontalDivider(color = MaColors.BorderLight, modifier = Modifier.padding(vertical = MaSpacing.sm))
 
                         results.tests.forEach { test ->
                             TestResultRow(test.name, test.passed, test.details)
@@ -225,7 +225,7 @@ fun Phase2DebugScreenUI(
                             color = MaColors.TextPrimary,
                         )
 
-                        Divider(color = MaColors.BorderLight, modifier = Modifier.padding(vertical = MaSpacing.sm))
+                        HorizontalDivider(color = MaColors.BorderLight, modifier = Modifier.padding(vertical = MaSpacing.sm))
 
                         StatRow("Conversations", "${stats.conversationsCreated}")
                         StatRow("Messages", "${stats.messagesCreated}")
@@ -260,7 +260,7 @@ fun Phase2DebugScreenUI(
                         color = MaColors.TextPrimary,
                     )
 
-                    Divider(color = MaColors.BorderLight, modifier = Modifier.padding(vertical = MaSpacing.sm))
+                    HorizontalDivider(color = MaColors.BorderLight, modifier = Modifier.padding(vertical = MaSpacing.sm))
 
                     FeatureRow("💬", "Conversation Management", "Create, update, delete conversations")
                     FeatureRow("🔍", "Search", "Keyword + semantic search (future)")

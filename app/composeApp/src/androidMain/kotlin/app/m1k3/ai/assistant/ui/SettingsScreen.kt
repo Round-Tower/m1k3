@@ -174,7 +174,7 @@ fun SettingsScreen(modifier: Modifier = Modifier) {
                     )
                 }
 
-                Divider(modifier = Modifier.padding(horizontal = 16.dp))
+                HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
 
                 SettingsItem(
                     title = "Knowledge Base",

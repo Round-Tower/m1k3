@@ -10,6 +10,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import app.m1k3.ai.assistant.design.tokens.MaColors
 import app.m1k3.ai.assistant.design.tokens.MaTypography
+import app.m1k3.ai.assistant.utils.Logger
 import io.github.sceneview.Scene
 import io.github.sceneview.loaders.ModelLoader
 import io.github.sceneview.node.ModelNode
@@ -17,6 +18,9 @@ import io.github.sceneview.rememberModelLoader
 import io.github.sceneview.rememberNodes
 import io.github.sceneview.rememberCameraNode
 import kotlinx.coroutines.delay
+
+// Logger instance for Avatar3D
+private val logger = Logger.withTag("Avatar3D")
 
 /**
  * 間 AI Avatar 3D View (Android) - GENERIC GLB LOADER
@@ -253,7 +257,7 @@ private fun RenderStaticModel(
             rotationAnimProgress = 0f
             previousEmotion = state.emotion
 
-            println("🔄 Emotion changed: ${state.emotion}, rotating from ${currentRotation.toInt()}° → ${targetRotation.toInt()}°")
+            logger.d { "Emotion changed: ${state.emotion}, rotating from ${currentRotation.toInt()}° → ${targetRotation.toInt()}°" }
 
             animate(
                 initialValue = 0f,
@@ -273,7 +277,7 @@ private fun RenderStaticModel(
                 scaleToUnits = 1.0f
             ).apply {
                 position = io.github.sceneview.math.Position(0f, 0f, 0f)
-                println("✅ Static model loaded: ${modelConfig.name}")
+                logger.i { "Static model loaded: ${modelConfig.name}" }
             }
         )
     }
@@ -365,7 +369,7 @@ private fun RenderAnimatedModel(
     // derivedStateOf only tracks Compose State objects, but 'state' is a regular parameter
     val targetAnimation = remember(state.emotion, state.activity, metadata.animations) {
         val anim = Avatar3DEngine.getAnimation(state, metadata.animations)
-        println("🎯 [remember] Target animation computed: ${anim.name} (emotion=${state.emotion}, activity=${state.activity})")
+        logger.v { "Target animation computed: ${anim.name} (emotion=${state.emotion}, activity=${state.activity})" }
         anim
     }
 
@@ -395,7 +399,7 @@ private fun RenderAnimatedModel(
     // Randomize starting animation for testing
     val randomStartingAnim = remember(metadata) {
         metadata.animations.random().also {
-            println("🎲 Randomized starting animation: ${it.name} (index=${it.index})")
+            logger.d { "Randomized starting animation: ${it.name} (index=${it.index})" }
         }
     }
 
@@ -421,10 +425,9 @@ private fun RenderAnimatedModel(
                         currentAnimName = randomStartingAnim.name,
                         startTime = System.nanoTime()
                     )
-                    println("✅ Initial animation: ${randomStartingAnim.name} (index=${randomStartingAnim.index})")
+                    logger.i { "Initial animation: ${randomStartingAnim.name} (index=${randomStartingAnim.index})" }
                 } catch (e: Exception) {
-                    println("⚠️ Failed to play animation '${randomStartingAnim.name}': ${e.message}")
-                    e.printStackTrace()
+                    logger.w(e) { "Failed to play animation '${randomStartingAnim.name}'" }
                     // Fallback to first animation
                     try {
                         val fallback = metadata.animations.firstOrNull()
@@ -441,7 +444,7 @@ private fun RenderAnimatedModel(
                             )
                         }
                     } catch (fallbackError: Exception) {
-                        println("❌ Failed to play fallback animation: ${fallbackError.message}")
+                        logger.e(fallbackError) { "Failed to play fallback animation" }
                     }
                 }
             }
@@ -452,7 +455,7 @@ private fun RenderAnimatedModel(
     // User tapping emotions/activities triggers immediate animation switch
     LaunchedEffect(targetAnimation) {
         if (playbackInfo.currentAnimName != targetAnimation.name) {
-            println("🎭 [USER_ACTION] ${playbackInfo.currentAnimName} → ${targetAnimation.name} (emotion=${state.emotion}, activity=${state.activity})")
+            logger.d { "[USER_ACTION] ${playbackInfo.currentAnimName} → ${targetAnimation.name} (emotion=${state.emotion}, activity=${state.activity})" }
 
             playbackInfo = AnimationPlaybackInfo(
                 currentAnimIndex = targetAnimation.index,
@@ -477,7 +480,7 @@ private fun RenderAnimatedModel(
 
             // Only transition if we're not already playing this idle
             if (playbackInfo.currentAnimName != idleAnimation.name) {
-                println("🏠 [AUTO_IDLE] Returning to ${idleAnimation.name} (emotion=${state.emotion})")
+                logger.d { "[AUTO_IDLE] Returning to ${idleAnimation.name} (emotion=${state.emotion})" }
 
                 playbackInfo = AnimationPlaybackInfo(
                     currentAnimIndex = idleAnimation.index,
@@ -507,7 +510,7 @@ private fun RenderAnimatedModel(
                 )
 
                 if (idleVariant != null) {
-                    println("🎲 [IDLE_VARIANT] Switching to ${idleVariant.name} for liveliness")
+                    logger.d { "[IDLE_VARIANT] Switching to ${idleVariant.name} for liveliness" }
 
                     playbackInfo = AnimationPlaybackInfo(
                         currentAnimIndex = idleVariant.index,
@@ -525,7 +528,7 @@ private fun RenderAnimatedModel(
                             playbackState = AnimationPlaybackState.AUTO_IDLE,
                             startTime = System.nanoTime()
                         )
-                        println("🔄 [IDLE_VARIANT] Returning to AUTO_IDLE")
+                        logger.d { "[IDLE_VARIANT] Returning to AUTO_IDLE" }
                     }
                 }
             }
@@ -575,7 +578,7 @@ private fun RenderAnimatedModel(
                             playbackInfo = playbackInfo.copy(
                                 playbackState = AnimationPlaybackState.AUTO_IDLE
                             )
-                            println("✅ [COMPLETION] ${currentAnim.name} finished → AUTO_IDLE")
+                            logger.d { "[COMPLETION] ${currentAnim.name} finished → AUTO_IDLE" }
                         }
 
                         // Calculate animation time with looping (using scaled time for smooth playback)

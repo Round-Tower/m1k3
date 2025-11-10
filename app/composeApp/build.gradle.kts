@@ -73,6 +73,9 @@ kotlin {
             implementation("com.google.android.play:core:1.10.3")
             implementation("com.google.android.play:core-ktx:1.8.1")
 
+            // Koin Android
+            implementation(libs.koin.android)
+
             // TODO: JVector for HNSW vector similarity search (not yet in Maven Central)
             // Using linear search fallback for now (fine for <10K vectors)
             // implementation("io.github.jbellis:jvector-base:1.0.0")
@@ -101,6 +104,13 @@ kotlin {
 
             // WebView for Three.js 3D avatar rendering
             implementation("io.github.kevinnzou:compose-webview-multiplatform:2.0.3")
+
+            // Kermit - Multiplatform logging
+            implementation(libs.kermit)
+
+            // Koin - Dependency injection
+            implementation(libs.koin.core)
+            implementation(libs.koin.compose)
         }
         commonTest.dependencies {
             implementation(libs.kotlin.test)

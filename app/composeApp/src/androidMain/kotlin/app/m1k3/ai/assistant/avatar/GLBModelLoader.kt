@@ -3,8 +3,11 @@ package app.m1k3.ai.assistant.avatar
 import io.github.sceneview.loaders.ModelLoader
 import io.github.sceneview.model.ModelInstance
 import androidx.compose.runtime.*
+import app.m1k3.ai.assistant.utils.Logger
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+
+private val logger = Logger.withTag("GLBModelLoader")
 
 /**
  * 間 AI GLB Model Loader (Android)
@@ -57,8 +60,7 @@ object GLBModelLoader {
             metadataCache[modelPath] = metadata
             metadata
         } catch (e: Exception) {
-            println("⚠️ Failed to load model metadata for $modelPath: ${e.message}")
-            e.printStackTrace()
+            logger.w(e) { "Failed to load model metadata for $modelPath" }
 
             // Return empty metadata as fallback
             ModelMetadata.empty(modelPath)
