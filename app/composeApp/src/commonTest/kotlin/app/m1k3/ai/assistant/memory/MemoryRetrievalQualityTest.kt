@@ -3,6 +3,8 @@ package app.m1k3.ai.assistant.memory
 import app.m1k3.ai.assistant.database.MemoryMetadata
 import app.m1k3.ai.assistant.domain.memory.ConversationContext
 import app.m1k3.ai.assistant.domain.memory.ImportanceCalculator
+import app.m1k3.ai.assistant.memory.test.DeterministicEmbeddingEngine
+import app.m1k3.ai.assistant.memory.test.DeterministicVectorSearchEngine
 import app.m1k3.ai.assistant.test.TestDatabaseFactory
 import kotlinx.coroutines.test.runTest
 import kotlin.test.*
@@ -376,53 +378,6 @@ class MemoryRetrievalQualityTest {
         mockVectorSearch.addVectorInternal(embeddingId, embedding)
     }
 
-    // Mock implementations
-
-    private class DeterministicEmbeddingEngine : EmbeddingEngine {
-        override val dimensions: Int = 384
-        private var queryVector: FloatArray? = null
-
-        fun setQueryVector(vector: FloatArray) {
-            queryVector = vector
-        }
-
-        override suspend fun embed(texts: List<String>): Result<List<FloatArray>> {
-            // Use query vector if set, otherwise use content hash
-            val embeddings = texts.map { text ->
-                queryVector ?: FloatArray(dimensions) { text.hashCode().toFloat() }
-            }
-            return Result.success(embeddings)
-        }
-    }
-
-    private class DeterministicVectorSearchEngine : VectorSearchEngine {
-        private val vectors = mutableMapOf<String, FloatArray>()
-        private var searchResults: List<SearchResult>? = null
-
-        fun setSearchResults(results: List<SearchResult>) {
-            searchResults = results
-        }
-
-        fun addVectorInternal(id: String, vector: FloatArray) {
-            vectors[id] = vector
-        }
-
-        override suspend fun addVector(id: String, vector: FloatArray): Result<Unit> {
-            vectors[id] = vector
-            return Result.success(Unit)
-        }
-
-        override suspend fun search(queryVector: FloatArray, k: Int): Result<List<SearchResult>> {
-            // Return pre-configured results if set, otherwise return all
-            val results = searchResults ?: vectors.keys.map { id ->
-                SearchResult(id, 0.8f)
-            }
-            return Result.success(results.take(k))
-        }
-
-        override suspend fun removeVector(id: String): Result<Unit> {
-            vectors.remove(id)
-            return Result.success(Unit)
-        }
-    }
+    // Note: Mock implementations moved to app.m1k3.ai.assistant.memory.test.TestMocks
+    // for shared use across MemoryManagerTest, MemoryRetrievalQualityTest, and MemoryIntegrationTest
 }

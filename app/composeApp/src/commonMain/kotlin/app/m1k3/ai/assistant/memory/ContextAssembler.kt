@@ -22,15 +22,35 @@ import kotlin.math.exp
  *       + 0.10 × access_freq   // Popularity (what gets used)
  * ```
  *
+ * **Example Scoring:**
+ * ```
+ * Memory A: similarity=0.95, recency=0.80, importance=0.70, access=0.50
+ * → score = (0.40×0.95) + (0.20×0.80) + (0.30×0.70) + (0.10×0.50) = 0.79
+ *
+ * Memory B: similarity=0.60, recency=0.95, importance=0.90, access=0.75
+ * → score = (0.40×0.60) + (0.20×0.95) + (0.30×0.90) + (0.10×0.75) = 0.73
+ *
+ * Memory A wins despite lower importance (higher semantic relevance)
+ * ```
+ *
  * **Token Budget Management:**
  * - Max context window: 24,576 tokens (SmolLM2 safe limit)
  * - Reserve: System prompt (500) + current turn (1000) + response (2000) = 3,500
- * - Available for memories: ~21,000 tokens
+ * - Available for memories: ~21,000 tokens (default: 1000 for testing)
  * - Dynamic allocation based on chunk sizes
+ * - Greedy selection: highest-scoring memories first until budget exhausted
  *
  * **Architecture:**
  * Input: Vector search results (id + similarity) + Memory metadata
  * Output: Ranked memories within token budget
+ *
+ * **Usage:**
+ * ```kotlin
+ * val assembler = ContextAssembler(maxContextTokens = 1000)
+ * val result = assembler.assembleContext(searchResults, memories)
+ * println(result.getStats())  // Debug statistics
+ * val contextText = result.formatAsContext()  // For AI prompt
+ * ```
  */
 class ContextAssembler(
     private val maxContextTokens: Int = 21000,

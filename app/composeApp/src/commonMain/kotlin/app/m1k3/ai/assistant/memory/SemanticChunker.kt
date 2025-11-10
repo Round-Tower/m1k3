@@ -14,15 +14,51 @@ import kotlin.math.min
  * - Filter out trivial chunks (too short)
  *
  * **Algorithm:**
- * 1. Split on semantic boundaries (sentences, paragraphs)
- * 2. Group sentences into chunks within token limits
+ * ```
+ * 1. Split on semantic boundaries (sentence-level)
+ *    - Regex pattern: (?<=[.!?])\s+
+ *    - Respects punctuation (periods, exclamation marks, questions)
+ *
+ * 2. Group sentences into chunks
+ *    - Accumulate sentences until token limit reached
+ *    - If single sentence >maxTokens, split with overlap
+ *
  * 3. Add overlap for context preservation
- * 4. Filter chunks below minimum token threshold
+ *    - Last 20 tokens of chunk N become first 20 of chunk N+1
+ *    - Ensures semantic continuity across chunks
+ *
+ * 4. Filter chunks below minimum threshold
+ *    - Discard chunks <100 tokens (too trivial)
+ *    - Return valid chunks with metadata
+ * ```
+ *
+ * **Example:**
+ * ```
+ * Input: "First sentence. Second sentence. Third sentence." (450 tokens)
+ *
+ * Output:
+ * Chunk 0: "First sentence. Second sentence." (200 tokens)
+ * Chunk 1: "Second sentence. Third sentence." (250 tokens)
+ *          ^^^^^^^^^^^^^^^^^ (overlap from Chunk 0)
+ * ```
  *
  * **Parameters:**
- * - minChunkTokens: 100 (configurable)
- * - maxChunkTokens: 300 (configurable)
- * - overlapTokens: 20 (configurable)
+ * - minChunkTokens: 100 (discard smaller chunks)
+ * - maxChunkTokens: 300 (split larger chunks)
+ * - overlapTokens: 20 (context preservation)
+ *
+ * **Usage:**
+ * ```kotlin
+ * val chunker = SemanticChunker()
+ * val chunks = chunker.chunkMessage(
+ *     messageContent = longText,
+ *     messageId = "msg-123",
+ *     projectId = "proj-abc",
+ *     timestamp = System.currentTimeMillis(),
+ *     role = "user"
+ * )
+ * println("Created ${chunks.size} chunks")
+ * ```
  */
 class SemanticChunker(
     private val tokenCounter: TokenCounter = SimpleTokenCounter(),

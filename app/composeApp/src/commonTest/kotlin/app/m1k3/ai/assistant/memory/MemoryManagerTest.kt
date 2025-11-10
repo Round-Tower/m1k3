@@ -3,6 +3,8 @@ package app.m1k3.ai.assistant.memory
 import app.m1k3.ai.assistant.database.MemoryMetadata
 import app.m1k3.ai.assistant.domain.memory.ConversationContext
 import app.m1k3.ai.assistant.domain.memory.ImportanceCalculator
+import app.m1k3.ai.assistant.memory.test.MockEmbeddingEngine
+import app.m1k3.ai.assistant.memory.test.MockVectorSearchEngine
 import app.m1k3.ai.assistant.test.TestDatabaseFactory
 import kotlinx.coroutines.test.runTest
 import kotlin.test.*
@@ -314,37 +316,6 @@ class MemoryManagerTest {
         assertNotNull(repository.getMemoryById("mem-low"))
     }
 
-    // Mock implementations
-
-    private class MockEmbeddingEngine : EmbeddingEngine {
-        override val dimensions: Int = 384
-
-        override suspend fun embed(texts: List<String>): Result<List<FloatArray>> {
-            // Return dummy embeddings (all 0.5)
-            val embeddings = texts.map { FloatArray(dimensions) { 0.5f } }
-            return Result.success(embeddings)
-        }
-    }
-
-    private class MockVectorSearchEngine : VectorSearchEngine {
-        val vectors = mutableMapOf<String, FloatArray>()
-
-        override suspend fun addVector(id: String, vector: FloatArray): Result<Unit> {
-            vectors[id] = vector
-            return Result.success(Unit)
-        }
-
-        override suspend fun search(queryVector: FloatArray, k: Int): Result<List<SearchResult>> {
-            // Return all vectors as search results (sorted by ID for determinism)
-            val results = vectors.keys.sorted().take(k).map { id ->
-                SearchResult(id, 0.9f)  // Dummy high similarity
-            }
-            return Result.success(results)
-        }
-
-        override suspend fun removeVector(id: String): Result<Unit> {
-            vectors.remove(id)
-            return Result.success(Unit)
-        }
-    }
+    // Note: Mock implementations moved to app.m1k3.ai.assistant.memory.test.TestMocks
+    // for shared use across MemoryManagerTest, MemoryRetrievalQualityTest, and MemoryIntegrationTest
 }

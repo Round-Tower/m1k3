@@ -2,6 +2,8 @@ package app.m1k3.ai.assistant.memory
 
 import app.m1k3.ai.assistant.domain.memory.ConversationContext
 import app.m1k3.ai.assistant.domain.memory.ImportanceCalculator
+import app.m1k3.ai.assistant.memory.test.MockEmbeddingEngine
+import app.m1k3.ai.assistant.memory.test.MockVectorSearchEngine
 import app.m1k3.ai.assistant.test.TestDatabaseFactory
 import kotlinx.coroutines.test.runTest
 import kotlin.test.*
@@ -469,52 +471,6 @@ class MemoryIntegrationTest {
         println("🎉 [Integration] Cascade deletion test PASSED")
     }
 
-    // Mock implementations
-
-    private class MockEmbeddingEngine : EmbeddingEngine {
-        override val dimensions: Int = 384
-
-        override suspend fun embed(texts: List<String>): Result<List<FloatArray>> {
-            // Return deterministic embeddings based on text hash
-            val embeddings = texts.map { text ->
-                FloatArray(dimensions) { i ->
-                    ((text.hashCode() + i) % 100) / 100f
-                }
-            }
-            return Result.success(embeddings)
-        }
-    }
-
-    private class MockVectorSearchEngine : VectorSearchEngine {
-        private val vectors = mutableMapOf<String, FloatArray>()
-        private var searchResults: List<SearchResult>? = null
-
-        fun setSearchResults(results: List<SearchResult>) {
-            searchResults = results
-        }
-
-        fun addVectorInternal(id: String, vector: FloatArray) {
-            vectors[id] = vector
-        }
-
-        fun vectorCount(): Int = vectors.size
-
-        override suspend fun addVector(id: String, vector: FloatArray): Result<Unit> {
-            vectors[id] = vector
-            return Result.success(Unit)
-        }
-
-        override suspend fun search(queryVector: FloatArray, k: Int): Result<List<SearchResult>> {
-            // Return pre-configured results if set, otherwise return all vectors
-            val results = searchResults ?: vectors.keys.map { id ->
-                SearchResult(id, 0.8f)
-            }
-            return Result.success(results.take(k))
-        }
-
-        override suspend fun removeVector(id: String): Result<Unit> {
-            vectors.remove(id)
-            return Result.success(Unit)
-        }
-    }
+    // Note: Mock implementations moved to app.m1k3.ai.assistant.memory.test.TestMocks
+    // for shared use across MemoryManagerTest, MemoryRetrievalQualityTest, and MemoryIntegrationTest
 }
