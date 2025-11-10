@@ -39,6 +39,7 @@ import app.m1k3.ai.assistant.ui.ChatScreen
 import app.m1k3.ai.assistant.ui.Avatar3DDebugScreen
 import app.m1k3.ai.assistant.ui.HistoryScreen
 import app.m1k3.ai.assistant.ui.EcoStatsScreen
+import com.google.android.filament.utils.Utils
 import kotlinx.coroutines.launch
 import java.io.BufferedReader
 import java.io.InputStreamReader
@@ -60,6 +61,11 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // Initialize Filament native libraries FIRST (before any Engine.create() calls)
+        // This loads the native .so libraries required for 3D rendering
+        Utils.init()
+        println("✅ [Filament] Native libraries initialized")
 
         // Enable edge-to-edge for immersive full-screen experience
         enableEdgeToEdge()
