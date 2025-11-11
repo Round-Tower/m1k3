@@ -560,11 +560,13 @@ fun ChatScreen(
                                                 }
 
                                                 // If no high-quality facts remain, fall back to system prompt with KB context
+                                                // BUT keep retrievedFacts for display with quality indicators
                                                 if (highQualityFacts.isEmpty()) {
                                                     println("⚠️ [RAG] No high-quality facts found, using base prompt with KB context")
                                                     result.copy(
                                                         enrichedPrompt = systemPrompt + "\n\n" + knowledgeContext,
-                                                        retrievedFacts = emptyList(),
+                                                        // Keep original facts for transparency (display with quality warning)
+                                                        retrievedFacts = result.retrievedFacts,
                                                         ragApplied = false,
                                                     )
                                                 } else {
@@ -609,15 +611,26 @@ fun ChatScreen(
                                 }
 
                                 // Track RAG usage for display and database
-                                if (ragResult.ragApplied) {
+                                // Always show sources when facts are retrieved (transparency principle)
+                                if (ragResult.retrievedFacts.isNotEmpty()) {
+                                    // Calculate average similarity for quality indicator
+                                    val avgSimilarity = ragResult.retrievedFacts.map { it.similarity }.average().toFloat()
+                                    val qualityEmoji = when {
+                                        avgSimilarity >= 0.7f -> "✅"  // High quality - reliable
+                                        avgSimilarity >= 0.6f -> "⚠️"  // Medium quality - useful
+                                        else -> "❓"                    // Low quality - experimental
+                                    }
+
                                     ragInfo =
-                                        "${ragResult.intent.category} (${(ragResult.confidence * 100).toInt()}%) • ${ragResult.retrievedFacts.size} facts"
+                                        "$qualityEmoji ${ragResult.intent.category} (${(ragResult.confidence * 100).toInt()}%) • ${ragResult.retrievedFacts.size} facts"
                                     ragSources = ragManager?.formatRAGSources(ragResult.retrievedFacts)
                                     ragConfidence = ragManager?.calculateRAGConfidence(ragResult.retrievedFacts)
+
                                     println(
                                         "📚 [RAG] Intent: ${ragResult.intent.category} (confidence: ${(ragResult.confidence * 100).toInt()}%)",
                                     )
-                                    println("📚 [RAG] Retrieved ${ragResult.retrievedFacts.size} facts")
+                                    println("📚 [RAG] Retrieved ${ragResult.retrievedFacts.size} facts (avg similarity: ${"%.2f".format(avgSimilarity)})")
+                                    println("📚 [RAG] Quality: $qualityEmoji (${if (ragResult.ragApplied) "used in prompt" else "shown for transparency"})")
                                     println("📚 [RAG] Enhanced system prompt length: ${enrichedSystemPrompt.length} chars")
                                 } else {
                                     println("📚 [RAG] No retrieval for intent: ${ragResult.intent.category}")
