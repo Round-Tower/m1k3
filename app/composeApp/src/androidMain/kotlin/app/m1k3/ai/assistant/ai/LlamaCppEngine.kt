@@ -380,15 +380,18 @@ class LlamaCppEngine(private val context: Context) : BaseLlmEngine {
      * Since Llamatik doesn't expose configuration APIs, we return reasonable defaults
      * based on device RAM. The actual behavior is controlled by Llamatik internally.
      *
-     * @return Recommended max tokens (64-512 depending on device)
+     * Note: Minimum increased to 256 tokens for usable responses (~192 words).
+     * SmolLM2-135M is efficient enough to handle this even on low-RAM devices.
+     *
+     * @return Recommended max tokens (256-512 depending on device)
      */
     override fun getOptimalMaxTokens(): Int {
         return when {
-            deviceRamGB >= 12 -> 512   // 12GB+: Long responses
-            deviceRamGB >= 8 -> 384    // 8-12GB: Medium-long responses
-            deviceRamGB >= 6 -> 256    // 6-8GB: Medium responses (default)
-            deviceRamGB >= 4 -> 128    // 4-6GB: Short responses
-            else -> 64                  // <4GB: Very short responses
+            deviceRamGB >= 12 -> 512   // 12GB+: Long responses (~384 words)
+            deviceRamGB >= 8 -> 384    // 8-12GB: Medium-long responses (~288 words)
+            deviceRamGB >= 6 -> 320    // 6-8GB: Medium responses (~240 words)
+            deviceRamGB >= 4 -> 256    // 4-6GB: Short responses (~192 words)
+            else -> 256                 // <4GB: Minimum usable (~192 words) - emulators + budget devices
         }
     }
 
