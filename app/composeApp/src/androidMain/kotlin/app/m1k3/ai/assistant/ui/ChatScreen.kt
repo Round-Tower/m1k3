@@ -108,6 +108,128 @@ private fun cleanStreamingToken(token: String, isStartOfGeneration: Boolean): St
 }
 
 /**
+ * Query type for adaptive generation parameters.
+ */
+private enum class QueryType {
+    EDUCATIONAL,      // Teach me, explain, how does X work
+    TECHNICAL,        // Code, debugging, technical problems
+    FACTUAL,          // Who/what/when/where factual questions
+    CONVERSATIONAL    // Casual chat, greetings, general discussion
+}
+
+/**
+ * Adaptive generation configuration.
+ */
+private data class AdaptiveConfig(
+    val maxTokens: Int,
+    val systemPromptHint: String,
+    val queryType: QueryType,
+    val reason: String
+)
+
+/**
+ * Get adaptive generation config based on intent classification and device capabilities.
+ *
+ * Maps 20 RAG intents → 4 generation strategies with device-appropriate token limits.
+ *
+ * Strategy:
+ * - EDUCATIONAL: Comprehensive explanations (512-1024 tokens)
+ * - TECHNICAL: Precise technical responses (384-768 tokens)
+ * - FACTUAL: Concise factual answers (256-512 tokens)
+ * - CONVERSATIONAL: Natural dialogue (256-384 tokens)
+ *
+ * @param intent Intent from RAG classification
+ * @param deviceRamGB Device RAM in GB for scaling
+ * @return AdaptiveConfig with maxTokens and prompt hint
+ */
+private fun getAdaptiveGenerationConfig(
+    intent: app.m1k3.ai.assistant.rag.IntentClassifier.Intent,
+    deviceRamGB: Int
+): AdaptiveConfig {
+    // Map intent to query type
+    val queryType = when (intent) {
+        // Educational: Teaching, explanations, learning
+        app.m1k3.ai.assistant.rag.IntentClassifier.Intent.HISTORY,
+        app.m1k3.ai.assistant.rag.IntentClassifier.Intent.SCIENCE,
+        app.m1k3.ai.assistant.rag.IntentClassifier.Intent.GEOGRAPHY,
+        app.m1k3.ai.assistant.rag.IntentClassifier.Intent.EDUCATION -> QueryType.EDUCATIONAL
+
+        // Technical: Code, debugging, technical concepts
+        app.m1k3.ai.assistant.rag.IntentClassifier.Intent.MATH,
+        app.m1k3.ai.assistant.rag.IntentClassifier.Intent.CODE_DEBUG,
+        app.m1k3.ai.assistant.rag.IntentClassifier.Intent.TECHNICAL_EXPLANATION -> QueryType.TECHNICAL
+
+        // Factual: Device help, troubleshooting, trivia
+        app.m1k3.ai.assistant.rag.IntentClassifier.Intent.DEVICE_TECH,
+        app.m1k3.ai.assistant.rag.IntentClassifier.Intent.WIFI_NETWORK,
+        app.m1k3.ai.assistant.rag.IntentClassifier.Intent.SECURITY,
+        app.m1k3.ai.assistant.rag.IntentClassifier.Intent.TROUBLESHOOTING,
+        app.m1k3.ai.assistant.rag.IntentClassifier.Intent.TRIVIA -> QueryType.FACTUAL
+
+        // Conversational: Everything else (chat, entertainment, lifestyle)
+        else -> QueryType.CONVERSATIONAL
+    }
+
+    // Calculate adaptive maxTokens based on query type and device RAM
+    val maxTokens = when (queryType) {
+        QueryType.EDUCATIONAL -> when {
+            deviceRamGB >= 12 -> 1536  // Flagship: full comprehensive teaching
+            deviceRamGB >= 8 -> 1024   // High-end: detailed explanations
+            deviceRamGB >= 6 -> 768    // Mid-range: balanced detail
+            deviceRamGB >= 4 -> 512    // Budget: concise but complete
+            else -> 512                // Minimum: ensure usable responses
+        }
+        QueryType.TECHNICAL -> when {
+            deviceRamGB >= 12 -> 1024  // Flagship: complex code/debugging
+            deviceRamGB >= 8 -> 768    // High-end: code with explanations
+            deviceRamGB >= 6 -> 512    // Mid-range: focused technical
+            deviceRamGB >= 4 -> 384    // Budget: minimal technical
+            else -> 384
+        }
+        QueryType.FACTUAL -> when {
+            deviceRamGB >= 12 -> 512   // Flagship: detailed facts
+            deviceRamGB >= 8 -> 384    // High-end: comprehensive facts
+            deviceRamGB >= 6 -> 320    // Mid-range: focused facts
+            deviceRamGB >= 4 -> 256    // Budget: concise facts
+            else -> 256
+        }
+        QueryType.CONVERSATIONAL -> when {
+            deviceRamGB >= 12 -> 512   // Flagship: natural lengthy chat
+            deviceRamGB >= 8 -> 384    // High-end: conversational
+            deviceRamGB >= 6 -> 320    // Mid-range: friendly chat
+            deviceRamGB >= 4 -> 256    // Budget: brief chat
+            else -> 256
+        }
+    }
+
+    // Build query-specific system prompt hints (simulate temperature via behavior)
+    val systemPromptHint = when (queryType) {
+        QueryType.EDUCATIONAL ->
+            "Be thorough and engaging. Provide comprehensive explanations with examples and analogies. " +
+            "Break down complex topics into understandable parts. Use the full response space to teach effectively."
+
+        QueryType.TECHNICAL ->
+            "Be precise and deterministic. Verify all code syntax and logic carefully. " +
+            "Provide accurate technical details. Use clear technical language and avoid ambiguity."
+
+        QueryType.FACTUAL ->
+            "Be concise and accurate. Provide direct factual answers. " +
+            "Cite retrieved knowledge when available. Focus on correctness over elaboration."
+
+        QueryType.CONVERSATIONAL ->
+            "Be natural and friendly. Use a conversational tone. " +
+            "Keep responses approachable and engaging. Match the user's casual style."
+    }
+
+    return AdaptiveConfig(
+        maxTokens = maxTokens,
+        systemPromptHint = systemPromptHint,
+        queryType = queryType,
+        reason = "Intent=${intent.category}, RAM=${deviceRamGB}GB → $queryType"
+    )
+}
+
+/**
  * M1K3 AI - Chat Screen
  *
  * Beautiful chat interface with live AI responses.
@@ -706,21 +828,38 @@ fun ChatScreen(
                                     logger.d { "No RAG retrieval for intent: ${ragResult.intent.category}" }
                                 }
 
+                                // ADAPTIVE GENERATION: Query-type-aware maxTokens and prompting
+                                val adaptiveConfig = getAdaptiveGenerationConfig(
+                                    intent = ragResult.intent,
+                                    deviceRamGB = deviceRamGB
+                                )
+
+                                logger.i {
+                                    "Adaptive Generation: ${adaptiveConfig.reason}, " +
+                                    "maxTokens=${adaptiveConfig.maxTokens}"
+                                }
+
+                                // Build enhanced system prompt with query-specific behavioral hint
+                                val enhancedSystemPrompt = buildString {
+                                    append(baseSystemPrompt)
+                                    append(" ")
+                                    append(adaptiveConfig.systemPromptHint)
+                                }
+
                                 // DEBUG: Log Llamatik three-parameter structure
                                 logger.d {
                                     "Llamatik params: user=${prompt.length}chars, " +
                                     "context=${contextString.length}chars, " +
-                                    "systemPrompt=null (auto-generated)"
+                                    "systemPrompt=${enhancedSystemPrompt.length}chars (${adaptiveConfig.queryType})"
                                 }
 
-                                // Use device-adaptive max tokens based on RAM
-                                // 12GB+: 512 tokens, 8-12GB: 384, 6-8GB: 256, 4-6GB: 128, <4GB: 64
+                                // Use query-type-aware generation with adaptive token limits
                                 aiEngine.generateStreaming(
                                     prompt = prompt,  // User's query (Llamatik user parameter)
                                     config = app.m1k3.ai.assistant.ai.GenerationConfig(
-                                        systemPrompt = null,  // Let LlamaCppEngine build clean system (identity+behavior)
-                                        maxTokens = aiEngine.getOptimalMaxTokens(), // Device-adaptive
-                                        temperature = 0.5f, // FACTUAL - Lower for less hallucination (was 0.7f)
+                                        systemPrompt = enhancedSystemPrompt,  // Query-aware behavioral instructions
+                                        maxTokens = adaptiveConfig.maxTokens,  // Adaptive: 256-1536 based on query type + device
+                                        temperature = 0.5f,  // Llamatik ignores this, but kept for prompt engineering in engine
                                         knowledgeContext = contextString  // Llamatik context parameter (RAG+conversation+KB)
                                     )
                                 ) { token ->
