@@ -30,12 +30,13 @@ This project is managed through phase-specific documentation:
 
 ### Overall Status
 
-**Current Phase:** Phase 2 In Progress (~60%) - Avatar System Enhanced!
+**Current Phase:** Phase 2 In Progress (~60%) - RAG System Enhanced!
 **Overall Progress:** ~42/143 tickets (~29%)
 **Started:** 2025-11-01
-**Last Updated:** 2025-11-07
+**Last Updated:** 2025-11-08
 
-🎨 **Latest Milestone:** Avatar pixel art rendering with activity-based animations! 🎨
+🔍 **Latest Milestone:** RAG quality improvements - intent classification + source display + token limits! 🔍
+🎨 **Previous:** Avatar pixel art rendering with activity-based animations
 🎯 **Previous:** PHASE2-007 Importance Calculator implemented with TDD
 ⭐ **Phase 1.5 Added:** Model evaluation (Gemma3 vs SmolLM2) + RAG fixes
 
@@ -106,6 +107,54 @@ This project is managed through phase-specific documentation:
 
 **Files Modified:** 5 files, 2,126 insertions
 **Commit:** bd82383 - `feat(avatar): Add rounded pixels with activity-based animations and idle timeout`
+
+---
+
+#### 2025-11-08: RAG System Quality Improvements 🔍
+
+**Implementation Summary:**
+- ✅ **Intent Classification Enhancement** - Word boundary matching prevents false positives
+- ✅ **RAG Source Transparency** - Shows actual fact content instead of category names
+- ✅ **Response Completeness** - Increased minimum from 64 to 256 tokens for complete responses
+
+**Intent Classification Fix:**
+- **Problem:** Substring matching caused false positives (e.g., "study techniques" matched "tech" → TECHNOLOGY intent)
+- **Solution:** Word boundary detection checks for spaces and punctuation boundaries
+- **Impact:** Queries now correctly match intended categories (e.g., "study techniques" → EDUCATION)
+- **Files:** IntentClassifier.kt (classify() and classifyWithConfidence() methods)
+- **Implementation:**
+  - Checks whole word matches, space boundaries, and punctuation boundaries
+  - Prevents substring false positives while maintaining accuracy
+
+**RAG Source Display Enhancement:**
+- **Problem:** Sources showing category names: "explanation_request (70%); explanation_request (70%)"
+- **Solution:** Display first 60 characters of actual fact content with numbered list format
+- **Impact:** Users can now verify source relevance and understand what knowledge was retrieved
+- **Files:** RAGManager.kt (formatRAGSources() method)
+- **Example Output:** "1. Active learning strategies like spaced repetition and... (70%)"
+
+**Token Limit Optimization:**
+- **Problem:** 64-token limit on emulator (1GB RAM) causing mid-sentence truncation
+- **Solution:** Raised minimum to 256 tokens (~192 words) across all device tiers
+- **Impact:** Emulators and budget devices now get complete, usable responses
+- **Files:** LlamaCppEngine.kt (getOptimalMaxTokens() method)
+- **Token Distribution:**
+  - 12GB+: 512 tokens (~384 words)
+  - 8-12GB: 384 tokens (~288 words)
+  - 6-8GB: 320 tokens (~240 words)
+  - 4-6GB: 256 tokens (~192 words)
+  - <4GB: 256 tokens (emulators + budget devices)
+
+**Rationale:**
+- SmolLM2-135M is efficient enough to handle 256 tokens on low-RAM devices
+- 256 tokens minimum ensures usable responses across all devices
+- Trade-off: Slightly slower generation but much better UX
+
+**Commits:**
+- 03db680 - `feat(rag): Improve intent classification and source display`
+- 7a38b1d - `fix(ai): Increase minimum maxTokens to 256 for usable responses`
+
+**Files Modified:** 3 files (IntentClassifier.kt, RAGManager.kt, LlamaCppEngine.kt)
 
 ---
 

@@ -378,7 +378,15 @@ docker-compose up --build
 **Target Release:** Beta v0.1.0 (Week 16)
 **Progress:** 12/135 tickets (9%) - **62 Passing Tests!** ✅
 
-### 🎉 **Latest Milestone:** Avatar Pixel Art Rendering System (2025-11-07)
+### 🎉 **Latest Milestone:** RAG System Quality Improvements (2025-11-08)
+- ✅ **Intent classification enhancement** - Word boundary matching prevents false positives (e.g., "study techniques" no longer matches "tech" → TECHNOLOGY)
+- ✅ **RAG source transparency** - Shows actual fact content instead of category names in chat bubbles
+- ✅ **Response completeness** - Increased minimum maxTokens from 64 to 256 tokens (~192 words) for usable responses on all devices
+- ✅ **Device-adaptive token limits** - 12GB+: 512 tokens, 8-12GB: 384 tokens, 6-8GB: 320 tokens, 4-6GB: 256 tokens, <4GB: 256 tokens
+- ✅ **Files modified** - IntentClassifier.kt, RAGManager.kt, LlamaCppEngine.kt
+- 📄 See commits 03db680 + 7a38b1d for complete implementation
+
+### 🎉 **Previous Milestone:** Avatar Pixel Art Rendering System (2025-11-07)
 - ✅ **Rounded pixels** - 1px padding + 15% corner radius at all resolutions (16x16 to 64x64)
 - ✅ **Activity-based sprites** - 6 sprite variants (LISTENING, THINKING, GENERATING, SPEAKING, ERROR, IDLE)
 - ✅ **Smart sprite selection** - Activity state prioritized over emotion for contextual feedback
