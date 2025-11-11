@@ -294,7 +294,7 @@ class MainActivity : ComponentActivity() {
                         aiEngine.close()
 
                         // Destroy Filament engine (CRITICAL: prevents memory leaks)
-                        app.m1k3.ai.assistant.avatar.FilamentEngineManager.forceDestroy()
+                        FilamentEngineManager.forceDestroy()
                     } catch (e: Exception) {
                         logger.w(e) { "Error during cleanup" }
                     }

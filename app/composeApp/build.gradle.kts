@@ -116,6 +116,13 @@ kotlin {
             implementation(libs.kotlin.test)
             implementation(libs.kotlinx.coroutinesTest)
         }
+        androidInstrumentedTest.dependencies {
+            implementation(libs.androidx.testExt.junit)
+            implementation(libs.androidx.espresso.core)
+            implementation(libs.kotlin.test)
+            @OptIn(org.jetbrains.compose.ExperimentalComposeLibrary::class)
+            implementation(compose.uiTest)
+        }
         jvmTest.dependencies {
             // JDBC SQLite driver for JVM unit tests only (in-memory database)
             implementation(libs.sqldelight.driver.jdbc)
@@ -200,9 +207,6 @@ dependencies {
     debugImplementation("com.squareup.leakcanary:leakcanary-android:2.12")
 
     // 間 AI - Testing dependencies
-    androidTestImplementation(libs.androidx.testExt.junit)
-    androidTestImplementation(libs.androidx.espresso.core)
-    androidTestImplementation(libs.kotlin.test)
     testImplementation(libs.junit)
     testImplementation(libs.kotlin.test)
     testImplementation(libs.robolectric)

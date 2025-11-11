@@ -26,7 +26,8 @@ import app.m1k3.ai.assistant.design.components.MaCard
 import app.m1k3.ai.assistant.design.tokens.MaColors
 import app.m1k3.ai.assistant.design.tokens.MaSpacing
 import app.m1k3.ai.assistant.design.tokens.MaTypography
-import kotlinx.datetime.Clock
+import kotlin.time.Clock
+import kotlin.time.ExperimentalTime
 
 /**
  * 間 AI Avatar View
@@ -78,8 +79,7 @@ fun AvatarView(
     MaCard(
         modifier = modifier
             .size(280.dp)
-            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier),
-        shape = RoundedCornerShape(24.dp)
+            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
     ) {
         Column(
             modifier = Modifier
@@ -350,6 +350,7 @@ fun AvatarActivityIndicator(
  * @param showEnvironment Whether to render background environment
  * @param enableInteractions Whether touch gestures are active
  */
+@OptIn(ExperimentalTime::class)
 @Composable
 fun PixelPetView(
     petState: PixelPetState,

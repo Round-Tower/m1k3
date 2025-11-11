@@ -42,7 +42,8 @@
       "Bash(do echo \"=== $animal ===\")",
       "Bash(done)",
       "Bash(for file in \"app/3d/Quirky-Series-FREE-Animals-v1.4 2/3D Files/GLTF/Animations/\"*_Animations.glb)",
-      "Bash(do cp \"$file\" app/composeApp/src/androidMain/assets/models/)"
+      "Bash(do cp \"$file\" app/composeApp/src/androidMain/assets/models/)",
+      "Bash(for:*)"
     ],
     "deny": [],
     "ask": []

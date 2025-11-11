@@ -429,16 +429,14 @@ fun ChatScreen(
                             )
                         }
 
-                        // 3D Avatar with activity/emotion feedback (reduced size to prevent clipping)
+                        // 3D Avatar with activity/emotion feedback
                         AvatarView(
                             state = avatarState,
                             use3D = true,
-                            showInfo = false,
+                            showInfo = true,
                             modifier = Modifier
                                 .testTag("avatar")
-                                .size(64.dp) // Reduced from 100.dp to prevent clipping
-                                .padding(4.dp)
-                                .clip(CircleShape)
+                                .size(140.dp)
                         )
                     }
                 }

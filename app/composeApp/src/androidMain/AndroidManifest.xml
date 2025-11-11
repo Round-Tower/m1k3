@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <!--
         M1K3 AI - Privacy-First On-Device AI Assistant
@@ -21,6 +22,20 @@
         - android.permission.ACCESS_WIFI_STATE
         - Any network-related permission
     -->
+
+    <!--
+        PRIVACY ENFORCEMENT: Explicitly remove network permissions added by dependencies
+
+        Some libraries (SceneView, Google Play Services) add INTERNET permission by default.
+        We MUST remove these to maintain 100% local processing guarantee.
+
+        Manifest Merger Rules:
+        - tools:node="remove" = Remove permission entirely
+        - This overrides any permission requests from library dependencies
+    -->
+    <uses-permission android:name="android.permission.INTERNET" tools:node="remove" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" tools:node="remove" />
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" tools:node="remove" />
 
     <!-- Camera permission for multi-modal vision features -->
     <uses-permission android:name="android.permission.CAMERA" />

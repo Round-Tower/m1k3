@@ -140,6 +140,20 @@ class LlamaCppEngine(private val context: Context) : BaseLlmEngine {
         val responseBuilder = StringBuilder()
         var tokenCount = 0
 
+        // Get maxTokens limit (0 = return empty response immediately)
+        val maxTokens = config.maxTokens ?: getOptimalMaxTokens()
+
+        // Handle maxTokens = 0 edge case
+        if (maxTokens == 0) {
+            logger.d { "maxTokens=0, returning empty response" }
+            return@withContext GenerationResult(
+                text = "",
+                tokensGenerated = 0,
+                inferenceTimeMs = 0,
+                tokensPerSecond = 0f
+            )
+        }
+
         try {
             // Build system prompt with prompt engineering for behavioral control
             val systemPrompt = buildSystemPrompt(config)
@@ -148,7 +162,7 @@ class LlamaCppEngine(private val context: Context) : BaseLlmEngine {
             // Llamatik will handle combining system + context + user appropriately
             val contextParam = config.knowledgeContext ?: ""
 
-            logger.d { "Starting generation (prompt=\"$prompt\", system=\"${systemPrompt.take(150)}...\", context=${if (contextParam.isNotEmpty()) "\"${contextParam.take(150)}...\"" else "empty"})" }
+            logger.d { "Starting generation (prompt=\"$prompt\", maxTokens=$maxTokens, system=\"${systemPrompt.take(150)}...\", context=${if (contextParam.isNotEmpty()) "\"${contextParam.take(150)}...\"" else "empty"})" }
 
             // Use streaming internally and collect full response
             val stopTokens = listOf("<end_of_turn>", "</s>", "<|endoftext|>", "<|im_end|>")
@@ -162,6 +176,17 @@ class LlamaCppEngine(private val context: Context) : BaseLlmEngine {
                     user = prompt,
                     onDelta = { delta ->
                         if (shouldStop) return@generateWithContextStream
+
+                        // Check if we've hit maxTokens limit
+                        if (tokenCount >= maxTokens) {
+                            shouldStop = true
+                            logger.d { "maxTokens limit reached: $tokenCount >= $maxTokens" }
+                            if (!hasResumed) {
+                                hasResumed = true
+                                continuation.resume(Unit)
+                            }
+                            return@generateWithContextStream
+                        }
 
                         // Log each delta for debugging
                         if (tokenCount < 5) {
@@ -260,7 +285,10 @@ class LlamaCppEngine(private val context: Context) : BaseLlmEngine {
             // Llamatik will handle combining system + context + user appropriately
             val contextParam = config.knowledgeContext ?: ""
 
-            logger.d { "Starting streaming generation (prompt=\"$prompt\", system=\"${systemPrompt.take(150)}...\", context=${if (contextParam.isNotEmpty()) "\"${contextParam.take(150)}...\"" else "empty"})" }
+            // Get maxTokens limit (if 0, still stream but stop immediately)
+            val maxTokens = config.maxTokens ?: getOptimalMaxTokens()
+
+            logger.d { "Starting streaming generation (prompt=\"$prompt\", maxTokens=$maxTokens, system=\"${systemPrompt.take(150)}...\", context=${if (contextParam.isNotEmpty()) "\"${contextParam.take(150)}...\"" else "empty"})" }
 
             var tokenCount = 0
             val stopTokens = listOf("<end_of_turn>", "</s>", "<|endoftext|>", "<|im_end|>")
@@ -276,6 +304,17 @@ class LlamaCppEngine(private val context: Context) : BaseLlmEngine {
                     user = prompt,
                     onDelta = { delta ->
                         if (shouldStop) return@generateWithContextStream
+
+                        // Check if we've hit maxTokens limit
+                        if (tokenCount >= maxTokens) {
+                            shouldStop = true
+                            logger.d { "maxTokens limit reached in streaming: $tokenCount >= $maxTokens" }
+                            if (!hasResumed) {
+                                hasResumed = true
+                                continuation.resume(Unit)
+                            }
+                            return@generateWithContextStream
+                        }
 
                         // Log first few deltas for debugging
                         if (tokenCount < 5) {
