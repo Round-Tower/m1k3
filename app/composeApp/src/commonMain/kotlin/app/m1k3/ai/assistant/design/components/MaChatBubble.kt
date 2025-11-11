@@ -142,7 +142,10 @@ fun MaChatBubbleAI(
                     verticalArrangement = Arrangement.spacedBy(MaSpacing.sm)
                 ) {
                     Text(
-                        text = text,
+                        // Defense-in-depth: trim leading whitespace for non-streaming sources
+                        // (e.g., database retrieval, error messages, manual text entry)
+                        // Note: Streaming text is already cleaned in ChatScreen.kt:cleanStreamingToken()
+                        text = text.trimStart(),
                         style = MaTypography.bodyLarge,
                         color = if (isError) MaColors.Error else MaColors.TextPrimary
                     )

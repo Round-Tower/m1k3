@@ -34,7 +34,17 @@ private val logger = Logger.withTag("LlamaCppEngine")
  * - ❌ Lost: Sampling parameters (temperature, topP, topK, minP)
  * - 🔧 Workaround: Prompt engineering for behavioral control
  *
- * **Model:** SmolLM2-135M-Instruct Q4_K_M (101 MB)
+ * **Model Selection: SmolLM2-135M Q4_K_M (101 MB)**
+ *
+ * SmolLM2-135M chosen over 360M due to APK size constraints:
+ * - APK budget: 200MB total (current: 149MB with embeddings/app/model)
+ * - SmolLM2-360M options: Q4_K_M = 271MB (35.5% over), Q2_K = 219MB (severe quality loss)
+ * - RAG enhancement: 1,401 documents compensate for smaller model
+ * - Philosophy alignment: 間 (Ma) computational sufficiency - "135M is enough"
+ * - Future path: 360M via dynamic delivery (Phase 3, optional download)
+ *
+ * See app/OPUS.md "Final Decision" section for complete analysis (2025-11-11)
+ *
  * **Context Window:** 8K tokens
  * **Library:** Llamatik 0.8.1
  *
@@ -155,14 +165,14 @@ class LlamaCppEngine(private val context: Context) : BaseLlmEngine {
         }
 
         try {
-            // Build system prompt with prompt engineering for behavioral control
-            val systemPrompt = buildSystemPrompt(config)
+            // LLAMATIK API DESIGN: system (identity+behavior) / context (facts) / user (query)
+            val systemPrompt = buildCleanSystemPrompt(config)
+            val contextParam = buildContextString(config)
 
-            // Use knowledgeContext in the context parameter
-            // Llamatik will handle combining system + context + user appropriately
-            val contextParam = config.knowledgeContext ?: ""
-
-            logger.d { "Starting generation (prompt=\"$prompt\", maxTokens=$maxTokens, system=\"${systemPrompt.take(150)}...\", context=${if (contextParam.isNotEmpty()) "\"${contextParam.take(150)}...\"" else "empty"})" }
+            logger.d {
+                "Llamatik non-streaming: user=${prompt.length}chars, maxTokens=$maxTokens, " +
+                "system=${systemPrompt.length}chars, context=${contextParam.length}chars"
+            }
 
             // Use streaming internally and collect full response
             val stopTokens = listOf("<end_of_turn>", "</s>", "<|endoftext|>", "<|im_end|>")
@@ -186,11 +196,6 @@ class LlamaCppEngine(private val context: Context) : BaseLlmEngine {
                                 continuation.resume(Unit)
                             }
                             return@generateWithContextStream
-                        }
-
-                        // Log each delta for debugging
-                        if (tokenCount < 5) {
-                            logger.v { "Delta $tokenCount: \"$delta\"" }
                         }
 
                         responseBuilder.append(delta)
@@ -278,17 +283,24 @@ class LlamaCppEngine(private val context: Context) : BaseLlmEngine {
         }
 
         try {
-            // Build system prompt with prompt engineering for behavioral control
-            val systemPrompt = buildSystemPrompt(config)
+            // LLAMATIK API DESIGN (three-parameter structure):
+            // - system: Identity + behavioral rules (WHO the AI is, HOW to behave)
+            // - context: Background information (RAG facts, knowledge, conversation history)
+            // - user: The actual query
 
-            // Use knowledgeContext in the context parameter
-            // Llamatik will handle combining system + context + user appropriately
-            val contextParam = config.knowledgeContext ?: ""
+            // Build CLEAN system prompt (identity + behavior only, no facts)
+            val systemPrompt = buildCleanSystemPrompt(config)
+
+            // Build context from all available sources (RAG facts, knowledge, conversation)
+            val contextParam = buildContextString(config)
 
             // Get maxTokens limit (if 0, still stream but stop immediately)
             val maxTokens = config.maxTokens ?: getOptimalMaxTokens()
 
-            logger.d { "Starting streaming generation (prompt=\"$prompt\", maxTokens=$maxTokens, system=\"${systemPrompt.take(150)}...\", context=${if (contextParam.isNotEmpty()) "\"${contextParam.take(150)}...\"" else "empty"})" }
+            logger.d {
+                "Llamatik generation: user=${prompt.length}chars, maxTokens=$maxTokens, " +
+                "system=${systemPrompt.length}chars, context=${contextParam.length}chars"
+            }
 
             var tokenCount = 0
             val stopTokens = listOf("<end_of_turn>", "</s>", "<|endoftext|>", "<|im_end|>")
@@ -314,11 +326,6 @@ class LlamaCppEngine(private val context: Context) : BaseLlmEngine {
                                 continuation.resume(Unit)
                             }
                             return@generateWithContextStream
-                        }
-
-                        // Log first few deltas for debugging
-                        if (tokenCount < 5) {
-                            logger.v { "Streaming delta $tokenCount: \"$delta\"" }
                         }
 
                         // Accumulate tokens to detect stop sequences
@@ -412,59 +419,75 @@ class LlamaCppEngine(private val context: Context) : BaseLlmEngine {
         }
     }
 
-    // ==================== Prompt Engineering for Behavioral Control ====================
+    // ==================== Llamatik Three-Parameter Structure ====================
 
     /**
-     * Build system prompt with prompt engineering to compensate for lost sampling control.
+     * Build CLEAN system prompt (identity + behavioral rules only).
      *
-     * **Problem:** Llamatik doesn't expose temperature/sampling APIs.
-     * **Solution:** Use prompt engineering to guide model behavior.
+     * Llamatik's API design separates concerns:
+     * - **system**: WHO the AI is + HOW to behave (this function)
+     * - **context**: Background info (RAG facts, knowledge, conversation)
+     * - **user**: The actual query
      *
-     * Temperature simulation:
-     * - Low (0.0-0.3): Add "Be concise, factual, and direct" instructions
-     * - Medium (0.4-0.7): Balanced default behavior
-     * - High (0.8-1.0): Add "Be creative, imaginative, and expansive" instructions
+     * This function builds ONLY the system part. NO facts, NO knowledge base descriptions.
      *
      * @param config Generation configuration
-     * @return Enhanced system prompt with behavioral guidance
+     * @return Clean system prompt (50-200 chars typical)
      */
-    private fun buildSystemPrompt(config: GenerationConfig): String {
+    private fun buildCleanSystemPrompt(config: GenerationConfig): String {
         val deviceInfo = getDeviceContext()
         val userName = config.userContext?.get("name")
 
-        // Base M1K3 prompt
-        val basePrompt = if (userName != null) {
-            "You are M1K3 (Mike), $userName's privacy-first local AI assistant running on $deviceInfo"
+        // Base identity (WHO)
+        val identity = if (userName != null) {
+            "You are M1K3 (Mike), $userName's local AI assistant running on $deviceInfo."
         } else {
-            "You are M1K3 (Mike), privacy-first local AI assistant running on $deviceInfo"
+            "You are M1K3 (Mike), a local AI assistant running on $deviceInfo."
         }
 
-        // Prompt engineering for temperature control
-        val behaviorGuidance = when {
-            // Low temperature (deterministic, factual)
+        // Behavioral rules (HOW) - based on temperature
+        val behavior = when {
             config.temperature != null && config.temperature < 0.4f -> {
-                "\n\nIMPORTANT: Be concise, factual, and direct in your responses. Avoid speculation or creativity."
+                " Be concise, factual, and direct. Avoid speculation."
             }
-            // High temperature (creative, expansive)
-            config.temperature != null && config.temperature > 0.7f -> {
-                "\n\nIMPORTANT: Be creative, imaginative, and expansive in your responses. Feel free to explore ideas."
+            config.temperature != null && config.temperature >= 0.4f && config.temperature <= 0.8f -> {
+                " Be helpful and accurate. Use provided facts. Do not make things up."
             }
-            // Medium temperature (balanced) - default behavior
-            else -> ""
+            config.temperature != null && config.temperature > 0.8f -> {
+                " Be creative and imaginative."
+            }
+            else -> {
+                " Be helpful and accurate."
+            }
         }
 
-        // Custom system prompt overrides default
-        // If custom systemPrompt is provided (e.g., RAG-enhanced), use it as-is
-        // (RAG-enhanced prompts already contain the relevant facts)
-        val finalBase = config.systemPrompt ?: (basePrompt + behaviorGuidance)
+        // Custom systemPrompt can override (but should also stay clean)
+        return config.systemPrompt ?: (identity + behavior)
+    }
 
-        // Append knowledge context if provided (only when not using custom RAG prompt)
-        // Note: ChatScreen now conditionally passes knowledgeContext based on ragResult.ragApplied
-        return if (config.knowledgeContext != null) {
-            "$finalBase\n\n${config.knowledgeContext}"
-        } else {
-            finalBase
-        }
+    /**
+     * Build context string from all available sources.
+     *
+     * Llamatik's context parameter should contain:
+     * - RAG-retrieved facts (if available)
+     * - Knowledge base summary (if RAG not used)
+     * - Conversation history (if provided)
+     *
+     * This keeps the system prompt clean while providing background info.
+     *
+     * @param config Generation configuration
+     * @return Context string (may be empty if no context available)
+     */
+    private fun buildContextString(config: GenerationConfig): String {
+        val contextParts = mutableListOf<String>()
+
+        // Add knowledge context if provided (either RAG facts or static KB summary)
+        config.knowledgeContext?.let { contextParts.add(it) }
+
+        // Future: Add conversation history from config.conversationHistory if provided
+        // Future: Add user profile context if provided
+
+        return contextParts.joinToString("\n\n")
     }
 
     /**

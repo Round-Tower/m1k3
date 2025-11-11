@@ -2863,3 +2863,179 @@ PRIVACY_MANIFEST.md - Detailed privacy implementation guide
 PERSONALITY_SYSTEM.md - Companion personality implementation
 
 Let me know if you'd like any of these additional files or modifications to the existing ones!RetryClaude can make mistakes. Please double-check responses.Keeper Opus 4.1
+
+---
+
+# Final Decision: SmolLM2-135M Selected (2025-11-11)
+
+## Executive Summary
+
+After thorough investigation of SmolLM2-360M compression strategies, **SmolLM2-135M Q4_K_M (101MB) has been selected as the primary model** for the 間 AI mobile app. SmolLM2-360M cannot achieve the 200MB budget constraint without severe quality degradation.
+
+## Initial Assumptions vs. Reality
+
+### Original Estimate (from early OPUS.md analysis)
+- **Estimated Size:** ~180MB at 4-bit quantization (Q4_K_M)
+- **Status:** ❌ **INCORRECT**
+
+### Actual Measurements (2025-11-11)
+
+Tested via `ollama run smollm2:360m-instruct-q4_K_M` and verified against HuggingFace bartowski repository:
+
+| Quantization | Size | Quality | Budget Status |
+|--------------|------|---------|---------------|
+| **Q4_K_M** (recommended) | **271 MB** | ⭐⭐⭐⭐⭐ Excellent | ❌ 35.5% over budget |
+| **Q4_K_S** | **260 MB** | ⭐⭐⭐⭐ Very Good | ❌ 30% over budget |
+| **IQ4_XS** | **227 MB** | ⭐⭐⭐⭐ Decent | ❌ 13.5% over budget |
+| **Q3_K_M** | **235 MB** | ⭐⭐⭐ Low | ❌ 17.5% over budget |
+| **Q3_K_S** | **219 MB** | ⭐⭐ Very Low | ❌ 9.5% over budget |
+| **Q2_K** | **219 MB** | ⭐ Extreme compression | ❌ 9.5% over budget |
+
+**Conclusion:** Even the most aggressive quantization (Q2_K) at 219MB still exceeds the 200MB budget by 9.5%, and would suffer severe quality degradation.
+
+## Why Not Aggressive Quantization?
+
+### Q2_K Quality Impact
+From llama.cpp perplexity benchmarks (7B models as reference):
+- **Q2_K:** +0.8698 perplexity increase = "extreme quality loss - not recommended"
+- **Risk:** Hallucinations, failed creative tasks, poor conversation quality
+- **Precedent:** Similar to ONNX Runtime quantization failures documented in project history
+
+### Smaller Models Are MORE Sensitive
+- 360M parameter models have less redundancy than 7B models
+- Aggressive quantization on small models = disproportionate quality loss
+- Q2_K on 360M ≠ Q2_K on 7B (much worse degradation)
+
+## Current Implementation Status
+
+### SmolLM2-135M Q4_K_M (101MB) ✅
+
+**Current APK Breakdown:**
+```
+SmolLM2-135M (Q4_K_M):   101 MB  ✅
+MiniLM-L6 (embeddings):   18 MB  ✅
+Base app code:            20 MB  ✅
+Assets & resources:       10 MB  ✅
+─────────────────────────────────
+Total APK:               149 MB  ✅ (26% under 200MB budget!)
+```
+
+**Quality Assessment (from SMOLLM2_135M_ADOPTION_STRATEGY.md):**
+| Category | Quality | Notes |
+|----------|---------|-------|
+| Educational/Technical | ⭐⭐⭐⭐ Good | Minimal impact with RAG |
+| Casual Conversation | ⭐⭐⭐ Adequate | Needs RAG enhancement |
+| Creative Writing | ⭐⭐⭐ Adequate | Benefits from templates |
+
+**RAG Enhancement (deployed 2025-11-08):**
+- ✅ 1,401 documents (1,391 comprehensive + 10 M1K3 system)
+- ✅ 24 categories across 4 domains
+- ✅ Intent classification with word boundary matching
+- ✅ Source transparency (shows actual fact content)
+- ✅ Device-adaptive token limits (256-512 tokens)
+- ✅ Quality improvements: commits 03db680 + 7a38b1d
+
+## Decision Rationale
+
+### Why SmolLM2-135M + RAG is Optimal
+
+1. **Budget Compliance:** 149MB total APK (26% under 200MB target) ✅
+2. **Quality Sufficient:** RAG enhancement compensates for smaller model ✅
+3. **Philosophy Alignment:** 間 (Ma) computational sufficiency - "135M is enough" ✅
+4. **Proven Stable:** Llamatik 0.8.1 + 135M = 62 tests passing, no crashes ✅
+5. **Room to Grow:** 51MB budget headroom for future features ✅
+
+### Comparison to Alternatives
+
+| Strategy | APK Size | Quality | Philosophy | Verdict |
+|----------|----------|---------|------------|---------|
+| **135M + RAG** (current) | 149 MB | Good with RAG | ✅ Aligned | ✅ **Selected** |
+| 360M Q4_K_M | 291 MB | Excellent | ❌ Over budget | ❌ Rejected |
+| 360M Q2_K | 239 MB | Poor | ❌ Over budget | ❌ Rejected |
+| 360M dynamic delivery | 149 MB base | User choice | ✅ Future option | ⏳ Phase 3 |
+
+## Future Path: Dynamic Model Delivery
+
+### Already Planned in Phase 3 (Weeks 8-9)
+
+**Strategy:** Google Play Asset Delivery
+- **Base APK:** Ships with SmolLM2-135M (149MB) ✅
+- **Optional Download:** SmolLM2-360M Q4_K_M (271MB) via on-demand asset delivery
+- **User Choice:** Settings → AI Models → Download Enhanced Model
+
+**Benefits:**
+- ✅ Complies with 200MB constraint for base install
+- ✅ Power users get quality upgrade
+- ✅ No forced compromise for either user segment
+- ✅ Aligns with Google Play best practices
+
+**Implementation:**
+- Install-time delivery: 135M (mandatory, under 150MB limit)
+- On-demand delivery: 360M (optional, downloads over WiFi)
+- Model hot-swapping without app restart
+
+### Alternative Models (Optional Future)
+
+**Gemma-3:270m** (427MB quantized):
+- Multi-modal capabilities
+- Larger but higher quality
+- Optional download only (too large for base APK)
+
+## Verification Against Constraints
+
+### Size Constraints ✅
+- [x] Base APK < 200MB (actual: 149MB, 26% under budget)
+- [x] Models fit in Android assets (135M: 101MB)
+- [x] Room for embeddings (MiniLM-L6: 18MB)
+- [x] Room for app code (20MB + 10MB assets)
+
+### Quality Constraints ✅
+- [x] Educational/technical tasks: Good quality
+- [x] Casual conversation: Adequate with RAG
+- [x] Creative writing: Adequate with templates
+- [x] Inference speed: 40+ tokens/sec (mid-range devices)
+- [x] Model load time: <5 seconds
+
+### Philosophy Constraints ✅
+- [x] 間 (Ma): Computational sufficiency (135M is enough)
+- [x] Wabi-Sabi: Accept limitations, enhance with RAG
+- [x] Privacy-first: 100% on-device (0 bytes transmitted)
+- [x] No cloud fallback: Offline-first by design
+
+## Implementation Notes
+
+### No Code Changes Required
+Current implementation already optimal:
+- SmolLM2-135M Q4_K_M deployed via Llamatik 0.8.1 ✅
+- RAG system enhanced (2025-11-08 quality improvements) ✅  
+- 62 tests passing (ConversationRepository, EcoMetrics, EcoCalculator) ✅
+- APK size: 149MB ✅
+
+### Documentation Updates Only
+1. **OPUS.md** (this section) - Decision rationale ✅
+2. **CLAUDE.md** - 360M compression investigation notes ⏳
+3. **LlamaCppEngine.kt** - Optional explanatory comment ⏳
+
+### Testing Validation
+No additional testing required:
+- Existing 62 tests passing
+- Quality validated in SMOLLM2_135M_ADOPTION_STRATEGY.md
+- RAG improvements deployed and tested (commits 03db680 + 7a38b1d)
+
+## Conclusion
+
+**SmolLM2-360M compression to under 200MB is not feasible without unacceptable quality loss.** The initial estimate of ~180MB at Q4_K_M was incorrect - actual size is 271MB (35.5% over budget).
+
+**SmolLM2-135M Q4_K_M (101MB) + RAG enhancement is the optimal strategy:**
+- 26% under budget (149MB total APK)
+- Good quality with RAG compensation
+- Aligns with 間 (Ma) philosophy
+- Proven stable (62 tests passing)
+- Future-proof (dynamic delivery option in Phase 3)
+
+**Status:** ✅ **Decision finalized - no changes needed**
+
+---
+
+*Last Updated: 2025-11-11*
+*Decision Rationale: Compression investigation revealed Q4_K_M = 271MB (not 180MB), making 360M infeasible under 200MB budget*

@@ -55,7 +55,7 @@ class SemanticRetrievalService(
     ): List<SemanticRetrievedFact> {
         if (query.isBlank()) return emptyList()
 
-        println("🔍 [RETRIEVAL-DEBUG] Query: \"$query\"")
+        println("🔍 [RETRIEVAL-DEBUG] Query: ${query.length}chars")
         println("🔍 [RETRIEVAL-DEBUG] Limit: $limit, Min similarity: $minSimilarity")
 
         // 1. Embed the user query
@@ -408,7 +408,7 @@ data class SemanticRetrievalDebugInfo(
     fun formatSummary(): String {
         return buildString {
             appendLine("🔍 Semantic Retrieval Debug Info")
-            appendLine("Query: \"$query\"")
+            appendLine("Query: ${query.length}chars")
             appendLine("Embedding dimensions: $queryEmbeddingDimensions")
             appendLine()
             appendLine("📊 Statistics:")

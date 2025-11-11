@@ -1,6 +1,7 @@
 package app.m1k3.ai.assistant.ai
 
 import android.content.Context
+import app.m1k3.ai.assistant.utils.Logger
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import java.io.BufferedReader
@@ -19,6 +20,7 @@ import java.io.InputStreamReader
  */
 class SmolLM2Tokenizer(private val context: Context) {
 
+    private val logger = Logger.withTag("SmolLM2Tokenizer")
     private val json = Json { ignoreUnknownKeys = true }
 
     private var vocabMap: Map<String, Int> = emptyMap()
@@ -42,11 +44,11 @@ class SmolLM2Tokenizer(private val context: Context) {
     fun initialize() {
         try {
             // Load vocabulary (token -> ID mapping)
-            println("📚 Loading SmolLM2 tokenizer vocabulary...")
+            logger.i { "Loading SmolLM2 tokenizer vocabulary..." }
             vocabMap = loadVocabulary()
 
             if (vocabMap.isEmpty()) {
-                println("⚠️  vocab.json is empty or failed to load, using fallback")
+                logger.w { "vocab.json is empty or failed to load, using fallback" }
                 vocabMap = createSimpleVocab()
             }
 
@@ -59,18 +61,14 @@ class SmolLM2Tokenizer(private val context: Context) {
 
             val usingFallback = vocabMap.size < 1000  // Real GPT-2 vocab has 49152 tokens
             if (usingFallback) {
-                println("⚠️  Using fallback vocabulary (${vocabMap.size} tokens)")
-                println("   NOTE: Text may not have spaces - real vocab.json needed")
+                logger.w { "Using fallback vocabulary (${vocabMap.size} tokens) - text may not have spaces" }
             } else {
-                println("✅ Tokenizer initialized with GPT-2 BPE")
-                println("   Vocabulary size: ${vocabMap.size}")
-                println("   Merges: ${merges.size}")
+                logger.i { "Tokenizer initialized with GPT-2 BPE (vocab=${vocabMap.size}, merges=${merges.size})" }
             }
 
         } catch (e: Exception) {
             // Fallback to simple character-level tokenization if files missing
-            println("⚠️  Tokenizer initialization error: ${e.message}")
-            println("   Using fallback simple tokenization")
+            logger.e(e) { "Tokenizer initialization error: ${e.message} - using fallback" }
             vocabMap = createSimpleVocab()
             idToToken = vocabMap.entries.associate { (k, v) -> v to k }
             isInitialized = true
@@ -148,7 +146,7 @@ class SmolLM2Tokenizer(private val context: Context) {
         // DEBUG: Log first few tokens to see what we're getting
         if (tokens.isNotEmpty()) {
             val firstFewTokens = tokens.take(10)
-            println("🔍 DEBUG: First tokens: ${firstFewTokens.joinToString(", ") { "\"$it\"" }}")
+            logger.v { "First tokens: ${firstFewTokens.joinToString(", ") { "\"$it\"" }}" }
         }
 
         // Filter out special tokens from output
@@ -164,7 +162,7 @@ class SmolLM2Tokenizer(private val context: Context) {
         val tokenString = filteredTokens.joinToString("")
 
         // DEBUG: Log token string to see if spaces are present
-        println("🔍 DEBUG: Token string (first 100 chars): ${tokenString.take(100)}")
+        logger.v { "Token string (first 100 chars): ${tokenString.take(100)}" }
 
         // Convert back to bytes using GPT-2 byte decoder
         val bytes = mutableListOf<Byte>()
@@ -174,9 +172,7 @@ class SmolLM2Tokenizer(private val context: Context) {
 
             // DEBUG: Log space character conversion specifically
             if (charCode == 288) {  // 'Ġ' (GPT-2 space)
-                println("🔍 DEBUG: Found space char 'Ġ' (U+0120)")
-                println("   charToByte(288) = $byte")
-                println("   Expected: 32 (space byte)")
+                logger.v { "Found space char 'Ġ' (U+0120): charToByte(288)=$byte, expected=32" }
             }
 
             if (byte != null) {
@@ -184,9 +180,7 @@ class SmolLM2Tokenizer(private val context: Context) {
             } else {
                 // This should never happen with proper GPT-2 BPE vocab!
                 // All valid GPT-2 tokens should map to bytes via charToByte()
-                println("⚠️ WARNING: Unmapped character U+${charCode.toString(16).uppercase()} ('$char')")
-                println("   charToByte($charCode) returned null")
-                println("   This indicates the vocab or decode logic has an issue!")
+                logger.w { "Unmapped character U+${charCode.toString(16).uppercase()} ('$char') - charToByte($charCode) returned null (vocab/decode issue)" }
                 // Skip unmapped characters - don't use UTF-8 fallback
                 // (UTF-8 encoding breaks GPT-2 byte decoding for special chars like 'Ġ')
             }
@@ -195,7 +189,7 @@ class SmolLM2Tokenizer(private val context: Context) {
         // Convert bytes to UTF-8 string
         return try {
             val result = bytes.toByteArray().toString(Charsets.UTF_8)
-            println("🔍 DEBUG: Decoded result (first 100 chars): ${result.take(100)}")
+            logger.v { "Decoded result (first 100 chars): ${result.take(100)}" }
 
             // Clean up any residual special tokens that made it through
             // IMPORTANT: Do NOT trim() here! GPT-2 tokens often have leading/trailing spaces
@@ -214,10 +208,10 @@ class SmolLM2Tokenizer(private val context: Context) {
                 .replace("im_end", "")           // Middle fragments
                 .replace("endoftext", "")        // Middle fragments
 
-            println("🔍 DEBUG: After cleaning (first 100 chars): ${cleanedResult.take(100)}")
+            logger.v { "After cleaning (first 100 chars): ${cleanedResult.take(100)}" }
             cleanedResult
         } catch (e: Exception) {
-            println("⚠️ Tokenizer decode error: ${e.message}")
+            logger.e(e) { "Tokenizer decode error: ${e.message}" }
             // Fallback: return tokens as-is (without special tokens)
             filteredTokens.joinToString("")
         }
@@ -261,13 +255,13 @@ class SmolLM2Tokenizer(private val context: Context) {
      */
     fun testRoundTrip(): Boolean {
         if (!isInitialized) {
-            println("❌ Tokenizer not initialized - cannot run round-trip test")
+            logger.e { "Tokenizer not initialized - cannot run round-trip test" }
             return false
         }
 
-        println("\n" + "=".repeat(60))
-        println("🧪 TOKENIZER ROUND-TRIP TEST")
-        println("=".repeat(60))
+        logger.i { "=".repeat(60) }
+        logger.i { "TOKENIZER ROUND-TRIP TEST" }
+        logger.i { "=".repeat(60) }
 
         val testCases = listOf(
             "Hello world",
@@ -281,33 +275,31 @@ class SmolLM2Tokenizer(private val context: Context) {
         var allPassed = true
 
         testCases.forEachIndexed { index, originalText ->
-            println("\n📝 Test ${index + 1}: \"$originalText\"")
+            logger.i { "Test ${index + 1}: \"$originalText\"" }
 
             try {
                 // Encode
                 val tokens = encode(originalText)
-                println("   Tokens (${tokens.size}): ${tokens.take(20).joinToString(", ")}")
+                logger.d { "   Tokens (${tokens.size}): ${tokens.take(20).joinToString(", ")}" }
 
                 // Decode
                 val decodedText = decode(tokens)
-                println("   Decoded: \"$decodedText\"")
+                logger.d { "   Decoded: \"$decodedText\"" }
 
                 // Compare
                 val matches = decodedText.trim() == originalText.trim()
                 if (matches) {
-                    println("   ✅ PASS - Perfect round-trip!")
+                    logger.i { "   PASS - Perfect round-trip!" }
                 } else {
-                    println("   ❌ FAIL - Mismatch detected!")
-                    println("      Expected: \"$originalText\"")
-                    println("      Got:      \"$decodedText\"")
+                    logger.w { "   FAIL - Mismatch detected!" }
+                    logger.w { "      Expected: \"$originalText\"" }
+                    logger.w { "      Got:      \"$decodedText\"" }
 
                     // Character-by-character comparison
                     val minLen = minOf(originalText.length, decodedText.length)
                     for (i in 0 until minLen) {
                         if (originalText[i] != decodedText[i]) {
-                            println("      First diff at position $i:")
-                            println("         Expected: '${originalText[i]}' (U+${originalText[i].code.toString(16).uppercase()})")
-                            println("         Got:      '${decodedText[i]}' (U+${decodedText[i].code.toString(16).uppercase()})")
+                            logger.w { "      First diff at position $i: Expected='${originalText[i]}' (U+${originalText[i].code.toString(16).uppercase()}), Got='${decodedText[i]}' (U+${decodedText[i].code.toString(16).uppercase()})" }
                             break
                         }
                     }
@@ -315,19 +307,18 @@ class SmolLM2Tokenizer(private val context: Context) {
                 }
 
             } catch (e: Exception) {
-                println("   ❌ ERROR: ${e.message}")
-                e.printStackTrace()
+                logger.e(e) { "   ERROR: ${e.message}" }
                 allPassed = false
             }
         }
 
-        println("\n" + "=".repeat(60))
+        logger.i { "=".repeat(60) }
         if (allPassed) {
-            println("✅ ALL TESTS PASSED - Tokenizer is working correctly!")
+            logger.i { "ALL TESTS PASSED - Tokenizer is working correctly!" }
         } else {
-            println("❌ SOME TESTS FAILED - Tokenizer needs fixes!")
+            logger.w { "SOME TESTS FAILED - Tokenizer needs fixes!" }
         }
-        println("=".repeat(60) + "\n")
+        logger.i { "=".repeat(60) }
 
         return allPassed
     }
