@@ -103,7 +103,7 @@ class RAGManager(
         val semanticFacts = retrievalService.retrieve(
             query = userQuery,
             limit = retrievalLimit,
-            minSimilarity = 0.6f
+            minSimilarity = 0.0f  // TEMPORARY: Zero threshold to debug retrieval (was 0.6f)
         )
 
         // Convert to RetrievedFact

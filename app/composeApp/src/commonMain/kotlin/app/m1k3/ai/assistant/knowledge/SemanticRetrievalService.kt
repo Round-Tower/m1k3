@@ -55,21 +55,28 @@ class SemanticRetrievalService(
     ): List<SemanticRetrievedFact> {
         if (query.isBlank()) return emptyList()
 
+        println("🔍 [RETRIEVAL-DEBUG] Query: \"$query\"")
+        println("🔍 [RETRIEVAL-DEBUG] Limit: $limit, Min similarity: $minSimilarity")
+
         // 1. Embed the user query
         val queryEmbeddingResult = embeddingEngine.embed(query, EmbeddingTaskType.QUERY)
         if (queryEmbeddingResult.isFailure) {
+            println("❌ [RETRIEVAL-DEBUG] Query embedding failed: ${queryEmbeddingResult.exceptionOrNull()?.message}")
             // Fallback to keyword-based retrieval if embedding fails
             return fallbackToKeywordSearch(query, limit)
         }
 
         val queryEmbedding = queryEmbeddingResult.getOrThrow()
+        println("✅ [RETRIEVAL-DEBUG] Query embedded (${queryEmbedding.size} dimensions)")
 
         // 2. Get all facts with embeddings from database
         // TODO: Replace with HNSW vector index when Phase 2 complete
         val allFacts = database.triviaFactQueries.getFactsWithEmbeddings().executeAsList()
+        println("📊 [RETRIEVAL-DEBUG] Total facts in database: ${allFacts.size}")
 
         // 3. Calculate similarity for each fact
         val rankedFacts = mutableListOf<SemanticRetrievedFact>()
+        val allSimilarities = mutableListOf<Pair<Float, String>>() // For debug logging
 
         for (fact in allFacts) {
             // PHASE1.5-005: Use actual embeddings stored in database
@@ -79,6 +86,7 @@ class SemanticRetrievalService(
             if (factEmbedding != null) {
                 // Calculate actual cosine similarity using embeddings
                 val similarity = embeddingEngine.cosineSimilarity(queryEmbedding, factEmbedding)
+                allSimilarities.add(Pair(similarity, fact.category))
 
                 // Apply threshold filter
                 if (similarity >= minSimilarity) {
@@ -93,6 +101,15 @@ class SemanticRetrievalService(
                 }
             }
         }
+
+        // DEBUG: Show top 10 similarity scores (even if below threshold)
+        val top10 = allSimilarities.sortedByDescending { it.first }.take(10)
+        println("🎯 [RETRIEVAL-DEBUG] Top 10 similarity scores:")
+        top10.forEachIndexed { index, (similarity, category) ->
+            val passThreshold = if (similarity >= minSimilarity) "✅" else "❌"
+            println("  ${index + 1}. $passThreshold ${"%.4f".format(similarity)} - $category")
+        }
+        println("📊 [RETRIEVAL-DEBUG] Facts passing threshold ($minSimilarity): ${rankedFacts.size}/${allFacts.size}")
 
         // 4. Rank by relevance and take top N
         val topFacts = rankedFacts

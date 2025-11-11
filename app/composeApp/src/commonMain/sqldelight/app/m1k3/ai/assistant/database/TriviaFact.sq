@@ -192,10 +192,10 @@ DELETE FROM TriviaFact;
 getTotalFactCount:
 SELECT COUNT(*) FROM TriviaFact;
 
--- Get facts with embeddings
+-- Get facts with embeddings (or generate on-demand)
 getFactsWithEmbeddings:
 SELECT * FROM TriviaFact
-WHERE has_embedding = 1
+-- Note: has_embedding filter removed to allow on-demand embedding generation
 ORDER BY category, importance DESC;
 
 -- Get facts without embeddings (for batch processing)
