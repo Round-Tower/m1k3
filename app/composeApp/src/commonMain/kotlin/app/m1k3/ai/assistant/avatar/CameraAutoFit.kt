@@ -62,6 +62,7 @@ object CameraAutoFit {
      * @param padding Padding multiplier (default: 1.5x)
      * @param cameraAngle Vertical angle offset in degrees (default: 0° = level with center)
      * @param focusOffset Vertical focus offset as fraction of height (default: 0.0 = center, 0.3 = face area)
+     * @param horizontalAngle Horizontal rotation in degrees (default: 0° = front view, -25° = 3/4 left view)
      * @return Optimal camera configuration
      */
     fun calculate(
@@ -69,7 +70,8 @@ object CameraAutoFit {
         fov: Float = DEFAULT_FOV,
         padding: Float = DEFAULT_PADDING,
         cameraAngle: Float = 0f,
-        focusOffset: Float = 0.0f
+        focusOffset: Float = 0.0f,
+        horizontalAngle: Float = 0f
     ): CameraConfig {
         // Calculate focus point (with optional vertical offset for face/forehead focus)
         val baseCenter = metadata.center
@@ -87,11 +89,12 @@ object CameraAutoFit {
             padding = padding
         )
 
-        // Calculate camera position with optional vertical angle
+        // Calculate camera position with optional vertical and horizontal angles
         val position = calculateCameraPosition(
             center = focusPoint,
             distance = distance,
-            verticalAngle = cameraAngle
+            verticalAngle = cameraAngle,
+            horizontalAngle = horizontalAngle
         )
 
         return CameraConfig(

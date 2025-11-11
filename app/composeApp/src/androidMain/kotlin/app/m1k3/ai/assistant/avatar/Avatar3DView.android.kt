@@ -347,11 +347,13 @@ private fun RenderAnimatedModel(
     val engine = LocalSharedEngine.current!!
     val modelLoader = rememberModelLoader(engine)
 
-    // Calculate optimal camera (elevated 15° above model, looking down)
+    // Calculate optimal camera (level with model center, focused on upper body/face, slight angle)
     val optimalCamera = remember(metadata) {
         CameraAutoFit.calculate(
             metadata = metadata,
-            cameraAngle = 15f  // Elevate camera 15° above model
+            cameraAngle = 0f,       // Level with model (not looking down)
+            focusOffset = 0.2f,     // Focus on upper 20% (face/head area)
+            horizontalAngle = -25f  // Rotate 25° to the left for 3/4 view
         )
     }
 
