@@ -4,6 +4,7 @@ import app.m1k3.ai.assistant.database.MaDatabase
 import app.m1k3.ai.assistant.database.TriviaFact
 import app.m1k3.ai.assistant.embedding.EmbeddingEngine
 import app.m1k3.ai.assistant.embedding.EmbeddingTaskType
+import app.m1k3.ai.assistant.utils.Logger
 
 /**
  * SemanticRetrievalService - PHASE1.5-005
@@ -39,6 +40,7 @@ class SemanticRetrievalService(
     private val database: MaDatabase,
     private val embeddingEngine: EmbeddingEngine
 ) {
+    private val logger = Logger.withTag("SemanticRetrieval")
 
     /**
      * Retrieve relevant facts using semantic similarity search.
@@ -55,24 +57,23 @@ class SemanticRetrievalService(
     ): List<SemanticRetrievedFact> {
         if (query.isBlank()) return emptyList()
 
-        println("🔍 [RETRIEVAL-DEBUG] Query: ${query.length}chars")
-        println("🔍 [RETRIEVAL-DEBUG] Limit: $limit, Min similarity: $minSimilarity")
+        logger.d { "Query: ${query.length}chars, limit=$limit, minSimilarity=$minSimilarity" }
 
         // 1. Embed the user query
         val queryEmbeddingResult = embeddingEngine.embed(query, EmbeddingTaskType.QUERY)
         if (queryEmbeddingResult.isFailure) {
-            println("❌ [RETRIEVAL-DEBUG] Query embedding failed: ${queryEmbeddingResult.exceptionOrNull()?.message}")
+            logger.w { "Query embedding failed: ${queryEmbeddingResult.exceptionOrNull()?.message}" }
             // Fallback to keyword-based retrieval if embedding fails
             return fallbackToKeywordSearch(query, limit)
         }
 
         val queryEmbedding = queryEmbeddingResult.getOrThrow()
-        println("✅ [RETRIEVAL-DEBUG] Query embedded (${queryEmbedding.size} dimensions)")
+        logger.d { "Query embedded (${queryEmbedding.size} dimensions)" }
 
         // 2. Get all facts with embeddings from database
         // TODO: Replace with HNSW vector index when Phase 2 complete
         val allFacts = database.triviaFactQueries.getFactsWithEmbeddings().executeAsList()
-        println("📊 [RETRIEVAL-DEBUG] Total facts in database: ${allFacts.size}")
+        logger.d { "Searching ${allFacts.size} facts in database" }
 
         // 3. Calculate similarity for each fact
         val rankedFacts = mutableListOf<SemanticRetrievedFact>()
@@ -104,12 +105,12 @@ class SemanticRetrievalService(
 
         // DEBUG: Show top 10 similarity scores (even if below threshold)
         val top10 = allSimilarities.sortedByDescending { it.first }.take(10)
-        println("🎯 [RETRIEVAL-DEBUG] Top 10 similarity scores:")
+        logger.d { "Top 10 similarity scores:" }
         top10.forEachIndexed { index, (similarity, category) ->
             val passThreshold = if (similarity >= minSimilarity) "✅" else "❌"
-            println("  ${index + 1}. $passThreshold ${"%.4f".format(similarity)} - $category")
+            logger.d { "  ${index + 1}. $passThreshold ${"%.4f".format(similarity)} - $category" }
         }
-        println("📊 [RETRIEVAL-DEBUG] Facts passing threshold ($minSimilarity): ${rankedFacts.size}/${allFacts.size}")
+        logger.i { "Retrieved ${rankedFacts.size}/${allFacts.size} facts (threshold=$minSimilarity)" }
 
         // 4. Rank by relevance and take top N
         val topFacts = rankedFacts
