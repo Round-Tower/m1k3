@@ -303,7 +303,10 @@ class LlamaCppEngine(private val context: Context) : BaseLlmEngine {
             }
 
             var tokenCount = 0
-            val stopTokens = listOf("<end_of_turn>", "</s>", "<|endoftext|>", "<|im_end|>")
+            // SmolLM2-specific stop tokens (ChatML format)
+            // DO NOT add tokens from other models (Gemma's <end_of_turn>, LLaMA's </s>)
+            // as they cause false positives when SmolLM2 generates text containing those strings
+            val stopTokens = listOf("<|im_end|>", "<|endoftext|>")
             val responseBuffer = StringBuilder()
             var shouldStop = false
             var hasResumed = false
