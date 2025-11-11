@@ -149,13 +149,24 @@ class IntentClassifier {
     fun classify(query: String): Intent {
         val normalizedQuery = query.lowercase().trim()
 
-        // Check each intent's keywords
+        // Check each intent's keywords with word boundary matching
         for (intent in Intent.values()) {
             if (intent == Intent.GENERAL) continue // Skip catch-all
 
-            // Check if any keyword matches
+            // Check if any keyword matches (whole word or at word boundaries)
             for (keyword in intent.keywords) {
-                if (normalizedQuery.contains(keyword.lowercase())) {
+                val keywordLower = keyword.lowercase()
+                // Match whole word or with word boundaries (space/punctuation)
+                if (normalizedQuery == keywordLower ||
+                    normalizedQuery.contains(" $keywordLower ") ||
+                    normalizedQuery.startsWith("$keywordLower ") ||
+                    normalizedQuery.endsWith(" $keywordLower") ||
+                    // Also match with punctuation boundaries
+                    normalizedQuery.contains("$keywordLower?") ||
+                    normalizedQuery.contains("$keywordLower!") ||
+                    normalizedQuery.contains("$keywordLower.") ||
+                    normalizedQuery.contains("$keywordLower,")
+                ) {
                     return intent
                 }
             }
@@ -176,13 +187,23 @@ class IntentClassifier {
         var bestIntent = Intent.GENERAL
         var maxMatches = 0
 
-        // Count keyword matches for each intent
+        // Count keyword matches for each intent (with word boundary matching)
         for (intent in Intent.values()) {
             if (intent == Intent.GENERAL) continue
 
             var matchCount = 0
             for (keyword in intent.keywords) {
-                if (normalizedQuery.contains(keyword.lowercase())) {
+                val keywordLower = keyword.lowercase()
+                // Use same word boundary matching as classify()
+                if (normalizedQuery == keywordLower ||
+                    normalizedQuery.contains(" $keywordLower ") ||
+                    normalizedQuery.startsWith("$keywordLower ") ||
+                    normalizedQuery.endsWith(" $keywordLower") ||
+                    normalizedQuery.contains("$keywordLower?") ||
+                    normalizedQuery.contains("$keywordLower!") ||
+                    normalizedQuery.contains("$keywordLower.") ||
+                    normalizedQuery.contains("$keywordLower,")
+                ) {
                     matchCount++
                 }
             }

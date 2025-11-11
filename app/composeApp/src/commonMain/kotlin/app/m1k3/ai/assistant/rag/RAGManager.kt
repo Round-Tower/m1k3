@@ -175,15 +175,23 @@ class RAGManager(
      * Formats retrieved facts into JSON-compatible string for
      * storage in message.rag_sources field.
      *
+     * Shows preview of fact content (first 60 chars) with similarity score.
+     *
      * @param retrievedFacts Facts to serialize
      * @return JSON string of sources
      */
     fun formatRAGSources(retrievedFacts: List<RetrievedFact>): String? {
         if (retrievedFacts.isEmpty()) return null
 
-        return retrievedFacts.joinToString(separator = "; ") { fact ->
-            "${fact.category} (${(fact.similarity * 100).toInt()}%)"
-        }
+        return retrievedFacts.mapIndexed { index, fact ->
+            // Show preview of fact content (first 60 chars)
+            val preview = if (fact.content.length > 60) {
+                fact.content.take(60) + "..."
+            } else {
+                fact.content
+            }
+            "${index + 1}. ${preview} (${(fact.similarity * 100).toInt()}%)"
+        }.joinToString(separator = "\n")
     }
 
     /**
