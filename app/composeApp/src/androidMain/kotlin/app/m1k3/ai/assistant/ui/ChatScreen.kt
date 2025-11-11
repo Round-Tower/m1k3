@@ -333,20 +333,14 @@ fun ChatScreen(
                     ChatBubble(message)
                 }
 
-                // Loading indicator
+                // Typing indicator while AI is generating
                 if (isGenerating) {
                     item {
-                        Box(
+                        app.m1k3.ai.assistant.design.components.TypingIndicatorBubble(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .testTag("loading_indicator"),
-                            contentAlignment = Alignment.CenterStart
-                        ) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(24.dp),
-                                strokeWidth = 2.dp,
-                            )
-                        }
+                                .testTag("typing_indicator")
+                        )
                     }
                 }
             }
@@ -602,12 +596,54 @@ fun ChatScreen(
                                         )
                                     }
 
+                                // PHASE 2 COMPLETION: Semantic Memory Retrieval for Multi-Turn Context
+                                // Retrieve relevant conversation memories using device-adaptive limits
+                                val memoryTopK = when {
+                                    deviceRamGB >= 12 -> 20  // Flagship: 20 memories (~4K tokens)
+                                    deviceRamGB >= 8 -> 15   // High-end: 15 memories (~3K tokens)
+                                    deviceRamGB >= 6 -> 10   // Mid-range: 10 memories (~2K tokens)
+                                    else -> 5                 // Budget: 5 memories (~1K tokens)
+                                }
+
+                                val conversationContext = try {
+                                    chatViewModel.retrieveMemories(
+                                        queryText = prompt,
+                                        topK = memoryTopK
+                                    ).getOrNull()?.let { contextResult ->
+                                        val memories = contextResult.selectedMemories
+                                        if (memories.isNotEmpty()) {
+                                            println("🧠 [MEMORY] Retrieved ${memories.size} relevant memories (topK=$memoryTopK)")
+                                            memories.take(memoryTopK).joinToString("\n") { memory ->
+                                                "Memory: ${memory.content.take(200)}" +
+                                                        (if (memory.content.length > 200) "..." else "")
+                                            }
+                                        } else {
+                                            println("🧠 [MEMORY] No relevant memories found")
+                                            null
+                                        }
+                                    }
+                                } catch (e: Exception) {
+                                    println("⚠️ [MEMORY] Retrieval failed: ${e.message}")
+                                    null
+                                }
+
                                 // Use RAG-enriched system prompt if RAG was applied
                                 // Otherwise use base system prompt
-                                val enrichedSystemPrompt = if (ragResult.ragApplied) {
-                                    ragResult.enrichedPrompt  // Contains RAG knowledge + base instructions
-                                } else {
-                                    systemPrompt  // Just base M1K3 instructions
+                                // Then enhance with conversation context if available
+                                val enrichedSystemPrompt = buildString {
+                                    // Start with RAG or base system prompt
+                                    append(if (ragResult.ragApplied) {
+                                        ragResult.enrichedPrompt  // Contains RAG knowledge + base instructions
+                                    } else {
+                                        systemPrompt  // Just base M1K3 instructions
+                                    })
+
+                                    // Add conversation context if memories were retrieved
+                                    if (conversationContext != null) {
+                                        append("\n\n## Relevant Conversation History:\n")
+                                        append(conversationContext)
+                                        append("\n\nUse this conversation context to provide coherent, contextual responses that reference previous discussions when relevant.")
+                                    }
                                 }
 
                                 // Track RAG usage for display and database
@@ -661,6 +697,7 @@ fun ChatScreen(
                                         .replace("<|endoftext|>", "")
                                         .replace("<|", "")  // Partial fragments
                                         .replace("|>", "")
+                                        .trim()  // Remove leading/trailing whitespace (fixes newline bug)
 
                                     // Append each cleaned token as it arrives
                                     streamedText += cleanedToken
@@ -751,14 +788,31 @@ fun ChatScreen(
                                     // Scroll animation failed, but inference already completed
                                 }
                             } catch (e: Exception) {
+                                // Log error for debugging
+                                println("❌ [GENERATION-ERROR] ${e.javaClass.simpleName}: ${e.message}")
+                                e.printStackTrace()
+
+                                // Show error on avatar
                                 avatarVM.showError("Generation failed")
 
                                 // Error haptic feedback
                                 haptics.error()
 
+                                // Create user-friendly error message
+                                val errorMessage = when {
+                                    e.message?.contains("out of memory", ignoreCase = true) == true ->
+                                        "⚠️ Not enough memory to generate response. Try closing other apps or asking a simpler question."
+                                    e.message?.contains("timeout", ignoreCase = true) == true ->
+                                        "⚠️ Generation took too long. The AI model might be overloaded. Please try again."
+                                    e.message?.contains("model", ignoreCase = true) == true ->
+                                        "⚠️ AI model error: ${e.message}. Try restarting the app."
+                                    else ->
+                                        "⚠️ Couldn't generate response: ${e.message ?: "Unknown error"}. Please try again."
+                                }
+
                                 chatViewModel.addMessage(
                                     app.m1k3.ai.assistant.chat.ChatMessage(
-                                        text = "Error: ${e.message}",
+                                        text = errorMessage,
                                         isUser = false,
                                         timestamp = Clock.System.now().toEpochMilliseconds(),
                                         isError = true,
