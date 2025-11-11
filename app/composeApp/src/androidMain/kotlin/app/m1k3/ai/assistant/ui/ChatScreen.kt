@@ -526,10 +526,18 @@ fun ChatScreen(
                                 var ragConfidence: Double? = null
 
                                 // Phase 3 RAG: Intent-aware knowledge retrieval with enriched prompt
+                                // Get device context for personalized responses
+                                val deviceModel = android.os.Build.MODEL
+                                val activityManager = context.getSystemService(Context.ACTIVITY_SERVICE) as android.app.ActivityManager
+                                val memInfo = android.app.ActivityManager.MemoryInfo()
+                                activityManager.getMemoryInfo(memInfo)
+                                val deviceRamGB = (memInfo.totalMem / (1024 * 1024 * 1024)).toInt()
+
                                 val systemPrompt =
-                                    "You are M1K3, a privacy-first AI assistant running 100% locally. " +
-                                        "Be helpful, concise, and informative. "
-//                                        knowledgeContext
+                                    "You are M1K3 (Mike), a privacy-first AI assistant running 100% locally on ${deviceModel} (${deviceRamGB}GB RAM). " +
+                                        "All conversations are private and never leave the device. " +
+                                        "Be helpful, concise, and informative. Use retrieved knowledge when available.\n\n" +
+                                        knowledgeContext
 
                                 // RAG with error handling and quality validation
                                 val ragResult =
@@ -542,20 +550,20 @@ fun ChatScreen(
                                                     enableRAG = true,
                                                 )
 
-                                            // Quality validation: Filter out low-quality facts (<0.65 similarity)
+                                            // Quality validation: Trust RAGManager threshold (0.6 minSimilarity)
                                             if (result.ragApplied) {
-                                                val highQualityFacts = result.retrievedFacts.filter { it.similarity >= 0.65f }
+                                                val highQualityFacts = result.retrievedFacts.filter { it.similarity >= 0.6f }
                                                 if (highQualityFacts.size < result.retrievedFacts.size) {
                                                     println(
-                                                        "⚠️ [RAG] Filtered ${result.retrievedFacts.size - highQualityFacts.size} low-quality facts (<0.65 similarity)",
+                                                        "⚠️ [RAG] Filtered ${result.retrievedFacts.size - highQualityFacts.size} low-quality facts (<0.6 similarity)",
                                                     )
                                                 }
 
-                                                // If no high-quality facts remain, fall back to system prompt
+                                                // If no high-quality facts remain, fall back to system prompt with KB context
                                                 if (highQualityFacts.isEmpty()) {
-                                                    println("⚠️ [RAG] No high-quality facts found, using base prompt")
+                                                    println("⚠️ [RAG] No high-quality facts found, using base prompt with KB context")
                                                     result.copy(
-                                                        enrichedPrompt = systemPrompt,
+                                                        enrichedPrompt = systemPrompt + "\n\n" + knowledgeContext,
                                                         retrievedFacts = emptyList(),
                                                         ragApplied = false,
                                                     )
@@ -628,7 +636,7 @@ fun ChatScreen(
                                     config = app.m1k3.ai.assistant.ai.GenerationConfig(
                                         systemPrompt = enrichedSystemPrompt,  // System instructions (with RAG if applicable)
                                         maxTokens = aiEngine.getOptimalMaxTokens(), // Device-adaptive
-                                        temperature = 0.9f, // INCREASED from 0.5f - Higher temperature reduces repetition loops
+                                        temperature = 0.7f, // BALANCED - Focused but creative (0.9f was too random)
                                         // Only pass static KB summary if RAG didn't retrieve anything
                                         knowledgeContext = if (ragResult.ragApplied) null else knowledgeContext
                                     )
