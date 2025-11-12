@@ -302,6 +302,11 @@ class LlamaCppEngine(private val context: Context) : BaseLlmEngine {
                 "system=${systemPrompt.length}chars, context=${contextParam.length}chars"
             }
 
+            // DEBUG: Log actual prompt contents (truncated for readability)
+            logger.v { ">>> USER PROMPT: ${prompt.take(200)}${if (prompt.length > 200) "..." else ""}" }
+            logger.v { ">>> SYSTEM PROMPT: ${systemPrompt.take(200)}${if (systemPrompt.length > 200) "..." else ""}" }
+            logger.v { ">>> CONTEXT: ${contextParam.take(500)}${if (contextParam.length > 500) "..." else ""}" }
+
             var tokenCount = 0
             // SmolLM2-specific stop tokens (ChatML format)
             // DO NOT add tokens from other models (Gemma's <end_of_turn>, LLaMA's </s>)
@@ -365,6 +370,11 @@ class LlamaCppEngine(private val context: Context) : BaseLlmEngine {
                         if (!hasResumed) {
                             hasResumed = true
                             logger.i { "Streaming complete ($tokenCount tokens)" }
+
+                            // DEBUG: Log final response (truncated)
+                            val finalResponse = responseBuffer.toString()
+                            logger.v { "<<< RESPONSE (${finalResponse.length} chars): ${finalResponse.take(500)}${if (finalResponse.length > 500) "..." else ""}" }
+
                             continuation.resume(Unit)
                         }
                     },
