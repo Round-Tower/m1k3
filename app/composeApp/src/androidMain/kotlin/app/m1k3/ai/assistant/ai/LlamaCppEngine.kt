@@ -448,19 +448,21 @@ class LlamaCppEngine(private val context: Context) : BaseLlmEngine {
             "You are M1K3 (Mike), a local AI assistant running on $deviceInfo."
         }
 
-        // Behavioral rules (HOW) - based on temperature
+        // Behavioral rules (HOW) - with anti-hallucination & anti-repetition directives
         val behavior = when {
             config.temperature != null && config.temperature < 0.4f -> {
-                " Be concise, factual, and direct. Avoid speculation."
+                " Be concise, factual, and direct. Avoid speculation. No repetition."
             }
             config.temperature != null && config.temperature >= 0.4f && config.temperature <= 0.8f -> {
-                " Be helpful and accurate. Use provided facts. Do not make things up."
+                " Be helpful and accurate. Use only provided facts. If unsure, say so. " +
+                "Avoid repetition. Each sentence must provide new information."
             }
             config.temperature != null && config.temperature > 0.8f -> {
-                " Be creative and imaginative."
+                " Be creative and imaginative. Vary your phrasing."
             }
             else -> {
-                " Be helpful and accurate."
+                " Be helpful and accurate. Use only provided facts. If unsure, say so. " +
+                "Avoid repetition. Each sentence must provide new information."
             }
         }
 

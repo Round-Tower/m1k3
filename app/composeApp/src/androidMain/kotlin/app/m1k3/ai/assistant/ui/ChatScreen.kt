@@ -202,23 +202,38 @@ private fun getAdaptiveGenerationConfig(
         }
     }
 
-    // Build query-specific system prompt hints (simulate temperature via behavior)
+    // Build query-specific system prompt hints with explicit reasoning strategies
+    // Based on Orca 2 research: Explicit strategy instruction improves SLM performance
     val systemPromptHint = when (queryType) {
         QueryType.EDUCATIONAL ->
-            "Be thorough and engaging. Provide comprehensive explanations with examples and analogies. " +
-            "Break down complex topics into understandable parts. Use the full response space to teach effectively."
+            "Use a teach-step-by-step strategy: " +
+            "1) State the core concept simply " +
+            "2) Break into logical steps " +
+            "3) Provide concrete examples " +
+            "4) Explain why each step matters. " +
+            "Avoid repetition. Each sentence must add new information."
 
         QueryType.TECHNICAL ->
-            "Be precise and deterministic. Verify all code syntax and logic carefully. " +
-            "Provide accurate technical details. Use clear technical language and avoid ambiguity."
+            "Use a recall-reason-generate strategy: " +
+            "1) Identify the technical problem " +
+            "2) Recall relevant principles " +
+            "3) Apply step-by-step reasoning " +
+            "4) Verify solution accuracy. " +
+            "Be precise. No speculation. No repetition of same points."
 
         QueryType.FACTUAL ->
-            "Be concise and accurate. Provide direct factual answers. " +
-            "Cite retrieved knowledge when available. Focus on correctness over elaboration."
+            "Use a direct-answer strategy: " +
+            "1) State the factual answer first " +
+            "2) Provide 1-2 supporting details " +
+            "3) Cite sources if provided. " +
+            "Be concise. One clear answer. No unnecessary elaboration."
 
         QueryType.CONVERSATIONAL ->
-            "Be natural and friendly. Use a conversational tone. " +
-            "Keep responses approachable and engaging. Match the user's casual style."
+            "Use a natural-dialogue strategy: " +
+            "1) Acknowledge the user's message " +
+            "2) Respond naturally and briefly " +
+            "3) Be friendly but not verbose. " +
+            "Vary sentence structure. Avoid repeating phrases."
     }
 
     return AdaptiveConfig(
@@ -492,7 +507,7 @@ fun ChatScreen(
                 // Typing indicator while AI is generating
                 if (isGenerating) {
                     item {
-                        app.m1k3.ai.assistant.design.components.TypingIndicatorBubble(
+                        TypingIndicatorBubble(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .testTag("typing_indicator")
