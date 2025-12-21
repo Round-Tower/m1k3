@@ -703,40 +703,17 @@ docker-compose up --build
 
 ## Development Notes
 
-### ⚠️ Knowledge Base Force Re-Import (TEMPORARY)
+### ✅ Knowledge Base Versioning System
 
-**Location:** `app/composeApp/src/androidMain/kotlin/app/m1k3/ai/assistant/MainActivity.kt:78`
+**Location:** `app/composeApp/src/androidMain/kotlin/app/m1k3/ai/assistant/MainActivity.kt:107-111`
 
-**Current Implementation:**
+**Implementation:**
 ```kotlin
-// TEMPORARY: Force re-import to load consolidated KB (1,391 docs) + M1K3 system KB (10 docs)
-val forceReimport = existingCount > 0 && existingCount < 1400
-```
-
-**Purpose:** Development aid to automatically update knowledge base when adding new content
-
-**⚠️ MUST REMOVE BEFORE PRODUCTION RELEASE**
-
-**Proposed Solution: Knowledge Base Versioning System**
-
-```kotlin
-// Recommended implementation for production:
-data class KnowledgeBaseVersion(
-    val comprehensive: String = "1.1.0",  // 1,391 documents
-    val system: String = "1.0.0",         // 10 documents
-    val combined: String = "1.1.0"        // Overall version
-)
-
-// In MainActivity.kt:
-val currentVersion = KnowledgeBaseVersion()
-val storedVersion = prefs.getString("kb_version", "0.0.0")
-
-if (storedVersion != currentVersion.combined) {
-    println("🔄 Knowledge base update detected: $storedVersion → ${currentVersion.combined}")
-    database.triviaFactQueries.deleteAllFacts()
-    // Import both KBs...
-    prefs.putString("kb_version", currentVersion.combined)
-}
+// Knowledge base versioning - increment when KB content changes
+val currentKbVersion = "1.1.0"  // 1,391 comprehensive + 10 system = 1,401 docs
+val prefs = getSharedPreferences("m1k3_kb", MODE_PRIVATE)
+val storedKbVersion = prefs.getString("kb_version", "0.0.0")
+val needsReimport = storedKbVersion != currentKbVersion
 ```
 
 **Version Format:** `MAJOR.MINOR.PATCH`
@@ -744,18 +721,10 @@ if (storedVersion != currentVersion.combined) {
 - **MINOR:** New categories, substantial content additions (50+ documents)
 - **PATCH:** Bug fixes, small content updates (<50 documents)
 
-**Benefits:**
-- ✅ Explicit version tracking
-- ✅ User-visible KB version in settings
-- ✅ Selective updates (only changed KBs)
-- ✅ Migration path for schema changes
-- ✅ Safe for production releases
-
-**Action Items:**
-1. Remove `forceReimport` logic before beta release
-2. Implement `KnowledgeBaseVersion` in comprehensive_knowledge_base.json and m1k3_system_knowledge.json
-3. Add version tracking to SharedPreferences
-4. Create KB migration system for schema changes
+**How to Update KB:**
+1. Increment `currentKbVersion` in MainActivity.kt
+2. Update knowledge base JSON files as needed
+3. App will automatically detect version mismatch and reimport
 
 ---
 

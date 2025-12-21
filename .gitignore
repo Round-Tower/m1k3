@@ -118,9 +118,10 @@ model_inventory.json
 # Demo and test files (keep for reference but don't commit)
 demo_*.py
 *_demo.py
-test_*.py
-*_test.py
 interactive_*.py
+
+# Test files now in tests/python/ - still ignored
+tests/python/test_*.py
 
 # Development and diagnostic files
 *_diagnostic.py

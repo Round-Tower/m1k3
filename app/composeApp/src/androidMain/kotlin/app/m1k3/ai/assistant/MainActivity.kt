@@ -101,18 +101,21 @@ class MainActivity : ComponentActivity() {
                 database = MaDatabase(driver!!)
                 val importer = KnowledgeBaseImporter(database!!)
 
-                // Check if knowledge already imported
+                // Check if knowledge already imported using version tracking
                 val existingCount = database!!.triviaFactQueries.getTotalFactCount().executeAsOne()
 
-                // TEMPORARY: Force re-import to load consolidated KB (1,391 docs) + M1K3 system KB (10 docs)
-                val forceReimport = existingCount > 0 && existingCount < 1400
+                // Knowledge base versioning - increment when KB content changes
+                val currentKbVersion = "1.1.0"  // 1,391 comprehensive + 10 system = 1,401 docs
+                val prefs = getSharedPreferences("m1k3_kb", MODE_PRIVATE)
+                val storedKbVersion = prefs.getString("kb_version", "0.0.0")
+                val needsReimport = storedKbVersion != currentKbVersion
 
-                if (forceReimport) {
-                    logger.i { "Force re-importing knowledge base (current: $existingCount docs, expected: 1,401)" }
+                if (needsReimport && existingCount > 0) {
+                    logger.i { "Knowledge base update: $storedKbVersion → $currentKbVersion" }
                     database!!.triviaFactQueries.deleteAllFacts()
                 }
 
-                if (existingCount == 0L || forceReimport) {
+                if (existingCount == 0L || needsReimport) {
                     logger.i { "Importing knowledge bases (1,401 documents from 2 sources)" }
 
                     // 1. Load comprehensive knowledge base (1,391 docs)
@@ -140,6 +143,11 @@ class MainActivity : ComponentActivity() {
                     logger.d { verification.toString() }
 
                     val totalImported = comprehensiveResult.imported + systemResult.imported
+
+                    // Save KB version after successful import
+                    prefs.edit().putString("kb_version", currentKbVersion).apply()
+                    logger.i { "Knowledge base version $currentKbVersion saved" }
+
                     knowledgeImportStatus = "✅ Knowledge ready: $totalImported documents (${comprehensiveResult.imported} comprehensive + ${systemResult.imported} system)"
                 } else {
                     logger.i { "Knowledge base already loaded ($existingCount documents)" }
