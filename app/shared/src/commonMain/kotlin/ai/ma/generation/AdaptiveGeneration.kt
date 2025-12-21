@@ -89,8 +89,9 @@ object AdaptiveGeneration {
 
             // Factual queries: definitions, facts, specific information
             lower.containsAny(
-                "what is", "who is", "when did", "where is", "define",
-                "which", "how many", "how much", "name the", "list"
+                "what is", "who is", "who invented", "who created", "who discovered",
+                "when did", "where is", "define", "which", "how many", "how much",
+                "name the", "list"
             ) -> QueryType.FACTUAL
 
             // Conversational queries: everything else (default)
