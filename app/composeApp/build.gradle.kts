@@ -54,11 +54,15 @@ kotlin {
             implementation(libs.camerax.lifecycle)
             implementation(libs.camerax.view)
 
-            // ML Kit
+            // ML Kit Vision
             implementation(libs.mlkit.vision)
             implementation(libs.mlkit.text.recognition)
             implementation(libs.mlkit.objectdetection)
             implementation(libs.mlkit.image.labeling)
+
+            // ML Kit GenAI (Gemini Nano on-device)
+            implementation(libs.mlkit.genai.prompt)
+            implementation(libs.mlkit.genai.summarization)
 
             // Google Fonts for custom typography
             implementation(libs.compose.ui.text.googlefonts)
@@ -99,8 +103,9 @@ kotlin {
             implementation(libs.kotlinx.datetime)
 
             // Llamatik - KMP llama.cpp binding for GGUF models
-            // Published on Maven Central: https://mvnrepository.com/artifact/com.llamatik/library/0.8.1
-            implementation("com.llamatik:library:0.8.1")
+            // Published on Maven Central: https://mvnrepository.com/artifact/com.llamatik/library
+            // Note: Sampling params (temp=1.0, top_k=64, top_p=0.95) configured in native layer
+            implementation("com.llamatik:library:0.9.0")
 
             // WebView for Three.js 3D avatar rendering
             implementation("io.github.kevinnzou:compose-webview-multiplatform:2.0.3")

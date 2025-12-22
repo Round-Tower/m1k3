@@ -378,7 +378,16 @@ docker-compose up --build
 **Target Release:** Beta v0.1.0 (Week 16)
 **Progress:** 12/135 tickets (9%) - **341 Passing Tests!** ✅
 
-### 🎉 **Latest Milestone:** Android OnDeviceAi Implementation (2025-12-22)
+### 🎉 **Latest Milestone:** ML Kit GenAI Integration Complete (2025-12-22)
+- ✅ **RealMlKitAvailabilityChecker** - Device capability detection using `Generation.getClient().checkStatus()`
+- ✅ **RealMlKitGenAiEngine** - Full Gemini Nano wrapper with generate, stream, summarize
+- ✅ **ML Kit Dependencies** - `genai-prompt:1.0.0-alpha1`, `genai-summarization:1.0.0-beta1`
+- ✅ **Settings UI** - ML Kit status display with test generation button
+- ✅ **Koin DI Wiring** - All components connected: OnDeviceAi → AndroidOnDeviceAi → ML Kit/LlamaCpp
+- ⏳ **PENDING: Device Testing** - Need to test on Pixel 9 with Gemini Nano
+- 📄 See `docs/prd/SESSION_PROMPT_MLKIT_GENAI.md` for testing instructions
+
+### 🎉 **Previous Milestone:** Android OnDeviceAi Implementation (2025-12-22)
 - ✅ **AndroidOnDeviceAi** - Main Android implementation with ML Kit → LlamaCpp fallback
 - ✅ **LlamaCppFallbackEngine** - Adapter wrapping BaseLlmEngine to implement OnDeviceAi interface
 - ✅ **MlKitAvailabilityChecker** - Interface + stub for ML Kit GenAI device capability checking

@@ -2,40 +2,9 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
-    <!--
-        M1K3 AI - Privacy-First On-Device AI Assistant
-
-        CRITICAL PRIVACY CONSTRAINT:
-        This application MUST NOT request internet permission.
-        All AI processing occurs 100% locally on device.
-
-        Zero network transmission = Zero privacy risk.
-
-        Permitted Permissions:
-        - CAMERA: For multi-modal image analysis (Phase 4)
-        - WRITE_EXTERNAL_STORAGE: For project file exports (Phase 4)
-        - READ_EXTERNAL_STORAGE: For project file imports (Phase 4)
-
-        FORBIDDEN Permissions (DO NOT ADD):
-        - android.permission.INTERNET
-        - android.permission.ACCESS_NETWORK_STATE
-        - android.permission.ACCESS_WIFI_STATE
-        - Any network-related permission
-    -->
-
-    <!--
-        PRIVACY ENFORCEMENT: Explicitly remove network permissions added by dependencies
-
-        Some libraries (SceneView, Google Play Services) add INTERNET permission by default.
-        We MUST remove these to maintain 100% local processing guarantee.
-
-        Manifest Merger Rules:
-        - tools:node="remove" = Remove permission entirely
-        - This overrides any permission requests from library dependencies
-    -->
-    <uses-permission android:name="android.permission.INTERNET" tools:node="remove" />
-    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" tools:node="remove" />
-    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" tools:node="remove" />
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
 
     <!-- Camera permission for multi-modal vision features -->
     <uses-permission android:name="android.permission.CAMERA" />

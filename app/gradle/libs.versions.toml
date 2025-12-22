@@ -27,6 +27,8 @@ camerax = "1.4.0"
 mlkit-vision = "17.0.2"
 mlkit-text = "19.0.0"
 mlkit-objects = "17.0.1"
+mlkit-genai-prompt = "1.0.0-alpha1"
+mlkit-genai-summarization = "1.0.0-beta1"
 kotlinx-serialization = "1.7.3"
 kotlinx-datetime = "0.6.1"
 sqlcipher = "4.5.4"
@@ -79,6 +81,8 @@ mlkit-vision = { module = "com.google.mlkit:vision-common", version.ref = "mlkit
 mlkit-text-recognition = { module = "com.google.android.gms:play-services-mlkit-text-recognition", version = "19.0.1" }
 mlkit-objectdetection = { module = "com.google.android.gms:play-services-mlkit-image-labeling", version = "16.0.8" }
 mlkit-image-labeling = { module = "com.google.mlkit:image-labeling", version.ref = "mlkit-vision" }
+mlkit-genai-prompt = { module = "com.google.mlkit:genai-prompt", version.ref = "mlkit-genai-prompt" }
+mlkit-genai-summarization = { module = "com.google.mlkit:genai-summarization", version.ref = "mlkit-genai-summarization" }
 
 kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "kotlinx-serialization" }
 kotlinx-datetime = { module = "org.jetbrains.kotlinx:kotlinx-datetime", version.ref = "kotlinx-datetime" }

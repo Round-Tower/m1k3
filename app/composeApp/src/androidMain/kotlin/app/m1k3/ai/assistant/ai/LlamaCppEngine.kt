@@ -17,36 +17,33 @@ private val logger = Logger.withTag("LlamaCppEngine")
  * **Migration History:**
  * - v1 (ONNX Runtime): SmolLM2-135M produced severe hallucinations (tokenizer issues)
  * - v2 (InferKt 0.0.2): Native crash (SIGABRT in llama_batch_free, memory corruption)
- * - v3 (Llamatik 0.8.1): Current implementation - stable, simple API
+ * - v3 (Llamatik 0.8.1): Stable with SmolLM2-135M but hallucinations
+ * - v4 (Llamatik 0.9.0): Current - Gemma 3 270M IQ3_XXS (much better quality)
  *
  * **Why Llamatik:**
- * - Recently updated (6 days ago) with active maintenance
- * - Stable 0.8.x version (mature API)
+ * - Stable KMP library for llama.cpp on Android/iOS
  * - No native crashes in testing
+ * - Handles Gemma 3 chat template internally (<start_of_turn>/<end_of_turn>)
  * - Simpler API = fewer failure modes
- * - Network inference capability (future feature)
  *
- * **Trade-offs vs InferKt:**
- * - ✅ Stability: No native crashes
- * - ✅ Simplicity: No complex configuration APIs
- * - ❌ Lost: Device-adaptive context window (512-2048 tokens)
- * - ❌ Lost: Thread count control (2-6 threads)
- * - ❌ Lost: Sampling parameters (temperature, topP, topK, minP)
- * - 🔧 Workaround: Prompt engineering for behavioral control
+ * **Sampling Parameters:**
+ * Llamatik does NOT expose temperature/top_k/top_p/min_p in its Kotlin API.
+ * Sampling is configured in the native llama.cpp layer with Gemma 3 defaults:
+ * - temperature: 1.0, top_k: 64, top_p: 0.95
+ * Behavioral control is achieved via prompt engineering (system prompt).
  *
- * **Model Selection: SmolLM2-135M Q4_K_M (101 MB)**
+ * **Model Selection: Gemma 3 270M IQ3_XXS (176 MB)**
  *
- * SmolLM2-135M chosen over 360M due to APK size constraints:
- * - APK budget: 200MB total (current: 149MB with embeddings/app/model)
- * - SmolLM2-360M options: Q4_K_M = 271MB (35.5% over), Q2_K = 219MB (severe quality loss)
- * - RAG enhancement: 1,401 documents compensate for smaller model
- * - Philosophy alignment: 間 (Ma) computational sufficiency - "135M is enough"
- * - Future path: 360M via dynamic delivery (Phase 3, optional download)
+ * - Gemma 3 270M: Google's efficient small model with excellent reasoning
+ * - IQ3_XXS quantization: 176 MB (under 200 MB cellular download limit)
+ * - 32K context window
+ * - Uses Gemma chat template: <start_of_turn>role\n...<end_of_turn>
+ * - Significantly improved quality vs SmolLM2-135M
  *
- * See app/OPUS.md "Final Decision" section for complete analysis (2025-11-11)
+ * Future: FunctionGemma 270M for tool-calling/agent capabilities
  *
- * **Context Window:** 8K tokens
- * **Library:** Llamatik 0.8.1
+ * **Context Window:** 32K tokens
+ * **Library:** Llamatik 0.9.0
  *
  * **Usage:**
  * ```kotlin
@@ -54,7 +51,6 @@ private val logger = Logger.withTag("LlamaCppEngine")
  * engine.initialize()
  *
  * val config = GenerationConfig(
- *     temperature = 0.7f,  // Note: Llamatik ignores this, we use prompt engineering
  *     systemPrompt = "You are a helpful assistant"
  * )
  *
@@ -94,21 +90,22 @@ class LlamaCppEngine(private val context: Context) : BaseLlmEngine {
         }
 
         try {
-            logger.i { "Starting initialization (Device RAM: ${deviceRamGB}GB, Library: Llamatik 0.8.1)" }
+            logger.i { "Starting initialization (Device RAM: ${deviceRamGB}GB, Library: Llamatik 0.9.0)" }
 
             // 1. Copy GGUF model from assets to internal storage
-            val modelFile = File(context.filesDir, "smollm2-135m-q4.gguf")
+            // Using Gemma 3 270M IQ3_XXS (176 MB) - much better quality than SmolLM2-135M
+            val modelFile = File(context.filesDir, "gemma-3-270m-it-UD-IQ3_XXS.gguf")
 
             if (!modelFile.exists()) {
-                logger.i { "Copying SmolLM2-135M GGUF to internal storage (Q4_K_M, 101 MB, 8K context)" }
-                context.assets.open("models/smollm2-135m-q4.gguf").use { input ->
+                logger.i { "Copying Gemma 3 270M GGUF to internal storage (IQ3_XXS, 176 MB)" }
+                context.assets.open("models/gemma-3-270m-it-UD-IQ3_XXS.gguf").use { input ->
                     modelFile.outputStream().use { output ->
                         input.copyTo(output, bufferSize = 8192)
                     }
                 }
                 logger.i { "Model copied (${modelFile.length() / 1024 / 1024} MB)" }
             } else {
-                logger.d { "SmolLM2-135M already in storage (${modelFile.length() / 1024 / 1024} MB)" }
+                logger.d { "Gemma 3 270M already in storage (${modelFile.length() / 1024 / 1024} MB)" }
             }
 
             // 2. Initialize Llamatik with model path
@@ -117,7 +114,7 @@ class LlamaCppEngine(private val context: Context) : BaseLlmEngine {
             LlamaBridge.initGenerateModel(modelFile.absolutePath)
 
             isInitialized = true
-            logger.i { "Initialization complete (Note: Temperature/sampling control via prompt engineering only)" }
+            logger.i { "Initialization complete - Gemma 3 270M ready (sampling: temp=1.0, top_k=64, top_p=0.95)" }
 
         } catch (e: Exception) {
             logger.e(e) { "Initialization failed" }
@@ -308,10 +305,9 @@ class LlamaCppEngine(private val context: Context) : BaseLlmEngine {
             logger.v { ">>> CONTEXT: ${contextParam.take(500)}${if (contextParam.length > 500) "..." else ""}" }
 
             var tokenCount = 0
-            // SmolLM2-specific stop tokens (ChatML format)
-            // DO NOT add tokens from other models (Gemma's <end_of_turn>, LLaMA's </s>)
-            // as they cause false positives when SmolLM2 generates text containing those strings
-            val stopTokens = listOf("<|im_end|>", "<|endoftext|>")
+            // Gemma 3 stop tokens - matches the chat template used by Llamatik
+            // Note: Llamatik handles the chat template internally with <start_of_turn>/<end_of_turn>
+            val stopTokens = listOf("<end_of_turn>", "<eos>", "</s>")
             val responseBuffer = StringBuilder()
             var shouldStop = false
             var hasResumed = false
@@ -400,8 +396,8 @@ class LlamaCppEngine(private val context: Context) : BaseLlmEngine {
      * Since Llamatik doesn't expose configuration APIs, we return reasonable defaults
      * based on device RAM. The actual behavior is controlled by Llamatik internally.
      *
-     * Note: Minimum increased to 256 tokens for usable responses (~192 words).
-     * SmolLM2-135M is efficient enough to handle this even on low-RAM devices.
+     * Note: Minimum 256 tokens for usable responses (~192 words).
+     * Gemma 3 270M handles this well even on low-RAM devices.
      *
      * @return Recommended max tokens (256-512 depending on device)
      */

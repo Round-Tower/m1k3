@@ -235,7 +235,7 @@ class LlamaCppFallbackEngine(
      * Get model information.
      */
     override suspend fun getModelInfo(): String {
-        return "LlamaCpp Fallback Engine (SmolLM2-135M Q4_K_M)"
+        return "Gemma 3 270M (IQ3_XXS, 176MB, 32K context)"
     }
 
     /**

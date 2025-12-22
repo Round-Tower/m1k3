@@ -1,5 +1,13 @@
 package app.m1k3.ai.assistant.ai.ondevice
 
+import android.content.Context
+import android.os.Build
+import co.touchlab.kermit.Logger
+import com.google.mlkit.genai.common.FeatureStatus
+import com.google.mlkit.genai.prompt.Generation
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+
 /**
  * Interface for checking ML Kit GenAI availability.
  *
@@ -13,12 +21,6 @@ package app.m1k3.ai.assistant.ai.ondevice
  * - **Tensor G3+** (Pixel 8 and newer)
  * - **Snapdragon 8 Gen 3+** (Samsung S24 and newer)
  * - **Dimensity 9300+** (select MediaTek devices)
- *
- * ## Future Implementation
- * When ML Kit GenAI leaves alpha, this will check:
- * - `GenerativeModel.checkFeatureStatus()` returns `AVAILABLE`
- * - Device meets hardware requirements
- * - Model is downloaded and ready
  */
 interface MlKitAvailabilityChecker {
     /**
@@ -32,20 +34,85 @@ interface MlKitAvailabilityChecker {
 /**
  * Default implementation that returns false (ML Kit GenAI not yet integrated).
  *
- * This is a placeholder until ML Kit GenAI SDK is stable and integrated.
- * When ML Kit GenAI is ready, this will be replaced with actual SDK checks.
+ * This is a placeholder for testing. In production, use RealMlKitAvailabilityChecker.
  */
 class DefaultMlKitAvailabilityChecker : MlKitAvailabilityChecker {
-    /**
-     * Currently always returns false since ML Kit GenAI is not yet integrated.
-     *
-     * TODO: Implement actual ML Kit GenAI availability check when SDK is stable
-     * ```kotlin
-     * val generativeModel = GenerativeModel.newBuilder()
-     *     .setModelName("gemini-nano")
-     *     .build()
-     * return generativeModel.checkFeatureStatus() == FeatureStatus.AVAILABLE
-     * ```
-     */
     override suspend fun isGenAiAvailable(): Boolean = false
+}
+
+/**
+ * Real implementation that checks ML Kit GenAI availability.
+ *
+ * Uses the ML Kit GenAI Prompt API to check if Gemini Nano is available on the device.
+ *
+ * ## Device Requirements
+ * - **Android 14+** (API 34+) with Google Play AI Core
+ * - **Tensor G3+** (Pixel 8 and newer)
+ * - **Snapdragon 8 Gen 3+** (Samsung S24 and newer)
+ * - **Dimensity 9300+** (select MediaTek devices)
+ * - **Bootloader must be locked** (unlocked bootloaders not supported)
+ *
+ * ## Usage
+ * ```kotlin
+ * val checker = RealMlKitAvailabilityChecker(context)
+ * if (checker.isGenAiAvailable()) {
+ *     // Use ML Kit GenAI
+ * } else {
+ *     // Fall back to LlamaCpp
+ * }
+ * ```
+ *
+ * @param context Android context for ML Kit initialization
+ */
+class RealMlKitAvailabilityChecker(
+    @Suppress("unused") private val context: Context
+) : MlKitAvailabilityChecker {
+
+    private val logger = Logger.withTag("RealMlKitAvailabilityChecker")
+
+    /**
+     * Check if ML Kit GenAI (Gemini Nano) is available on this device.
+     *
+     * This performs several checks:
+     * 1. Android version (requires API 34+ / Android 14+)
+     * 2. ML Kit GenAI feature status (AVAILABLE or DOWNLOADABLE)
+     *
+     * @return true if ML Kit GenAI can be used, false otherwise
+     */
+    override suspend fun isGenAiAvailable(): Boolean = withContext(Dispatchers.IO) {
+        try {
+            // Check Android version - ML Kit GenAI requires Android 14+ (API 34)
+            if (Build.VERSION.SDK_INT < 34) {
+                logger.d { "Device running Android ${Build.VERSION.SDK_INT}, ML Kit GenAI requires API 34+" }
+                return@withContext false
+            }
+
+            // Check ML Kit GenAI availability using the Prompt API
+            val generativeModel = Generation.getClient()
+            // checkStatus() is a suspend function that returns @FeatureStatus Int
+            val status = generativeModel.checkStatus()
+
+            when (status) {
+                FeatureStatus.AVAILABLE -> {
+                    logger.i { "ML Kit GenAI is available and ready" }
+                    true
+                }
+                FeatureStatus.DOWNLOADABLE -> {
+                    logger.i { "ML Kit GenAI is downloadable (model not yet cached)" }
+                    true // We can download it, so consider it available
+                }
+                FeatureStatus.DOWNLOADING -> {
+                    logger.i { "ML Kit GenAI model is currently downloading" }
+                    true // Download in progress, consider it available
+                }
+                else -> {
+                    logger.w { "ML Kit GenAI unavailable, status: $status" }
+                    false
+                }
+            }
+        } catch (e: Exception) {
+            logger.w(e) { "Error checking ML Kit GenAI availability: ${e.message}" }
+            false
+        }
+    }
 }
