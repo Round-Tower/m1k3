@@ -55,8 +55,10 @@ class SemanticChunkerTest {
 
     @Test
     fun `long text is split into multiple chunks`() {
-        // Create text > 300 tokens (~1200 chars = ~300 tokens)
-        val text = "word ".repeat(240) + "."  // ~1200 chars, ~300 tokens
+        // Create text > 300 tokens: SimpleTokenCounter uses ~4 chars per token
+        // 300 tokens = ~1200 chars, so we need > 1200 chars to split
+        // Using 600 words * 5 chars = 3000 chars ≈ 750 tokens
+        val text = "word ".repeat(600) + "."
         val now = System.currentTimeMillis()
 
         val chunks = chunker.chunkMessage(
@@ -67,8 +69,8 @@ class SemanticChunkerTest {
             role = "user"
         )
 
-        // Should produce multiple chunks
-        assertTrue(chunks.size > 1, "Long text should split into multiple chunks")
+        // Should produce multiple chunks (750 tokens / 300 max = at least 2-3 chunks)
+        assertTrue(chunks.size > 1, "Long text should split into multiple chunks, got ${chunks.size}")
 
         // Each chunk should respect limits
         chunks.forEach { chunk ->
@@ -79,10 +81,16 @@ class SemanticChunkerTest {
 
     @Test
     fun `semantic boundaries are respected`() {
+        // Text needs to be long enough to produce chunks (>100 tokens = ~400 chars)
+        // Create text with semantic boundaries (paragraph breaks, topic transitions)
         val text = """
-            This is the first topic. It has several sentences.
-            However, let's move to the second topic.
-            The second topic is different.
+            This is the first topic with detailed content about machine learning and artificial intelligence.
+            It covers neural networks, deep learning architectures, and various training methodologies.
+            The discussion includes supervised learning, unsupervised learning, and reinforcement learning.
+
+            However, let's transition to the second topic about natural language processing.
+            Natural language processing involves text analysis, sentiment detection, and language models.
+            Modern NLP uses transformer architectures and attention mechanisms extensively.
         """.trimIndent()
 
         val now = System.currentTimeMillis()
@@ -95,9 +103,8 @@ class SemanticChunkerTest {
             role = "user"
         )
 
-        // Should detect "However" as semantic boundary
-        // (This is probabilistic based on token count meeting minimum)
-        assertTrue(chunks.size >= 1)
+        // Text should be chunked - either as single chunk or split at semantic boundary
+        assertTrue(chunks.isNotEmpty(), "Should produce at least one chunk")
     }
 
     @Test

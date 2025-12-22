@@ -17,9 +17,29 @@ class IntentClassifier {
 
     /**
      * Knowledge categories matching comprehensive_knowledge_base.json
+     *
+     * **ORDER MATTERS:** More specific intents should come before general ones.
+     * The first matching intent wins, so:
+     * 1. CONVERSATIONAL greetings/thanks (most specific, before SYSTEM)
+     * 2. Specific domains (SCIENCE, WIFI_NETWORK, etc.)
+     * 3. General patterns (TECHNICAL_EXPLANATION last)
      */
     enum class Intent(val category: String, val keywords: List<String>) {
-        // Technical Expertise
+        // Conversational FIRST - greetings and social niceties
+        // Must be before SYSTEM to avoid "thank you" matching "you"
+        CONVERSATIONAL(
+            category = "Casual Conversation",
+            keywords = listOf("hello", "hi", "hey", "thanks", "thank you", "bye", "goodbye", "how are you", "good morning", "good night")
+        ),
+
+        // System Knowledge (M1K3-specific)
+        // More specific phrases to avoid false positives
+        SYSTEM(
+            category = "M1K3 System Knowledge",
+            keywords = listOf("m1k3", "ma ai", "what is m1k3", "yourself", "your capabilities", "what can you do", "tell me about yourself", "about you")
+        ),
+
+        // Technical Expertise - specific first
         MATH(
             category = "Mathematical Calculations",
             keywords = listOf("calculate", "math", "equation", "solve", "formula", "algebra", "geometry", "trigonometry", "calculus")
@@ -28,31 +48,27 @@ class IntentClassifier {
             category = "Code Debugging",
             keywords = listOf("code", "debug", "error", "bug", "programming", "function", "crash", "exception", "syntax", "compile")
         ),
-        TECHNICAL_EXPLANATION(
-            category = "Technical Explanations",
-            keywords = listOf("how does", "explain", "what is", "technical", "system", "works", "architecture", "protocol")
-        ),
 
-        // Educational & General Knowledge
+        // Educational & General Knowledge - BEFORE TECHNICAL_EXPLANATION
         HISTORY(
             category = "Historical Facts",
-            keywords = listOf("history", "historical", "ancient", "war", "civilization", "empire", "revolution", "century", "era")
+            keywords = listOf("history", "historical", "ancient", "war", "civilization", "empire", "revolution", "century", "era", "invented", "when was")
         ),
         SCIENCE(
             category = "Science Facts",
-            keywords = listOf("science", "physics", "chemistry", "biology", "atom", "molecule", "species", "experiment", "theory")
+            keywords = listOf("science", "physics", "chemistry", "biology", "atom", "molecule", "species", "experiment", "theory", "photosynthesis", "evolution", "quantum")
         ),
         GEOGRAPHY(
             category = "Geography Facts",
-            keywords = listOf("geography", "country", "city", "mountain", "river", "ocean", "continent", "capital", "location")
+            keywords = listOf("geography", "country", "city", "mountain", "river", "ocean", "continent", "capital", "location", "where is", "everest", "amazon")
         ),
         MOVIES_TV(
             category = "Movies & TV",
-            keywords = listOf("movie", "film", "tv", "series", "actor", "director", "cinema", "episode", "season", "cast")
+            keywords = listOf("movie", "movies", "film", "tv", "series", "actor", "director", "cinema", "episode", "season", "cast", "directed")
         ),
         MUSIC(
             category = "Music Culture",
-            keywords = listOf("music", "song", "artist", "album", "concert", "band", "singer", "instrument", "genre", "melody")
+            keywords = listOf("music", "song", "artist", "album", "concert", "band", "singer", "instrument", "genre", "melody", "jazz", "classical")
         ),
         SPORTS(
             category = "Sports & Recreation",
@@ -62,52 +78,52 @@ class IntentClassifier {
             category = "Food Culture",
             keywords = listOf("food", "recipe", "cook", "cuisine", "dish", "restaurant", "ingredient", "meal", "taste")
         ),
-        TECHNOLOGY(
-            category = "Technology Trends",
-            keywords = listOf("technology", "tech", "innovation", "digital", "software", "hardware", "internet", "app", "gadget")
-        ),
         LIFESTYLE(
             category = "Lifestyle & Wellness",
             keywords = listOf("lifestyle", "wellness", "health", "habit", "routine", "meditation", "mindfulness", "balance", "self-care")
         ),
 
-        // Advanced Expertise (Phase 3 additions)
+        // Advanced Expertise - more specific keywords
+        // DEVICE_TECH before WIFI_NETWORK since "phone" is more common
         DEVICE_TECH(
             category = "Device Technology",
-            keywords = listOf("phone", "device", "smartphone", "tablet", "laptop", "battery", "screen", "setup", "configure")
+            keywords = listOf("phone", "phones", "device", "smartphone", "tablet", "laptop", "battery", "screen", "overheating", "reset my")
         ),
         WIFI_NETWORK(
             category = "WiFi & Networking",
-            keywords = listOf("wifi", "network", "router", "internet", "connection", "ip", "dns", "modem", "bandwidth")
+            keywords = listOf("wifi", "network", "router", "internet connection", "ip address", "dns", "modem", "bandwidth", "wifi slow", "setup router")
         ),
         SECURITY(
             category = "Security & Privacy",
-            keywords = listOf("security", "privacy", "password", "hack", "encryption", "phishing", "malware", "vpn", "firewall")
+            keywords = listOf("security", "privacy", "password", "hack", "phishing", "malware", "vpn", "firewall", "secure")
         ),
         TROUBLESHOOTING(
             category = "Diagnostic & Troubleshooting",
-            keywords = listOf("problem", "issue", "fix", "troubleshoot", "solve", "diagnose", "repair", "broken", "not working")
+            keywords = listOf("problem", "issue", "fix", "troubleshoot", "diagnose", "repair", "broken", "not working")
         ),
         EDUCATION(
             category = "Educational & Tutoring",
-            keywords = listOf("learn", "study", "education", "teach", "tutor", "lesson", "homework", "exam", "practice")
+            keywords = listOf("learn", "study", "education", "teach", "tutor", "lesson", "homework", "exam", "practice", "learning", "effectively")
         ),
         TRIVIA(
             category = "Trivia & Fun Facts",
-            keywords = listOf("trivia", "fact", "interesting", "did you know", "quiz", "random", "curious", "amazing")
+            keywords = listOf("trivia", "interesting fact", "did you know", "quiz", "curious", "amazing fact", "fun fact")
         ),
 
-        // System Knowledge (M1K3-specific)
-        SYSTEM(
-            category = "M1K3 System Knowledge",
-            keywords = listOf("m1k3", "ma ai", "you", "yourself", "your capabilities", "what can you do", "tell me about you")
+        // TECHNOLOGY after device-specific, catches general tech queries
+        TECHNOLOGY(
+            category = "Technology Trends",
+            keywords = listOf("technology", "innovation", "digital", "software", "hardware", "gadget")
+        ),
+
+        // TECHNICAL_EXPLANATION last - catches general "how does X work" patterns
+        // Only after specific domains have been checked
+        TECHNICAL_EXPLANATION(
+            category = "Technical Explanations",
+            keywords = listOf("how does", "explain", "what is", "technical", "architecture", "protocol", "encryption")
         ),
 
         // Fallback
-        CONVERSATIONAL(
-            category = "Casual Conversation",
-            keywords = listOf("hello", "hi", "hey", "thanks", "thank you", "bye", "goodbye", "how are you")
-        ),
         GENERAL(
             category = "General Query",
             keywords = emptyList() // Catch-all
@@ -149,24 +165,13 @@ class IntentClassifier {
     fun classify(query: String): Intent {
         val normalizedQuery = query.lowercase().trim()
 
-        // Check each intent's keywords with word boundary matching
+        // Check each intent's keywords
         for (intent in Intent.values()) {
             if (intent == Intent.GENERAL) continue // Skip catch-all
 
-            // Check if any keyword matches (whole word or at word boundaries)
+            // Check if any keyword matches
             for (keyword in intent.keywords) {
-                val keywordLower = keyword.lowercase()
-                // Match whole word or with word boundaries (space/punctuation)
-                if (normalizedQuery == keywordLower ||
-                    normalizedQuery.contains(" $keywordLower ") ||
-                    normalizedQuery.startsWith("$keywordLower ") ||
-                    normalizedQuery.endsWith(" $keywordLower") ||
-                    // Also match with punctuation boundaries
-                    normalizedQuery.contains("$keywordLower?") ||
-                    normalizedQuery.contains("$keywordLower!") ||
-                    normalizedQuery.contains("$keywordLower.") ||
-                    normalizedQuery.contains("$keywordLower,")
-                ) {
+                if (matchesKeyword(normalizedQuery, keyword.lowercase())) {
                     return intent
                 }
             }
@@ -174,6 +179,27 @@ class IntentClassifier {
 
         // Fallback to general
         return Intent.GENERAL
+    }
+
+    /**
+     * Check if query matches keyword with appropriate boundary rules.
+     *
+     * - Multi-word phrases: Use contains (e.g., "how are you", "thank you")
+     * - Single words: Use word start boundary matching (allows suffixes like -ing, -ed, -s)
+     */
+    private fun matchesKeyword(query: String, keyword: String): Boolean {
+        // Multi-word phrases can use simple contains
+        if (keyword.contains(" ")) {
+            return query.contains(keyword)
+        }
+
+        // Single words: check that keyword appears at word start boundary
+        // This allows "crash" to match "crashing" but not "recrash"
+        // Split by non-alphanumeric characters and check each word starts with keyword
+        val words = query.split(Regex("[^a-z0-9]+"))
+        return words.any { word ->
+            word == keyword || word.startsWith(keyword)
+        }
     }
 
     /**
@@ -187,23 +213,13 @@ class IntentClassifier {
         var bestIntent = Intent.GENERAL
         var maxMatches = 0
 
-        // Count keyword matches for each intent (with word boundary matching)
+        // Count keyword matches for each intent (using same matching as classify())
         for (intent in Intent.values()) {
             if (intent == Intent.GENERAL) continue
 
             var matchCount = 0
             for (keyword in intent.keywords) {
-                val keywordLower = keyword.lowercase()
-                // Use same word boundary matching as classify()
-                if (normalizedQuery == keywordLower ||
-                    normalizedQuery.contains(" $keywordLower ") ||
-                    normalizedQuery.startsWith("$keywordLower ") ||
-                    normalizedQuery.endsWith(" $keywordLower") ||
-                    normalizedQuery.contains("$keywordLower?") ||
-                    normalizedQuery.contains("$keywordLower!") ||
-                    normalizedQuery.contains("$keywordLower.") ||
-                    normalizedQuery.contains("$keywordLower,")
-                ) {
+                if (matchesKeyword(normalizedQuery, keyword.lowercase())) {
                     matchCount++
                 }
             }

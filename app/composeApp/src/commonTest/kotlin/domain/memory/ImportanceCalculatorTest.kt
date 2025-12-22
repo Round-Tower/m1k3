@@ -117,13 +117,14 @@ class ImportanceCalculatorTest {
     @Test
     fun `very short content has lower importance`() {
         val veryShort = "OK"
-        val normal = "That sounds good, let's proceed with the plan."
+        // Normal content needs to be > 50 chars to not get short penalty
+        val normal = "That sounds good, let's proceed with the plan we discussed earlier today. I think it will work well for our project."
 
         val shortScore = calculator.calculateImportance(veryShort)
         val normalScore = calculator.calculateImportance(normal)
 
         assertTrue(shortScore < normalScore,
-            "Very short content should score lower")
+            "Very short content should score lower: short=$shortScore, normal=$normalScore")
     }
 
     @Test
