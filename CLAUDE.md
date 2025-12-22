@@ -373,12 +373,34 @@ docker-compose up --build
 
 ## Status: 🚀 ACTIVE DEVELOPMENT
 
-**Current Phase:** AI Engine Migration & Abstraction - **IN PROGRESS** 🔄
+**Current Phase:** Platform-Native On-Device AI Migration - **IN PROGRESS** 🔄
 **Timeline:** 16 weeks (6 phases)
 **Target Release:** Beta v0.1.0 (Week 16)
-**Progress:** 12/135 tickets (9%) - **227 Passing Tests!** ✅
+**Progress:** 12/135 tickets (9%) - **341 Passing Tests!** ✅
 
-### 🎉 **Latest Milestone:** Project Cleanup & Test Improvements (2025-12-22)
+### 🎉 **Latest Milestone:** Android OnDeviceAi Implementation (2025-12-22)
+- ✅ **AndroidOnDeviceAi** - Main Android implementation with ML Kit → LlamaCpp fallback
+- ✅ **LlamaCppFallbackEngine** - Adapter wrapping BaseLlmEngine to implement OnDeviceAi interface
+- ✅ **MlKitAvailabilityChecker** - Interface + stub for ML Kit GenAI device capability checking
+- ✅ **MlKitGenAiEngine** - Interface + stub for future ML Kit GenAI (Gemini Nano) integration
+- ✅ **Thread-safe architecture** - AtomicReference<EngineState> for lock-free reads, Mutex for initialization, CAS loop for release
+- ✅ **44 new tests** - 17 for LlamaCppFallbackEngine + 27 for AndroidOnDeviceAi (100% pass rate)
+- ✅ **Concurrent access tests** - Verifies mutex protection and single-release guarantee
+- ✅ **Agent-reviewed** - kmp-mobile-ai-reviewer validated thread safety patterns
+- 📄 See `app/composeApp/src/androidMain/kotlin/app/m1k3/ai/assistant/ai/ondevice/` for implementation
+
+### 🎉 **Previous Milestone:** OnDeviceAi Interface & TDD Foundation (2025-12-22)
+- ✅ **OnDeviceAi interface** - Platform-agnostic AI abstraction for ML Kit GenAI + Apple Foundation Models
+- ✅ **AiAvailability sealed class** - 4 states: Available, Downloading, Unavailable(reason), Fallback(engine)
+- ✅ **AiResult<T> sealed class** - Functional error handling with map, fold, onSuccess, onError
+- ✅ **AiErrorCode enum** - 8 typed error codes: UNAVAILABLE, BUSY, QUOTA_EXCEEDED, CONTENT_FILTERED, etc.
+- ✅ **SummaryStyle enum** - BRIEF, BULLETS, DETAILED for platform-optimized summarization
+- ✅ **MockOnDeviceAi** - Full mock implementation for testing with configurable state
+- ✅ **70 new tests** - TDD Red-Green-Refactor methodology, 100% pass rate
+- ✅ **Architecture documentation** - OnDeviceAi vs BaseLlmEngine relationship documented
+- 📄 See `app/composeApp/src/commonMain/kotlin/app/m1k3/ai/assistant/ai/ondevice/` for implementation
+
+### 🎉 **Previous Milestone:** Project Cleanup & Test Improvements (2025-12-22)
 - ✅ **Major codebase cleanup** - Removed ~11GB of build artifacts, organized project structure
 - ✅ **Dead code removal** - Deleted 4 obsolete AI engines (SmolLM2Engine, Gemma3Engine, etc.) - 1,878 lines removed
 - ✅ **IntentClassifier improvements** - Better enum ordering, stemming-like matching, alphanumeric keyword support
@@ -513,17 +535,31 @@ docker-compose up --build
 - **Target:** Android API 27+ (8.0+), iOS 15+ (future)
 
 ### AI/ML Stack
-- **Llamatik 0.8.1** - llama.cpp binding for GGUF models (stable, simple API)
-- **SmolLM2-135M-Instruct Q4_K_M** - Primary language model (101MB GGUF)
-- **ONNX Runtime 1.17.0** - Mobile inference engine (legacy/fallback)
+
+**Primary AI Engines (Platform-Native):**
+- **Android: ML Kit GenAI** - Gemini Nano via Google Play AI Core (target: 2025)
+- **iOS: Apple Foundation Models** - On-device Apple Intelligence (iOS 26+)
+- **Fallback: Llamatik 0.8.1** - llama.cpp binding for older devices
+
+**Unified Interface:**
+- **OnDeviceAi** - Platform-agnostic interface with availability awareness
+- **AndroidOnDeviceAi** - Android implementation (ML Kit → LlamaCpp fallback)
+- **LlamaCppFallbackEngine** - Adapter wrapping BaseLlmEngine for OnDeviceAi compatibility
+- **BaseLlmEngine** - Direct LLM inference for Llamatik/GGUF models
+- **AiResult<T>** - Functional error handling (Success/Error sealed class)
+- **AiAvailability** - Dynamic model state (Available, Downloading, Unavailable, Fallback)
+
+**Supporting Infrastructure:**
+- **SmolLM2-135M-Instruct Q4_K_M** - Fallback language model (101MB GGUF)
 - **MiniLM-L6** - Sentence embeddings (90MB, 384-dim)
 - **JVector** - HNSW vector similarity search
-- **ML Kit** - On-device vision (OCR, object detection, labels)
+- **ML Kit Vision** - On-device vision (OCR, object detection, labels)
 
 **Migration History:**
 - v1 (ONNX Runtime): SmolLM2-135M severe hallucinations (tokenizer issues)
 - v2 (InferKt 0.0.2): Native crash SIGABRT in llama_batch_free (memory corruption)
-- v3 (Llamatik 0.8.1): ✅ Current - Stable, no crashes, prompt engineering for control
+- v3 (Llamatik 0.8.1): ✅ Stable fallback - no crashes, prompt engineering for control
+- v4 (Platform-Native): 🔄 IN PROGRESS - ML Kit GenAI + Apple Foundation Models
 
 ### Data Layer
 - **SQLDelight 2.0.0** - Type-safe SQL for Kotlin Multiplatform
