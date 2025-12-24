@@ -49,6 +49,12 @@ class IntentClassifier {
             keywords = listOf("code", "debug", "error", "bug", "programming", "function", "crash", "exception", "syntax", "compile")
         ),
 
+        // AI & Machine Learning - BEFORE generic TECHNOLOGY/TECHNICAL
+        AI_ML(
+            category = "AI & Machine Learning",
+            keywords = listOf("ai", "artificial intelligence", "machine learning", "neural network", "deep learning", "llm", "chatgpt", "gpt", "model training", "natural language")
+        ),
+
         // Educational & General Knowledge - BEFORE TECHNICAL_EXPLANATION
         HISTORY(
             category = "Historical Facts",
@@ -140,7 +146,7 @@ class IntentClassifier {
              */
             val educationalIntents = listOf(
                 HISTORY, SCIENCE, GEOGRAPHY, MOVIES_TV, MUSIC,
-                SPORTS, FOOD, TECHNOLOGY, LIFESTYLE
+                SPORTS, FOOD, TECHNOLOGY, LIFESTYLE, AI_ML
             )
 
             /**
@@ -259,6 +265,7 @@ class IntentClassifier {
     fun getRetrievalLimit(intent: Intent): Int {
         return when (intent) {
             Intent.TROUBLESHOOTING, Intent.DEVICE_TECH -> 5 // More context for troubleshooting
+            Intent.AI_ML -> 4 // Rich AI/ML educational content
             Intent.MATH, Intent.CODE_DEBUG -> 3 // Focused technical help
             Intent.TRIVIA -> 1 // Single fun fact
             Intent.CONVERSATIONAL, Intent.GENERAL -> 0 // No retrieval

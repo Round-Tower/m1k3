@@ -378,7 +378,16 @@ docker-compose up --build
 **Target Release:** Beta v0.1.0 (Week 16)
 **Progress:** 12/135 tickets (9%) - **341 Passing Tests!** ✅
 
-### 🎉 **Latest Milestone:** ML Kit GenAI Integration Complete (2025-12-22)
+### 🎉 **Latest Milestone:** Gemma 3 270M Working with Llamatik 0.9.0 (2025-12-23)
+- ✅ **Gemma 3 270M IQ3_XXS** - 176MB model generating proper responses at 10+ tok/s
+- ✅ **Critical Llamatik Fix** - Discovered `generateWithContextStream()` uses `<start_of_turn>system` which Gemma 3 doesn't support
+- ✅ **Raw Template Approach** - Switched to `generateStream()` with proper Gemma 3 template: `<bos><start_of_turn>user\n...<end_of_turn>\n<start_of_turn>model\n`
+- ✅ **Simplified System Prompts** - Reduced complex numbered-list prompts that small models regurgitate
+- ✅ **Stop Token Fix** - Using only Gemma 3 tokens: `<end_of_turn>`, `<eos>` (removed ChatML/LLaMA tokens)
+- 📄 Root cause: Llamatik's native layer builds wrong template for Gemma 3 (system role not supported)
+- 📄 See `app/composeApp/src/androidMain/kotlin/app/m1k3/ai/assistant/ai/LlamaCppEngine.kt` for implementation
+
+### 🎉 **Previous Milestone:** ML Kit GenAI Integration Complete (2025-12-22)
 - ✅ **RealMlKitAvailabilityChecker** - Device capability detection using `Generation.getClient().checkStatus()`
 - ✅ **RealMlKitGenAiEngine** - Full Gemini Nano wrapper with generate, stream, summarize
 - ✅ **ML Kit Dependencies** - `genai-prompt:1.0.0-alpha1`, `genai-summarization:1.0.0-beta1`
@@ -548,7 +557,7 @@ docker-compose up --build
 **Primary AI Engines (Platform-Native):**
 - **Android: ML Kit GenAI** - Gemini Nano via Google Play AI Core (target: 2025)
 - **iOS: Apple Foundation Models** - On-device Apple Intelligence (iOS 26+)
-- **Fallback: Llamatik 0.8.1** - llama.cpp binding for older devices
+- **Fallback: Llamatik 0.9.0** - llama.cpp binding with Gemma 3 270M
 
 **Unified Interface:**
 - **OnDeviceAi** - Platform-agnostic interface with availability awareness
@@ -558,8 +567,8 @@ docker-compose up --build
 - **AiResult<T>** - Functional error handling (Success/Error sealed class)
 - **AiAvailability** - Dynamic model state (Available, Downloading, Unavailable, Fallback)
 
-**Supporting Infrastructure:**
-- **SmolLM2-135M-Instruct Q4_K_M** - Fallback language model (101MB GGUF)
+**Current Model:**
+- **Gemma 3 270M IQ3_XXS** - Primary language model (176MB GGUF, 10+ tok/s)
 - **MiniLM-L6** - Sentence embeddings (90MB, 384-dim)
 - **JVector** - HNSW vector similarity search
 - **ML Kit Vision** - On-device vision (OCR, object detection, labels)
@@ -567,8 +576,10 @@ docker-compose up --build
 **Migration History:**
 - v1 (ONNX Runtime): SmolLM2-135M severe hallucinations (tokenizer issues)
 - v2 (InferKt 0.0.2): Native crash SIGABRT in llama_batch_free (memory corruption)
-- v3 (Llamatik 0.8.1): ✅ Stable fallback - no crashes, prompt engineering for control
-- v4 (Platform-Native): 🔄 IN PROGRESS - ML Kit GenAI + Apple Foundation Models
+- v3 (Llamatik 0.8.1): Stable but SmolLM2 hallucinations
+- v4 (Llamatik 0.9.0 + Gemma 3): ⚠️ `generateWithContextStream()` broken for Gemma 3 (wrong template)
+- v5 (Llamatik 0.9.0 + raw template): ✅ Using `generateStream()` with proper Gemma 3 template
+- v6 (Platform-Native): 🔄 IN PROGRESS - ML Kit GenAI + Apple Foundation Models
 
 ### Data Layer
 - **SQLDelight 2.0.0** - Type-safe SQL for Kotlin Multiplatform

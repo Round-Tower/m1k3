@@ -12,7 +12,7 @@
 
 ### Key Features
 
-- **100% Local AI** - SmolLM2-135M runs entirely on-device via Llamatik
+- **100% Local AI** - Gemma 3 270M runs entirely on-device via Llamatik 0.9.0
 - **Zero Network Permission** - Manifest-level privacy enforcement
 - **RAG System** - 1,401+ documents across 24 knowledge categories
 - **Semantic Memory** - HNSW vector search with importance scoring
@@ -21,16 +21,17 @@
 
 ## Current Status
 
-**Phase:** AI Engine Migration Complete
-**Tests:** 227 passing
-**Model:** SmolLM2-135M-Instruct Q4_K_M (101MB GGUF)
+**Phase:** Gemma 3 Integration Complete
+**Tests:** 341+ passing
+**Model:** Gemma 3 270M IQ3_XXS (176MB GGUF, 10+ tok/s)
 
 ### Recent Milestones
 
-- **2025-12-22** - Project cleanup, 11GB recovered, 227 tests passing
+- **2025-12-23** - Gemma 3 270M working with Llamatik raw template fix
+- **2025-12-22** - ML Kit GenAI integration, OnDeviceAi abstraction
+- **2025-12-22** - Project cleanup, 11GB recovered, 341 tests passing
 - **2025-11-08** - RAG quality improvements, word boundary matching
 - **2025-11-07** - Pixel art avatar with activity-based sprites
-- **2025-11-06** - Llamatik 0.8.1 stable integration
 
 ## Quick Start
 
@@ -79,8 +80,8 @@ app/
 | Layer | Technology |
 |-------|------------|
 | **UI** | Compose Multiplatform 1.9.1 |
-| **AI Engine** | Llamatik 0.8.1 (llama.cpp binding) |
-| **Model** | SmolLM2-135M-Instruct Q4_K_M |
+| **AI Engine** | Llamatik 0.9.0 (llama.cpp binding) |
+| **Model** | Gemma 3 270M IQ3_XXS (176MB) |
 | **Database** | SQLDelight 2.0.0 |
 | **Embeddings** | MiniLM-L6 (384-dim, ONNX) |
 | **Vector Search** | JVector HNSW |
@@ -179,7 +180,7 @@ Increment version when updating KB content - the app auto-reimports on mismatch.
 ### Core Principles
 
 1. **Wabi-Sabi** - Beauty in imperfection
-2. **Computational Sufficiency** - SmolLM2-135M is enough
+2. **Computational Sufficiency** - Gemma 3 270M is enough
 3. **Privacy First** - No network permission
 4. **Mindful Design** - Negative space in UI
 5. **Local Everything** - AI, memory, analytics on-device
@@ -197,4 +198,4 @@ Part of the M1K3 project. See root LICENSE file.
 
 ---
 
-**Last Updated:** 2025-12-22
+**Last Updated:** 2025-12-23

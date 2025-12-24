@@ -18,29 +18,45 @@ private val logger = Logger.withTag("LlamaCppEngine")
  * - v1 (ONNX Runtime): SmolLM2-135M produced severe hallucinations (tokenizer issues)
  * - v2 (InferKt 0.0.2): Native crash (SIGABRT in llama_batch_free, memory corruption)
  * - v3 (Llamatik 0.8.1): Stable with SmolLM2-135M but hallucinations
- * - v4 (Llamatik 0.9.0): Current - Gemma 3 270M IQ3_XXS (much better quality)
+ * - v4 (Llamatik 0.9.0): Gemma 3 270M IQ3_XXS - requires special prompt handling
  *
  * **Why Llamatik:**
  * - Stable KMP library for llama.cpp on Android/iOS
  * - No native crashes in testing
- * - Handles Gemma 3 chat template internally (<start_of_turn>/<end_of_turn>)
  * - Simpler API = fewer failure modes
+ *
+ * **CRITICAL: Gemma 3 Prompt Structure**
+ * Gemma 3 does NOT support a separate system role - only `user` and `model` roles.
+ * See: https://ai.google.dev/gemma/docs/core/prompt-structure
+ *
+ * When calling `LlamaBridge.generateWithContextStream()`:
+ * - `system` parameter: MUST be empty string
+ * - `context` parameter: MUST be empty string
+ * - `user` parameter: Combines instructions + context + user query
+ *
+ * This is handled by `buildGemma3UserMessage()` which structures the prompt as:
+ * ```
+ * [Instructions]
+ * You are M1K3, a helpful assistant...
+ *
+ * [Context]
+ * RAG facts, knowledge base info...
+ *
+ * [User]
+ * The actual user question
+ * ```
  *
  * **Sampling Parameters:**
  * Llamatik does NOT expose temperature/top_k/top_p/min_p in its Kotlin API.
  * Sampling is configured in the native llama.cpp layer with Gemma 3 defaults:
  * - temperature: 1.0, top_k: 64, top_p: 0.95
- * Behavioral control is achieved via prompt engineering (system prompt).
+ * Behavioral control is achieved via prompt engineering.
  *
  * **Model Selection: Gemma 3 270M IQ3_XXS (176 MB)**
- *
  * - Gemma 3 270M: Google's efficient small model with excellent reasoning
  * - IQ3_XXS quantization: 176 MB (under 200 MB cellular download limit)
  * - 32K context window
- * - Uses Gemma chat template: <start_of_turn>role\n...<end_of_turn>
- * - Significantly improved quality vs SmolLM2-135M
- *
- * Future: FunctionGemma 270M for tool-calling/agent capabilities
+ * - Stop tokens: `<end_of_turn>`, `<eos>` (Gemma-specific only)
  *
  * **Context Window:** 32K tokens
  * **Library:** Llamatik 0.9.0
@@ -162,75 +178,82 @@ class LlamaCppEngine(private val context: Context) : BaseLlmEngine {
         }
 
         try {
-            // LLAMATIK API DESIGN: system (identity+behavior) / context (facts) / user (query)
+            // GEMMA 3 PROMPT STRUCTURE: User + Model roles ONLY (no system role!)
+            // Using generateStream() with RAW prompt because generateWithContextStream()
+            // uses <start_of_turn>system which Gemma 3 doesn't support
             val systemPrompt = buildCleanSystemPrompt(config)
             val contextParam = buildContextString(config)
 
+            // Build complete Gemma 3 chat prompt with proper template
+            val chatPrompt = buildGemma3ChatPrompt(systemPrompt, contextParam, prompt)
+
             logger.d {
-                "Llamatik non-streaming: user=${prompt.length}chars, maxTokens=$maxTokens, " +
-                "system=${systemPrompt.length}chars, context=${contextParam.length}chars"
+                "Llamatik non-streaming (Gemma 3 raw template): prompt=${chatPrompt.length}chars, maxTokens=$maxTokens"
             }
 
             // Use streaming internally and collect full response
-            val stopTokens = listOf("<end_of_turn>", "</s>", "<|endoftext|>", "<|im_end|>")
+            // Gemma 3 stop tokens ONLY - no ChatML/LLaMA tokens
+            val stopTokens = listOf("<end_of_turn>", "<eos>")
             var shouldStop = false
             var hasResumed = false
 
             suspendCancellableCoroutine<Unit> { continuation ->
-                LlamaBridge.generateWithContextStream(
-                    system = systemPrompt,
-                    context = contextParam,
-                    user = prompt,
-                    onDelta = { delta ->
-                        if (shouldStop) return@generateWithContextStream
+                LlamaBridge.generateStream(
+                    chatPrompt,
+                    object : com.llamatik.library.platform.GenStream {
+                        override fun onDelta(delta: String) {
+                            if (shouldStop) return
 
-                        // Check if we've hit maxTokens limit
-                        if (tokenCount >= maxTokens) {
-                            shouldStop = true
-                            logger.d { "maxTokens limit reached: $tokenCount >= $maxTokens" }
-                            if (!hasResumed) {
-                                hasResumed = true
-                                continuation.resume(Unit)
-                            }
-                            return@generateWithContextStream
-                        }
-
-                        responseBuilder.append(delta)
-                        tokenCount++
-
-                        // Check if we've hit a stop token
-                        val currentText = responseBuilder.toString()
-                        for (stopToken in stopTokens) {
-                            if (currentText.contains(stopToken)) {
+                            // Check if we've hit maxTokens limit
+                            if (tokenCount >= maxTokens) {
                                 shouldStop = true
-                                logger.d { "Stop token detected: \"$stopToken\" after $tokenCount tokens" }
-
-                                // Truncate response at stop token
-                                val textBeforeStop = currentText.substringBefore(stopToken)
-                                responseBuilder.clear()
-                                responseBuilder.append(textBeforeStop)
-
-                                // Resume only if not already resumed
+                                logger.d { "maxTokens limit reached: $tokenCount >= $maxTokens" }
                                 if (!hasResumed) {
                                     hasResumed = true
                                     continuation.resume(Unit)
                                 }
-                                return@generateWithContextStream
+                                return
+                            }
+
+                            responseBuilder.append(delta)
+                            tokenCount++
+
+                            // Check if we've hit a stop token
+                            val currentText = responseBuilder.toString()
+                            for (stopToken in stopTokens) {
+                                if (currentText.contains(stopToken)) {
+                                    shouldStop = true
+                                    logger.d { "Stop token detected: \"$stopToken\" after $tokenCount tokens" }
+
+                                    // Truncate response at stop token
+                                    val textBeforeStop = currentText.substringBefore(stopToken)
+                                    responseBuilder.clear()
+                                    responseBuilder.append(textBeforeStop)
+
+                                    // Resume only if not already resumed
+                                    if (!hasResumed) {
+                                        hasResumed = true
+                                        continuation.resume(Unit)
+                                    }
+                                    return
+                                }
                             }
                         }
-                    },
-                    onDone = {
-                        if (!hasResumed) {
-                            hasResumed = true
-                            logger.d { "Generation complete" }
-                            continuation.resume(Unit)
+
+                        override fun onComplete() {
+                            if (!hasResumed) {
+                                hasResumed = true
+                                logger.d { "Generation complete" }
+                                continuation.resume(Unit)
+                            }
                         }
-                    },
-                    onError = { error ->
-                        if (!hasResumed) {
-                            hasResumed = true
-                            logger.e { "Generation error: $error" }
-                            continuation.resume(Unit)
+
+                        override fun onError(error: String) {
+                            if (!hasResumed) {
+                                hasResumed = true
+                                logger.e { "Generation error: $error" }
+                                continuation.resume(Unit)
+                            }
                         }
                     }
                 )
@@ -280,10 +303,9 @@ class LlamaCppEngine(private val context: Context) : BaseLlmEngine {
         }
 
         try {
-            // LLAMATIK API DESIGN (three-parameter structure):
-            // - system: Identity + behavioral rules (WHO the AI is, HOW to behave)
-            // - context: Background information (RAG facts, knowledge, conversation history)
-            // - user: The actual query
+            // GEMMA 3 PROMPT STRUCTURE: User + Model roles ONLY (no system role!)
+            // Gemma 3 doesn't support a separate system parameter - it must be combined into user message
+            // See: https://ai.google.dev/gemma/docs/core/prompt-structure
 
             // Build CLEAN system prompt (identity + behavior only, no facts)
             val systemPrompt = buildCleanSystemPrompt(config)
@@ -291,94 +313,97 @@ class LlamaCppEngine(private val context: Context) : BaseLlmEngine {
             // Build context from all available sources (RAG facts, knowledge, conversation)
             val contextParam = buildContextString(config)
 
+            // Build complete Gemma 3 chat prompt with proper template
+            // Using generateStream() instead of generateWithContextStream() because
+            // the latter uses <start_of_turn>system which Gemma 3 doesn't support
+            val chatPrompt = buildGemma3ChatPrompt(systemPrompt, contextParam, prompt)
+
             // Get maxTokens limit (if 0, still stream but stop immediately)
             val maxTokens = config.maxTokens ?: getOptimalMaxTokens()
 
             logger.d {
-                "Llamatik generation: user=${prompt.length}chars, maxTokens=$maxTokens, " +
-                "system=${systemPrompt.length}chars, context=${contextParam.length}chars"
+                "Llamatik streaming (Gemma 3 raw template): prompt=${chatPrompt.length}chars, maxTokens=$maxTokens"
             }
 
             // DEBUG: Log actual prompt contents (truncated for readability)
-            logger.v { ">>> USER PROMPT: ${prompt.take(200)}${if (prompt.length > 200) "..." else ""}" }
-            logger.v { ">>> SYSTEM PROMPT: ${systemPrompt.take(200)}${if (systemPrompt.length > 200) "..." else ""}" }
-            logger.v { ">>> CONTEXT: ${contextParam.take(500)}${if (contextParam.length > 500) "..." else ""}" }
+            logger.v { ">>> GEMMA 3 PROMPT: ${chatPrompt.take(500)}${if (chatPrompt.length > 500) "..." else ""}" }
 
             var tokenCount = 0
-            // Gemma 3 stop tokens - matches the chat template used by Llamatik
-            // Note: Llamatik handles the chat template internally with <start_of_turn>/<end_of_turn>
-            val stopTokens = listOf("<end_of_turn>", "<eos>", "</s>")
+            // Gemma 3 stop tokens ONLY - no ChatML/LLaMA tokens
+            val stopTokens = listOf("<end_of_turn>", "<eos>")
             val responseBuffer = StringBuilder()
             var shouldStop = false
             var hasResumed = false
 
-            // Stream tokens with Llamatik
+            // Stream tokens with Llamatik using RAW prompt (no templating)
             suspendCancellableCoroutine<Unit> { continuation ->
-                LlamaBridge.generateWithContextStream(
-                    system = systemPrompt,
-                    context = contextParam,
-                    user = prompt,
-                    onDelta = { delta ->
-                        if (shouldStop) return@generateWithContextStream
+                LlamaBridge.generateStream(
+                    chatPrompt,
+                    object : com.llamatik.library.platform.GenStream {
+                        override fun onDelta(delta: String) {
+                            if (shouldStop) return
 
-                        // Check if we've hit maxTokens limit
-                        if (tokenCount >= maxTokens) {
-                            shouldStop = true
-                            logger.d { "maxTokens limit reached in streaming: $tokenCount >= $maxTokens" }
-                            if (!hasResumed) {
-                                hasResumed = true
-                                continuation.resume(Unit)
-                            }
-                            return@generateWithContextStream
-                        }
-
-                        // Accumulate tokens to detect stop sequences
-                        responseBuffer.append(delta)
-                        tokenCount++
-
-                        // Check if we've hit a stop token
-                        val currentText = responseBuffer.toString()
-                        for (stopToken in stopTokens) {
-                            if (currentText.contains(stopToken)) {
+                            // Check if we've hit maxTokens limit
+                            if (tokenCount >= maxTokens) {
                                 shouldStop = true
-                                logger.d { "Stop token detected: \"$stopToken\" after $tokenCount tokens" }
-
-                                // Send only text before stop token
-                                val textBeforeStop = currentText.substringBefore(stopToken)
-                                if (textBeforeStop.isNotEmpty()) {
-                                    // Clear buffer and send final clean text
-                                    responseBuffer.clear()
-                                    responseBuffer.append(textBeforeStop)
-                                }
-
-                                // Resume only if not already resumed
+                                logger.d { "maxTokens limit reached in streaming: $tokenCount >= $maxTokens" }
                                 if (!hasResumed) {
                                     hasResumed = true
                                     continuation.resume(Unit)
                                 }
-                                return@generateWithContextStream
+                                return
+                            }
+
+                            // Accumulate tokens to detect stop sequences
+                            responseBuffer.append(delta)
+                            tokenCount++
+
+                            // Check if we've hit a stop token
+                            val currentText = responseBuffer.toString()
+                            for (stopToken in stopTokens) {
+                                if (currentText.contains(stopToken)) {
+                                    shouldStop = true
+                                    logger.d { "Stop token detected: \"$stopToken\" after $tokenCount tokens" }
+
+                                    // Send only text before stop token
+                                    val textBeforeStop = currentText.substringBefore(stopToken)
+                                    if (textBeforeStop.isNotEmpty()) {
+                                        // Clear buffer and send final clean text
+                                        responseBuffer.clear()
+                                        responseBuffer.append(textBeforeStop)
+                                    }
+
+                                    // Resume only if not already resumed
+                                    if (!hasResumed) {
+                                        hasResumed = true
+                                        continuation.resume(Unit)
+                                    }
+                                    return
+                                }
+                            }
+
+                            onToken(delta)  // Stream to UI
+                        }
+
+                        override fun onComplete() {
+                            if (!hasResumed) {
+                                hasResumed = true
+                                logger.i { "Streaming complete ($tokenCount tokens)" }
+
+                                // DEBUG: Log final response (truncated)
+                                val finalResponse = responseBuffer.toString()
+                                logger.v { "<<< RESPONSE (${finalResponse.length} chars): ${finalResponse.take(500)}${if (finalResponse.length > 500) "..." else ""}" }
+
+                                continuation.resume(Unit)
                             }
                         }
 
-                        onToken(delta)  // Stream to UI
-                    },
-                    onDone = {
-                        if (!hasResumed) {
-                            hasResumed = true
-                            logger.i { "Streaming complete ($tokenCount tokens)" }
-
-                            // DEBUG: Log final response (truncated)
-                            val finalResponse = responseBuffer.toString()
-                            logger.v { "<<< RESPONSE (${finalResponse.length} chars): ${finalResponse.take(500)}${if (finalResponse.length > 500) "..." else ""}" }
-
-                            continuation.resume(Unit)
-                        }
-                    },
-                    onError = { error ->
-                        if (!hasResumed) {
-                            hasResumed = true
-                            logger.e { "Streaming error: $error" }
-                            continuation.resume(Unit)
+                        override fun onError(error: String) {
+                            if (!hasResumed) {
+                                hasResumed = true
+                                logger.e { "Streaming error: $error" }
+                                continuation.resume(Unit)
+                            }
                         }
                     }
                 )
@@ -500,6 +525,59 @@ class LlamaCppEngine(private val context: Context) : BaseLlmEngine {
 
         return contextParts.joinToString("\n\n")
     }
+
+    /**
+     * Build Gemma 3 compatible user message.
+     *
+     * **CRITICAL:** Gemma 3 does NOT support a separate system role!
+     * It only has two roles: user and model.
+     * See: https://ai.google.dev/gemma/docs/core/prompt-structure
+     *
+     * This function combines:
+     * - System instructions (identity + behavior)
+     * - Context (RAG facts, knowledge, conversation history)
+     * - User query
+     *
+     * Into a single user message that Gemma 3 can properly process.
+     *
+     * @param systemPrompt System instructions (identity + behavior)
+     * @param context Background info (RAG, knowledge, conversation)
+     * @param userQuery The actual user question/request
+     * @return Combined user message for Gemma 3
+     */
+    /**
+     * Build a complete Gemma 3 chat prompt with proper template.
+     *
+     * **CRITICAL:** We use LlamaBridge.generateStream() with a RAW prompt because
+     * LlamaBridge.generateWithContextStream() uses a template with `<start_of_turn>system`
+     * which Gemma 3 does NOT support (only `user` and `model` roles).
+     *
+     * Gemma 3 template format:
+     * ```
+     * <bos><start_of_turn>user
+     * {user_message}<end_of_turn>
+     * <start_of_turn>model
+     * ```
+     *
+     * @param systemPrompt System instructions (goes into user message)
+     * @param context Background info (RAG, knowledge)
+     * @param userQuery The actual user question
+     * @return Complete Gemma 3 chat prompt ready for generation
+     */
+    /**
+     * Build Gemma 3 prompt using the testable Gemma3PromptBuilder.
+     *
+     * Note: systemPrompt is intentionally ignored for 270M models.
+     * Complex instructions confuse small models - let RAG + question do the work.
+     */
+    private fun buildGemma3ChatPrompt(
+        systemPrompt: String,
+        context: String,
+        userQuery: String
+    ): String = Gemma3PromptBuilder.build(
+        userQuery = userQuery,
+        context = context.ifBlank { null }
+    )
 
     /**
      * Get device context string for dynamic system prompts.

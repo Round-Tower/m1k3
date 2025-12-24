@@ -152,7 +152,8 @@ private fun getAdaptiveGenerationConfig(
         app.m1k3.ai.assistant.rag.IntentClassifier.Intent.HISTORY,
         app.m1k3.ai.assistant.rag.IntentClassifier.Intent.SCIENCE,
         app.m1k3.ai.assistant.rag.IntentClassifier.Intent.GEOGRAPHY,
-        app.m1k3.ai.assistant.rag.IntentClassifier.Intent.EDUCATION -> QueryType.EDUCATIONAL
+        app.m1k3.ai.assistant.rag.IntentClassifier.Intent.EDUCATION,
+        app.m1k3.ai.assistant.rag.IntentClassifier.Intent.AI_ML -> QueryType.EDUCATIONAL
 
         // Technical: Code, debugging, technical concepts
         app.m1k3.ai.assistant.rag.IntentClassifier.Intent.MATH,
@@ -202,38 +203,13 @@ private fun getAdaptiveGenerationConfig(
         }
     }
 
-    // Build query-specific system prompt hints with explicit reasoning strategies
-    // Based on Orca 2 research: Explicit strategy instruction improves SLM performance
+    // Engaging prompt hints for Gemma 3 IQ3_XXS (personality-driven, not forced brevity)
+    // CRITICAL: Tell model to TEACH, not ask questions back (small models deflect)
     val systemPromptHint = when (queryType) {
-        QueryType.EDUCATIONAL ->
-            "Use a teach-step-by-step strategy: " +
-            "1) State the core concept simply " +
-            "2) Break into logical steps " +
-            "3) Provide concrete examples " +
-            "4) Explain why each step matters. " +
-            "Avoid repetition. Each sentence must add new information."
-
-        QueryType.TECHNICAL ->
-            "Use a recall-reason-generate strategy: " +
-            "1) Identify the technical problem " +
-            "2) Recall relevant principles " +
-            "3) Apply step-by-step reasoning " +
-            "4) Verify solution accuracy. " +
-            "Be precise. No speculation. No repetition of same points."
-
-        QueryType.FACTUAL ->
-            "Use a direct-answer strategy: " +
-            "1) State the factual answer first " +
-            "2) Provide 1-2 supporting details " +
-            "3) Cite sources if provided. " +
-            "Be concise. One clear answer. No unnecessary elaboration."
-
-        QueryType.CONVERSATIONAL ->
-            "Use a natural-dialogue strategy: " +
-            "1) Acknowledge the user's message " +
-            "2) Respond naturally and briefly " +
-            "3) Be friendly but not verbose. " +
-            "Vary sentence structure. Avoid repeating phrases."
+        QueryType.EDUCATIONAL -> "Teach! Provide information using the facts given. Do NOT ask questions back - explain directly."
+        QueryType.TECHNICAL -> "Be precise but make it accessible. Walk through the details step by step."
+        QueryType.FACTUAL -> "Share the facts directly with interesting context. Answer the question."
+        QueryType.CONVERSATIONAL -> "Be natural and friendly. Have a real conversation!"
     }
 
     return AdaptiveConfig(
@@ -699,12 +675,12 @@ fun ChatScreen(
                                 activityManager.getMemoryInfo(memInfo)
                                 val deviceRamGB = (memInfo.totalMem / (1024 * 1024 * 1024)).toInt()
 
-                                // CLEAN system prompt (identity + instructions ONLY, no facts)
+                                // CLEAN system prompt (identity + personality ONLY, no facts)
                                 // LlamaCppEngine will build this, but we provide base for RAG
                                 val baseSystemPrompt =
-                                    "You are M1K3 (Mike), a privacy-first AI assistant running 100% locally on ${deviceModel} (${deviceRamGB}GB RAM). " +
+                                    "You are M1K3 (Mike), a friendly AI companion running 100% locally on ${deviceModel} (${deviceRamGB}GB RAM). " +
                                         "All conversations are private and never leave the device. " +
-                                        "Be helpful, concise, and informative. Use retrieved facts when provided."
+                                        "Be curious, enthusiastic, and engaging. Share your knowledge naturally like talking to a friend."
 
                                 // RAG with error handling and quality validation
                                 val ragResult =
@@ -881,11 +857,20 @@ fun ChatScreen(
                                     // THREADING NOTE: This callback runs on Dispatchers.Default (LlamaCppEngine.kt:282)
                                     // ChatViewModel.updateMessage() is thread-safe (StateFlow.value setter is atomic)
 
+                                    // DEBUG: Log raw token from Llamatik
+                                    logger.d { "RAW TOKEN: '$token' (${token.length} chars)" }
+
                                     // Clean token using optimized regex helper (8x faster than sequential .replace())
                                     val cleanedToken = cleanStreamingToken(token, isStartOfGeneration = !hasContent)
 
+                                    // DEBUG: Log cleaned token
+                                    if (cleanedToken != token) {
+                                        logger.d { "CLEANED TOKEN: '$cleanedToken' (was: '$token')" }
+                                    }
+
                                     // Skip empty tokens (whitespace-only at start already filtered by helper)
                                     if (cleanedToken.isEmpty()) {
+                                        logger.d { "SKIPPED empty token" }
                                         return@generateStreaming
                                     }
 
@@ -941,6 +926,9 @@ fun ChatScreen(
 
                                 // Convert StringBuilder to final String for persistence
                                 val finalText = streamedText.toString().ifEmpty { "..." }
+
+                                // DEBUG: Log final generation result
+                                logger.i { "GENERATION COMPLETE: tokenCount=$tokenCount, finalText.length=${finalText.length}, text='${finalText.take(100)}...'" }
 
                                 chatViewModel.updateMessage(
                                     aiMessageIndex,

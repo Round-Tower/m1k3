@@ -67,18 +67,20 @@ class MiniLmEmbeddingEngine(
             // Initialize ONNX Runtime environment
             ortEnvironment = OrtEnvironment.getEnvironment()
 
-            // Check if model exists
+            // Check if model exists - FAIL LOUDLY if missing!
             val modelExists = try {
                 context.assets.open(MODEL_PATH).close()
                 true
             } catch (e: Exception) {
+                Log.e(TAG, "Model file not found: $MODEL_PATH")
                 false
             }
 
             if (!modelExists) {
-                Log.w(TAG, "Model not found at $MODEL_PATH, using placeholder")
-                isLoaded = true
-                return@withContext Result.success(Unit)
+                val error = RuntimeException("Embedding model not found at $MODEL_PATH - RAG will not work!")
+                Log.e(TAG, "❌ CRITICAL: $error")
+                isLoaded = false
+                return@withContext Result.failure(error)
             }
 
             // Load model from assets
@@ -121,8 +123,10 @@ class MiniLmEmbeddingEngine(
                 tokenizer = SimpleTokenizer(vocab)
                 Log.d(TAG, "Tokenizer loaded: ${vocab.size} tokens")
             } else {
-                Log.w(TAG, "Vocabulary not found, using simple tokenizer")
-                tokenizer = SimpleTokenizer(emptyList())
+                val error = RuntimeException("Vocabulary not found at $VOCAB_PATH - embeddings will fail!")
+                Log.e(TAG, "❌ CRITICAL: $error")
+                isLoaded = false
+                return@withContext Result.failure(error)
             }
 
             isLoaded = true
@@ -166,17 +170,11 @@ class MiniLmEmbeddingEngine(
             // For MiniLM, task prefixes are optional (symmetric search)
             // We'll just use the text as-is for simplicity
 
-            // If model not actually loaded (placeholder mode)
+            // FAIL if model not properly loaded - no silent placeholders!
             if (ortSession == null || tokenizer == null) {
-                val duration = System.currentTimeMillis() - startTime
-                Log.w(TAG, "⚠️ Using placeholder embedding (model not available)")
-                Log.w(TAG, "   Generated in ${duration}ms (hash-based)")
-                val embedding = FloatArray(embeddingDimensions) {
-                    // Generate deterministic embedding based on text hash
-                    val hash = text.hashCode() + it
-                    (kotlin.math.sin(hash.toDouble()) * 0.5 + 0.5).toFloat()
-                }
-                return@withContext Result.success(normalize(embedding))
+                val error = RuntimeException("ONNX session or tokenizer not initialized - call loadModel() first")
+                Log.e(TAG, "❌ Embedding failed: $error")
+                return@withContext Result.failure(error)
             }
 
             // Tokenize input text
