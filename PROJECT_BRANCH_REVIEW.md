@@ -1,8 +1,22 @@
 # M1K3 Project & Branch Review
 
-**Review Date**: 2025-11-04
+**Review Date**: 2025-12-25
 **Current Branch**: `claude/review-project-branches-011CUoUB8oqzP4fRQdorxeSS`
 **Reviewer**: Claude Code Assistant
+
+---
+
+## Review Context
+
+**Purpose**: This review was commissioned to provide strategic clarity on M1K3's dual-platform architecture and branch strategy. It aims to document the relationship between the Desktop/CLI (Python) and Mobile (Kotlin) platforms, identify shared assets, and recommend development priorities.
+
+**Intended Audience**: Project maintainers, contributors, and stakeholders evaluating M1K3's architecture.
+
+**Scope**: Analysis of `master` and `epic/ma-ai-mobile-phase0-foundation` branches as of the review date.
+
+> **Verification Note**: This review is based on git history analysis and file inspection of both branches. Branch existence and commit history were verified using `git log` and `git branch -a`. Feature claims are derived from source code examination and documentation review.
+
+---
 
 ## Executive Summary
 
@@ -352,6 +366,15 @@ dfaa7e3 feat(design): Implement premium UX with custom fonts, haptics, and enhan
 
 ---
 
-**Document Version**: 1.0
-**Last Updated**: 2025-11-04
+**Document Version**: 1.1
+**Last Updated**: 2025-12-25
 **Next Review**: When mobile reaches Phase 1 completion
+
+---
+
+## Maintenance Note
+
+This document is a **point-in-time snapshot**. Statistics (commit counts, test coverage, feature completion percentages) will become stale. Consider:
+- Quarterly reviews to update strategic sections
+- Renaming to `PROJECT_REVIEW_2025-12.md` for archival if creating new reviews
+- Linking from main README to help users understand platform choices
