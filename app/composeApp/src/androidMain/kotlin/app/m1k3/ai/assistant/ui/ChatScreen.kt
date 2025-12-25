@@ -47,65 +47,18 @@ import app.m1k3.ai.assistant.design.haptics.*
 import app.m1k3.ai.assistant.design.tokens.*
 import app.m1k3.ai.assistant.embedding.rememberEmbeddingsViewModel
 import app.m1k3.ai.assistant.rag.RAGManager
+import app.m1k3.ai.assistant.ui.components.ChatHeader
+import app.m1k3.ai.assistant.ui.components.ChatMessageList
 import app.m1k3.ai.assistant.ui.components.EcoIndicator
 import app.m1k3.ai.assistant.ui.components.EcoIndicatorVariant
 import app.m1k3.ai.assistant.utils.Logger
+import app.m1k3.ai.assistant.utils.cleanStreamingToken
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.datetime.Clock
 
 private val logger = Logger.withTag("ChatScreen")
-
-/**
- * Regex for cleaning chat template tokens from streaming inference output.
- *
- * Matches both complete and partial template tokens:
- * - ChatML tokens (legacy): <|im_start|>, <|im_end|>, <|endoftext|>
- * - Gemma/Llama tokens: <end_of_turn>, <start_of_turn>, <eos>, <bos>
- * - Partial tokens (handles tokenizer splitting): <end_of_turn, end_of_turn>, etc.
- * - Fragments: <|, |>, end_of_turn (without angle brackets)
- *
- * Performance: Single-pass regex replacement (8x faster than sequential String.replace())
- */
-private val CHAT_TEMPLATE_TOKEN_REGEX = Regex(
-    // Complete ChatML tokens
-    "<\\|im_start\\>|<\\|im_end\\>|<\\|endoftext\\>|" +
-    // Complete Gemma/Llama tokens
-    "<end_of_turn>|<start_of_turn>|<eos>|<bos>|" +
-    // Partial tokens (tokenizer may split them)
-    "<end_of_turn|end_of_turn>|end_of_turn|" +
-    "<start_of_turn|start_of_turn>|start_of_turn|" +
-    // Fragments
-    "<\\||\\|>"
-)
-
-/**
- * Clean streaming token by removing chat template markers.
- *
- * Optimizations:
- * - Single regex pass (vs 8 sequential String.replace() calls)
- * - Skip whitespace-only tokens at start of generation
- * - First token trimming to remove leading newlines
- *
- * Threading: Safe to call from any thread (pure function, no side effects)
- *
- * @param token Raw token from AI model
- * @param isStartOfGeneration True if this is the very start of text generation (not just first token)
- * @return Cleaned token, or empty string if whitespace-only at start
- */
-private fun cleanStreamingToken(token: String, isStartOfGeneration: Boolean): String {
-    // Remove all chat template tokens in single pass
-    val cleaned = CHAT_TEMPLATE_TOKEN_REGEX.replace(token, "")
-
-    // Skip whitespace-only tokens until real content arrives
-    // This prevents multiple leading newlines (e.g., "\n" + "\n" + "Hello")
-    if (isStartOfGeneration && cleaned.isBlank()) {
-        return ""
-    }
-
-    return cleaned
-}
 
 /**
  * Query type for adaptive generation parameters.
@@ -462,104 +415,22 @@ fun ChatScreen(
             }
 
             // Messages list
-            LazyColumn(
-                state = listState,
-                modifier =
-                    Modifier
-                        .testTag("message_list")
-                        .animateContentSize()
-                        .fillMaxSize()
-                        .padding(horizontal = 16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-                contentPadding = PaddingValues(
-                    top = if (chatState.sessionEcoStats.messageCount > 0) 180.dp else 120.dp, // Account for toolbar + eco indicator
-                    bottom = 100.dp, // Account for input bar overlay
-                ),
-            ) {
-                items(messages) { message ->
-                    ChatBubble(message)
-                }
-
-                // Typing indicator while AI is generating
-                if (isGenerating) {
-                    item {
-                        TypingIndicatorBubble(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .testTag("typing_indicator")
-                        )
-                    }
-                }
-            }
+            ChatMessageList(
+                messages = messages,
+                isGenerating = isGenerating,
+                listState = listState,
+                showEcoIndicator = chatState.sessionEcoStats.messageCount > 0
+            )
         }
 
         // Top overlay: Toolbar with blur and gradient
-        Box(
+        ChatHeader(
+            engineInitialized = engineInitialized,
+            avatarState = avatarState,
             modifier = Modifier
                 .fillMaxWidth()
                 .align(Alignment.TopCenter)
-        ) {
-            // Gradient overlay for liquid glass effect
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(120.dp)
-                    .background(
-                        brush = Brush.verticalGradient(
-                            colors = listOf(
-                                MaColors.BgPrimary.copy(alpha = 0.95f),
-                                MaColors.BgPrimary.copy(alpha = 0.85f),
-                                MaColors.BgPrimary.copy(alpha = 0.0f)
-                            )
-                        )
-                    )
-            )
-
-            // Toolbar content
-            Surface(
-                modifier = Modifier.fillMaxWidth(),
-                color = MaColors.BgPrimary.copy(alpha = 0.75f),
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = MaSpacing.md, vertical = 12.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Column {
-                        Text(
-                            "M1K3",
-                            style = MaTypography.titleLarge,
-                            fontWeight = FontWeight.Bold,
-                            color = MaColors.TextPrimary,
-                        )
-                        Text(
-                            if (engineInitialized) "🟢 Ready" else "🔄 Loading...",
-                            style =
-                                TextStyle(
-                                    fontFamily = MaFontFamilyCaption,
-                                    fontWeight = FontWeight.Normal,
-                                    fontSize = 12.sp,
-                                    lineHeight = 16.sp,
-                                    letterSpacing = 0.25.sp,
-                                ),
-                            color = if (engineInitialized) MaColors.Orange else MaColors.TextSecondary,
-                        )
-                    }
-
-                    // 3D Avatar with activity/emotion feedback
-                    AvatarView(
-                        state = avatarState,
-                        use3D = true,
-                        showInfo = true,
-                        modifier = Modifier
-                            .testTag("avatar")
-                            .size(140.dp)
-                    )
-                }
-            }
-        }
+        )
 
         // Bottom overlay: Input bar with blur and gradient
         Box(
