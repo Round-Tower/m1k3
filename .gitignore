@@ -61,8 +61,8 @@ env/
 # macOS
 .DS_Store
 
-# Local Claude settings (commented out - we want to track this)
-# .claude/settings.local.json
+# Local Claude settings (user-specific, don't commit)
+.claude/settings.local.json
 
 # Models - Large files should be downloaded locally 
 models/
@@ -118,9 +118,10 @@ model_inventory.json
 # Demo and test files (keep for reference but don't commit)
 demo_*.py
 *_demo.py
-test_*.py
-*_test.py
 interactive_*.py
+
+# Test files now in tests/python/ - still ignored
+tests/python/test_*.py
 
 # Development and diagnostic files
 *_diagnostic.py
@@ -135,3 +136,15 @@ pwa-deployment/frontend/models/embeddings-tiny/model.onnx
 
 # External Libraries
 VibeVoice/
+
+# Android/Kotlin build artifacts
+*.jar
+*.apk
+*.aab
+bundletool-all-*.jar
+
+# Test screenshots and artifacts
+*.png
+!app/src/main/res/**/*.png
+!docs/**/*.png
+!app/3d/**/*.png

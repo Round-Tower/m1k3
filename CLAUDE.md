@@ -363,3 +363,472 @@ docker-compose up --build
 - **0 bytes transmitted** - All AI inference on your device
 - **Energy efficient** - ~3 Wh saved per response vs cloud AI
 - **Water conservation** - ~120ml saved per response vs data centers
+
+---
+
+# 間 AI Mobile App - Privacy-First On-Device AI Companion
+
+## Overview
+**間 AI** (pronounced "ma" - meaning "negative space") is the mobile companion to M1K3, bringing privacy-first on-device AI to Android and iOS through Kotlin Multiplatform. Embracing wabi-sabi philosophy and computational sufficiency, 間 AI delivers a powerful AI assistant that never sends data to the cloud.
+
+## Status: 🚀 ACTIVE DEVELOPMENT
+
+**Current Phase:** Platform-Native On-Device AI Migration - **IN PROGRESS** 🔄
+**Timeline:** 16 weeks (6 phases)
+**Target Release:** Beta v0.1.0 (Week 16)
+**Progress:** 12/135 tickets (9%) - **341 Passing Tests!** ✅
+
+### 🎉 **Latest Milestone:** Gemma 3 270M Working with Llamatik 0.9.0 (2025-12-23)
+- ✅ **Gemma 3 270M IQ3_XXS** - 176MB model generating proper responses at 10+ tok/s
+- ✅ **Critical Llamatik Fix** - Discovered `generateWithContextStream()` uses `<start_of_turn>system` which Gemma 3 doesn't support
+- ✅ **Raw Template Approach** - Switched to `generateStream()` with proper Gemma 3 template: `<bos><start_of_turn>user\n...<end_of_turn>\n<start_of_turn>model\n`
+- ✅ **Simplified System Prompts** - Reduced complex numbered-list prompts that small models regurgitate
+- ✅ **Stop Token Fix** - Using only Gemma 3 tokens: `<end_of_turn>`, `<eos>` (removed ChatML/LLaMA tokens)
+- 📄 Root cause: Llamatik's native layer builds wrong template for Gemma 3 (system role not supported)
+- 📄 See `app/composeApp/src/androidMain/kotlin/app/m1k3/ai/assistant/ai/LlamaCppEngine.kt` for implementation
+
+### 🎉 **Previous Milestone:** ML Kit GenAI Integration Complete (2025-12-22)
+- ✅ **RealMlKitAvailabilityChecker** - Device capability detection using `Generation.getClient().checkStatus()`
+- ✅ **RealMlKitGenAiEngine** - Full Gemini Nano wrapper with generate, stream, summarize
+- ✅ **ML Kit Dependencies** - `genai-prompt:1.0.0-alpha1`, `genai-summarization:1.0.0-beta1`
+- ✅ **Settings UI** - ML Kit status display with test generation button
+- ✅ **Koin DI Wiring** - All components connected: OnDeviceAi → AndroidOnDeviceAi → ML Kit/LlamaCpp
+- ⏳ **PENDING: Device Testing** - Need to test on Pixel 9 with Gemini Nano
+- 📄 See `docs/prd/SESSION_PROMPT_MLKIT_GENAI.md` for testing instructions
+
+### 🎉 **Previous Milestone:** Android OnDeviceAi Implementation (2025-12-22)
+- ✅ **AndroidOnDeviceAi** - Main Android implementation with ML Kit → LlamaCpp fallback
+- ✅ **LlamaCppFallbackEngine** - Adapter wrapping BaseLlmEngine to implement OnDeviceAi interface
+- ✅ **MlKitAvailabilityChecker** - Interface + stub for ML Kit GenAI device capability checking
+- ✅ **MlKitGenAiEngine** - Interface + stub for future ML Kit GenAI (Gemini Nano) integration
+- ✅ **Thread-safe architecture** - AtomicReference<EngineState> for lock-free reads, Mutex for initialization, CAS loop for release
+- ✅ **44 new tests** - 17 for LlamaCppFallbackEngine + 27 for AndroidOnDeviceAi (100% pass rate)
+- ✅ **Concurrent access tests** - Verifies mutex protection and single-release guarantee
+- ✅ **Agent-reviewed** - kmp-mobile-ai-reviewer validated thread safety patterns
+- 📄 See `app/composeApp/src/androidMain/kotlin/app/m1k3/ai/assistant/ai/ondevice/` for implementation
+
+### 🎉 **Previous Milestone:** OnDeviceAi Interface & TDD Foundation (2025-12-22)
+- ✅ **OnDeviceAi interface** - Platform-agnostic AI abstraction for ML Kit GenAI + Apple Foundation Models
+- ✅ **AiAvailability sealed class** - 4 states: Available, Downloading, Unavailable(reason), Fallback(engine)
+- ✅ **AiResult<T> sealed class** - Functional error handling with map, fold, onSuccess, onError
+- ✅ **AiErrorCode enum** - 8 typed error codes: UNAVAILABLE, BUSY, QUOTA_EXCEEDED, CONTENT_FILTERED, etc.
+- ✅ **SummaryStyle enum** - BRIEF, BULLETS, DETAILED for platform-optimized summarization
+- ✅ **MockOnDeviceAi** - Full mock implementation for testing with configurable state
+- ✅ **70 new tests** - TDD Red-Green-Refactor methodology, 100% pass rate
+- ✅ **Architecture documentation** - OnDeviceAi vs BaseLlmEngine relationship documented
+- 📄 See `app/composeApp/src/commonMain/kotlin/app/m1k3/ai/assistant/ai/ondevice/` for implementation
+
+### 🎉 **Previous Milestone:** Project Cleanup & Test Improvements (2025-12-22)
+- ✅ **Major codebase cleanup** - Removed ~11GB of build artifacts, organized project structure
+- ✅ **Dead code removal** - Deleted 4 obsolete AI engines (SmolLM2Engine, Gemma3Engine, etc.) - 1,878 lines removed
+- ✅ **IntentClassifier improvements** - Better enum ordering, stemming-like matching, alphanumeric keyword support
+- ✅ **Test suite improvements** - Fixed 18 failing tests (73 → 55 failures, 227 passing)
+- ✅ **Proper KB versioning** - Replaced temporary forceReimport hack with SharedPreferences-based versioning
+- ✅ **Directory organization** - Moved demos, tests, scripts to proper directories
+- 📄 See commits 5ffb641 (test fixes), 4531eb8 (cleanup) for details
+
+### 🎉 **Previous Milestone:** RAG System Quality Improvements (2025-11-08)
+- ✅ **Intent classification enhancement** - Word boundary matching prevents false positives (e.g., "study techniques" no longer matches "tech" → TECHNOLOGY)
+- ✅ **RAG source transparency** - Shows actual fact content instead of category names in chat bubbles
+- ✅ **Response completeness** - Increased minimum maxTokens from 64 to 256 tokens (~192 words) for usable responses on all devices
+- ✅ **Device-adaptive token limits** - 12GB+: 512 tokens, 8-12GB: 384 tokens, 6-8GB: 320 tokens, 4-6GB: 256 tokens, <4GB: 256 tokens
+- ✅ **Files modified** - IntentClassifier.kt, RAGManager.kt, LlamaCppEngine.kt
+- 📄 See commits 03db680 + 7a38b1d for complete implementation
+
+### 🎉 **Previous Milestone:** Avatar Pixel Art Rendering System (2025-11-07)
+- ✅ **Rounded pixels** - 1px padding + 15% corner radius at all resolutions (16x16 to 64x64)
+- ✅ **Activity-based sprites** - 6 sprite variants (LISTENING, THINKING, GENERATING, SPEAKING, ERROR, IDLE)
+- ✅ **Smart sprite selection** - Activity state prioritized over emotion for contextual feedback
+- ✅ **Idle timeout system** - 5-second auto-reset to neutral state with coroutine management
+- ✅ **UI toggle control** - Demo screen settings for rounded pixels on/off
+- ✅ **Architecture** - 5 files modified, 2,126 insertions (PixelArtRenderer, AvatarViewModel, etc.)
+- 📄 See commit bd82383 for complete implementation
+
+### 🎉 **Previous Milestone:** Llamatik 0.8.1 Integration & BaseLlmEngine Abstraction (2025-11-06)
+- ✅ **Llamatik 0.8.1** - Stable llama.cpp binding successfully integrated (no crashes!)
+- ✅ **BaseLlmEngine interface** - Abstract AI engine interface for easy swapping (177 lines)
+- ✅ **LlamaCppEngine** - Rewritten to use Llamatik API with prompt engineering (353 lines)
+- ✅ **Testing infrastructure** - 36 test cases + MockLlmEngine for deterministic testing
+- ✅ **GenerationConfig** - Unified configuration with graceful degradation
+- ✅ **Migration success** - ONNX hallucinations → InferKt crash (SIGABRT) → Llamatik stable
+- ⚠️ **Trade-offs** - Lost fine-grained control (temperature, topP, topK) but gained stability
+- 🔧 **Workaround** - Prompt engineering for behavioral control ("Be concise..." vs "Be creative...")
+- 📄 See commit 8f4e204 for complete migration details
+
+### 🎉 **Previous Milestone:** Phase 2 Complete - Chat History & Eco Metrics (2025-11-04)
+- ✅ **ConversationRepository** - Chat history management (19/19 tests passing)
+- ✅ **EcoMetricsRepository** - Environmental impact tracking (16/16 tests passing)
+- ✅ **EcoCalculator** - Carbon/water/energy calculations (27/27 tests passing)
+- ✅ **62 total tests passing** - 100% success rate for Phase 2
+- ✅ **Database schemas** - ConversationMetadata + EcoMetrics tables with foreign keys, indexes
+- ✅ **Test infrastructure** - expect/actual TestDatabaseFactory for cross-platform tests
+- ✅ **Baselines:** 120ml water, 3Wh energy, 2g CO2 saved per 100 tokens vs cloud AI
+- ✅ **Privacy enforcement** - Multi-layer validation + database CHECK constraint (0 bytes transmitted)
+- ✅ **Achievement system** - 5 tiers: Water Bottle (500ml) → Olympic Pool (2500L)
+- ✅ **TDD methodology** - Red-Green-Refactor for all implementations
+- 📄 See commits 6511a95 (eco metrics) + c798192 (conversation history) for details
+
+### 🎉 **Previous Milestone:** Knowledge Base Consolidation (2025-11-04)
+- ✅ **1,401 documents** loaded (1,391 comprehensive + 10 M1K3 system knowledge)
+- ✅ **24 categories** across 4 domains (Technical, Educational, Expertise, System)
+- ✅ **M1K3 self-awareness** - Can explain its own capabilities
+- ✅ **Multi-source KB loading** - Clean architecture for multiple knowledge bases
+- ✅ **Enhanced system prompt** - Device context + category breakdown
+- 📄 See [SESSION_NOTES_2025_11_04.md](app/SESSION_NOTES_2025_11_04.md) for details
+
+### 🎉 **Previous Milestone:** Streaming Inference (2025-11-02)
+- ✅ **Real-time token-by-token AI generation** working end-to-end
+- ✅ **Fixed SIGSEGV crash** in ONNX Runtime KV cache management
+- ✅ **Fixed threading violations** in Compose UI updates
+- ✅ **Performance:** 15 tok/s on emulator (20-40 tok/s expected on device)
+- ✅ **256 tokens generated** without crashes
+- 📄 See [MILESTONE_STREAMING_INFERENCE.md](app/docs/MILESTONE_STREAMING_INFERENCE.md) for details
+
+### Documentation
+- **[PROJECT_MANAGEMENT.md](app/PROJECT_MANAGEMENT.md)** - Master overview, architecture, testing strategy
+- **[Phase 0: Foundation](app/docs/phases/PHASE0.md)** - 15 tickets (Weeks 1-2) - Database, privacy, knowledge import
+- **[Phase 1: Core AI](app/docs/phases/PHASE1.md)** - 20 tickets (Weeks 3-5) - SmolLM2-360M integration, chat UI
+- **[Phase 2: Memory](app/docs/phases/PHASE2.md)** - 25 tickets (Weeks 6-8) - Vector embeddings, HNSW index
+- **[Phase 3: Knowledge](app/docs/phases/PHASE3.md)** - 15 tickets (Weeks 9-10) - RAG, trivia, device intelligence
+- **[Phase 4: Multi-Modal](app/docs/phases/PHASE4.md)** - 20 tickets (Weeks 11-12) - CameraX, ML Kit, projects
+- **[Phase 5: Polish](app/docs/phases/PHASE5.md)** - 30 tickets (Weeks 13-15) - Emotional intelligence, analytics, accessibility
+- **[Phase 6: Release](app/docs/phases/PHASE6.md)** - 10 tickets (Week 16) - Integration testing, APK optimization
+
+---
+
+## Core Features (Planned)
+
+### Privacy-First Architecture
+- **Zero network permission** - Manifest-level privacy enforcement
+- **100% on-device inference** - SmolLM2-360M (180MB, 4-bit quantized)
+- **Local embeddings** - MiniLM-L6 (90MB, 8-bit quantized)
+- **Encrypted storage** - SQLCipher for sensitive data
+- **Privacy dashboard** - Transparency metrics showing 0 bytes transmitted
+
+### AI & Memory System
+- **SmolLM2-360M** - HuggingFace's efficient 360M parameter model
+- **24K context window** - Long conversation support
+- **Semantic memory** - HNSW vector index (384-dimensional embeddings)
+- **Importance scoring** - Intelligent memory prioritization
+- **RAG integration** - 1,401 documents across 24 categories (1,391 comprehensive + 10 M1K3 system)
+
+### Multi-Modal Intelligence
+- **CameraX integration** - Image capture and analysis
+- **ML Kit vision** - OCR, object detection, label detection
+- **Image understanding** - Contextual descriptions and Q&A
+- **Vision + text** - Unified multi-modal conversations
+
+### Project Management
+- **Scoped conversations** - Organize chats by project
+- **Project-scoped memory** - Context isolation per project
+- **Export/import** - JSON backup for portability
+- **Statistics & insights** - Per-project analytics
+
+### Emotional Intelligence
+- **Sentiment analysis** - VAD (Valence-Arousal-Dominance) model
+- **Tone adaptation** - Empathetic response generation
+- **7+ emotions** - Happy, Sad, Angry, Calm, Excited, Anxious, Neutral
+- **Context-aware** - Adapts to user emotional state
+
+### Knowledge Systems
+- **Trivia engine** - 1,341+ facts across 20 categories
+- **Device intelligence** - OEM profiles, SoC detection, capability analysis
+- **Contextual enrichment** - Facts injected naturally into conversations
+- **Semantic search** - <100ms retrieval @ 1,341 documents
+
+### Local Analytics
+- **Usage insights** - Message counts, memory stats, response times
+- **Weekly summaries** - Conversation patterns and highlights
+- **Privacy-preserving** - All analytics computed locally
+- **No telemetry** - Zero data collection or transmission
+
+---
+
+## Technical Architecture
+
+### Platform & Tools
+- **Kotlin Multiplatform 2.2.20** - Shared business logic
+- **Compose Multiplatform 1.9.1** - Native UI (Android primary, iOS future)
+- **Gradle 8.14.3** - Build system
+- **Target:** Android API 27+ (8.0+), iOS 15+ (future)
+
+### AI/ML Stack
+
+**Primary AI Engines (Platform-Native):**
+- **Android: ML Kit GenAI** - Gemini Nano via Google Play AI Core (target: 2025)
+- **iOS: Apple Foundation Models** - On-device Apple Intelligence (iOS 26+)
+- **Fallback: Llamatik 0.9.0** - llama.cpp binding with Gemma 3 270M
+
+**Unified Interface:**
+- **OnDeviceAi** - Platform-agnostic interface with availability awareness
+- **AndroidOnDeviceAi** - Android implementation (ML Kit → LlamaCpp fallback)
+- **LlamaCppFallbackEngine** - Adapter wrapping BaseLlmEngine for OnDeviceAi compatibility
+- **BaseLlmEngine** - Direct LLM inference for Llamatik/GGUF models
+- **AiResult<T>** - Functional error handling (Success/Error sealed class)
+- **AiAvailability** - Dynamic model state (Available, Downloading, Unavailable, Fallback)
+
+**Current Model:**
+- **Gemma 3 270M IQ3_XXS** - Primary language model (176MB GGUF, 10+ tok/s)
+- **MiniLM-L6** - Sentence embeddings (90MB, 384-dim)
+- **JVector** - HNSW vector similarity search
+- **ML Kit Vision** - On-device vision (OCR, object detection, labels)
+
+**Migration History:**
+- v1 (ONNX Runtime): SmolLM2-135M severe hallucinations (tokenizer issues)
+- v2 (InferKt 0.0.2): Native crash SIGABRT in llama_batch_free (memory corruption)
+- v3 (Llamatik 0.8.1): Stable but SmolLM2 hallucinations
+- v4 (Llamatik 0.9.0 + Gemma 3): ⚠️ `generateWithContextStream()` broken for Gemma 3 (wrong template)
+- v5 (Llamatik 0.9.0 + raw template): ✅ Using `generateStream()` with proper Gemma 3 template
+- v6 (Platform-Native): 🔄 IN PROGRESS - ML Kit GenAI + Apple Foundation Models
+
+### Data Layer
+- **SQLDelight 2.0.0** - Type-safe SQL for Kotlin Multiplatform
+- **SQLCipher** - AES-256 encryption for sensitive data
+- **HNSW Index** - Fast vector similarity search (M=16, efConstruction=200)
+- **4 core tables** - Project, Message, MemoryMetadata, TriviaFact
+
+### UI/UX
+- **Jetpack Compose** - Modern declarative UI
+- **Material3 Design** - Adaptive theming
+- **CameraX** - Image capture
+- **WCAG 2.2 Level AA** - Accessibility compliance
+- **TalkBack support** - Full screen reader compatibility
+
+### Testing Strategy
+- **Test-Driven Development (TDD)** - Red-Green-Refactor cycle
+- **Testing Pyramid** - 40% unit, 30% integration, 20% UI, 10% E2E
+- **Coverage targets** - 70% overall, 80%+ domain logic
+- **Performance benchmarks** - Model load <5s, inference >40 tok/sec
+- **282 tests total** - 227 passing, 55 pending (mock infrastructure updates needed)
+
+---
+
+## Development Roadmap
+
+### Phase 0: Foundation (Weeks 1-2) - 15 tickets
+**Status:** 🔴 Not Started (0/15, 0%)
+
+**Key Deliverables:**
+- Remove INTERNET permission from manifest
+- Configure ONNX Runtime, SQLDelight, CameraX dependencies
+- Create 4 database tables with SQLDelight schemas
+- Import M1K3 knowledge base (1.6MB JSON → SQLite)
+- Privacy validation tests
+
+**Milestone:** Foundation ready, privacy enforced, database operational
+
+---
+
+### Phase 1: Core AI Engine (Weeks 3-5) - 20 tickets
+**Status:** ⚪ Pending (0/20, 0%)
+
+**Key Deliverables:**
+- Export SmolLM2-360M to ONNX format
+- Android ONNX Runtime session management
+- SentencePiece tokenizer integration
+- Basic chat UI with Compose
+- Streaming response generation
+
+**Milestone:** SmolLM2-360M running, basic chat working
+
+---
+
+### Phase 2: Memory & Embedding System (Weeks 6-8) - 25 tickets
+**Status:** ⚪ Pending (0/25, 0%)
+
+**Key Deliverables:**
+- Export MiniLM-L6 to ONNX (embeddings)
+- HNSW vector index integration (JVector)
+- Semantic chunking (100-300 tokens with overlap)
+- Importance scoring algorithm
+- Memory manager with context assembly
+
+**Milestone:** Memory system functional, context-aware conversations
+
+---
+
+### Phase 3: Knowledge Systems (Weeks 9-10) - 15 tickets
+**Status:** ⚪ Pending (0/15, 0%)
+
+**Key Deliverables:**
+- Trivia engine with semantic search
+- Device intelligence (OEM profiles, SoC detection)
+- RAG integration with intent detection
+- Response enrichment with contextual facts
+- Knowledge browser UI
+
+**Milestone:** Knowledge integrated, trivia/device facts in responses
+
+---
+
+### Phase 4: Multi-Modal & Projects (Weeks 11-12) - 20 tickets
+**Status:** ⚪ Pending (0/20, 0%)
+
+**Key Deliverables:**
+- CameraX integration for image capture
+- ML Kit vision (OCR, object detection, labels)
+- Multi-modal AI engine (vision + text)
+- Project management CRUD
+- Project-scoped conversations and memory
+
+**Milestone:** Multi-modal working, projects organized
+
+---
+
+### Phase 5: Advanced Features & Polish (Weeks 13-15) - 30 tickets
+**Status:** ⚪ Pending (0/30, 0%)
+
+**Key Deliverables:**
+- Sentiment analysis (VAD model)
+- Tone adaptation for empathetic responses
+- Local analytics engine with insights
+- Privacy dashboard
+- WCAG 2.2 AA accessibility compliance
+- Performance tuning (<5s model load, >40 tok/sec)
+- Battery optimization (<2%/hour active use)
+
+**Milestone:** Emotional intelligence, analytics, accessibility complete
+
+---
+
+### Phase 6: Integration Testing & Release (Week 16) - 10 tickets
+**Status:** ⚪ Pending (0/10, 0%)
+
+**Key Deliverables:**
+- End-to-end integration tests
+- Stress testing (10K memories, 100 projects)
+- Battery drain validation (8-hour simulation)
+- APK size optimization (<200MB)
+- Privacy audit (0 bytes transmitted verification)
+- Beta release preparation
+
+**Milestone:** Beta release ready, all tests passing
+
+---
+
+## Performance Targets
+
+### Model Performance (Mid-Range: 6GB RAM)
+| Metric | Target | Validation |
+|--------|--------|------------|
+| Model Load Time | <5 seconds | Stopwatch measurement |
+| Inference Speed | 40+ tokens/sec | Benchmark test |
+| Memory Retrieval | <100ms @ 10K | Performance test |
+| Battery Impact | <2%/hour active | Battery profiler (8hr test) |
+| APK Size | <200MB | Build output |
+| Startup Time | <3 seconds | Cold start measurement |
+| UI Frame Time | <16ms (60fps) | GPU profiler |
+
+### Quality Gates
+- **Tests:** 282 tests (227 passing, 55 pending) - 80% pass rate
+- **Coverage:** >70% overall, >80% domain logic
+- **Accessibility:** WCAG 2.2 Level AA (>95% axe DevTools score)
+- **TalkBack:** Fully functional screen reader support
+- **Memory:** Zero memory leaks (LeakCanary validation)
+- **Privacy:** No network activity (manual code review + Android Studio profiler)
+
+---
+
+## Integration with M1K3 Ecosystem
+
+### Shared Resources
+- **Knowledge Base:** M1K3's `comprehensive_knowledge_base.json` (1.6MB, 1,341+ documents)
+- **Embedding Model:** MiniLM-L6 (384-dimensional, compatible across platforms)
+- **Database Schema:** Similar structure (Projects, Messages, MemoryMetadata)
+- **RAG Architecture:** Intent detection, semantic retrieval, context assembly
+
+### Platform Differences
+| Component | M1K3 (Python/Desktop) | 間 AI (Kotlin/Mobile) |
+|-----------|----------------------|----------------------|
+| **Language Model** | TinyLlama-1.1B-Chat | SmolLM2-360M (size constraint) |
+| **Vector DB** | DuckDB VSS | JVector HNSW (mobile-optimized) |
+| **TTS** | VibeVoice, KittenTTS | Android TTS API |
+| **STT** | Vosk, Whisper, macOS | Android SpeechRecognizer |
+| **UI** | CLI, TUI, Web Dashboard | Compose Multiplatform |
+
+---
+
+## Philosophy: 間 (Ma) - Negative Space
+
+### Core Principles
+1. **Wabi-Sabi** - Beauty in imperfection, acceptance of limitations
+2. **Computational Sufficiency** - SmolLM2-360M is enough (not TinyLlama-1.1B)
+3. **Privacy First** - No network permission at manifest level
+4. **Mindful Design** - Negative space in UI, calm interactions
+5. **Local Everything** - AI, memory, analytics all on-device
+
+### Design Decisions
+- **No cloud fallback** - Offline-first by design, not feature
+- **Smaller model** - 360M params vs 1.1B (mobile constraint = feature)
+- **Minimal APK** - <200MB including models (every byte counts)
+- **No telemetry** - Can't improve what we don't measure (and that's okay)
+- **Accessibility** - Screen readers and inclusive design from day one
+
+---
+
+## Development Notes
+
+### ✅ Knowledge Base Versioning System
+
+**Location:** `app/composeApp/src/androidMain/kotlin/app/m1k3/ai/assistant/MainActivity.kt:107-111`
+
+**Implementation:**
+```kotlin
+// Knowledge base versioning - increment when KB content changes
+val currentKbVersion = "1.1.0"  // 1,391 comprehensive + 10 system = 1,401 docs
+val prefs = getSharedPreferences("m1k3_kb", MODE_PRIVATE)
+val storedKbVersion = prefs.getString("kb_version", "0.0.0")
+val needsReimport = storedKbVersion != currentKbVersion
+```
+
+**Version Format:** `MAJOR.MINOR.PATCH`
+- **MAJOR:** Breaking changes to schema or major content reorganization
+- **MINOR:** New categories, substantial content additions (50+ documents)
+- **PATCH:** Bug fixes, small content updates (<50 documents)
+
+**How to Update KB:**
+1. Increment `currentKbVersion` in MainActivity.kt
+2. Update knowledge base JSON files as needed
+3. App will automatically detect version mismatch and reimport
+
+---
+
+## Getting Started (When Released)
+
+```bash
+# Clone repository
+git clone https://github.com/Round-Tower/m1k3.git
+cd m1k3/app
+
+# Open in Android Studio
+open -a "Android Studio" .
+
+# Build and run
+./gradlew :composeApp:assembleDebug
+./gradlew :composeApp:installDebug
+
+# Run tests
+./gradlew test
+./gradlew connectedAndroidTest
+```
+
+---
+
+## Project Status & Links
+
+**Planning:** ✅ Complete (135 tickets, 6 phases documented)
+**Implementation:** 🔴 Not Started (Phase 0 begins soon)
+**Target Release:** Beta v0.1.0 (Week 16)
+
+**Documentation:**
+- [Master Plan](app/PROJECT_MANAGEMENT.md) - 16-week roadmap
+- [Architecture](app/ARCHITECTURE.md) - KMP 2025 implementation guide
+- [AI Architecture](app/AI_ARCHITECTURE.md) - System design details
+- [Model Selection](app/OPUS.md) - SmolLM2-360M rationale
+
+**Repository:** https://github.com/Round-Tower/m1k3 (app/ directory)
+
+---
+
+**Last Updated:** 2025-11-01
+**Status:** Planning Complete, Implementation Pending

@@ -25,6 +25,7 @@ class CommandCategory(Enum):
     HELP = "help"
     SESSION = "session"
     DATABASE = "database"
+    PERSONALITY = "personality"
 
 
 @dataclass
@@ -212,6 +213,14 @@ class CLICommandHandler:
         ))
 
         self._register_command(Command(
+            name="personality", aliases=["humor", "witty"],
+            description="Personality system management and analytics",
+            category=CommandCategory.PERSONALITY, handler=self._handle_personality,
+            usage="personality <status|stats|humor|dashboard|test>",
+            examples=["personality status", "personality test", "humor", "personality dashboard 24"]
+        ))
+
+        self._register_command(Command(
             name="export", aliases=["backup"],
             description="Export conversations to file (JSON, CSV, Parquet)",
             category=CommandCategory.DATABASE, handler=self._handle_export,
@@ -327,7 +336,66 @@ class CLICommandHandler:
         except Exception as e:
             log_error(f"Error executing command '{command_name}': {e}")
             return False
-    
+
+    def process_command(self, user_input: str) -> Optional[str]:
+        """Process a command string and return result. Wrapper for parse + execute flow."""
+        try:
+            command_name, args = self.parse_command(user_input)
+            if command_name:
+                success = self.execute_command(command_name, args)
+                if success:
+                    # For help command, return the actual help text
+                    if command_name == "help":
+                        # Capture help output
+                        return self._get_help_output(args)
+                    return f"Command '{command_name}' executed successfully"
+                else:
+                    return f"Command '{command_name}' failed to execute"
+            else:
+                return f"Unknown command: {user_input}"
+        except Exception as e:
+            log_error(f"Error processing command '{user_input}': {e}")
+            return f"Error processing command: {e}"
+
+    def _get_help_output(self, args: List[str]) -> str:
+        """Get help output for help command"""
+        try:
+            if args:
+                # Help for specific command
+                command_name = args[0]
+                if command_name in self.commands:
+                    cmd = self.commands[command_name]
+                    help_text = f"\n🔍 Command: {cmd.name}\n"
+                    if cmd.aliases:
+                        help_text += f"   Aliases: {', '.join(cmd.aliases)}\n"
+                    help_text += f"   Description: {cmd.description}\n"
+                    if cmd.usage:
+                        help_text += f"   Usage: {cmd.usage}\n"
+                    if cmd.examples:
+                        help_text += f"   Examples:\n"
+                        for example in cmd.examples:
+                            help_text += f"     {example}\n"
+                    return help_text
+                else:
+                    return f"Unknown command: {command_name}"
+            else:
+                # General help
+                help_text = "\n🔍 M1K3 CLI Commands:\n"
+                help_text += "=" * 30 + "\n"
+
+                for category in CommandCategory:
+                    commands = self.get_commands_by_category(category)
+                    if commands:
+                        help_text += f"\n{category.value.upper()}:\n"
+                        for cmd in commands:
+                            aliases = f" ({', '.join(cmd.aliases)})" if cmd.aliases else ""
+                            help_text += f"  {cmd.name}{aliases} - {cmd.description}\n"
+
+                help_text += "\nType 'help <command>' for detailed information about a specific command.\n"
+                return help_text
+        except Exception as e:
+            return f"Error generating help: {e}"
+
     def is_command(self, user_input: str) -> bool:
         """Check if user input is a command"""
         command_name, _ = self.parse_command(user_input)
@@ -955,6 +1023,12 @@ class CLICommandHandler:
     def _handle_analytics(self, args: List[str]) -> bool:
         """Handle analytics command"""
         result = self.db_handler.handle_analytics_command(args)
+        print(result)
+        return True
+
+    def _handle_personality(self, args: List[str]) -> bool:
+        """Handle personality command"""
+        result = self.db_handler.handle_personality_command(args)
         print(result)
         return True
 

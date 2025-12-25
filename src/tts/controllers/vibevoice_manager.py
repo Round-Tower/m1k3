@@ -23,6 +23,9 @@ warnings.filterwarnings("ignore", category=FutureWarning)
 warnings.filterwarnings("ignore", category=UserWarning)
 # Suppress specific tokenizer warning
 warnings.filterwarnings("ignore", message="The tokenizer class you load from this checkpoint")
+# Suppress APEX FusedRMSNorm warning (performance optimization)
+warnings.filterwarnings("ignore", message=".*APEX FusedRMSNorm.*")
+warnings.filterwarnings("ignore", message=".*apex.*not available.*")
 
 # Try to import VibeVoice dependencies
 try:
@@ -132,19 +135,19 @@ class VibeVoiceManager:
             self.loading = False
             
             # Multi-speaker configuration
-            self.current_speakers = ["Alice"]  # Default single speaker
+            self.current_speakers = ["Carter"]  # Default male speaker (professional male voice)
             self.max_speakers = 4
-            self.available_speakers = ["Alice", "Bob", "Carol", "Dave"]
-            
+            self.available_speakers = ["Carter", "Alice", "Maya", "Frank"]
+
             # Generation settings
             self.sample_rate = 24000  # VibeVoice native sample rate
             self.max_length_minutes = 90  # Maximum generation length
             self.chunk_length_seconds = 30  # Default chunking for streaming
-            
-            # Performance settings
-            self.generation_quality = "balanced"  # fast, balanced, quality
-            self.ddmp_steps = {"fast": 5, "balanced": 7, "quality": 10}
-            self.cfg_scales = {"fast": 1.0, "balanced": 1.3, "quality": 1.5}
+
+            # Performance settings - Optimized for emotional quality with real-time speed
+            self.generation_quality = "quality"  # fast, balanced, quality
+            self.ddmp_steps = {"fast": 5, "balanced": 7, "quality": 10, "emotional": 12}
+            self.cfg_scales = {"fast": 1.0, "balanced": 1.3, "quality": 1.5, "emotional": 1.8}
             
             # Device configuration
             if torch.cuda.is_available():

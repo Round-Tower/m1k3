@@ -41,11 +41,11 @@ class ESpeakTTSManager:
     def __init__(self):
         if not hasattr(self, 'initialized'):  # Ensure __init__ runs only once
             self.sample_rate = 22050  # eSpeak's default sample rate
-            self.current_voice = "en"  # Default English voice
-            self.speed = 175  # Words per minute (default: 175)
-            self.pitch = 50   # Pitch adjustment (0-99, default: 50)
+            self.current_voice = "en+m3"  # M1K3 OPTIMIZED: Professional male voice
+            self.speed = 170  # M1K3 OPTIMIZED: Responsive and detailed (was 150)
+            self.pitch = 58   # M1K3 OPTIMIZED: Warmer, more human tone (was 48)
             self.amplitude = 100  # Volume (0-200, default: 100)
-            self.word_gap = 0  # Gap between words in 10ms units
+            self.word_gap = 1  # M1K3 OPTIMIZED: Slight gap for clarity
 
             # Available voices and languages
             self.available_voices = {
@@ -57,39 +57,39 @@ class ESpeakTTSManager:
                 "en-gb": {"name": "English (UK)", "gender": "male", "variant": "gb"}
             }
 
-            # Performance profiles
+            # Performance profiles (M1K3 optimized)
             self.profiles = {
                 "ultra_fast": {
                     "speed": 200,
-                    "pitch": 50,
+                    "pitch": 48,
                     "amplitude": 100,
                     "word_gap": 0,
                     "description": "Maximum speed for emergency use"
                 },
                 "fast": {
                     "speed": 175,
-                    "pitch": 50,
+                    "pitch": 48,
                     "amplitude": 100,
                     "word_gap": 1,
                     "description": "Fast but clear speech"
                 },
                 "balanced": {
-                    "speed": 150,
-                    "pitch": 50,
+                    "speed": 170,  # M1K3 DEFAULT: Responsive and engaging
+                    "pitch": 58,   # M1K3 DEFAULT: Warm, human tone
                     "amplitude": 100,
-                    "word_gap": 2,
-                    "description": "Balance of speed and clarity"
+                    "word_gap": 1,  # M1K3 DEFAULT: Slight clarity gap
+                    "description": "M1K3 optimal: warm, engaging, professional"
                 },
                 "clear": {
                     "speed": 125,
-                    "pitch": 50,
+                    "pitch": 48,
                     "amplitude": 100,
-                    "word_gap": 3,
-                    "description": "Slower but very clear"
+                    "word_gap": 2,
+                    "description": "Very clear for complex explanations"
                 }
             }
 
-            self.current_profile = "fast"
+            self.current_profile = "balanced"  # M1K3 DEFAULT: Professional, clear delivery
             self._apply_profile(self.current_profile)
             self.initialized = True
 

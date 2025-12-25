@@ -48,42 +48,67 @@ class PiperTTSManager:
             self.voice: Optional[PiperVoice] = None
             self.loading = False
             self.sample_rate = 22050  # Piper's default sample rate
-            self.current_voice = "en_US-lessac-medium"  # Default voice
+            self.current_voice = "en_US-amy-medium"  # Default voice (Amy Medium - best performer)
 
             # Performance settings
             self.length_scale = 1.0  # Speed multiplier (1.0 = normal, <1.0 = faster)
             self.noise_scale = 0.667  # Noise for synthesis quality
             self.noise_w = 0.8  # Noise weight
 
-            # Available voice models (will be populated on initialization)
+            # Available voice models (dynamically detected from models/piper directory)
             self.available_voices = {
                 "en_US-lessac-medium": {
-                    "name": "Lessac (Medium Quality)",
+                    "name": "Lessac Medium (Balanced Neural)",
                     "language": "en-US",
                     "quality": "medium",
-                    "speed": "fast"
+                    "speed": "fast",
+                    "character": "Professional, clear, reliable",
+                    "best_for": "General conversation, narration"
                 },
-                "en_US-lessac-low": {
-                    "name": "Lessac (Low Quality - Fastest)",
+                "en_US-lessac-high": {
+                    "name": "Lessac High (Premium Neural)",
                     "language": "en-US",
-                    "quality": "low",
-                    "speed": "fastest"
+                    "quality": "high",
+                    "speed": "moderate",
+                    "character": "Rich, detailed, expressive",
+                    "best_for": "High-quality presentations, audiobooks"
                 },
                 "en_US-amy-medium": {
-                    "name": "Amy (Medium Quality)",
+                    "name": "Amy Medium (Warm Female)",
                     "language": "en-US",
                     "quality": "medium",
-                    "speed": "fast"
-                },
-                "en_US-ryan-medium": {
-                    "name": "Ryan (Medium Quality)",
-                    "language": "en-US",
-                    "quality": "medium",
-                    "speed": "fast"
+                    "speed": "fast",
+                    "character": "Friendly, warm, conversational",
+                    "best_for": "Assistant responses, customer service"
                 }
             }
 
+            # Detect available models at runtime
+            self._detect_available_models()
+
             self.initialized = True
+
+    def _detect_available_models(self):
+        """Detect available voice models in models/piper directory"""
+        models_dir = Path("models/piper")
+        if not models_dir.exists():
+            return
+
+        # Scan for .onnx files and their corresponding .json configs
+        for model_file in models_dir.glob("*.onnx"):
+            config_file = model_file.with_suffix(".onnx.json")
+            if config_file.exists():
+                voice_id = model_file.stem
+                if voice_id not in self.available_voices:
+                    # Add discovered model with basic info
+                    self.available_voices[voice_id] = {
+                        "name": f"{voice_id} (Discovered)",
+                        "language": "en-US",
+                        "quality": "unknown",
+                        "speed": "unknown",
+                        "character": "Auto-detected model",
+                        "best_for": "General use"
+                    }
 
     def is_available(self) -> bool:
         """Check if Piper TTS is available"""
@@ -119,8 +144,23 @@ class PiperTTSManager:
         start_time = time.time()
 
         try:
-            # Download voice model if not present (Piper handles this automatically)
-            self.voice = PiperVoice.load(self.current_voice, use_cuda=False)
+            # Use local model files from models/piper directory
+            model_path = f"models/piper/{self.current_voice}.onnx"
+            config_path = f"models/piper/{self.current_voice}.onnx.json"
+
+            # Check if model files exist
+            if not os.path.exists(model_path):
+                print(f"❌ Model file not found: {model_path}")
+                print(f"   Download from: https://huggingface.co/rhasspy/piper-voices")
+                return False
+
+            if not os.path.exists(config_path):
+                print(f"❌ Config file not found: {config_path}")
+                print(f"   Download from: https://huggingface.co/rhasspy/piper-voices")
+                return False
+
+            # Load the model with explicit paths
+            self.voice = PiperVoice.load(model_path, config_path, use_cuda=False)
 
             # Set performance parameters for real-time usage
             self.voice.config.length_scale = self.length_scale
@@ -159,29 +199,32 @@ class PiperTTSManager:
         try:
             start_time = time.time()
 
-            # Generate audio using Piper
-            with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as temp_file:
-                temp_path = temp_file.name
+            # Generate audio using Piper - returns generator of AudioChunk objects
+            audio_chunks = list(self.voice.synthesize(text))
 
-            # Piper generates to file (most efficient method)
-            self.voice.synthesize(text, temp_path)
+            # Combine all audio chunks into a single array
+            audio_arrays = []
+            for chunk in audio_chunks:
+                if hasattr(chunk, 'audio_float_array') and chunk.audio_float_array is not None:
+                    audio_arrays.append(chunk.audio_float_array)
 
-            # Read the generated audio file
-            audio_data, sample_rate = sf.read(temp_path, dtype=np.float32)
+            if not audio_arrays:
+                print("❌ No audio data generated")
+                return None
 
-            # Clean up temporary file
-            os.unlink(temp_path)
+            # Concatenate all audio chunks
+            audio_data = np.concatenate(audio_arrays)
+
+            # Get sample rate from first chunk
+            actual_sample_rate = audio_chunks[0].sample_rate if audio_chunks else self.sample_rate
 
             # Ensure correct sample rate
-            if sample_rate != self.sample_rate:
-                print(f"⚠️  Sample rate mismatch: expected {self.sample_rate}, got {sample_rate}")
-
-            # Ensure mono audio
-            if len(audio_data.shape) > 1:
-                audio_data = audio_data[:, 0] if audio_data.shape[1] > 0 else audio_data.flatten()
+            if actual_sample_rate != self.sample_rate:
+                print(f"⚠️  Sample rate mismatch: expected {self.sample_rate}, got {actual_sample_rate}")
+                self.sample_rate = actual_sample_rate
 
             generation_time = time.time() - start_time
-            duration = len(audio_data) / sample_rate
+            duration = len(audio_data) / self.sample_rate
             rtf = generation_time / duration if duration > 0 else 0
 
             print(f"🎯 Piper TTS: Generated {duration:.2f}s audio in {generation_time:.3f}s (RTF: {rtf:.2f}x)")

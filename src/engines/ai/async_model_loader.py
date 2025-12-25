@@ -249,9 +249,11 @@ class AsyncModelLoader:
                     callback(self.get_ready_models())
                 except Exception as e:
                     logger.error(f"Completion callback error: {e}")
-                    # Fix the StartupOptimizer attribute error
-                    if "'StartupOptimizer' object has no attribute 'StartupPhase'" in str(e):
+                    # Handle StartupOptimizer callback errors gracefully
+                    if "StartupOptimizer" in str(e) and "attribute" in str(e):
                         logger.warning("StartupOptimizer callback error - this is expected during initialization")
+                    else:
+                        logger.error(f"Unexpected callback error: {e}")
     
     def _check_and_queue_dependent_tasks(self):
         """Check and queue tasks whose dependencies are now ready"""

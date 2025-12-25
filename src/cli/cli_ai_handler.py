@@ -19,6 +19,13 @@ try:
 except ImportError:
     DATABASE_AVAILABLE = False
 
+# Import personality integration
+try:
+    from .cli_personality_integration import CLIPersonalityIntegrator
+    PERSONALITY_INTEGRATION_AVAILABLE = True
+except ImportError:
+    PERSONALITY_INTEGRATION_AVAILABLE = False
+
 
 class ResponseProcessingState(Enum):
     """States for response processing"""
@@ -39,6 +46,14 @@ class CLIAIResponseProcessor:
         self.current_state = ResponseProcessingState.IDLE
         self.response_callbacks: Dict[str, Callable] = {}
         self.processing_thread: Optional[threading.Thread] = None
+
+        # Initialize personality integration
+        if PERSONALITY_INTEGRATION_AVAILABLE:
+            self.personality_integrator = CLIPersonalityIntegrator(cli_instance)
+            log_info(f"🧠 Personality integration: {'enabled' if self.personality_integrator.is_enabled() else 'disabled'}")
+        else:
+            self.personality_integrator = None
+            log_debug("Personality integration not available")
     
     def update_engines(self, voice_engine=None, rag_engine=None):
         """Update engine references when they become available"""
@@ -118,16 +133,38 @@ class CLIAIResponseProcessor:
                 self._trigger_callback('response_generated', response_text)
                 log_info(f"AI response generated: {len(response_text)} characters")
 
+                # Enhanced personality integration
+                final_response = response_text
+                analytics_data = {}
+                system_metrics = None
+
+                if self.personality_integrator and self.personality_integrator.is_enabled():
+                    try:
+                        enhancement_result = self.personality_integrator.enhance_ai_response(
+                            base_response=response_text,
+                            user_input=user_input,
+                            context={}
+                        )
+                        final_response = enhancement_result['enhanced_response']
+                        analytics_data = enhancement_result['analytics']
+                        system_metrics = enhancement_result.get('system_metrics')
+
+                        if enhancement_result['personality_applied']:
+                            log_info(f"🎭 Personality enhanced: +{len(final_response) - len(response_text)} chars, humor={analytics_data.get('humor_score', 0):.1f}")
+                    except Exception as e:
+                        log_warning(f"Personality enhancement failed: {e}")
+                        final_response = response_text
+
                 # Record stats for eco metrics and virtual pet features
                 if hasattr(self.cli, 'record_query_stats'):
                     elapsed_time = time.time() - start_time
-                    estimated_tokens = len(response_text.split()) * 1.3  # Rough token estimate
-                    self.cli.record_query_stats(elapsed_time, int(estimated_tokens), response_text)
+                    estimated_tokens = len(final_response.split()) * 1.3  # Rough token estimate
+                    self.cli.record_query_stats(elapsed_time, int(estimated_tokens), final_response)
 
-                # Record conversation to database if available
-                self._record_conversation(user_input, response_text, start_time, int(estimated_tokens if 'estimated_tokens' in locals() else len(response_text.split()) * 1.3), use_rag)
+                # Record conversation to database with enhanced analytics
+                self._record_enhanced_conversation(user_input, final_response, start_time, int(estimated_tokens if 'estimated_tokens' in locals() else len(final_response.split()) * 1.3), use_rag, analytics_data, system_metrics)
 
-                return response_text
+                return final_response
             else:
                 self.set_state(ResponseProcessingState.ERROR)
                 log_warning("AI engine returned empty response")
@@ -188,11 +225,11 @@ class CLIAIResponseProcessor:
         """Preprocess text for voice synthesis"""
         try:
             # Use voice preprocessor if available
-            if hasattr(self.cli, 'initializer'):
+            if hasattr(self.cli, 'initializer') and self.cli.initializer:
                 preprocess_func = self.cli.initializer.get_component('preprocess_for_voice_synthesis')
                 if preprocess_func:
                     return preprocess_func(text)
-            
+
             # Basic preprocessing
             return text.strip()
         except Exception as e:
@@ -274,7 +311,7 @@ class CLIAIResponseProcessor:
         
         # Process with voice if enabled
         if enable_voice:
-            self.process_response_with_voice(response, background=True)
+            self.process_response_with_voice(response, background=False)
         
         # Update metrics
         self._update_response_metrics(user_input, response)
@@ -382,6 +419,31 @@ class CLIAIResponseProcessor:
 
         except Exception as e:
             log_warning(f"Failed to record conversation to database: {e}")
+
+    def _record_enhanced_conversation(self, user_input: str, ai_response: str, start_time: float,
+                                    tokens_used: int, use_rag: bool = False, analytics_data: dict = None,
+                                    system_metrics = None):
+        """Record conversation with enhanced personality analytics"""
+        # Try enhanced recording first
+        if self.personality_integrator and self.personality_integrator.is_enabled():
+            try:
+                conversation_id = self.personality_integrator.store_enhanced_conversation(
+                    user_input=user_input,
+                    ai_response=ai_response,
+                    start_time=start_time,
+                    tokens_used=tokens_used,
+                    analytics=analytics_data or {},
+                    use_rag=use_rag,
+                    system_metrics=system_metrics
+                )
+                if conversation_id:
+                    log_debug(f"Enhanced conversation recorded: {conversation_id}")
+                    return
+            except Exception as e:
+                log_warning(f"Enhanced conversation recording failed: {e}")
+
+        # Fallback to standard recording
+        self._record_conversation(user_input, ai_response, start_time, tokens_used, use_rag)
 
     def stop_processing(self):
         """Stop any ongoing response processing"""

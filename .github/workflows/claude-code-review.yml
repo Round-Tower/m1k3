@@ -3,25 +3,26 @@ name: Claude Code Review
 on:
   pull_request:
     types: [opened, synchronize]
-    # Optional: Only run on specific file changes
-    # paths:
-    #   - "src/**/*.ts"
-    #   - "src/**/*.tsx"
-    #   - "src/**/*.js"
-    #   - "src/**/*.jsx"
+    paths:
+      # Kotlin source files
+      - "app/**/*.kt"
+      - "app/**/*.kts"
+      # Gradle build files
+      - "app/**/build.gradle.kts"
+      - "app/settings.gradle.kts"
+      # SQL schemas
+      - "app/**/*.sq"
+      # AI/ML model files
+      - "app/**/*.onnx"
+      # Knowledge base
+      - "app/**/*knowledge*.json"
 
 jobs:
   claude-review:
-    # Optional: Filter by PR author
-    # if: |
-    #   github.event.pull_request.user.login == 'external-contributor' ||
-    #   github.event.pull_request.user.login == 'new-developer' ||
-    #   github.event.pull_request.author_association == 'FIRST_TIME_CONTRIBUTOR'
-
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      pull-requests: read
+      pull-requests: write  # Required to post PR comments
       issues: read
       id-token: write
 
@@ -29,7 +30,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          fetch-depth: 1
+          fetch-depth: 0  # Full history for better diff context
 
       - name: Run Claude Code Review
         id: claude-review
@@ -40,18 +41,46 @@ jobs:
             REPO: ${{ github.repository }}
             PR NUMBER: ${{ github.event.pull_request.number }}
 
-            Please review this pull request and provide feedback on:
-            - Code quality and best practices
-            - Potential bugs or issues
-            - Performance considerations
-            - Security concerns
-            - Test coverage
+            You are reviewing a **Kotlin Multiplatform (KMP) mobile AI app** called 間 AI (M1K3).
 
-            Use the repository's CLAUDE.md for guidance on style and conventions. Be constructive and helpful in your feedback.
+            Key technical context:
+            - **AI Engine**: Llamatik 0.9.0 with Gemma 3 270M (on-device inference)
+            - **RAG System**: Intent classification + semantic retrieval with MiniLM-L6 embeddings
+            - **Database**: SQLDelight with SQLCipher encryption
+            - **UI**: Jetpack Compose with Material3
+            - **Targets**: Android API 27+ (8.0+)
+            - **Privacy**: Zero network permissions, 100% local processing
+
+            Please review this pull request focusing on:
+
+            **1. KMP/Android Best Practices**
+            - Proper expect/actual declarations
+            - Correct Dispatchers usage (Main for UI, IO for disk, Default for CPU)
+            - Memory management and lifecycle handling
+
+            **2. AI/ML Concerns**
+            - Thread safety in AI engine code (check for @Volatile, Mutex, AtomicBoolean)
+            - ONNX Runtime session management
+            - Token generation and streaming correctness
+
+            **3. RAG Quality**
+            - Intent classification accuracy
+            - Embedding and similarity threshold tuning
+            - Category boosting for relevant results
+
+            **4. Security & Privacy**
+            - No network calls or data leakage
+            - SQLCipher usage for sensitive data
+            - Input validation
+
+            **5. Performance**
+            - Avoid main thread blocking
+            - Efficient Compose recomposition
+            - Memory leaks (check for proper coroutine cancellation)
+
+            Use the repository's CLAUDE.md for additional style guidance.
+            Be constructive and specific in your feedback.
 
             Use `gh pr comment` with your Bash tool to leave your review as a comment on the PR.
 
-          # See https://github.com/anthropics/claude-code-action/blob/main/docs/usage.md
-          # or https://code.claude.com/docs/en/cli-reference for available options
-          claude_args: '--allowed-tools "Bash(gh issue view:*),Bash(gh search:*),Bash(gh issue list:*),Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*),Bash(gh pr list:*)"'
-
+          claude_args: '--allowed-tools "Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*),Bash(gh pr list:*)"'

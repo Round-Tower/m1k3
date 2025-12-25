@@ -9,8 +9,16 @@ import sys
 import time
 import signal
 import threading
+import warnings
 from typing import Optional, Dict, Any
 from enum import Enum
+
+# Suppress third-party warnings for cleaner CLI output
+warnings.filterwarnings("ignore", category=FutureWarning)
+warnings.filterwarnings("ignore", category=UserWarning)
+# Suppress APEX warnings from VibeVoice
+warnings.filterwarnings("ignore", message=".*APEX FusedRMSNorm.*")
+warnings.filterwarnings("ignore", message=".*apex.*not available.*")
 
 from .cli_logging import get_cli_logger, log_info, log_debug, log_warning, log_error, setup_cli_logging
 from .cli_initialization import CLIInitializer, initialize_cli_components
@@ -249,10 +257,13 @@ class M1K3CLICore:
     def _start_async_loading(self):
         """Start async loading of heavy components"""
         log_info("⚡ Starting async loading")
-        
+
+        # Import async loading classes
+        from src.engines.ai.async_model_loader import ModelLoadTask, LoadingPriority
+
         # Register model loading tasks with ComponentManager's loaders
         self.async_loader.register_model(ModelLoadTask(
-            name="primary_ai", 
+            name="primary_ai",
             priority=LoadingPriority.HIGH,
             loader_func=self.component_manager.get_ai_engine, # Use ComponentManager's loader
             estimated_time=5.0
@@ -581,6 +592,23 @@ class M1K3CLICore:
                     log_error(f"Voice engine setup failed: {e}")
         else:
             log_warning("Voice engine not available")
+
+        # Initialize intelligent TTS engine
+        if self.initializer.is_component_available('intelligent_tts'):
+            try:
+                from src.engines.voice.intelligent_tts_engine import intelligent_tts_engine
+                self.intelligent_tts = intelligent_tts_engine
+                if self.intelligent_tts.load_model():
+                    log_debug("✅ Intelligent TTS engine initialized")
+                else:
+                    log_warning("Intelligent TTS engine failed to load")
+                    self.intelligent_tts = None
+            except Exception as e:
+                log_error(f"Intelligent TTS setup failed: {e}")
+                self.intelligent_tts = None
+        else:
+            log_warning("Intelligent TTS not available")
+            self.intelligent_tts = None
     
     def _configure_voice_engine(self):
         """Configure the voice engine based on CLI arguments"""
@@ -1653,3 +1681,26 @@ class M1K3CLICore:
             pass  # Database not available
         except Exception as e:
             log_warning(f"Failed to end database session: {e}")
+
+    def _safe_voice_synthesis(self, text: str, background: bool = True, use_intelligent_tts: bool = False):
+        """Safely synthesize voice using the intelligent TTS system"""
+        if not text or not text.strip():
+            return
+
+        try:
+            # Use intelligent TTS engine if available
+            if use_intelligent_tts and hasattr(self, 'intelligent_tts') and self.intelligent_tts:
+                success = self.intelligent_tts.synthesize_and_play(text.strip(), background=background)
+                if success:
+                    log_debug("Voice synthesis completed with intelligent TTS")
+                    return
+
+            # Fallback to voice engine
+            if hasattr(self, 'voice_engine') and self.voice_engine:
+                self.voice_engine.synthesize_and_play(text.strip(), background=background)
+                log_debug("Voice synthesis completed with voice engine")
+            else:
+                log_debug("No voice synthesis engine available")
+
+        except Exception as e:
+            log_error(f"Voice synthesis failed: {e}")

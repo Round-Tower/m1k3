@@ -50,7 +50,7 @@ class SmolLMConfig:
     repetition_penalty: float = 1.1
     context_length: int = 2048
     stop_tokens: List[str] = None
-    system_prompt: str = "You are M1K3, a helpful AI assistant."
+    system_prompt: str = "You are M1K3 (Mike), an eco-conscious, context-aware edge AI system. You run locally on user devices for privacy and sustainability. Be helpful, efficient, and mindful of system resources."
     adaptive_prompting: bool = True  # Enable adaptive prompting
     force_format: Optional[str] = None  # Override format detection
     
@@ -107,7 +107,7 @@ class SmolLMEngine:
                         repetition_penalty=params.get('repetition_penalty', 1.1),
                         context_length=params.get('context_length', 2048),
                         stop_tokens=params.get('stop_tokens', None),
-                        system_prompt=params.get('system_prompt', "You are M1K3, a helpful AI assistant."),
+                        system_prompt=params.get('system_prompt', "You are M1K3 (Mike), an eco-conscious, context-aware edge AI system. You run locally on user devices for privacy and sustainability. Be helpful, efficient, and mindful of system resources."),
                         adaptive_prompting=params.get('adaptive_prompting', True),
                         force_format=params.get('force_format', None)
                     )
@@ -287,7 +287,7 @@ class SmolLMEngine:
             if len(base_prompt) > self.model_profile.max_system_prompt_length:
                 # Smart truncation based on profile strategy
                 if self.model_profile.context_strategy == "minimal":
-                    base_prompt = "You are M1K3, a helpful AI assistant. Provide clear, direct responses."
+                    base_prompt = "You are M1K3 (Mike), an eco-conscious edge AI. Provide clear, direct responses efficiently."
                 elif self.model_profile.context_strategy == "structured":
                     # Keep essential parts
                     lines = base_prompt.split('\\n')

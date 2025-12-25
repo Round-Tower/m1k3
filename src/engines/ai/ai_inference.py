@@ -830,7 +830,7 @@ class LocalAIEngine:
                 
                 # Add RAG context if available
                 rag_context = self._get_rag_context(prompt)
-                system_prompt = "You are M1K3, a helpful AI assistant."
+                system_prompt = "You are M1K3 (Mike), an eco-conscious, context-aware edge AI system. You run locally on user devices for privacy and sustainability. Be helpful, efficient, and mindful of system resources."
                 if rag_context:
                     system_prompt += f"\n\nAdditional Context:\n{rag_context}"
                 

@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Title moved to base module (required for AAB) -->
+    <string name="gemma_embedding_description">Embedding Gemma 300M for higher quality semantic search</string>
+</resources>

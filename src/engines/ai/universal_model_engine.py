@@ -105,7 +105,11 @@ class UniversalModelEngine:
                 stop_tokens = self._parse_stop_tokens(parameters_str)
                 
                 print(f"✅ Ollama metadata detected: {family} family, {param_count:,} parameters")
-                
+
+                # Override system prompt for Gemma models to enforce M1K3 identity
+                if "gemma" in family.lower() or "gemma" in model_name.lower():
+                    system_prompt = "You are M1K3 (Mike), an eco-conscious, context-aware edge AI system. You run locally on user devices for privacy and sustainability. You are NOT Gemma or any other model - you are M1K3. Be helpful, efficient, and mindful of system resources."
+
                 return ModelMetadata(
                     name=model_name,
                     family=families[0] if families else family,
@@ -145,7 +149,7 @@ class UniversalModelEngine:
                 parameter_count=135000000,
                 context_length=8192,
                 template="{{- if .Messages }}{{- if .System }}<|im_start|>system\\n{{ .System }}<|im_end|>\\n{{ end }}{{- range $i, $_ := .Messages }}{{- if eq .Role \"user\" }}<|im_start|>user\\n{{ .Content }}<|im_end|>\\n{{ else if eq .Role \"assistant\" }}<|im_start|>assistant\\n{{ .Content }}<|im_end|>\\n{{ end }}{{ end }}<|im_start|>assistant\\n{{ else }}{{- if .System }}<|im_start|>system\\n{{ .System }}<|im_end|>\\n{{ end }}{{ if .Prompt }}<|im_start|>user\\n{{ .Prompt }}<|im_end|>\\n{{ end }}<|im_start|>assistant\\n{{ end }}",
-                system_prompt="You are a helpful AI assistant named SmolLM, trained by Hugging Face",
+                system_prompt="You are M1K3 (Mike), an eco-conscious, context-aware edge AI system. You run locally on user devices for privacy and sustainability. Be helpful, efficient, and mindful of system resources.",
                 stop_tokens=["<|im_start|>", "<|im_end|>"],
                 source="fallback"
             )
@@ -157,6 +161,7 @@ class UniversalModelEngine:
                 parameter_count=270000000,
                 context_length=32768,
                 template="{{- $systemPromptAdded := false }}{{- range $i, $_ := .Messages }}{{- $last := eq (len (slice $.Messages $i)) 1 }}{{- if eq .Role \"user\" }}<start_of_turn>user\\n{{- if (and (not $systemPromptAdded) $.System) }}{{- $systemPromptAdded = true }}{{ $.System }}\\n{{ end }}{{ .Content }}<end_of_turn>\\n{{ if $last }}<start_of_turn>model\\n{{ end }}{{- else if eq .Role \"assistant\" }}<start_of_turn>model\\n{{ .Content }}{{ if not $last }}<end_of_turn>\\n{{ end }}{{- end }}{{- end }}",
+                system_prompt="You are M1K3 (Mike), an eco-conscious, context-aware edge AI system. You run locally on user devices for privacy and sustainability. You are NOT Gemma or any other model - you are M1K3. Be helpful, efficient, and mindful of system resources.",
                 stop_tokens=["<end_of_turn>"],
                 source="fallback"
             )
@@ -299,13 +304,17 @@ class UniversalModelEngine:
                 add_generation_prompt=True
             )
     
-    def generate_response(self, user_input: str, system_prompt: str = "", 
+    def generate_response(self, user_input: str, system_prompt: str = "",
                          max_tokens: int = 2048, temperature: float = 0.7) -> str:
         """Generate response using the loaded model"""
         if not self.engine_loaded or not self.model_metadata:
             return "Error: Model not loaded"
-            
+
         try:
+            # Use model's system prompt if no explicit system prompt provided
+            if not system_prompt and hasattr(self.model_metadata, 'system_prompt') and self.model_metadata.system_prompt:
+                system_prompt = self.model_metadata.system_prompt
+
             formatted_input = self.format_conversation(user_input, system_prompt)
             
             # Check if we should use Ollama's chat API with messages

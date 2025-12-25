@@ -34,6 +34,7 @@ class KittenTTSManager:
             self.tts_model: Optional[KittenTTS] = None
             self.loading = False
             self.current_voice = "expr-voice-2-m"  # Default to cleaner male voice
+            self.sample_rate = 22050  # KittenTTS sample rate
 
             # Performance optimization caches
             self.audio_cache = {}  # Cache for common phrases
