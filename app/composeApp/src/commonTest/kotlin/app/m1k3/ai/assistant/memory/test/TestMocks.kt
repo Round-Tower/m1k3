@@ -23,7 +23,7 @@ import app.m1k3.ai.assistant.memory.VectorSearchEngine
  * **Usage:**
  * ```kotlin
  * val mockEngine = MockEmbeddingEngine(dimensions = 384)
- * memoryManager.embeddingEngine = mockEngine
+ * val memoryManager = MemoryManager(..., embeddingEngine = mockEngine)
  * ```
  */
 class MockEmbeddingEngine(
@@ -58,7 +58,7 @@ class MockEmbeddingEngine(
  *     SearchResult("mem-1", 0.95f),
  *     SearchResult("mem-2", 0.80f)
  * ))
- * memoryManager.vectorSearch = mockSearch
+ * val memoryManager = MemoryManager(..., vectorSearch = mockSearch)
  * ```
  */
 class MockVectorSearchEngine : VectorSearchEngine {

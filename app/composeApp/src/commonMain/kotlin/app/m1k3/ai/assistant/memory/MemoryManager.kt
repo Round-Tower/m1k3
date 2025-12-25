@@ -49,15 +49,18 @@ class MemoryManager(
     private val importanceCalculator: ImportanceCalculator,
     private val contextAssembler: ContextAssembler,
     private val projectId: String,
-    private val minImportanceThreshold: Float = 0.3f
-) {
-
+    private val minImportanceThreshold: Float = 0.3f,
     /**
-     * Embedding engine and vector search (platform-specific)
-     * Must be set after initialization
+     * Embedding engine (platform-specific, optional for testing)
+     * Required for createMemoriesFromMessage() and retrieveRelevantMemories()
      */
-    var embeddingEngine: EmbeddingEngine? = null
-    var vectorSearch: VectorSearchEngine? = null
+    private val embeddingEngine: EmbeddingEngine? = null,
+    /**
+     * Vector search engine (platform-specific, optional for testing)
+     * Required for retrieveRelevantMemories()
+     */
+    private val vectorSearch: VectorSearchEngine? = null
+) {
 
     /**
      * Create memories from message content

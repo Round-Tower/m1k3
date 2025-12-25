@@ -548,38 +548,15 @@ fun ChatScreen(
                         )
                     }
 
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        // 🗑️ TEMPORARY DEBUG: Clear conversation history button
-                        // TODO: Remove before production - for testing model hallucination fixes
-                        IconButton(
-                            onClick = {
-                                scope.launch {
-                                    logger.d { "Manually clearing conversation history" }
-                                    chatViewModel.clearConversation()
-                                    haptics.success()
-                                }
-                            }
-                        ) {
-                            Text(
-                                text = "🗑️",
-                                style = MaTypography.bodyLarge,
-                                color = MaColors.Orange
-                            )
-                        }
-
-                        // 3D Avatar with activity/emotion feedback
-                        AvatarView(
-                            state = avatarState,
-                            use3D = true,
-                            showInfo = true,
-                            modifier = Modifier
-                                .testTag("avatar")
-                                .size(140.dp)
-                        )
-                    }
+                    // 3D Avatar with activity/emotion feedback
+                    AvatarView(
+                        state = avatarState,
+                        use3D = true,
+                        showInfo = true,
+                        modifier = Modifier
+                            .testTag("avatar")
+                            .size(140.dp)
+                    )
                 }
             }
         }
