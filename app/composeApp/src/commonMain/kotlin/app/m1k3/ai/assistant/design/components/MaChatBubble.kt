@@ -1,12 +1,20 @@
 package app.m1k3.ai.assistant.design.components
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -160,25 +168,65 @@ fun MaChatBubbleAI(
                         )
                     }
 
-                    // RAG sources (Phase 3 - if available)
+                    // RAG status indicator with collapsible sources
                     if (ragSources != null) {
-                        Row(
+                        var isExpanded by remember { mutableStateOf(false) }
+                        val factCount = ragSources.lines().count { it.isNotBlank() }
+
+                        Column(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(top = MaSpacing.xs),
-                            horizontalArrangement = Arrangement.spacedBy(MaSpacing.xs),
-                            verticalAlignment = Alignment.CenterVertically
+                                .padding(top = MaSpacing.sm)
                         ) {
-                            Text(
-                                text = "📚",
-                                style = MaTypography.labelSmall
-                            )
-                            Text(
-                                text = ragSources,
-                                style = MaTypography.labelSmall,
-                                color = MaColors.Orange,
-                                fontWeight = FontWeight.Medium
-                            )
+                            // RAG badge - clickable to expand sources
+                            Row(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(MaRadius.sm))
+                                    .background(MaColors.Orange.copy(alpha = 0.15f))
+                                    .clickable { isExpanded = !isExpanded }
+                                    .padding(horizontal = MaSpacing.sm, vertical = MaSpacing.xs),
+                                horizontalArrangement = Arrangement.spacedBy(MaSpacing.xs),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "📚",
+                                    style = MaTypography.labelSmall
+                                )
+                                Text(
+                                    text = "RAG Enhanced",
+                                    style = MaTypography.labelSmall,
+                                    color = MaColors.Orange,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                                Text(
+                                    text = "• $factCount ${if (factCount == 1) "fact" else "facts"}",
+                                    style = MaTypography.labelSmall,
+                                    color = MaColors.TextSecondary
+                                )
+                                Text(
+                                    text = if (isExpanded) "▲" else "▼",
+                                    style = MaTypography.labelSmall,
+                                    color = MaColors.TextDisabled
+                                )
+                            }
+
+                            // Expandable sources list
+                            AnimatedVisibility(
+                                visible = isExpanded,
+                                enter = expandVertically(),
+                                exit = shrinkVertically()
+                            ) {
+                                Text(
+                                    text = ragSources,
+                                    style = MaTypography.labelSmall,
+                                    color = MaColors.TextSecondary,
+                                    modifier = Modifier.padding(
+                                        start = MaSpacing.sm,
+                                        top = MaSpacing.xs,
+                                        end = MaSpacing.sm
+                                    )
+                                )
+                            }
                         }
                     }
                 }
