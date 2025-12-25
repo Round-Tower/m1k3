@@ -56,20 +56,19 @@ class MemoryRetrievalQualityTest {
         importanceCalculator = ImportanceCalculator()
         contextAssembler = ContextAssembler(maxContextTokens = 1000)
 
+        mockEmbeddingEngine = DeterministicEmbeddingEngine()
+        mockVectorSearch = DeterministicVectorSearchEngine()
+
         memoryManager = MemoryManager(
             chunker = chunker,
             repository = repository,
             importanceCalculator = importanceCalculator,
             contextAssembler = contextAssembler,
             projectId = "test-project",
-            minImportanceThreshold = 0.3f
+            minImportanceThreshold = 0.3f,
+            embeddingEngine = mockEmbeddingEngine,
+            vectorSearch = mockVectorSearch
         )
-
-        mockEmbeddingEngine = DeterministicEmbeddingEngine()
-        mockVectorSearch = DeterministicVectorSearchEngine()
-
-        memoryManager.embeddingEngine = mockEmbeddingEngine
-        memoryManager.vectorSearch = mockVectorSearch
 
         // Create test project
         val now = System.currentTimeMillis()
