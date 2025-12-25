@@ -135,6 +135,56 @@ class IntentClassifierTest {
     }
 
     // ========================================
+    // AI/ML Tests
+    // ========================================
+
+    @Test
+    fun `classify AI and ML queries as AI_ML`() {
+        assertEquals(IntentClassifier.Intent.AI_ML, classifier.classify("Tell me about artificial intelligence"))
+        assertEquals(IntentClassifier.Intent.AI_ML, classifier.classify("What is machine learning?"))
+        assertEquals(IntentClassifier.Intent.AI_ML, classifier.classify("How do neural networks work?"))
+        assertEquals(IntentClassifier.Intent.AI_ML, classifier.classify("What is deep learning?"))
+        assertEquals(IntentClassifier.Intent.AI_ML, classifier.classify("Tell me about ChatGPT"))
+        assertEquals(IntentClassifier.Intent.AI_ML, classifier.classify("How does GPT work?"))
+        assertEquals(IntentClassifier.Intent.AI_ML, classifier.classify("What is an LLM?"))
+    }
+
+    @Test
+    fun `AI_ML intent retrieval limit is 4`() {
+        assertEquals(4, classifier.getRetrievalLimit(IntentClassifier.Intent.AI_ML), "AI_ML should retrieve 4 docs")
+    }
+
+    @Test
+    fun `short keyword 'ai' requires exact word match - no false positives`() {
+        // Short keywords (≤2 chars like "ai") require exact word match
+        // This prevents false positives from prefix matching
+
+        // These SHOULD match AI_ML (true positives - exact word "ai")
+        assertEquals(IntentClassifier.Intent.AI_ML, classifier.classify("Tell me about AI"))
+        assertEquals(IntentClassifier.Intent.AI_ML, classifier.classify("What is AI?"))
+        assertEquals(IntentClassifier.Intent.AI_ML, classifier.classify("AI is fascinating"))
+
+        // These should NOT match AI_ML (false positive prevention)
+        // "aid", "aim", "aisle" should not trigger AI_ML since "ai" requires exact match
+        assertNotEquals(IntentClassifier.Intent.AI_ML, classifier.classify("I need first aid training"))
+        assertNotEquals(IntentClassifier.Intent.AI_ML, classifier.classify("What should I aim for?"))
+        assertNotEquals(IntentClassifier.Intent.AI_ML, classifier.classify("Walk down the aisle"))
+    }
+
+    @Test
+    fun `short keyword matching is case insensitive`() {
+        // "AI", "Ai", "ai" should all match the same way
+        assertEquals(
+            classifier.classify("Tell me about AI"),
+            classifier.classify("Tell me about ai")
+        )
+        assertEquals(
+            classifier.classify("What is AI?"),
+            classifier.classify("What is Ai?")
+        )
+    }
+
+    // ========================================
     // System & Fallback Tests
     // ========================================
 

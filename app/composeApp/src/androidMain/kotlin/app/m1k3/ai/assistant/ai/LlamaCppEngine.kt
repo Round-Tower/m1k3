@@ -5,8 +5,12 @@ import app.m1k3.ai.assistant.utils.Logger
 import com.llamatik.library.platform.LlamaBridge
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
 import kotlin.coroutines.resume
 
 private val logger = Logger.withTag("LlamaCppEngine")
@@ -78,7 +82,10 @@ private val logger = Logger.withTag("LlamaCppEngine")
  */
 class LlamaCppEngine(private val context: Context) : BaseLlmEngine {
 
+    // Thread-safety: Use @Volatile for visibility + Mutex for initialization
+    @Volatile
     private var isInitialized = false
+    private val initMutex = Mutex()
 
     // Device-specific configuration (for getOptimalMaxTokens)
     private val deviceRamGB: Int by lazy {
@@ -101,42 +108,51 @@ class LlamaCppEngine(private val context: Context) : BaseLlmEngine {
      * @throws RuntimeException if initialization fails
      */
     override suspend fun initialize() = withContext(Dispatchers.IO) {
+        // Fast path: already initialized (volatile read)
         if (isInitialized) {
             return@withContext
         }
 
-        try {
-            logger.i { "Starting initialization (Device RAM: ${deviceRamGB}GB, Library: Llamatik 0.9.0)" }
-
-            // 1. Copy GGUF model from assets to internal storage
-            // Using Gemma 3 270M IQ3_XXS (176 MB) - much better quality than SmolLM2-135M
-            val modelFile = File(context.filesDir, "gemma-3-270m-it-UD-IQ3_XXS.gguf")
-
-            if (!modelFile.exists()) {
-                logger.i { "Copying Gemma 3 270M GGUF to internal storage (IQ3_XXS, 176 MB)" }
-                context.assets.open("models/gemma-3-270m-it-UD-IQ3_XXS.gguf").use { input ->
-                    modelFile.outputStream().use { output ->
-                        input.copyTo(output, bufferSize = 8192)
-                    }
-                }
-                logger.i { "Model copied (${modelFile.length() / 1024 / 1024} MB)" }
-            } else {
-                logger.d { "Gemma 3 270M already in storage (${modelFile.length() / 1024 / 1024} MB)" }
+        // Thread-safe initialization with mutex (prevents double-init race condition)
+        initMutex.withLock {
+            // Double-check after acquiring lock
+            if (isInitialized) {
+                return@withContext
             }
 
-            // 2. Initialize Llamatik with model path
-            // Note: Llamatik handles all configuration internally (context window, threads, etc.)
-            logger.i { "Loading model with Llamatik" }
-            LlamaBridge.initGenerateModel(modelFile.absolutePath)
+            try {
+                logger.i { "Starting initialization (Device RAM: ${deviceRamGB}GB, Library: Llamatik 0.9.0)" }
 
-            isInitialized = true
-            logger.i { "Initialization complete - Gemma 3 270M ready (sampling: temp=1.0, top_k=64, top_p=0.95)" }
+                // 1. Copy GGUF model from assets to internal storage
+                // Using Gemma 3 270M IQ3_XXS (176 MB) - much better quality than SmolLM2-135M
+                val modelFile = File(context.filesDir, "gemma-3-270m-it-UD-IQ3_XXS.gguf")
 
-        } catch (e: Exception) {
-            logger.e(e) { "Initialization failed" }
-            e.printStackTrace()
-            isInitialized = false
-            throw RuntimeException("Failed to initialize LlamaCppEngine", e)
+                if (!modelFile.exists()) {
+                    logger.i { "Copying Gemma 3 270M GGUF to internal storage (IQ3_XXS, 176 MB)" }
+                    context.assets.open("models/gemma-3-270m-it-UD-IQ3_XXS.gguf").use { input ->
+                        modelFile.outputStream().use { output ->
+                            input.copyTo(output, bufferSize = 8192)
+                        }
+                    }
+                    logger.i { "Model copied (${modelFile.length() / 1024 / 1024} MB)" }
+                } else {
+                    logger.d { "Gemma 3 270M already in storage (${modelFile.length() / 1024 / 1024} MB)" }
+                }
+
+                // 2. Initialize Llamatik with model path
+                // Note: Llamatik handles all configuration internally (context window, threads, etc.)
+                logger.i { "Loading model with Llamatik" }
+                LlamaBridge.initGenerateModel(modelFile.absolutePath)
+
+                isInitialized = true
+                logger.i { "Initialization complete - Gemma 3 270M ready (sampling: temp=1.0, top_k=64, top_p=0.95)" }
+
+            } catch (e: Exception) {
+                logger.e(e) { "Initialization failed" }
+                e.printStackTrace()
+                isInitialized = false
+                throw RuntimeException("Failed to initialize LlamaCppEngine", e)
+            }
         }
     }
 
@@ -161,7 +177,8 @@ class LlamaCppEngine(private val context: Context) : BaseLlmEngine {
 
         val startTime = System.currentTimeMillis()
         val responseBuilder = StringBuilder()
-        var tokenCount = 0
+        // Thread-safe counters for native callback access
+        val tokenCount = AtomicInteger(0)
 
         // Get maxTokens limit (0 = return empty response immediately)
         val maxTokens = config.maxTokens ?: getOptimalMaxTokens()
@@ -194,45 +211,45 @@ class LlamaCppEngine(private val context: Context) : BaseLlmEngine {
             // Use streaming internally and collect full response
             // Gemma 3 stop tokens ONLY - no ChatML/LLaMA tokens
             val stopTokens = listOf("<end_of_turn>", "<eos>")
-            var shouldStop = false
-            var hasResumed = false
+            // Thread-safe flags for native callback access (prevents double-resume race condition)
+            val shouldStop = AtomicBoolean(false)
+            val hasResumed = AtomicBoolean(false)
 
             suspendCancellableCoroutine<Unit> { continuation ->
                 LlamaBridge.generateStream(
                     chatPrompt,
                     object : com.llamatik.library.platform.GenStream {
                         override fun onDelta(delta: String) {
-                            if (shouldStop) return
+                            if (shouldStop.get()) return
 
                             // Check if we've hit maxTokens limit
-                            if (tokenCount >= maxTokens) {
-                                shouldStop = true
-                                logger.d { "maxTokens limit reached: $tokenCount >= $maxTokens" }
-                                if (!hasResumed) {
-                                    hasResumed = true
+                            val currentCount = tokenCount.get()
+                            if (currentCount >= maxTokens) {
+                                shouldStop.set(true)
+                                logger.d { "maxTokens limit reached: $currentCount >= $maxTokens" }
+                                if (hasResumed.compareAndSet(false, true)) {
                                     continuation.resume(Unit)
                                 }
                                 return
                             }
 
                             responseBuilder.append(delta)
-                            tokenCount++
+                            tokenCount.incrementAndGet()
 
                             // Check if we've hit a stop token
                             val currentText = responseBuilder.toString()
                             for (stopToken in stopTokens) {
                                 if (currentText.contains(stopToken)) {
-                                    shouldStop = true
-                                    logger.d { "Stop token detected: \"$stopToken\" after $tokenCount tokens" }
+                                    shouldStop.set(true)
+                                    logger.d { "Stop token detected: \"$stopToken\" after ${tokenCount.get()} tokens" }
 
                                     // Truncate response at stop token
                                     val textBeforeStop = currentText.substringBefore(stopToken)
                                     responseBuilder.clear()
                                     responseBuilder.append(textBeforeStop)
 
-                                    // Resume only if not already resumed
-                                    if (!hasResumed) {
-                                        hasResumed = true
+                                    // Resume only if not already resumed (atomic check-and-set)
+                                    if (hasResumed.compareAndSet(false, true)) {
                                         continuation.resume(Unit)
                                     }
                                     return
@@ -241,16 +258,14 @@ class LlamaCppEngine(private val context: Context) : BaseLlmEngine {
                         }
 
                         override fun onComplete() {
-                            if (!hasResumed) {
-                                hasResumed = true
+                            if (hasResumed.compareAndSet(false, true)) {
                                 logger.d { "Generation complete" }
                                 continuation.resume(Unit)
                             }
                         }
 
                         override fun onError(error: String) {
-                            if (!hasResumed) {
-                                hasResumed = true
+                            if (hasResumed.compareAndSet(false, true)) {
                                 logger.e { "Generation error: $error" }
                                 continuation.resume(Unit)
                             }
@@ -260,17 +275,18 @@ class LlamaCppEngine(private val context: Context) : BaseLlmEngine {
             }
 
             val inferenceTimeMs = System.currentTimeMillis() - startTime
+            val finalTokenCount = tokenCount.get()
             val tokensPerSecond = if (inferenceTimeMs > 0) {
-                (tokenCount * 1000f) / inferenceTimeMs
+                (finalTokenCount * 1000f) / inferenceTimeMs
             } else 0f
 
             val fullResponse = responseBuilder.toString()
 
-            logger.i { "Generation complete (length=${fullResponse.length} chars, tokens=$tokenCount, time=${inferenceTimeMs}ms, ${String.format("%.1f", tokensPerSecond)} tok/s)" }
+            logger.i { "Generation complete (length=${fullResponse.length} chars, tokens=$finalTokenCount, time=${inferenceTimeMs}ms, ${String.format("%.1f", tokensPerSecond)} tok/s)" }
 
             GenerationResult(
                 text = fullResponse,
-                tokensGenerated = tokenCount,
+                tokensGenerated = finalTokenCount,
                 inferenceTimeMs = inferenceTimeMs,
                 tokensPerSecond = tokensPerSecond
             )
@@ -328,12 +344,13 @@ class LlamaCppEngine(private val context: Context) : BaseLlmEngine {
             // DEBUG: Log actual prompt contents (truncated for readability)
             logger.v { ">>> GEMMA 3 PROMPT: ${chatPrompt.take(500)}${if (chatPrompt.length > 500) "..." else ""}" }
 
-            var tokenCount = 0
+            // Thread-safe counters and flags for native callback access
+            val tokenCount = AtomicInteger(0)
             // Gemma 3 stop tokens ONLY - no ChatML/LLaMA tokens
             val stopTokens = listOf("<end_of_turn>", "<eos>")
             val responseBuffer = StringBuilder()
-            var shouldStop = false
-            var hasResumed = false
+            val shouldStop = AtomicBoolean(false)
+            val hasResumed = AtomicBoolean(false)
 
             // Stream tokens with Llamatik using RAW prompt (no templating)
             suspendCancellableCoroutine<Unit> { continuation ->
@@ -341,14 +358,14 @@ class LlamaCppEngine(private val context: Context) : BaseLlmEngine {
                     chatPrompt,
                     object : com.llamatik.library.platform.GenStream {
                         override fun onDelta(delta: String) {
-                            if (shouldStop) return
+                            if (shouldStop.get()) return
 
                             // Check if we've hit maxTokens limit
-                            if (tokenCount >= maxTokens) {
-                                shouldStop = true
-                                logger.d { "maxTokens limit reached in streaming: $tokenCount >= $maxTokens" }
-                                if (!hasResumed) {
-                                    hasResumed = true
+                            val currentCount = tokenCount.get()
+                            if (currentCount >= maxTokens) {
+                                shouldStop.set(true)
+                                logger.d { "maxTokens limit reached in streaming: $currentCount >= $maxTokens" }
+                                if (hasResumed.compareAndSet(false, true)) {
                                     continuation.resume(Unit)
                                 }
                                 return
@@ -356,14 +373,14 @@ class LlamaCppEngine(private val context: Context) : BaseLlmEngine {
 
                             // Accumulate tokens to detect stop sequences
                             responseBuffer.append(delta)
-                            tokenCount++
+                            tokenCount.incrementAndGet()
 
                             // Check if we've hit a stop token
                             val currentText = responseBuffer.toString()
                             for (stopToken in stopTokens) {
                                 if (currentText.contains(stopToken)) {
-                                    shouldStop = true
-                                    logger.d { "Stop token detected: \"$stopToken\" after $tokenCount tokens" }
+                                    shouldStop.set(true)
+                                    logger.d { "Stop token detected: \"$stopToken\" after ${tokenCount.get()} tokens" }
 
                                     // Send only text before stop token
                                     val textBeforeStop = currentText.substringBefore(stopToken)
@@ -373,9 +390,8 @@ class LlamaCppEngine(private val context: Context) : BaseLlmEngine {
                                         responseBuffer.append(textBeforeStop)
                                     }
 
-                                    // Resume only if not already resumed
-                                    if (!hasResumed) {
-                                        hasResumed = true
+                                    // Resume only if not already resumed (atomic check-and-set)
+                                    if (hasResumed.compareAndSet(false, true)) {
                                         continuation.resume(Unit)
                                     }
                                     return
@@ -386,9 +402,8 @@ class LlamaCppEngine(private val context: Context) : BaseLlmEngine {
                         }
 
                         override fun onComplete() {
-                            if (!hasResumed) {
-                                hasResumed = true
-                                logger.i { "Streaming complete ($tokenCount tokens)" }
+                            if (hasResumed.compareAndSet(false, true)) {
+                                logger.i { "Streaming complete (${tokenCount.get()} tokens)" }
 
                                 // DEBUG: Log final response (truncated)
                                 val finalResponse = responseBuffer.toString()
@@ -399,8 +414,7 @@ class LlamaCppEngine(private val context: Context) : BaseLlmEngine {
                         }
 
                         override fun onError(error: String) {
-                            if (!hasResumed) {
-                                hasResumed = true
+                            if (hasResumed.compareAndSet(false, true)) {
                                 logger.e { "Streaming error: $error" }
                                 continuation.resume(Unit)
                             }

@@ -693,26 +693,25 @@ fun ChatScreen(
                                                     enableRAG = true,
                                                 )
 
-                                            // Quality validation: Trust RAGManager threshold (0.6 minSimilarity)
+                                            // Quality validation: Trust RAGManager threshold (0.5 minSimilarity)
+                                            // Note: RAGManager already filters by 0.5f, so we just pass through
                                             if (result.ragApplied) {
-                                                val highQualityFacts = result.retrievedFacts.filter { it.similarity >= 0.6f }
-                                                if (highQualityFacts.size < result.retrievedFacts.size) {
-                                                    logger.w {
-                                                        "Filtered ${result.retrievedFacts.size - highQualityFacts.size} low-quality facts (<0.6 similarity)"
-                                                    }
+                                                // Log quality distribution but don't filter further
+                                                val highQuality = result.retrievedFacts.count { it.similarity >= 0.6f }
+                                                val mediumQuality = result.retrievedFacts.count { it.similarity in 0.5f..0.6f }
+                                                logger.i {
+                                                    "RAG quality: ${highQuality} high (≥0.6), ${mediumQuality} medium (0.5-0.6) of ${result.retrievedFacts.size} total"
                                                 }
 
-                                                // If no high-quality facts remain, fall back to system prompt with KB context
-                                                // BUT keep retrievedFacts for display with quality indicators
-                                                if (highQualityFacts.isEmpty()) {
-                                                    logger.w { "No high-quality facts found, fallback to static KB" }
+                                                // If no facts at all, fall back to static KB
+                                                if (result.retrievedFacts.isEmpty()) {
+                                                    logger.w { "No facts found, fallback to static KB" }
                                                     result.copy(
                                                         enrichedPrompt = "",  // No RAG facts to add
-                                                        retrievedFacts = result.retrievedFacts,
                                                         ragApplied = false,
                                                     )
                                                 } else {
-                                                    result.copy(retrievedFacts = highQualityFacts)
+                                                    result  // Keep all facts (already filtered by RAGManager)
                                                 }
                                             } else {
                                                 result
@@ -837,11 +836,16 @@ fun ChatScreen(
                                     append(adaptiveConfig.systemPromptHint)
                                 }
 
-                                // DEBUG: Log Llamatik three-parameter structure
-                                logger.d {
-                                    "Llamatik params: user=${prompt.length}chars, " +
-                                    "context=${contextString.length}chars, " +
-                                    "systemPrompt=${enhancedSystemPrompt.length}chars (${adaptiveConfig.queryType})"
+                                // DEBUG: Log Llamatik three-parameter structure (INFO level for visibility)
+                                logger.i {
+                                    "=== RAG DEBUG: Final Context ===" +
+                                    "\n  Query: '$prompt'" +
+                                    "\n  Intent: ${ragResult.intent.category} (${(ragResult.confidence * 100).toInt()}%)" +
+                                    "\n  RAG Applied: ${ragResult.ragApplied}" +
+                                    "\n  Facts Retrieved: ${ragResult.retrievedFacts.size}" +
+                                    "\n  Context Length: ${contextString.length} chars" +
+                                    "\n  Context Preview: ${contextString.take(200).replace("\n", "\\n")}..." +
+                                    "\n  SystemPrompt Length: ${enhancedSystemPrompt.length} chars"
                                 }
 
                                 // Use query-type-aware generation with adaptive token limits

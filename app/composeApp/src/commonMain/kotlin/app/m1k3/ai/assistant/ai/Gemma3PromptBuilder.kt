@@ -45,10 +45,18 @@ object Gemma3PromptBuilder {
         append(START_USER)
 
         // RAG facts FIRST (so model sees context before question)
-        if (!context.isNullOrBlank() && !context.contains("0 facts")) {
+        // Note: "0 facts" check guards against empty KB summary like "I have access to 0 facts..."
+        // This is fragile but prevents showing useless context to the model
+        val hasValidContext = !context.isNullOrBlank() && !context.contains("0 facts")
+        if (hasValidContext) {
             append("Facts:\n")
             append(context.trim())
             append("\n\n")
+        }
+        // DEBUG: Log if context was skipped (helps trace RAG issues)
+        // Note: This logs only in debug builds - consider using platform-specific logger for production
+        if (!context.isNullOrBlank() && !hasValidContext) {
+            println("[Gemma3PromptBuilder] WARNING: Context skipped due to '0 facts' check. Context preview: ${context.take(100)}")
         }
 
         // User question
@@ -81,8 +89,9 @@ object Gemma3PromptBuilder {
         append(instruction.trim())
         append("\n\n")
 
-        // RAG facts
-        if (!context.isNullOrBlank() && !context.contains("0 facts")) {
+        // RAG facts (same "0 facts" guard as build())
+        val hasValidContext = !context.isNullOrBlank() && !context.contains("0 facts")
+        if (hasValidContext) {
             append("Facts:\n")
             append(context.trim())
             append("\n\n")

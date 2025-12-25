@@ -191,6 +191,7 @@ class IntentClassifier {
      * Check if query matches keyword with appropriate boundary rules.
      *
      * - Multi-word phrases: Use contains (e.g., "how are you", "thank you")
+     * - Very short keywords (≤2 chars): Require exact word match (prevents "ai" matching "aid", "aim")
      * - Single words: Use word start boundary matching (allows suffixes like -ing, -ed, -s)
      */
     private fun matchesKeyword(query: String, keyword: String): Boolean {
@@ -199,10 +200,17 @@ class IntentClassifier {
             return query.contains(keyword)
         }
 
-        // Single words: check that keyword appears at word start boundary
-        // This allows "crash" to match "crashing" but not "recrash"
-        // Split by non-alphanumeric characters and check each word starts with keyword
+        // Single words: check that keyword appears at word boundary
+        // Split by non-alphanumeric characters and check each word
         val words = query.split(Regex("[^a-z0-9]+"))
+
+        // Very short keywords (≤2 chars like "ai") require exact match
+        // This prevents "ai" from matching "aid", "aim", "aisle"
+        if (keyword.length <= 2) {
+            return words.any { word -> word == keyword }
+        }
+
+        // Longer keywords: allow prefix matching (e.g., "crash" matches "crashing")
         return words.any { word ->
             word == keyword || word.startsWith(keyword)
         }

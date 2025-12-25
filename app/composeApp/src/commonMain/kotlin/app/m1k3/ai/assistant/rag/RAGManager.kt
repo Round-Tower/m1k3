@@ -98,22 +98,41 @@ class RAGManager(
             )
         }
 
-        // 3. Retrieve relevant knowledge
+        // 3. Retrieve relevant knowledge with category boosting
+        // Lower threshold to catch more candidates, then boost matching categories
         val retrievalLimit = intentClassifier.getRetrievalLimit(intent)
         val semanticFacts = retrievalService.retrieve(
             query = userQuery,
-            limit = retrievalLimit,
-            minSimilarity = 0.6f  // 60% minimum similarity for quality facts (filters noise)
+            limit = retrievalLimit * 2,  // Get more candidates for re-ranking
+            minSimilarity = 0.40f  // Lower threshold to capture category matches (boosted later)
         )
 
-        // Convert to RetrievedFact
-        val retrievedFacts = semanticFacts.map { semanticFact ->
-            RetrievedFact(
-                content = semanticFact.fact.answer,
-                category = semanticFact.fact.category,
-                similarity = semanticFact.similarityScore
-            )
+        // Apply category boosting: +0.15 for facts matching the detected intent
+        // This ensures "ai_ml_facts" ranks higher than "casual_conversation" for AI queries
+        val intentCategory = intent.category.lowercase().replace(" ", "_").replace("&", "").trim()
+        val boostedFacts = semanticFacts.map { semanticFact ->
+            val factCategory = semanticFact.fact.category.lowercase()
+            // Boost if category matches intent (e.g., "ai_ml" in intent matches "ai_ml_facts")
+            val categoryMatch = factCategory.contains(intentCategory) ||
+                    intentCategory.contains(factCategory.removeSuffix("_facts"))
+            val boost = if (categoryMatch) CATEGORY_BOOST else 0f
+            val boostedSimilarity = (semanticFact.similarityScore + boost).coerceAtMost(1.0f)
+
+            semanticFact to boostedSimilarity
         }
+
+        // Re-rank by boosted similarity, filter by effective threshold, take limit
+        val retrievedFacts = boostedFacts
+            .filter { it.second >= EFFECTIVE_MIN_SIMILARITY }
+            .sortedByDescending { it.second }
+            .take(retrievalLimit)
+            .map { (semanticFact, boostedSim) ->
+                RetrievedFact(
+                    content = semanticFact.fact.answer,
+                    category = semanticFact.fact.category,
+                    similarity = boostedSim  // Use boosted similarity for display
+                )
+            }
 
         // 4. Build enriched prompt
         val enrichedPrompt = if (retrievedFacts.isNotEmpty()) {
@@ -229,5 +248,20 @@ class RAGManager(
             }
             query to summary
         }
+    }
+
+    companion object {
+        /**
+         * Category boost for facts matching the detected intent.
+         * Applied to semantic similarity scores to prioritize category-relevant facts.
+         * Example: AI_ML query + ai_ml_facts category → +0.15 boost
+         */
+        private const val CATEGORY_BOOST = 0.15f
+
+        /**
+         * Effective minimum similarity after category boosting.
+         * Facts must meet this threshold to be included in results.
+         */
+        private const val EFFECTIVE_MIN_SIMILARITY = 0.5f
     }
 }

@@ -344,14 +344,15 @@ class SemanticRetrievalService(
         /**
          * Default minimum similarity threshold.
          *
-         * 0.6 is chosen to filter out weak matches while keeping relevant results.
-         * - Below 0.5: Likely irrelevant
-         * - 0.5-0.6: Questionable relevance
-         * - 0.6-0.7: Moderately relevant
-         * - 0.7-0.8: Highly relevant
-         * - 0.8+: Extremely relevant
+         * 0.5 is chosen to capture more relevant results while filtering noise.
+         * Previously 0.6 but lowered to reduce missed retrievals.
+         * - Below 0.4: Likely irrelevant
+         * - 0.4-0.5: Weak relevance
+         * - 0.5-0.6: Moderately relevant (now included!)
+         * - 0.6-0.7: Highly relevant
+         * - 0.7+: Extremely relevant
          */
-        const val DEFAULT_MIN_SIMILARITY = 0.6f
+        const val DEFAULT_MIN_SIMILARITY = 0.5f
 
         /**
          * Weight for similarity in relevance calculation.
