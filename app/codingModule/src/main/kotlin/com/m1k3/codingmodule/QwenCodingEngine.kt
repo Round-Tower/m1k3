@@ -6,10 +6,15 @@ import ai.onnxruntime.OrtSession
 import android.content.Context
 import domain.coding.*
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.yield
+import kotlin.coroutines.coroutineContext
+import kotlin.math.exp
+import kotlin.random.Random
 import java.io.File
 import java.nio.LongBuffer
 import kotlin.system.measureTimeMillis
@@ -197,6 +202,10 @@ class QwenCodingEngine(
             val stopTokens = request.config.stopSequences.map { tokenizer!!.encode(it) }
 
             for (i in 0 until maxNewTokens) {
+                // Check for cancellation before each token generation
+                coroutineContext.ensureActive()
+                yield() // Allow cancellation between iterations
+
                 val nextToken = generateNextToken(
                     inputIds + generatedContent.let { tokenizer!!.encode(it) },
                     request.config.temperature,
@@ -261,70 +270,84 @@ class QwenCodingEngine(
      *
      * Checks:
      * - Valid HTML structure (basic)
-     * - No script injection (< script > tags)
+     * - No script injection (dangerous patterns)
      * - Accessibility attributes present
+     * - XSS prevention (onclick, onerror, javascript: URLs)
      */
     override suspend fun validateCode(html: String): ValidationResult = withContext(Dispatchers.Default) {
-        val errors = mutableListOf<ValidationIssue>()
-        val warnings = mutableListOf<ValidationIssue>()
-        val suggestions = mutableListOf<String>()
+        val issues = mutableListOf<ValidationIssue>()
 
         // Check HTML structure
         if (!html.contains("<!DOCTYPE html>", ignoreCase = true)) {
-            errors.add(ValidationIssue(
-                IssueType.INVALID_HTML,
-                "Missing DOCTYPE declaration",
-                null,
-                IssueSeverity.ERROR
+            issues.add(ValidationIssue(
+                type = IssueType.INVALID_HTML,
+                message = "Missing DOCTYPE declaration",
+                suggestion = "Add <!DOCTYPE html> at the beginning",
+                severity = IssueSeverity.ERROR
             ))
         }
 
-        // Security: Check for inline scripts (templates use embedded scripts which is okay)
+        // Security: Check for dangerous patterns (expanded for XSS prevention)
         val dangerousPatterns = listOf(
-            "eval\\(",
-            "innerHTML\\s*=",
-            "document.write\\("
+            "eval\\s*\\(" to "eval() can execute arbitrary code",
+            "innerHTML\\s*=" to "innerHTML can inject malicious scripts",
+            "document\\.write\\s*\\(" to "document.write can modify page content",
+            "on(click|error|load|mouseover)\\s*=" to "Inline event handlers can be XSS vectors",
+            "javascript\\s*:" to "javascript: URLs can execute code",
+            "window\\s*\\[" to "Dynamic property access can bypass filters"
         )
-        dangerousPatterns.forEach { pattern ->
-            if (Regex(pattern).find(html) != null) {
-                warnings.add(ValidationIssue(
-                    IssueType.SECURITY,
-                    "Potentially unsafe pattern: $pattern",
-                    null,
-                    IssueSeverity.WARNING
+        dangerousPatterns.forEach { (pattern, description) ->
+            if (Regex(pattern, RegexOption.IGNORE_CASE).find(html) != null) {
+                issues.add(ValidationIssue(
+                    type = IssueType.SECURITY,
+                    message = "Potentially unsafe pattern detected",
+                    suggestion = description,
+                    severity = IssueSeverity.WARNING
                 ))
             }
         }
 
-        // Accessibility checks
+        // Accessibility checks (WCAG 2.2 AA)
         if (!html.contains("aria-", ignoreCase = true)) {
-            warnings.add(ValidationIssue(
-                IssueType.ACCESSIBILITY,
-                "No ARIA attributes found",
-                null,
-                IssueSeverity.WARNING
+            issues.add(ValidationIssue(
+                type = IssueType.ACCESSIBILITY,
+                message = "No ARIA attributes found",
+                suggestion = "Add ARIA labels for screen reader support",
+                severity = IssueSeverity.WARNING
             ))
         }
 
         if (!html.contains("alt=", ignoreCase = true) && html.contains("<img", ignoreCase = true)) {
-            errors.add(ValidationIssue(
-                IssueType.ACCESSIBILITY,
-                "Images without alt text",
-                null,
-                IssueSeverity.ERROR
+            issues.add(ValidationIssue(
+                type = IssueType.ACCESSIBILITY,
+                message = "Images without alt text",
+                suggestion = "Add alt attributes to all <img> elements",
+                severity = IssueSeverity.ERROR
             ))
         }
 
-        // Suggestions
         if (!html.contains("lang=", ignoreCase = true)) {
-            suggestions.add("Add lang attribute to <html> tag for better accessibility")
+            issues.add(ValidationIssue(
+                type = IssueType.ACCESSIBILITY,
+                message = "Missing lang attribute",
+                suggestion = "Add lang attribute to <html> tag for better accessibility",
+                severity = IssueSeverity.INFO
+            ))
+        }
+
+        // Check for focus indicators (WCAG 2.2)
+        if (!html.contains(":focus", ignoreCase = true) && !html.contains("outline", ignoreCase = true)) {
+            issues.add(ValidationIssue(
+                type = IssueType.ACCESSIBILITY,
+                message = "No focus indicators detected",
+                suggestion = "Add :focus styles for keyboard navigation",
+                severity = IssueSeverity.WARNING
+            ))
         }
 
         ValidationResult(
-            isValid = errors.isEmpty(),
-            errors = errors,
-            warnings = warnings,
-            suggestions = suggestions
+            isValid = issues.none { it.severity == IssueSeverity.ERROR },
+            issues = issues
         )
     }
 
@@ -398,7 +421,14 @@ class QwenCodingEngine(
     }
 
     /**
-     * Generate next token using ONNX model
+     * Generate next token using ONNX model with temperature and top-p sampling
+     *
+     * Implements proper autoregressive generation:
+     * 1. Run ONNX inference to get logits
+     * 2. Extract logits for last position
+     * 3. Apply temperature scaling
+     * 4. Apply top-p (nucleus) sampling
+     * 5. Sample from filtered distribution
      */
     private fun generateNextToken(
         inputIds: List<Long>,
@@ -416,16 +446,78 @@ class QwenCodingEngine(
 
             // Run inference
             val outputs = session.run(mapOf("input_ids" to inputTensor))
-            val logits = outputs[0]?.value as? Array<*>
+            val logitsRaw = outputs[0]?.value
 
             inputTensor.close()
+
+            // Extract logits for last token position
+            // ONNX output shape is typically [batch, seq_len, vocab_size]
+            val logits = when (logitsRaw) {
+                is Array<*> -> {
+                    // Shape: [batch][seq_len][vocab_size]
+                    @Suppress("UNCHECKED_CAST")
+                    val batchLogits = logitsRaw as? Array<Array<FloatArray>>
+                    batchLogits?.get(0)?.lastOrNull() // Last position logits
+                }
+                is FloatArray -> {
+                    // Already flat, assume last vocab_size values
+                    logitsRaw
+                }
+                else -> null
+            }
+
             outputs.close()
 
-            // Apply temperature and top-p sampling
-            // Simplified implementation - actual would use proper sampling
-            logits?.let {
-                // Return most likely token (greedy for now)
-                0L // Placeholder
+            if (logits == null || logits.isEmpty()) {
+                return null
+            }
+
+            // Apply temperature scaling
+            val scaledLogits = if (temperature > 0f && temperature != 1f) {
+                logits.map { it / temperature }.toFloatArray()
+            } else {
+                logits
+            }
+
+            // Convert to probabilities with softmax
+            val maxLogit = scaledLogits.maxOrNull() ?: 0f
+            val expLogits = scaledLogits.map { exp((it - maxLogit).toDouble()).toFloat() }
+            val sumExp = expLogits.sum()
+            val probs = expLogits.map { it / sumExp }
+
+            // Apply top-p (nucleus) sampling
+            val sortedIndices = probs.indices.sortedByDescending { probs[it] }
+            var cumulativeProb = 0f
+            val nucleus = mutableListOf<Int>()
+
+            for (idx in sortedIndices) {
+                nucleus.add(idx)
+                cumulativeProb += probs[idx]
+                if (cumulativeProb >= topP) {
+                    break
+                }
+            }
+
+            // Sample from nucleus
+            if (nucleus.isEmpty()) {
+                // Fallback to argmax
+                scaledLogits.indices.maxByOrNull { scaledLogits[it] }?.toLong()
+            } else {
+                // Weighted random selection from nucleus
+                val nucleusProbs = nucleus.map { probs[it] }
+                val nucleusProbSum = nucleusProbs.sum()
+                val normalizedProbs = nucleusProbs.map { it / nucleusProbSum }
+
+                var r = Random.nextFloat()
+                var selectedIdx = nucleus.last()
+                for (i in nucleus.indices) {
+                    r -= normalizedProbs[i]
+                    if (r <= 0) {
+                        selectedIdx = nucleus[i]
+                        break
+                    }
+                }
+                selectedIdx.toLong()
             }
         } catch (e: Exception) {
             null
