@@ -29,9 +29,10 @@ class BaseLlmEngineTest {
         val engine = MockLlmEngine()
 
         // Act
-        engine.initialize()
+        val result = engine.initialize()
 
         // Assert
+        assertTrue(result.isSuccess, "Initialize should succeed")
         assertTrue(engine.isInitializedPublic, "Engine should be initialized after initialize() call")
     }
 
@@ -41,23 +42,27 @@ class BaseLlmEngineTest {
         val engine = MockLlmEngine()
 
         // Act
-        engine.initialize()
-        engine.initialize()  // Second call should be safe
+        val result1 = engine.initialize()
+        val result2 = engine.initialize()  // Second call should be safe
 
         // Assert
+        assertTrue(result1.isSuccess, "First initialize should succeed")
+        assertTrue(result2.isSuccess, "Second initialize should succeed")
         assertTrue(engine.isInitializedPublic, "Engine should remain initialized")
         assertEquals(1, engine.initializeCallCount, "initialize() should only execute once")
     }
 
     @Test
-    fun `generate throws IllegalStateException when engine not initialized`() = runTest {
+    fun `generate returns failure when engine not initialized`() = runTest {
         // Arrange
         val engine = MockLlmEngine()
 
-        // Act & Assert
-        assertFailsWith<IllegalStateException> {
-            engine.generate("Hello")
-        }
+        // Act
+        val result = engine.generate("Hello")
+
+        // Assert
+        assertTrue(result.isFailure, "Generate should fail when engine not initialized")
+        assertTrue(result.exceptionOrNull() is IllegalStateException, "Should return IllegalStateException")
     }
 
     // ==================== Blocking Generation Tests ====================
@@ -66,10 +71,10 @@ class BaseLlmEngineTest {
     fun `generate returns valid GenerationResult with default config`() = runTest {
         // Arrange
         val engine = MockLlmEngine()
-        engine.initialize()
+        engine.initialize().getOrThrow()
 
         // Act
-        val result = engine.generate("Hello, AI!")
+        val result = engine.generate("Hello, AI!").getOrThrow()
 
         // Assert
         assertNotNull(result, "Result should not be null")
@@ -83,11 +88,11 @@ class BaseLlmEngineTest {
     fun `generate respects GenerationConfig maxTokens`() = runTest {
         // Arrange
         val engine = MockLlmEngine()
-        engine.initialize()
+        engine.initialize().getOrThrow()
         val config = GenerationConfig(maxTokens = 10)
 
         // Act
-        val result = engine.generate("Tell me a story", config)
+        val result = engine.generate("Tell me a story", config).getOrThrow()
 
         // Assert
         assertTrue(result.tokensGenerated <= 10, "Should not exceed max tokens")
@@ -97,12 +102,12 @@ class BaseLlmEngineTest {
     fun `generate respects GenerationConfig systemPrompt`() = runTest {
         // Arrange
         val engine = MockLlmEngine()
-        engine.initialize()
+        engine.initialize().getOrThrow()
         val customPrompt = "You are a pirate assistant"
         val config = GenerationConfig(systemPrompt = customPrompt)
 
         // Act
-        val result = engine.generate("Ahoy!", config)
+        val result = engine.generate("Ahoy!", config).getOrThrow()
 
         // Assert
         assertTrue(result.text.contains("pirate") || result.text.contains("Ahoy"),
@@ -113,13 +118,13 @@ class BaseLlmEngineTest {
     fun `generate handles userContext for personalization`() = runTest {
         // Arrange
         val engine = MockLlmEngine()
-        engine.initialize()
+        engine.initialize().getOrThrow()
         val config = GenerationConfig(
             userContext = mapOf("name" to "Alice", "timezone" to "PST")
         )
 
         // Act
-        val result = engine.generate("What's my name?", config)
+        val result = engine.generate("What's my name?", config).getOrThrow()
 
         // Assert
         assertNotNull(result.text, "Should return a response")
@@ -130,12 +135,12 @@ class BaseLlmEngineTest {
     fun `generate handles knowledgeContext for RAG`() = runTest {
         // Arrange
         val engine = MockLlmEngine()
-        engine.initialize()
+        engine.initialize().getOrThrow()
         val knowledge = "FACT: The Eiffel Tower is 330 meters tall."
         val config = GenerationConfig(knowledgeContext = knowledge)
 
         // Act
-        val result = engine.generate("How tall is the Eiffel Tower?", config)
+        val result = engine.generate("How tall is the Eiffel Tower?", config).getOrThrow()
 
         // Assert
         assertNotNull(result.text, "Should return a response")

@@ -319,70 +319,83 @@ fun ChatScreen(
     // Initialize AI engine on first load
     LaunchedEffect(Unit) {
         scope.launch {
-            try {
-                aiEngine.initialize()
-                engineInitialized = true
+            aiEngine.initialize()
+                .onSuccess {
+                    engineInitialized = true
 
-                // ONLY generate welcome if no messages exist (avoid duplicates on load)
-                if (chatViewModel.messages.value.isEmpty()) {
-                    // Generate context-aware welcome message with device and knowledge stats
-                    val aiMessageTimestamp = Clock.System.now().toEpochMilliseconds()
+                    // ONLY generate welcome if no messages exist (avoid duplicates on load)
+                    if (chatViewModel.messages.value.isEmpty()) {
+                        // Generate context-aware welcome message with device and knowledge stats
+                        val aiMessageTimestamp = Clock.System.now().toEpochMilliseconds()
 
-                    chatViewModel.addMessage(
-                        app.m1k3.ai.assistant.chat.ChatMessage(
-                            text = "...",
-                            isUser = false,
-                            timestamp = aiMessageTimestamp,
-                            inferenceStats = "🔄 Initializing...",
-                        ),
-                    )
-
-                    val aiMessageIndex = chatViewModel.messages.value.size - 1
-
-                    // Get device context for greeting
-                    val deviceModel = android.os.Build.MODEL
-                    val batteryManager = context.getSystemService(Context.BATTERY_SERVICE) as? android.os.BatteryManager
-                    val batteryLevel = batteryManager?.getIntProperty(android.os.BatteryManager.BATTERY_PROPERTY_CAPACITY) ?: -1
-                    val batteryInfo = if (batteryLevel > 0) "$batteryLevel% battery" else "battery connected"
-
-                    // Generate personalized welcome with device and knowledge context
-                    var welcomeText = ""
-                    aiEngine.generateStreaming(
-                        prompt =
-                            "Greet the user. " +
-                                "Mention that you're running 100% locally on their $deviceModel with $batteryInfo, " +
-                                "and that all conversations are private and never leave their device. " +
-                                "Keep it brief (2-3 sentences), friendly, and conversational.",
-                        config = app.m1k3.ai.assistant.ai.GenerationConfig(
-                            temperature = 0.5f, // Slightly creative but still coherent
-                            // Use static KB summary for welcome message (no RAG needed)
-                            knowledgeContext = knowledgeContext
-                        )
-                    ) { token ->
-                        welcomeText += token
-                        // Update welcome message in real-time
-                        chatViewModel.updateMessage(
-                            aiMessageIndex,
+                        chatViewModel.addMessage(
                             app.m1k3.ai.assistant.chat.ChatMessage(
-                                text = welcomeText,
+                                text = "...",
                                 isUser = false,
                                 timestamp = aiMessageTimestamp,
+                                inferenceStats = "🔄 Initializing...",
                             ),
                         )
+
+                        val aiMessageIndex = chatViewModel.messages.value.size - 1
+
+                        // Get device context for greeting
+                        val deviceModel = android.os.Build.MODEL
+                        val batteryManager = context.getSystemService(Context.BATTERY_SERVICE) as? android.os.BatteryManager
+                        val batteryLevel = batteryManager?.getIntProperty(android.os.BatteryManager.BATTERY_PROPERTY_CAPACITY) ?: -1
+                        val batteryInfo = if (batteryLevel > 0) "$batteryLevel% battery" else "battery connected"
+
+                        // Generate personalized welcome with device and knowledge context
+                        var welcomeText = ""
+                        aiEngine.generateStreaming(
+                            prompt =
+                                "Greet the user. " +
+                                    "Mention that you're running 100% locally on their $deviceModel with $batteryInfo, " +
+                                    "and that all conversations are private and never leave their device. " +
+                                    "Keep it brief (2-3 sentences), friendly, and conversational.",
+                            config = app.m1k3.ai.assistant.ai.GenerationConfig(
+                                temperature = 0.5f, // Slightly creative but still coherent
+                                // Use static KB summary for welcome message (no RAG needed)
+                                knowledgeContext = knowledgeContext
+                            )
+                        ) { token ->
+                            welcomeText += token
+                            // Update welcome message in real-time
+                            chatViewModel.updateMessage(
+                                aiMessageIndex,
+                                app.m1k3.ai.assistant.chat.ChatMessage(
+                                    text = welcomeText,
+                                    isUser = false,
+                                    timestamp = aiMessageTimestamp,
+                                ),
+                            )
+                        }.onFailure { e ->
+                            logger.e(e) { "Welcome message generation failed" }
+                            chatViewModel.updateMessage(
+                                aiMessageIndex,
+                                app.m1k3.ai.assistant.chat.ChatMessage(
+                                    text = "⚠️ Failed to generate welcome message: ${e.message}",
+                                    isUser = false,
+                                    timestamp = aiMessageTimestamp,
+                                    isError = true,
+                                ),
+                            )
+                        }
                     }
                 }
-            } catch (e: Exception) {
-                chatViewModel.addMessage(
-                    app.m1k3.ai.assistant.chat.ChatMessage(
-                        text =
-                            "⚠️ AI engine initialization failed: ${e.message}. " +
-                                "Make sure the ONNX model is in assets/",
-                        isUser = false,
-                        timestamp = Clock.System.now().toEpochMilliseconds(),
-                        isError = true,
-                    ),
-                )
-            }
+                .onFailure { e ->
+                    logger.e(e) { "AI engine initialization failed" }
+                    chatViewModel.addMessage(
+                        app.m1k3.ai.assistant.chat.ChatMessage(
+                            text =
+                                "⚠️ AI engine initialization failed: ${e.message}. " +
+                                    "Make sure the GGUF model is in assets/",
+                            isUser = false,
+                            timestamp = Clock.System.now().toEpochMilliseconds(),
+                            isError = true,
+                        ),
+                    )
+                }
         }
     }
 
@@ -484,20 +497,19 @@ fun ChatScreen(
                         avatarVM.startThinking()
 
                         scope.launch {
-                            try {
-                                // Add placeholder AI message that will be updated during streaming
-                                val aiMessageTimestamp = Clock.System.now().toEpochMilliseconds()
+                            // Add placeholder AI message that will be updated during streaming
+                            val aiMessageTimestamp = Clock.System.now().toEpochMilliseconds()
 
-                                chatViewModel.addMessage(
-                                    app.m1k3.ai.assistant.chat.ChatMessage(
-                                        text = "...",
-                                        isUser = false,
-                                        timestamp = aiMessageTimestamp,
-                                        inferenceStats = "🔄 Generating...",
-                                    ),
-                                )
+                            chatViewModel.addMessage(
+                                app.m1k3.ai.assistant.chat.ChatMessage(
+                                    text = "...",
+                                    isUser = false,
+                                    timestamp = aiMessageTimestamp,
+                                    inferenceStats = "🔄 Generating...",
+                                ),
+                            )
 
-                                val aiMessageIndex = chatViewModel.messages.value.size - 1
+                            val aiMessageIndex = chatViewModel.messages.value.size - 1
 
                                 // Auto-scroll to show the new message
                                 try {
@@ -756,111 +768,111 @@ fun ChatScreen(
 //                                            // Ignore scroll failures - inference must continue regardless
 //                                        }
 //                                    }
-                                }
-
-                                // Final update with complete stats
-                                val totalTime = System.currentTimeMillis() - startTime
-                                val tokensPerSec =
-                                    if (totalTime > 0) {
-                                        (tokenCount * 1000.0f) / totalTime
-                                    } else {
-                                        0f
-                                    }
-
-                                // Build stats with RAG info
-                                val statsText =
-                                    buildString {
-                                        append("⚡ $tokenCount tokens in ${totalTime}ms (${"%.1f".format(tokensPerSec)} tok/s)")
-                                        if (ragInfo.isNotEmpty()) {
-                                            append(" • $ragInfo")
+                                }.onSuccess {
+                                    // Final update with complete stats
+                                    val totalTime = System.currentTimeMillis() - startTime
+                                    val tokensPerSec =
+                                        if (totalTime > 0) {
+                                            (tokenCount * 1000.0f) / totalTime
+                                        } else {
+                                            0f
                                         }
+
+                                    // Build stats with RAG info
+                                    val statsText =
+                                        buildString {
+                                            append("⚡ $tokenCount tokens in ${totalTime}ms (${"%.1f".format(tokensPerSec)} tok/s)")
+                                            if (ragInfo.isNotEmpty()) {
+                                                append(" • $ragInfo")
+                                            }
+                                        }
+
+                                    // Convert StringBuilder to final String for persistence
+                                    val finalText = streamedText.toString().ifEmpty { "..." }
+
+                                    // DEBUG: Log final generation result
+                                    logger.i { "GENERATION COMPLETE: tokenCount=$tokenCount, finalText.length=${finalText.length}, text='${finalText.take(100)}...'" }
+
+                                    chatViewModel.updateMessage(
+                                        aiMessageIndex,
+                                        app.m1k3.ai.assistant.chat.ChatMessage(
+                                            text = finalText,
+                                            isUser = false,
+                                            timestamp = aiMessageTimestamp,
+                                            inferenceStats = statsText,
+                                            ragSources = ragSources, // Phase 3: Track RAG sources
+                                        ),
+                                    )
+
+                                    // Record assistant message with eco-metrics and RAG metadata (Phase 3)
+                                    chatViewModel.recordMessage(
+                                        content = finalText,
+                                        role = "assistant",
+                                        tokens = tokenCount,
+                                        ragSources = ragSources,
+                                        ragConfidence = ragConfidence,
+                                    )
+
+                                    // Log complete response for debugging
+                                    val hasTemplateTokens = finalText.contains("<|") || finalText.contains("|>")
+                                    logger.i {
+                                        "Generation complete: ${finalText.length} chars, $tokenCount tokens, " +
+                                        "${"%.1f".format(tokensPerSec)} tok/s, ${totalTime}ms" +
+                                        (if (hasTemplateTokens) " ⚠️ TEMPLATE TOKENS DETECTED" else "") +
+                                        (if (ragInfo.isNotEmpty()) ", RAG: $ragInfo" else "")
                                     }
 
-                                // Convert StringBuilder to final String for persistence
-                                val finalText = streamedText.toString().ifEmpty { "..." }
+                                    // Detect emotion from AI response
+                                    avatarVM.processMessage(finalText, isUserMessage = false)
+                                    avatarVM.startSpeaking()
 
-                                // DEBUG: Log final generation result
-                                logger.i { "GENERATION COMPLETE: tokenCount=$tokenCount, finalText.length=${finalText.length}, text='${finalText.take(100)}...'" }
+                                    // Success haptic feedback
+                                    haptics.success()
 
-                                chatViewModel.updateMessage(
-                                    aiMessageIndex,
-                                    app.m1k3.ai.assistant.chat.ChatMessage(
-                                        text = finalText,
-                                        isUser = false,
-                                        timestamp = aiMessageTimestamp,
-                                        inferenceStats = statsText,
-                                        ragSources = ragSources, // Phase 3: Track RAG sources
-                                    ),
-                                )
+                                    // Final scroll with animation (safe since streaming is done)
+                                    try {
+                                        listState.animateScrollToItem(chatViewModel.messages.value.size - 1)
+                                    } catch (e: Exception) {
+                                        // Scroll animation failed, but inference already completed
+                                    }
+                                }.onFailure { e ->
+                                    // Log error for debugging
+                                    logger.e(e) { "Generation failed: ${e.javaClass.simpleName}" }
 
-                                // Record assistant message with eco-metrics and RAG metadata (Phase 3)
-                                chatViewModel.recordMessage(
-                                    content = finalText,
-                                    role = "assistant",
-                                    tokens = tokenCount,
-                                    ragSources = ragSources,
-                                    ragConfidence = ragConfidence,
-                                )
+                                    // Show error on avatar
+                                    avatarVM.showError("Generation failed")
 
-                                // Log complete response for debugging
-                                val hasTemplateTokens = finalText.contains("<|") || finalText.contains("|>")
-                                logger.i {
-                                    "Generation complete: ${finalText.length} chars, $tokenCount tokens, " +
-                                    "${"%.1f".format(tokensPerSec)} tok/s, ${totalTime}ms" +
-                                    (if (hasTemplateTokens) " ⚠️ TEMPLATE TOKENS DETECTED" else "") +
-                                    (if (ragInfo.isNotEmpty()) ", RAG: $ragInfo" else "")
+                                    // Error haptic feedback
+                                    haptics.error()
+
+                                    // Create user-friendly error message
+                                    val errorMessage = when {
+                                        e.message?.contains("out of memory", ignoreCase = true) == true ->
+                                            "⚠️ Not enough memory to generate response. Try closing other apps or asking a simpler question."
+                                        e.message?.contains("timeout", ignoreCase = true) == true ->
+                                            "⚠️ Generation took too long. The AI model might be overloaded. Please try again."
+                                        e.message?.contains("model", ignoreCase = true) == true ->
+                                            "⚠️ AI model error: ${e.message}. Try restarting the app."
+                                        else ->
+                                            "⚠️ Couldn't generate response: ${e.message ?: "Unknown error"}. Please try again."
+                                    }
+
+                                    chatViewModel.addMessage(
+                                        app.m1k3.ai.assistant.chat.ChatMessage(
+                                            text = errorMessage,
+                                            isUser = false,
+                                            timestamp = Clock.System.now().toEpochMilliseconds(),
+                                            isError = true,
+                                        ),
+                                    )
                                 }
 
-                                // Detect emotion from AI response
-                                avatarVM.processMessage(finalText, isUserMessage = false)
-                                avatarVM.startSpeaking()
-
-                                // Success haptic feedback
-                                haptics.success()
-
-                                // Final scroll with animation (safe since streaming is done)
-                                try {
-                                    listState.animateScrollToItem(chatViewModel.messages.value.size - 1)
-                                } catch (e: Exception) {
-                                    // Scroll animation failed, but inference already completed
-                                }
-                            } catch (e: Exception) {
-                                // Log error for debugging
-                                logger.e(e) { "Generation failed: ${e.javaClass.simpleName}" }
-
-                                // Show error on avatar
-                                avatarVM.showError("Generation failed")
-
-                                // Error haptic feedback
-                                haptics.error()
-
-                                // Create user-friendly error message
-                                val errorMessage = when {
-                                    e.message?.contains("out of memory", ignoreCase = true) == true ->
-                                        "⚠️ Not enough memory to generate response. Try closing other apps or asking a simpler question."
-                                    e.message?.contains("timeout", ignoreCase = true) == true ->
-                                        "⚠️ Generation took too long. The AI model might be overloaded. Please try again."
-                                    e.message?.contains("model", ignoreCase = true) == true ->
-                                        "⚠️ AI model error: ${e.message}. Try restarting the app."
-                                    else ->
-                                        "⚠️ Couldn't generate response: ${e.message ?: "Unknown error"}. Please try again."
-                                }
-
-                                chatViewModel.addMessage(
-                                    app.m1k3.ai.assistant.chat.ChatMessage(
-                                        text = errorMessage,
-                                        isUser = false,
-                                        timestamp = Clock.System.now().toEpochMilliseconds(),
-                                        isError = true,
-                                    ),
-                                )
-                            } finally {
-                                isGenerating = false
-                                // Return to idle after a delay
-                                scope.launch {
-                                    kotlinx.coroutines.delay(2000)
-                                    avatarVM.returnToIdle()
-                                }
+                            // Cleanup after generation (success or failure)
+                            isGenerating = false
+                            // Return to idle after a delay
+                            scope.launch {
+                                kotlinx.coroutines.delay(2000)
+                                avatarVM.returnToIdle()
                             }
                         }
                     }
