@@ -106,19 +106,19 @@ class LlamaCppEngine(private val context: Context) : BaseLlmEngine {
      * Note: Llamatik's initGenerateModel() handles all configuration internally.
      * Gemma 3 270M provides 32K token context window (4x larger than SmolLM2-135M).
      *
-     * @throws RuntimeException if initialization fails
+     * @return Result.success(Unit) if initialization succeeds, Result.failure(exception) otherwise
      */
-    override suspend fun initialize() = withContext(Dispatchers.IO) {
+    override suspend fun initialize(): Result<Unit> = withContext(Dispatchers.IO) {
         // Fast path: already initialized (volatile read)
         if (isInitialized) {
-            return@withContext
+            return@withContext Result.success(Unit)
         }
 
         // Thread-safe initialization with mutex (prevents double-init race condition)
         initMutex.withLock {
             // Double-check after acquiring lock
             if (isInitialized) {
-                return@withContext
+                return@withLock Result.success(Unit)
             }
 
             try {
@@ -148,11 +148,12 @@ class LlamaCppEngine(private val context: Context) : BaseLlmEngine {
                 isInitialized = true
                 logger.i { "Initialization complete - Gemma 3 270M ready (sampling: temp=1.0, top_k=64, top_p=0.95)" }
 
+                Result.success(Unit)
             } catch (e: Exception) {
                 logger.e(e) { "Initialization failed" }
                 e.printStackTrace()
                 isInitialized = false
-                throw RuntimeException("Failed to initialize LlamaCppEngine", e)
+                Result.failure(RuntimeException("Failed to initialize LlamaCppEngine", e))
             }
         }
     }
@@ -164,16 +165,16 @@ class LlamaCppEngine(private val context: Context) : BaseLlmEngine {
      *
      * @param prompt User input text
      * @param config Generation configuration
-     * @return GenerationResult with full response text and performance metrics
-     * @throws IllegalStateException if engine not initialized
-     * @throws RuntimeException if inference fails
+     * @return Result.success(GenerationResult) if generation succeeds, Result.failure(exception) otherwise
      */
     override suspend fun generate(
         prompt: String,
         config: GenerationConfig
-    ): GenerationResult = withContext(Dispatchers.Default) {
+    ): Result<GenerationResult> = withContext(Dispatchers.Default) {
         if (!isInitialized) {
-            throw IllegalStateException("Engine not initialized. Call initialize() first.")
+            return@withContext Result.failure(
+                IllegalStateException("Engine not initialized. Call initialize() first.")
+            )
         }
 
         val startTime = System.currentTimeMillis()
@@ -187,11 +188,13 @@ class LlamaCppEngine(private val context: Context) : BaseLlmEngine {
         // Handle maxTokens = 0 edge case
         if (maxTokens == 0) {
             logger.d { "maxTokens=0, returning empty response" }
-            return@withContext GenerationResult(
-                text = "",
-                tokensGenerated = 0,
-                inferenceTimeMs = 0,
-                tokensPerSecond = 0f
+            return@withContext Result.success(
+                GenerationResult(
+                    text = "",
+                    tokensGenerated = 0,
+                    inferenceTimeMs = 0,
+                    tokensPerSecond = 0f
+                )
             )
         }
 
@@ -285,17 +288,18 @@ class LlamaCppEngine(private val context: Context) : BaseLlmEngine {
 
             logger.i { "Generation complete (length=${fullResponse.length} chars, tokens=$finalTokenCount, time=${inferenceTimeMs}ms, ${String.format("%.1f", tokensPerSecond)} tok/s)" }
 
-            GenerationResult(
-                text = fullResponse,
-                tokensGenerated = finalTokenCount,
-                inferenceTimeMs = inferenceTimeMs,
-                tokensPerSecond = tokensPerSecond
+            Result.success(
+                GenerationResult(
+                    text = fullResponse,
+                    tokensGenerated = finalTokenCount,
+                    inferenceTimeMs = inferenceTimeMs,
+                    tokensPerSecond = tokensPerSecond
+                )
             )
-
         } catch (e: Exception) {
             logger.e(e) { "Generation failed" }
             e.printStackTrace()
-            throw RuntimeException("Generation failed", e)
+            Result.failure(RuntimeException("Generation failed", e))
         }
     }
 
@@ -307,16 +311,17 @@ class LlamaCppEngine(private val context: Context) : BaseLlmEngine {
      * @param prompt User input text
      * @param config Generation configuration
      * @param onToken Callback invoked for each generated token
-     * @throws IllegalStateException if engine not initialized
-     * @throws RuntimeException if inference fails
+     * @return Result.success(Unit) if streaming completes, Result.failure(exception) if error occurs
      */
     override suspend fun generateStreaming(
         prompt: String,
         config: GenerationConfig,
         onToken: (String) -> Unit
-    ) = withContext(Dispatchers.Default) {
+    ): Result<Unit> = withContext(Dispatchers.Default) {
         if (!isInitialized) {
-            throw IllegalStateException("Engine not initialized. Call initialize() first.")
+            return@withContext Result.failure(
+                IllegalStateException("Engine not initialized. Call initialize() first.")
+            )
         }
 
         try {
@@ -424,9 +429,10 @@ class LlamaCppEngine(private val context: Context) : BaseLlmEngine {
                 )
             }
 
+            Result.success(Unit)
         } catch (e: Exception) {
             logger.e(e) { "Streaming failed" }
-            throw RuntimeException("Streaming failed", e)
+            Result.failure(RuntimeException("Streaming failed", e))
         }
     }
 
