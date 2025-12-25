@@ -439,21 +439,23 @@ class LlamaCppEngine(private val context: Context) : BaseLlmEngine {
     /**
      * Get device-appropriate maximum tokens for generation.
      *
-     * Since Llamatik doesn't expose configuration APIs, we return reasonable defaults
-     * based on device RAM. The actual behavior is controlled by Llamatik internally.
+     * Returns a very high limit to let the model's stop tokens determine completion naturally.
+     * The model will stop when it generates <end_of_turn> or <eos> tokens.
      *
-     * Note: Minimum 256 tokens for usable responses (~192 words).
-     * Gemma 3 270M handles this well even on low-RAM devices.
+     * Note: High limits are safe because:
+     * 1. Model stop tokens prevent runaway generation
+     * 2. User can interrupt generation in UI
+     * 3. Allows for longer, more complete responses
      *
-     * @return Recommended max tokens (256-512 depending on device)
+     * @return High token limit (2048-4096 depending on device) to let model decide
      */
     override fun getOptimalMaxTokens(): Int {
         return when {
-            deviceRamGB >= 12 -> 512   // 12GB+: Long responses (~384 words)
-            deviceRamGB >= 8 -> 384    // 8-12GB: Medium-long responses (~288 words)
-            deviceRamGB >= 6 -> 320    // 6-8GB: Medium responses (~240 words)
-            deviceRamGB >= 4 -> 256    // 4-6GB: Short responses (~192 words)
-            else -> 256                 // <4GB: Minimum usable (~192 words) - emulators + budget devices
+            deviceRamGB >= 12 -> 4096   // 12GB+: Let model decide naturally (~3000 words max)
+            deviceRamGB >= 8 -> 3072    // 8-12GB: High limit (~2300 words max)
+            deviceRamGB >= 6 -> 2048    // 6-8GB: Generous limit (~1500 words max)
+            deviceRamGB >= 4 -> 1536    // 4-6GB: Reasonable limit (~1150 words max)
+            else -> 1024                // <4GB: Conservative but usable (~750 words max)
         }
     }
 
