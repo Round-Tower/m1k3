@@ -48,10 +48,10 @@ class MockLlmEngine(
     val isInitializedPublic: Boolean
         get() = isInitialized
 
-    override suspend fun initialize() {
+    override suspend fun initialize(): Result<Unit> {
         if (isInitialized) {
             // Already initialized, skip
-            return
+            return Result.success(Unit)
         }
         initializeCallCount++
 
@@ -59,13 +59,17 @@ class MockLlmEngine(
         delay(5L)
 
         isInitialized = true
+        return Result.success(Unit)
     }
 
     override suspend fun generate(
         prompt: String,
         config: GenerationConfig
-    ): GenerationResult {
-        checkInitialized()
+    ): Result<GenerationResult> {
+        // Check initialization
+        if (!isInitialized) {
+            return Result.failure(IllegalStateException("Engine not initialized. Call initialize() first."))
+        }
 
         val startTime = System.currentTimeMillis()
 
@@ -75,12 +79,12 @@ class MockLlmEngine(
         // Handle edge case: maxTokens = 0
         val maxTokens = config.maxTokens ?: optimalMaxTokens
         if (maxTokens == 0) {
-            return GenerationResult(
+            return Result.success(GenerationResult(
                 text = "",
                 tokensGenerated = 0,
                 inferenceTimeMs = 0,
                 tokensPerSecond = 0f
-            )
+            ))
         }
 
         // Generate response based on configuration
@@ -94,35 +98,44 @@ class MockLlmEngine(
             actualTokens.toFloat()
         }
 
-        return GenerationResult(
+        return Result.success(GenerationResult(
             text = responseText,
             tokensGenerated = actualTokens,
             inferenceTimeMs = inferenceTime,
             tokensPerSecond = tokensPerSecond
-        )
+        ))
     }
 
     override suspend fun generateStreaming(
         prompt: String,
         config: GenerationConfig,
         onToken: (String) -> Unit
-    ) {
-        checkInitialized()
-
-        // Handle edge case: maxTokens = 0
-        val maxTokens = config.maxTokens ?: optimalMaxTokens
-        if (maxTokens == 0) {
-            return
+    ): Result<Unit> {
+        // Check initialization
+        if (!isInitialized) {
+            return Result.failure(IllegalStateException("Engine not initialized. Call initialize() first."))
         }
 
-        // Generate response and emit token by token
-        val responseText = buildMockResponse(prompt, config)
-        val tokens = tokenizeResponse(responseText)
-        val actualTokens = minOf(tokens.size, maxTokens)
+        return try {
+            // Handle edge case: maxTokens = 0
+            val maxTokens = config.maxTokens ?: optimalMaxTokens
+            if (maxTokens == 0) {
+                return Result.success(Unit)
+            }
 
-        for (i in 0 until actualTokens) {
-            delay(2L)  // Simulate per-token delay
-            onToken(tokens[i])
+            // Generate response and emit token by token
+            val responseText = buildMockResponse(prompt, config)
+            val tokens = tokenizeResponse(responseText)
+            val actualTokens = minOf(tokens.size, maxTokens)
+
+            for (i in 0 until actualTokens) {
+                delay(2L)  // Simulate per-token delay
+                onToken(tokens[i])
+            }
+
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
         }
     }
 
@@ -135,12 +148,6 @@ class MockLlmEngine(
     }
 
     // Helper functions
-
-    private fun checkInitialized() {
-        if (!isInitialized) {
-            throw IllegalStateException("Engine not initialized. Call initialize() first.")
-        }
-    }
 
     /**
      * Build mock response based on prompt and configuration

@@ -2,6 +2,7 @@ package app.m1k3.ai.assistant.ai
 
 import android.content.Context
 import app.m1k3.ai.assistant.utils.Logger
+import app.m1k3.ai.assistant.utils.resultOf
 import com.llamatik.library.platform.LlamaBridge
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
