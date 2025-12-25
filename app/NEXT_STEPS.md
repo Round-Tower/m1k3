@@ -1,6 +1,7 @@
 # 間 AI - Next Steps & Future Improvements
 
 **Created**: 2025-12-25 (Christmas Day Refactoring Session 🎄)
+**Updated**: 2025-12-25 (Post-Red Wine Edition 🍷)
 **Status**: Post-Beta Planning Document
 **Priority**: Medium-term improvements for v1.0+
 
@@ -15,10 +16,303 @@
 - 49 tests passing (36 unit + 13 integration)
 - ChatScreen Result handling with .onSuccess/.onFailure
 
-⚠️ **Known Issues**:
-- Chat responses feel "limited" (likely due to small model size)
+⚠️ **Known Issues & Constraints**:
+- Chat responses feel "limited" (small model + aggressive quantization)
 - Gemma 3 270M struggles with complex instructions
 - IQ3_XXS quantization sacrifices quality for size
+- **APK size constraint** - Need small initial download
+- **Dynamic model downloads required** - Can't bundle large models
+
+---
+
+## 🤖 Priority 0: Agentic Bootstrap Strategy (GAME CHANGER!)
+
+**Status**: 🍷 Red Wine Brainstorm - Brilliant Idea!
+**Concept**: Use a small bundled agent to coordinate downloads AND provide agentic capabilities out of the box!
+
+### **The Vision**:
+1. **Bundle FunctionGemma 2B** (~1.2GB Q4_K_M) OR **Gemma 3 270M w/ Function Calling** (~200MB)
+2. **Agent helps user download chat models** - Meta! AI helps download better AI!
+3. **Provides immediate value** - Tool use, function calling, multi-step reasoning from day 1
+4. **Two-model architecture** - Agent (tools/coordination) + Chat (conversation)
+
+### **Architecture Options**:
+
+#### **Option A: Dual Model System** ⭐⭐⭐⭐⭐ (Recommended)
+**Bundle**: Gemma 3 270M Q4_K_M (200MB) with function calling via structured prompts
+**Download**: Larger chat models on-demand (1B, 3.8B, etc.)
+
+**Roles**:
+- **Agent Model** (bundled 270M):
+  - Coordinates model downloads
+  - File operations (search, organize conversations)
+  - Settings management
+  - Tool use (calculator, web search via MCP, etc.)
+  - Multi-step task planning
+
+- **Chat Model** (downloaded on-demand):
+  - Natural conversation
+  - Long-form responses
+  - RAG-enhanced knowledge retrieval
+  - Complex instruction following
+
+**Benefits**:
+✅ Small APK (50MB base + 200MB agent = 250MB total)
+✅ Immediate agentic capabilities
+✅ User chooses chat model quality vs speed
+✅ Agent persists, chat model swappable
+✅ Two models can collaborate (agent plans, chat executes)
+
+**Implementation**:
+```kotlin
+class DualModelEngine(context: Context) {
+    private val agentEngine = LlamaCppEngine(context, "gemma-3-270m-it-Q4_K_M.gguf") // Bundled
+    private val chatEngine = LlamaCppEngine(context, userSelectedModel) // Downloaded
+
+    suspend fun executeAgentTask(task: AgentTask): Result<AgentResponse> {
+        // Use function calling for structured output
+        val functionPrompt = """
+        You are an AI agent. Available functions:
+        - download_model(name, size_mb)
+        - search_files(query)
+        - update_settings(key, value)
+
+        Task: ${task.description}
+        Respond with JSON function call.
+        """.trimIndent()
+
+        return agentEngine.generate(functionPrompt).map { result ->
+            parseAndExecuteFunction(result.text)
+        }
+    }
+
+    suspend fun chat(message: String): Result<String> {
+        return chatEngine.generateStreaming(message) { token ->
+            // Stream to UI
+        }
+    }
+}
+```
+
+#### **Option B: FunctionGemma 2B** ⭐⭐⭐ (More powerful, larger APK)
+**Bundle**: FunctionGemma 2B Q4_K_M (~1.2GB)
+**Download**: Optional chat models
+
+**Pros**:
+- Native function calling support (better than prompt engineering)
+- More capable agent (2B params)
+- Designed specifically for tool use
+
+**Cons**:
+- Larger APK (50MB + 1.2GB = 1.25GB initial download)
+- Slower on low-end devices
+- May be overkill for basic coordination tasks
+
+#### **Option C: No Bundling, Agent-First Download** ⭐⭐⭐⭐ (Smallest APK)
+**Bundle**: Nothing (50MB APK only)
+**Download**: FunctionGemma 2B FIRST, then chat models
+
+**Flow**:
+1. User installs app (50MB)
+2. First launch: "Downloading AI Agent..." (1.2GB FunctionGemma)
+3. Agent ready → helps download chat models
+4. Full agentic capabilities available
+
+**Benefits**:
+✅ Smallest initial APK (50MB)
+✅ Best agent capabilities (native function calling)
+✅ Clear separation: agent vs chat
+
+**Drawbacks**:
+⚠️ Longer first-launch wait (1.2GB download)
+⚠️ No offline use until download completes
+
+---
+
+### **Function Calling Implementation** (Option A - Recommended)
+
+**Structured Output via Prompting**:
+```kotlin
+// AgentPromptBuilder.kt
+object AgentPromptBuilder {
+    fun buildFunctionCallingPrompt(
+        task: String,
+        availableFunctions: List<FunctionDefinition>
+    ): String {
+        return """
+        <bos><start_of_turn>system
+        You are M1K3 Agent, a helpful AI assistant with function calling capabilities.
+        You can call functions to help users accomplish tasks.
+
+        Available Functions:
+        ${availableFunctions.joinToString("\n") { it.toJsonSchema() }}
+
+        Instructions:
+        1. Analyze the user's task
+        2. Choose the appropriate function(s) to call
+        3. Respond ONLY with valid JSON function calls
+        4. Format: {"function": "function_name", "arguments": {...}}
+        <end_of_turn>
+        <start_of_turn>user
+        Task: $task
+        <end_of_turn>
+        <start_of_turn>model
+        """.trimIndent()
+    }
+}
+
+// FunctionDefinition.kt
+data class FunctionDefinition(
+    val name: String,
+    val description: String,
+    val parameters: Map<String, ParameterSchema>
+) {
+    fun toJsonSchema(): String = """
+    {
+      "name": "$name",
+      "description": "$description",
+      "parameters": ${parameters.toJson()}
+    }
+    """.trimIndent()
+}
+
+// Built-in functions
+val DOWNLOAD_MODEL = FunctionDefinition(
+    name = "download_model",
+    description = "Download a new AI model from HuggingFace",
+    parameters = mapOf(
+        "model_name" to ParameterSchema("string", "Name of model (e.g., 'gemma-3-1b-it-Q4_K_M')"),
+        "url" to ParameterSchema("string", "HuggingFace download URL"),
+        "size_mb" to ParameterSchema("number", "File size in MB")
+    )
+)
+
+val SEARCH_CONVERSATIONS = FunctionDefinition(
+    name = "search_conversations",
+    description = "Search through user's chat history",
+    parameters = mapOf(
+        "query" to ParameterSchema("string", "Search query"),
+        "limit" to ParameterSchema("number", "Max results to return")
+    )
+)
+
+val UPDATE_SETTINGS = FunctionDefinition(
+    name = "update_settings",
+    description = "Update app settings",
+    parameters = mapOf(
+        "setting_key" to ParameterSchema("string", "Setting to update"),
+        "value" to ParameterSchema("any", "New value")
+    )
+)
+```
+
+**Function Executor**:
+```kotlin
+// AgentExecutor.kt
+class AgentExecutor(
+    private val context: Context,
+    private val database: MaDatabase
+) {
+    suspend fun execute(functionCall: FunctionCall): Result<FunctionResult> {
+        return when (functionCall.function) {
+            "download_model" -> downloadModel(
+                functionCall.arguments["model_name"] as String,
+                functionCall.arguments["url"] as String,
+                functionCall.arguments["size_mb"] as Int
+            )
+
+            "search_conversations" -> searchConversations(
+                functionCall.arguments["query"] as String,
+                functionCall.arguments["limit"] as? Int ?: 10
+            )
+
+            "update_settings" -> updateSettings(
+                functionCall.arguments["setting_key"] as String,
+                functionCall.arguments["value"]
+            )
+
+            else -> Result.failure(
+                IllegalArgumentException("Unknown function: ${functionCall.function}")
+            )
+        }
+    }
+
+    private suspend fun downloadModel(
+        name: String,
+        url: String,
+        sizeMB: Int
+    ): Result<FunctionResult> = withContext(Dispatchers.IO) {
+        try {
+            val downloader = ModelDownloader(context)
+            downloader.download(url, name) { progress ->
+                // Update UI progress
+            }.map { file ->
+                FunctionResult.success(
+                    "Successfully downloaded $name (${sizeMB}MB) to ${file.absolutePath}"
+                )
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+}
+```
+
+---
+
+### **User Experience Flow**:
+
+**First Launch** (Option A - Dual Model):
+1. App opens → "Setting up M1K3 Agent..." (copies 200MB model from assets)
+2. Agent ready in ~10 seconds
+3. Welcome screen:
+   > "Hi! I'm M1K3 Agent 🤖
+   >
+   > I can help you download chat models and manage your conversations.
+   >
+   > Would you like to download a chat model now?
+   > - Gemma 3 1B (750MB) - Balanced quality & speed ✅ Recommended
+   > - Phi-3.5 Mini (2GB) - Best quality, slower
+   > - Skip for now - Use agent-only mode"
+
+**Agent-Only Mode**:
+- User: "Search my conversations for 'pizza recipe'"
+- Agent: *Calls search_conversations function*
+- Agent: "Found 3 conversations about pizza recipes from last week..."
+
+**Dual-Model Mode** (after chat model downloaded):
+- User: "Tell me a story about a robot"
+- App: *Routes to chat model* (better at creative long-form)
+- User: "Find that story I wrote last week"
+- App: *Routes to agent model* (tool use for search)
+
+---
+
+### **Implementation Timeline**:
+
+**Week 1** (Agent Foundation):
+- Create `AgentPromptBuilder.kt` with function calling prompts
+- Create `FunctionDefinition.kt` and built-in functions
+- Create `AgentExecutor.kt` for function execution
+- Test structured output with Gemma 3 270M
+
+**Week 2** (Model Download System):
+- Create `ModelDownloader.kt` with HuggingFace API
+- Create `ModelManager.kt` for installed models
+- Add progress UI for downloads
+- Test download → install → switch flow
+
+**Week 3** (Dual Model Architecture):
+- Create `DualModelEngine.kt` wrapper
+- Implement intelligent routing (task type → model selection)
+- Create agent-first onboarding flow
+- Add model selection UI
+
+**Week 4** (Polish & Testing):
+- Test all function calls
+- Add more built-in functions (calculator, unit conversion, etc.)
+- Optimize prompt engineering for 270M
+- Beta testing with real users
 
 ---
 
