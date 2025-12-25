@@ -24,6 +24,14 @@ This project is managed through phase-specific documentation:
 - **[Phase 5: Advanced Features & Polish](docs/phases/PHASE5.md)** (30 tickets, Weeks 12-14)
 - **[Phase 6: Integration Testing & Release](docs/phases/PHASE6.md)** (10 tickets, Weeks 15-16)
 
+### Parallel Development
+
+- **[Qwen Integration: Code Generation](docs/phases/QWEN_INTEGRATION.md)** (20 tickets, Weeks 1-4)
+  - Dual-model system for visual expression
+  - Template-driven generation (quizzes, games, SVG, presentations)
+  - Google Play Dynamic Delivery (130MB on-demand)
+  - WCAG 2.2 Level AA accessible templates
+
 ---
 
 ## Progress Tracking

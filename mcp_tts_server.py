@@ -28,7 +28,7 @@ from src.engines.voice.intelligent_tts_engine import IntelligentTTSEngine, TTSQu
 from src.tts.controllers.piper_tts_manager import PiperTTSManager
 from src.tts.effects.audio_effects import (
     PitchShiftEffect, RobotVoiceEffect, EchoEffect,
-    ChorusEffect, LoFiEffect, FlangerEffect, ReverbEffect
+    ChorusEffect, LoFiEffect, MultibandLoFiEffect, FlangerEffect, ReverbEffect
 )
 
 # Initialize the TTS engines globally
@@ -77,8 +77,8 @@ async def handle_list_tools() -> list[types.Tool]:
                     },
                     "effect": {
                         "type": "string",
-                        "enum": ["none", "robot", "chipmunk", "giant", "echo", "reverb", "chorus", "lofi", "flanger"],
-                        "description": "Fun audio effect to apply (default: none). robot=mechanical voice, chipmunk=high pitch, giant=deep voice, echo=delay, reverb=spacious, chorus=rich harmonies, lofi=retro sound, flanger=swooshing",
+                        "enum": ["none", "robot", "chipmunk", "giant", "echo", "reverb", "chorus", "lofi", "nostalgic", "flanger"],
+                        "description": "Fun audio effect to apply (default: none). robot=mechanical voice, chipmunk=high pitch, giant=deep voice, echo=delay, reverb=spacious, chorus=rich harmonies, lofi=retro sound, nostalgic=vintage warmth with vocal clarity, flanger=swooshing",
                         "default": "none"
                     },
                     "effect_intensity": {
@@ -234,12 +234,26 @@ async def handle_call_tool(
                         audio_data = effect.apply(audio_data, sample_rate)
 
                     elif effect_name == "lofi":
+                        # Original lofi (uniform bitcrushing)
                         bit_depth = int(16 - 8 * effect_intensity)
                         effect = LoFiEffect({
                             "bit_depth": max(4, bit_depth),
                             "downsample": int(2 + 6 * effect_intensity),
                             "noise": 0.01 * effect_intensity
                         })
+                        audio_data = effect.apply(audio_data, sample_rate)
+
+                    elif effect_name == "lofi_nostalgic" or effect_name == "nostalgic":
+                        # Multiband lofi with vocal preservation (M1K3's nostalgic character)
+                        # Map intensity to presets: low → gentle, medium → balanced, high → aggressive
+                        if effect_intensity < 0.4:
+                            preset = "lofi_gentle"
+                        elif effect_intensity < 0.7:
+                            preset = "lofi_balanced"
+                        else:
+                            preset = "lofi_aggressive"
+
+                        effect = MultibandLoFiEffect({"preset": preset})
                         audio_data = effect.apply(audio_data, sample_rate)
 
                     elif effect_name == "flanger":

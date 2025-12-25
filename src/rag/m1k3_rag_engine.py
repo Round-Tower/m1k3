@@ -106,15 +106,27 @@ class RAGDocument:
 
 class EmbeddingEngine:
     """Handles text embeddings with multiple backend support"""
-    
-    def __init__(self, model_name: str = "BAAI/bge-small-en-v1.5", cache_embeddings: bool = True):
+
+    def __init__(self,
+                 model_name: str = "google/embeddinggemma-300m",
+                 cache_embeddings: bool = True,
+                 truncate_dim: Optional[int] = None):
+        """
+        Initialize embedding engine.
+
+        Args:
+            model_name: Embedding model (default: google/embeddinggemma-300m)
+            cache_embeddings: Enable caching for faster repeated lookups
+            truncate_dim: Truncate embeddings to this dimension (EmbeddingGemma only: 768/512/256/128)
+        """
         self.model_name = model_name
         self.cache_embeddings = cache_embeddings
+        self.truncate_dim = truncate_dim
         self.model = None
         self.embedding_cache = {} if cache_embeddings else None
         self.embedding_dim = None
         self.logger = logging.getLogger(__name__)
-        
+
         # Initialize with fallback strategy
         self._initialize_model()
     
@@ -124,40 +136,57 @@ class EmbeddingEngine:
             try:
                 print(f"🔄 Loading embedding model: {self.model_name}")
                 self.model = SentenceTransformer(self.model_name)
-                
+
                 # Test model and get dimensions
                 test_embedding = self.model.encode(["test"], show_progress_bar=False)
                 self.embedding_dim = len(test_embedding[0])
+
+                # Validate truncate_dim for EmbeddingGemma
+                if self.truncate_dim:
+                    if "embeddinggemma" in self.model_name.lower():
+                        valid_dims = [768, 512, 256, 128]
+                        if self.truncate_dim not in valid_dims:
+                            print(f"⚠️ Invalid truncate_dim {self.truncate_dim}. Must be one of {valid_dims}")
+                            self.truncate_dim = None
+                        else:
+                            print(f"✅ Matryoshka truncation: {self.embedding_dim}D → {self.truncate_dim}D")
+                    else:
+                        print(f"⚠️ Truncation only supported for EmbeddingGemma")
+                        self.truncate_dim = None
+
                 print(f"✅ Embedding model loaded ({self.embedding_dim}D)")
                 return True
-                
+
             except Exception as e:
                 print(f"❌ Failed to load {self.model_name}: {e}")
-                
-                # Try fallback models
+
+                # Try fallback models (EmbeddingGemma → BGE → MiniLM → MPNet)
                 fallback_models = [
+                    "BAAI/bge-small-en-v1.5",
                     "all-MiniLM-L6-v2",
                     "all-mpnet-base-v2"
                 ]
-                
+
                 for fallback in fallback_models:
                     try:
                         print(f"🔄 Trying fallback model: {fallback}")
                         self.model = SentenceTransformer(fallback)
                         self.model_name = fallback
-                        
+                        self.truncate_dim = None  # Disable truncation for fallback models
+
                         test_embedding = self.model.encode(["test"], show_progress_bar=False)
                         self.embedding_dim = len(test_embedding[0])
                         print(f"✅ Fallback model loaded ({self.embedding_dim}D)")
                         return True
-                        
+
                     except Exception as fallback_error:
                         print(f"❌ Fallback {fallback} failed: {fallback_error}")
                         continue
-        
+
         # Ultimate fallback - mock embeddings
         print("⚠️  Using mock embeddings (limited functionality)")
-        self.embedding_dim = 384
+        self.embedding_dim = 768  # Match EmbeddingGemma default
+        self.truncate_dim = None
         return False
     
     def embed_texts(self, texts: List[str]) -> List[List[float]]:
@@ -178,7 +207,13 @@ class EmbeddingEngine:
             # Generate embedding
             if self.model:
                 try:
-                    embedding = self.model.encode([text], show_progress_bar=False)[0].tolist()
+                    embedding_vec = self.model.encode([text], show_progress_bar=False)[0]
+
+                    # Apply Matryoshka truncation if specified
+                    if self.truncate_dim and len(embedding_vec) > self.truncate_dim:
+                        embedding_vec = embedding_vec[:self.truncate_dim]
+
+                    embedding = embedding_vec.tolist()
                 except Exception as e:
                     self.logger.warning(f"Embedding generation failed: {e}")
                     embedding = self._mock_embedding(text)
@@ -405,26 +440,36 @@ class KnowledgeBase:
 
 class M1K3RAGEngine:
     """Main RAG engine for M1K3 system"""
-    
-    def __init__(self, 
+
+    def __init__(self,
                  knowledge_base_path: str = "knowledge/m1k3_knowledge_base.json",
-                 embedding_model: str = "BAAI/bge-small-en-v1.5",
-                 lazy_load: bool = True):
-        
+                 embedding_model: str = "google/embeddinggemma-300m",
+                 lazy_load: bool = True,
+                 truncate_dim: Optional[int] = None):
+        """
+        Initialize M1K3 RAG Engine.
+
+        Args:
+            knowledge_base_path: Path to knowledge base JSON file
+            embedding_model: Embedding model (default: google/embeddinggemma-300m)
+            lazy_load: Lazy-load embedding model when first needed
+            truncate_dim: Truncate embeddings to this dimension (EmbeddingGemma: 768/512/256/128)
+        """
         self.knowledge_base_path = knowledge_base_path
         self.embedding_model_name = embedding_model
         self.lazy_load = lazy_load
-        
+        self.truncate_dim = truncate_dim
+
         # Core components
         self.knowledge_base = None
         self.embedding_engine = None
         self.intent_engine = None
-        
+
         # Configuration
         self.max_context_documents = 3
         self.similarity_threshold = 0.1
         self.logger = logging.getLogger(__name__)
-        
+
         # Initialize components
         self._initialize()
     
@@ -455,7 +500,8 @@ class M1K3RAGEngine:
         if not self.embedding_engine:
             self.embedding_engine = EmbeddingEngine(
                 model_name=self.embedding_model_name,
-                cache_embeddings=True
+                cache_embeddings=True,
+                truncate_dim=self.truncate_dim
             )
         return self.embedding_engine
     

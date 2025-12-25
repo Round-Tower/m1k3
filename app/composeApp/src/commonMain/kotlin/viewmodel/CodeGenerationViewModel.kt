@@ -3,8 +3,17 @@ package viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import domain.coding.*
-import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
  * ViewModel for code generation screen with Smart Model Auto-Selection
@@ -130,16 +139,19 @@ abstract class BaseCodeGenerationViewModel : ViewModel() {
     /**
      * Load the appropriate model for current template
      * Uses smart auto-selection via ensureCorrectEngine()
+     * Runs on IO dispatcher to avoid blocking main thread
      */
     fun loadModel() {
         if (_uiState.value.isModelLoaded || _uiState.value.isLoadingModel) {
             return
         }
 
-        viewModelScope.launch {
-            _uiState.update { it.copy(isLoadingModel = true, error = null) }
+        viewModelScope.launch(Dispatchers.IO) {
+            withContext(Dispatchers.Main) {
+                _uiState.update { it.copy(isLoadingModel = true, error = null) }
+            }
 
-            // Smart selection based on current template
+            // Smart selection based on current template (runs on IO)
             ensureCorrectEngine(_uiState.value.selectedTemplate)
         }
     }
@@ -166,13 +178,20 @@ abstract class BaseCodeGenerationViewModel : ViewModel() {
     /**
      * Generate code with current configuration
      * Automatically ensures correct engine is loaded for template type
+     * Runs model loading on IO dispatcher to avoid ANR
      */
     fun generateCode() {
         val currentState = _uiState.value
 
-        // Validation
+        // Validation: empty check
         if (currentState.topic.isBlank()) {
             _uiState.update { it.copy(error = "Please enter a topic") }
+            return
+        }
+
+        // Validation: length limit (prevent OOM in tokenizer)
+        if (currentState.topic.length > 500) {
+            _uiState.update { it.copy(error = "Topic too long (max 500 characters)") }
             return
         }
 
@@ -205,8 +224,10 @@ abstract class BaseCodeGenerationViewModel : ViewModel() {
                 )
             }
 
-            // Ensure correct engine is loaded for this template type
-            ensureCorrectEngine(currentState.selectedTemplate)
+            // Ensure correct engine is loaded for this template type (on IO to avoid ANR)
+            withContext(Dispatchers.IO) {
+                ensureCorrectEngine(currentState.selectedTemplate)
+            }
 
             // Proceed with generation if engine loaded successfully
             if (currentEngine == null) {
@@ -236,75 +257,75 @@ abstract class BaseCodeGenerationViewModel : ViewModel() {
 
                     // Update state based on event
                     when (event) {
-                    is GenerationEvent.Started -> {
-                        _uiState.update { it.copy(generationStage = "Starting...") }
-                    }
-
-                    is GenerationEvent.LoadingTemplate -> {
-                        _uiState.update {
-                            it.copy(generationStage = "Loading ${event.templateType.name.lowercase()} template...")
+                        is GenerationEvent.Started -> {
+                            _uiState.update { it.copy(generationStage = "Starting...") }
                         }
-                    }
 
-                    is GenerationEvent.Generating -> {
-                        _uiState.update {
-                            it.copy(
-                                progress = event.progress.toInt(),
-                                generationStage = "Generating code... ${event.progress.toInt()}%"
-                            )
+                        is GenerationEvent.LoadingTemplate -> {
+                            _uiState.update {
+                                it.copy(generationStage = "Loading ${event.templateType.name.lowercase()} template...")
+                            }
                         }
-                    }
 
-                    is GenerationEvent.Progress -> {
-                        _uiState.update {
-                            it.copy(
-                                progress = event.progress.toInt(),
-                                generationStage = event.stage
-                            )
+                        is GenerationEvent.Generating -> {
+                            _uiState.update {
+                                it.copy(
+                                    progress = event.progress.toInt(),
+                                    generationStage = "Generating code... ${event.progress.toInt()}%"
+                                )
+                            }
                         }
-                    }
 
-                    is GenerationEvent.PartialResult -> {
-                        _uiState.update {
-                            it.copy(
-                                partialResult = event.partial,
-                                generationStage = "Generating... (${event.partial.length} chars)"
-                            )
+                        is GenerationEvent.Progress -> {
+                            _uiState.update {
+                                it.copy(
+                                    progress = event.progress.toInt(),
+                                    generationStage = event.stage
+                                )
+                            }
                         }
-                    }
 
-                    is GenerationEvent.Validating -> {
-                        _uiState.update { it.copy(generationStage = "Validating output...") }
-                    }
-
-                    is GenerationEvent.InjectingTemplate -> {
-                        _uiState.update { it.copy(generationStage = "Injecting content...") }
-                    }
-
-                    is GenerationEvent.Completed -> {
-                        _uiState.update {
-                            it.copy(
-                                isGenerating = false,
-                                progress = 100,
-                                generatedHtml = event.html,
-                                metrics = event.metrics,
-                                generationStage = "Complete!",
-                                partialResult = null
-                            )
+                        is GenerationEvent.PartialResult -> {
+                            _uiState.update {
+                                it.copy(
+                                    partialResult = event.partial,
+                                    generationStage = "Generating... (${event.partial.length} chars)"
+                                )
+                            }
                         }
-                    }
 
-                    is GenerationEvent.Failed -> {
-                        _uiState.update {
-                            it.copy(
-                                isGenerating = false,
-                                error = "Generation failed at ${event.stage}: ${event.error.message}",
-                                generationStage = "Failed"
-                            )
+                        is GenerationEvent.Validating -> {
+                            _uiState.update { it.copy(generationStage = "Validating output...") }
+                        }
+
+                        is GenerationEvent.InjectingTemplate -> {
+                            _uiState.update { it.copy(generationStage = "Injecting content...") }
+                        }
+
+                        is GenerationEvent.Completed -> {
+                            _uiState.update {
+                                it.copy(
+                                    isGenerating = false,
+                                    progress = 100,
+                                    generatedHtml = event.html,
+                                    metrics = event.metrics,
+                                    generationStage = "Complete!",
+                                    partialResult = null
+                                )
+                            }
+                        }
+
+                        is GenerationEvent.Failed -> {
+                            _uiState.update {
+                                it.copy(
+                                    isGenerating = false,
+                                    error = "Generation failed at ${event.stage}: ${event.error.message}",
+                                    generationStage = "Failed"
+                                )
+                            }
                         }
                     }
                 }
-            }
         }
     }
 
@@ -446,12 +467,7 @@ abstract class BaseCodeGenerationViewModel : ViewModel() {
         currentModel = null
     }
 
-    // Extension function for cleaner state updates
-    private fun MutableStateFlow<CodeGenerationUiState>.update(
-        function: (CodeGenerationUiState) -> CodeGenerationUiState
-    ) {
-        value = function(value)
-    }
+    // Note: Using kotlinx.coroutines.flow.update for thread-safe state updates
 }
 
 /**
