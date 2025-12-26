@@ -4,20 +4,29 @@ package app.m1k3.ai.assistant.ai
  * BaseLlmEngine - Unified interface for AI inference engines
  *
  * This interface abstracts common LLM functionality across different backends:
- * - SmolLM2Engine (ONNX Runtime)
- * - LlamaCppEngine (llama.cpp via InferKt/Llamatik)
- * - Future engines (Gemma3, cloud fallbacks, etc.)
+ * - LlamaCppEngine (llama.cpp via Llamatik)
+ * - MockLlmEngine (testing)
+ * - Future engines (cloud fallbacks, etc.)
  *
  * Design principles:
  * 1. **Platform agnostic** - Works across Android, iOS, Desktop
  * 2. **Backend flexibility** - Supports engines with varying capabilities
  * 3. **Test-friendly** - Easy to mock for UI testing
- * 4. **Configuration graceful degradation** - Handles engines with limited configuration APIs
+ * 4. **Result-based error handling** - No surprise exceptions, explicit error handling
+ * 5. **Configuration graceful degradation** - Handles engines with limited configuration APIs
+ *
+ * Error Handling:
+ * - All methods return Result<T> for explicit error handling
+ * - No unchecked exceptions thrown
+ * - Errors can be inspected, logged, or recovered from
  *
  * Usage example:
  * ```kotlin
  * val engine: BaseLlmEngine = LlamaCppEngine(context)
- * engine.initialize()
+ * engine.initialize().onFailure { error ->
+ *     logger.e(error) { "Initialization failed" }
+ *     return
+ * }
  *
  * val config = GenerationConfig(
  *     maxTokens = 256,
@@ -25,13 +34,18 @@ package app.m1k3.ai.assistant.ai
  *     systemPrompt = "You are a helpful assistant"
  * )
  *
- * // Blocking generation
- * val result = engine.generate("Hello!", config)
- * println(result.text)
+ * // Blocking generation with error handling
+ * engine.generate("Hello!", config).onSuccess { result ->
+ *     println(result.text)
+ * }.onFailure { error ->
+ *     logger.e(error) { "Generation failed" }
+ * }
  *
  * // Streaming generation
  * engine.generateStreaming("Tell me a story", config) { token ->
  *     print(token)  // Real-time token display
+ * }.onFailure { error ->
+ *     logger.e(error) { "Streaming failed" }
  * }
  *
  * engine.release()
@@ -49,9 +63,9 @@ interface BaseLlmEngine {
      *
      * Must be called before any generation methods.
      *
-     * @throws RuntimeException if initialization fails
+     * @return Result.success(Unit) if initialization succeeds, Result.failure(exception) otherwise
      */
-    suspend fun initialize()
+    suspend fun initialize(): Result<Unit>
 
     /**
      * Generate AI response for a given prompt (blocking).
@@ -60,14 +74,13 @@ interface BaseLlmEngine {
      *
      * @param prompt User input text
      * @param config Generation configuration (temperature, max tokens, system prompt, etc.)
-     * @return Complete generation result with text, performance metrics
-     * @throws IllegalStateException if engine not initialized
-     * @throws RuntimeException if inference fails
+     * @return Result.success(GenerationResult) if generation succeeds, Result.failure(exception) otherwise
+     *         Common failures: engine not initialized, inference error, model crash
      */
     suspend fun generate(
         prompt: String,
         config: GenerationConfig = GenerationConfig()
-    ): GenerationResult
+    ): Result<GenerationResult>
 
     /**
      * Generate AI response with streaming token-by-token callback.
@@ -78,14 +91,14 @@ interface BaseLlmEngine {
      * @param prompt User input text
      * @param config Generation configuration
      * @param onToken Callback invoked for each generated token (called on inference thread)
-     * @throws IllegalStateException if engine not initialized
-     * @throws RuntimeException if inference fails
+     * @return Result.success(Unit) if streaming completes, Result.failure(exception) if error occurs
+     *         Common failures: engine not initialized, inference error, callback exception
      */
     suspend fun generateStreaming(
         prompt: String,
         config: GenerationConfig = GenerationConfig(),
         onToken: (String) -> Unit
-    )
+    ): Result<Unit>
 
     /**
      * Get device-appropriate maximum tokens for generation.

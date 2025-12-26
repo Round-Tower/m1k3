@@ -36,12 +36,14 @@ import app.m1k3.ai.assistant.design.tokens.MaSpacing
 import app.m1k3.ai.assistant.design.tokens.MaTypography
 import app.m1k3.ai.assistant.avatar.*
 import app.m1k3.ai.assistant.knowledge.KnowledgeBaseImporter
+import app.m1k3.ai.assistant.knowledge.KnowledgeImportManager
 import app.m1k3.ai.assistant.ui.ChatScreen
 import app.m1k3.ai.assistant.ui.Avatar3DDebugScreen
 import app.m1k3.ai.assistant.ui.HistoryScreen
 import app.m1k3.ai.assistant.ui.EcoStatsScreen
 import app.m1k3.ai.assistant.di.allModules
 import app.m1k3.ai.assistant.utils.Logger
+import app.m1k3.ai.assistant.utils.FilamentSetup
 import com.google.android.filament.utils.Utils
 import kotlinx.coroutines.launch
 import org.koin.android.ext.koin.androidContext
@@ -79,17 +81,16 @@ class MainActivity : ComponentActivity() {
             logger.e(e) { "Failed to initialize Koin DI - falling back to manual DI" }
         }
 
-        // Initialize Filament native libraries FIRST (before any Engine.create() calls)
-        // This loads the native .so libraries required for 3D rendering
-        Utils.init()
-        logger.i { "Filament native libraries initialized" }
+        // Initialize Filament 3D engine
+        FilamentSetup.initialize()
+        logger.i { "Filament 3D engine initialized" }
 
         // Enable edge-to-edge for immersive full-screen experience
         enableEdgeToEdge()
 
         aiEngine = LlamaCppEngine(this)
 
-        // Import knowledge base on first startup
+        // Initialize database and import knowledge base
         lifecycleScope.launch {
             try {
                 knowledgeImportStatus = "Loading knowledge..."
@@ -99,64 +100,26 @@ class MainActivity : ComponentActivity() {
                 val passphrase = databaseFactory.getDatabasePassphrase()
                 driver = databaseFactory.createDriver(passphrase)
                 database = MaDatabase(driver!!)
-                val importer = KnowledgeBaseImporter(database!!)
 
-                // Check if knowledge already imported using version tracking
-                val existingCount = database!!.triviaFactQueries.getTotalFactCount().executeAsOne()
+                // Import knowledge using manager
+                val knowledgeManager = KnowledgeImportManager(this@MainActivity, database!!)
+                val result = knowledgeManager.importIfNeeded()
 
-                // Knowledge base versioning - increment when KB content changes
-                val currentKbVersion = "1.1.0"  // 1,391 comprehensive + 10 system = 1,401 docs
-                val prefs = getSharedPreferences("m1k3_kb", MODE_PRIVATE)
-                val storedKbVersion = prefs.getString("kb_version", "0.0.0")
-                val needsReimport = storedKbVersion != currentKbVersion
-
-                if (needsReimport && existingCount > 0) {
-                    logger.i { "Knowledge base update: $storedKbVersion → $currentKbVersion" }
-                    database!!.triviaFactQueries.deleteAllFacts()
-                }
-
-                if (existingCount == 0L || needsReimport) {
-                    logger.i { "Importing knowledge bases (1,401 documents from 2 sources)" }
-
-                    // 1. Load comprehensive knowledge base (1,391 docs)
-                    val comprehensiveJson = assets.open("composeResources/myapplication.composeapp.generated.resources/files/comprehensive_knowledge_base.json").use { input ->
-                        BufferedReader(InputStreamReader(input)).use { reader ->
-                            reader.readText()
-                        }
+                knowledgeImportStatus = when (result) {
+                    is KnowledgeImportManager.ImportResult.Success -> {
+                        "✅ Knowledge ready: ${result.totalDocs} documents (${result.comprehensiveDocs} comprehensive + ${result.systemDocs} system)"
                     }
-
-                    val comprehensiveResult = importer.importKnowledgeBase(comprehensiveJson)
-                    logger.i { "Comprehensive KB: ${comprehensiveResult.imported} documents imported" }
-
-                    // 2. Load M1K3 system knowledge base (10 docs)
-                    val systemJson = assets.open("composeResources/myapplication.composeapp.generated.resources/files/m1k3_system_knowledge.json").use { input ->
-                        BufferedReader(InputStreamReader(input)).use { reader ->
-                            reader.readText()
-                        }
+                    is KnowledgeImportManager.ImportResult.AlreadyImported -> {
+                        "✅ Knowledge ready: ${result.existingDocs} documents"
                     }
-
-                    val systemResult = importer.importKnowledgeBase(systemJson)
-                    logger.i { "M1K3 System KB: ${systemResult.imported} documents imported" }
-
-                    // Verify combined import
-                    val verification = importer.verifyImport()
-                    logger.d { verification.toString() }
-
-                    val totalImported = comprehensiveResult.imported + systemResult.imported
-
-                    // Save KB version after successful import
-                    prefs.edit().putString("kb_version", currentKbVersion).apply()
-                    logger.i { "Knowledge base version $currentKbVersion saved" }
-
-                    knowledgeImportStatus = "✅ Knowledge ready: $totalImported documents (${comprehensiveResult.imported} comprehensive + ${systemResult.imported} system)"
-                } else {
-                    logger.i { "Knowledge base already loaded ($existingCount documents)" }
-                    knowledgeImportStatus = "✅ Knowledge ready: $existingCount documents"
+                    is KnowledgeImportManager.ImportResult.Error -> {
+                        logger.e(result.error) { result.message }
+                        "⚠️ Knowledge unavailable: ${result.message}"
+                    }
                 }
 
             } catch (e: Exception) {
                 logger.e(e) { "Knowledge import failed" }
-                e.printStackTrace()
                 knowledgeImportStatus = "⚠️ Knowledge unavailable"
             }
         }

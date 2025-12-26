@@ -29,7 +29,7 @@ class SmolLM2BasicTest {
     @Before
     fun setup() = runTest(timeout = 30.seconds) {
         engine = LlamaCppEngine(context)
-        engine.initialize()
+        engine.initialize().getOrThrow()
     }
 
     @After
@@ -61,7 +61,7 @@ class SmolLM2BasicTest {
             systemPrompt = "You are a helpful AI assistant."
         )
 
-        val result = engine.generate("Say hello", config)
+        val result = engine.generate("Say hello", config).getOrThrow()
 
         // Verify response was generated
         assertTrue(result.text.isNotBlank(), "Should generate non-empty response")
@@ -79,7 +79,7 @@ class SmolLM2BasicTest {
         val tokens = mutableListOf<String>()
         engine.generateStreaming("Count to 5", config) { token ->
             tokens.add(token)
-        }
+        }.getOrThrow()
 
         // Verify tokens were streamed
         assertTrue(tokens.isNotEmpty(), "Should stream tokens")
@@ -102,7 +102,7 @@ class SmolLM2BasicTest {
             systemPrompt = "You are a helpful AI assistant."
         )
 
-        val result = engine.generate("What is 2+2?", config)
+        val result = engine.generate("What is 2+2?", config).getOrThrow()
 
         // Basic coherence checks
         assertTrue(result.text.split(" ").size > 2, "Should generate multiple words")
@@ -130,7 +130,7 @@ class SmolLM2BasicTest {
             temperature = 0.0f
         )
 
-        val result = engine.generate("Hello", config)
+        val result = engine.generate("Hello", config).getOrThrow()
 
         // Check for common special tokens that shouldn't appear in output
         val specialTokens = listOf("<|im_start|>", "<|im_end|>", "<|endoftext|>", "<s>", "</s>")
@@ -150,7 +150,7 @@ class SmolLM2BasicTest {
             temperature = 0.0f
         )
 
-        val result = engine.generate("Tell me a long story", config)
+        val result = engine.generate("Tell me a long story", config).getOrThrow()
 
         // Allow small margin (±5 tokens) for tokenization differences
         assertTrue(
@@ -169,9 +169,9 @@ class SmolLM2BasicTest {
         val prompt = "Count from 1 to 3"
 
         // Generate 3 times with same config
-        val result1 = engine.generate(prompt, config)
-        val result2 = engine.generate(prompt, config)
-        val result3 = engine.generate(prompt, config)
+        val result1 = engine.generate(prompt, config).getOrThrow()
+        val result2 = engine.generate(prompt, config).getOrThrow()
+        val result3 = engine.generate(prompt, config).getOrThrow()
 
         // All results should be identical with temperature=0
         assertEquals(result1.text, result2.text, "Results 1 and 2 should match with temp=0")
@@ -189,7 +189,7 @@ class SmolLM2BasicTest {
             temperature = 0.0f
         )
 
-        val result = engine.generate("Count from 1 to 10", config)
+        val result = engine.generate("Count from 1 to 10", config).getOrThrow()
 
         // Calculate tokens per second
         val tokensPerSecond = if (result.inferenceTimeMs > 0) {
@@ -231,7 +231,7 @@ class SmolLM2BasicTest {
             temperature = 0.0f
         )
 
-        val result = engine.generate("", config)
+        val result = engine.generate("", config).getOrThrow()
 
         // Should handle empty prompt gracefully (may return empty or default response)
         assertTrue(result.tokensGenerated >= 0, "Should handle empty prompt")
@@ -244,7 +244,7 @@ class SmolLM2BasicTest {
             temperature = 0.0f
         )
 
-        val result = engine.generate("Hello", config)
+        val result = engine.generate("Hello", config).getOrThrow()
 
         // Should return empty result
         assertEquals("", result.text, "Should return empty text with maxTokens=0")
@@ -261,7 +261,7 @@ class SmolLM2BasicTest {
             temperature = 0.0f
         )
 
-        val result = engine.generate(longPrompt, config)
+        val result = engine.generate(longPrompt, config).getOrThrow()
 
         // Should handle long prompt without crashing
         assertTrue(result.tokensGenerated >= 0, "Should handle long prompt")
