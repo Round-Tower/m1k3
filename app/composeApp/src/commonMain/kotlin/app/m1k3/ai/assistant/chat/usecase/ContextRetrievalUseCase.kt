@@ -111,20 +111,25 @@ class ContextRetrievalUseCase(
                 enableRAG = true
             )
 
-            if (result.ragApplied && result.enrichedPrompt.isNotEmpty()) {
-                // Build RAG info display string
-                val ragInfo = if (result.retrievedFacts.isNotEmpty()) {
-                    val avgSimilarity = result.retrievedFacts.map { it.similarity }.average().toFloat()
-                    val qualityEmoji = when {
-                        avgSimilarity >= GenerationConstants.Similarity.HIGH_QUALITY -> "✅"
-                        avgSimilarity >= GenerationConstants.Similarity.MEDIUM_QUALITY -> "⚠️"
-                        else -> "❓"
-                    }
-                    "$qualityEmoji ${result.intent.category} (${(result.confidence * 100).toInt()}%) • ${result.retrievedFacts.size} facts"
-                } else null
+            if (result.ragApplied && result.retrievedFacts.isNotEmpty()) {
+                // Build simple facts-only context (NO RAG instructions!)
+                // The enrichedPrompt contains instructions that confuse small models.
+                // Just give the model the raw facts as simple bullet points.
+                val factsContext = result.retrievedFacts.joinToString("\n") { fact ->
+                    "- ${fact.content}"
+                }
+
+                // Build RAG info display string for UI
+                val avgSimilarity = result.retrievedFacts.map { it.similarity }.average().toFloat()
+                val qualityEmoji = when {
+                    avgSimilarity >= GenerationConstants.Similarity.HIGH_QUALITY -> "✅"
+                    avgSimilarity >= GenerationConstants.Similarity.MEDIUM_QUALITY -> "⚠️"
+                    else -> "❓"
+                }
+                val ragInfo = "$qualityEmoji ${result.intent.category} (${(result.confidence * 100).toInt()}%) • ${result.retrievedFacts.size} facts"
 
                 RagResult(
-                    context = result.enrichedPrompt,
+                    context = factsContext,  // Facts only, no instructions
                     intentCategory = result.intent.category,
                     ragInfo = ragInfo,
                     ragSources = ragManager.formatRAGSources(result.retrievedFacts),

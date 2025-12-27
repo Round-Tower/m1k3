@@ -294,9 +294,9 @@ class ChatScreenViewModel(
                 prompt = welcomePrompt,
                 config = config,
                 onToken = { token ->
-                    val cleanToken = token.trim()
-                    if (cleanToken.isNotEmpty()) {
-                        accumulated.append(cleanToken).append(" ")
+                    // Don't trim or add spaces - tokens include natural spacing
+                    if (token.isNotEmpty()) {
+                        accumulated.append(token)
                         tokenCount++
 
                         _uiState.update { state ->
@@ -390,9 +390,9 @@ class ChatScreenViewModel(
                 prompt = fullPrompt,
                 config = config,
                 onToken = { token ->
-                    val cleanToken = token.trim()
-                    if (cleanToken.isNotEmpty()) {
-                        accumulated.append(cleanToken).append(" ")
+                    // Don't trim or add spaces - tokens include natural spacing
+                    if (token.isNotEmpty()) {
+                        accumulated.append(token)
                         tokenCount++
 
                         _uiState.update { state ->
