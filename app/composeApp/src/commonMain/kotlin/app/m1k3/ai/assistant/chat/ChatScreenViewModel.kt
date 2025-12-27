@@ -13,8 +13,8 @@ import app.m1k3.ai.assistant.eco.EcoCalculator
 import app.m1k3.ai.assistant.eco.EcoMetricsRepository
 import app.m1k3.ai.assistant.history.ConversationRepository
 import app.m1k3.ai.assistant.memory.MemoryManager
-import app.m1k3.ai.assistant.platform.DeviceInfoProvider
-import app.m1k3.ai.assistant.platform.PreferencesStore
+import app.m1k3.ai.assistant.platform.DeviceInfoProviderInterface
+import app.m1k3.ai.assistant.platform.PreferencesStoreInterface
 import app.m1k3.ai.assistant.rag.RAGManager
 import app.m1k3.ai.assistant.utils.Logger
 import kotlinx.coroutines.CoroutineScope
@@ -52,8 +52,8 @@ class ChatScreenViewModel(
     private val conversationRepo: ConversationRepository,
     private val ecoMetricsRepo: EcoMetricsRepository,
     private val database: MaDatabase,
-    private val deviceInfo: DeviceInfoProvider,
-    private val preferences: PreferencesStore,
+    private val deviceInfo: DeviceInfoProviderInterface,
+    private val preferences: PreferencesStoreInterface,
     private val scope: CoroutineScope,
     private val projectId: String,
     private val memoryManager: MemoryManager? = null,

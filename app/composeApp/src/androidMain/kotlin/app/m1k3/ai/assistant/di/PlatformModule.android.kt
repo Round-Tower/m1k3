@@ -13,6 +13,10 @@ import app.m1k3.ai.assistant.ai.ondevice.RealMlKitAvailabilityChecker
 import app.m1k3.ai.assistant.ai.ondevice.RealMlKitGenAiEngine
 import app.m1k3.ai.assistant.database.DatabaseFactory
 import app.m1k3.ai.assistant.database.MaDatabase
+import app.m1k3.ai.assistant.platform.DeviceInfoProvider
+import app.m1k3.ai.assistant.platform.DeviceInfoProviderInterface
+import app.m1k3.ai.assistant.platform.PreferencesStore
+import app.m1k3.ai.assistant.platform.PreferencesStoreInterface
 import org.koin.dsl.module
 
 /**
@@ -37,6 +41,30 @@ actual val platformModule = module {
                 name = "ma_ai.db"
             )
         )
+    }
+
+    // ===== Platform Abstractions =====
+
+    /**
+     * DeviceInfoProvider
+     *
+     * Provides device information for adaptive generation:
+     * - RAM for token limit scaling
+     * - Device model for debugging
+     * - Battery level for power-aware generation
+     */
+    single<DeviceInfoProviderInterface> {
+        DeviceInfoProvider(get<Context>())
+    }
+
+    /**
+     * PreferencesStore
+     *
+     * SharedPreferences wrapper for feature flags and settings.
+     * Thread-safe with reactive observation support.
+     */
+    single<PreferencesStoreInterface> {
+        PreferencesStore(get<Context>())
     }
 
     // ===== AI Engine Layer =====

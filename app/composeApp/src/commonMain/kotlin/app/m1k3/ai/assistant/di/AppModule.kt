@@ -2,6 +2,7 @@ package app.m1k3.ai.assistant.di
 
 import app.m1k3.ai.assistant.avatar.AvatarViewModel
 import app.m1k3.ai.assistant.avatar.PetMetricsRepository
+import app.m1k3.ai.assistant.chat.GenerationConfigBuilder
 import app.m1k3.ai.assistant.database.DatabaseFactory
 import app.m1k3.ai.assistant.database.MaDatabase
 import app.m1k3.ai.assistant.eco.EcoCalculator
@@ -9,6 +10,7 @@ import app.m1k3.ai.assistant.eco.EcoMetricsRepository
 import app.m1k3.ai.assistant.history.ConversationRepository
 import app.m1k3.ai.assistant.history.SearchRepository
 import app.m1k3.ai.assistant.memory.MemoryRepository
+import app.m1k3.ai.assistant.platform.DeviceInfoProviderInterface
 import org.koin.core.module.Module
 import org.koin.core.module.dsl.singleOf
 import org.koin.dsl.module
@@ -110,10 +112,31 @@ val appModule = module {
      */
     single { EcoCalculator }
 
+    // ===== Use Case Layer =====
+
+    /**
+     * GenerationConfigBuilder
+     *
+     * Builds device-adaptive AI generation configurations.
+     * Uses DeviceInfoProvider for RAM-based token limit scaling.
+     */
+    single {
+        GenerationConfigBuilder(get<DeviceInfoProviderInterface>())
+    }
+
     // ===== ViewModel Layer =====
 
-    // TODO: Add ViewModels once we resolve CoroutineScope injection
-    // Avatar ViewModel requires CoroutineScope parameter
+    // Note: ViewModels are created at the screen level using remember*ViewModel
+    // factories because they require:
+    // - CoroutineScope (provided by rememberCoroutineScope)
+    // - projectId (provided at navigation time)
+    // - Optional dependencies (memoryManager, ragManager)
+    //
+    // This follows the pattern established in:
+    // - RememberHistoryViewModel.kt
+    // - RememberEcoStatsViewModel.kt
+    // - rememberSettingsViewModel() in SettingsViewModel.kt
+    // - rememberAvatarDebugViewModel() in AvatarDebugViewModel.kt
 }
 
 /**
