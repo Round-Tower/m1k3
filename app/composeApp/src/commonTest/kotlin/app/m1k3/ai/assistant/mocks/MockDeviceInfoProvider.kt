@@ -1,6 +1,7 @@
 package app.m1k3.ai.assistant.mocks
 
 import app.m1k3.ai.assistant.config.GenerationConstants
+import app.m1k3.ai.assistant.platform.DeviceInfoProviderInterface
 
 /**
  * Mock implementation of DeviceInfoProvider for testing.
@@ -21,12 +22,12 @@ class MockDeviceInfoProvider(
     private var ramGB: Int = GenerationConstants.DeviceRam.MID_RANGE,
     private var model: String = "Mock Device",
     private var battery: Int? = 80
-) {
-    fun getDeviceRamGB(): Int = ramGB
+) : DeviceInfoProviderInterface {
+    override fun getDeviceRamGB(): Int = ramGB
 
-    fun getDeviceModel(): String = model
+    override fun getDeviceModel(): String = model
 
-    fun getBatteryLevel(): Int? = battery
+    override fun getBatteryLevel(): Int? = battery
 
     /**
      * Set battery level for testing power-aware scenarios.

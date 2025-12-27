@@ -2,7 +2,7 @@ package app.m1k3.ai.assistant.chat
 
 import app.m1k3.ai.assistant.ai.GenerationConfig
 import app.m1k3.ai.assistant.config.GenerationConstants
-import app.m1k3.ai.assistant.platform.DeviceInfoProvider
+import app.m1k3.ai.assistant.platform.DeviceInfoProviderInterface
 import app.m1k3.ai.assistant.platform.DeviceTier
 import app.m1k3.ai.assistant.platform.getDeviceTier
 
@@ -37,7 +37,7 @@ import app.m1k3.ai.assistant.platform.getDeviceTier
  * - Device-adaptive: Automatically adjusts to device capabilities
  */
 class GenerationConfigBuilder(
-    private val deviceInfo: DeviceInfoProvider
+    private val deviceInfo: DeviceInfoProviderInterface
 ) {
     /**
      * Build a GenerationConfig for the given query type.

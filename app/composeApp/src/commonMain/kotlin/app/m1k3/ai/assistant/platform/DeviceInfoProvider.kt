@@ -3,21 +3,12 @@ package app.m1k3.ai.assistant.platform
 import app.m1k3.ai.assistant.config.GenerationConstants
 
 /**
- * DeviceInfoProvider - Platform abstraction for device information.
+ * DeviceInfoProviderInterface - Common interface for device information providers.
  *
- * Provides device capabilities for adaptive generation:
- * - RAM for token limit scaling
- * - Device model for debugging
- * - Battery level for power-aware generation
- *
- * **Usage:**
- * ```kotlin
- * val deviceInfo = DeviceInfoProvider(context)  // Android
- * val ramGB = deviceInfo.getDeviceRamGB()
- * val tier = deviceInfo.getDeviceTier()
- * ```
+ * This interface allows both the platform-specific DeviceInfoProvider and
+ * test mocks to be used interchangeably for testing purposes.
  */
-expect class DeviceInfoProvider {
+interface DeviceInfoProviderInterface {
     /**
      * Get device RAM in gigabytes.
      * Used for adaptive token limit calculation.
@@ -44,6 +35,47 @@ expect class DeviceInfoProvider {
 }
 
 /**
+ * DeviceInfoProvider - Platform abstraction for device information.
+ *
+ * Provides device capabilities for adaptive generation:
+ * - RAM for token limit scaling
+ * - Device model for debugging
+ * - Battery level for power-aware generation
+ *
+ * **Usage:**
+ * ```kotlin
+ * val deviceInfo = DeviceInfoProvider(context)  // Android
+ * val ramGB = deviceInfo.getDeviceRamGB()
+ * val tier = deviceInfo.getDeviceTier()
+ * ```
+ */
+expect class DeviceInfoProvider : DeviceInfoProviderInterface {
+    /**
+     * Get device RAM in gigabytes.
+     * Used for adaptive token limit calculation.
+     *
+     * @return RAM in GB (e.g., 8 for 8GB device)
+     */
+    override fun getDeviceRamGB(): Int
+
+    /**
+     * Get device model name.
+     * Used for debugging and logging.
+     *
+     * @return Device model (e.g., "Pixel 8 Pro")
+     */
+    override fun getDeviceModel(): String
+
+    /**
+     * Get current battery level percentage.
+     * Can be used for power-aware generation.
+     *
+     * @return Battery level 0-100, or null if unavailable
+     */
+    override fun getBatteryLevel(): Int?
+}
+
+/**
  * Device tier based on RAM capacity.
  */
 enum class DeviceTier {
@@ -62,7 +94,7 @@ enum class DeviceTier {
 /**
  * Extension to get device tier from RAM.
  */
-fun DeviceInfoProvider.getDeviceTier(): DeviceTier {
+fun DeviceInfoProviderInterface.getDeviceTier(): DeviceTier {
     val ramGB = getDeviceRamGB()
     return when {
         ramGB >= GenerationConstants.DeviceRam.FLAGSHIP -> DeviceTier.FLAGSHIP
@@ -76,7 +108,7 @@ fun DeviceInfoProvider.getDeviceTier(): DeviceTier {
 /**
  * Extension to get memory topK based on device tier.
  */
-fun DeviceInfoProvider.getMemoryTopK(): Int {
+fun DeviceInfoProviderInterface.getMemoryTopK(): Int {
     return when (getDeviceTier()) {
         DeviceTier.FLAGSHIP -> GenerationConstants.MemoryTopK.FLAGSHIP
         DeviceTier.HIGH_END -> GenerationConstants.MemoryTopK.HIGH_END

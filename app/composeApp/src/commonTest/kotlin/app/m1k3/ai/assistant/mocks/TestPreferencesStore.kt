@@ -1,5 +1,6 @@
 package app.m1k3.ai.assistant.mocks
 
+import app.m1k3.ai.assistant.platform.PreferencesStoreInterface
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.map
@@ -24,7 +25,7 @@ import kotlinx.coroutines.flow.map
  * }
  * ```
  */
-class TestPreferencesStore {
+class TestPreferencesStore : PreferencesStoreInterface {
     // In-memory storage
     private val storage = mutableMapOf<String, Any?>()
 
@@ -33,22 +34,22 @@ class TestPreferencesStore {
 
     // ===== Boolean =====
 
-    fun getBoolean(key: String, default: Boolean): Boolean {
+    override fun getBoolean(key: String, default: Boolean): Boolean {
         return storage[key] as? Boolean ?: default
     }
 
-    fun setBoolean(key: String, value: Boolean) {
+    override fun setBoolean(key: String, value: Boolean) {
         storage[key] = value
         notifyChange()
     }
 
-    fun observeBoolean(key: String, default: Boolean): Flow<Boolean> {
+    override fun observeBoolean(key: String, default: Boolean): Flow<Boolean> {
         return updateFlow.map { getBoolean(key, default) }
     }
 
     // ===== String =====
 
-    fun getString(key: String, default: String?): String? {
+    override fun getString(key: String, default: String?): String? {
         return if (storage.containsKey(key)) {
             storage[key] as? String
         } else {
@@ -56,7 +57,7 @@ class TestPreferencesStore {
         }
     }
 
-    fun setString(key: String, value: String?) {
+    override fun setString(key: String, value: String?) {
         if (value == null) {
             storage.remove(key)
         } else {
@@ -67,27 +68,27 @@ class TestPreferencesStore {
 
     // ===== Int =====
 
-    fun getInt(key: String, default: Int): Int {
+    override fun getInt(key: String, default: Int): Int {
         return storage[key] as? Int ?: default
     }
 
-    fun setInt(key: String, value: Int) {
+    override fun setInt(key: String, value: Int) {
         storage[key] = value
         notifyChange()
     }
 
     // ===== Operations =====
 
-    fun contains(key: String): Boolean {
+    override fun contains(key: String): Boolean {
         return storage.containsKey(key)
     }
 
-    fun remove(key: String) {
+    override fun remove(key: String) {
         storage.remove(key)
         notifyChange()
     }
 
-    fun clear() {
+    override fun clear() {
         storage.clear()
         notifyChange()
     }

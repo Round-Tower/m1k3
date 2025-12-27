@@ -12,11 +12,11 @@ import android.os.Build
  */
 actual class DeviceInfoProvider(
     private val context: Context
-) {
+) : DeviceInfoProviderInterface {
     /**
      * Get device RAM in gigabytes from ActivityManager.
      */
-    actual fun getDeviceRamGB(): Int {
+    actual override fun getDeviceRamGB(): Int {
         val activityManager = context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
         val memInfo = ActivityManager.MemoryInfo()
         activityManager.getMemoryInfo(memInfo)
@@ -26,7 +26,7 @@ actual class DeviceInfoProvider(
     /**
      * Get device model from Build.MODEL.
      */
-    actual fun getDeviceModel(): String {
+    actual override fun getDeviceModel(): String {
         return Build.MODEL
     }
 
@@ -35,7 +35,7 @@ actual class DeviceInfoProvider(
      *
      * @return Battery level 0-100, or null if unavailable
      */
-    actual fun getBatteryLevel(): Int? {
+    actual override fun getBatteryLevel(): Int? {
         val batteryManager = context.getSystemService(Context.BATTERY_SERVICE) as? BatteryManager
         return batteryManager?.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY)
             ?.takeIf { it > 0 }

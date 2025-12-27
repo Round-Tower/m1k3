@@ -3,8 +3,8 @@ package app.m1k3.ai.assistant.chat.usecase
 import app.m1k3.ai.assistant.config.GenerationConstants
 import app.m1k3.ai.assistant.memory.ContextResult
 import app.m1k3.ai.assistant.memory.MemoryManager
-import app.m1k3.ai.assistant.platform.DeviceInfoProvider
-import app.m1k3.ai.assistant.platform.PreferencesStore
+import app.m1k3.ai.assistant.platform.DeviceInfoProviderInterface
+import app.m1k3.ai.assistant.platform.PreferencesStoreInterface
 import app.m1k3.ai.assistant.platform.PreferenceKeys
 import app.m1k3.ai.assistant.platform.getMemoryTopK
 import app.m1k3.ai.assistant.rag.RAGManager
@@ -39,8 +39,8 @@ private val logger = Logger.withTag("ContextRetrievalUseCase")
  * - Device-Adaptive: Adjusts memory topK based on device tier
  */
 class ContextRetrievalUseCase(
-    private val deviceInfo: DeviceInfoProvider,
-    private val preferences: PreferencesStore,
+    private val deviceInfo: DeviceInfoProviderInterface,
+    private val preferences: PreferencesStoreInterface,
     private val ragManager: RAGManager? = null,
     private val memoryManager: MemoryManager? = null
 ) {

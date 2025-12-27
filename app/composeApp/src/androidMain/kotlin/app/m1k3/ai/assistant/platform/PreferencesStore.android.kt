@@ -14,7 +14,7 @@ import kotlinx.coroutines.flow.callbackFlow
 actual class PreferencesStore(
     context: Context,
     name: String = "ma_ai_prefs"
-) {
+) : PreferencesStoreInterface {
     private val prefs: SharedPreferences = context.getSharedPreferences(
         name,
         Context.MODE_PRIVATE
@@ -22,15 +22,15 @@ actual class PreferencesStore(
 
     // ===== Boolean =====
 
-    actual fun getBoolean(key: String, default: Boolean): Boolean {
+    actual override fun getBoolean(key: String, default: Boolean): Boolean {
         return prefs.getBoolean(key, default)
     }
 
-    actual fun setBoolean(key: String, value: Boolean) {
+    actual override fun setBoolean(key: String, value: Boolean) {
         prefs.edit().putBoolean(key, value).apply()
     }
 
-    actual fun observeBoolean(key: String, default: Boolean): Flow<Boolean> = callbackFlow {
+    actual override fun observeBoolean(key: String, default: Boolean): Flow<Boolean> = callbackFlow {
         // Emit initial value
         trySend(getBoolean(key, default))
 
@@ -49,11 +49,11 @@ actual class PreferencesStore(
 
     // ===== String =====
 
-    actual fun getString(key: String, default: String?): String? {
+    actual override fun getString(key: String, default: String?): String? {
         return prefs.getString(key, default)
     }
 
-    actual fun setString(key: String, value: String?) {
+    actual override fun setString(key: String, value: String?) {
         if (value == null) {
             prefs.edit().remove(key).apply()
         } else {
@@ -63,25 +63,25 @@ actual class PreferencesStore(
 
     // ===== Int =====
 
-    actual fun getInt(key: String, default: Int): Int {
+    actual override fun getInt(key: String, default: Int): Int {
         return prefs.getInt(key, default)
     }
 
-    actual fun setInt(key: String, value: Int) {
+    actual override fun setInt(key: String, value: Int) {
         prefs.edit().putInt(key, value).apply()
     }
 
     // ===== Operations =====
 
-    actual fun contains(key: String): Boolean {
+    actual override fun contains(key: String): Boolean {
         return prefs.contains(key)
     }
 
-    actual fun remove(key: String) {
+    actual override fun remove(key: String) {
         prefs.edit().remove(key).apply()
     }
 
-    actual fun clear() {
+    actual override fun clear() {
         prefs.edit().clear().apply()
     }
 }
