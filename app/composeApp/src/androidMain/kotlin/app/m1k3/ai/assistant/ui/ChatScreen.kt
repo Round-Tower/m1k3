@@ -53,9 +53,7 @@ import app.m1k3.ai.assistant.ui.components.EcoIndicator
 import app.m1k3.ai.assistant.ui.components.EcoIndicatorVariant
 import app.m1k3.ai.assistant.utils.Logger
 import app.m1k3.ai.assistant.utils.cleanStreamingToken
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import kotlinx.datetime.Clock
 
 private val logger = Logger.withTag("ChatScreen")
@@ -133,6 +131,7 @@ private fun getAdaptiveGenerationConfig(
             deviceRamGB >= 4 -> 512    // Budget: concise but complete
             else -> 512                // Minimum: ensure usable responses
         }
+
         QueryType.TECHNICAL -> when {
             deviceRamGB >= 12 -> 1024  // Flagship: complex code/debugging
             deviceRamGB >= 8 -> 768    // High-end: code with explanations
@@ -140,6 +139,7 @@ private fun getAdaptiveGenerationConfig(
             deviceRamGB >= 4 -> 384    // Budget: minimal technical
             else -> 384
         }
+
         QueryType.FACTUAL -> when {
             deviceRamGB >= 12 -> 512   // Flagship: detailed facts
             deviceRamGB >= 8 -> 384    // High-end: comprehensive facts
@@ -147,6 +147,7 @@ private fun getAdaptiveGenerationConfig(
             deviceRamGB >= 4 -> 256    // Budget: concise facts
             else -> 256
         }
+
         QueryType.CONVERSATIONAL -> when {
             deviceRamGB >= 12 -> 512   // Flagship: natural lengthy chat
             deviceRamGB >= 8 -> 384    // High-end: conversational
@@ -212,7 +213,12 @@ fun ChatScreen(
     val context = LocalContext.current
 
     // RAG preference (Phase 3)
-    val prefs = remember { context.getSharedPreferences("ma_ai_prefs", android.content.Context.MODE_PRIVATE) }
+    val prefs = remember {
+        context.getSharedPreferences(
+            "ma_ai_prefs",
+            android.content.Context.MODE_PRIVATE
+        )
+    }
     val ragEnabled by remember { derivedStateOf { prefs.getBoolean("rag_enabled", true) } }
 
     // PHASE 3: Embeddings ViewModel - Clean architecture with proper lifecycle management
@@ -236,85 +242,6 @@ fun ChatScreen(
     LaunchedEffect(isGenerating) {
         avatarVM.syncWithAI(isGenerating)
     }
-
-    // Get knowledge base stats with category breakdown
-    val knowledgeContext =
-        remember(database) {
-            try {
-                val totalFacts = database.triviaFactQueries.getTotalFactCount().executeAsOne()
-                val categories = database.triviaFactQueries.getAllCategories().executeAsList()
-
-                // Group categories by domain for cleaner presentation
-                val technical =
-                    categories.filter {
-                        it in
-                            listOf(
-                                "mathematical_calculation",
-                                "code_debugging",
-                                "explanation_request",
-                                "casual_conversation",
-                                "creative_writing",
-                                "ai_ml_facts",
-                            )
-                    }
-                val educational =
-                    categories.filter {
-                        it in
-                            listOf(
-                                "historical_facts",
-                                "science_facts",
-                                "geography_facts",
-                                "movies_tv",
-                                "music_culture",
-                                "sports_recreation",
-                                "food_culture",
-                                "technology_trends",
-                                "lifestyle_wellness",
-                                "educational_wisdom",
-                            )
-                    }
-                val expertise =
-                    categories.filter {
-                        it in
-                            listOf(
-                                "device_technology",
-                                "wifi_networking",
-                                "security_privacy",
-                                "diagnostic_troubleshooting",
-                                "educational_tutoring",
-                                "trivia_facts",
-                            )
-                    }
-                val system = categories.filter { it in listOf("m1k3_capabilities", "m1k3_technical") }
-
-                buildString {
-                    append("I have access to $totalFacts facts across ${categories.size} categories:\n")
-                    if (technical.isNotEmpty()) {
-                        append(
-                            "• Technical: ${technical.joinToString(", ") { it.replace("_", " ").replaceFirstChar { if (it.isLowerCase()) it.titlecase() else it.toString() } }}\n",
-                        )
-                    }
-                    if (educational.isNotEmpty()) {
-                        append(
-                            "• Educational: ${educational.joinToString(", ") { it.replace("_", " ").replaceFirstChar { if (it.isLowerCase()) it.titlecase() else it.toString() } }}\n",
-                        )
-                    }
-                    if (expertise.isNotEmpty()) {
-                        append(
-                            "• Expertise: ${expertise.joinToString(", ") { it.replace("_", " ").replaceFirstChar { if (it.isLowerCase()) it.titlecase() else it.toString() } }}\n",
-                        )
-                    }
-                    if (system.isNotEmpty()) {
-                        append(
-                            "• System Knowledge: ${system.joinToString(", ") { it.replace("_", " ").replaceFirstChar { if (it.isLowerCase()) it.titlecase() else it.toString() } }}\n",
-                        )
-                    }
-                    append("\nUse this knowledge to provide informed, helpful responses.")
-                }
-            } catch (e: Exception) {
-                "I have access to a comprehensive knowledge base covering technical expertise, educational content, and troubleshooting guides."
-            }
-        }
 
     // Initialize AI engine on first load
     LaunchedEffect(Unit) {
@@ -341,22 +268,25 @@ fun ChatScreen(
 
                         // Get device context for greeting
                         val deviceModel = android.os.Build.MODEL
-                        val batteryManager = context.getSystemService(Context.BATTERY_SERVICE) as? android.os.BatteryManager
-                        val batteryLevel = batteryManager?.getIntProperty(android.os.BatteryManager.BATTERY_PROPERTY_CAPACITY) ?: -1
-                        val batteryInfo = if (batteryLevel > 0) "$batteryLevel% battery" else "battery connected"
+                        val batteryManager =
+                            context.getSystemService(Context.BATTERY_SERVICE) as? android.os.BatteryManager
+                        val batteryLevel =
+                            batteryManager?.getIntProperty(android.os.BatteryManager.BATTERY_PROPERTY_CAPACITY)
+                                ?: -1
+                        val batteryInfo =
+                            if (batteryLevel > 0) "$batteryLevel% battery" else "battery connected"
 
                         // Generate personalized welcome with device and knowledge context
                         var welcomeText = ""
+
                         aiEngine.generateStreaming(
                             prompt =
                                 "Greet the user. " +
-                                    "Mention that you're running 100% locally on their $deviceModel with $batteryInfo, " +
-                                    "and that all conversations are private and never leave their device. " +
-                                    "Keep it brief (2-3 sentences), friendly, and conversational.",
+                                        "Mention that you're running 100% locally on their $deviceModel with $batteryInfo, " +
+                                        "and that all conversations are private and never leave their device. " +
+                                        "Keep it brief (2-3 sentences), friendly, and conversational.",
                             config = app.m1k3.ai.assistant.ai.GenerationConfig(
-                                temperature = 0.5f, // Slightly creative but still coherent
-                                // Use static KB summary for welcome message (no RAG needed)
-                                knowledgeContext = knowledgeContext
+                                temperature = 0.5f
                             )
                         ) { token ->
                             welcomeText += token
@@ -389,7 +319,7 @@ fun ChatScreen(
                         app.m1k3.ai.assistant.chat.ChatMessage(
                             text =
                                 "⚠️ AI engine initialization failed: ${e.message}. " +
-                                    "Make sure the GGUF model is in assets/",
+                                        "Make sure the GGUF model is in assets/",
                             isUser = false,
                             timestamp = Clock.System.now().toEpochMilliseconds(),
                             isError = true,
@@ -511,256 +441,267 @@ fun ChatScreen(
 
                             val aiMessageIndex = chatViewModel.messages.value.size - 1
 
-                                // Auto-scroll to show the new message
-                                try {
-                                    listState.animateScrollToItem(messages.size - 1)
-                                } catch (e: Exception) {
-                                    // Scroll animation failed, but continue with inference
-                                }
+                            // Auto-scroll to show the new message
+                            try {
+                                listState.animateScrollToItem(messages.size - 1)
+                            } catch (e: Exception) {
+                                // Scroll animation failed, but continue with inference
+                            }
 
-                                // Use streaming generation for real-time updates
-                                val startTime = System.currentTimeMillis()
-                                val streamedText = StringBuilder()  // StringBuilder for O(1) append (vs O(n) String +=)
-                                var tokenCount = 0
-                                var hasContent = false  // Track if we've received any non-whitespace content
-                                var ragInfo = ""
-                                var ragSources: String? = null
-                                var ragConfidence: Double? = null
+                            // Use streaming generation for real-time updates
+                            val startTime = System.currentTimeMillis()
+                            val streamedText =
+                                StringBuilder()  // StringBuilder for O(1) append (vs O(n) String +=)
+                            var tokenCount = 0
+                            var hasContent =
+                                false  // Track if we've received any non-whitespace content
+                            var ragInfo = ""
+                            var ragSources: String? = null
+                            var ragConfidence: Double? = null
 
-                                // Phase 3 RAG: Intent-aware knowledge retrieval with enriched prompt
-                                // Get device context for personalized responses
-                                val deviceModel = android.os.Build.MODEL
-                                val activityManager = context.getSystemService(Context.ACTIVITY_SERVICE) as android.app.ActivityManager
-                                val memInfo = android.app.ActivityManager.MemoryInfo()
-                                activityManager.getMemoryInfo(memInfo)
-                                val deviceRamGB = (memInfo.totalMem / (1024 * 1024 * 1024)).toInt()
+                            // Phase 3 RAG: Intent-aware knowledge retrieval with enriched prompt
+                            // Get device context for personalized responses
+                            val deviceModel = android.os.Build.MODEL
+                            val activityManager =
+                                context.getSystemService(Context.ACTIVITY_SERVICE) as android.app.ActivityManager
+                            val memInfo = android.app.ActivityManager.MemoryInfo()
+                            activityManager.getMemoryInfo(memInfo)
+                            val deviceRamGB = (memInfo.totalMem / (1024 * 1024 * 1024)).toInt()
 
-                                // CLEAN system prompt (identity + personality ONLY, no facts)
-                                // LlamaCppEngine will build this, but we provide base for RAG
-                                val baseSystemPrompt =
-                                    "You are M1K3 (Mike), a friendly AI companion running 100% locally on ${deviceModel} (${deviceRamGB}GB RAM). " +
+                            // CLEAN system prompt (identity + personality ONLY, no facts)
+                            // LlamaCppEngine will build this, but we provide base for RAG
+                            val baseSystemPrompt =
+                                "You are M1K3 (Mike), a friendly AI companion running 100% locally on ${deviceModel} (${deviceRamGB}GB RAM). " +
                                         "All conversations are private and never leave the device. " +
                                         "Be curious, enthusiastic, and engaging. Share your knowledge naturally like talking to a friend."
 
-                                // RAG with error handling and quality validation
-                                val ragResult =
-                                    try {
-                                        if (ragManager != null && ragEnabled) {
-                                            val result =
-                                                ragManager.enrichPrompt(
-                                                    userQuery = prompt,
-                                                    systemPrompt = baseSystemPrompt,
-                                                    enableRAG = true,
+                            // RAG with error handling and quality validation
+                            val ragResult =
+                                try {
+                                    if (ragManager != null && ragEnabled) {
+                                        val result =
+                                            ragManager.enrichPrompt(
+                                                userQuery = prompt,
+                                                systemPrompt = baseSystemPrompt,
+                                                enableRAG = true,
+                                            )
+
+                                        // Quality validation: Trust RAGManager threshold (0.5 minSimilarity)
+                                        // Note: RAGManager already filters by 0.5f, so we just pass through
+                                        if (result.ragApplied) {
+                                            // Log quality distribution but don't filter further
+                                            val highQuality =
+                                                result.retrievedFacts.count { it.similarity >= 0.6f }
+                                            val mediumQuality =
+                                                result.retrievedFacts.count { it.similarity in 0.5f..0.6f }
+                                            logger.i {
+                                                "RAG quality: ${highQuality} high (≥0.6), ${mediumQuality} medium (0.5-0.6) of ${result.retrievedFacts.size} total"
+                                            }
+
+                                            // If no facts at all, fall back to static KB
+                                            if (result.retrievedFacts.isEmpty()) {
+                                                logger.w { "No facts found, fallback to static KB" }
+                                                result.copy(
+                                                    enrichedPrompt = "",  // No RAG facts to add
+                                                    ragApplied = false,
                                                 )
-
-                                            // Quality validation: Trust RAGManager threshold (0.5 minSimilarity)
-                                            // Note: RAGManager already filters by 0.5f, so we just pass through
-                                            if (result.ragApplied) {
-                                                // Log quality distribution but don't filter further
-                                                val highQuality = result.retrievedFacts.count { it.similarity >= 0.6f }
-                                                val mediumQuality = result.retrievedFacts.count { it.similarity in 0.5f..0.6f }
-                                                logger.i {
-                                                    "RAG quality: ${highQuality} high (≥0.6), ${mediumQuality} medium (0.5-0.6) of ${result.retrievedFacts.size} total"
-                                                }
-
-                                                // If no facts at all, fall back to static KB
-                                                if (result.retrievedFacts.isEmpty()) {
-                                                    logger.w { "No facts found, fallback to static KB" }
-                                                    result.copy(
-                                                        enrichedPrompt = "",  // No RAG facts to add
-                                                        ragApplied = false,
-                                                    )
-                                                } else {
-                                                    result  // Keep all facts (already filtered by RAGManager)
-                                                }
                                             } else {
-                                                result
+                                                result  // Keep all facts (already filtered by RAGManager)
                                             }
                                         } else {
-                                            if (!ragEnabled) {
-                                                logger.i { "RAG disabled by user preference" }
-                                            } else {
-                                                logger.w { "RAG manager not available (embedding engine not initialized)" }
-                                            }
-                                            RAGManager.RAGResult(
-                                                enrichedPrompt = "",  // No RAG
-                                                intent = app.m1k3.ai.assistant.rag.IntentClassifier.Intent.GENERAL,
-                                                confidence = 0f,
-                                                retrievedFacts = emptyList(),
-                                                ragApplied = false,
-                                            )
+                                            result
                                         }
-                                    } catch (e: Exception) {
-                                        logger.e(e) { "RAG enrichment failed" }
-                                        // Fall back without RAG
+                                    } else {
+                                        if (!ragEnabled) {
+                                            logger.i { "RAG disabled by user preference" }
+                                        } else {
+                                            logger.w { "RAG manager not available (embedding engine not initialized)" }
+                                        }
                                         RAGManager.RAGResult(
-                                            enrichedPrompt = "",
+                                            enrichedPrompt = "",  // No RAG
                                             intent = app.m1k3.ai.assistant.rag.IntentClassifier.Intent.GENERAL,
                                             confidence = 0f,
                                             retrievedFacts = emptyList(),
                                             ragApplied = false,
                                         )
                                     }
-
-                                // PHASE 2 COMPLETION: Semantic Memory Retrieval for Multi-Turn Context
-                                // Retrieve relevant conversation memories using device-adaptive limits
-                                val memoryTopK = when {
-                                    deviceRamGB >= 12 -> 20  // Flagship: 20 memories (~4K tokens)
-                                    deviceRamGB >= 8 -> 15   // High-end: 15 memories (~3K tokens)
-                                    deviceRamGB >= 6 -> 10   // Mid-range: 10 memories (~2K tokens)
-                                    else -> 5                 // Budget: 5 memories (~1K tokens)
-                                }
-
-                                val conversationContext = try {
-                                    chatViewModel.retrieveMemories(
-                                        queryText = prompt,
-                                        topK = memoryTopK
-                                    ).getOrNull()?.let { contextResult ->
-                                        val memories = contextResult.selectedMemories
-                                        if (memories.isNotEmpty()) {
-                                            logger.i { "Retrieved ${memories.size} relevant memories (topK=$memoryTopK)" }
-                                            memories.take(memoryTopK).joinToString("\n") { memory ->
-                                                "Memory: ${memory.content.take(200)}" +
-                                                        (if (memory.content.length > 200) "..." else "")
-                                            }
-                                        } else {
-                                            logger.d { "No relevant memories found" }
-                                            null
-                                        }
-                                    }
                                 } catch (e: Exception) {
-                                    logger.w(e) { "Memory retrieval failed" }
-                                    null
+                                    logger.e(e) { "RAG enrichment failed" }
+                                    // Fall back without RAG
+                                    RAGManager.RAGResult(
+                                        enrichedPrompt = "",
+                                        intent = app.m1k3.ai.assistant.rag.IntentClassifier.Intent.GENERAL,
+                                        confidence = 0f,
+                                        retrievedFacts = emptyList(),
+                                        ragApplied = false,
+                                    )
                                 }
 
-                                // BUILD CONTEXT STRING (Llamatik's context parameter)
-                                // Combine all background information: RAG facts + conversation + KB
-                                val contextString = buildString {
-                                    // Add RAG facts if retrieved
-                                    if (ragResult.ragApplied && ragResult.enrichedPrompt.isNotEmpty()) {
-                                        append(ragResult.enrichedPrompt)  // Contains formatted RAG facts
-                                    }
-                                    // Add static KB summary if RAG not used
-                                    else if (!ragResult.ragApplied && knowledgeContext.isNotEmpty()) {
-                                        append(knowledgeContext)
-                                    }
+                            // PHASE 2 COMPLETION: Semantic Memory Retrieval for Multi-Turn Context
+                            // Retrieve relevant conversation memories using device-adaptive limits
+                            val memoryTopK = when {
+                                deviceRamGB >= 12 -> 20  // Flagship: 20 memories (~4K tokens)
+                                deviceRamGB >= 8 -> 15   // High-end: 15 memories (~3K tokens)
+                                deviceRamGB >= 6 -> 10   // Mid-range: 10 memories (~2K tokens)
+                                else -> 5                 // Budget: 5 memories (~1K tokens)
+                            }
 
-                                    // Add conversation history if retrieved
-                                    if (conversationContext != null) {
-                                        if (isNotEmpty()) append("\n\n")
-                                        append("## Recent Conversation:\n")
-                                        append(conversationContext)
+                            val conversationContext = try {
+                                chatViewModel.retrieveMemories(
+                                    queryText = prompt,
+                                    topK = memoryTopK
+                                ).getOrNull()?.let { contextResult ->
+                                    val memories = contextResult.selectedMemories
+                                    if (memories.isNotEmpty()) {
+                                        logger.i { "Retrieved ${memories.size} relevant memories (topK=$memoryTopK)" }
+                                        memories.take(memoryTopK).joinToString("\n") { memory ->
+                                            "Memory: ${memory.content.take(200)}" +
+                                                    (if (memory.content.length > 200) "..." else "")
+                                        }
+                                    } else {
+                                        logger.d { "No relevant memories found" }
+                                        null
                                     }
                                 }
+                            } catch (e: Exception) {
+                                logger.w(e) { "Memory retrieval failed" }
+                                null
+                            }
 
-                                // Track RAG usage for display and database
-                                // Always show sources when facts are retrieved (transparency principle)
-                                if (ragResult.retrievedFacts.isNotEmpty()) {
-                                    // Calculate average similarity for quality indicator
-                                    val avgSimilarity = ragResult.retrievedFacts.map { it.similarity }.average().toFloat()
-                                    val qualityEmoji = when {
-                                        avgSimilarity >= 0.7f -> "✅"  // High quality - reliable
-                                        avgSimilarity >= 0.6f -> "⚠️"  // Medium quality - useful
-                                        else -> "❓"                    // Low quality - experimental
-                                    }
-
-                                    ragInfo =
-                                        "$qualityEmoji ${ragResult.intent.category} (${(ragResult.confidence * 100).toInt()}%) • ${ragResult.retrievedFacts.size} facts"
-                                    ragSources = ragManager?.formatRAGSources(ragResult.retrievedFacts)
-                                    ragConfidence = ragManager?.calculateRAGConfidence(ragResult.retrievedFacts)
-
-                                    logger.i {
-                                        "RAG: Intent=${ragResult.intent.category} (${(ragResult.confidence * 100).toInt()}%), " +
-                                        "Facts=${ragResult.retrievedFacts.size}, AvgSim=${"%.2f".format(avgSimilarity)}, " +
-                                        "Quality=$qualityEmoji, Applied=${ragResult.ragApplied}"
-                                    }
-                                } else {
-                                    logger.d { "No RAG retrieval for intent: ${ragResult.intent.category}" }
+                            // BUILD CONTEXT STRING (Llamatik's context parameter)
+                            // Combine all background information: RAG facts + conversation + KB
+                            val contextString = buildString {
+                                // Add RAG facts if retrieved
+                                if (ragResult.ragApplied && ragResult.enrichedPrompt.isNotEmpty()) {
+                                    append(ragResult.enrichedPrompt)  // Contains formatted RAG facts
                                 }
 
-                                // ADAPTIVE GENERATION: Query-type-aware maxTokens and prompting
-                                val adaptiveConfig = getAdaptiveGenerationConfig(
-                                    intent = ragResult.intent,
-                                    deviceRamGB = deviceRamGB
+                                // Add conversation history if retrieved
+                                if (conversationContext != null) {
+                                    if (isNotEmpty()) append("\n\n")
+                                    append("## Recent Conversation:\n")
+                                    append(conversationContext)
+                                }
+                            }
+
+                            // Track RAG usage for display and database
+                            // Always show sources when facts are retrieved (transparency principle)
+                            if (ragResult.retrievedFacts.isNotEmpty()) {
+                                // Calculate average similarity for quality indicator
+                                val avgSimilarity =
+                                    ragResult.retrievedFacts.map { it.similarity }.average()
+                                        .toFloat()
+                                val qualityEmoji = when {
+                                    avgSimilarity >= 0.7f -> "✅"  // High quality - reliable
+                                    avgSimilarity >= 0.6f -> "⚠️"  // Medium quality - useful
+                                    else -> "❓"                    // Low quality - experimental
+                                }
+
+                                ragInfo =
+                                    "$qualityEmoji ${ragResult.intent.category} (${(ragResult.confidence * 100).toInt()}%) • ${ragResult.retrievedFacts.size} facts"
+                                ragSources = ragManager?.formatRAGSources(ragResult.retrievedFacts)
+                                ragConfidence =
+                                    ragManager?.calculateRAGConfidence(ragResult.retrievedFacts)
+
+                                logger.i {
+                                    "RAG: Intent=${ragResult.intent.category} (${(ragResult.confidence * 100).toInt()}%), " +
+                                            "Facts=${ragResult.retrievedFacts.size}, AvgSim=${
+                                                "%.2f".format(
+                                                    avgSimilarity
+                                                )
+                                            }, " +
+                                            "Quality=$qualityEmoji, Applied=${ragResult.ragApplied}"
+                                }
+                            } else {
+                                logger.d { "No RAG retrieval for intent: ${ragResult.intent.category}" }
+                            }
+
+                            // ADAPTIVE GENERATION: Query-type-aware maxTokens and prompting
+                            val adaptiveConfig = getAdaptiveGenerationConfig(
+                                intent = ragResult.intent,
+                                deviceRamGB = deviceRamGB
+                            )
+
+                            logger.i {
+                                "Adaptive Generation: ${adaptiveConfig.reason}, " +
+                                        "maxTokens=${adaptiveConfig.maxTokens}"
+                            }
+
+                            // Build enhanced system prompt with query-specific behavioral hint
+                            val enhancedSystemPrompt = buildString {
+                                append(baseSystemPrompt)
+                                append(" ")
+                                append(adaptiveConfig.systemPromptHint)
+                            }
+
+                            // DEBUG: Log Llamatik three-parameter structure (INFO level for visibility)
+                            logger.i {
+                                "=== RAG DEBUG: Final Context ===" +
+                                        "\n  Query: '$prompt'" +
+                                        "\n  Intent: ${ragResult.intent.category} (${(ragResult.confidence * 100).toInt()}%)" +
+                                        "\n  RAG Applied: ${ragResult.ragApplied}" +
+                                        "\n  Facts Retrieved: ${ragResult.retrievedFacts.size}" +
+                                        "\n  Context Length: ${contextString.length} chars" +
+                                        "\n  Context Preview: ${
+                                            contextString.replace("\n", "\\n")
+                                        }..." +
+                                        "\n  SystemPrompt Length: ${enhancedSystemPrompt.length} chars"
+                            }
+
+                            // Use query-type-aware generation with adaptive token limits
+                            aiEngine.generateStreaming(
+                                prompt = prompt,  // User's query (Llamatik user parameter)
+                                config = app.m1k3.ai.assistant.ai.GenerationConfig(
+                                    systemPrompt = enhancedSystemPrompt,  // Query-aware behavioral instructions
+                                    maxTokens = adaptiveConfig.maxTokens,  // Adaptive: 256-1536 based on query type + device
+                                    temperature = 0.5f,  // Llamatik ignores this, but kept for prompt engineering in engine
+                                    knowledgeContext = contextString  // Llamatik context parameter (RAG+conversation+KB)
+                                )
+                            ) { token ->
+                                // THREADING NOTE: This callback runs on Dispatchers.Default (LlamaCppEngine.kt:282)
+                                // ChatViewModel.updateMessage() is thread-safe (StateFlow.value setter is atomic)
+
+                                // DEBUG: Log raw token from Llamatik
+                                logger.d { "RAW TOKEN: '$token' (${token.length} chars)" }
+
+                                // Clean token using optimized regex helper (8x faster than sequential .replace())
+                                val cleanedToken =
+                                    cleanStreamingToken(token, isStartOfGeneration = !hasContent)
+
+                                // DEBUG: Log cleaned token
+                                if (cleanedToken != token) {
+                                    logger.d { "CLEANED TOKEN: '$cleanedToken' (was: '$token')" }
+                                }
+
+                                // Skip empty tokens (whitespace-only at start already filtered by helper)
+                                if (cleanedToken.isEmpty()) {
+                                    logger.d { "SKIPPED empty token" }
+                                    return@generateStreaming
+                                }
+
+                                // Mark that we've received real content
+                                if (!hasContent && cleanedToken.isNotBlank()) {
+                                    hasContent = true
+                                }
+
+                                // Append token with O(1) performance (vs O(n) String concatenation)
+                                streamedText.append(cleanedToken)
+                                tokenCount++
+
+                                // Update the message in real-time (convert StringBuilder to immutable String)
+                                chatViewModel.updateMessage(
+                                    aiMessageIndex,
+                                    app.m1k3.ai.assistant.chat.ChatMessage(
+                                        text = streamedText.toString(),  // Create immutable copy for Compose state
+                                        isUser = false,
+                                        timestamp = aiMessageTimestamp,
+                                        inferenceStats = "⚡ Streaming... ($tokenCount tokens)",
+                                    ),
                                 )
 
-                                logger.i {
-                                    "Adaptive Generation: ${adaptiveConfig.reason}, " +
-                                    "maxTokens=${adaptiveConfig.maxTokens}"
-                                }
-
-                                // Build enhanced system prompt with query-specific behavioral hint
-                                val enhancedSystemPrompt = buildString {
-                                    append(baseSystemPrompt)
-                                    append(" ")
-                                    append(adaptiveConfig.systemPromptHint)
-                                }
-
-                                // DEBUG: Log Llamatik three-parameter structure (INFO level for visibility)
-                                logger.i {
-                                    "=== RAG DEBUG: Final Context ===" +
-                                    "\n  Query: '$prompt'" +
-                                    "\n  Intent: ${ragResult.intent.category} (${(ragResult.confidence * 100).toInt()}%)" +
-                                    "\n  RAG Applied: ${ragResult.ragApplied}" +
-                                    "\n  Facts Retrieved: ${ragResult.retrievedFacts.size}" +
-                                    "\n  Context Length: ${contextString.length} chars" +
-                                    "\n  Context Preview: ${contextString.take(200).replace("\n", "\\n")}..." +
-                                    "\n  SystemPrompt Length: ${enhancedSystemPrompt.length} chars"
-                                }
-
-                                // Use query-type-aware generation with adaptive token limits
-                                aiEngine.generateStreaming(
-                                    prompt = prompt,  // User's query (Llamatik user parameter)
-                                    config = app.m1k3.ai.assistant.ai.GenerationConfig(
-                                        systemPrompt = enhancedSystemPrompt,  // Query-aware behavioral instructions
-                                        maxTokens = adaptiveConfig.maxTokens,  // Adaptive: 256-1536 based on query type + device
-                                        temperature = 0.5f,  // Llamatik ignores this, but kept for prompt engineering in engine
-                                        knowledgeContext = contextString  // Llamatik context parameter (RAG+conversation+KB)
-                                    )
-                                ) { token ->
-                                    // THREADING NOTE: This callback runs on Dispatchers.Default (LlamaCppEngine.kt:282)
-                                    // ChatViewModel.updateMessage() is thread-safe (StateFlow.value setter is atomic)
-
-                                    // DEBUG: Log raw token from Llamatik
-                                    logger.d { "RAW TOKEN: '$token' (${token.length} chars)" }
-
-                                    // Clean token using optimized regex helper (8x faster than sequential .replace())
-                                    val cleanedToken = cleanStreamingToken(token, isStartOfGeneration = !hasContent)
-
-                                    // DEBUG: Log cleaned token
-                                    if (cleanedToken != token) {
-                                        logger.d { "CLEANED TOKEN: '$cleanedToken' (was: '$token')" }
-                                    }
-
-                                    // Skip empty tokens (whitespace-only at start already filtered by helper)
-                                    if (cleanedToken.isEmpty()) {
-                                        logger.d { "SKIPPED empty token" }
-                                        return@generateStreaming
-                                    }
-
-                                    // Mark that we've received real content
-                                    if (!hasContent && cleanedToken.isNotBlank()) {
-                                        hasContent = true
-                                    }
-
-                                    // Append token with O(1) performance (vs O(n) String concatenation)
-                                    streamedText.append(cleanedToken)
-                                    tokenCount++
-
-                                    // Update the message in real-time (convert StringBuilder to immutable String)
-                                    chatViewModel.updateMessage(
-                                        aiMessageIndex,
-                                        app.m1k3.ai.assistant.chat.ChatMessage(
-                                            text = streamedText.toString(),  // Create immutable copy for Compose state
-                                            isUser = false,
-                                            timestamp = aiMessageTimestamp,
-                                            inferenceStats = "⚡ Streaming... ($tokenCount tokens)",
-                                        ),
-                                    )
-
-                                    // Auto-scroll to keep the message visible
-                                    // Use scrollToItem (instant) during streaming to avoid MutatorMutex conflicts
-                                    // that would cancel the generation coroutine with CancellationException
+                                // Auto-scroll to keep the message visible
+                                // Use scrollToItem (instant) during streaming to avoid MutatorMutex conflicts
+                                // that would cancel the generation coroutine with CancellationException
 //                                    if (tokenCount % 3 == 0) {  // Scroll every 3 tokens to reduce UI updates
 //                                        try {
 //                                            listState.scrollToItem(chatViewModel.messages.value.size - 1)
@@ -768,104 +709,123 @@ fun ChatScreen(
 //                                            // Ignore scroll failures - inference must continue regardless
 //                                        }
 //                                    }
-                                }.onSuccess {
-                                    // Final update with complete stats
-                                    val totalTime = System.currentTimeMillis() - startTime
-                                    val tokensPerSec =
-                                        if (totalTime > 0) {
-                                            (tokenCount * 1000.0f) / totalTime
-                                        } else {
-                                            0f
+                            }.onSuccess {
+                                // Final update with complete stats
+                                val totalTime = System.currentTimeMillis() - startTime
+                                val tokensPerSec =
+                                    if (totalTime > 0) {
+                                        (tokenCount * 1000.0f) / totalTime
+                                    } else {
+                                        0f
+                                    }
+
+                                // Build stats with RAG info
+                                val statsText =
+                                    buildString {
+                                        append(
+                                            "⚡ $tokenCount tokens in ${totalTime}ms (${
+                                                "%.1f".format(
+                                                    tokensPerSec
+                                                )
+                                            } tok/s)"
+                                        )
+                                        if (ragInfo.isNotEmpty()) {
+                                            append(" • $ragInfo")
                                         }
-
-                                    // Build stats with RAG info
-                                    val statsText =
-                                        buildString {
-                                            append("⚡ $tokenCount tokens in ${totalTime}ms (${"%.1f".format(tokensPerSec)} tok/s)")
-                                            if (ragInfo.isNotEmpty()) {
-                                                append(" • $ragInfo")
-                                            }
-                                        }
-
-                                    // Convert StringBuilder to final String for persistence
-                                    val finalText = streamedText.toString().ifEmpty { "..." }
-
-                                    // DEBUG: Log final generation result
-                                    logger.i { "GENERATION COMPLETE: tokenCount=$tokenCount, finalText.length=${finalText.length}, text='${finalText.take(100)}...'" }
-
-                                    chatViewModel.updateMessage(
-                                        aiMessageIndex,
-                                        app.m1k3.ai.assistant.chat.ChatMessage(
-                                            text = finalText,
-                                            isUser = false,
-                                            timestamp = aiMessageTimestamp,
-                                            inferenceStats = statsText,
-                                            ragSources = ragSources, // Phase 3: Track RAG sources
-                                        ),
-                                    )
-
-                                    // Record assistant message with eco-metrics and RAG metadata (Phase 3)
-                                    chatViewModel.recordMessage(
-                                        content = finalText,
-                                        role = "assistant",
-                                        tokens = tokenCount,
-                                        ragSources = ragSources,
-                                        ragConfidence = ragConfidence,
-                                    )
-
-                                    // Log complete response for debugging
-                                    val hasTemplateTokens = finalText.contains("<|") || finalText.contains("|>")
-                                    logger.i {
-                                        "Generation complete: ${finalText.length} chars, $tokenCount tokens, " +
-                                        "${"%.1f".format(tokensPerSec)} tok/s, ${totalTime}ms" +
-                                        (if (hasTemplateTokens) " ⚠️ TEMPLATE TOKENS DETECTED" else "") +
-                                        (if (ragInfo.isNotEmpty()) ", RAG: $ragInfo" else "")
                                     }
 
-                                    // Detect emotion from AI response
-                                    avatarVM.processMessage(finalText, isUserMessage = false)
-                                    avatarVM.startSpeaking()
+                                // Convert StringBuilder to final String for persistence
+                                val finalText = streamedText.toString().ifEmpty { "..." }
 
-                                    // Success haptic feedback
-                                    haptics.success()
-
-                                    // Final scroll with animation (safe since streaming is done)
-                                    try {
-                                        listState.animateScrollToItem(chatViewModel.messages.value.size - 1)
-                                    } catch (e: Exception) {
-                                        // Scroll animation failed, but inference already completed
-                                    }
-                                }.onFailure { e ->
-                                    // Log error for debugging
-                                    logger.e(e) { "Generation failed: ${e.javaClass.simpleName}" }
-
-                                    // Show error on avatar
-                                    avatarVM.showError("Generation failed")
-
-                                    // Error haptic feedback
-                                    haptics.error()
-
-                                    // Create user-friendly error message
-                                    val errorMessage = when {
-                                        e.message?.contains("out of memory", ignoreCase = true) == true ->
-                                            "⚠️ Not enough memory to generate response. Try closing other apps or asking a simpler question."
-                                        e.message?.contains("timeout", ignoreCase = true) == true ->
-                                            "⚠️ Generation took too long. The AI model might be overloaded. Please try again."
-                                        e.message?.contains("model", ignoreCase = true) == true ->
-                                            "⚠️ AI model error: ${e.message}. Try restarting the app."
-                                        else ->
-                                            "⚠️ Couldn't generate response: ${e.message ?: "Unknown error"}. Please try again."
-                                    }
-
-                                    chatViewModel.addMessage(
-                                        app.m1k3.ai.assistant.chat.ChatMessage(
-                                            text = errorMessage,
-                                            isUser = false,
-                                            timestamp = Clock.System.now().toEpochMilliseconds(),
-                                            isError = true,
-                                        ),
-                                    )
+                                // DEBUG: Log final generation result
+                                logger.i {
+                                    "GENERATION COMPLETE: tokenCount=$tokenCount, finalText.length=${finalText.length}, text='${
+                                        finalText.take(
+                                            100
+                                        )
+                                    }...'"
                                 }
+
+                                chatViewModel.updateMessage(
+                                    aiMessageIndex,
+                                    app.m1k3.ai.assistant.chat.ChatMessage(
+                                        text = finalText,
+                                        isUser = false,
+                                        timestamp = aiMessageTimestamp,
+                                        inferenceStats = statsText,
+                                        ragSources = ragSources, // Phase 3: Track RAG sources
+                                    ),
+                                )
+
+                                // Record assistant message with eco-metrics and RAG metadata (Phase 3)
+                                chatViewModel.recordMessage(
+                                    content = finalText,
+                                    role = "assistant",
+                                    tokens = tokenCount,
+                                    ragSources = ragSources,
+                                    ragConfidence = ragConfidence,
+                                )
+
+                                // Log complete response for debugging
+                                val hasTemplateTokens =
+                                    finalText.contains("<|") || finalText.contains("|>")
+                                logger.i {
+                                    "Generation complete: ${finalText.length} chars, $tokenCount tokens, " +
+                                            "${"%.1f".format(tokensPerSec)} tok/s, ${totalTime}ms" +
+                                            (if (hasTemplateTokens) " ⚠️ TEMPLATE TOKENS DETECTED" else "") +
+                                            (if (ragInfo.isNotEmpty()) ", RAG: $ragInfo" else "")
+                                }
+
+                                // Detect emotion from AI response
+                                avatarVM.processMessage(finalText, isUserMessage = false)
+                                avatarVM.startSpeaking()
+
+                                // Success haptic feedback
+                                haptics.success()
+
+                                // Final scroll with animation (safe since streaming is done)
+                                try {
+                                    listState.animateScrollToItem(chatViewModel.messages.value.size - 1)
+                                } catch (e: Exception) {
+                                    // Scroll animation failed, but inference already completed
+                                }
+                            }.onFailure { e ->
+                                // Log error for debugging
+                                logger.e(e) { "Generation failed: ${e.javaClass.simpleName}" }
+
+                                // Show error on avatar
+                                avatarVM.showError("Generation failed")
+
+                                // Error haptic feedback
+                                haptics.error()
+
+                                // Create user-friendly error message
+                                val errorMessage = when {
+                                    e.message?.contains(
+                                        "out of memory",
+                                        ignoreCase = true
+                                    ) == true ->
+                                        "⚠️ Not enough memory to generate response. Try closing other apps or asking a simpler question."
+
+                                    e.message?.contains("timeout", ignoreCase = true) == true ->
+                                        "⚠️ Generation took too long. The AI model might be overloaded. Please try again."
+
+                                    e.message?.contains("model", ignoreCase = true) == true ->
+                                        "⚠️ AI model error: ${e.message}. Try restarting the app."
+
+                                    else ->
+                                        "⚠️ Couldn't generate response: ${e.message ?: "Unknown error"}. Please try again."
+                                }
+
+                                chatViewModel.addMessage(
+                                    app.m1k3.ai.assistant.chat.ChatMessage(
+                                        text = errorMessage,
+                                        isUser = false,
+                                        timestamp = Clock.System.now().toEpochMilliseconds(),
+                                        isError = true,
+                                    ),
+                                )
+                            }
 
                             // Cleanup after generation (success or failure)
                             isGenerating = false
@@ -1053,11 +1013,13 @@ fun ChatInputBar(
                                 .background(
                                     color = if (enabled) MaColors.BgSecondary else MaColors.BgPrimary,
                                     shape = RoundedCornerShape(28.dp),
-                                ).border(
+                                )
+                                .border(
                                     width = borderWidth,
                                     color = borderColor,
                                     shape = RoundedCornerShape(28.dp),
-                                ).padding(start = 20.dp, end = 60.dp, top = 16.dp, bottom = 16.dp),
+                                )
+                                .padding(start = 20.dp, end = 60.dp, top = 16.dp, bottom = 16.dp),
                     ) {
                         if (text.isEmpty()) {
                             Text(
@@ -1085,7 +1047,8 @@ fun ChatInputBar(
                         .background(
                             color = if (hasText && enabled) MaColors.Orange else MaColors.BgSecondary,
                             shape = CircleShape,
-                        ).clickable(
+                        )
+                        .clickable(
                             enabled = hasText && enabled,
                             onClick = {
                                 haptics.strong() // Strong feedback on send
@@ -1100,7 +1063,8 @@ fun ChatInputBar(
                 androidx.compose.foundation.Canvas(
                     modifier = Modifier.size(20.dp),
                 ) {
-                    val arrowColor = if (hasText && enabled) MaColors.White else MaColors.TextDisabled
+                    val arrowColor =
+                        if (hasText && enabled) MaColors.White else MaColors.TextDisabled
                     val strokeWidth = 2.5f
                     val centerX = size.width / 2
                     val centerY = size.height / 2
@@ -1119,7 +1083,10 @@ fun ChatInputBar(
                     drawLine(
                         color = arrowColor,
                         start = Offset(centerX, centerY - arrowLength / 2),
-                        end = Offset(centerX - arrowLength / 3, centerY - arrowLength / 2 + arrowLength / 3),
+                        end = Offset(
+                            centerX - arrowLength / 3,
+                            centerY - arrowLength / 2 + arrowLength / 3
+                        ),
                         strokeWidth = strokeWidth,
                         cap = StrokeCap.Round,
                     )
@@ -1128,7 +1095,10 @@ fun ChatInputBar(
                     drawLine(
                         color = arrowColor,
                         start = Offset(centerX, centerY - arrowLength / 2),
-                        end = Offset(centerX + arrowLength / 3, centerY - arrowLength / 2 + arrowLength / 3),
+                        end = Offset(
+                            centerX + arrowLength / 3,
+                            centerY - arrowLength / 2 + arrowLength / 3
+                        ),
                         strokeWidth = strokeWidth,
                         cap = StrokeCap.Round,
                     )

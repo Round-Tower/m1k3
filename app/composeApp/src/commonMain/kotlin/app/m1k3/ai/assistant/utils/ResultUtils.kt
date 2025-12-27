@@ -91,9 +91,9 @@ inline fun <T> resultOf(block: () -> T): Result<T> {
  * @param block Suspend code to execute
  * @return Result.success(value) or Result.failure(exception)
  */
-inline fun <T> suspendResultOf(crossinline block: suspend () -> T): Result<T> {
+suspend inline fun <T> suspendResultOf(crossinline block: suspend () -> T): Result<T> {
     return try {
-        Result.success(runCatching { block() }.getOrThrow())
+        Result.success(block())
     } catch (e: Exception) {
         Result.failure(e)
     }
@@ -150,9 +150,9 @@ fun <T> Result<T>.getOrThrow(message: String): T {
  * @param message Lazy message provider (only evaluated on failure)
  * @return Original result (for chaining)
  */
-inline fun <T> Result<T>.logFailure(logger: Logger, message: () -> String): Result<T> {
+inline fun <T> Result<T>.logFailure(logger: Logger, crossinline message: () -> String): Result<T> {
     onFailure { exception ->
-        logger.e(exception) { message() }
+        logger.e(exception, message())
     }
     return this
 }

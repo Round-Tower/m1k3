@@ -76,7 +76,7 @@ fun ChatHeader(
                         color = MaColors.TextPrimary,
                     )
                     Text(
-                        if (engineInitialized) "🟢 Ready" else "🔄 Loading...",
+                        if (engineInitialized) "Ready" else "Loading...",
                         style =
                             TextStyle(
                                 fontFamily = MaFontFamilyCaption,
@@ -96,7 +96,7 @@ fun ChatHeader(
                     showInfo = true,
                     modifier = Modifier
                         .testTag("avatar")
-                        .size(140.dp)
+                        .size(100.dp)
                 )
             }
         }

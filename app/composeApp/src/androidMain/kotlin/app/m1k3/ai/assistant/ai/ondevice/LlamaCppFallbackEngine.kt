@@ -74,14 +74,16 @@ class LlamaCppFallbackEngine(
                 return@withLock AiAvailability.Fallback("LlamaCpp")
             }
 
-            try {
-                engine.initialize()
-                isInitialized = true
-                AiAvailability.Fallback("LlamaCpp")
-            } catch (e: Exception) {
-                initializationError = e
-                AiAvailability.Unavailable(AiAvailability.UnavailableReason.MODEL_NOT_READY)
-            }
+            engine.initialize().fold(
+                onSuccess = {
+                    isInitialized = true
+                    AiAvailability.Fallback("LlamaCpp")
+                },
+                onFailure = { e ->
+                    initializationError = e as? Exception ?: Exception(e.message)
+                    AiAvailability.Unavailable(AiAvailability.UnavailableReason.MODEL_NOT_READY)
+                }
+            )
         }
     }
 
@@ -105,17 +107,19 @@ class LlamaCppFallbackEngine(
                 return@withLock AiResult.Success(Unit)
             }
 
-            try {
-                engine.initialize()
-                isInitialized = true
-                AiResult.Success(Unit)
-            } catch (e: Exception) {
-                initializationError = e
-                AiResult.Error(
-                    AiErrorCode.UNAVAILABLE,
-                    "Failed to initialize LlamaCpp: ${e.message}"
-                )
-            }
+            engine.initialize().fold(
+                onSuccess = {
+                    isInitialized = true
+                    AiResult.Success(Unit)
+                },
+                onFailure = { e ->
+                    initializationError = e as? Exception ?: Exception(e.message)
+                    AiResult.Error(
+                        AiErrorCode.UNAVAILABLE,
+                        "Failed to initialize LlamaCpp: ${e.message}"
+                    )
+                }
+            )
         }
     }
 
@@ -133,7 +137,7 @@ class LlamaCppFallbackEngine(
         }
 
         return try {
-            val result = engine.generate(prompt, config)
+            val result = engine.generate(prompt, config).getOrThrow()
             AiResult.Success(result.text)
         } catch (e: Exception) {
             AiResult.Error(
@@ -204,7 +208,7 @@ class LlamaCppFallbackEngine(
                 },
                 temperature = 0.3f  // Lower temperature for factual summary
             )
-            val result = engine.generate(summaryPrompt, config)
+            val result = engine.generate(summaryPrompt, config).getOrThrow()
             AiResult.Success(result.text)
         } catch (e: Exception) {
             AiResult.Error(

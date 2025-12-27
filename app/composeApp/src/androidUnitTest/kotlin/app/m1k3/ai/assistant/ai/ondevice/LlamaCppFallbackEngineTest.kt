@@ -232,11 +232,12 @@ class LlamaCppFallbackEngineTest {
     // === Model Info Tests ===
 
     @Test
-    fun `getModelInfo returns LlamaCpp info string`() = runTest {
+    fun `getModelInfo returns model info string`() = runTest {
         val info = fallbackEngine.getModelInfo()
 
-        assertTrue(info.contains("LlamaCpp") || info.contains("llama"))
-        assertTrue(info.contains("Fallback") || info.contains("fallback"))
+        // Gemma 3 270M is the current fallback model used via LlamaCpp
+        assertTrue(info.contains("Gemma") || info.contains("llama") || info.contains("LlamaCpp"))
+        assertTrue(info.contains("context") || info.contains("MB"))
     }
 
     // === Release Tests ===
@@ -267,29 +268,31 @@ class MockBaseLlmEngine : BaseLlmEngine {
 
     var releaseCalled = false
 
-    override suspend fun initialize() {
+    override suspend fun initialize(): Result<Unit> {
         initializeCalled = true
-        initializeThrows?.let { throw it }
+        initializeThrows?.let { return Result.failure(it) }
         isInitializedResult = true
+        return Result.success(Unit)
     }
 
-    override suspend fun generate(prompt: String, config: GenerationConfig): GenerationResult {
+    override suspend fun generate(prompt: String, config: GenerationConfig): Result<GenerationResult> {
         lastPrompt = prompt
         lastConfig = config
-        generateThrows?.let { throw it }
-        return generateResult ?: GenerationResult("", 0, 0, 0f)
+        generateThrows?.let { return Result.failure(it) }
+        return Result.success(generateResult ?: GenerationResult("", 0, 0, 0f))
     }
 
     override suspend fun generateStreaming(
         prompt: String,
         config: GenerationConfig,
         onToken: (String) -> Unit
-    ) {
+    ): Result<Unit> {
         lastPrompt = prompt
         lastConfig = config
         for (token in streamTokens) {
             onToken(token)
         }
+        return Result.success(Unit)
     }
 
     override fun getOptimalMaxTokens(): Int = 256

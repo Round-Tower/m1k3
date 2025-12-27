@@ -14,7 +14,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import kotlinx.datetime.Clock
+import kotlin.time.ExperimentalTime
 
 private val logger = Logger.withTag("ChatViewModel")
 
@@ -60,6 +60,7 @@ private val logger = Logger.withTag("ChatViewModel")
  * Text("💧 Saved: ${state.sessionEcoStats.waterMl}ml water")
  * ```
  */
+@OptIn(ExperimentalTime::class)
 class ChatViewModel(
     private val conversationRepo: ConversationRepository,
     private val ecoMetricsRepo: EcoMetricsRepository,
@@ -81,7 +82,7 @@ class ChatViewModel(
     val messages: StateFlow<List<ChatMessage>> = _messages.asStateFlow()
 
     // Current session tracking
-    private val sessionId = "chat_session_${Clock.System.now().toEpochMilliseconds()}"
+    private val sessionId = "chat_session_${kotlin.time.Clock.System.now().toEpochMilliseconds()}"
     private var currentConversationId: Long? = null
 
     init {
@@ -189,7 +190,7 @@ class ChatViewModel(
     ) {
         scope.launch {
             try {
-                val now = Clock.System.now().toEpochMilliseconds()
+                val now = kotlin.time.Clock.System.now().toEpochMilliseconds()
                 val messageId = "msg_${now}_${(0..9999).random()}"
 
                 // Calculate eco savings for this message

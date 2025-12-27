@@ -219,7 +219,9 @@ class LlamaCppEngine(private val context: Context) : BaseLlmEngine {
             val shouldStop = AtomicBoolean(false)
             val hasResumed = AtomicBoolean(false)
 
-            suspendCancellableCoroutine<Unit> { continuation ->
+            logger.d { chatPrompt }
+
+            suspendCancellableCoroutine { continuation ->
                 LlamaBridge.generateStream(
                     chatPrompt,
                     object : com.llamatik.library.platform.GenStream {
@@ -231,6 +233,7 @@ class LlamaCppEngine(private val context: Context) : BaseLlmEngine {
                             if (currentCount >= maxTokens) {
                                 shouldStop.set(true)
                                 logger.d { "maxTokens limit reached: $currentCount >= $maxTokens" }
+
                                 if (hasResumed.compareAndSet(false, true)) {
                                     continuation.resume(Unit)
                                 }
@@ -348,7 +351,7 @@ class LlamaCppEngine(private val context: Context) : BaseLlmEngine {
             }
 
             // DEBUG: Log actual prompt contents (truncated for readability)
-            logger.v { ">>> GEMMA 3 PROMPT: ${chatPrompt.take(500)}${if (chatPrompt.length > 500) "..." else ""}" }
+            logger.v { ">>> PROMPT: ${chatPrompt}" }
 
             // Thread-safe counters and flags for native callback access
             val tokenCount = AtomicInteger(0)
