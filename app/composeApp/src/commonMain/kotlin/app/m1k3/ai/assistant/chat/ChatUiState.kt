@@ -203,7 +203,15 @@ val EngineState.isReady: Boolean
     get() = this is EngineState.Ready
 
 /**
- * Extension to check if input is allowed.
+ * Extension to check if input field is enabled.
+ * The input field should be enabled when the engine is ready and not generating.
+ */
+val ChatUiState.isInputEnabled: Boolean
+    get() = engineState.isReady && !generationState.isGenerating
+
+/**
+ * Extension to check if send button should be enabled.
+ * Send is only allowed when input is enabled AND there's text to send.
  */
 val ChatUiState.canSendMessage: Boolean
-    get() = engineState.isReady && !generationState.isGenerating && inputText.isNotBlank()
+    get() = isInputEnabled && inputText.isNotBlank()

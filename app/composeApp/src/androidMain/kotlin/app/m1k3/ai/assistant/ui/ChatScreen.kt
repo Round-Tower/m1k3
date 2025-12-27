@@ -149,6 +149,7 @@ fun ChatScreen(
         ChatHeader(
             engineInitialized = uiState.engineState.isReady,
             avatarState = avatarState,
+            onClearClick = { viewModel.clearConversation() },
             modifier = Modifier
                 .fillMaxWidth()
                 .align(Alignment.TopCenter)
@@ -165,7 +166,7 @@ fun ChatScreen(
                         avatarVM.processMessage(uiState.inputText, isUserMessage = true)
                         viewModel.sendMessage()
                     },
-                    enabled = uiState.canSendMessage
+                    enabled = uiState.isInputEnabled
                 )
             },
             modifier = Modifier.align(Alignment.BottomCenter)
