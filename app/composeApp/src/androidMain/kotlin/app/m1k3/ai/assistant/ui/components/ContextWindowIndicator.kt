@@ -1,0 +1,165 @@
+package app.m1k3.ai.assistant.ui.components
+
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import app.m1k3.ai.assistant.chat.ContextWindowState
+
+/**
+ * ContextWindowIndicator - Displays context window usage in chat.
+ *
+ * Shows:
+ * - Number of conversation messages in context
+ * - Estimated token usage as progress bar
+ * - Device tier for transparency
+ *
+ * Tapping expands to show more detail.
+ */
+@Composable
+fun ContextWindowIndicator(
+    state: ContextWindowState,
+    modifier: Modifier = Modifier
+) {
+    // Don't show if no history
+    if (state.historyMessageCount == 0 && state.historyTokens == 0) {
+        return
+    }
+
+    var expanded by remember { mutableStateOf(false) }
+
+    val animatedProgress by animateFloatAsState(
+        targetValue = (state.usagePercent / 100f).coerceIn(0f, 1f),
+        animationSpec = tween(500),
+        label = "context_progress"
+    )
+
+    val progressColor = when {
+        state.usagePercent < 50 -> MaterialTheme.colorScheme.primary
+        state.usagePercent < 80 -> MaterialTheme.colorScheme.tertiary
+        else -> MaterialTheme.colorScheme.error
+    }
+
+    Box(
+        modifier = modifier
+            .testTag("context_window_indicator")
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 4.dp)
+            .clip(RoundedCornerShape(8.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+            .clickable { expanded = !expanded }
+            .animateContentSize()
+            .padding(12.dp)
+    ) {
+        Column {
+            // Compact view (always visible)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // Left: Context icon and message count
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "💬",
+                        fontSize = 14.sp
+                    )
+                    Text(
+                        text = "${state.historyMessageCount} msgs in context",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+
+                // Right: Token usage badge
+                Text(
+                    text = "${state.usagePercent.toInt()}%",
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = progressColor
+                )
+            }
+
+            // Progress bar
+            Spacer(modifier = Modifier.height(8.dp))
+            LinearProgressIndicator(
+                progress = { animatedProgress },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(4.dp)
+                    .clip(RoundedCornerShape(2.dp)),
+                color = progressColor,
+                trackColor = MaterialTheme.colorScheme.surfaceVariant,
+                strokeCap = StrokeCap.Round
+            )
+
+            // Expanded details
+            if (expanded) {
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // Token count
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        text = "Tokens",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                    )
+                    Text(
+                        text = state.formatUsage(),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(4.dp))
+
+                // Device tier
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        text = "Device",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                    )
+                    Text(
+                        text = state.deviceTier,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // Help text
+                Text(
+                    text = "Tap to collapse • Context includes recent conversation history",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                )
+            }
+        }
+    }
+}

@@ -42,7 +42,10 @@ data class ChatUiState(
     val error: ChatError? = null,
 
     /** RAG info for display (e.g., "Technical (85%) • 3 facts") */
-    val ragInfo: String? = null
+    val ragInfo: String? = null,
+
+    /** Context window usage tracking */
+    val contextWindow: ContextWindowState = ContextWindowState()
 )
 
 /**
@@ -215,3 +218,100 @@ val ChatUiState.isInputEnabled: Boolean
  */
 val ChatUiState.canSendMessage: Boolean
     get() = isInputEnabled && inputText.isNotBlank()
+
+/**
+ * Single chat message in the conversation.
+ */
+data class ChatMessage(
+    /** Message text content */
+    val text: String,
+
+    /** True if sent by user, false if from AI assistant */
+    val isUser: Boolean,
+
+    /** Message timestamp in milliseconds since epoch */
+    val timestamp: Long = 0,
+
+    /** True if this message represents an error */
+    val isError: Boolean = false,
+
+    /** Inference statistics for AI messages (e.g., "⚡ 42 tokens in 3.0s") */
+    val inferenceStats: String? = null,
+
+    /** RAG sources used for this response */
+    val ragSources: String? = null
+)
+
+/**
+ * Session eco-metrics tracking water, energy, and CO2 saved from local AI.
+ */
+data class SessionEcoStats(
+    /** Total tokens generated in this session */
+    val totalTokens: Long = 0,
+
+    /** Water saved in milliliters (vs cloud AI) */
+    val waterMl: Long = 0,
+
+    /** Energy saved in watt-hours (vs cloud AI) */
+    val energyWh: Long = 0,
+
+    /** CO2 prevented in grams (vs cloud AI) */
+    val co2G: Long = 0,
+
+    /** Number of messages generated */
+    val messageCount: Int = 0
+) {
+    /**
+     * Format water savings for display.
+     */
+    fun formatWater(): String = when {
+        waterMl >= 1000 -> "%.1fL".format(waterMl / 1000.0)
+        else -> "${waterMl}ml"
+    }
+
+    /**
+     * Format energy savings for display.
+     */
+    fun formatEnergy(): String = when {
+        energyWh >= 1000 -> "%.1fkWh".format(energyWh / 1000.0)
+        else -> "${energyWh}Wh"
+    }
+
+    /**
+     * Format CO2 savings for display.
+     */
+    fun formatCO2(): String = when {
+        co2G >= 1000 -> "%.1fkg".format(co2G / 1000.0)
+        else -> "${co2G}g"
+    }
+}
+
+/**
+ * Context window usage state for displaying token consumption.
+ */
+data class ContextWindowState(
+    /** Number of conversation history messages included in context */
+    val historyMessageCount: Int = 0,
+
+    /** Estimated tokens used by conversation history */
+    val historyTokens: Int = 0,
+
+    /** Maximum context tokens based on device tier */
+    val maxContextTokens: Int = 4096,
+
+    /** Device tier name for display */
+    val deviceTier: String = "Unknown"
+) {
+    /** Percentage of context window used (0-100) */
+    val usagePercent: Float
+        get() = if (maxContextTokens > 0) (historyTokens.toFloat() / maxContextTokens * 100) else 0f
+
+    /** Formatted context usage for display */
+    fun formatUsage(): String = "$historyTokens / $maxContextTokens tokens"
+
+    /** Format as compact badge */
+    fun formatCompact(): String = when {
+        historyMessageCount == 0 -> "No history"
+        else -> "${historyMessageCount} msgs (${usagePercent.toInt()}%)"
+    }
+}

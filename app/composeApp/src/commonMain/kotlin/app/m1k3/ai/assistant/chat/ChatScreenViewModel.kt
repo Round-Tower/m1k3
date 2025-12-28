@@ -65,6 +65,8 @@ class ChatScreenViewModel(
         ContextRetrievalUseCase(
             deviceInfo = deviceInfo,
             preferences = preferences,
+            database = database,
+            projectId = projectId,
             ragManager = ragManager,
             memoryManager = memoryManager
         )
@@ -372,6 +374,9 @@ class ChatScreenViewModel(
             // Use ContextRetrievalUseCase for context building
             val context = contextRetrieval.retrieveContext(prompt)
 
+            // Update context window state for UI display
+            updateContextWindowState(context)
+
             // Use GenerationConfigBuilder for device-adaptive config
             val config = configBuilder.buildFromIntent(context.intentCategory)
 
@@ -380,10 +385,27 @@ class ChatScreenViewModel(
             val startTime = Clock.System.now().toEpochMilliseconds()
 
             // Build full prompt with context
-            val fullPrompt = if (context.hasContext) {
-                "${context.context}\n\nUser: $prompt"
-            } else {
-                prompt
+            // Note: Don't add "User:" prefix - Gemma3PromptBuilder already wraps in <start_of_turn>user
+            // IMPORTANT: Only use "Facts:" header for actual RAG facts, not conversation history
+            val fullPrompt = buildString {
+                if (context.hasRagContext) {
+                    // RAG facts - use "Facts:" header
+                    append("Facts:\n")
+                    append(context.context)
+                    append("\n\n")
+                    append(prompt)
+                } else if (context.hasConversationHistory) {
+                    // Conversation context only - no "Facts:" header (confuses model)
+                    append("Context: ")
+                    append(context.context)
+                    append("\n\n")
+                    append("Answer this question helpfully:\n")
+                    append(prompt)
+                } else {
+                    // No context - use helpful framing for small models
+                    append("Answer this question helpfully:\n")
+                    append(prompt)
+                }
             }
 
             val result = aiEngine.generateStreaming(
@@ -557,6 +579,42 @@ class ChatScreenViewModel(
             } catch (e: Exception) {
                 logger.w(e) { "Failed to record message" }
             }
+        }
+    }
+
+    private fun updateContextWindowState(context: EnrichedContext) {
+        val historyLines = context.conversationHistory?.lines()?.size ?: 0
+        val historyMessageCount = (historyLines + 1) / 2 // Approximate: 2 lines per message pair
+
+        // Estimate tokens: ~4 chars per token for English text
+        val estimatedTokens = (context.context.length * 0.25f).toInt()
+
+        // Get device tier info
+        val ramGb = deviceInfo.getDeviceRamGB()
+        val deviceTier = when {
+            ramGb >= 12 -> "Flagship"
+            ramGb >= 8 -> "High-End"
+            ramGb >= 6 -> "Mid-Range"
+            else -> "Budget"
+        }
+
+        // Max context based on device tier (rough approximation)
+        val maxContext = when {
+            ramGb >= 12 -> 8192
+            ramGb >= 8 -> 6144
+            ramGb >= 6 -> 4096
+            else -> 2048
+        }
+
+        _uiState.update { state ->
+            state.copy(
+                contextWindow = ContextWindowState(
+                    historyMessageCount = historyMessageCount,
+                    historyTokens = estimatedTokens,
+                    maxContextTokens = maxContext,
+                    deviceTier = deviceTier
+                )
+            )
         }
     }
 

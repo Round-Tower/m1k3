@@ -23,6 +23,7 @@ import app.m1k3.ai.assistant.ui.components.ChatHeader
 import app.m1k3.ai.assistant.ui.components.ChatInputBar
 import app.m1k3.ai.assistant.ui.components.ChatInputBarContainer
 import app.m1k3.ai.assistant.ui.components.ChatMessageList
+import app.m1k3.ai.assistant.ui.components.ContextWindowIndicator
 import app.m1k3.ai.assistant.ui.components.EcoIndicator
 import app.m1k3.ai.assistant.ui.components.EcoIndicatorVariant
 import app.m1k3.ai.assistant.utils.Logger
@@ -126,19 +127,14 @@ fun ChatScreen(
                 onEcoStatsClick = onEcoStatsClick
             )
 
+            // Context Window Indicator - Shows conversation history usage
+            ContextWindowIndicator(
+                state = uiState.contextWindow
+            )
+
             // Messages list
             ChatMessageList(
-                messages = uiState.messages.map { msg ->
-                    // Convert ChatMessage to the format expected by ChatMessageList
-                    app.m1k3.ai.assistant.chat.ChatMessage(
-                        text = msg.text,
-                        isUser = msg.isUser,
-                        timestamp = msg.timestamp,
-                        isError = msg.isError,
-                        inferenceStats = msg.inferenceStats,
-                        ragSources = msg.ragSources
-                    )
-                },
+                messages = uiState.messages,
                 isGenerating = uiState.generationState.isGenerating,
                 listState = listState,
                 showEcoIndicator = uiState.sessionEcoStats.messageCount > 0

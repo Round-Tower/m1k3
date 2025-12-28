@@ -1,6 +1,7 @@
 package app.m1k3.ai.assistant.chat.usecase
 
 import app.m1k3.ai.assistant.config.GenerationConstants
+import app.m1k3.ai.assistant.database.MaDatabase
 import app.m1k3.ai.assistant.memory.ContextResult
 import app.m1k3.ai.assistant.memory.MemoryManager
 import app.m1k3.ai.assistant.platform.DeviceInfoProviderInterface
@@ -16,6 +17,7 @@ private val logger = Logger.withTag("ContextRetrievalUseCase")
  * ContextRetrievalUseCase - Retrieves relevant context for AI generation.
  *
  * Orchestrates context retrieval from multiple sources:
+ * - Conversation History: Recent messages for multi-turn context
  * - RAG: Retrieves facts from knowledge base based on intent
  * - Memory: Retrieves semantic memories from conversation history
  * - Device: Adapts retrieval to device capabilities
@@ -25,22 +27,26 @@ private val logger = Logger.withTag("ContextRetrievalUseCase")
  * val useCase = ContextRetrievalUseCase(
  *     deviceInfo = deviceInfoProvider,
  *     preferences = preferencesStore,
+ *     database = database,
+ *     projectId = "default",
  *     ragManager = ragManager,
  *     memoryManager = memoryManager
  * )
  *
  * val result = useCase.retrieveContext("What is photosynthesis?")
- * // Returns: EnrichedContext with RAG facts + memories
+ * // Returns: EnrichedContext with conversation history + RAG facts + memories
  * ```
  *
  * **Design Principles:**
  * - Single Responsibility: Only retrieves context, doesn't generate
  * - Fail-Safe: Individual retrieval failures don't break the flow
- * - Device-Adaptive: Adjusts memory topK based on device tier
+ * - Device-Adaptive: Adjusts history and memory limits based on device tier
  */
 class ContextRetrievalUseCase(
     private val deviceInfo: DeviceInfoProviderInterface,
     private val preferences: PreferencesStoreInterface,
+    private val database: MaDatabase? = null,
+    private val projectId: String? = null,
     private val ragManager: RAGManager? = null,
     private val memoryManager: MemoryManager? = null
 ) {
@@ -51,6 +57,7 @@ class ContextRetrievalUseCase(
      * @return EnrichedContext containing all retrieved context
      */
     suspend fun retrieveContext(prompt: String): EnrichedContext {
+        var conversationHistory = ""
         var ragContext = ""
         var intentCategory = "GENERAL"
         var ragInfo: String? = null
@@ -58,7 +65,12 @@ class ContextRetrievalUseCase(
         var ragConfidence: Double? = null
         var memoryContext = ""
 
-        // 1. RAG retrieval (if enabled)
+        // 1. Conversation history retrieval (for multi-turn context)
+        if (database != null && projectId != null) {
+            conversationHistory = retrieveConversationHistory()
+        }
+
+        // 2. RAG retrieval (if enabled)
         if (isRagEnabled() && ragManager != null) {
             val ragResult = retrieveRagContext(prompt)
             ragContext = ragResult.context
@@ -68,20 +80,22 @@ class ContextRetrievalUseCase(
             ragConfidence = ragResult.ragConfidence
         }
 
-        // 2. Memory retrieval (if available)
+        // 3. Semantic memory retrieval (if available)
         if (memoryManager != null) {
             memoryContext = retrieveMemoryContext(prompt)
         }
 
-        // 3. Combine contexts
-        val combinedContext = buildCombinedContext(ragContext, memoryContext)
+        // 4. Combine contexts
+        val combinedContext = buildCombinedContext(conversationHistory, ragContext, memoryContext)
 
         return EnrichedContext(
             context = combinedContext,
+            conversationHistory = conversationHistory,
             intentCategory = intentCategory,
             ragInfo = ragInfo,
             ragSources = ragSources,
             ragConfidence = ragConfidence,
+            hasConversationHistory = conversationHistory.isNotEmpty(),
             hasRagContext = ragContext.isNotEmpty(),
             hasMemoryContext = memoryContext.isNotEmpty()
         )
@@ -101,7 +115,72 @@ class ContextRetrievalUseCase(
         return deviceInfo.getMemoryTopK()
     }
 
+    /**
+     * Get the number of conversation history messages to include based on device tier.
+     * Higher-end devices can handle more context.
+     */
+    fun getConversationHistoryLimit(): Int {
+        val ramGb = deviceInfo.getDeviceRamGB()
+        return when {
+            ramGb >= 12 -> 10  // Flagship: last 10 messages (5 turns)
+            ramGb >= 8 -> 8    // High-end: last 8 messages (4 turns)
+            ramGb >= 6 -> 6    // Mid-range: last 6 messages (3 turns)
+            else -> 4          // Budget: last 4 messages (2 turns)
+        }
+    }
+
     // ===== Private Methods =====
+
+    /**
+     * Retrieve recent conversation history for multi-turn context.
+     *
+     * **Important:** Small models (Gemma 270M) get confused by transcript format.
+     * We only extract key topics from USER messages to provide context.
+     *
+     * **Why no assistant responses?**
+     * Including previous assistant responses creates a feedback loop - if the model
+     * gives a bad/refusing response, that gets fed back as context and the model
+     * continues the refusal pattern. User topics are sufficient for follow-ups.
+     */
+    private fun retrieveConversationHistory(): String {
+        return try {
+            val limit = getConversationHistoryLimit()
+            val messages = database!!.messageQueries
+                .getRecentMessagesForProject(projectId!!, limit.toLong())
+                .executeAsList()
+                .reversed() // Reverse to get chronological order (oldest first)
+
+            if (messages.isEmpty()) {
+                return ""
+            }
+
+            // Only extract topics from USER messages (not assistant responses)
+            val userMessages = messages.filter { it.role == "user" }
+
+            if (userMessages.isEmpty()) {
+                return ""
+            }
+
+            // Get meaningful topics (skip greetings)
+            val topics = userMessages.mapNotNull { msg ->
+                val content = msg.content.trim()
+                if (content.length > 10 && !content.lowercase().matches(Regex("^(hi|hey|hello|what's up|sup).*"))) {
+                    content.take(100)
+                } else null
+            }.takeLast(3) // Last 3 meaningful queries
+
+            if (topics.isEmpty()) {
+                return ""
+            }
+
+            val history = "Recent topics discussed: ${topics.joinToString("; ")}"
+            logger.d { "Retrieved context from ${userMessages.size} user messages" }
+            history
+        } catch (e: Exception) {
+            logger.w(e) { "Conversation history retrieval failed" }
+            ""
+        }
+    }
 
     private suspend fun retrieveRagContext(prompt: String): RagResult {
         return try {
@@ -182,15 +261,30 @@ class ContextRetrievalUseCase(
         }
     }
 
-    private fun buildCombinedContext(ragContext: String, memoryContext: String): String {
-        return when {
-            ragContext.isNotEmpty() && memoryContext.isNotEmpty() -> {
-                "$ragContext\n\n## Recent Conversation:\n$memoryContext"
-            }
-            ragContext.isNotEmpty() -> ragContext
-            memoryContext.isNotEmpty() -> "## Recent Conversation:\n$memoryContext"
-            else -> ""
+    private fun buildCombinedContext(
+        conversationHistory: String,
+        ragContext: String,
+        memoryContext: String
+    ): String {
+        val parts = mutableListOf<String>()
+
+        // Add conversation context (simplified for small models)
+        // Note: Using plain text, NOT "User:"/"Assistant:" format
+        if (conversationHistory.isNotEmpty()) {
+            parts.add(conversationHistory)
         }
+
+        // Add RAG facts as simple bullet points
+        if (ragContext.isNotEmpty()) {
+            parts.add(ragContext)
+        }
+
+        // Add semantic memories
+        if (memoryContext.isNotEmpty()) {
+            parts.add(memoryContext)
+        }
+
+        return parts.joinToString("\n")
     }
 
     /**
@@ -210,12 +304,16 @@ class ContextRetrievalUseCase(
  *
  * This is the output of ContextRetrievalUseCase and contains:
  * - Combined context string for prompt enrichment
- * - Metadata about what was retrieved (RAG, memory)
+ * - Conversation history for multi-turn context
+ * - Metadata about what was retrieved (history, RAG, memory)
  * - Intent classification for config building
  */
 data class EnrichedContext(
     /** Combined context string for prompt enrichment */
     val context: String,
+
+    /** Formatted conversation history (User: X\nAssistant: Y\n...) */
+    val conversationHistory: String? = null,
 
     /** Detected intent category from RAG (e.g., "SCIENCE", "CODE_DEBUG") */
     val intentCategory: String,
@@ -229,6 +327,9 @@ data class EnrichedContext(
     /** RAG confidence score (0.0 - 1.0) */
     val ragConfidence: Double?,
 
+    /** Whether conversation history was retrieved */
+    val hasConversationHistory: Boolean = false,
+
     /** Whether RAG context was retrieved */
     val hasRagContext: Boolean,
 
@@ -237,9 +338,13 @@ data class EnrichedContext(
 ) {
     /** Check if any context was retrieved */
     val hasContext: Boolean
-        get() = hasRagContext || hasMemoryContext
+        get() = hasConversationHistory || hasRagContext || hasMemoryContext
 
     /** Check if context is empty */
     val isEmpty: Boolean
         get() = context.isEmpty()
+
+    /** Count of turns in conversation history */
+    val conversationTurnCount: Int
+        get() = conversationHistory?.lines()?.size?.div(2) ?: 0
 }

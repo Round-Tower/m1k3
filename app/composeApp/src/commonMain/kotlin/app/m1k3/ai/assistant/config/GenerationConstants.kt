@@ -139,4 +139,19 @@ object GenerationConstants {
     object MemoryPreview {
         const val MAX_CONTENT_LENGTH = 200
     }
+
+    /**
+     * Context window configuration for conversation history.
+     * Controls how much history is included in prompts.
+     */
+    object ContextWindow {
+        /** Maximum characters per message in conversation history */
+        const val MAX_MESSAGE_LENGTH = 300
+
+        /** Maximum total context tokens (model limit is ~24K, leave room for response) */
+        const val MAX_TOTAL_TOKENS = 4096
+
+        /** Estimated tokens per character (rough approximation) */
+        const val TOKENS_PER_CHAR = 0.25f
+    }
 }
