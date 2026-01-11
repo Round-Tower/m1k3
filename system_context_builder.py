@@ -1,4 +1,14 @@
 #!/usr/bin/env python3
+# Signed: Kev + claude-sonnet-4-5-20250514, 2026-01-05
+# Format: MurphySig v0.1 (https://murphysig.dev/spec)
+#
+# Context: Builds runtime context from system stats (CPU, RAM, hardware accel)
+# so the AI can adapt responses to device capabilities. Enables smart tiering
+# (high-performance / balanced / efficient / minimal) based on real metrics.
+#
+# Confidence: 0.8 - psutil integration stable, tier thresholds may need tuning
+# Open: Should we expose context to users for transparency?
+#
 """
 M1K3 System Context Builder
 Dynamic system statistics and device info for context-aware AI responses

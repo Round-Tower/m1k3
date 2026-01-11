@@ -1,4 +1,14 @@
 #!/usr/bin/env python3
+# Signed: Kev + claude-sonnet-4-5-20250514, 2026-01-05
+# Format: MurphySig v0.1 (https://murphysig.dev/spec)
+#
+# Context: Main launcher for M1K3, the local AI assistant. Unifies three
+# interface modes (CLI, Textual TUI, Rich fullscreen) behind one entry point.
+# Key decision: argparse for interface selection, graceful fallback chain.
+#
+# Confidence: 0.85 - stable launcher, interface handoffs well-tested
+# Open: Should we add a web interface option?
+#
 """
 M1K3 - AI Assistant Launcher
 Supports multiple interfaces: CLI, Textual TUI, and Rich full-screen

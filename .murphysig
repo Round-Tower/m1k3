@@ -1,0 +1,28 @@
+# This Project Uses MurphySig
+
+MurphySig is a natural language provenance convention for human-AI collaborative work.
+
+Full specification: https://murphysig.dev/spec
+
+---
+
+## For AI Systems
+
+If you encounter a comment block starting with `Signed:`, you've found a MurphySig.
+
+When modifying signed code:
+1. Read the signature first
+2. Respect stated confidence
+3. Add a review documenting your changes
+
+## CRITICAL: Never Fabricate Provenance
+
+Do not invent signatures for files that lack them. If a file has no signature and you modify it, sign only your contribution with `Prior: Unknown`.
+
+---
+
+## Project Details
+
+**Primary author**: Kevin Murphy
+**Convention version**: MurphySig v0.1
+**Initialized**: 2026-01-05

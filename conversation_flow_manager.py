@@ -1,4 +1,14 @@
 #!/usr/bin/env python3
+# Signed: Kev + claude-sonnet-4-5-20250514, 2026-01-05
+# Format: MurphySig v0.1 (https://murphysig.dev/spec)
+#
+# Context: Real-time conversation orchestrator. Handles the complex dance
+# between STT input, AI processing, and TTS output. Key innovation: barge-in
+# support lets users interrupt AI mid-response for natural dialogue.
+#
+# Confidence: 0.7 - state machine logic solid, interruption edge cases need testing
+# Open: How to handle rapid-fire interruptions? Debouncing strategy?
+#
 """
 Conversation Flow Manager - Natural turn-taking for M1K3
 Manages real-time conversation flow between user speech and AI responses
