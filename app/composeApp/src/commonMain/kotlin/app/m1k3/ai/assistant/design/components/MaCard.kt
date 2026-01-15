@@ -81,7 +81,7 @@ private fun MaCardBasicPreview() {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(MaColors.BgPrimary)
+                .background(MaColors.bgPrimary())
                 .padding(MaSpacing.base),
             verticalArrangement = Arrangement.spacedBy(MaSpacing.base)
         ) {
@@ -113,7 +113,7 @@ private fun MaCardClickablePreview() {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(MaColors.BgPrimary)
+                .background(MaColors.bgPrimary())
                 .padding(MaSpacing.base),
             verticalArrangement = Arrangement.spacedBy(MaSpacing.base)
         ) {
@@ -148,7 +148,7 @@ private fun MaCardWithIconPreview() {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(MaColors.BgPrimary)
+                .background(MaColors.bgPrimary())
                 .padding(MaSpacing.base),
             verticalArrangement = Arrangement.spacedBy(MaSpacing.base)
         ) {
@@ -185,7 +185,7 @@ private fun MaCardMultiplePreview() {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(MaColors.BgPrimary)
+                .background(MaColors.bgPrimary())
                 .padding(MaSpacing.base),
             verticalArrangement = Arrangement.spacedBy(MaSpacing.base)
         ) {

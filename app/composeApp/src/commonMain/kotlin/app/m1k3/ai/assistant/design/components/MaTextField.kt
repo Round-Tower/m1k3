@@ -108,7 +108,7 @@ fun MaTextField(
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(MaRadius.sm))
                     .background(
-                        color = if (enabled) MaColors.BgSecondary else MaColors.BgPrimary,
+                        color = if (enabled) MaColors.bgSecondary() else MaColors.bgPrimary(),
                         shape = RoundedCornerShape(MaRadius.sm)
                     )
                     .border(
@@ -257,7 +257,7 @@ private fun MaTextFieldEmptyPreview() {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(MaColors.BgPrimary)
+                .background(MaColors.bgPrimary())
                 .padding(MaSpacing.base),
             verticalArrangement = Arrangement.spacedBy(MaSpacing.base)
         ) {
@@ -278,7 +278,7 @@ private fun MaTextFieldWithTextPreview() {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(MaColors.BgPrimary)
+                .background(MaColors.bgPrimary())
                 .padding(MaSpacing.base),
             verticalArrangement = Arrangement.spacedBy(MaSpacing.base)
         ) {
@@ -299,7 +299,7 @@ private fun MaTextFieldDisabledPreview() {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(MaColors.BgPrimary)
+                .background(MaColors.bgPrimary())
                 .padding(MaSpacing.base),
             verticalArrangement = Arrangement.spacedBy(MaSpacing.base)
         ) {
@@ -321,7 +321,7 @@ private fun MaTextFieldMultilinePreview() {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(MaColors.BgPrimary)
+                .background(MaColors.bgPrimary())
                 .padding(MaSpacing.base),
             verticalArrangement = Arrangement.spacedBy(MaSpacing.base)
         ) {
@@ -342,7 +342,7 @@ private fun MaTextFieldChatEmptyPreview() {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(MaColors.BgPrimary)
+                .background(MaColors.bgPrimary())
                 .padding(MaSpacing.base),
             verticalArrangement = Arrangement.spacedBy(MaSpacing.base)
         ) {
@@ -370,7 +370,7 @@ private fun MaTextFieldChatWithMessagePreview() {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(MaColors.BgPrimary)
+                .background(MaColors.bgPrimary())
                 .padding(MaSpacing.base),
             verticalArrangement = Arrangement.spacedBy(MaSpacing.base)
         ) {
@@ -398,7 +398,7 @@ private fun MaTextFieldSearchEmptyPreview() {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(MaColors.BgPrimary)
+                .background(MaColors.bgPrimary())
                 .padding(MaSpacing.base),
             verticalArrangement = Arrangement.spacedBy(MaSpacing.base)
         ) {
@@ -426,7 +426,7 @@ private fun MaTextFieldSearchWithQueryPreview() {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(MaColors.BgPrimary)
+                .background(MaColors.bgPrimary())
                 .padding(MaSpacing.base),
             verticalArrangement = Arrangement.spacedBy(MaSpacing.base)
         ) {
@@ -454,7 +454,7 @@ private fun MaTextFieldAllVariantsPreview() {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(MaColors.BgPrimary)
+                .background(MaColors.bgPrimary())
                 .padding(MaSpacing.base),
             verticalArrangement = Arrangement.spacedBy(MaSpacing.base)
         ) {

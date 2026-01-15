@@ -79,7 +79,7 @@ fun TypingIndicatorBubble(
         Surface(
             modifier = Modifier
                 .wrapContentSize(),
-            color = MaColors.BgSecondary,
+            color = MaColors.bgSecondary(),
             shape = RoundedCornerShape(MaRadius.md),
             shadowElevation = 1.dp
         ) {
@@ -137,7 +137,7 @@ private fun TypingIndicatorBubblePreview() {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(MaColors.BgPrimary)
+                .background(MaColors.bgPrimary())
                 .padding(MaSpacing.base),
             verticalArrangement = Arrangement.spacedBy(MaSpacing.base)
         ) {
@@ -155,7 +155,7 @@ private fun TypingIndicatorBubbleInContextPreview() {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(MaColors.BgPrimary)
+                .background(MaColors.bgPrimary())
                 .padding(MaSpacing.base),
             verticalArrangement = Arrangement.spacedBy(MaSpacing.base)
         ) {
@@ -183,7 +183,7 @@ private fun TypingIndicatorBubbleMultiplePreview() {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(MaColors.BgPrimary)
+                .background(MaColors.bgPrimary())
                 .padding(MaSpacing.base),
             verticalArrangement = Arrangement.spacedBy(MaSpacing.lg)
         ) {

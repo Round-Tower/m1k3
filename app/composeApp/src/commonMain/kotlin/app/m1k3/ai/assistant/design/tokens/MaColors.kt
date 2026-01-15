@@ -234,4 +234,74 @@ object MaColors {
 
     /** Light mode dark scrim - 70% black (for full overlays) */
     val ScrimDarkLight = Color(0xB3000000)
+
+    /**
+     * Theme-aware color getters
+     * Automatically select appropriate color based on system dark mode
+     */
+
+    // Text colors
+    @androidx.compose.runtime.Composable
+    fun textPrimary(): Color = if (androidx.compose.foundation.isSystemInDarkTheme()) TextPrimary else TextPrimaryLight
+
+    @androidx.compose.runtime.Composable
+    fun textSecondary(): Color = if (androidx.compose.foundation.isSystemInDarkTheme()) TextSecondary else TextSecondaryLight
+
+    @androidx.compose.runtime.Composable
+    fun textMuted(): Color = if (androidx.compose.foundation.isSystemInDarkTheme()) TextMuted else TextMutedLight
+
+    @androidx.compose.runtime.Composable
+    fun textDisabled(): Color = if (androidx.compose.foundation.isSystemInDarkTheme()) TextDisabled else TextDisabledLight
+
+    // Background colors
+    @androidx.compose.runtime.Composable
+    fun bgPrimary(): Color = if (androidx.compose.foundation.isSystemInDarkTheme()) BgPrimary else BgPrimaryLight
+
+    @androidx.compose.runtime.Composable
+    fun bgSecondary(): Color = if (androidx.compose.foundation.isSystemInDarkTheme()) BgSecondary else BgSecondaryLight
+
+    @androidx.compose.runtime.Composable
+    fun bgTertiary(): Color = if (androidx.compose.foundation.isSystemInDarkTheme()) BgTertiary else BgTertiaryLight
+
+    @androidx.compose.runtime.Composable
+    fun bgElevated(): Color = if (androidx.compose.foundation.isSystemInDarkTheme()) BgElevated else BgElevatedLight
+
+    @androidx.compose.runtime.Composable
+    fun bgGlass(): Color = if (androidx.compose.foundation.isSystemInDarkTheme()) BgGlass else BgGlassLight
+
+    @androidx.compose.runtime.Composable
+    fun bgHighElevated(): Color = if (androidx.compose.foundation.isSystemInDarkTheme()) BgHighElevated else BgHighElevatedLight
+
+    // Border colors
+    @androidx.compose.runtime.Composable
+    fun borderSubtle(): Color = if (androidx.compose.foundation.isSystemInDarkTheme()) BorderSubtle else BorderSubtleLight
+
+    @androidx.compose.runtime.Composable
+    fun borderLight(): Color = if (androidx.compose.foundation.isSystemInDarkTheme()) BorderLight else BorderLightLight
+
+    @androidx.compose.runtime.Composable
+    fun borderMedium(): Color = if (androidx.compose.foundation.isSystemInDarkTheme()) BorderMedium else BorderMediumLight
+
+    @androidx.compose.runtime.Composable
+    fun borderStrong(): Color = if (androidx.compose.foundation.isSystemInDarkTheme()) BorderStrong else BorderStrongLight
+
+    // Interactive states
+    @androidx.compose.runtime.Composable
+    fun hoverOverlay(): Color = if (androidx.compose.foundation.isSystemInDarkTheme()) HoverOverlay else HoverOverlayLight
+
+    @androidx.compose.runtime.Composable
+    fun pressedOverlay(): Color = if (androidx.compose.foundation.isSystemInDarkTheme()) PressedOverlay else PressedOverlayLight
+
+    @androidx.compose.runtime.Composable
+    fun selectionBg(): Color = if (androidx.compose.foundation.isSystemInDarkTheme()) SelectionBg else SelectionBgLight
+
+    // Scrim colors
+    @androidx.compose.runtime.Composable
+    fun scrimLight(): Color = if (androidx.compose.foundation.isSystemInDarkTheme()) ScrimLight else ScrimLightLight
+
+    @androidx.compose.runtime.Composable
+    fun scrimMedium(): Color = if (androidx.compose.foundation.isSystemInDarkTheme()) ScrimMedium else ScrimMediumLight
+
+    @androidx.compose.runtime.Composable
+    fun scrimDark(): Color = if (androidx.compose.foundation.isSystemInDarkTheme()) ScrimDark else ScrimDarkLight
 }

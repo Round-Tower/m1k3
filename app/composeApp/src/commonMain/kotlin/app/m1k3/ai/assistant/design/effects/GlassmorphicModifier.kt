@@ -48,12 +48,14 @@ import app.m1k3.ai.assistant.design.tokens.MaRadius
  * ```
  */
 fun Modifier.glassmorphic(
-    backgroundColor: Color = MaColors.BgGlass.copy(alpha = 0.1f),
-    borderColor: Color = MaColors.BorderSubtle,
+    backgroundColor: Color? = null,
+    borderColor: Color? = null,
     borderWidth: Dp = 2.dp,
     shape: Shape = RoundedCornerShape(MaRadius.none),
     blurRadius: Float = 8f
 ): Modifier = composed {
+    val actualBackgroundColor = backgroundColor ?: MaColors.bgGlass().copy(alpha = 0.1f)
+    val actualBorderColor = borderColor ?: MaColors.borderSubtle()
     // Note: Blur effect requires platform-specific implementation
     // For now, using transparency-only approach (works on all API levels)
     // Blur will be added in androidMain implementation if needed
@@ -61,12 +63,12 @@ fun Modifier.glassmorphic(
     this
         .clip(shape)
         .background(
-            color = backgroundColor,
+            color = actualBackgroundColor,
             shape = shape
         )
         .border(
             width = borderWidth,
-            color = borderColor,
+            color = actualBorderColor,
             shape = shape
         )
 }
@@ -88,24 +90,28 @@ fun Modifier.glassmorphicCard(
  */
 fun Modifier.glassmorphicSurface(
     shape: Shape = RoundedCornerShape(MaRadius.md)
-): Modifier = glassmorphic(
-    backgroundColor = MaColors.BgSecondary,
-    borderColor = MaColors.BorderSubtle,
-    borderWidth = 1.dp,
-    shape = shape
-)
+): Modifier = composed {
+    glassmorphic(
+        backgroundColor = MaColors.bgSecondary(),
+        borderColor = MaColors.borderSubtle(),
+        borderWidth = 1.dp,
+        shape = shape
+    )
+}
 
 /**
  * Glassmorphic overlay variant - for modals/dialogs
  */
 fun Modifier.glassmorphicOverlay(
     shape: Shape = RoundedCornerShape(MaRadius.lg)
-): Modifier = glassmorphic(
-    backgroundColor = MaColors.BgHighElevated,
-    borderColor = MaColors.BorderMedium,
-    borderWidth = 1.5.dp,
-    shape = shape
-)
+): Modifier = composed {
+    glassmorphic(
+        backgroundColor = MaColors.bgHighElevated(),
+        borderColor = MaColors.borderMedium(),
+        borderWidth = 1.5.dp,
+        shape = shape
+    )
+}
 
 /**
  * Usage Guidelines

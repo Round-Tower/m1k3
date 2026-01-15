@@ -78,7 +78,7 @@ fun MaChatBubbleUser(
             Box(
                 modifier = Modifier
                     .clip(RoundedCornerShape(MaRadius.md))
-                    .background(MaColors.BgTertiary)
+                    .background(MaColors.bgTertiary())
                     .border(
                         width = 1.5.dp,
                         color = MaColors.Orange,
@@ -89,7 +89,7 @@ fun MaChatBubbleUser(
                 Text(
                     text = text,
                     style = MaTypography.bodyLarge,
-                    color = MaColors.TextPrimary
+                    color = MaColors.textPrimary()
                 )
             }
 
@@ -97,7 +97,7 @@ fun MaChatBubbleUser(
             Text(
                 text = formatTimestamp(timestamp),
                 style = MaTypography.labelSmall,
-                color = MaColors.TextDisabled,
+                color = MaColors.textDisabled(),
                 modifier = Modifier.padding(top = MaSpacing.xs, end = MaSpacing.sm)
             )
         }
@@ -140,8 +140,8 @@ fun MaChatBubbleAI(
             Box(
                 modifier = Modifier
                     .glassmorphic(
-                        backgroundColor = if (isError) MaColors.ErrorBg else MaColors.BgElevated,
-                        borderColor = if (isError) MaColors.Error else MaColors.BorderLight,
+                        backgroundColor = if (isError) MaColors.ErrorBg else MaColors.bgElevated(),
+                        borderColor = if (isError) MaColors.Error else MaColors.borderLight(),
                         borderWidth = 0.dp,
                         shape = RoundedCornerShape(MaRadius.md)
                     )
@@ -166,7 +166,7 @@ fun MaChatBubbleAI(
                         Text(
                             text = inferenceStats,
                             style = MaTypography.labelSmall,
-                            color = MaColors.TextDisabled,
+                            color = MaColors.textDisabled(),
                             fontWeight = FontWeight.Medium
                         )
                     }
@@ -204,12 +204,12 @@ fun MaChatBubbleAI(
                                 Text(
                                     text = "• $factCount ${if (factCount == 1) "fact" else "facts"}",
                                     style = MaTypography.labelSmall,
-                                    color = MaColors.TextSecondary
+                                    color = MaColors.textSecondary()
                                 )
                                 Text(
                                     text = if (isExpanded) "▲" else "▼",
                                     style = MaTypography.labelSmall,
-                                    color = MaColors.TextDisabled
+                                    color = MaColors.textDisabled()
                                 )
                             }
 
@@ -222,7 +222,7 @@ fun MaChatBubbleAI(
                                 Text(
                                     text = ragSources,
                                     style = MaTypography.labelSmall,
-                                    color = MaColors.TextSecondary,
+                                    color = MaColors.textSecondary(),
                                     modifier = Modifier.padding(
                                         start = MaSpacing.sm,
                                         top = MaSpacing.xs,
@@ -239,7 +239,7 @@ fun MaChatBubbleAI(
             Text(
                 text = formatTimestamp(timestamp),
                 style = MaTypography.labelSmall,
-                color = MaColors.TextDisabled,
+                color = MaColors.textDisabled(),
                 modifier = Modifier.padding(top = MaSpacing.xs, start = MaSpacing.sm)
             )
         }
@@ -306,7 +306,7 @@ private fun MaChatBubbleUserPreview() {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(MaColors.BgPrimary)
+                .background(MaColors.bgPrimary())
                 .padding(MaSpacing.base)
         ) {
             MaChatBubbleUser(
@@ -324,7 +324,7 @@ private fun MaChatBubbleUserLongTextPreview() {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(MaColors.BgPrimary)
+                .background(MaColors.bgPrimary())
                 .padding(MaSpacing.base)
         ) {
             MaChatBubbleUser(
@@ -342,7 +342,7 @@ private fun MaChatBubbleAIPreview() {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(MaColors.BgPrimary)
+                .background(MaColors.bgPrimary())
                 .padding(MaSpacing.base)
         ) {
             MaChatBubbleAI(
@@ -360,7 +360,7 @@ private fun MaChatBubbleAIWithStatsPreview() {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(MaColors.BgPrimary)
+                .background(MaColors.bgPrimary())
                 .padding(MaSpacing.base)
         ) {
             MaChatBubbleAI(
@@ -379,7 +379,7 @@ private fun MaChatBubbleAIWithRagPreview() {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(MaColors.BgPrimary)
+                .background(MaColors.bgPrimary())
                 .padding(MaSpacing.base)
         ) {
             MaChatBubbleAI(
@@ -399,7 +399,7 @@ private fun MaChatBubbleAIErrorPreview() {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(MaColors.BgPrimary)
+                .background(MaColors.bgPrimary())
                 .padding(MaSpacing.base)
         ) {
             MaChatBubbleAI(
@@ -418,14 +418,14 @@ private fun MaChatBubbleConversationPreview() {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(MaColors.BgPrimary)
+                .background(MaColors.bgPrimary())
                 .padding(MaSpacing.base),
             verticalArrangement = Arrangement.spacedBy(MaSpacing.base)
         ) {
             Text(
                 "Sample Conversation:",
                 style = MaTypography.labelSmall,
-                color = MaColors.TextSecondary,
+                color = MaColors.textSecondary(),
                 modifier = Modifier.padding(bottom = MaSpacing.sm)
             )
 
