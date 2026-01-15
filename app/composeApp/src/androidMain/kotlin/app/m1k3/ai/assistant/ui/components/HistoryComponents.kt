@@ -14,6 +14,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.SolidColor
+import org.jetbrains.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -27,6 +28,7 @@ import app.m1k3.ai.assistant.design.tokens.MaColors
 import app.m1k3.ai.assistant.design.tokens.MaFontFamilyCaption
 import app.m1k3.ai.assistant.design.tokens.MaSpacing
 import app.m1k3.ai.assistant.design.tokens.MaTypography
+import app.m1k3.ai.assistant.design.theme.MaTheme
 import app.m1k3.ai.assistant.history.ConversationInfo
 import app.m1k3.ai.assistant.history.ExportFormat
 import app.m1k3.ai.assistant.history.SearchResult
@@ -583,5 +585,58 @@ fun formatHistoryTimestamp(timestampMs: Long): String {
             val date = instant.toString().substringBefore("T")
             date
         }
+    }
+}
+
+// ============================================================
+// Previews
+// ============================================================
+
+@Preview
+@Composable
+private fun HistorySearchBarPreview() {
+    MaTheme {
+        HistorySearchBar(
+            query = "machine learning",
+            onQueryChange = {},
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp)
+        )
+    }
+}
+
+@Preview
+@Composable
+private fun ConversationCardPreview() {
+    MaTheme {
+        ConversationCard(
+            conversation = ConversationInfo(
+                id = 1,
+                projectId = "default",
+                title = "Discussing AI Ethics",
+                startedAt = System.currentTimeMillis() - 3600000,
+                lastMessageAt = System.currentTimeMillis(),
+                messageCount = 12,
+                tokenCount = 3400,
+                isArchived = false
+            ),
+            onClick = {},
+            onDeleteClick = {},
+            onExportClick = {}
+        )
+    }
+}
+
+@Preview
+@Composable
+private fun ConversationsListEmptyPreview() {
+    MaTheme {
+        ConversationsList(
+            conversations = emptyList(),
+            onConversationClick = {},
+            onDeleteClick = {},
+            onExportClick = {}
+        )
     }
 }

@@ -1,7 +1,11 @@
 package app.m1k3.ai.assistant.design.components
 
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -13,9 +17,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import org.jetbrains.compose.ui.tooling.preview.Preview
 import app.m1k3.ai.assistant.design.tokens.MaColors
 import app.m1k3.ai.assistant.design.tokens.MaRadius
 import app.m1k3.ai.assistant.design.tokens.MaSpacing
+import app.m1k3.ai.assistant.design.theme.MaTheme
+import app.m1k3.ai.assistant.design.preview.PreviewFixtures
 
 /**
  * 間 AI Button Components
@@ -154,3 +161,107 @@ fun MaButtonText(
  * )
  * ```
  */
+
+// ============================================================
+// Previews
+// ============================================================
+
+@Preview
+@Composable
+private fun MaButtonPrimaryPreview() {
+    MaTheme {
+        MaButtonPrimary(
+            onClick = PreviewFixtures.noOpOnClick,
+            text = PreviewFixtures.buttonTextPrimary
+        )
+    }
+}
+
+@Preview
+@Composable
+private fun MaButtonSecondaryPreview() {
+    MaTheme {
+        MaButtonSecondary(
+            onClick = PreviewFixtures.noOpOnClick,
+            text = PreviewFixtures.buttonTextSecondary
+        )
+    }
+}
+
+@Preview
+@Composable
+private fun MaButtonTextPreview() {
+    MaTheme {
+        MaButtonText(
+            onClick = PreviewFixtures.noOpOnClick,
+            text = PreviewFixtures.buttonTextCancel
+        )
+    }
+}
+
+@Preview
+@Composable
+private fun MaButtonPrimaryDisabledPreview() {
+    MaTheme {
+        MaButtonPrimary(
+            onClick = PreviewFixtures.noOpOnClick,
+            text = PreviewFixtures.buttonTextPrimary,
+            enabled = false
+        )
+    }
+}
+
+@Preview
+@Composable
+private fun MaButtonSecondaryDisabledPreview() {
+    MaTheme {
+        MaButtonSecondary(
+            onClick = PreviewFixtures.noOpOnClick,
+            text = PreviewFixtures.buttonTextSecondary,
+            enabled = false
+        )
+    }
+}
+
+@Preview
+@Composable
+private fun MaButtonAllVariantsPreview() {
+    MaTheme {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            Text("Enabled Variants:")
+            MaButtonPrimary(
+                onClick = PreviewFixtures.noOpOnClick,
+                text = "Primary Button"
+            )
+            MaButtonSecondary(
+                onClick = PreviewFixtures.noOpOnClick,
+                text = "Secondary Button"
+            )
+            MaButtonText(
+                onClick = PreviewFixtures.noOpOnClick,
+                text = "Text Button"
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
+            Text("Disabled Variants:")
+            MaButtonPrimary(
+                onClick = PreviewFixtures.noOpOnClick,
+                text = "Disabled Primary",
+                enabled = false
+            )
+            MaButtonSecondary(
+                onClick = PreviewFixtures.noOpOnClick,
+                text = "Disabled Secondary",
+                enabled = false
+            )
+            MaButtonText(
+                onClick = PreviewFixtures.noOpOnClick,
+                text = "Disabled Text",
+                enabled = false
+            )
+        }
+    }
+}

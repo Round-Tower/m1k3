@@ -10,7 +10,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.tooling.preview.Preview
+import org.jetbrains.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import app.m1k3.ai.assistant.ai.ondevice.OnDeviceAi
 import app.m1k3.ai.assistant.settings.collectAsState
@@ -331,7 +331,7 @@ private fun AboutSection(
 /**
  * Preview for Settings Screen
  */
-@Preview(showBackground = true, showSystemUi = true)
+@Preview(showBackground = true)
 @Composable
 private fun SettingsScreenPreview() {
     MaterialTheme {

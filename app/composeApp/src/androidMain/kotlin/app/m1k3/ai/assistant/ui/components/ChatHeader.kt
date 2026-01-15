@@ -19,7 +19,10 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import org.jetbrains.compose.ui.tooling.preview.Preview
 import app.m1k3.ai.assistant.avatar.AvatarState
+import app.m1k3.ai.assistant.design.preview.PreviewFixtures
+import app.m1k3.ai.assistant.design.theme.MaTheme
 import app.m1k3.ai.assistant.avatar.AvatarView
 import app.m1k3.ai.assistant.design.tokens.*
 
@@ -134,5 +137,48 @@ fun ChatHeader(
                 }
             }
         }
+    }
+}
+
+// ============================================================
+// Previews
+// ============================================================
+
+@Preview
+@Composable
+private fun ChatHeaderReadyPreview() {
+    MaTheme {
+        ChatHeader(
+            engineInitialized = true,
+            avatarState = AvatarState(emotion = app.m1k3.ai.assistant.avatar.AvatarEmotion.HAPPY),
+            onClearClick = PreviewFixtures.noOpOnClick
+        )
+    }
+}
+
+@Preview
+@Composable
+private fun ChatHeaderLoadingPreview() {
+    MaTheme {
+        ChatHeader(
+            engineInitialized = false,
+            avatarState = AvatarState(emotion = app.m1k3.ai.assistant.avatar.AvatarEmotion.THINKING),
+            onClearClick = PreviewFixtures.noOpOnClick
+        )
+    }
+}
+
+@Preview
+@Composable
+private fun ChatHeaderGeneratingPreview() {
+    MaTheme {
+        ChatHeader(
+            engineInitialized = true,
+            avatarState = AvatarState(
+                emotion = app.m1k3.ai.assistant.avatar.AvatarEmotion.HAPPY,
+                activity = app.m1k3.ai.assistant.avatar.AvatarActivity.GENERATING
+            ),
+            onClearClick = PreviewFixtures.noOpOnClick
+        )
     }
 }

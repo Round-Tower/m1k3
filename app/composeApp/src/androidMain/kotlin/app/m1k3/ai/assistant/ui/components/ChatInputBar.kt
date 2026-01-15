@@ -28,7 +28,10 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
+import org.jetbrains.compose.ui.tooling.preview.Preview
 import app.m1k3.ai.assistant.design.haptics.rememberHapticFeedback
+import app.m1k3.ai.assistant.design.preview.PreviewFixtures
+import app.m1k3.ai.assistant.design.theme.MaTheme
 import app.m1k3.ai.assistant.design.tokens.MaColors
 import app.m1k3.ai.assistant.design.tokens.MaSpacing
 import app.m1k3.ai.assistant.design.tokens.MaTypography
@@ -322,5 +325,93 @@ fun ChatInputBarContainer(
 
         // Input bar content
         inputBar()
+    }
+}
+
+// ============================================================
+// Previews
+// ============================================================
+
+@Preview
+@Composable
+private fun ChatInputBarEmptyPreview() {
+    MaTheme {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(MaColors.BgPrimary)
+                .padding(MaSpacing.base)
+        ) {
+            ChatInputBar(
+                text = "",
+                onTextChange = PreviewFixtures.noOpOnTextChange,
+                onSend = PreviewFixtures.noOpOnClick,
+                enabled = true,
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
+    }
+}
+
+@Preview
+@Composable
+private fun ChatInputBarWithTextPreview() {
+    MaTheme {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(MaColors.BgPrimary)
+                .padding(MaSpacing.base)
+        ) {
+            ChatInputBar(
+                text = "What is machine learning?",
+                onTextChange = PreviewFixtures.noOpOnTextChange,
+                onSend = PreviewFixtures.noOpOnClick,
+                enabled = true,
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
+    }
+}
+
+@Preview
+@Composable
+private fun ChatInputBarMultilinePreview() {
+    MaTheme {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(MaColors.BgPrimary)
+                .padding(MaSpacing.base)
+        ) {
+            ChatInputBar(
+                text = "Can you help me understand:\n1. Machine learning basics\n2. Neural networks\n3. Applications",
+                onTextChange = PreviewFixtures.noOpOnTextChange,
+                onSend = PreviewFixtures.noOpOnClick,
+                enabled = true,
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
+    }
+}
+
+@Preview
+@Composable
+private fun ChatInputBarDisabledPreview() {
+    MaTheme {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(MaColors.BgPrimary)
+                .padding(MaSpacing.base)
+        ) {
+            ChatInputBar(
+                text = "Processing...",
+                onTextChange = PreviewFixtures.noOpOnTextChange,
+                onSend = PreviewFixtures.noOpOnClick,
+                enabled = false,
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
     }
 }

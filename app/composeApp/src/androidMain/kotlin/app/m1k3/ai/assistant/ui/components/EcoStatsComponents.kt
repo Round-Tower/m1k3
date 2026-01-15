@@ -11,6 +11,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import org.jetbrains.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
@@ -19,6 +20,7 @@ import app.m1k3.ai.assistant.design.components.MaCard
 import app.m1k3.ai.assistant.design.tokens.MaColors
 import app.m1k3.ai.assistant.design.tokens.MaSpacing
 import app.m1k3.ai.assistant.design.tokens.MaTypography
+import app.m1k3.ai.assistant.design.theme.MaTheme
 import app.m1k3.ai.assistant.eco.LifetimeStats
 import app.m1k3.ai.assistant.eco.ProjectStats
 import app.m1k3.ai.assistant.history.EcoComparison
@@ -518,3 +520,15 @@ fun formatCO2(co2G: Double): String = when {
 
 fun calculateProgress(value: Double, maxValue: Double): Float =
     (value / maxValue).coerceIn(0.0, 1.0).toFloat()
+
+// ============================================================
+// Previews
+// ============================================================
+
+@Preview
+@Composable
+private fun PrivacyStatementCardPreview() {
+    MaTheme {
+        PrivacyStatementCard()
+    }
+}

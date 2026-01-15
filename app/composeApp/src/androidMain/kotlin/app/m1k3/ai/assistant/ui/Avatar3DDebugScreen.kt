@@ -9,6 +9,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import org.jetbrains.compose.ui.tooling.preview.Preview
 import app.m1k3.ai.assistant.avatar.*
 import app.m1k3.ai.assistant.avatar.debug.collectAsState
 import app.m1k3.ai.assistant.avatar.debug.rememberAvatarDebugViewModel
@@ -20,6 +22,7 @@ import app.m1k3.ai.assistant.design.haptics.rememberHapticFeedback
 import app.m1k3.ai.assistant.design.tokens.MaColors
 import app.m1k3.ai.assistant.design.tokens.MaSpacing
 import app.m1k3.ai.assistant.design.tokens.MaTypography
+import app.m1k3.ai.assistant.design.theme.MaTheme
 import app.m1k3.ai.assistant.ui.components.*
 
 /**
@@ -408,6 +411,214 @@ private fun AnimationTestsCard(
                     },
                     modifier = Modifier.weight(1f)
                 )
+            }
+        }
+    }
+}
+
+// ============================================================
+// Previews
+// ============================================================
+
+@Preview
+@Composable
+@OptIn(ExperimentalMaterial3Api::class)
+private fun Avatar3DDebugScreenSimplifiedPreview() {
+    MaTheme {
+        Scaffold(
+            topBar = {
+                TopAppBar(
+                    title = {
+                        Column {
+                            Text(
+                                "Avatar Debug",
+                                style = MaTypography.titleLarge,
+                                fontWeight = FontWeight.Bold,
+                                color = MaColors.TextPrimary
+                            )
+                            Text(
+                                "Testing 2D Canvas Robot - Static",
+                                style = MaTypography.bodySmall,
+                                color = MaColors.Orange
+                            )
+                        }
+                    },
+                    navigationIcon = {
+                        TextButton(onClick = {}) {
+                            Text("Back", style = MaterialTheme.typography.titleMedium)
+                        }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = MaColors.BgPrimary
+                    )
+                )
+            }
+        ) { padding ->
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding)
+                    .verticalScroll(rememberScrollState())
+                    .padding(MaSpacing.base),
+                verticalArrangement = Arrangement.spacedBy(MaSpacing.base)
+            ) {
+                Text(
+                    "Avatar Debug Interface",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+
+                Text(
+                    "Configure emotions and activities",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                Spacer(modifier = Modifier.height(MaSpacing.base))
+
+                Text(
+                    "Features:",
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Bold
+                )
+
+                Text("✓ 2D Canvas and 3D Filament rendering", style = MaterialTheme.typography.bodySmall)
+                Text("✓ 9 model selections (8 animals + Mask)", style = MaterialTheme.typography.bodySmall)
+                Text("✓ 9 emotion states with intensity control", style = MaterialTheme.typography.bodySmall)
+                Text("✓ 6 activity animations", style = MaterialTheme.typography.bodySmall)
+                Text("✓ Real-time state visualization", style = MaterialTheme.typography.bodySmall)
+                Text("✓ Performance metrics", style = MaterialTheme.typography.bodySmall)
+            }
+        }
+    }
+}
+
+@Preview
+@Composable
+@OptIn(ExperimentalMaterial3Api::class)
+private fun Avatar3DDebugScreenEmotionsPreview() {
+    MaTheme {
+        Scaffold(
+            topBar = {
+                TopAppBar(
+                    title = { Text("Avatar Debug - Emotions") },
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = MaColors.BgPrimary
+                    )
+                )
+            }
+        ) { padding ->
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding)
+                    .verticalScroll(rememberScrollState())
+                    .padding(MaSpacing.base),
+                verticalArrangement = Arrangement.spacedBy(MaSpacing.base)
+            ) {
+                Text(
+                    "Emotion States",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+
+                // Emotion buttons grid
+                listOf("Happy", "Sad", "Angry", "Excited", "Thinking", "Surprised", "Concerned", "Neutral", "Love")
+                    .chunked(3)
+                    .forEach { row ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(MaSpacing.xs)
+                        ) {
+                            row.forEach { emotion ->
+                                Button(
+                                    onClick = {},
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .height(40.dp),
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = MaColors.Orange
+                                    )
+                                ) {
+                                    Text(emotion, style = MaterialTheme.typography.labelSmall)
+                                }
+                            }
+                            repeat(3 - row.size) {
+                                Spacer(modifier = Modifier.weight(1f))
+                            }
+                        }
+                    }
+            }
+        }
+    }
+}
+
+@Preview
+@Composable
+@OptIn(ExperimentalMaterial3Api::class)
+private fun Avatar3DDebugScreenActivitiesPreview() {
+    MaTheme {
+        Scaffold(
+            topBar = {
+                TopAppBar(
+                    title = { Text("Avatar Debug - Activities") },
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = MaColors.BgPrimary
+                    )
+                )
+            }
+        ) { padding ->
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding)
+                    .verticalScroll(rememberScrollState())
+                    .padding(MaSpacing.base),
+                verticalArrangement = Arrangement.spacedBy(MaSpacing.base)
+            ) {
+                Text(
+                    "Activity States",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(MaSpacing.xs)
+                ) {
+                    listOf("Idle", "Listening", "Speaking").forEach { activity ->
+                        Button(
+                            onClick = {},
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(40.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaColors.Orange
+                            )
+                        ) {
+                            Text(activity, style = MaterialTheme.typography.labelSmall)
+                        }
+                    }
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(MaSpacing.xs)
+                ) {
+                    listOf("Thinking", "Generating", "Error").forEach { activity ->
+                        Button(
+                            onClick = {},
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(40.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaColors.Orange
+                            )
+                        ) {
+                            Text(activity, style = MaterialTheme.typography.labelSmall)
+                        }
+                    }
+                }
             }
         }
     }

@@ -21,7 +21,10 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import org.jetbrains.compose.ui.tooling.preview.Preview
 import app.m1k3.ai.assistant.design.effects.glassmorphic
+import app.m1k3.ai.assistant.design.preview.PreviewFixtures
+import app.m1k3.ai.assistant.design.theme.MaTheme
 import app.m1k3.ai.assistant.design.tokens.MaColors
 import app.m1k3.ai.assistant.design.tokens.MaRadius
 import app.m1k3.ai.assistant.design.tokens.MaSpacing
@@ -291,3 +294,163 @@ private fun formatTimestamp(timestamp: Long): String {
  * )
  * ```
  */
+
+// ============================================================
+// Previews
+// ============================================================
+
+@Preview
+@Composable
+private fun MaChatBubbleUserPreview() {
+    MaTheme {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(MaColors.BgPrimary)
+                .padding(MaSpacing.base)
+        ) {
+            MaChatBubbleUser(
+                text = PreviewFixtures.sampleShortText,
+                timestamp = PreviewFixtures.sampleUserMessageTimestamp
+            )
+        }
+    }
+}
+
+@Preview
+@Composable
+private fun MaChatBubbleUserLongTextPreview() {
+    MaTheme {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(MaColors.BgPrimary)
+                .padding(MaSpacing.base)
+        ) {
+            MaChatBubbleUser(
+                text = PreviewFixtures.sampleLongText,
+                timestamp = PreviewFixtures.sampleUserMessageTimestamp
+            )
+        }
+    }
+}
+
+@Preview
+@Composable
+private fun MaChatBubbleAIPreview() {
+    MaTheme {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(MaColors.BgPrimary)
+                .padding(MaSpacing.base)
+        ) {
+            MaChatBubbleAI(
+                text = "Hi there! How can I help you today?",
+                timestamp = PreviewFixtures.sampleAiMessageTimestamp
+            )
+        }
+    }
+}
+
+@Preview
+@Composable
+private fun MaChatBubbleAIWithStatsPreview() {
+    MaTheme {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(MaColors.BgPrimary)
+                .padding(MaSpacing.base)
+        ) {
+            MaChatBubbleAI(
+                text = "Machine learning is a subset of artificial intelligence where systems learn and improve from experience without being explicitly programmed.",
+                timestamp = PreviewFixtures.sampleAiMessageTimestamp,
+                inferenceStats = PreviewFixtures.sampleInferenceStatsLong
+            )
+        }
+    }
+}
+
+@Preview
+@Composable
+private fun MaChatBubbleAIWithRagPreview() {
+    MaTheme {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(MaColors.BgPrimary)
+                .padding(MaSpacing.base)
+        ) {
+            MaChatBubbleAI(
+                text = "Based on the knowledge base, machine learning algorithms can be categorized into supervised, unsupervised, and reinforcement learning.",
+                timestamp = PreviewFixtures.sampleAiMessageTimestamp,
+                inferenceStats = PreviewFixtures.sampleInferenceStatsMedium,
+                ragSources = PreviewFixtures.sampleRagSourceMultiple
+            )
+        }
+    }
+}
+
+@Preview
+@Composable
+private fun MaChatBubbleAIErrorPreview() {
+    MaTheme {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(MaColors.BgPrimary)
+                .padding(MaSpacing.base)
+        ) {
+            MaChatBubbleAI(
+                text = "⚠️ Model initialization failed. Please try again.",
+                timestamp = PreviewFixtures.sampleAiMessageTimestamp,
+                isError = true
+            )
+        }
+    }
+}
+
+@Preview
+@Composable
+private fun MaChatBubbleConversationPreview() {
+    MaTheme {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(MaColors.BgPrimary)
+                .padding(MaSpacing.base),
+            verticalArrangement = Arrangement.spacedBy(MaSpacing.base)
+        ) {
+            Text(
+                "Sample Conversation:",
+                style = MaTypography.labelSmall,
+                color = MaColors.TextSecondary,
+                modifier = Modifier.padding(bottom = MaSpacing.sm)
+            )
+
+            MaChatBubbleUser(
+                text = "Hello! What is machine learning?",
+                timestamp = PreviewFixtures.sampleUserMessageTimestamp
+            )
+
+            MaChatBubbleAI(
+                text = "Machine learning is a subset of artificial intelligence where systems learn and improve from experience without being explicitly programmed.",
+                timestamp = PreviewFixtures.sampleAiMessageTimestamp,
+                inferenceStats = PreviewFixtures.sampleInferenceStatsLong,
+                ragSources = PreviewFixtures.sampleRagSourceSingle
+            )
+
+            MaChatBubbleUser(
+                text = "Tell me more!",
+                timestamp = PreviewFixtures.sampleUserMessageTimestamp + 2000
+            )
+
+            MaChatBubbleAI(
+                text = "There are three main types: supervised learning (with labeled data), unsupervised learning (finding patterns), and reinforcement learning (reward-based).",
+                timestamp = PreviewFixtures.sampleAiMessageTimestamp + 2000,
+                inferenceStats = PreviewFixtures.sampleInferenceStatsLong
+            )
+        }
+    }
+}

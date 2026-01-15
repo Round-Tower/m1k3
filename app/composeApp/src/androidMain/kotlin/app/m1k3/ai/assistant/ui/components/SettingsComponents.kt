@@ -11,12 +11,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
+import org.jetbrains.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.m1k3.ai.assistant.ai.ondevice.AiAvailability
 import app.m1k3.ai.assistant.design.tokens.MaFontFamilyCaption
+import app.m1k3.ai.assistant.design.theme.MaTheme
 import app.m1k3.ai.assistant.settings.MlKitStatus
 
 /**
@@ -317,6 +319,69 @@ fun MlKitStatusSection(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
+        }
+    }
+}
+
+// ============================================================
+// Previews
+// ============================================================
+
+@Preview
+@Composable
+private fun SettingsSectionPreview() {
+    MaTheme {
+        SettingsSection(
+            title = "Appearance",
+            icon = Icons.Default.Settings,
+            content = {
+                Text("Theme and display settings")
+            }
+        )
+    }
+}
+
+@Preview
+@Composable
+private fun SettingsItemPreview() {
+    MaTheme {
+        Column {
+            SettingsItem(
+                title = "Export Data",
+                subtitle = "Download your conversations",
+                icon = Icons.Default.Download,
+                onClick = {}
+            )
+            SettingsItem(
+                title = "Clear Cache",
+                subtitle = "Remove temporary files",
+                icon = Icons.Default.Delete,
+                onClick = {},
+                isDestructive = true
+            )
+        }
+    }
+}
+
+@Preview
+@Composable
+private fun SettingsToggleItemPreview() {
+    MaTheme {
+        Column {
+            SettingsToggleItem(
+                title = "Analytics",
+                subtitle = "Help improve the app",
+                icon = Icons.Default.Analytics,
+                checked = true,
+                onCheckedChange = {}
+            )
+            SettingsToggleItem(
+                title = "Notifications",
+                subtitle = "Receive app updates",
+                icon = Icons.Default.Notifications,
+                checked = false,
+                onCheckedChange = {}
+            )
         }
     }
 }

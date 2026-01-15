@@ -19,7 +19,14 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import org.jetbrains.compose.ui.tooling.preview.Preview
 import app.m1k3.ai.assistant.chat.ContextWindowState
+import app.m1k3.ai.assistant.design.preview.PreviewFixtures
+import app.m1k3.ai.assistant.design.theme.MaTheme
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
 
 /**
  * ContextWindowIndicator - Displays context window usage in chat.
@@ -160,6 +167,79 @@ fun ContextWindowIndicator(
                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
                 )
             }
+        }
+    }
+}
+
+// ============================================================
+// Previews
+// ============================================================
+
+@Preview
+@Composable
+private fun ContextWindowIndicatorLowUsagePreview() {
+    MaTheme {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(MaterialTheme.colorScheme.surface)
+                .padding(8.dp)
+        ) {
+            ContextWindowIndicator(
+                state = ContextWindowState(
+                    historyMessageCount = 5,
+                    historyTokens = 500,
+                    maxContextTokens = 2000,
+                    deviceTier = "High-end"
+                ),
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
+    }
+}
+
+@Preview
+@Composable
+private fun ContextWindowIndicatorMediumUsagePreview() {
+    MaTheme {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(MaterialTheme.colorScheme.surface)
+                .padding(8.dp)
+        ) {
+            ContextWindowIndicator(
+                state = ContextWindowState(
+                    historyMessageCount = 12,
+                    historyTokens = 1200,
+                    maxContextTokens = 2000,
+                    deviceTier = "Mid-range"
+                ),
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
+    }
+}
+
+@Preview
+@Composable
+private fun ContextWindowIndicatorHighUsagePreview() {
+    MaTheme {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(MaterialTheme.colorScheme.surface)
+                .padding(8.dp)
+        ) {
+            ContextWindowIndicator(
+                state = ContextWindowState(
+                    historyMessageCount = 20,
+                    historyTokens = 1800,
+                    maxContextTokens = 2000,
+                    deviceTier = "Budget"
+                ),
+                modifier = Modifier.fillMaxWidth()
+            )
         }
     }
 }

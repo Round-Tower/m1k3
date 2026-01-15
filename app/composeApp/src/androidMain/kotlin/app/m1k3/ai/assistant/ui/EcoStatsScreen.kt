@@ -13,6 +13,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.unit.dp
+import org.jetbrains.compose.ui.tooling.preview.Preview
 import app.m1k3.ai.assistant.database.MaDatabase
 import app.m1k3.ai.assistant.design.haptics.HapticFeedbackType
 import app.m1k3.ai.assistant.design.haptics.rememberHapticFeedback
@@ -20,6 +22,7 @@ import app.m1k3.ai.assistant.design.tokens.MaColors
 import app.m1k3.ai.assistant.design.tokens.MaFontFamilyCaption
 import app.m1k3.ai.assistant.design.tokens.MaSpacing
 import app.m1k3.ai.assistant.design.tokens.MaTypography
+import app.m1k3.ai.assistant.design.theme.MaTheme
 import app.m1k3.ai.assistant.eco.rememberEcoStatsViewModel
 import app.m1k3.ai.assistant.history.collectAsState
 import app.m1k3.ai.assistant.ui.components.*
@@ -208,5 +211,122 @@ private fun EcoStatsContent(
 
         // Privacy statement
         PrivacyStatementCard()
+    }
+}
+
+// ============================================================
+// Previews
+// ============================================================
+
+@Preview
+@Composable
+private fun EcoStatsScreenLoadingPreview() {
+    MaTheme {
+        Scaffold(
+            topBar = {
+                EcoStatsTopBar(
+                    onBackClick = {},
+                    onRefreshClick = {}
+                )
+            }
+        ) { paddingValues ->
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(paddingValues),
+                contentAlignment = Alignment.Center
+            ) {
+                CircularProgressIndicator(color = MaColors.Orange)
+            }
+        }
+    }
+}
+
+@Preview
+@Composable
+private fun EcoStatsScreenEmptyPreview() {
+    MaTheme {
+        Scaffold(
+            topBar = {
+                EcoStatsTopBar(
+                    onBackClick = {},
+                    onRefreshClick = {}
+                )
+            }
+        ) { paddingValues ->
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(paddingValues),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(
+                        "🌱",
+                        style = MaterialTheme.typography.displayLarge
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text(
+                        "No data yet",
+                        style = MaterialTheme.typography.titleMedium
+                    )
+                    Text(
+                        "Your environmental impact will appear here",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Preview
+@Composable
+private fun EcoStatsScreenWithStatsPreview() {
+    MaTheme {
+        Scaffold(
+            topBar = {
+                EcoStatsTopBar(
+                    onBackClick = {},
+                    onRefreshClick = {}
+                )
+            }
+        ) { paddingValues ->
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(paddingValues)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .verticalScroll(rememberScrollState())
+                        .padding(MaSpacing.md),
+                    verticalArrangement = Arrangement.spacedBy(MaSpacing.md)
+                ) {
+                    Text(
+                        "Environmental Stats",
+                        style = MaterialTheme.typography.titleMedium,
+                        modifier = Modifier.padding(bottom = MaSpacing.sm)
+                    )
+
+                    Text(
+                        "💧 Water Saved: 15.2 L",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+
+                    Text(
+                        "⚡ Energy Saved: 28 kWh",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+
+                    Text(
+                        "🌱 CO₂ Prevented: 8.5 kg",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                }
+            }
+        }
     }
 }

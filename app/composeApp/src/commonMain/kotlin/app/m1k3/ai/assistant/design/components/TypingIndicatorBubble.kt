@@ -13,6 +13,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import org.jetbrains.compose.ui.tooling.preview.Preview
+import app.m1k3.ai.assistant.design.preview.PreviewFixtures
+import app.m1k3.ai.assistant.design.theme.MaTheme
 import app.m1k3.ai.assistant.design.tokens.MaColors
 import app.m1k3.ai.assistant.design.tokens.MaRadius
 import app.m1k3.ai.assistant.design.tokens.MaSpacing
@@ -119,6 +122,94 @@ fun TypingIndicatorBubble(
                         )
                 )
             }
+        }
+    }
+}
+
+// ============================================================
+// Previews
+// ============================================================
+
+@Preview
+@Composable
+private fun TypingIndicatorBubblePreview() {
+    MaTheme {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(MaColors.BgPrimary)
+                .padding(MaSpacing.base),
+            verticalArrangement = Arrangement.spacedBy(MaSpacing.base)
+        ) {
+            TypingIndicatorBubble(
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
+    }
+}
+
+@Preview
+@Composable
+private fun TypingIndicatorBubbleInContextPreview() {
+    MaTheme {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(MaColors.BgPrimary)
+                .padding(MaSpacing.base),
+            verticalArrangement = Arrangement.spacedBy(MaSpacing.base)
+        ) {
+            // User message
+            MaChatBubbleUser(
+                text = "Hello! Tell me about machine learning.",
+                timestamp = PreviewFixtures.sampleUserMessageTimestamp,
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            Spacer(modifier = Modifier.height(MaSpacing.sm))
+
+            // AI typing indicator
+            TypingIndicatorBubble(
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
+    }
+}
+
+@Preview
+@Composable
+private fun TypingIndicatorBubbleMultiplePreview() {
+    MaTheme {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(MaColors.BgPrimary)
+                .padding(MaSpacing.base),
+            verticalArrangement = Arrangement.spacedBy(MaSpacing.lg)
+        ) {
+            // First conversation turn
+            MaChatBubbleUser(
+                text = "What is AI?",
+                timestamp = PreviewFixtures.sampleUserMessageTimestamp,
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            TypingIndicatorBubble(
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            Spacer(modifier = Modifier.height(MaSpacing.sm))
+
+            // Second conversation turn
+            MaChatBubbleUser(
+                text = "Tell me more about neural networks.",
+                timestamp = PreviewFixtures.sampleUserMessageTimestamp + 2000,
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            TypingIndicatorBubble(
+                modifier = Modifier.fillMaxWidth()
+            )
         }
     }
 }

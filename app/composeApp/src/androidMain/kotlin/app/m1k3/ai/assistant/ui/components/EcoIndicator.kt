@@ -20,6 +20,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import org.jetbrains.compose.ui.tooling.preview.Preview
 import app.m1k3.ai.assistant.chat.SessionEcoStats
 import app.m1k3.ai.assistant.design.components.MaCard
 import app.m1k3.ai.assistant.design.haptics.HapticFeedbackController
@@ -414,8 +415,9 @@ enum class EcoIndicatorVariant {
 /**
  * Preview helpers (for Android Studio preview)
  */
+@Preview
 @Composable
-fun EcoIndicatorPreview() {
+private fun EcoIndicatorPreview() {
     val sampleStats =
         SessionEcoStats(
             totalTokens = 1250,

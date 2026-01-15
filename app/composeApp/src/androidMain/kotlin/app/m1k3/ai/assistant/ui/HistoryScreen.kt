@@ -10,6 +10,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.unit.dp
+import org.jetbrains.compose.ui.tooling.preview.Preview
 import app.m1k3.ai.assistant.database.MaDatabase
 import app.m1k3.ai.assistant.design.haptics.HapticFeedbackType
 import app.m1k3.ai.assistant.design.haptics.rememberHapticFeedback
@@ -17,6 +19,7 @@ import app.m1k3.ai.assistant.design.tokens.MaColors
 import app.m1k3.ai.assistant.design.tokens.MaFontFamilyCaption
 import app.m1k3.ai.assistant.design.tokens.MaSpacing
 import app.m1k3.ai.assistant.design.tokens.MaTypography
+import app.m1k3.ai.assistant.design.theme.MaTheme
 import app.m1k3.ai.assistant.history.collectAsState
 import app.m1k3.ai.assistant.history.rememberHistoryViewModel
 import app.m1k3.ai.assistant.ui.components.*
@@ -226,6 +229,110 @@ private fun HistoryContent(
                 onDeleteClick = onDeleteClick,
                 onExportClick = onExportClick
             )
+        }
+    }
+}
+
+// ============================================================
+// Previews
+// ============================================================
+
+@Preview
+@Composable
+private fun HistoryScreenEmptyPreview() {
+    MaTheme {
+        Scaffold(
+            topBar = {
+                HistoryTopBar(
+                    conversationCount = 0,
+                    onBackClick = {}
+                )
+            }
+        ) { paddingValues ->
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(paddingValues),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(
+                        "📭",
+                        style = MaterialTheme.typography.displayLarge
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text(
+                        "No conversations yet",
+                        style = MaterialTheme.typography.titleMedium
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Preview
+@Composable
+private fun HistoryScreenLoadingPreview() {
+    MaTheme {
+        Scaffold(
+            topBar = {
+                HistoryTopBar(
+                    conversationCount = 0,
+                    onBackClick = {}
+                )
+            }
+        ) { paddingValues ->
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(paddingValues),
+                contentAlignment = Alignment.Center
+            ) {
+                CircularProgressIndicator(color = MaColors.Orange)
+            }
+        }
+    }
+}
+
+@Preview
+@Composable
+private fun HistoryScreenWithConversationsPreview() {
+    MaTheme {
+        Scaffold(
+            topBar = {
+                HistoryTopBar(
+                    conversationCount = 3,
+                    onBackClick = {}
+                )
+            }
+        ) { paddingValues ->
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(paddingValues)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(MaSpacing.md)
+                ) {
+                    HistorySearchBar(
+                        query = "",
+                        onQueryChange = {},
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = MaSpacing.md)
+                    )
+
+                    Text(
+                        "Showing 3 conversations",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(bottom = MaSpacing.md)
+                    )
+                }
+            }
         }
     }
 }

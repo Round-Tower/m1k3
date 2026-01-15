@@ -10,11 +10,16 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import org.jetbrains.compose.ui.tooling.preview.Preview
 import app.m1k3.ai.assistant.avatar.PixelPetState
+import app.m1k3.ai.assistant.avatar.EvolutionStage
+import app.m1k3.ai.assistant.design.theme.MaTheme
+import app.m1k3.ai.assistant.design.tokens.MaColors
 import app.m1k3.ai.assistant.eco.EcoCalculator
 
 /**
@@ -384,3 +389,123 @@ private fun MiniStatBar(
  * )
  * ```
  */
+
+// ============================================================
+// Previews
+// ============================================================
+
+@Preview
+@Composable
+private fun PetStatsBarFullPreview() {
+    MaTheme {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(MaColors.BgPrimary)
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            PetStatsBar(
+                petState = PixelPetState(
+                    health = 85f,
+                    energy = 70f,
+                    happiness = 85f,
+                    lifetimeWaterMl = 15000,
+                    lifetimeEnergyWh = 28000,
+                    lifetimeCO2G = 8500,
+                    evolutionStage = EvolutionStage.INTERMEDIATE
+                ),
+                showEcoTooltips = true,
+                compact = false
+            )
+        }
+    }
+}
+
+@Preview
+@Composable
+private fun PetStatsBarCompactPreview() {
+    MaTheme {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(MaColors.BgPrimary)
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            Text(
+                "Compact Mode:",
+                style = androidx.compose.material3.MaterialTheme.typography.labelSmall
+            )
+
+            PetStatsBar(
+                petState = PixelPetState(
+                    health = 70f,
+                    energy = 60f,
+                    happiness = 75f
+                ),
+                showEcoTooltips = false,
+                compact = true
+            )
+        }
+    }
+}
+
+@Preview
+@Composable
+private fun PetStatsBarLowHealthPreview() {
+    MaTheme {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(MaColors.BgPrimary)
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            Text(
+                "Low Health State:",
+                style = androidx.compose.material3.MaterialTheme.typography.labelSmall
+            )
+
+            PetStatsBar(
+                petState = PixelPetState(
+                    health = 25f,
+                    energy = 15f,
+                    happiness = 30f,
+                    lifetimeWaterMl = 3000,
+                    lifetimeEnergyWh = 5000,
+                    lifetimeCO2G = 1500
+                ),
+                showEcoTooltips = true,
+                compact = false
+            )
+        }
+    }
+}
+
+@Preview
+@Composable
+private fun MiniPetStatsBarPreview() {
+    MaTheme {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(MaColors.BgPrimary)
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            Text(
+                "Mini Stats Bar:",
+                style = androidx.compose.material3.MaterialTheme.typography.labelSmall
+            )
+
+            MiniPetStatsBar(
+                petState = PixelPetState(
+                    health = 90f,
+                    energy = 85f,
+                    happiness = 95f
+                )
+            )
+        }
+    }
+}

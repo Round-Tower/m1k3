@@ -12,12 +12,14 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
+import org.jetbrains.compose.ui.tooling.preview.Preview
 import app.m1k3.ai.assistant.ai.BaseLlmEngine
 import app.m1k3.ai.assistant.avatar.*
 import app.m1k3.ai.assistant.chat.*
 import app.m1k3.ai.assistant.database.*
 import app.m1k3.ai.assistant.design.components.*
 import app.m1k3.ai.assistant.design.tokens.*
+import app.m1k3.ai.assistant.design.theme.MaTheme
 import app.m1k3.ai.assistant.embedding.rememberEmbeddingsViewModel
 import app.m1k3.ai.assistant.ui.components.ChatHeader
 import app.m1k3.ai.assistant.ui.components.ChatInputBar
@@ -244,5 +246,162 @@ fun ChatBubble(message: app.m1k3.ai.assistant.chat.ChatMessage) {
             isError = message.isError,
             ragSources = message.ragSources
         )
+    }
+}
+
+// ============================================================
+// Previews
+// ============================================================
+
+@Preview
+@Composable
+private fun ChatScreenEmptyPreview() {
+    MaTheme {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(MaColors.BgPrimary)
+        ) {
+            Column(modifier = Modifier.fillMaxSize()) {
+                ChatMessageList(
+                    messages = emptyList(),
+                    isGenerating = false,
+                    listState = rememberLazyListState(),
+                    showEcoIndicator = false
+                )
+            }
+
+            ChatHeader(
+                engineInitialized = true,
+                avatarState = AvatarState(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .align(Alignment.TopCenter)
+            )
+
+            ChatInputBarContainer(
+                inputBar = {
+                    ChatInputBar(
+                        text = "",
+                        onTextChange = {},
+                        onSend = {},
+                        enabled = true
+                    )
+                },
+                modifier = Modifier.align(Alignment.BottomCenter)
+            )
+        }
+    }
+}
+
+@Preview
+@Composable
+private fun ChatScreenWithMessagesPreview() {
+    MaTheme {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(MaColors.BgPrimary)
+        ) {
+            Column(modifier = Modifier.fillMaxSize()) {
+                ChatMessageList(
+                    messages = listOf(
+                        ChatMessage(
+                            text = "What is machine learning?",
+                            isUser = true,
+                            timestamp = System.currentTimeMillis()
+                        ),
+                        ChatMessage(
+                            text = "Machine learning is a subset of artificial intelligence that enables systems to learn and improve from experience without being explicitly programmed.",
+                            isUser = false,
+                            timestamp = System.currentTimeMillis(),
+                            inferenceStats = "⚡ 42 tokens in 2.3s"
+                        )
+                    ),
+                    isGenerating = false,
+                    listState = rememberLazyListState(),
+                    showEcoIndicator = true
+                )
+            }
+
+            ChatHeader(
+                engineInitialized = true,
+                avatarState = AvatarState(emotion = AvatarEmotion.HAPPY),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .align(Alignment.TopCenter)
+            )
+
+            ChatInputBarContainer(
+                inputBar = {
+                    ChatInputBar(
+                        text = "",
+                        onTextChange = {},
+                        onSend = {},
+                        enabled = true
+                    )
+                },
+                modifier = Modifier.align(Alignment.BottomCenter)
+            )
+        }
+    }
+}
+
+@Preview
+@Composable
+private fun ChatScreenGeneratingPreview() {
+    MaTheme {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(MaColors.BgPrimary)
+        ) {
+            Column(modifier = Modifier.fillMaxSize()) {
+                ContextWindowIndicator(
+                    state = ContextWindowState(
+                        historyMessageCount = 5,
+                        historyTokens = 500,
+                        maxContextTokens = 4096,
+                        deviceTier = "High-end"
+                    )
+                )
+
+                ChatMessageList(
+                    messages = listOf(
+                        ChatMessage(
+                            text = "Explain quantum computing",
+                            isUser = true,
+                            timestamp = System.currentTimeMillis()
+                        )
+                    ),
+                    isGenerating = true,
+                    listState = rememberLazyListState(),
+                    showEcoIndicator = false
+                )
+            }
+
+            ChatHeader(
+                engineInitialized = true,
+                avatarState = AvatarState(
+                    emotion = AvatarEmotion.THINKING,
+                    activity = AvatarActivity.GENERATING
+                ),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .align(Alignment.TopCenter)
+            )
+
+            ChatInputBarContainer(
+                inputBar = {
+                    ChatInputBar(
+                        text = "",
+                        onTextChange = {},
+                        onSend = {},
+                        enabled = false
+                    )
+                },
+                modifier = Modifier.align(Alignment.BottomCenter)
+            )
+        }
     }
 }

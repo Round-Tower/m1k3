@@ -9,7 +9,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
+import org.jetbrains.compose.ui.tooling.preview.Preview
 import app.m1k3.ai.assistant.chat.ChatMessage
+import app.m1k3.ai.assistant.design.preview.PreviewFixtures
+import app.m1k3.ai.assistant.design.theme.MaTheme
+import androidx.compose.foundation.lazy.rememberLazyListState
 import app.m1k3.ai.assistant.ui.ChatBubble
 import app.m1k3.ai.assistant.design.components.TypingIndicatorBubble
 
@@ -63,5 +67,88 @@ fun ChatMessageList(
                 )
             }
         }
+    }
+}
+
+// ============================================================
+// Previews
+// ============================================================
+
+@Preview
+@Composable
+private fun ChatMessageListEmptyPreview() {
+    MaTheme {
+        ChatMessageList(
+            messages = emptyList(),
+            isGenerating = false,
+            listState = rememberLazyListState(),
+            showEcoIndicator = false,
+            modifier = Modifier.fillMaxSize()
+        )
+    }
+}
+
+@Preview
+@Composable
+private fun ChatMessageListWithMessagesPreview() {
+    MaTheme {
+        ChatMessageList(
+            messages = listOf(
+                ChatMessage(
+                    text = "Hello! How are you?",
+                    isUser = true,
+                    timestamp = System.currentTimeMillis()
+                ),
+                ChatMessage(
+                    text = "I'm doing great! How can I help you?",
+                    isUser = false,
+                    timestamp = System.currentTimeMillis()
+                )
+            ),
+            isGenerating = false,
+            listState = rememberLazyListState(),
+            showEcoIndicator = false,
+            modifier = Modifier.fillMaxSize()
+        )
+    }
+}
+
+@Preview
+@Composable
+private fun ChatMessageListGeneratingPreview() {
+    MaTheme {
+        ChatMessageList(
+            messages = listOf(
+                ChatMessage(
+                    text = "Tell me about machine learning",
+                    isUser = true,
+                    timestamp = System.currentTimeMillis()
+                )
+            ),
+            isGenerating = true,
+            listState = rememberLazyListState(),
+            showEcoIndicator = false,
+            modifier = Modifier.fillMaxSize()
+        )
+    }
+}
+
+@Preview
+@Composable
+private fun ChatMessageListWithEcoIndicatorPreview() {
+    MaTheme {
+        ChatMessageList(
+            messages = List(5) { index ->
+                ChatMessage(
+                    text = "Message $index",
+                    isUser = index % 2 == 0,
+                    timestamp = System.currentTimeMillis() + (index * 1000)
+                )
+            },
+            isGenerating = false,
+            listState = rememberLazyListState(),
+            showEcoIndicator = true,
+            modifier = Modifier.fillMaxSize()
+        )
     }
 }

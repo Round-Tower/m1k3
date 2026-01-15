@@ -8,6 +8,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import org.jetbrains.compose.ui.tooling.preview.Preview
 import app.m1k3.ai.assistant.avatar.*
 import app.m1k3.ai.assistant.design.components.MaButtonPrimary
 import app.m1k3.ai.assistant.design.components.MaButtonSecondary
@@ -17,6 +18,7 @@ import app.m1k3.ai.assistant.design.haptics.HapticFeedbackType
 import app.m1k3.ai.assistant.design.tokens.MaColors
 import app.m1k3.ai.assistant.design.tokens.MaSpacing
 import app.m1k3.ai.assistant.design.tokens.MaTypography
+import app.m1k3.ai.assistant.design.theme.MaTheme
 
 /**
  * AvatarDisplayCard - Shows the avatar with current state info.
@@ -529,6 +531,24 @@ fun DebugInfoRow(label: String, value: String) {
             style = MaTypography.bodySmall,
             fontWeight = FontWeight.Medium,
             color = MaColors.TextPrimary
+        )
+    }
+}
+
+// ============================================================
+// Previews
+// ============================================================
+
+@Preview
+@Composable
+private fun RenderingModeCardPreview() {
+    MaTheme {
+        // Note: RenderingModeCard requires HapticFeedbackController from rememberHapticFeedback()
+        // Simplified preview - shows layout without haptics
+        Text(
+            "Rendering Mode Card",
+            style = MaTypography.titleMedium,
+            modifier = Modifier.padding(16.dp)
         )
     }
 }
