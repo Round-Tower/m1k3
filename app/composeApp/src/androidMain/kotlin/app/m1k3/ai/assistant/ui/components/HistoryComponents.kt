@@ -413,8 +413,8 @@ fun DeleteConfirmationDialog(
                 Text("Cancel", color = MaColors.TextSecondary)
             }
         },
-        containerColor = MaColors.BgElevated,
-        textContentColor = MaColors.TextPrimary
+        containerColor = MaterialTheme.colorScheme.surface,
+        textContentColor = MaterialTheme.colorScheme.onSurface
     )
 }
 
@@ -470,8 +470,8 @@ fun ExportDialog(
                 Text("Cancel", color = MaColors.TextSecondary)
             }
         },
-        containerColor = MaColors.BgElevated,
-        textContentColor = MaColors.TextPrimary
+        containerColor = MaterialTheme.colorScheme.surface,
+        textContentColor = MaterialTheme.colorScheme.onSurface
     )
 }
 

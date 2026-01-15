@@ -59,7 +59,7 @@ fun PetStatsBar(
             label = "Health",
             value = petState.health,
             maxValue = 100f,
-            color = Color(0xFF4CAF50), // Green
+            color = MaColors.Success, // Green - theme-aware
             icon = "💧",
             isSelected = selectedStat == StatType.HEALTH,
             onTap = {
@@ -83,7 +83,7 @@ fun PetStatsBar(
             label = "Energy",
             value = petState.energy,
             maxValue = 100f,
-            color = Color(0xFFFFEB3B), // Yellow
+            color = MaColors.Warning, // Yellow - theme-aware
             icon = "⚡",
             isSelected = selectedStat == StatType.ENERGY,
             onTap = {
@@ -107,7 +107,7 @@ fun PetStatsBar(
             label = "Happiness",
             value = petState.happiness,
             maxValue = 100f,
-            color = Color(0xFFE91E63), // Pink
+            color = Color(0xFFE91E63), // Pink - semantic stat color (not in MaColors)
             icon = "💕",
             isSelected = selectedStat == StatType.HAPPINESS,
             onTap = {
@@ -138,7 +138,7 @@ fun PetStatsBar(
                 Text(
                     text = "✨ ${petState.evolutionStage.displayName} Stage",
                     style = MaterialTheme.typography.labelSmall,
-                    color = Color(0xFFFFD700), // Gold
+                    color = MaColors.Orange, // Gold - use theme's accent
                     fontSize = 11.sp
                 )
             }
@@ -209,7 +209,7 @@ private fun StatBarRow(
                 .fillMaxWidth()
                 .height(if (compact) 6.dp else 8.dp)
                 .clip(RoundedCornerShape(if (compact) 3.dp else 4.dp))
-                .background(Color(0xFF1A1A1A)) // Dark background
+                .background(MaterialTheme.colorScheme.surfaceVariant) // Theme-aware background
                 .clickable(onClick = onTap)
         ) {
             // Fill
@@ -225,7 +225,7 @@ private fun StatBarRow(
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .background(Color.White.copy(alpha = 0.2f))
+                        .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.2f))
                 )
             }
         }
@@ -247,7 +247,7 @@ private fun EcoTooltip(
             .fillMaxWidth()
             .padding(vertical = 4.dp, horizontal = 8.dp)
             .clip(RoundedCornerShape(8.dp))
-            .background(Color(0xFF2A2A2A))
+            .background(MaterialTheme.colorScheme.surface) // Theme-aware background
             .padding(8.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
@@ -278,7 +278,7 @@ private fun EcoTooltip(
         Text(
             text = value,
             style = MaterialTheme.typography.labelMedium,
-            color = Color(0xFF00FF85), // M1K3 Green
+            color = MaColors.Success, // Theme-aware eco color
             fontSize = 12.sp
         )
     }
@@ -309,17 +309,17 @@ fun MiniPetStatsBar(
         // Compact vertical bars
         MiniStatBar(
             value = petState.health,
-            color = Color(0xFF4CAF50),
+            color = MaColors.Success, // Green - theme-aware
             icon = "💧"
         )
         MiniStatBar(
             value = petState.energy,
-            color = Color(0xFFFFEB3B),
+            color = MaColors.Warning, // Yellow - theme-aware
             icon = "⚡"
         )
         MiniStatBar(
             value = petState.happiness,
-            color = Color(0xFFE91E63),
+            color = Color(0xFFE91E63), // Pink - semantic stat color
             icon = "💕"
         )
     }
@@ -352,7 +352,7 @@ private fun MiniStatBar(
                 .width(12.dp)
                 .height(40.dp)
                 .clip(RoundedCornerShape(6.dp))
-                .background(Color(0xFF1A1A1A))
+                .background(MaterialTheme.colorScheme.surfaceVariant) // Theme-aware background
         ) {
             // Fill from bottom
             Box(

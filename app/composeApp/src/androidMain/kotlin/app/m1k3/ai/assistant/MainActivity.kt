@@ -178,7 +178,7 @@ class MainActivity : ComponentActivity() {
                                 modifier = Modifier
                                     .fillMaxHeight()
                                     .width(280.dp),
-                                drawerContainerColor = if (isDarkMode) Color.Black else Color.White,
+                                drawerContainerColor = if (isDarkMode) MaColors.BgPrimary else MaColors.BgPrimaryLight,
                                 drawerShape = RoundedCornerShape(
                                     topEnd = MaRadius.lg,
                                     bottomEnd = MaRadius.lg

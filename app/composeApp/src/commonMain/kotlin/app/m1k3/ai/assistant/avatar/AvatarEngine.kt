@@ -510,21 +510,23 @@ object AvatarEngine {
         showEnvironment: Boolean = true,
         showPixelGrid: Boolean = false,
         showResolutionDebug: Boolean = false,
-        useRoundedPixels: Boolean = true
+        useRoundedPixels: Boolean = true,
+        isDarkMode: Boolean = true
     ) {
-        // 1. Draw pixel art pet with adaptive resolution and rounded pixels
+        // 1. Draw pixel art pet with adaptive resolution and rounded pixels (theme-aware)
         drawPixelArtPet(
             petState = petState,
             avatarState = avatarState,
             showEnvironment = showEnvironment,
             showPixelGrid = showPixelGrid,
             showResolutionDebug = showResolutionDebug,
-            useRoundedPixels = useRoundedPixels
+            useRoundedPixels = useRoundedPixels,
+            isDarkMode = isDarkMode
         )
 
         // 2. Draw stat bars (bottom)
         if (showStatBars) {
-            drawStatBars(petState)
+            drawStatBars(petState, isDarkMode)
         }
 
         // 3. Draw evolution aura (if advanced stage)
@@ -535,52 +537,77 @@ object AvatarEngine {
 
     /**
      * Draw environment background based on evolution stage
+     * @param isDarkMode If true, uses dark theme colors; if false, uses light theme colors
      */
     fun DrawScope.drawEnvironmentBackground(
         environment: Environment,
-        stage: EvolutionStage
+        stage: EvolutionStage,
+        isDarkMode: Boolean = true
     ) {
         when (environment) {
             Environment.VOID -> {
-                // Simple dark gradient
+                // Simple gradient (dark or light)
                 drawRect(
-                    color = Color(0xFF0A0A0A),
+                    color = if (isDarkMode) Color(0xFF0A0A0A) else Color(0xFFF0F0F0),
                     size = size
                 )
             }
             Environment.OFFICE -> {
                 // Modern office: floor + window hints
-                drawRect(Color(0xFF1A1A1A), size = size) // Dark floor
-                drawRect(Color(0xFF2A2A2A), Offset(0f, 0f), Size(size.width, size.height * 0.3f)) // Window hint
+                if (isDarkMode) {
+                    drawRect(Color(0xFF1A1A1A), size = size) // Dark floor
+                    drawRect(Color(0xFF2A2A2A), Offset(0f, 0f), Size(size.width, size.height * 0.3f)) // Window hint
+                } else {
+                    drawRect(Color(0xFFE8E8E8), size = size) // Light floor
+                    drawRect(Color(0xFFD0D0D0), Offset(0f, 0f), Size(size.width, size.height * 0.3f)) // Window hint
+                }
             }
             Environment.GARDEN -> {
-                // Green tones with grass
-                drawRect(Color(0xFF0D1F0D), size = size) // Dark green
-                // Simple grass representation
-                drawRect(Color(0xFF1A3A1A), Offset(0f, size.height * 0.7f), Size(size.width, size.height * 0.3f))
+                // Green tones with grass (theme-aware)
+                if (isDarkMode) {
+                    drawRect(Color(0xFF0D1F0D), size = size) // Dark green
+                    drawRect(Color(0xFF1A3A1A), Offset(0f, size.height * 0.7f), Size(size.width, size.height * 0.3f))
+                } else {
+                    drawRect(Color(0xFFC8E6C9), size = size) // Light green
+                    drawRect(Color(0xFFA5D6A7), Offset(0f, size.height * 0.7f), Size(size.width, size.height * 0.3f)) // Grass
+                }
             }
             Environment.LAB -> {
                 // Tech lab: blue tones with grid
-                drawRect(Color(0xFF0A0F1F), size = size)
-                // Grid lines
-                val gridSpacing = 40f
-                for (i in 0..((size.width / gridSpacing).toInt())) {
-                    drawLine(
-                        Color(0xFF1A2F4F),
-                        Offset(i * gridSpacing, 0f),
-                        Offset(i * gridSpacing, size.height),
-                        strokeWidth = 1f
-                    )
+                if (isDarkMode) {
+                    drawRect(Color(0xFF0A0F1F), size = size)
+                    // Grid lines
+                    val gridSpacing = 40f
+                    for (i in 0..((size.width / gridSpacing).toInt())) {
+                        drawLine(
+                            Color(0xFF1A2F4F),
+                            Offset(i * gridSpacing, 0f),
+                            Offset(i * gridSpacing, size.height),
+                            strokeWidth = 1f
+                        )
+                    }
+                } else {
+                    drawRect(Color(0xFFE3F2FD), size = size) // Light blue background
+                    // Grid lines in light mode
+                    val gridSpacing = 40f
+                    for (i in 0..((size.width / gridSpacing).toInt())) {
+                        drawLine(
+                            Color(0xFFBBDEFB),
+                            Offset(i * gridSpacing, 0f),
+                            Offset(i * gridSpacing, size.height),
+                            strokeWidth = 1f
+                        )
+                    }
                 }
             }
             Environment.SPACE_STATION -> {
-                // Space: deep black with stars
-                drawRect(Color.Black, size = size)
-                // Draw random stars
+                // Space: deep background with stars (always dark for space aesthetic)
+                drawRect(Color(0xFF000814), size = size) // Even darker for space
+                // Draw random stars (always bright)
                 repeat(30) {
                     val x = (0..size.width.toInt()).random().toFloat()
                     val y = (0..size.height.toInt()).random().toFloat()
-                    drawCircle(Color.White, radius = 1f, center = Offset(x, y))
+                    drawCircle(Color(0xFFFAFAFA), radius = 1f, center = Offset(x, y))
                 }
             }
         }
@@ -588,20 +615,23 @@ object AvatarEngine {
 
     /**
      * Draw stat bars showing health, energy, and happiness
+     * @param isDarkMode If true, uses dark theme colors; if false, uses light theme colors
      */
-    fun DrawScope.drawStatBars(petState: PixelPetState) {
+    fun DrawScope.drawStatBars(petState: PixelPetState, isDarkMode: Boolean = true) {
         val barHeight = 8f
         val barSpacing = 4f
         val barWidth = size.width * 0.8f
         val startX = (size.width - barWidth) / 2f
         val startY = size.height - (barHeight * 3 + barSpacing * 2 + 16f)
 
-        // Health bar (red/green gradient)
+        val backgroundColor = if (isDarkMode) Color(0xFF1A1A1A) else Color(0xFFE0E0E0)
+
+        // Health bar (green)
         drawStatBar(
             value = petState.health,
             max = 100f,
-            color = Color(0xFF4CAF50), // Green
-            backgroundColor = Color(0xFF1A1A1A),
+            color = Color(0xFF4CAF50), // Green - semantic color (always green for health)
+            backgroundColor = backgroundColor,
             position = Offset(startX, startY),
             barSize = Size(barWidth, barHeight)
         )
@@ -610,8 +640,8 @@ object AvatarEngine {
         drawStatBar(
             value = petState.energy,
             max = 100f,
-            color = Color(0xFFFFEB3B), // Yellow
-            backgroundColor = Color(0xFF1A1A1A),
+            color = Color(0xFFFFEB3B), // Yellow - semantic color (always yellow for energy)
+            backgroundColor = backgroundColor,
             position = Offset(startX, startY + barHeight + barSpacing),
             barSize = Size(barWidth, barHeight)
         )
@@ -620,8 +650,8 @@ object AvatarEngine {
         drawStatBar(
             value = petState.happiness,
             max = 100f,
-            color = Color(0xFFE91E63), // Pink
-            backgroundColor = Color(0xFF1A1A1A),
+            color = Color(0xFFE91E63), // Pink - semantic color (always pink for happiness)
+            backgroundColor = backgroundColor,
             position = Offset(startX, startY + (barHeight + barSpacing) * 2),
             barSize = Size(barWidth, barHeight)
         )

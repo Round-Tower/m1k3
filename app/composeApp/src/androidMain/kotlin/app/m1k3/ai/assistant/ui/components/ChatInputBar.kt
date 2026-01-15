@@ -13,6 +13,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
@@ -307,7 +308,7 @@ fun ChatInputBarContainer(
     modifier: Modifier = Modifier
 ) {
     Box(modifier = modifier.fillMaxWidth()) {
-        // Gradient overlay for liquid glass effect
+        // Gradient overlay for liquid glass effect (theme-aware)
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -315,9 +316,9 @@ fun ChatInputBarContainer(
                 .background(
                     brush = Brush.verticalGradient(
                         colors = listOf(
-                            MaColors.BgPrimary.copy(alpha = 0.0f),
-                            MaColors.BgPrimary.copy(alpha = 0.85f),
-                            MaColors.BgPrimary.copy(alpha = 0.95f)
+                            MaterialTheme.colorScheme.background.copy(alpha = 0.0f),
+                            MaterialTheme.colorScheme.background.copy(alpha = 0.85f),
+                            MaterialTheme.colorScheme.background.copy(alpha = 0.95f)
                         )
                     )
                 )

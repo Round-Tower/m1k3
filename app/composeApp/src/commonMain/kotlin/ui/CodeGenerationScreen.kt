@@ -17,6 +17,7 @@ import androidx.compose.ui.unit.dp
 import domain.coding.*
 import viewmodel.BaseCodeGenerationViewModel
 import viewmodel.CodeGenerationUiState
+import app.m1k3.ai.assistant.design.tokens.MaColors
 
 /**
  * Code Generation Screen - M1K3's Visual Expression Canvas
@@ -159,7 +160,7 @@ private fun CodeGenerationTopBar(
                     Icon(
                         imageVector = if (isModelLoaded) Icons.Filled.CheckCircle else Icons.Filled.Warning,
                         contentDescription = null,
-                        tint = if (isModelLoaded) Color.Green else MaterialTheme.colorScheme.primary
+                        tint = if (isModelLoaded) MaColors.Success else MaterialTheme.colorScheme.primary
                     )
                 },
                 enabled = !isGenerating,

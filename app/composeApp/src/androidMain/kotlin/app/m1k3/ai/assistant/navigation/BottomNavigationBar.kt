@@ -62,10 +62,7 @@ fun BottomNavigationBar(
                     )
                 },
                 label = {
-                    Text(
-                        text = item.label,
-                        color = MaColors.White
-                    )
+                    Text(text = item.label)
                 },
                 selected = isSelected,
                 onClick = {
