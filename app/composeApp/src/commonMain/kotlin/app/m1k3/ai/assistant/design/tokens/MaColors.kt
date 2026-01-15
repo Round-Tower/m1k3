@@ -39,7 +39,8 @@ object MaColors {
     val OrangeFaint = Color(0x33E25303)
 
     // ============================================
-    // Background Layers (Transparent White on Black)
+    // Background Layers - Dark Mode
+    // (Transparent White on Black)
     // Creates depth through subtle transparency
     // ============================================
 
@@ -62,6 +63,29 @@ object MaColors {
     val BgHighElevated = Color(0x1FFFFFFF)  // rgba(255,255,255,0.12)
 
     // ============================================
+    // Background Layers - Light Mode
+    // (Transparent Black on Light)
+    // ============================================
+
+    /** Light mode primary background - Off-white (#F9F9FA) */
+    val BgPrimaryLight = Color(0xFFF9F9FA)
+
+    /** Light mode secondary background - Very subtle dark (1% black) */
+    val BgSecondaryLight = Color(0x03000000)  // rgba(0,0,0,0.01)
+
+    /** Light mode tertiary background - 2% black transparency */
+    val BgTertiaryLight = Color(0x05000000)   // rgba(0,0,0,0.02)
+
+    /** Light mode elevated surface - 4% black transparency */
+    val BgElevatedLight = Color(0x0A000000)   // rgba(0,0,0,0.04)
+
+    /** Light mode glassmorphic surface - 2% black transparency */
+    val BgGlassLight = Color(0x05000000)      // rgba(0,0,0,0.02)
+
+    /** Light mode highly elevated surface - 8% black transparency */
+    val BgHighElevatedLight = Color(0x14000000)  // rgba(0,0,0,0.08)
+
+    // ============================================
     // Text Hierarchy
     // ============================================
 
@@ -78,7 +102,23 @@ object MaColors {
     val TextDisabled = Color(0x4DFFFFFF)   // rgba(255,255,255,0.30)
 
     // ============================================
-    // Border Colors
+    // Text Hierarchy - Light Mode
+    // ============================================
+
+    /** Light mode primary text - 95% black (near-black for readability) */
+    val TextPrimaryLight = Color(0xF2000000)    // rgba(0,0,0,0.95)
+
+    /** Light mode secondary text - 60% black (for less important content) */
+    val TextSecondaryLight = Color(0x99000000)  // rgba(0,0,0,0.60)
+
+    /** Light mode muted text - 40% black (for hints, placeholders) */
+    val TextMutedLight = Color(0x66000000)      // rgba(0,0,0,0.40)
+
+    /** Light mode disabled text - 25% black (for inactive elements) */
+    val TextDisabledLight = Color(0x40000000)   // rgba(0,0,0,0.25)
+
+    // ============================================
+    // Border Colors - Dark Mode
     // ============================================
 
     /** Subtle border - 6% white (barely visible separation) */
@@ -92,6 +132,22 @@ object MaColors {
 
     /** Strong border - 25% white (strong visual separation) */
     val BorderStrong = Color(0x40FFFFFF)   // rgba(255,255,255,0.25)
+
+    // ============================================
+    // Border Colors - Light Mode
+    // ============================================
+
+    /** Light mode subtle border - 5% black (barely visible separation) */
+    val BorderSubtleLight = Color(0x0D000000)   // rgba(0,0,0,0.05)
+
+    /** Light mode light border - 8% black (standard dividers) */
+    val BorderLightLight = Color(0x14000000)    // rgba(0,0,0,0.08)
+
+    /** Light mode medium border - 12% black (emphasized dividers) */
+    val BorderMediumLight = Color(0x1F000000)   // rgba(0,0,0,0.12)
+
+    /** Light mode strong border - 20% black (strong visual separation) */
+    val BorderStrongLight = Color(0x33000000)   // rgba(0,0,0,0.20)
 
     // ============================================
     // Status Colors
@@ -138,7 +194,23 @@ object MaColors {
     val SelectionBg = Color(0x1FE25303)
 
     // ============================================
-    // Scrim & Overlays
+    // Interactive States - Light Mode
+    // ============================================
+
+    /** Light mode hover overlay - 5% black */
+    val HoverOverlayLight = Color(0x0D000000)
+
+    /** Light mode pressed overlay - 10% black */
+    val PressedOverlayLight = Color(0x1A000000)
+
+    /** Light mode focus ring - M1K3 orange */
+    val FocusRingLight = Orange
+
+    /** Light mode selection background - 12% orange */
+    val SelectionBgLight = Color(0x1FE25303)
+
+    // ============================================
+    // Scrim & Overlays - Dark Mode
     // ============================================
 
     /** Light scrim - 40% black (for overlays) */
@@ -149,4 +221,17 @@ object MaColors {
 
     /** Dark scrim - 80% black (for full overlays) */
     val ScrimDark = Color(0xCC000000)
+
+    // ============================================
+    // Scrim & Overlays - Light Mode
+    // ============================================
+
+    /** Light mode light scrim - 30% black (for overlays) */
+    val ScrimLightLight = Color(0x4D000000)
+
+    /** Light mode medium scrim - 50% black (for modals) */
+    val ScrimMediumLight = Color(0x80000000)
+
+    /** Light mode dark scrim - 70% black (for full overlays) */
+    val ScrimDarkLight = Color(0xB3000000)
 }

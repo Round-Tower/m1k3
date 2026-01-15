@@ -22,6 +22,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -163,6 +164,7 @@ class MainActivity : ComponentActivity() {
                     }
 
                     val haptics = LocalHapticFeedback.current
+                    val isDarkMode = isSystemInDarkTheme()
 
                     // Animate content offset based on drawer state
                     val contentOffset by animateDpAsState(
@@ -176,7 +178,7 @@ class MainActivity : ComponentActivity() {
                                 modifier = Modifier
                                     .fillMaxHeight()
                                     .width(280.dp),
-                                drawerContainerColor = Color.Black,
+                                drawerContainerColor = if (isDarkMode) Color.Black else Color.White,
                                 drawerShape = RoundedCornerShape(
                                     topEnd = MaRadius.lg,
                                     bottomEnd = MaRadius.lg
@@ -202,11 +204,14 @@ class MainActivity : ComponentActivity() {
                                     Text(
                                         "Privacy-First AI",
                                         style = MaTypography.bodySmall,
-                                        color = MaColors.TextSecondary
+                                        color = if (isDarkMode) MaColors.TextSecondary else MaColors.TextSecondaryLight
                                     )
                                 }
 
-                                HorizontalDivider(color = MaColors.BorderSubtle, thickness = 1.dp)
+                                HorizontalDivider(
+                                    color = if (isDarkMode) MaColors.BorderSubtle else MaColors.BorderSubtleLight,
+                                    thickness = 1.dp
+                                )
 
                                 Spacer(modifier = Modifier.height(MaSpacing.base))
 
@@ -241,7 +246,7 @@ class MainActivity : ComponentActivity() {
                                 Spacer(modifier = Modifier.height(MaSpacing.lg))
                             }
                         },
-                        scrimColor = MaColors.ScrimMedium,
+                        scrimColor = if (isDarkMode) MaColors.ScrimMedium else MaColors.ScrimMediumLight,
                         drawerState = drawerState
                     ) {
                         Box(
