@@ -56,7 +56,6 @@ import app.m1k3.ai.assistant.avatar.*
 import app.m1k3.ai.assistant.knowledge.KnowledgeBaseImporter
 import app.m1k3.ai.assistant.knowledge.KnowledgeImportManager
 import app.m1k3.ai.assistant.ui.ChatScreen
-import app.m1k3.ai.assistant.ui.Avatar3DDebugScreen
 import app.m1k3.ai.assistant.ui.HistoryScreen
 import app.m1k3.ai.assistant.ui.EcoStatsScreen
 import app.m1k3.ai.assistant.di.allModules
@@ -204,7 +203,7 @@ class MainActivity : ComponentActivity() {
                                     Text(
                                         "Privacy-First AI",
                                         style = MaTypography.bodySmall,
-                                        color = if (isDarkMode) MaColors.TextSecondary else MaColors.TextSecondaryLight
+                                        color = MaColors.textSecondary()
                                     )
                                 }
 
@@ -280,7 +279,7 @@ class MainActivity : ComponentActivity() {
                                         }
                                     },
                                     colors = TopAppBarDefaults.topAppBarColors(
-                                        containerColor = MaColors.BgPrimary
+                                        containerColor = MaterialTheme.colorScheme.background
                                     )
                                 )
                             },
@@ -295,7 +294,6 @@ class MainActivity : ComponentActivity() {
                             composable(Screen.Demo.route) {
                                 MaAIDemo(
                                     onChatClick = { navController.navigate(Screen.Chat.route) },
-                                    onDebugClick = { navController.navigate(Screen.Avatar.route) },
                                     knowledgeStatus = knowledgeImportStatus
                                 )
                             }
@@ -305,7 +303,6 @@ class MainActivity : ComponentActivity() {
                                 if (database != null) {
                                     ChatScreen(
                                         onBackClick = { navController.navigateUp() },
-                                        onDebugClick = { navController.navigate(Screen.Avatar.route) },
                                         onHistoryClick = { navController.navigate(Screen.History.route) },
                                         onEcoStatsClick = { navController.navigate(Screen.EcoStats.route) },
                                         aiEngine = aiEngine,
@@ -336,24 +333,6 @@ class MainActivity : ComponentActivity() {
                                         projectId = "default",
                                         onBackClick = { navController.navigateUp() }
                                     )
-                                }
-                            }
-
-                            // Avatar Screen (3D Debug Screen)
-                            composable(Screen.Avatar.route) {
-                                database?.let { db ->
-                                    Avatar3DDebugScreen(
-                                        database = db,
-                                        onBackClick = { navController.navigateUp() }
-                                    )
-                                } ?: run {
-                                    // Show loading state if database not initialized
-                                    Box(
-                                        modifier = Modifier.fillMaxSize(),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Text("Loading database...")
-                                    }
                                 }
                             }
 
@@ -465,12 +444,12 @@ fun MaAIDemo(onChatClick: () -> Unit, onDebugClick: () -> Unit = {}, knowledgeSt
                                 "M1K3",
                                 style = MaTypography.headlineSmall,
                                 fontWeight = FontWeight.Bold,
-                                color = MaColors.TextPrimary
+                                color = MaColors.textPrimary()
                             )
                             Text(
                                 "Privacy-First Mobile Assistant",
                                 style = MaTypography.bodySmall,
-                                color = MaColors.TextSecondary
+                                color = MaColors.textSecondary()
                             )
                         }
                         // Mini avatar in top bar
@@ -490,7 +469,7 @@ fun MaAIDemo(onChatClick: () -> Unit, onDebugClick: () -> Unit = {}, knowledgeSt
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaColors.BgPrimary
+                    containerColor = MaterialTheme.colorScheme.background
                 )
             )
         }
@@ -546,12 +525,12 @@ fun MaAIDemo(onChatClick: () -> Unit, onDebugClick: () -> Unit = {}, knowledgeSt
                                 "🎨 Avatar Debug Lab",
                                 style = MaTypography.titleSmall,
                                 fontWeight = FontWeight.Medium,
-                                color = MaColors.TextPrimary
+                                color = MaColors.textPrimary()
                             )
                             Text(
                                 "Test 3D avatar • All emotions • Performance metrics",
                                 style = MaTypography.bodySmall,
-                                color = MaColors.TextSecondary
+                                color = MaColors.textSecondary()
                             )
                         }
                         Text("→", style = MaTypography.headlineMedium, color = MaColors.Orange)
@@ -575,7 +554,7 @@ fun MaAIDemo(onChatClick: () -> Unit, onDebugClick: () -> Unit = {}, knowledgeSt
                         Text(
                             "AMOLED Black • Liquid Glass • Robot Avatar • Streaming Inference",
                             style = MaTypography.bodyMedium,
-                            color = MaColors.TextSecondary
+                            color = MaColors.textSecondary()
                         )
                     }
                 }
@@ -587,7 +566,7 @@ fun MaAIDemo(onChatClick: () -> Unit, onDebugClick: () -> Unit = {}, knowledgeSt
                     "System Status",
                     style = MaTypography.titleMedium,
                     fontWeight = FontWeight.SemiBold,
-                    color = MaColors.TextPrimary,
+                    color = MaColors.textPrimary(),
                     modifier = Modifier.padding(vertical = MaSpacing.sm)
                 )
             }
@@ -602,7 +581,7 @@ fun MaAIDemo(onChatClick: () -> Unit, onDebugClick: () -> Unit = {}, knowledgeSt
                     "Architecture",
                     style = MaTypography.titleMedium,
                     fontWeight = FontWeight.SemiBold,
-                    color = MaColors.TextPrimary,
+                    color = MaColors.textPrimary(),
                     modifier = Modifier.padding(vertical = MaSpacing.sm)
                 )
             }
@@ -617,7 +596,7 @@ fun MaAIDemo(onChatClick: () -> Unit, onDebugClick: () -> Unit = {}, knowledgeSt
                 Text(
                     "💡 100% Local • Zero Network • Privacy-First",
                     style = MaTypography.bodySmall,
-                    color = MaColors.TextDisabled,
+                    color = MaColors.textDisabled(),
                     modifier = Modifier.fillMaxWidth()
                 )
             }
@@ -640,12 +619,12 @@ fun StatusCard(status: StatusItem) {
                     status.name,
                     style = MaTypography.titleSmall,
                     fontWeight = FontWeight.Medium,
-                    color = if (status.isSuccess) MaColors.TextPrimary else MaColors.Error
+                    color = if (status.isSuccess) MaColors.textPrimary() else MaColors.Error
                 )
                 Text(
                     status.description,
                     style = MaTypography.bodySmall,
-                    color = MaColors.TextSecondary
+                    color = MaColors.textSecondary()
                 )
             }
             Text(
@@ -688,12 +667,12 @@ fun ArchitectureLayer(name: String, description: String) {
                 name,
                 style = MaTypography.bodyMedium,
                 fontWeight = FontWeight.Medium,
-                color = MaColors.TextPrimary
+                color = MaColors.textPrimary()
             )
             Text(
                 description,
                 style = MaTypography.bodySmall,
-                color = MaColors.TextSecondary
+                color = MaColors.textSecondary()
             )
         }
     }

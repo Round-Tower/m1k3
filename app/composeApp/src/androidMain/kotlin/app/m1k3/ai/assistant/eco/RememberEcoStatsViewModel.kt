@@ -4,7 +4,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import app.m1k3.ai.assistant.database.MaDatabase
-import app.m1k3.ai.assistant.history.EcoStatsViewModel
 
 /**
  * Remember an EcoStatsViewModel scoped to the composition.

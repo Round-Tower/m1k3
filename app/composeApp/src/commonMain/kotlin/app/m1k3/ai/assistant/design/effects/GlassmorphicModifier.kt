@@ -78,12 +78,14 @@ fun Modifier.glassmorphic(
  */
 fun Modifier.glassmorphicCard(
     shape: Shape = RoundedCornerShape(MaRadius.md)
-): Modifier = glassmorphic(
-    backgroundColor = Color.Transparent,
-    borderColor = MaColors.BorderLight.copy(alpha = 0.1f),
-    borderWidth = 2.dp,
-    shape = shape
-)
+): Modifier = composed {
+    glassmorphic(
+        backgroundColor = Color.Transparent,
+        borderColor = MaColors.borderLight().copy(alpha = 0.1f),
+        borderWidth = 2.dp,
+        shape = shape
+    )
+}
 
 /**
  * Glassmorphic surface variant - subtle

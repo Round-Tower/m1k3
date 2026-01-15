@@ -33,11 +33,6 @@ val sidebarItems = listOf(
         icon = Icons.Default.Eco
     ),
     NavItem(
-        screen = Screen.Avatar,
-        label = "Avatar",
-        icon = Icons.Default.Face
-    ),
-    NavItem(
         screen = Screen.Settings,
         label = "Settings",
         icon = Icons.Default.Settings

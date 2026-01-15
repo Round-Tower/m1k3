@@ -1,10 +1,6 @@
-package app.m1k3.ai.assistant.history
+package app.m1k3.ai.assistant.eco
 
 import androidx.compose.runtime.*
-import app.m1k3.ai.assistant.eco.EcoCalculator
-import app.m1k3.ai.assistant.eco.EcoMetricsRepository
-import app.m1k3.ai.assistant.eco.LifetimeStats
-import app.m1k3.ai.assistant.eco.ProjectStats
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow

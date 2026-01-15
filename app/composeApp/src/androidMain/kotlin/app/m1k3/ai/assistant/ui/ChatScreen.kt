@@ -147,7 +147,7 @@ fun ChatScreen(
         ChatHeader(
             engineInitialized = uiState.engineState.isReady,
             avatarState = avatarState,
-            onClearClick = { viewModel.clearConversation() },
+            onNewChatClick = { viewModel.clearConversation() },
             modifier = Modifier
                 .fillMaxWidth()
                 .align(Alignment.TopCenter)

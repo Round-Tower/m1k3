@@ -14,7 +14,6 @@ package app.m1k3.ai.assistant.navigation
  * - Chat: Main AI conversation interface
  * - History: Browse past conversations
  * - Eco Stats: Environmental impact dashboard
- * - Avatar: 3D avatar visualization + debug
  * - Settings: App configuration and preferences
  * - Demo: Welcome/demo screen for new users
  */
@@ -38,11 +37,6 @@ sealed class Screen(val route: String) {
      * Eco Stats screen - Environmental impact dashboard
      */
     data object EcoStats : Screen("eco_stats")
-
-    /**
-     * Avatar screen - 3D avatar visualization and debug controls
-     */
-    data object Avatar : Screen("avatar")
 
     /**
      * Settings screen - App configuration and preferences
@@ -70,7 +64,6 @@ sealed class Screen(val route: String) {
             Chat,
             History,
             EcoStats,
-            Avatar,
             Settings,
             Demo
         )

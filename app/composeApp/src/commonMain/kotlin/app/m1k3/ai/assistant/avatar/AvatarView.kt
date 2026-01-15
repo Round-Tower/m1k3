@@ -133,7 +133,7 @@ fun AvatarView(
                     Text(
                         text = state.activity.displayName,
                         style = MaTypography.bodySmall,
-                        color = MaColors.TextSecondary
+                        color = MaColors.textSecondary()
                     )
                 }
 
@@ -143,7 +143,7 @@ fun AvatarView(
                     Text(
                         text = state.message,
                         style = MaTypography.labelSmall,
-                        color = MaColors.TextDisabled
+                        color = MaColors.textDisabled()
                     )
                 }
 
@@ -151,7 +151,7 @@ fun AvatarView(
                 Text(
                     text = "Intensity: ${(state.intensity * 100).toInt()}%",
                     style = MaTypography.labelSmall,
-                    color = MaColors.TextDisabled
+                    color = MaColors.textDisabled()
                 )
             }
         }
@@ -230,7 +230,7 @@ fun AvatarEmotionSelector(
             text = "Avatar Emotions",
             style = MaTypography.titleMedium,
             fontWeight = FontWeight.Bold,
-            color = MaColors.TextPrimary
+            color = MaColors.textPrimary()
         )
 
         // Grid of emotion buttons
@@ -287,6 +287,7 @@ fun AvatarActivityIndicator(
     modifier: Modifier = Modifier
 ) {
     val activityAnim = rememberActivityAnimation(activity)
+    val idleColor = MaColors.textDisabled()
 
     Row(
         modifier = modifier
@@ -311,7 +312,7 @@ fun AvatarActivityIndicator(
                         AvatarActivity.GENERATING -> MaColors.Orange
                         AvatarActivity.SPEAKING -> MaColors.Success
                         AvatarActivity.ERROR -> MaColors.Error
-                        AvatarActivity.IDLE -> MaColors.TextDisabled
+                        AvatarActivity.IDLE -> idleColor
                     }
                 )
             }
@@ -320,7 +321,7 @@ fun AvatarActivityIndicator(
         Text(
             text = activity.displayName,
             style = MaTypography.bodySmall,
-            color = if (activity.isActive) MaColors.TextPrimary else MaColors.TextDisabled,
+            color = if (activity.isActive) MaColors.textPrimary() else MaColors.textDisabled(),
             fontWeight = if (activity.isActive) FontWeight.Medium else FontWeight.Normal
         )
     }
@@ -495,7 +496,7 @@ fun PixelPetView(
                             Text(
                                 text = stage.displayName,
                                 style = MaTypography.bodySmall,
-                                color = MaColors.TextSecondary
+                                color = MaColors.textSecondary()
                             )
                         }
                     }

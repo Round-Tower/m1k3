@@ -23,8 +23,9 @@ import app.m1k3.ai.assistant.design.tokens.MaFontFamilyCaption
 import app.m1k3.ai.assistant.design.tokens.MaSpacing
 import app.m1k3.ai.assistant.design.tokens.MaTypography
 import app.m1k3.ai.assistant.design.theme.MaTheme
+import app.m1k3.ai.assistant.eco.EcoStatsState
 import app.m1k3.ai.assistant.eco.rememberEcoStatsViewModel
-import app.m1k3.ai.assistant.history.collectAsState
+import app.m1k3.ai.assistant.eco.collectAsState
 import app.m1k3.ai.assistant.ui.components.*
 import kotlinx.coroutines.launch
 
@@ -121,7 +122,7 @@ private fun EcoStatsTopBar(
                     "Environmental Impact",
                     style = MaTypography.titleLarge,
                     fontWeight = FontWeight.Bold,
-                    color = MaColors.TextPrimary
+                    color = MaColors.textPrimary()
                 )
                 Text(
                     "100% local AI inference",
@@ -132,7 +133,7 @@ private fun EcoStatsTopBar(
                         lineHeight = 16.sp,
                         letterSpacing = 0.25.sp
                     ),
-                    color = MaColors.TextSecondary
+                    color = MaColors.textSecondary()
                 )
             }
         },
@@ -141,7 +142,7 @@ private fun EcoStatsTopBar(
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                     contentDescription = "Back",
-                    tint = MaColors.TextPrimary
+                    tint = MaColors.textPrimary()
                 )
             }
         },
@@ -150,12 +151,12 @@ private fun EcoStatsTopBar(
                 Icon(
                     imageVector = Icons.Default.Refresh,
                     contentDescription = "Refresh",
-                    tint = MaColors.TextPrimary
+                    tint = MaColors.textPrimary()
                 )
             }
         },
         colors = TopAppBarDefaults.topAppBarColors(
-            containerColor = MaColors.BgPrimary
+            containerColor = MaterialTheme.colorScheme.background
         )
     )
 }
@@ -165,7 +166,7 @@ private fun EcoStatsTopBar(
  */
 @Composable
 private fun EcoStatsContent(
-    state: app.m1k3.ai.assistant.history.EcoStatsState,
+    state: EcoStatsState,
     projectId: String?,
     onClearError: () -> Unit
 ) {

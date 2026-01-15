@@ -5,8 +5,9 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -33,26 +34,26 @@ import app.m1k3.ai.assistant.design.tokens.*
  * - Liquid glass blur effect with gradient overlay
  * - Engine initialization status indicator
  * - 3D avatar with emotion/activity feedback
- * - Clear conversation button
+ * - New chat button
  * - Minimal, clean design following Ma design system
  *
  * @param engineInitialized Whether the AI engine is ready
  * @param avatarState Current avatar emotional/activity state
- * @param onClearClick Callback when clear button is pressed
+ * @param onNewChatClick Callback when new chat button is pressed
  * @param modifier Optional modifier for customization
  */
 @Composable
 fun ChatHeader(
     engineInitialized: Boolean,
     avatarState: AvatarState,
-    onClearClick: () -> Unit = {},
+    onNewChatClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     Box(
         modifier = modifier
             .fillMaxWidth()
     ) {
-        // Gradient overlay for liquid glass effect
+        // Gradient overlay for liquid glass effect (theme-aware)
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -60,9 +61,9 @@ fun ChatHeader(
                 .background(
                     brush = Brush.verticalGradient(
                         colors = listOf(
-                            MaColors.BgPrimary.copy(alpha = 0.95f),
-                            MaColors.BgPrimary.copy(alpha = 0.85f),
-                            MaColors.BgPrimary.copy(alpha = 0.0f)
+                            MaterialTheme.colorScheme.background.copy(alpha = 0.95f),
+                            MaterialTheme.colorScheme.background.copy(alpha = 0.85f),
+                            MaterialTheme.colorScheme.background.copy(alpha = 0.0f)
                         )
                     )
                 )
@@ -71,7 +72,7 @@ fun ChatHeader(
         // Toolbar content
         Surface(
             modifier = Modifier.fillMaxWidth(),
-            color = MaColors.BgPrimary.copy(alpha = 0.75f),
+            color = MaterialTheme.colorScheme.background.copy(alpha = 0.75f),
         ) {
             Row(
                 modifier = Modifier
@@ -86,7 +87,7 @@ fun ChatHeader(
                         "M1K3",
                         style = MaTypography.titleLarge,
                         fontWeight = FontWeight.Bold,
-                        color = MaColors.TextPrimary,
+                        color = MaColors.textPrimary(),
                     )
                     Text(
                         if (engineInitialized) "Ready" else "Loading...",
@@ -98,29 +99,29 @@ fun ChatHeader(
                                 lineHeight = 16.sp,
                                 letterSpacing = 0.25.sp,
                             ),
-                        color = if (engineInitialized) MaColors.Orange else MaColors.TextSecondary,
+                        color = if (engineInitialized) MaColors.Orange else MaColors.textSecondary(),
                     )
                 }
 
-                // Right side: Clear button and Avatar
+                // Right side: New Chat button and Avatar
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    // Clear conversation button
+                    // New Chat button
                     Box(
                         modifier = Modifier
-                            .testTag("clear_button")
+                            .testTag("new_chat_button")
                             .size(40.dp)
                             .clip(CircleShape)
-                            .background(MaColors.BgSecondary)
-                            .clickable(onClick = onClearClick),
+                            .background(MaColors.Orange.copy(alpha = 0.15f))
+                            .clickable(onClick = onNewChatClick),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
-                            imageVector = Icons.Outlined.Delete,
-                            contentDescription = "Clear conversation",
-                            tint = MaColors.TextSecondary,
+                            imageVector = Icons.Filled.Add,
+                            contentDescription = "New chat",
+                            tint = MaColors.Orange,
                             modifier = Modifier.size(20.dp)
                         )
                     }
@@ -151,7 +152,7 @@ private fun ChatHeaderReadyPreview() {
         ChatHeader(
             engineInitialized = true,
             avatarState = AvatarState(emotion = app.m1k3.ai.assistant.avatar.AvatarEmotion.HAPPY),
-            onClearClick = PreviewFixtures.noOpOnClick
+            onNewChatClick = PreviewFixtures.noOpOnClick
         )
     }
 }
@@ -163,7 +164,7 @@ private fun ChatHeaderLoadingPreview() {
         ChatHeader(
             engineInitialized = false,
             avatarState = AvatarState(emotion = app.m1k3.ai.assistant.avatar.AvatarEmotion.THINKING),
-            onClearClick = PreviewFixtures.noOpOnClick
+            onNewChatClick = PreviewFixtures.noOpOnClick
         )
     }
 }
@@ -178,7 +179,7 @@ private fun ChatHeaderGeneratingPreview() {
                 emotion = app.m1k3.ai.assistant.avatar.AvatarEmotion.HAPPY,
                 activity = app.m1k3.ai.assistant.avatar.AvatarActivity.GENERATING
             ),
-            onClearClick = PreviewFixtures.noOpOnClick
+            onNewChatClick = PreviewFixtures.noOpOnClick
         )
     }
 }

@@ -52,13 +52,15 @@ fun SidebarMenuItem(
         animationSpec = tween(durationMillis = MaDurations.fast, easing = EaseInOutCubic)
     )
 
+    val defaultTextColor = MaColors.textSecondary()
     val textColor by animateColorAsState(
-        targetValue = if (isSelected) MaColors.Orange else MaColors.TextSecondary,
+        targetValue = if (isSelected) MaColors.Orange else defaultTextColor,
         animationSpec = tween(durationMillis = MaDurations.fast, easing = EaseInOutCubic)
     )
 
+    val defaultIconColor = MaColors.textSecondary()
     val iconTint by animateColorAsState(
-        targetValue = if (isSelected) MaColors.Orange else MaColors.TextSecondary,
+        targetValue = if (isSelected) MaColors.Orange else defaultIconColor,
         animationSpec = tween(durationMillis = MaDurations.fast, easing = EaseInOutCubic)
     )
 

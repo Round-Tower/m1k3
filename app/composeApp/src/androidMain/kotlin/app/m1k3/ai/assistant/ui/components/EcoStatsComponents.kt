@@ -23,7 +23,7 @@ import app.m1k3.ai.assistant.design.tokens.MaTypography
 import app.m1k3.ai.assistant.design.theme.MaTheme
 import app.m1k3.ai.assistant.eco.LifetimeStats
 import app.m1k3.ai.assistant.eco.ProjectStats
-import app.m1k3.ai.assistant.history.EcoComparison
+import app.m1k3.ai.assistant.eco.EcoComparison
 
 /**
  * LifetimeStatsCard - Displays lifetime environmental savings.
@@ -49,7 +49,7 @@ fun LifetimeStatsCard(stats: LifetimeStats) {
                     text = "Lifetime Savings",
                     style = MaTypography.titleMedium,
                     fontWeight = FontWeight.Bold,
-                    color = MaColors.TextPrimary
+                    color = MaColors.textPrimary()
                 )
 
                 Surface(
@@ -126,13 +126,13 @@ fun CloudComparisonCard(comparison: EcoComparison) {
                 text = "Local vs Cloud AI",
                 style = MaTypography.titleMedium,
                 fontWeight = FontWeight.Bold,
-                color = MaColors.TextPrimary
+                color = MaColors.textPrimary()
             )
 
             Text(
                 text = "Environmental impact comparison with cloud-based AI services",
                 style = MaTypography.bodySmall,
-                color = MaColors.TextSecondary
+                color = MaColors.textSecondary()
             )
 
             HorizontalDivider(color = MaColors.BorderLight)
@@ -190,7 +190,7 @@ fun ProjectMetricsCard(
                 text = "Project: $projectId",
                 style = MaTypography.titleSmall,
                 fontWeight = FontWeight.Bold,
-                color = MaColors.TextPrimary
+                color = MaColors.textPrimary()
             )
 
             HorizontalDivider(color = MaColors.BorderLight)
@@ -220,13 +220,13 @@ fun EmptyStatsCard() {
                 text = "No environmental data yet",
                 style = MaTypography.titleMedium,
                 fontWeight = FontWeight.Medium,
-                color = MaColors.TextPrimary
+                color = MaColors.textPrimary()
             )
 
             Text(
                 text = "Start chatting to see your environmental impact",
                 style = MaTypography.bodyMedium,
-                color = MaColors.TextSecondary
+                color = MaColors.textSecondary()
             )
         }
     }
@@ -252,7 +252,7 @@ fun PrivacyStatementCard() {
                     text = "100% Local Processing",
                     style = MaTypography.titleSmall,
                     fontWeight = FontWeight.Bold,
-                    color = MaColors.TextPrimary
+                    color = MaColors.textPrimary()
                 )
             }
 
@@ -260,7 +260,7 @@ fun PrivacyStatementCard() {
                 text = "All AI inference happens on your device. Zero data transmission. " +
                     "Environmental savings calculated from avoiding cloud data center usage.",
                 style = MaTypography.bodySmall,
-                color = MaColors.TextSecondary
+                color = MaColors.textSecondary()
             )
         }
     }
@@ -326,7 +326,7 @@ fun AnimatedMetricRow(
                 Text(
                     text = label,
                     style = MaTypography.bodyMedium,
-                    color = MaColors.TextSecondary
+                    color = MaColors.textSecondary()
                 )
             }
 
@@ -401,7 +401,7 @@ fun ComparisonRow(
             Text(
                 text = "$emoji $label",
                 style = MaTypography.bodyMedium,
-                color = MaColors.TextSecondary
+                color = MaColors.textSecondary()
             )
 
             Surface(
@@ -426,7 +426,7 @@ fun ComparisonRow(
                 Text(
                     text = "Local",
                     style = MaTypography.labelSmall,
-                    color = MaColors.TextMuted
+                    color = MaColors.textMuted()
                 )
                 Text(
                     text = localValue,
@@ -440,13 +440,13 @@ fun ComparisonRow(
                 Text(
                     text = "Cloud",
                     style = MaTypography.labelSmall,
-                    color = MaColors.TextMuted
+                    color = MaColors.textMuted()
                 )
                 Text(
                     text = cloudValue,
                     style = MaTypography.bodySmall,
                     fontWeight = FontWeight.Medium,
-                    color = MaColors.TextMuted
+                    color = MaColors.textMuted()
                 )
             }
         }
@@ -468,13 +468,13 @@ fun SimpleMetricRow(
         Text(
             text = label,
             style = MaTypography.bodySmall,
-            color = MaColors.TextSecondary
+            color = MaColors.textSecondary()
         )
         Text(
             text = value,
             style = MaTypography.bodySmall,
             fontWeight = FontWeight.Medium,
-            color = MaColors.TextPrimary
+            color = MaColors.textPrimary()
         )
     }
 }
@@ -492,12 +492,12 @@ fun EcoStatChip(
             text = value,
             style = MaTypography.bodySmall,
             fontWeight = FontWeight.Bold,
-            color = MaColors.TextPrimary
+            color = MaColors.textPrimary()
         )
         Text(
             text = label,
             style = MaTypography.labelSmall,
-            color = MaColors.TextMuted
+            color = MaColors.textMuted()
         )
     }
 }

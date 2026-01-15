@@ -20,6 +20,7 @@ import app.m1k3.ai.assistant.design.tokens.MaFontFamilyCaption
 import app.m1k3.ai.assistant.design.tokens.MaSpacing
 import app.m1k3.ai.assistant.design.tokens.MaTypography
 import app.m1k3.ai.assistant.design.theme.MaTheme
+import app.m1k3.ai.assistant.eco.collectAsState
 import app.m1k3.ai.assistant.history.collectAsState
 import app.m1k3.ai.assistant.history.rememberHistoryViewModel
 import app.m1k3.ai.assistant.ui.components.*
@@ -164,7 +165,7 @@ private fun HistoryTopBar(
                     "Conversation History",
                     style = MaTypography.titleLarge,
                     fontWeight = FontWeight.Bold,
-                    color = MaColors.TextPrimary
+                    color = MaColors.textPrimary()
                 )
                 Text(
                     "$conversationCount conversations",
@@ -175,7 +176,7 @@ private fun HistoryTopBar(
                         lineHeight = 16.sp,
                         letterSpacing = 0.25.sp
                     ),
-                    color = MaColors.TextSecondary
+                    color = MaColors.textSecondary()
                 )
             }
         },
@@ -184,12 +185,12 @@ private fun HistoryTopBar(
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                     contentDescription = "Back",
-                    tint = MaColors.TextPrimary
+                    tint = MaColors.textPrimary()
                 )
             }
         },
         colors = TopAppBarDefaults.topAppBarColors(
-            containerColor = MaColors.BgPrimary
+            containerColor = MaterialTheme.colorScheme.background
         )
     )
 }

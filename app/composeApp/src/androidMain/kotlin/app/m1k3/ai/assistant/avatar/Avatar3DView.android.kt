@@ -115,7 +115,7 @@ fun Avatar3DView(
                     Text(
                         text = "Loading ${modelConfig.name}...",
                         style = MaTypography.labelSmall,
-                        color = MaColors.TextSecondary
+                        color = MaColors.textSecondary()
                     )
                 }
             }
@@ -136,7 +136,7 @@ fun Avatar3DView(
                     Text(
                         text = error!!,
                         style = MaTypography.labelSmall,
-                        color = MaColors.TextSecondary
+                        color = MaColors.textSecondary()
                     )
                 }
             }

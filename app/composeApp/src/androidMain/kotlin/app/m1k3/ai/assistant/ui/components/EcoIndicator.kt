@@ -183,7 +183,7 @@ private fun CompactEcoIndicator(
                 Icon(
                     imageVector = Icons.Default.Info,
                     contentDescription = "View details",
-                    tint = MaColors.TextMuted,
+                    tint = MaColors.textMuted(),
                     modifier = Modifier.size(16.dp),
                 )
             }
@@ -231,21 +231,21 @@ private fun ExpandedEcoIndicator(
                     text = "🌿 Environmental Savings",
                     style = MaTypography.titleSmall,
                     fontWeight = FontWeight.Bold,
-                    color = MaColors.TextPrimary,
+                    color = MaColors.textPrimary(),
                 )
 
                 if (onClick != null) {
                     Icon(
                         imageVector = Icons.Default.Info,
                         contentDescription = "View details",
-                        tint = MaColors.TextMuted,
+                        tint = MaColors.textMuted(),
                         modifier = Modifier.size(18.dp),
                     )
                 }
             }
 
             HorizontalDivider(
-                color = MaColors.BorderLight,
+                color = MaColors.borderLight(),
                 thickness = 1.dp,
             )
 
@@ -282,13 +282,13 @@ private fun ExpandedEcoIndicator(
                 Text(
                     text = "${stats.messageCount} messages",
                     style = MaTypography.bodySmall,
-                    color = MaColors.TextMuted,
+                    color = MaColors.textMuted(),
                 )
 
                 Text(
                     text = "${stats.totalTokens} tokens",
                     style = MaTypography.bodySmall,
-                    color = MaColors.TextMuted,
+                    color = MaColors.textMuted(),
                 )
             }
         }
@@ -364,7 +364,7 @@ private fun EcoMetricRow(
                         lineHeight = 16.sp,
                         letterSpacing = 0.25.sp,
                     ),
-                color = MaColors.TextSecondary,
+                color = MaColors.textSecondary(),
             )
         }
 
@@ -444,7 +444,7 @@ private fun EcoIndicatorPreview() {
                     lineHeight = 16.sp,
                     letterSpacing = 0.25.sp,
                 ),
-            color = MaColors.TextPrimary,
+            color = MaColors.textPrimary(),
         )
         EcoIndicator(
             stats = sampleStats,
@@ -462,7 +462,7 @@ private fun EcoIndicatorPreview() {
                     lineHeight = 16.sp,
                     letterSpacing = 0.25.sp,
                 ),
-            color = MaColors.TextPrimary,
+            color = MaColors.textPrimary(),
         )
         EcoIndicator(
             stats = sampleStats,

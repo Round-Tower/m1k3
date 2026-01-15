@@ -174,7 +174,7 @@ fun ChatInputBar(
                     ),
                 enabled = enabled,
                 textStyle = MaTypography.bodyLarge.copy(
-                    color = if (enabled) MaColors.TextPrimary else MaColors.TextDisabled
+                    color = if (enabled) MaColors.textPrimary() else MaColors.textDisabled()
                 ),
                 cursorBrush = SolidColor(MaColors.Orange),
                 maxLines = 6,
@@ -205,7 +205,7 @@ fun ChatInputBar(
                             Text(
                                 text = "Message M1K3 AI...",
                                 style = MaTypography.bodyLarge,
-                                color = MaColors.TextDisabled,
+                                color = MaColors.textDisabled(),
                                 modifier = Modifier.align(Alignment.CenterStart)
                             )
                         }
@@ -240,7 +240,7 @@ fun ChatInputBar(
             ) {
                 // Custom arrow icon (↑)
                 SendArrowIcon(
-                    color = if (hasText && enabled) MaColors.White else MaColors.TextDisabled
+                    color = if (hasText && enabled) MaColors.White else MaColors.textDisabled()
                 )
             }
         }

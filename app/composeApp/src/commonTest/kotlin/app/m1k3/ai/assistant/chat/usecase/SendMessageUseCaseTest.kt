@@ -138,7 +138,7 @@ class SendMessageUseCaseTest {
     @Test
     fun `execute Failed event contains ChatError`() = runTest {
         val mockEngine = MockBaseLlmEngine()
-        mockEngine.setStreamingError(RuntimeException("Model crashed"))
+        mockEngine.setStreamingError(RuntimeException("Something went wrong"))
         val useCase = createUseCase(mockEngine)
 
         val events = useCase.execute("Test").toList()

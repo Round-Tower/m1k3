@@ -67,7 +67,7 @@ fun HistorySearchBar(
                 onValueChange = onQueryChange,
                 modifier = Modifier.weight(1f),
                 textStyle = MaTypography.bodyMedium.copy(
-                    color = MaColors.TextPrimary
+                    color = MaColors.textPrimary()
                 ),
                 cursorBrush = SolidColor(MaColors.Orange),
                 decorationBox = { innerTextField ->
@@ -90,7 +90,7 @@ fun HistorySearchBar(
                     Icon(
                         imageVector = Icons.Default.Clear,
                         contentDescription = "Clear search",
-                        tint = MaColors.TextSecondary,
+                        tint = MaColors.textSecondary(),
                         modifier = Modifier.size(18.dp)
                     )
                 }
@@ -175,7 +175,7 @@ fun ConversationCard(
                         text = conversation.title ?: "Untitled Conversation",
                         style = MaTypography.titleMedium,
                         fontWeight = FontWeight.Medium,
-                        color = MaColors.TextPrimary,
+                        color = MaColors.textPrimary(),
                         maxLines = 2
                     )
 
@@ -193,7 +193,7 @@ fun ConversationCard(
                                 lineHeight = 16.sp,
                                 letterSpacing = 0.25.sp
                             ),
-                            color = MaColors.TextSecondary
+                            color = MaColors.textSecondary()
                         )
 
                         Text(
@@ -205,7 +205,7 @@ fun ConversationCard(
                                 lineHeight = 16.sp,
                                 letterSpacing = 0.25.sp
                             ),
-                            color = MaColors.TextSecondary
+                            color = MaColors.textSecondary()
                         )
                     }
                 }
@@ -224,7 +224,7 @@ fun ConversationCard(
                             Icons.Default.KeyboardArrowDown
                         },
                         contentDescription = if (expanded) "Collapse" else "Expand",
-                        tint = MaColors.TextSecondary
+                        tint = MaColors.textSecondary()
                     )
                 }
             }
@@ -549,7 +549,7 @@ fun HistoryEmptyState(
                 text = message,
                 style = MaTypography.titleMedium,
                 fontWeight = FontWeight.Medium,
-                color = MaColors.TextSecondary
+                color = MaColors.textSecondary()
             )
             Text(
                 text = subtitle,

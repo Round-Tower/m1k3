@@ -49,6 +49,7 @@ fun MiniAvatarIndicator(
     val animatedState = rememberAnimatedAvatarState(state, transitionDuration = 200)
     val activityAnim = rememberActivityAnimation(state.activity)
     val glowPulse = rememberGlowPulse(state.isAnimating)
+    val idleActivityColor = MaColors.textDisabled()
 
     Box(
         modifier = modifier
@@ -111,7 +112,7 @@ fun MiniAvatarIndicator(
                             AvatarActivity.GENERATING -> MaColors.Orange
                             AvatarActivity.SPEAKING -> MaColors.Success
                             AvatarActivity.ERROR -> MaColors.Error
-                            else -> MaColors.TextDisabled
+                            else -> idleActivityColor
                         }
                     )
                 }
@@ -239,7 +240,7 @@ fun MiniAvatarRow(
                 androidx.compose.material3.Text(
                     text = "+${states.size - maxVisible}",
                     style = app.m1k3.ai.assistant.design.tokens.MaTypography.labelMedium,
-                    color = app.m1k3.ai.assistant.design.tokens.MaColors.TextSecondary
+                    color = app.m1k3.ai.assistant.design.tokens.MaColors.textSecondary()
                 )
             }
         }
