@@ -83,8 +83,7 @@ fun SettingsItem(
 ) {
     Surface(
         onClick = onClick,
-        modifier = Modifier.fillMaxWidth(),
-        color = MaterialTheme.colorScheme.surface
+        modifier = Modifier.fillMaxWidth()
     ) {
         Row(
             modifier = Modifier

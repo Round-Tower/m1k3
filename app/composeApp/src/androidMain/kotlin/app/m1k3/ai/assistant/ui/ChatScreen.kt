@@ -8,7 +8,6 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
@@ -22,17 +21,11 @@ import app.m1k3.ai.assistant.design.tokens.*
 import app.m1k3.ai.assistant.design.theme.MaTheme
 import app.m1k3.ai.assistant.embedding.rememberEmbeddingsViewModel
 import app.m1k3.ai.assistant.ui.components.ChatInputBar
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.Icons
 import app.m1k3.ai.assistant.ui.components.ChatInputBarContainer
 import app.m1k3.ai.assistant.ui.components.ChatMessageList
 import app.m1k3.ai.assistant.ui.components.ContextWindowIndicator
 import app.m1k3.ai.assistant.ui.components.EcoIndicator
 import app.m1k3.ai.assistant.ui.components.EcoIndicatorVariant
-import app.m1k3.ai.assistant.utils.Logger
-import kotlinx.coroutines.launch
-
-private val logger = Logger.withTag("ChatScreen")
 
 /**
  * M1K3 AI - Chat Screen
@@ -53,20 +46,16 @@ private val logger = Logger.withTag("ChatScreen")
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ChatScreen(
-    onBackClick: () -> Unit,
-    onDebugClick: () -> Unit = {},
-    onHistoryClick: () -> Unit = {},
     onEcoStatsClick: () -> Unit = {},
     aiEngine: BaseLlmEngine,
     database: MaDatabase,
 ) {
     val context = LocalContext.current
-    val scope = rememberCoroutineScope()
+    rememberCoroutineScope()
     val listState = rememberLazyListState()
 
     // Avatar state management - use shared app-level ViewModel from CompositionLocal
     val avatarVM = LocalSharedAvatarVM.current
-    val avatarState by avatarVM?.collectAsState() ?: remember { mutableStateOf(AvatarState()) }
 
     // Embeddings for RAG (Phase 3)
     val embeddingsVM = rememberEmbeddingsViewModel()
@@ -126,12 +115,6 @@ fun ChatScreen(
     ) {
         // Background: Messages list (behind overlays)
         Column(modifier = Modifier.fillMaxSize()) {
-            // Eco Indicator - Real-time environmental impact
-            EcoIndicatorSection(
-                stats = uiState.sessionEcoStats,
-                onEcoStatsClick = onEcoStatsClick
-            )
-
             // Context Window Indicator - Shows conversation history usage
             ContextWindowIndicator(
                 state = uiState.contextWindow
@@ -145,6 +128,13 @@ fun ChatScreen(
                 showEcoIndicator = uiState.sessionEcoStats.messageCount > 0
             )
         }
+
+
+        // Eco Indicator - Real-time environmental impact
+        EcoIndicatorSection(
+            stats = uiState.sessionEcoStats,
+            onEcoStatsClick = onEcoStatsClick
+        )
 
         // Bottom overlay: Input bar with gradient
         ChatInputBarContainer(
@@ -172,15 +162,15 @@ fun ChatScreen(
         }
 
         // Floating Action Button for new chat
-        FloatingActionButton(
-            onClick = { viewModel.clearConversation() },
-            modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .padding(16.dp),
-            containerColor = MaColors.Orange
-        ) {
-            Icon(Icons.Filled.Add, contentDescription = "New chat")
-        }
+//        FloatingActionButton(
+//            onClick = { viewModel.clearConversation() },
+//            modifier = Modifier
+//                .align(Alignment.BottomEnd)
+//                .padding(16.dp),
+//            containerColor = MaColors.Orange
+//        ) {
+//            Icon(Icons.Filled.Add, contentDescription = "New chat")
+//        }
     }
 }
 
@@ -235,7 +225,7 @@ private fun ErrorSnackbar(
  * ChatBubble - Renders a single message bubble.
  */
 @Composable
-fun ChatBubble(message: app.m1k3.ai.assistant.chat.ChatMessage) {
+fun ChatBubble(message: ChatMessage) {
     if (message.isUser) {
         MaChatBubbleUser(
             text = message.text,

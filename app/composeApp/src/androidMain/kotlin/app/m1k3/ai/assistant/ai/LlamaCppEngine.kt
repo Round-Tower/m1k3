@@ -347,7 +347,7 @@ class LlamaCppEngine(private val context: Context) : BaseLlmEngine {
             val maxTokens = config.maxTokens ?: getOptimalMaxTokens()
 
             logger.d {
-                "Llamatik streaming (Gemma 3 raw template): prompt=${chatPrompt.length}chars, maxTokens=$maxTokens"
+                "Llamatik streaming (Gemma 3 raw template): prompt=${chatPrompt.length} chars, maxTokens=$maxTokens"
             }
 
             // DEBUG: Log actual prompt contents (truncated for readability)
@@ -355,6 +355,7 @@ class LlamaCppEngine(private val context: Context) : BaseLlmEngine {
 
             // Thread-safe counters and flags for native callback access
             val tokenCount = AtomicInteger(0)
+
             // Gemma 3 stop tokens ONLY - no ChatML/LLaMA tokens
             val stopTokens = listOf("<end_of_turn>", "<eos>")
             val responseBuffer = StringBuilder()

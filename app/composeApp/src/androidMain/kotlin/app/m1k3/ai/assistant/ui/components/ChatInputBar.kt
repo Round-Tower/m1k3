@@ -189,17 +189,14 @@ fun ChatInputBar(
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clip(RoundedCornerShape(28.dp))
                             .background(
                                 color = if (enabled) MaColors.BgSecondary else MaColors.BgPrimary,
                                 shape = RoundedCornerShape(28.dp)
                             )
                             .border(
                                 width = borderWidth,
-                                color = borderColor,
-                                shape = RoundedCornerShape(28.dp)
+                                color = borderColor
                             )
-                            .padding(start = 20.dp, end = 60.dp, top = 16.dp, bottom = 16.dp)
                     ) {
                         if (text.isEmpty()) {
                             Text(

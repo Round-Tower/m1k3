@@ -84,8 +84,7 @@ fun AvatarView(
     ) {
         Column(
             modifier = Modifier
-                .fillMaxSize()
-                .padding(MaSpacing.base),
+                .fillMaxSize(),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {

@@ -4,13 +4,10 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.core.view.WindowCompat
 import androidx.lifecycle.lifecycleScope
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material3.*
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.animation.core.animateDpAsState
@@ -21,8 +18,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.unit.IntOffset
-import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.graphics.RectangleShape
@@ -43,8 +38,6 @@ import app.m1k3.ai.assistant.navigation.navigateToBottomNav
 import app.m1k3.ai.assistant.navigation.sidebarItems
 import app.m1k3.ai.assistant.ai.BaseLlmEngine
 import app.m1k3.ai.assistant.ai.LlamaCppEngine
-import app.m1k3.ai.assistant.database.AndroidDatabaseFactory
-import app.m1k3.ai.assistant.database.DatabaseConfig
 import app.m1k3.ai.assistant.database.MaDatabase
 import app.m1k3.ai.assistant.design.theme.MaTheme
 import app.m1k3.ai.assistant.design.components.MaButtonPrimary
@@ -54,8 +47,6 @@ import app.m1k3.ai.assistant.design.tokens.MaRadius
 import app.m1k3.ai.assistant.design.tokens.MaSpacing
 import app.m1k3.ai.assistant.design.tokens.MaTypography
 import app.m1k3.ai.assistant.avatar.*
-import app.m1k3.ai.assistant.knowledge.KnowledgeBaseImporter
-import app.m1k3.ai.assistant.knowledge.KnowledgeImportManager
 import app.m1k3.ai.assistant.ui.ChatScreen
 import app.m1k3.ai.assistant.ui.HistoryScreen
 import app.m1k3.ai.assistant.ui.EcoStatsScreen
@@ -63,12 +54,17 @@ import app.m1k3.ai.assistant.ui.components.UnifiedToolbar
 import app.m1k3.ai.assistant.di.allModules
 import app.m1k3.ai.assistant.utils.Logger
 import app.m1k3.ai.assistant.utils.FilamentSetup
-import com.google.android.filament.utils.Utils
+import app.m1k3.ai.assistant.app.AppInitializationManager
+import app.m1k3.ai.assistant.app.InitializationResult
+import app.m1k3.ai.assistant.app.AndroidDatabaseInitializer
+import app.m1k3.ai.assistant.app.DatabaseInitResult
+import app.m1k3.ai.assistant.app.KnowledgeImportResult
+import app.m1k3.ai.assistant.ui.demo.MaAIDemo
+import app.m1k3.ai.assistant.ui.drawer.DrawerContent
+import co.touchlab.kermit.Logger as KermitLogger
 import kotlinx.coroutines.launch
 import org.koin.android.ext.koin.androidContext
 import org.koin.core.context.startKoin
-import java.io.BufferedReader
-import java.io.InputStreamReader
 
 /**
  * M1K3 AI - MainActivity
@@ -90,24 +86,32 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Initialize Koin dependency injection
-        try {
-            startKoin {
-                androidContext(this@MainActivity)
-                modules(allModules)
-            }
-            logger.i { "Koin DI initialized successfully" }
-        } catch (e: Exception) {
-            logger.e(e) { "Failed to initialize Koin DI - falling back to manual DI" }
-        }
-
-        // Initialize Filament 3D engine
-        FilamentSetup.initialize()
-        logger.i { "Filament 3D engine initialized" }
-
         // Enable edge-to-edge for immersive full-screen experience
         enableEdgeToEdge()
 
+        // Initialize Koin & Filament using AppInitializationManager
+        val appInitManager = AppInitializationManager(
+            logger = LoggerAdapter(logger),
+            koinInitializer = {
+                startKoin {
+                    androidContext(this@MainActivity)
+                    modules(allModules)
+                }
+            },
+            filamentInitializer = { FilamentSetup.initialize() }
+        )
+
+        val koinResult = appInitManager.initializeKoin()
+        if (koinResult !is InitializationResult.Success) {
+            logger.e { "Koin initialization failed" }
+        }
+
+        val filamentResult = appInitManager.initializeFilament()
+        if (filamentResult !is InitializationResult.Success) {
+            logger.e { "Filament initialization failed" }
+        }
+
+        // Initialize AI engine
         aiEngine = LlamaCppEngine(this)
 
         // Initialize database and import knowledge base
@@ -115,31 +119,37 @@ class MainActivity : ComponentActivity() {
             try {
                 knowledgeImportStatus = "Loading knowledge..."
 
+                val initializer = AndroidDatabaseInitializer(this@MainActivity, LoggerAdapter(logger))
+
                 // Initialize database
-                val databaseFactory = AndroidDatabaseFactory(this@MainActivity)
-                val passphrase = databaseFactory.getDatabasePassphrase()
-                driver = databaseFactory.createDriver(passphrase)
-                database = MaDatabase(driver!!)
+                val dbResult = initializer.initializeDatabase()
+                when (dbResult) {
+                    is DatabaseInitResult.Success -> {
+                        database = dbResult.database as MaDatabase
+                        driver = null // Driver is managed by MaDatabase
 
-                // Import knowledge using manager
-                val knowledgeManager = KnowledgeImportManager(this@MainActivity, database!!)
-                val result = knowledgeManager.importIfNeeded()
-
-                knowledgeImportStatus = when (result) {
-                    is KnowledgeImportManager.ImportResult.Success -> {
-                        "✅ Knowledge ready: ${result.totalDocs} documents (${result.comprehensiveDocs} comprehensive + ${result.systemDocs} system)"
+                        // Import knowledge
+                        val knowledgeResult = initializer.importKnowledge(database!!)
+                        knowledgeImportStatus = when (knowledgeResult) {
+                            is KnowledgeImportResult.Success -> {
+                                "✅ Knowledge ready: ${knowledgeResult.totalDocs} documents (${knowledgeResult.comprehensiveDocs} comprehensive + ${knowledgeResult.systemDocs} system)"
+                            }
+                            is KnowledgeImportResult.AlreadyImported -> {
+                                "✅ Knowledge ready: ${knowledgeResult.existingDocs} documents"
+                            }
+                            is KnowledgeImportResult.Error -> {
+                                "⚠️ Knowledge unavailable: ${knowledgeResult.message}"
+                            }
+                        }
                     }
-                    is KnowledgeImportManager.ImportResult.AlreadyImported -> {
-                        "✅ Knowledge ready: ${result.existingDocs} documents"
-                    }
-                    is KnowledgeImportManager.ImportResult.Error -> {
-                        logger.e(result.error) { result.message }
-                        "⚠️ Knowledge unavailable: ${result.message}"
+                    is DatabaseInitResult.Error -> {
+                        logger.e { "Database initialization failed: ${dbResult.message}" }
+                        knowledgeImportStatus = "⚠️ Knowledge unavailable"
+                        driver = null
                     }
                 }
-
             } catch (e: Exception) {
-                logger.e(e) { "Knowledge import failed" }
+                logger.e(e) { "Database/Knowledge initialization failed" }
                 knowledgeImportStatus = "⚠️ Knowledge unavailable"
             }
         }
@@ -177,77 +187,23 @@ class MainActivity : ComponentActivity() {
 
                     ModalNavigationDrawer(
                         drawerContent = {
-                            ModalDrawerSheet(
-                                modifier = Modifier
-                                    .fillMaxHeight()
-                                    .width(280.dp),
-                                drawerContainerColor = if (isDarkMode) MaColors.BgPrimary else MaColors.BgPrimaryLight,
-                                drawerShape = RoundedCornerShape(
-                                    topEnd = MaRadius.lg,
-                                    bottomEnd = MaRadius.lg
-                                )
-                            ) {
-                                // M1K3 Header
-                                Column(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(
-                                            horizontal = MaSpacing.base,
-                                            vertical = MaSpacing.lg
-                                        ),
-                                    horizontalAlignment = Alignment.Start
-                                ) {
-                                    Text(
-                                        "M1K3",
-                                        style = MaTypography.displayLarge,
-                                        fontWeight = FontWeight.Bold,
-                                        color = MaColors.Orange,
-                                        modifier = Modifier.padding(bottom = MaSpacing.sm)
-                                    )
-                                    Text(
-                                        "Call me Mike",
-                                        style = MaTypography.bodySmall,
-                                        color = MaColors.textSecondary()
-                                    )
-                                }
-
-                                HorizontalDivider(
-                                    color = if (isDarkMode) MaColors.BorderSubtle else MaColors.BorderSubtleLight,
-                                    thickness = 1.dp
-                                )
-
-                                Spacer(modifier = Modifier.height(MaSpacing.base))
-
-                                // Sidebar menu items
-                                sidebarItems.forEach { item ->
-                                    val isSelected = navController.currentBackStackEntryAsState().value?.destination?.hierarchy?.any {
-                                        it.route == item.screen.route
-                                    } == true
-
-                                    SidebarMenuItem(
-                                        icon = item.icon,
-                                        label = item.label,
-                                        isSelected = isSelected,
-                                        onClick = {
-                                            if (!isSelected) {
-                                                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                                                navController.navigateToBottomNav(item.screen)
-                                            }
-                                            // Auto-close drawer after selection
-                                            drawerOpen = false
-                                        },
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .padding(horizontal = MaSpacing.base)
-                                    )
-
-                                    Spacer(modifier = Modifier.height(MaSpacing.md))
-                                }
-
-                                // Bottom spacer for visual balance
-                                Spacer(modifier = Modifier.weight(1f))
-                                Spacer(modifier = Modifier.height(MaSpacing.lg))
-                            }
+                            DrawerContent(
+                                currentRoute = navController.currentBackStackEntryAsState().value?.destination?.route,
+                                isDarkMode = isDarkMode,
+                                onItemClick = { route ->
+                                    // Map route to Screen and navigate
+                                    val screen = when (route) {
+                                        "chat" -> Screen.Chat
+                                        "history" -> Screen.History
+                                        "ecostats" -> Screen.EcoStats
+                                        "settings" -> Screen.Settings
+                                        else -> Screen.Chat
+                                    }
+                                    navController.navigateToBottomNav(screen)
+                                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                },
+                                onMenuClose = { drawerOpen = false }
+                            )
                         },
                         scrimColor = if (isDarkMode) MaColors.ScrimMedium else MaColors.ScrimMediumLight,
                         drawerState = drawerState
@@ -256,11 +212,6 @@ class MainActivity : ComponentActivity() {
                             modifier = Modifier
                                 .fillMaxSize()
                                 .offset(x = contentOffset)
-                                .shadow(
-                                    elevation = if (drawerOpen) 8.dp else 0.dp,
-                                    shape = RectangleShape
-                                )
-                                .clip(RoundedCornerShape(MaRadius.lg))
                         ) {
                             Scaffold(
                                 topBar = {
@@ -293,8 +244,6 @@ class MainActivity : ComponentActivity() {
                                 composable(Screen.Chat.route) {
                                     if (database != null) {
                                         ChatScreen(
-                                            onBackClick = { navController.navigateUp() },
-                                            onHistoryClick = { navController.navigate(Screen.History.route) },
                                             onEcoStatsClick = { navController.navigate(Screen.EcoStats.route) },
                                             aiEngine = aiEngine,
                                             database = database!!
@@ -414,324 +363,16 @@ private fun getScreenName(route: String?): String = when (route) {
     else -> "M1K3"
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun MaAIDemo(onChatClick: () -> Unit, onDebugClick: () -> Unit = {}, knowledgeStatus: String? = null) {
-    var systemStatus by remember { mutableStateOf<List<StatusItem>>(emptyList()) }
-    val scope = rememberCoroutineScope()
-
-    // Avatar state
-    val avatarVM = rememberAvatarViewModel()
-    val avatarState by avatarVM.collectAsState()
-
-    LaunchedEffect(knowledgeStatus) {
-        scope.launch {
-            systemStatus = getSystemStatus(knowledgeStatus)
-            // Set avatar to happy when knowledge loads successfully
-            if (knowledgeStatus?.startsWith("✅") == true) {
-                avatarVM.setEmotion(AvatarEmotion.HAPPY, 0.8f)
-            }
-        }
+/**
+ * Adapter to convert KermitLogger to ILogger interface
+ * Bridges the application's logger with AppInitializationManager's expectations
+ */
+class LoggerAdapter(private val logger: KermitLogger) : app.m1k3.ai.assistant.app.ILogger {
+    override fun i(message: String) {
+        logger.i { message }
     }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column {
-                            Text(
-                                "M1K3",
-                                style = MaTypography.headlineSmall,
-                                fontWeight = FontWeight.Bold,
-                                color = MaColors.textPrimary()
-                            )
-                            Text(
-                                "Privacy-First Mobile Assistant",
-                                style = MaTypography.bodySmall,
-                                color = MaColors.textSecondary()
-                            )
-                        }
-                        // Mini avatar in top bar
-                        MiniAvatarIndicator(
-                            state = avatarState,
-                            modifier = Modifier.size(48.dp),
-                            onClick = {
-                                // Cycle through emotions on click (for demo)
-                                val emotions = listOf(
-                                    AvatarEmotion.HAPPY, AvatarEmotion.EXCITED,
-                                    AvatarEmotion.LOVE, AvatarEmotion.THINKING
-                                )
-                                val nextEmotion = emotions.random()
-                                avatarVM.setEmotion(nextEmotion, 0.8f)
-                            }
-                        )
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.background
-                )
-            )
-        }
-    ) { padding ->
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .padding(MaSpacing.base),
-            verticalArrangement = Arrangement.spacedBy(MaSpacing.md)
-        ) {
-            // Avatar Display - 3D Colobus Monkey with third eye perspective
-            item {
-                Box(
-                    modifier = Modifier.fillMaxWidth(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    AvatarView(
-                        state = avatarState,
-                        showInfo = true,
-                        use3D = true,  // ✅ ENABLED: Reference-counted engine prevents crashes
-                        onClick = {
-                            avatarVM.flashEmotion(AvatarEmotion.EXCITED, 1500)
-                        }
-                    )
-                }
-            }
-
-            // Chat Button
-            item {
-                MaButtonPrimary(
-                    onClick = onChatClick,
-                    text = "💬 Chat with M1K3 AI",
-                    modifier = Modifier.fillMaxWidth()
-                )
-            }
-
-            // Debug Button
-            item {
-                MaCard(
-                    onClick = onDebugClick,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(MaSpacing.base),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                "🎨 Avatar Debug Lab",
-                                style = MaTypography.titleSmall,
-                                fontWeight = FontWeight.Medium,
-                                color = MaColors.textPrimary()
-                            )
-                            Text(
-                                "Test 3D avatar • All emotions • Performance metrics",
-                                style = MaTypography.bodySmall,
-                                color = MaColors.textSecondary()
-                            )
-                        }
-                        Text("→", style = MaTypography.headlineMedium, color = MaColors.Orange)
-                    }
-                }
-            }
-
-            // Hero Section
-            item {
-                MaCard(modifier = Modifier.fillMaxWidth()) {
-                    Column(
-                        modifier = Modifier.padding(MaSpacing.lg),
-                        verticalArrangement = Arrangement.spacedBy(MaSpacing.sm)
-                    ) {
-                        Text(
-                            "🎉 Design System + Avatar Complete",
-                            style = MaTypography.titleLarge,
-                            fontWeight = FontWeight.Bold,
-                            color = MaColors.Orange
-                        )
-                        Text(
-                            "AMOLED Black • Liquid Glass • Robot Avatar • Streaming Inference",
-                            style = MaTypography.bodyMedium,
-                            color = MaColors.textSecondary()
-                        )
-                    }
-                }
-            }
-
-            // System Status Section
-            item {
-                Text(
-                    "System Status",
-                    style = MaTypography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaColors.textPrimary(),
-                    modifier = Modifier.padding(vertical = MaSpacing.sm)
-                )
-            }
-
-            items(systemStatus) { status ->
-                StatusCard(status)
-            }
-
-            // Architecture Section
-            item {
-                Text(
-                    "Architecture",
-                    style = MaTypography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaColors.textPrimary(),
-                    modifier = Modifier.padding(vertical = MaSpacing.sm)
-                )
-            }
-
-            item {
-                ArchitectureCard()
-            }
-
-            // Footer
-            item {
-                Spacer(modifier = Modifier.height(MaSpacing.base))
-                Text(
-                    "💡 100% Local • Zero Network • Privacy-First",
-                    style = MaTypography.bodySmall,
-                    color = MaColors.textDisabled(),
-                    modifier = Modifier.fillMaxWidth()
-                )
-            }
-        }
+    override fun e(error: Throwable?, message: String) {
+        logger.e(error) { message }
     }
-}
-
-@Composable
-fun StatusCard(status: StatusItem) {
-    MaCard(modifier = Modifier.fillMaxWidth()) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(MaSpacing.base),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    status.name,
-                    style = MaTypography.titleSmall,
-                    fontWeight = FontWeight.Medium,
-                    color = if (status.isSuccess) MaColors.textPrimary() else MaColors.Error
-                )
-                Text(
-                    status.description,
-                    style = MaTypography.bodySmall,
-                    color = MaColors.textSecondary()
-                )
-            }
-            Text(
-                status.icon,
-                style = MaTypography.headlineMedium
-            )
-        }
-    }
-}
-
-@Composable
-fun ArchitectureCard() {
-    MaCard(modifier = Modifier.fillMaxWidth()) {
-        Column(
-            modifier = Modifier.padding(MaSpacing.base),
-            verticalArrangement = Arrangement.spacedBy(MaSpacing.md)
-        ) {
-            ArchitectureLayer("Kotlin Multiplatform 2.2.20", "Cross-platform foundation")
-            HorizontalDivider(color = MaColors.BorderSubtle)
-            ArchitectureLayer("Compose Multiplatform 1.9.1", "Modern UI framework")
-            HorizontalDivider(color = MaColors.BorderSubtle)
-            ArchitectureLayer("SQLDelight 2.0.2", "Type-safe database")
-            HorizontalDivider(color = MaColors.BorderSubtle)
-            ArchitectureLayer("ONNX Runtime 1.23.1", "Local AI inference")
-            HorizontalDivider(color = MaColors.BorderSubtle)
-            ArchitectureLayer("CameraX + ML Kit", "Multi-modal vision")
-        }
-    }
-}
-
-@Composable
-fun ArchitectureLayer(name: String, description: String) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                name,
-                style = MaTypography.bodyMedium,
-                fontWeight = FontWeight.Medium,
-                color = MaColors.textPrimary()
-            )
-            Text(
-                description,
-                style = MaTypography.bodySmall,
-                color = MaColors.textSecondary()
-            )
-        }
-    }
-}
-
-data class StatusItem(
-    val name: String,
-    val description: String,
-    val icon: String,
-    val isSuccess: Boolean
-)
-
-fun getSystemStatus(knowledgeStatus: String? = null): List<StatusItem> {
-    return listOf(
-        StatusItem(
-            name = "Privacy Protection",
-            description = "Zero network permission • 100% local",
-            icon = "🔒",
-            isSuccess = true
-        ),
-        StatusItem(
-            name = "Database Foundation",
-            description = "SQLDelight with encryption ready",
-            icon = "🗄️",
-            isSuccess = true
-        ),
-        StatusItem(
-            name = "Knowledge Base",
-            description = knowledgeStatus ?: "Loading...",
-            icon = "📚",
-            isSuccess = knowledgeStatus?.startsWith("✅") == true
-        ),
-        StatusItem(
-            name = "Package Name",
-            description = "app.m1k3.ai.assistant (ASO optimized)",
-            icon = "📦",
-            isSuccess = true
-        ),
-        StatusItem(
-            name = "AI Engine",
-            description = "SmolLM2-360M (Production Ready)",
-            icon = "🤖",
-            isSuccess = true
-        ),
-        StatusItem(
-            name = "Design System",
-            description = "AMOLED Black • Liquid Glass • Complete",
-            icon = "🎨",
-            isSuccess = true
-        ),
-        StatusItem(
-            name = "Robot Avatar",
-            description = "9 Emotions • 6 Activities • Canvas Rendering",
-            icon = "🤖",
-            isSuccess = true
-        )
-    )
 }

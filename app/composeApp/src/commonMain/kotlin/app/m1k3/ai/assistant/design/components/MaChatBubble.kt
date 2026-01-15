@@ -72,18 +72,13 @@ fun MaChatBubbleUser(
         horizontalArrangement = Arrangement.End
     ) {
         Column(
-            modifier = Modifier.widthIn(max = 280.dp),
+            modifier = Modifier.fillMaxWidth(),
             horizontalAlignment = Alignment.End
         ) {
-            Box(
+            Column (
+                horizontalAlignment = Alignment.End,
                 modifier = Modifier
-                    .clip(RoundedCornerShape(MaRadius.md))
-                    .background(MaColors.bgTertiary())
-                    .border(
-                        width = 1.5.dp,
-                        color = MaColors.Orange,
-                        shape = RoundedCornerShape(MaRadius.md)
-                    )
+                    .fillMaxWidth()
                     .padding(horizontal = MaSpacing.md, vertical = MaSpacing.base)
             ) {
                 Text(
@@ -91,15 +86,15 @@ fun MaChatBubbleUser(
                     style = MaTypography.bodyLarge,
                     color = MaColors.textPrimary()
                 )
-            }
 
-            // Timestamp
-            Text(
-                text = formatTimestamp(timestamp),
-                style = MaTypography.labelSmall,
-                color = MaColors.textDisabled(),
-                modifier = Modifier.padding(top = MaSpacing.xs, end = MaSpacing.sm)
-            )
+                // Timestamp
+                Text(
+                    text = formatTimestamp(timestamp),
+                    style = MaTypography.labelSmall,
+                    color = MaColors.textDisabled(),
+                    modifier = Modifier.padding(top = MaSpacing.xs, end = MaSpacing.sm)
+                )
+            }
         }
     }
 }
@@ -129,8 +124,7 @@ fun MaChatBubbleAI(
     Row(
         modifier = modifier
             .animateContentSize()
-            .fillMaxWidth()
-            .padding(horizontal = MaSpacing.base, vertical = MaSpacing.sm),
+            .fillMaxWidth(),
         horizontalArrangement = Arrangement.Start
     ) {
         Column(
@@ -140,10 +134,9 @@ fun MaChatBubbleAI(
             Box(
                 modifier = Modifier
                     .glassmorphic(
-                        backgroundColor = if (isError) MaColors.ErrorBg else MaColors.bgElevated(),
+                        backgroundColor = if (isError) MaColors.ErrorBg else MaColors.bgPrimary(),
                         borderColor = if (isError) MaColors.Error else MaColors.borderLight(),
-                        borderWidth = 0.dp,
-                        shape = RoundedCornerShape(MaRadius.md)
+                        borderWidth = 3.dp,
                     )
                     .padding(horizontal = MaSpacing.md, vertical = MaSpacing.base)
                     .animateContentSize()
@@ -159,6 +152,14 @@ fun MaChatBubbleAI(
                         text = text.trimStart(),
                         style = MaTypography.bodyLarge,
                         color = if (isError) MaColors.Error else MaColors.textPrimary()
+                    )
+
+                    // Timestamp
+                    Text(
+                        text = formatTimestamp(timestamp),
+                        style = MaTypography.labelSmall,
+                        color = MaColors.textSecondary(),
+                        modifier = Modifier.padding(top = MaSpacing.xs)
                     )
 
                     // Inference statistics (if available)
@@ -234,14 +235,6 @@ fun MaChatBubbleAI(
                     }
                 }
             }
-
-            // Timestamp
-            Text(
-                text = formatTimestamp(timestamp),
-                style = MaTypography.labelSmall,
-                color = MaColors.textDisabled(),
-                modifier = Modifier.padding(top = MaSpacing.xs, start = MaSpacing.sm)
-            )
         }
     }
 }

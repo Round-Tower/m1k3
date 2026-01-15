@@ -54,6 +54,7 @@ fun UnifiedToolbar(
     Box(
         modifier = modifier
             .fillMaxWidth()
+            .padding(top = 42.dp, start = 16.dp, end = 16.dp)
     ) {
         // Gradient overlay for liquid glass effect (theme-aware)
         Box(
@@ -80,7 +81,7 @@ fun UnifiedToolbar(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = MaSpacing.md, vertical = 12.dp),
+                    .padding(horizontal = MaSpacing.md, vertical = 16.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
@@ -118,6 +119,7 @@ fun UnifiedToolbar(
                                     fontSize = 12.sp,
                                     lineHeight = 16.sp,
                                     letterSpacing = 0.25.sp,
+
                                 ),
                             color = if (engineInitialized) MaColors.Orange else MaColors.textSecondary(),
                         )
@@ -132,6 +134,7 @@ fun UnifiedToolbar(
                     modifier = Modifier
                         .testTag("avatar_unified")
                         .size(100.dp)
+                        .padding(start = 16.dp)
                 )
             }
         }

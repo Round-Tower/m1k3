@@ -45,8 +45,7 @@ fun ChatMessageList(
         modifier = modifier
             .testTag("message_list")
             .animateContentSize()
-            .fillMaxSize()
-            .padding(horizontal = 8.dp),
+            .fillMaxSize(),
         verticalArrangement = Arrangement.spacedBy(12.dp),
         contentPadding = PaddingValues(
             top = if (showEcoIndicator) 180.dp else 120.dp, // Account for toolbar + optional eco indicator
