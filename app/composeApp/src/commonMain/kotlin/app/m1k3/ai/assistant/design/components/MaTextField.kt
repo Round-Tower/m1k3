@@ -74,8 +74,9 @@ fun MaTextField(
     val isFocused by interactionSource.collectIsFocusedAsState()
 
     // Animated focus glow
+    val defaultBorderColor = MaColors.borderLight()
     val borderColor by animateColorAsState(
-        targetValue = if (isFocused) MaColors.Orange else MaColors.BorderLight,
+        targetValue = if (isFocused) MaColors.Orange else defaultBorderColor,
         animationSpec = tween(durationMillis = MaDurations.fast),
         label = "borderColor"
     )
@@ -94,7 +95,7 @@ fun MaTextField(
             .heightIn(min = 56.dp),
         enabled = enabled,
         textStyle = MaTypography.bodyLarge.copy(
-            color = if (enabled) MaColors.TextPrimary else MaColors.TextDisabled
+            color = if (enabled) MaColors.textPrimary() else MaColors.textDisabled()
         ),
         cursorBrush = SolidColor(MaColors.Orange),
         singleLine = singleLine,
@@ -123,7 +124,7 @@ fun MaTextField(
                     Text(
                         text = placeholder,
                         style = MaTypography.bodyLarge,
-                        color = MaColors.TextDisabled
+                        color = MaColors.textDisabled()
                     )
                 }
                 innerTextField()
@@ -349,7 +350,7 @@ private fun MaTextFieldChatEmptyPreview() {
             Text(
                 "Chat Input (Empty):",
                 style = MaTypography.labelSmall,
-                color = MaColors.TextSecondary,
+                color = MaColors.textSecondary(),
                 modifier = Modifier.padding(bottom = MaSpacing.sm)
             )
 
@@ -377,7 +378,7 @@ private fun MaTextFieldChatWithMessagePreview() {
             Text(
                 "Chat Input (With Message):",
                 style = MaTypography.labelSmall,
-                color = MaColors.TextSecondary,
+                color = MaColors.textSecondary(),
                 modifier = Modifier.padding(bottom = MaSpacing.sm)
             )
 
@@ -405,7 +406,7 @@ private fun MaTextFieldSearchEmptyPreview() {
             Text(
                 "Search Field (Empty):",
                 style = MaTypography.labelSmall,
-                color = MaColors.TextSecondary,
+                color = MaColors.textSecondary(),
                 modifier = Modifier.padding(bottom = MaSpacing.sm)
             )
 
@@ -433,7 +434,7 @@ private fun MaTextFieldSearchWithQueryPreview() {
             Text(
                 "Search Field (With Query):",
                 style = MaTypography.labelSmall,
-                color = MaColors.TextSecondary,
+                color = MaColors.textSecondary(),
                 modifier = Modifier.padding(bottom = MaSpacing.sm)
             )
 
@@ -461,7 +462,7 @@ private fun MaTextFieldAllVariantsPreview() {
             Text(
                 "Basic TextField:",
                 style = MaTypography.labelSmall,
-                color = MaColors.TextSecondary
+                color = MaColors.textSecondary()
             )
             MaTextField(
                 value = "",
@@ -473,7 +474,7 @@ private fun MaTextFieldAllVariantsPreview() {
             Text(
                 "Chat TextField:",
                 style = MaTypography.labelSmall,
-                color = MaColors.TextSecondary,
+                color = MaColors.textSecondary(),
                 modifier = Modifier.padding(top = MaSpacing.base)
             )
             MaTextFieldChat(
@@ -486,7 +487,7 @@ private fun MaTextFieldAllVariantsPreview() {
             Text(
                 "Search TextField:",
                 style = MaTypography.labelSmall,
-                color = MaColors.TextSecondary,
+                color = MaColors.textSecondary(),
                 modifier = Modifier.padding(top = MaSpacing.base)
             )
             MaTextFieldSearch(

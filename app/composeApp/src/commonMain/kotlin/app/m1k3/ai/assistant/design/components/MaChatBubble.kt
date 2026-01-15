@@ -158,7 +158,7 @@ fun MaChatBubbleAI(
                         // Note: Streaming text is already cleaned in ChatScreen.kt:cleanStreamingToken()
                         text = text.trimStart(),
                         style = MaTypography.bodyLarge,
-                        color = if (isError) MaColors.Error else MaColors.TextPrimary
+                        color = if (isError) MaColors.Error else MaColors.textPrimary()
                     )
 
                     // Inference statistics (if available)

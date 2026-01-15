@@ -95,7 +95,7 @@ fun TypingIndicatorBubble(
                         .size(8.dp)
                         .alpha(dot1Alpha)
                         .background(
-                            color = MaColors.TextSecondary,
+                            color = MaColors.textSecondary(),
                             shape = CircleShape
                         )
                 )
@@ -106,7 +106,7 @@ fun TypingIndicatorBubble(
                         .size(8.dp)
                         .alpha(dot2Alpha)
                         .background(
-                            color = MaColors.TextSecondary,
+                            color = MaColors.textSecondary(),
                             shape = CircleShape
                         )
                 )
@@ -117,7 +117,7 @@ fun TypingIndicatorBubble(
                         .size(8.dp)
                         .alpha(dot3Alpha)
                         .background(
-                            color = MaColors.TextSecondary,
+                            color = MaColors.textSecondary(),
                             shape = CircleShape
                         )
                 )

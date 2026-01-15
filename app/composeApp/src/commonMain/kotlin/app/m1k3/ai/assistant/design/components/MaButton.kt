@@ -54,7 +54,7 @@ fun MaButtonPrimary(
             containerColor = MaColors.Orange,
             contentColor = MaColors.White,
             disabledContainerColor = MaColors.OrangeDim,
-            disabledContentColor = MaColors.TextDisabled
+            disabledContentColor = MaColors.textDisabled()
         ),
         contentPadding = PaddingValues(
             horizontal = MaSpacing.lg,
@@ -86,12 +86,12 @@ fun MaButtonSecondary(
         enabled = enabled,
         shape = RoundedCornerShape(MaRadius.sm),
         colors = ButtonDefaults.outlinedButtonColors(
-            contentColor = MaColors.TextPrimary,
-            disabledContentColor = MaColors.TextDisabled
+            contentColor = MaColors.textPrimary(),
+            disabledContentColor = MaColors.textDisabled()
         ),
         border = ButtonDefaults.outlinedButtonBorder.copy(
             brush = androidx.compose.ui.graphics.SolidColor(
-                if (enabled) MaColors.BorderLight else MaColors.BorderSubtle
+                if (enabled) MaColors.borderLight() else MaColors.borderSubtle()
             )
         ),
         contentPadding = PaddingValues(
@@ -124,7 +124,7 @@ fun MaButtonText(
         enabled = enabled,
         colors = ButtonDefaults.textButtonColors(
             contentColor = MaColors.Orange,
-            disabledContentColor = MaColors.TextDisabled
+            disabledContentColor = MaColors.textDisabled()
         ),
         contentPadding = PaddingValues(
             horizontal = MaSpacing.base,

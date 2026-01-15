@@ -98,7 +98,7 @@ private fun MaCardBasicPreview() {
                     Text(
                         "This is a simple glassmorphic card with content.",
                         style = MaTypography.bodyMedium,
-                        color = MaColors.TextSecondary
+                        color = MaColors.textSecondary()
                     )
                 }
             }
@@ -133,7 +133,7 @@ private fun MaCardClickablePreview() {
                     Text(
                         "Tap to interact with this card.",
                         style = MaTypography.bodyMedium,
-                        color = MaColors.TextSecondary
+                        color = MaColors.textSecondary()
                     )
                 }
             }
@@ -169,7 +169,7 @@ private fun MaCardWithIconPreview() {
                         Text(
                             "Multi-element card content.",
                             style = MaTypography.bodySmall,
-                            color = MaColors.TextSecondary
+                            color = MaColors.textSecondary()
                         )
                     }
                 }
@@ -192,7 +192,7 @@ private fun MaCardMultiplePreview() {
             Text(
                 "Card Collection:",
                 style = MaTypography.labelSmall,
-                color = MaColors.TextSecondary,
+                color = MaColors.textSecondary(),
                 modifier = Modifier.padding(bottom = MaSpacing.sm)
             )
 
