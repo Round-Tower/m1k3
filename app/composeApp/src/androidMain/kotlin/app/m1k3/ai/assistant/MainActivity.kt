@@ -199,13 +199,13 @@ class MainActivity : ComponentActivity() {
                                 ) {
                                     Text(
                                         "M1K3",
-                                        style = MaTypography.displaySmall,
+                                        style = MaTypography.displayLarge,
                                         fontWeight = FontWeight.Bold,
                                         color = MaColors.Orange,
                                         modifier = Modifier.padding(bottom = MaSpacing.sm)
                                     )
                                     Text(
-                                        "Privacy-First AI",
+                                        "Call me Mike",
                                         style = MaTypography.bodySmall,
                                         color = MaColors.textSecondary()
                                     )
@@ -268,6 +268,7 @@ class MainActivity : ComponentActivity() {
                                         screenName = getScreenName(navController.currentBackStackEntryAsState().value?.destination?.route),
                                         engineInitialized = true,
                                         avatarState = appAvatarState,
+                                        onMenuClick = { drawerOpen = !drawerOpen },
                                         modifier = Modifier.fillMaxWidth()
                                     )
                                 },
@@ -279,7 +280,6 @@ class MainActivity : ComponentActivity() {
                                 NavHost(
                                     navController = navController,
                                     startDestination = Screen.Chat.route,
-                                    modifier = Modifier.padding(paddingValues)
                                 ) {
                                 // Demo Screen
                                 composable(Screen.Demo.route) {

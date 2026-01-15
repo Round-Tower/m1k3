@@ -27,6 +27,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import app.m1k3.ai.assistant.design.tokens.MaTypography
 
 /**
  * ContextWindowIndicator - Displays context window usage in chat.
@@ -67,8 +68,6 @@ fun ContextWindowIndicator(
             .testTag("context_window_indicator")
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 4.dp)
-            .clip(RoundedCornerShape(8.dp))
-            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
             .clickable { expanded = !expanded }
             .animateContentSize()
             .padding(12.dp)
@@ -83,24 +82,20 @@ fun ContextWindowIndicator(
                 // Left: Context icon and message count
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
-                        text = "💬",
-                        fontSize = 14.sp
-                    )
-                    Text(
                         text = "${state.historyMessageCount} msgs in context",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        style = MaTypography.displaySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontSize = 8.sp
                     )
                 }
 
                 // Right: Token usage badge
                 Text(
                     text = "${state.usagePercent.toInt()}%",
-                    style = MaterialTheme.typography.labelSmall,
-                    fontWeight = FontWeight.Bold,
+                    style = MaTypography.labelMedium,
                     color = progressColor
                 )
             }
@@ -115,7 +110,7 @@ fun ContextWindowIndicator(
                     .clip(RoundedCornerShape(2.dp)),
                 color = progressColor,
                 trackColor = MaterialTheme.colorScheme.surfaceVariant,
-                strokeCap = StrokeCap.Round
+                strokeCap = StrokeCap.Round,
             )
 
             // Expanded details
@@ -129,12 +124,12 @@ fun ContextWindowIndicator(
                 ) {
                     Text(
                         text = "Tokens",
-                        style = MaterialTheme.typography.bodySmall,
+                        style = MaTypography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
                     )
                     Text(
                         text = state.formatUsage(),
-                        style = MaterialTheme.typography.bodySmall,
+                        style = MaTypography.labelMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
@@ -148,12 +143,12 @@ fun ContextWindowIndicator(
                 ) {
                     Text(
                         text = "Device",
-                        style = MaterialTheme.typography.bodySmall,
+                        style = MaTypography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
                     )
                     Text(
                         text = state.deviceTier,
-                        style = MaterialTheme.typography.bodySmall,
+                        style = MaTypography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
@@ -163,7 +158,7 @@ fun ContextWindowIndicator(
                 // Help text
                 Text(
                     text = "Tap to collapse • Context includes recent conversation history",
-                    style = MaterialTheme.typography.labelSmall,
+                    style = MaTypography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
                 )
             }

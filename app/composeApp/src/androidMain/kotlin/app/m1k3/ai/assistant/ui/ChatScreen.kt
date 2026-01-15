@@ -197,8 +197,7 @@ private fun EcoIndicatorSection(
             modifier = Modifier
                 .testTag("eco_indicator")
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 8.dp)
-                .padding(top = 120.dp), // Account for toolbar overlay
+                .padding(horizontal = 16.dp, vertical = 8.dp),
             contentAlignment = Alignment.Center
         ) {
             EcoIndicator(
