@@ -29,14 +29,14 @@ object MaColors {
     // M1K3 Brand Colors
     // ============================================
 
-    /** M1K3 signature orange - Primary brand color */
-    val Orange = Color(0xFFE25303)
+    /** M1K3 signature orange - Primary brand color (muted amber) */
+    val Orange = Color(0xFFD97706)
 
     /** Dimmed orange (50% alpha) - For subtle accents */
-    val OrangeDim = Color(0x80E25303)
+    val OrangeDim = Color(0x80D97706)
 
     /** Faint orange (20% alpha) - For very subtle tints */
-    val OrangeFaint = Color(0x33E25303)
+    val OrangeFaint = Color(0x33D97706)
 
     // ============================================
     // Background Layers - Dark Mode
