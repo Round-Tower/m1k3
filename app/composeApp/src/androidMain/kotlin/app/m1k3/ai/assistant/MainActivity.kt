@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.runtime.*
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -58,6 +59,7 @@ import app.m1k3.ai.assistant.knowledge.KnowledgeImportManager
 import app.m1k3.ai.assistant.ui.ChatScreen
 import app.m1k3.ai.assistant.ui.HistoryScreen
 import app.m1k3.ai.assistant.ui.EcoStatsScreen
+import app.m1k3.ai.assistant.ui.components.UnifiedToolbar
 import app.m1k3.ai.assistant.di.allModules
 import app.m1k3.ai.assistant.utils.Logger
 import app.m1k3.ai.assistant.utils.FilamentSetup
@@ -146,6 +148,8 @@ class MainActivity : ComponentActivity() {
             ProvideSharedEngine {
                 MaTheme {
                     val navController = rememberNavController()
+                    val appAvatarVM = rememberAvatarViewModel()
+                    val appAvatarState by appAvatarVM.collectAsState()
                     var drawerOpen by remember { mutableStateOf(false) }
 
                     val drawerState = rememberDrawerState(DrawerValue.Closed)
@@ -260,127 +264,115 @@ class MainActivity : ComponentActivity() {
                         ) {
                             Scaffold(
                                 topBar = {
-                                TopAppBar(
-                                    title = {
-                                        Row(
-                                            modifier = Modifier.fillMaxWidth(),
-                                            horizontalArrangement = Arrangement.SpaceBetween,
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
-                                            Column {
-                                                Text("M1K3", style = MaTypography.headlineSmall)
-                                                Text("Privacy-First Mobile Assistant", style = MaTypography.bodySmall)
-                                            }
-                                        }
-                                    },
-                                    navigationIcon = {
-                                        IconButton(onClick = { drawerOpen = !drawerOpen }) {
-                                            Icon(Icons.Default.Menu, contentDescription = "Menu")
-                                        }
-                                    },
-                                    colors = TopAppBarDefaults.topAppBarColors(
-                                        containerColor = MaterialTheme.colorScheme.background
+                                    UnifiedToolbar(
+                                        screenName = getScreenName(navController.currentBackStackEntryAsState().value?.destination?.route),
+                                        engineInitialized = true,
+                                        avatarState = appAvatarState,
+                                        modifier = Modifier.fillMaxWidth()
                                     )
-                                )
-                            },
+                                },
                             contentWindowInsets = WindowInsets.systemBars
                         ) { paddingValues ->
-                            NavHost(
-                                navController = navController,
-                                startDestination = Screen.Chat.route,
-                                modifier = Modifier.padding(paddingValues)
+                            CompositionLocalProvider(
+                                LocalSharedAvatarVM provides appAvatarVM
                             ) {
-                            // Demo Screen
-                            composable(Screen.Demo.route) {
-                                MaAIDemo(
-                                    onChatClick = { navController.navigate(Screen.Chat.route) },
-                                    knowledgeStatus = knowledgeImportStatus
-                                )
-                            }
-
-                            // Chat Screen
-                            composable(Screen.Chat.route) {
-                                if (database != null) {
-                                    ChatScreen(
-                                        onBackClick = { navController.navigateUp() },
-                                        onHistoryClick = { navController.navigate(Screen.History.route) },
-                                        onEcoStatsClick = { navController.navigate(Screen.EcoStats.route) },
-                                        aiEngine = aiEngine,
-                                        database = database!!
-                                    )
-                                }
-                            }
-
-                            // History Screen
-                            composable(Screen.History.route) {
-                                if (database != null) {
-                                    HistoryScreen(
-                                        database = database!!,
-                                        projectId = "default",
-                                        onBackClick = { navController.navigateUp() },
-                                        onConversationClick = { conversationId ->
-                                            navController.navigate("conversation/$conversationId")
-                                        }
-                                    )
-                                }
-                            }
-
-                            // Eco Stats Screen
-                            composable(Screen.EcoStats.route) {
-                                if (database != null) {
-                                    EcoStatsScreen(
-                                        database = database!!,
-                                        projectId = "default",
-                                        onBackClick = { navController.navigateUp() }
-                                    )
-                                }
-                            }
-
-                            // Settings Screen
-                            composable(Screen.Settings.route) {
-                                app.m1k3.ai.assistant.ui.SettingsScreen()
-                            }
-
-                            // Conversation Detail Screen
-                            composable(
-                                route = Screen.ConversationDetail.route,
-                                arguments = listOf(
-                                    navArgument(Screen.ConversationDetail.argConversationId) {
-                                        type = NavType.LongType
-                                    }
-                                )
-                            ) { backStackEntry ->
-                                val conversationId = backStackEntry.arguments?.getLong(
-                                    Screen.ConversationDetail.argConversationId
-                                ) ?: 0L
-
-                                // TODO: Create ConversationDetailScreen in Phase 3
-                                Box(
-                                    modifier = Modifier.fillMaxSize(),
-                                    contentAlignment = Alignment.Center
+                                NavHost(
+                                    navController = navController,
+                                    startDestination = Screen.Chat.route,
+                                    modifier = Modifier.padding(paddingValues)
                                 ) {
-                                    Column(
-                                        horizontalAlignment = Alignment.CenterHorizontally,
-                                        verticalArrangement = Arrangement.spacedBy(16.dp)
-                                    ) {
-                                        Text(
-                                            "Conversation Detail",
-                                            style = MaterialTheme.typography.headlineMedium
+                                // Demo Screen
+                                composable(Screen.Demo.route) {
+                                    MaAIDemo(
+                                        onChatClick = { navController.navigate(Screen.Chat.route) },
+                                        knowledgeStatus = knowledgeImportStatus
+                                    )
+                                }
+
+                                // Chat Screen
+                                composable(Screen.Chat.route) {
+                                    if (database != null) {
+                                        ChatScreen(
+                                            onBackClick = { navController.navigateUp() },
+                                            onHistoryClick = { navController.navigate(Screen.History.route) },
+                                            onEcoStatsClick = { navController.navigate(Screen.EcoStats.route) },
+                                            aiEngine = aiEngine,
+                                            database = database!!
                                         )
-                                        Text("ID: $conversationId")
-                                        TextButton(onClick = { navController.navigateUp() }) {
-                                            Text("← Back")
+                                    }
+                                }
+
+                                // History Screen
+                                composable(Screen.History.route) {
+                                    if (database != null) {
+                                        HistoryScreen(
+                                            database = database!!,
+                                            projectId = "default",
+                                            onBackClick = { navController.navigateUp() },
+                                            onConversationClick = { conversationId ->
+                                                navController.navigate("conversation/$conversationId")
+                                            }
+                                        )
+                                    }
+                                }
+
+                                // Eco Stats Screen
+                                composable(Screen.EcoStats.route) {
+                                    if (database != null) {
+                                        EcoStatsScreen(
+                                            database = database!!,
+                                            projectId = "default",
+                                            onBackClick = { navController.navigateUp() }
+                                        )
+                                    }
+                                }
+
+                                // Settings Screen
+                                composable(Screen.Settings.route) {
+                                    app.m1k3.ai.assistant.ui.SettingsScreen()
+                                }
+
+                                // Conversation Detail Screen
+                                composable(
+                                    route = Screen.ConversationDetail.route,
+                                    arguments = listOf(
+                                        navArgument(Screen.ConversationDetail.argConversationId) {
+                                            type = NavType.LongType
+                                        }
+                                    )
+                                ) { backStackEntry ->
+                                    val conversationId = backStackEntry.arguments?.getLong(
+                                        Screen.ConversationDetail.argConversationId
+                                    ) ?: 0L
+
+                                    // TODO: Create ConversationDetailScreen in Phase 3
+                                    Box(
+                                        modifier = Modifier.fillMaxSize(),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Column(
+                                            horizontalAlignment = Alignment.CenterHorizontally,
+                                            verticalArrangement = Arrangement.spacedBy(16.dp)
+                                        ) {
+                                            Text(
+                                                "Conversation Detail",
+                                                style = MaterialTheme.typography.headlineMedium
+                                            )
+                                            Text("ID: $conversationId")
+                                            TextButton(onClick = { navController.navigateUp() }) {
+                                                Text("← Back")
+                                            }
                                         }
                                     }
                                 }
                             }
-                        }
-                    }
                         }
                     }
                 }
             }
         }
+    }
+    }
     }
 
     override fun onDestroy() {
@@ -408,6 +400,18 @@ class MainActivity : ComponentActivity() {
         }
         super.onDestroy()
     }
+}
+
+/**
+ * Helper to get screen name from route for UnifiedToolbar
+ */
+private fun getScreenName(route: String?): String = when (route) {
+    Screen.Chat.route -> "Chat"
+    Screen.History.route -> "History"
+    Screen.EcoStats.route -> "Environmental Impact"
+    Screen.Settings.route -> "Settings"
+    Screen.Demo.route -> "Welcome"
+    else -> "M1K3"
 }
 
 @OptIn(ExperimentalMaterial3Api::class)

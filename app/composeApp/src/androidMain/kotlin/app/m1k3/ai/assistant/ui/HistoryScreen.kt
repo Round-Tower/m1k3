@@ -67,22 +67,7 @@ fun HistoryScreen(
     var showDeleteDialog by remember { mutableStateOf<Long?>(null) }
     var showExportDialog by remember { mutableStateOf<Long?>(null) }
 
-    Scaffold(
-        topBar = {
-            HistoryTopBar(
-                conversationCount = state.conversations.size,
-                onBackClick = {
-                    haptics.performHapticFeedback(HapticFeedbackType.LIGHT)
-                    onBackClick()
-                }
-            )
-        }
-    ) { paddingValues ->
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
-        ) {
+    Box(modifier = Modifier.fillMaxSize()) {
             Column(
                 modifier = Modifier
                     .fillMaxSize()
@@ -145,7 +130,6 @@ fun HistoryScreen(
                     onDismiss = { showExportDialog = null }
                 )
             }
-        }
     }
 }
 

@@ -65,43 +65,40 @@ fun EcoStatsScreen(
         projectId?.let { viewModel.loadProjectStats(it) }
     }
 
-    Scaffold(
-        topBar = {
-            EcoStatsTopBar(
-                onBackClick = {
-                    haptics.performHapticFeedback(HapticFeedbackType.LIGHT)
-                    onBackClick()
-                },
-                onRefreshClick = {
-                    haptics.performHapticFeedback(HapticFeedbackType.LIGHT)
-                    scope.launch {
-                        viewModel.loadLifetimeStats()
-                        projectId?.let { viewModel.loadProjectStats(it) }
-                    }
-                }
+    Box(
+        modifier = Modifier.fillMaxSize()
+    ) {
+        if (state.isLoading) {
+            // Loading indicator
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                CircularProgressIndicator(color = MaColors.Orange)
+            }
+        } else {
+            EcoStatsContent(
+                state = state,
+                projectId = projectId,
+                onClearError = { viewModel.clearError() }
             )
         }
-    ) { paddingValues ->
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
-        ) {
-            if (state.isLoading) {
-                // Loading indicator
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    CircularProgressIndicator(color = MaColors.Orange)
+
+        // Floating Action Button for refresh
+        FloatingActionButton(
+            onClick = {
+                haptics.performHapticFeedback(HapticFeedbackType.LIGHT)
+                scope.launch {
+                    viewModel.loadLifetimeStats()
+                    projectId?.let { viewModel.loadProjectStats(it) }
                 }
-            } else {
-                EcoStatsContent(
-                    state = state,
-                    projectId = projectId,
-                    onClearError = { viewModel.clearError() }
-                )
-            }
+            },
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(16.dp),
+            containerColor = MaColors.Orange
+        ) {
+            Icon(Icons.Filled.Refresh, contentDescription = "Refresh stats")
         }
     }
 }

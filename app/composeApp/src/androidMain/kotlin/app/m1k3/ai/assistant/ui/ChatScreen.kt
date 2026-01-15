@@ -21,8 +21,9 @@ import app.m1k3.ai.assistant.design.components.*
 import app.m1k3.ai.assistant.design.tokens.*
 import app.m1k3.ai.assistant.design.theme.MaTheme
 import app.m1k3.ai.assistant.embedding.rememberEmbeddingsViewModel
-import app.m1k3.ai.assistant.ui.components.ChatHeader
 import app.m1k3.ai.assistant.ui.components.ChatInputBar
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.Icons
 import app.m1k3.ai.assistant.ui.components.ChatInputBarContainer
 import app.m1k3.ai.assistant.ui.components.ChatMessageList
 import app.m1k3.ai.assistant.ui.components.ContextWindowIndicator
@@ -63,9 +64,9 @@ fun ChatScreen(
     val scope = rememberCoroutineScope()
     val listState = rememberLazyListState()
 
-    // Avatar state management
-    val avatarVM = rememberAvatarViewModel()
-    val avatarState by avatarVM.collectAsState()
+    // Avatar state management - use shared app-level ViewModel from CompositionLocal
+    val avatarVM = LocalSharedAvatarVM.current
+    val avatarState by avatarVM?.collectAsState() ?: remember { mutableStateOf(AvatarState()) }
 
     // Embeddings for RAG (Phase 3)
     val embeddingsVM = rememberEmbeddingsViewModel()
@@ -81,22 +82,24 @@ fun ChatScreen(
     val uiState by viewModel.collectAsState()
 
     // Sync avatar with generation state
-    LaunchedEffect(uiState.generationState) {
-        when (uiState.generationState) {
-            is GenerationState.Thinking -> avatarVM.startThinking()
-            is GenerationState.Streaming -> avatarVM.startSpeaking()
-            is GenerationState.Complete -> {
-                val complete = uiState.generationState as GenerationState.Complete
-                avatarVM.processMessage(complete.finalText, isUserMessage = false)
-                kotlinx.coroutines.delay(2000)
-                avatarVM.returnToIdle()
+    if (avatarVM != null) {
+        LaunchedEffect(uiState.generationState) {
+            when (uiState.generationState) {
+                is GenerationState.Thinking -> avatarVM.startThinking()
+                is GenerationState.Streaming -> avatarVM.startSpeaking()
+                is GenerationState.Complete -> {
+                    val complete = uiState.generationState as GenerationState.Complete
+                    avatarVM.processMessage(complete.finalText, isUserMessage = false)
+                    kotlinx.coroutines.delay(2000)
+                    avatarVM.returnToIdle()
+                }
+                is GenerationState.Failed -> {
+                    avatarVM.showError("Generation failed")
+                    kotlinx.coroutines.delay(2000)
+                    avatarVM.returnToIdle()
+                }
+                else -> {}
             }
-            is GenerationState.Failed -> {
-                avatarVM.showError("Generation failed")
-                kotlinx.coroutines.delay(2000)
-                avatarVM.returnToIdle()
-            }
-            else -> {}
         }
     }
 
@@ -143,16 +146,6 @@ fun ChatScreen(
             )
         }
 
-        // Top overlay: Toolbar with blur and gradient
-        ChatHeader(
-            engineInitialized = uiState.engineState.isReady,
-            avatarState = avatarState,
-            onNewChatClick = { viewModel.clearConversation() },
-            modifier = Modifier
-                .fillMaxWidth()
-                .align(Alignment.TopCenter)
-        )
-
         // Bottom overlay: Input bar with gradient
         ChatInputBarContainer(
             inputBar = {
@@ -161,7 +154,7 @@ fun ChatScreen(
                     onTextChange = { viewModel.updateInputText(it) },
                     onSend = {
                         // Process avatar emotion from user message
-                        avatarVM.processMessage(uiState.inputText, isUserMessage = true)
+                        avatarVM?.processMessage(uiState.inputText, isUserMessage = true)
                         viewModel.sendMessage()
                     },
                     enabled = uiState.isInputEnabled
@@ -176,6 +169,17 @@ fun ChatScreen(
                 error = error,
                 onDismiss = { viewModel.clearError() }
             )
+        }
+
+        // Floating Action Button for new chat
+        FloatingActionButton(
+            onClick = { viewModel.clearConversation() },
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(16.dp),
+            containerColor = MaColors.Orange
+        ) {
+            Icon(Icons.Filled.Add, contentDescription = "New chat")
         }
     }
 }
@@ -271,14 +275,6 @@ private fun ChatScreenEmptyPreview() {
                 )
             }
 
-            ChatHeader(
-                engineInitialized = true,
-                avatarState = AvatarState(),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .align(Alignment.TopCenter)
-            )
-
             ChatInputBarContainer(
                 inputBar = {
                     ChatInputBar(
@@ -323,14 +319,6 @@ private fun ChatScreenWithMessagesPreview() {
                     showEcoIndicator = true
                 )
             }
-
-            ChatHeader(
-                engineInitialized = true,
-                avatarState = AvatarState(emotion = AvatarEmotion.HAPPY),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .align(Alignment.TopCenter)
-            )
 
             ChatInputBarContainer(
                 inputBar = {
@@ -379,17 +367,6 @@ private fun ChatScreenGeneratingPreview() {
                     showEcoIndicator = false
                 )
             }
-
-            ChatHeader(
-                engineInitialized = true,
-                avatarState = AvatarState(
-                    emotion = AvatarEmotion.THINKING,
-                    activity = AvatarActivity.GENERATING
-                ),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .align(Alignment.TopCenter)
-            )
 
             ChatInputBarContainer(
                 inputBar = {
