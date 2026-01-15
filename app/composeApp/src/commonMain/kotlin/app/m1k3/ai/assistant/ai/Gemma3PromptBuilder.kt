@@ -41,7 +41,7 @@ object Gemma3PromptBuilder {
         userQuery: String,
         context: String? = null
     ): String = buildString {
-//        append(BOS)
+        append(BOS)
         append(START_USER)
 
         // RAG facts FIRST (so model sees context before question)
@@ -82,7 +82,7 @@ object Gemma3PromptBuilder {
         context: String? = null,
         instruction: String
     ): String = buildString {
-//        append(BOS)
+        append(BOS)
         append(START_USER)
 
         // Instruction first
@@ -112,7 +112,8 @@ object Gemma3PromptBuilder {
      * @return true if prompt has valid Gemma 3 format
      */
     fun isValidFormat(prompt: String): Boolean {
-        return prompt.contains(START_USER) &&
+        return prompt.startsWith(BOS) &&
+                prompt.contains(START_USER) &&
                 prompt.contains(END_TURN) &&
                 prompt.endsWith(START_MODEL) &&
                 !prompt.contains("<start_of_turn>system") // Gemma 3 has NO system role!

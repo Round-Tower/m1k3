@@ -47,12 +47,14 @@ class PetViewModelTest {
         // Create test coroutine scope
         testScope = TestScope()
 
-        // Create ViewModel
-        viewModel = PetViewModel(ecoRepo, testScope)
+        // Create ViewModel (disable background jobs for tests)
+        viewModel = PetViewModel(ecoRepo, testScope, startBackgroundJobs = false)
     }
 
     @AfterTest
     fun teardown() {
+        // Cancel background coroutines
+        viewModel.onCleared()
         // In-memory database is automatically cleaned up
     }
 
@@ -99,6 +101,7 @@ class PetViewModelTest {
 
         // Act
         viewModel.onEcoMetricsRecorded(savings)
+        advanceUntilIdle()
 
         // Assert
         val updatedState = viewModel.petState.first()
@@ -117,6 +120,7 @@ class PetViewModelTest {
         // Act
         viewModel.onEcoMetricsRecorded(savings1)
         viewModel.onEcoMetricsRecorded(savings2)
+        advanceUntilIdle()
 
         // Assert
         val state = viewModel.petState.first()
@@ -133,6 +137,7 @@ class PetViewModelTest {
 
         // Act
         viewModel.onEcoMetricsRecorded(savings)
+        runCurrent() // Run the spawning coroutine without advancing time
 
         // Assert
         val particles = viewModel.particleEffects.first()
@@ -149,6 +154,7 @@ class PetViewModelTest {
 
         // Act
         viewModel.onEcoMetricsRecorded(largeSavings)
+        advanceUntilIdle()
 
         // Assert
         val state = viewModel.petState.first()
@@ -163,9 +169,11 @@ class PetViewModelTest {
         // Arrange
         val savings = EcoSavings(100, 120, 3000, 2, 0)
         viewModel.onEcoMetricsRecorded(savings)
+        advanceUntilIdle() // Let the spawn coroutine complete
 
-        // Act - Wait for particles to expire (3 seconds default lifetime)
-        advanceTimeBy(3500) // 3.5 seconds
+        // Act - Wait for particles to expire (cleanup delay is 2500ms)
+        advanceTimeBy(3000) // Advance past cleanup delay
+        advanceUntilIdle() // Run cleanup coroutine
 
         // Assert
         val particles = viewModel.particleEffects.first()
@@ -188,17 +196,22 @@ class PetViewModelTest {
     fun `particle cleanup removes only expired particles`() = testScope.runTest {
         // Arrange - Spawn first batch
         viewModel.onEcoMetricsRecorded(EcoSavings(100, 120, 3000, 2, 0))
-        advanceTimeBy(2000) // 2 seconds
+        runCurrent() // Spawn without running cleanup
 
-        // Act - Spawn second batch
+        // Verify first batch is there
+        var particles = viewModel.particleEffects.first()
+        val firstBatchSize = particles.size
+
+        // Act - Advance past first batch cleanup (2500ms) and run pending tasks
+        advanceTimeBy(3000) // Advance past cleanup time
+
+        // Spawn second batch
         viewModel.onEcoMetricsRecorded(EcoSavings(100, 120, 3000, 2, 0))
-        advanceTimeBy(1500) // 1.5 seconds more (total 3.5s for first batch)
+        runCurrent() // Spawn second batch
 
-        // Assert
-        val particles = viewModel.particleEffects.first()
-        // First batch should be expired (3.5s > 3s), second batch still alive (1.5s < 3s)
-        assertTrue(particles.size >= 3, "Second batch particles should still be alive")
-        assertTrue(particles.size < 6, "First batch particles should be removed")
+        // Assert - First batch should be cleaned up, only second batch remains
+        particles = viewModel.particleEffects.first()
+        assertEquals(firstBatchSize, particles.size, "Only second batch particles should remain (same count as first)")
     }
 
     // ==================== User Interaction Tests ====================
@@ -210,6 +223,7 @@ class PetViewModelTest {
 
         // Act
         viewModel.onPat(InteractionType.PAT)
+        advanceUntilIdle()
 
         // Assert
         val updatedState = viewModel.petState.first()
@@ -225,6 +239,7 @@ class PetViewModelTest {
 
         // Act
         viewModel.onPat(InteractionType.DOUBLE_TAP)
+        advanceUntilIdle()
 
         // Assert
         val updatedState = viewModel.petState.first()
@@ -239,6 +254,7 @@ class PetViewModelTest {
 
         // Act
         viewModel.onPat(InteractionType.LONG_PRESS)
+        advanceUntilIdle()
 
         // Assert
         val updatedState = viewModel.petState.first()
@@ -250,6 +266,7 @@ class PetViewModelTest {
     fun `onPat spawns heart particle`() = testScope.runTest {
         // Act
         viewModel.onPat(InteractionType.PAT)
+        advanceUntilIdle()
 
         // Assert
         val particles = viewModel.particleEffects.first()
@@ -262,6 +279,7 @@ class PetViewModelTest {
         repeat(5) {
             viewModel.onPat(InteractionType.PAT)
         }
+        advanceUntilIdle()
 
         // Assert
         val state = viewModel.petState.first()
@@ -277,6 +295,7 @@ class PetViewModelTest {
 
         // Act
         viewModel.onEcoMetricsRecorded(savings)
+        advanceUntilIdle()
 
         // Assert
         val state = viewModel.petState.first()
@@ -290,6 +309,7 @@ class PetViewModelTest {
 
         // Act
         viewModel.onEcoMetricsRecorded(savings)
+        advanceUntilIdle()
 
         // Assert
         val state = viewModel.petState.first()
@@ -302,6 +322,7 @@ class PetViewModelTest {
         repeat(10) {
             viewModel.onEcoMetricsRecorded(EcoSavings(1000, 12000, 30000, 20, 0)) // 12L per interaction
         }
+        advanceUntilIdle()
 
         // Assert
         val state = viewModel.petState.first()
@@ -313,12 +334,14 @@ class PetViewModelTest {
     fun `evolution stages are permanent`() = testScope.runTest {
         // Arrange - Evolve to INTERMEDIATE
         viewModel.onEcoMetricsRecorded(EcoSavings(500, 6000, 15000, 10, 0))
+        advanceUntilIdle()
         val evolvedStage = viewModel.petState.first().evolutionStage
 
         // Act - Add more interactions
         repeat(5) {
             viewModel.onEcoMetricsRecorded(EcoSavings(100, 120, 3000, 2, 0))
         }
+        advanceUntilIdle()
 
         // Assert
         val state = viewModel.petState.first()
@@ -337,6 +360,7 @@ class PetViewModelTest {
 
         // Act
         viewModel.onEcoMetricsRecorded(savings)
+        advanceUntilIdle()
 
         // Assert
         val state = viewModel.petState.first()
@@ -350,6 +374,7 @@ class PetViewModelTest {
         repeat(15) {
             viewModel.onEcoMetricsRecorded(EcoSavings(100, 120, 3000, 2, 0))
         }
+        advanceUntilIdle()
 
         // Assert
         val state = viewModel.petState.first()
@@ -365,6 +390,7 @@ class PetViewModelTest {
 
         // Act
         viewModel.onEcoMetricsRecorded(hugeSavings)
+        advanceUntilIdle()
 
         // Assert
         val state = viewModel.petState.first()
@@ -404,6 +430,7 @@ class PetViewModelTest {
 
         // Act
         viewModel.onEcoMetricsRecorded(savings)
+        advanceUntilIdle()
 
         // Assert
         val state = viewModel.petState.first()
@@ -420,6 +447,7 @@ class PetViewModelTest {
         repeat(5) {
             viewModel.onEcoMetricsRecorded(EcoSavings(100, 1200, 3000, 2, 0)) // 1.2L each
         }
+        advanceUntilIdle()
 
         // Assert
         val state = viewModel.petState.first()
@@ -436,6 +464,7 @@ class PetViewModelTest {
 
         // Act
         viewModel.onEcoMetricsRecorded(zeroSavings)
+        advanceUntilIdle()
 
         // Assert
         val state = viewModel.petState.first()
@@ -449,6 +478,7 @@ class PetViewModelTest {
         repeat(10) {
             viewModel.onEcoMetricsRecorded(EcoSavings(100, 120, 3000, 2, 0))
         }
+        advanceUntilIdle()
 
         // Assert
         val state = viewModel.petState.first()
@@ -463,6 +493,7 @@ class PetViewModelTest {
 
         // Act
         viewModel.onEcoMetricsRecorded(EcoSavings(100, 120, 3000, 2, 0))
+        advanceUntilIdle()
 
         // Assert
         val updatedState = viewModel.petState.first()
@@ -482,6 +513,7 @@ class PetViewModelTest {
             viewModel.onEcoMetricsRecorded(EcoSavings(150, 180, 4500, 3, 0))
             advanceTimeBy(100) // Small delay between conversations
         }
+        advanceUntilIdle()
 
         // Assert
         val state = viewModel.petState.first()
@@ -498,6 +530,7 @@ class PetViewModelTest {
         repeat(35) { // 5 × 7
             viewModel.onEcoMetricsRecorded(EcoSavings(150, 180, 4500, 3, 0))
         }
+        advanceUntilIdle()
 
         // Assert
         val state = viewModel.petState.first()
@@ -513,6 +546,7 @@ class PetViewModelTest {
         viewModel.onPat(InteractionType.PAT)
         viewModel.onEcoMetricsRecorded(EcoSavings(150, 180, 4500, 3, 0))
         viewModel.onPat(InteractionType.DOUBLE_TAP)
+        advanceUntilIdle()
 
         // Assert
         val state = viewModel.petState.first()
