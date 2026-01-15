@@ -9,20 +9,36 @@ import androidx.lifecycle.lifecycleScope
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material3.*
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.graphics.Color
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavType
+import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
-import app.m1k3.ai.assistant.navigation.BottomNavigationBar
+import app.m1k3.ai.assistant.navigation.SidebarMenuItem
 import app.m1k3.ai.assistant.navigation.Screen
+import app.m1k3.ai.assistant.navigation.navigateToBottomNav
+import app.m1k3.ai.assistant.navigation.sidebarItems
 import app.m1k3.ai.assistant.ai.BaseLlmEngine
 import app.m1k3.ai.assistant.ai.LlamaCppEngine
 import app.m1k3.ai.assistant.database.AndroidDatabaseFactory
@@ -32,6 +48,7 @@ import app.m1k3.ai.assistant.design.theme.MaTheme
 import app.m1k3.ai.assistant.design.components.MaButtonPrimary
 import app.m1k3.ai.assistant.design.components.MaCard
 import app.m1k3.ai.assistant.design.tokens.MaColors
+import app.m1k3.ai.assistant.design.tokens.MaRadius
 import app.m1k3.ai.assistant.design.tokens.MaSpacing
 import app.m1k3.ai.assistant.design.tokens.MaTypography
 import app.m1k3.ai.assistant.avatar.*
@@ -67,6 +84,7 @@ class MainActivity : ComponentActivity() {
     private var knowledgeImportStatus by mutableStateOf<String?>(null)
     private val logger = Logger.withTag("MainActivity")
 
+    @OptIn(ExperimentalMaterial3Api::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
@@ -128,18 +146,146 @@ class MainActivity : ComponentActivity() {
             ProvideSharedEngine {
                 MaTheme {
                     val navController = rememberNavController()
+                    var drawerOpen by remember { mutableStateOf(false) }
 
-                    Scaffold(
-                        contentWindowInsets = WindowInsets.systemBars,
-                        bottomBar = {
-                            BottomNavigationBar(navController = navController)
+                    val drawerState = rememberDrawerState(DrawerValue.Closed)
+
+                    LaunchedEffect(drawerOpen) {
+                        if (drawerOpen) {
+                            drawerState.open()
+                        } else {
+                            drawerState.close()
                         }
-                    ) { paddingValues ->
-                        NavHost(
-                            navController = navController,
-                            startDestination = Screen.Chat.route,
-                            modifier = Modifier.padding(paddingValues)
+                    }
+
+                    LaunchedEffect(drawerState.currentValue) {
+                        drawerOpen = drawerState.currentValue == DrawerValue.Open
+                    }
+
+                    val haptics = LocalHapticFeedback.current
+
+                    // Animate content offset based on drawer state
+                    val contentOffset by animateDpAsState(
+                        targetValue = if (drawerOpen) 280.dp else 0.dp,
+                        animationSpec = tween(durationMillis = 300)
+                    )
+
+                    ModalNavigationDrawer(
+                        drawerContent = {
+                            ModalDrawerSheet(
+                                modifier = Modifier
+                                    .fillMaxHeight()
+                                    .width(280.dp),
+                                drawerContainerColor = Color.Black,
+                                drawerShape = RoundedCornerShape(
+                                    topEnd = MaRadius.lg,
+                                    bottomEnd = MaRadius.lg
+                                )
+                            ) {
+                                // M1K3 Header
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(
+                                            horizontal = MaSpacing.base,
+                                            vertical = MaSpacing.lg
+                                        ),
+                                    horizontalAlignment = Alignment.Start
+                                ) {
+                                    Text(
+                                        "M1K3",
+                                        style = MaTypography.displaySmall,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaColors.Orange,
+                                        modifier = Modifier.padding(bottom = MaSpacing.sm)
+                                    )
+                                    Text(
+                                        "Privacy-First AI",
+                                        style = MaTypography.bodySmall,
+                                        color = MaColors.TextSecondary
+                                    )
+                                }
+
+                                HorizontalDivider(color = MaColors.BorderSubtle, thickness = 1.dp)
+
+                                Spacer(modifier = Modifier.height(MaSpacing.base))
+
+                                // Sidebar menu items
+                                sidebarItems.forEach { item ->
+                                    val isSelected = navController.currentBackStackEntryAsState().value?.destination?.hierarchy?.any {
+                                        it.route == item.screen.route
+                                    } == true
+
+                                    SidebarMenuItem(
+                                        icon = item.icon,
+                                        label = item.label,
+                                        isSelected = isSelected,
+                                        onClick = {
+                                            if (!isSelected) {
+                                                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                navController.navigateToBottomNav(item.screen)
+                                            }
+                                            // Auto-close drawer after selection
+                                            drawerOpen = false
+                                        },
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(horizontal = MaSpacing.base)
+                                    )
+
+                                    Spacer(modifier = Modifier.height(MaSpacing.md))
+                                }
+
+                                // Bottom spacer for visual balance
+                                Spacer(modifier = Modifier.weight(1f))
+                                Spacer(modifier = Modifier.height(MaSpacing.lg))
+                            }
+                        },
+                        scrimColor = MaColors.ScrimMedium,
+                        drawerState = drawerState
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .offset(x = contentOffset)
+                                .shadow(
+                                    elevation = if (drawerOpen) 8.dp else 0.dp,
+                                    shape = RectangleShape
+                                )
+                                .clip(RoundedCornerShape(MaRadius.lg))
                         ) {
+                            Scaffold(
+                                topBar = {
+                                TopAppBar(
+                                    title = {
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Column {
+                                                Text("M1K3", style = MaTypography.headlineSmall)
+                                                Text("Privacy-First Mobile Assistant", style = MaTypography.bodySmall)
+                                            }
+                                        }
+                                    },
+                                    navigationIcon = {
+                                        IconButton(onClick = { drawerOpen = !drawerOpen }) {
+                                            Icon(Icons.Default.Menu, contentDescription = "Menu")
+                                        }
+                                    },
+                                    colors = TopAppBarDefaults.topAppBarColors(
+                                        containerColor = MaColors.BgPrimary
+                                    )
+                                )
+                            },
+                            contentWindowInsets = WindowInsets.systemBars
+                        ) { paddingValues ->
+                            NavHost(
+                                navController = navController,
+                                startDestination = Screen.Chat.route,
+                                modifier = Modifier.padding(paddingValues)
+                            ) {
                             // Demo Screen
                             composable(Screen.Demo.route) {
                                 MaAIDemo(
@@ -244,6 +390,8 @@ class MainActivity : ComponentActivity() {
                                     }
                                 }
                             }
+                        }
+                    }
                         }
                     }
                 }
