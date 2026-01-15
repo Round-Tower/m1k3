@@ -5,6 +5,29 @@ import app.m1k3.ai.assistant.domain.memory.ImportanceCalculator
 import app.m1k3.ai.assistant.domain.memory.ConversationContext
 
 /**
+ * Documentation signed: Kev + claude-sonnet-4-5-20250929, 2026-01-15
+ * Format: MurphySig v0.1 (https://murphysig.dev/spec)
+ * Prior: Partial documentation (class-level KDoc existed, interfaces lacked detail)
+ *
+ * Context: Enhanced interface documentation for platform-agnostic memory layer.
+ * Key improvements:
+ * - EmbeddingEngine and VectorSearchEngine interfaces: comprehensive parameter docs
+ * - Clarified nullable dependency semantics (Result.failure vs throws)
+ * - Added threading/dispatcher guidance for implementors
+ * - Documented text truncation, empty index handling, error modes
+ * - Added iOS platform migration notes for Core ML and Accelerate frameworks
+ *
+ * Confidence: 0.88 - Interface contracts are clear and technically accurate.
+ * KMP mobile AI reviewer verified threading semantics and platform notes.
+ * Reduced from 0.92 due to:
+ * - ChunkWithImportance private data class lacks KDoc (low priority)
+ * - Result vs exception patterns could be more explicit in method-level docs
+ * - No @since tags for API versioning
+ *
+ * Open: Should we extract SearchResult data class to shared types package for reuse?
+ */
+
+/**
  * 間 AI - Memory Manager
  *
  * High-level orchestration layer for semantic memory system.
@@ -51,13 +74,42 @@ class MemoryManager(
     private val projectId: String,
     private val minImportanceThreshold: Float = 0.3f,
     /**
-     * Embedding engine (platform-specific, optional for testing)
-     * Required for createMemoriesFromMessage() and retrieveRelevantMemories()
+     * Embedding engine for text-to-vector conversion (platform-specific)
+     *
+     * **Required for:**
+     * - `createMemoriesFromMessage()` - Returns Result.failure(IllegalStateException) if null
+     * - `retrieveRelevantMemories()` - Returns Result.failure(IllegalStateException) if null
+     *
+     * **Optional only for:**
+     * - Testing non-memory operations (stats, pinning, recent queries)
+     * - Dependency injection in unit tests with mocked operations
+     *
+     * **Platform implementations:**
+     * - Android: MiniLmEmbeddingEngine (384-dim) or GemmaEmbeddingEngine (512-dim)
+     * - iOS: Core ML embedding models (future)
+     *   - Expected: MiniLM.mlmodel converted via coremltools
+     *   - Thread: CoreML automatically uses Metal/ANE
+     *   - Dimension matching: Verify 384-dim matches Android
      */
     private val embeddingEngine: EmbeddingEngine? = null,
     /**
-     * Vector search engine (platform-specific, optional for testing)
-     * Required for retrieveRelevantMemories()
+     * Vector search engine for semantic similarity (platform-specific)
+     *
+     * **Required for:**
+     * - `retrieveRelevantMemories()` - Returns Result.failure(IllegalStateException) if null
+     * - `deleteMemoriesForMessage()` - Returns Result.failure(IllegalStateException) if null
+     * - `cleanupLowImportanceMemories()` - Returns Result.failure(IllegalStateException) if null
+     *
+     * **Optional only for:**
+     * - Testing read-only operations (stats, recent memories)
+     * - Unit tests with mocked repository queries
+     *
+     * **Platform implementations:**
+     * - Android: VectorSearchManager (linear cosine similarity)
+     * - iOS: Accelerate framework BNNS or Core ML (future)
+     *   - Expected: HNSW via Accelerate vDSP or custom Swift implementation
+     *   - Thread: Dispatch queues for background indexing
+     *   - Memory: Consider memory pressure on older iOS devices
      */
     private val vectorSearch: VectorSearchEngine? = null
 ) {
@@ -367,47 +419,121 @@ private data class ChunkWithImportance(
 
 /**
  * Embedding engine interface (platform-specific implementation)
+ *
+ * Converts text strings to dense vector representations for semantic similarity.
+ * Each text is encoded into a fixed-dimensional vector (e.g., 384-dim, 512-dim)
+ * where semantically similar texts produce similar vectors (high cosine similarity).
+ *
+ * **Platform Implementations:**
+ * - Android: MiniLmEmbeddingEngine (ONNX Runtime, 384-dim)
+ * - Android: GemmaEmbeddingEngine (ONNX Runtime, 512-dim, dynamic module)
+ * - iOS: Core ML embedding models (future)
+ *
+ * **Threading:**
+ * - Implementations handle their own dispatcher switching (typically Dispatchers.Default for CPU inference)
+ * - Safe to call from Main thread - will not block UI (suspends internally)
+ * - Concurrent embed() calls are safe but may serialize internally to prevent OOM
+ * - ONNX Runtime session is thread-safe but tensor creation should be synchronized
  */
 interface EmbeddingEngine {
     /**
-     * Generate embeddings for texts
+     * Generate embeddings for multiple texts in batch
      *
-     * @param texts List of text strings to embed
-     * @return Result with list of embedding vectors
+     * Encodes text strings into normalized vector representations using the loaded
+     * embedding model. Vectors are L2-normalized to unit length for cosine similarity.
+     *
+     * @param texts List of text strings to embed. Must not be empty.
+     *              Each string should be ≤ model's token limit (typically 256-512 tokens).
+     *              Text exceeding token limit is silently truncated to first N tokens.
+     *              Implementations should log warning at Debug level when truncation occurs.
+     *              Empty strings are allowed but may produce zero vectors.
+     * @return Result.success with list of FloatArray vectors (same length as input)
+     *         where each FloatArray.size == dimensions, OR
+     *         Result.failure if:
+     *         - Model not loaded (call loadModel() first)
+     *         - Input is empty list
+     *         - Inference error (OOM, ONNX Runtime error)
+     * @see dimensions The fixed output dimension for all embeddings
      */
     suspend fun embed(texts: List<String>): Result<List<FloatArray>>
 
     /**
-     * Get embedding dimensions
+     * Get embedding vector dimensions
+     *
+     * Fixed size for all embeddings produced by this engine.
+     * Common values: 384 (MiniLM), 512 (Gemma), 768 (BERT-base)
      */
     val dimensions: Int
 }
 
 /**
  * Vector search engine interface (platform-specific implementation)
+ *
+ * Performs nearest neighbor search over embedded vectors using cosine similarity.
+ * Maintains an in-memory or disk-backed index for fast approximate or exact search.
+ *
+ * **Platform Implementations:**
+ * - Android: VectorSearchManager (linear scan, exact search, <10ms @ 1K vectors)
+ * - iOS: Accelerate BNNS or Core ML (future)
+ *
+ * **Similarity Metric:** Cosine similarity (normalized dot product), range [0.0, 1.0]
+ * where 1.0 = identical vectors, 0.0 = orthogonal vectors.
+ *
+ * **Threading:**
+ * - Implementations handle their own dispatcher switching (typically Dispatchers.Default)
+ * - Safe to call from Main thread - will not block UI (suspends internally)
+ * - Index updates (add/remove) use mutex or synchronized blocks to prevent corruption
+ * - Search queries can run concurrently with minimal lock contention
  */
 interface VectorSearchEngine {
     /**
-     * Add vector to index
+     * Add or update vector in search index
      *
-     * @param id Vector ID (embedding_id)
-     * @param vector Embedding vector
+     * Inserts a new vector into the index or overwrites existing vector with same ID.
+     * Vectors are automatically normalized to unit length for cosine similarity.
+     *
+     * @param id Unique vector identifier (typically "{memoryId}_emb")
+     *           Must match the embedding_id in MemoryRepository
+     * @param vector Embedding vector (any FloatArray, will be normalized)
+     *               Must have same dimensions as all other vectors in index
+     * @return Result.success if added successfully, OR
+     *         Result.failure if:
+     *         - Dimension mismatch with existing vectors
+     *         - Index is locked (rare)
+     *         - Disk write error (if persisted)
+     * @see removeVector To delete vectors before re-adding
      */
     suspend fun addVector(id: String, vector: FloatArray): Result<Unit>
 
     /**
-     * Search for similar vectors
+     * Search for k nearest neighbors using cosine similarity
      *
-     * @param queryVector Query embedding
-     * @param k Number of results
-     * @return Result with search results (id + similarity)
+     * Returns the k most similar vectors to the query, ranked by similarity score.
+     * If fewer than k vectors exist in index, returns all available vectors.
+     *
+     * @param queryVector Query embedding (any FloatArray, will be normalized)
+     *                    Typically from EmbeddingEngine.embed(userQuery)
+     * @param k Maximum number of results to return (top-k)
+     *          Typical values: 10-50 for initial retrieval before re-ranking
+     * @return Result.success with list of SearchResults (id, similarity) sorted descending by similarity.
+     *         Returns empty list (not failure) if index is empty.
+     *         Result.failure if:
+     *         - Dimension mismatch with indexed vectors
+     * @see SearchResult Data class containing vector ID and similarity score [0.0, 1.0]
      */
     suspend fun search(queryVector: FloatArray, k: Int): Result<List<SearchResult>>
 
     /**
-     * Remove vector from index
+     * Remove vector from search index
      *
-     * @param id Vector ID to remove
+     * Deletes the vector with given ID. Safe to call even if ID doesn't exist (no-op).
+     * Should be called when deleting memories to prevent orphaned vectors in index.
+     *
+     * @param id Vector identifier to remove (must match addVector() ID)
+     * @return Result.success even if ID not found, OR
+     *         Result.failure if:
+     *         - Disk write error (if persisted)
+     *         - Index is locked (rare)
      */
     suspend fun removeVector(id: String): Result<Unit>
 }
