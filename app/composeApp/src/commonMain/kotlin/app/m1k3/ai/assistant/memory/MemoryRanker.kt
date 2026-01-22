@@ -1,6 +1,7 @@
 package app.m1k3.ai.assistant.memory
 
 import app.m1k3.ai.assistant.database.MemoryMetadata
+import app.m1k3.ai.domain.repositories.VectorSearchResult
 import kotlin.math.exp
 import kotlinx.datetime.Clock
 
@@ -70,7 +71,7 @@ class MemoryRanker(
      * @return Ranked memories within token budget
      */
     fun rankAndSelect(
-        searchResults: List<SearchResult>,
+        searchResults: List<VectorSearchResult>,
         memories: List<MemoryMetadata>,
         currentTimestamp: Long = Clock.System.now().toEpochMilliseconds()
     ): MemoryRankingResult {
@@ -294,10 +295,5 @@ data class MemoryRankingResult(
     }
 }
 
-/**
- * Search result from vector search (id + similarity)
- */
-data class SearchResult(
-    val id: String,
-    val similarity: Float
-)
+// SearchResult removed - now using VectorSearchResult from domain layer
+// See: app.m1k3.ai.domain.repositories.VectorSearchResult

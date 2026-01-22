@@ -1,6 +1,7 @@
 package app.m1k3.ai.assistant.memory
 
 import app.m1k3.ai.assistant.database.MemoryMetadata
+import app.m1k3.ai.domain.repositories.VectorSearchResult
 import kotlin.test.*
 
 /**
@@ -62,7 +63,7 @@ class MemoryRankerTest {
         val memory = createMemory("mem-1", "emb-1", chunkTokens = 100)
 
         val result = ranker.rankAndSelect(
-            searchResults = listOf(SearchResult("emb-1", 0.9f)),
+            searchResults = listOf(VectorSearchResult("emb-1", 0.9f)),
             memories = listOf(memory)
         )
 
@@ -81,8 +82,8 @@ class MemoryRankerTest {
 
         val result = ranker.rankAndSelect(
             searchResults = listOf(
-                SearchResult("emb-1", 0.9f),  // High similarity
-                SearchResult("emb-2", 0.3f)   // Low similarity
+                VectorSearchResult("emb-1", 0.9f),  // High similarity
+                VectorSearchResult("emb-2", 0.3f)   // Low similarity
             ),
             memories = listOf(memory1, memory2)
         )
@@ -103,8 +104,8 @@ class MemoryRankerTest {
 
         val result = ranker.rankAndSelect(
             searchResults = listOf(
-                SearchResult("emb-1", 0.5f),
-                SearchResult("emb-2", 0.5f)
+                VectorSearchResult("emb-1", 0.5f),
+                VectorSearchResult("emb-2", 0.5f)
             ),
             memories = listOf(recentMemory, oldMemory),
             currentTimestamp = now
@@ -123,8 +124,8 @@ class MemoryRankerTest {
 
         val result = ranker.rankAndSelect(
             searchResults = listOf(
-                SearchResult("emb-1", 0.5f),
-                SearchResult("emb-2", 0.5f)
+                VectorSearchResult("emb-1", 0.5f),
+                VectorSearchResult("emb-2", 0.5f)
             ),
             memories = listOf(highImportance, lowImportance)
         )
@@ -142,8 +143,8 @@ class MemoryRankerTest {
 
         val result = ranker.rankAndSelect(
             searchResults = listOf(
-                SearchResult("emb-1", 0.5f),
-                SearchResult("emb-2", 0.5f)
+                VectorSearchResult("emb-1", 0.5f),
+                VectorSearchResult("emb-2", 0.5f)
             ),
             memories = listOf(popularMemory, unpopularMemory)
         )
@@ -159,7 +160,7 @@ class MemoryRankerTest {
         }
 
         val searchResults = (1..20).map { i ->
-            SearchResult("emb-$i", 0.5f)
+            VectorSearchResult("emb-$i", 0.5f)
         }
 
         // Budget is 1000 tokens, each memory is 100 tokens
@@ -182,9 +183,9 @@ class MemoryRankerTest {
 
         val result = ranker.rankAndSelect(
             searchResults = listOf(
-                SearchResult("emb-1", 0.9f),
-                SearchResult("emb-2", 0.8f),
-                SearchResult("emb-3", 0.7f)
+                VectorSearchResult("emb-1", 0.9f),
+                VectorSearchResult("emb-2", 0.8f),
+                VectorSearchResult("emb-3", 0.7f)
             ),
             memories = listOf(memory1, memory2, memory3)
         )
@@ -202,7 +203,7 @@ class MemoryRankerTest {
         val memory = createMemory("mem-1", "emb-1", chunkTokens = null)
 
         val result = ranker.rankAndSelect(
-            searchResults = listOf(SearchResult("emb-1", 0.9f)),
+            searchResults = listOf(VectorSearchResult("emb-1", 0.9f)),
             memories = listOf(memory)
         )
 
@@ -227,9 +228,9 @@ class MemoryRankerTest {
 
         val result = ranker.rankAndSelect(
             searchResults = listOf(
-                SearchResult("emb-1", 0.9f),
-                SearchResult("emb-2", 0.8f),
-                SearchResult("emb-3", 0.7f)
+                VectorSearchResult("emb-1", 0.9f),
+                VectorSearchResult("emb-2", 0.8f),
+                VectorSearchResult("emb-3", 0.7f)
             ),
             memories = listOf(memory1, memory2, memory3)
         )
@@ -253,8 +254,8 @@ class MemoryRankerTest {
 
         val result = ranker.rankAndSelect(
             searchResults = listOf(
-                SearchResult("emb-1", 0.9f),
-                SearchResult("emb-2", 0.8f)
+                VectorSearchResult("emb-1", 0.9f),
+                VectorSearchResult("emb-2", 0.8f)
             ),
             memories = listOf(memory1, memory2)
         )
@@ -282,7 +283,7 @@ class MemoryRankerTest {
         val memory = createMemory("mem-1", "emb-1")
 
         val result = ranker.rankAndSelect(
-            searchResults = listOf(SearchResult("emb-1", 0.9f)),
+            searchResults = listOf(VectorSearchResult("emb-1", 0.9f)),
             memories = listOf(memory)
         )
 
@@ -296,8 +297,8 @@ class MemoryRankerTest {
 
         val result = ranker.rankAndSelect(
             searchResults = listOf(
-                SearchResult("emb-1", 0.9f),
-                SearchResult("emb-2", 0.8f)
+                VectorSearchResult("emb-1", 0.9f),
+                VectorSearchResult("emb-2", 0.8f)
             ),
             memories = listOf(memory1, memory2)
         )
@@ -330,8 +331,8 @@ class MemoryRankerTest {
 
         val result = ranker.rankAndSelect(
             searchResults = listOf(
-                SearchResult("emb-1", 0.95f),  // Very high similarity
-                SearchResult("emb-2", 0.60f)   // Medium similarity
+                VectorSearchResult("emb-1", 0.95f),  // Very high similarity
+                VectorSearchResult("emb-2", 0.60f)   // Medium similarity
             ),
             memories = listOf(mem1, mem2),
             currentTimestamp = now
@@ -356,7 +357,7 @@ class MemoryRankerTest {
 
         val result = ranker.rankAndSelect(
             searchResults = listOf(
-                SearchResult("emb-NONEXISTENT", 0.9f)  // No matching memory
+                VectorSearchResult("emb-NONEXISTENT", 0.9f)  // No matching memory
             ),
             memories = listOf(memory)
         )

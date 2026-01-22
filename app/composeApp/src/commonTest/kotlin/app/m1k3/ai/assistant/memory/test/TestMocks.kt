@@ -1,8 +1,9 @@
 package app.m1k3.ai.assistant.memory.test
 
 import app.m1k3.ai.domain.repositories.EmbeddingRepository
-import app.m1k3.ai.assistant.memory.SearchResult
-import app.m1k3.ai.assistant.memory.VectorSearchEngine
+import app.m1k3.ai.domain.repositories.VectorSearchRepository
+import app.m1k3.ai.domain.repositories.VectorSearchResult
+import app.m1k3.ai.domain.repositories.VectorIndexStats
 
 /**
  * Shared test utilities for Phase 2 Memory System tests.
@@ -68,7 +69,7 @@ class MockEmbeddingRepository(
 }
 
 /**
- * Mock vector search engine with configurable search results.
+ * Mock vector search repository with configurable search results.
  *
  * **Behavior:**
  * - Stores vectors in memory (HashMap)
@@ -80,22 +81,22 @@ class MockEmbeddingRepository(
  * ```kotlin
  * val mockSearch = MockVectorSearchEngine()
  * mockSearch.setSearchResults(listOf(
- *     SearchResult("mem-1", 0.95f),
- *     SearchResult("mem-2", 0.80f)
+ *     VectorSearchResult("mem-1", 0.95f),
+ *     VectorSearchResult("mem-2", 0.80f)
  * ))
- * val memoryManager = MemoryManager(..., vectorSearch = mockSearch)
+ * val memoryManager = MemoryManager(..., vectorSearchRepository = mockSearch)
  * ```
  */
-class MockVectorSearchEngine : VectorSearchEngine {
+class MockVectorSearchEngine : VectorSearchRepository {
     private val vectors = mutableMapOf<String, FloatArray>()
-    private var searchResults: List<SearchResult>? = null
+    private var searchResults: List<VectorSearchResult>? = null
 
     /**
      * Configure search results to return for next search() call.
      *
-     * @param results List of SearchResult with memory IDs and similarity scores
+     * @param results List of VectorSearchResult with memory IDs and similarity scores
      */
-    fun setSearchResults(results: List<SearchResult>) {
+    fun setSearchResults(results: List<VectorSearchResult>) {
         searchResults = results
     }
 
@@ -116,10 +117,10 @@ class MockVectorSearchEngine : VectorSearchEngine {
         return Result.success(Unit)
     }
 
-    override suspend fun search(queryVector: FloatArray, k: Int): Result<List<SearchResult>> {
+    override suspend fun search(queryVector: FloatArray, k: Int): Result<List<VectorSearchResult>> {
         // Return pre-configured results if set, otherwise return all vectors
         val results = searchResults ?: vectors.keys.sorted().take(k).map { id ->
-            SearchResult(id, 0.9f)  // Dummy high similarity
+            VectorSearchResult(id, 0.9f)  // Dummy high similarity
         }
         return Result.success(results.take(k))
     }
@@ -127,6 +128,14 @@ class MockVectorSearchEngine : VectorSearchEngine {
     override suspend fun removeVector(id: String): Result<Unit> {
         vectors.remove(id)
         return Result.success(Unit)
+    }
+
+    override fun getStats(): VectorIndexStats {
+        return VectorIndexStats(
+            vectorCount = vectors.size,
+            dimensions = 384,  // Default test dimensions
+            indexType = "mock"
+        )
     }
 }
 
@@ -199,7 +208,7 @@ class DeterministicEmbeddingRepository(
 }
 
 /**
- * Deterministic vector search engine with configurable search results.
+ * Deterministic vector search repository with configurable search results.
  *
  * **Behavior:**
  * - Stores vectors internally
@@ -210,21 +219,21 @@ class DeterministicEmbeddingRepository(
  * ```kotlin
  * val engine = DeterministicVectorSearchEngine()
  * engine.setSearchResults(listOf(
- *     SearchResult("mem-paris", 0.95f),      // Relevant
- *     SearchResult("mem-python", 0.60f)      // Not relevant
+ *     VectorSearchResult("mem-paris_emb", 0.95f),      // Relevant
+ *     VectorSearchResult("mem-python_emb", 0.60f)      // Not relevant
  * ))
  * ```
  *
  * Used in MemoryRetrievalQualityTest to validate precision/recall metrics.
  */
-class DeterministicVectorSearchEngine : VectorSearchEngine {
+class DeterministicVectorSearchEngine : VectorSearchRepository {
     private val vectors = mutableMapOf<String, FloatArray>()
-    private var searchResults: List<SearchResult>? = null
+    private var searchResults: List<VectorSearchResult>? = null
 
     /**
      * Configure search results to return for next search() call.
      */
-    fun setSearchResults(results: List<SearchResult>) {
+    fun setSearchResults(results: List<VectorSearchResult>) {
         searchResults = results
     }
 
@@ -240,10 +249,10 @@ class DeterministicVectorSearchEngine : VectorSearchEngine {
         return Result.success(Unit)
     }
 
-    override suspend fun search(queryVector: FloatArray, k: Int): Result<List<SearchResult>> {
+    override suspend fun search(queryVector: FloatArray, k: Int): Result<List<VectorSearchResult>> {
         // Return pre-configured results if set, otherwise return all
         val results = searchResults ?: vectors.keys.map { id ->
-            SearchResult(id, 0.8f)
+            VectorSearchResult(id, 0.8f)
         }
         return Result.success(results.take(k))
     }
@@ -251,5 +260,13 @@ class DeterministicVectorSearchEngine : VectorSearchEngine {
     override suspend fun removeVector(id: String): Result<Unit> {
         vectors.remove(id)
         return Result.success(Unit)
+    }
+
+    override fun getStats(): VectorIndexStats {
+        return VectorIndexStats(
+            vectorCount = vectors.size,
+            dimensions = 384,
+            indexType = "deterministic-mock"
+        )
     }
 }

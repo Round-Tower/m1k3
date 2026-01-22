@@ -7,6 +7,7 @@ import app.m1k3.ai.domain.memory.services.SemanticChunker
 import app.m1k3.ai.assistant.memory.test.MockEmbeddingRepository
 import app.m1k3.ai.assistant.memory.test.MockVectorSearchEngine
 import app.m1k3.ai.assistant.test.TestDatabaseFactory
+import app.m1k3.ai.domain.repositories.VectorSearchResult
 import kotlinx.coroutines.test.runTest
 import kotlin.test.*
 
@@ -91,7 +92,7 @@ class MemoryIntegrationTest {
             projectId = "test-project",
             minImportanceThreshold = 0.3f,
             embeddingRepository = mockEmbeddingRepository,
-            vectorSearch = mockVectorSearch
+            vectorSearchRepository = mockVectorSearch
         )
 
         // Create test project
@@ -161,7 +162,7 @@ class MemoryIntegrationTest {
         // Configure mock to return stored memories with similarity scores
         mockVectorSearch.setSearchResults(
             storedMemories.map { memory ->
-                SearchResult(memory.embedding_id, 0.8f) // High similarity
+                VectorSearchResult(memory.embedding_id, 0.8f) // High similarity
             }
         )
 
@@ -337,7 +338,7 @@ class MemoryIntegrationTest {
         // Perform some retrievals to increment access count
         mockVectorSearch.setSearchResults(
             repository.getMemoriesForProject("test-project").take(3).map { memory ->
-                SearchResult(memory.embedding_id, 0.9f)
+                VectorSearchResult(memory.embedding_id, 0.9f)
             }
         )
 

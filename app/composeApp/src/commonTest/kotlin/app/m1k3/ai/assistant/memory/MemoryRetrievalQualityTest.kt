@@ -8,6 +8,7 @@ import app.m1k3.ai.domain.memory.services.SemanticChunker
 import app.m1k3.ai.assistant.memory.test.DeterministicEmbeddingRepository
 import app.m1k3.ai.assistant.memory.test.DeterministicVectorSearchEngine
 import app.m1k3.ai.assistant.test.TestDatabaseFactory
+import app.m1k3.ai.domain.repositories.VectorSearchResult
 import kotlinx.coroutines.test.runTest
 import kotlin.test.*
 
@@ -69,7 +70,7 @@ class MemoryRetrievalQualityTest {
             projectId = "test-project",
             minImportanceThreshold = 0.3f,
             embeddingRepository = mockEmbeddingRepository,
-            vectorSearch = mockVectorSearch
+            vectorSearchRepository = mockVectorSearch
         )
 
         // Create test project
@@ -108,13 +109,13 @@ class MemoryRetrievalQualityTest {
         // Dataset has 5 France memories, so return them + 2 tech (to test filtering)
         mockVectorSearch.setSearchResults(
             listOf(
-                SearchResult("mem-paris_emb", 0.95f),      // Relevant
-                SearchResult("mem-eiffel_emb", 0.90f),     // Relevant
-                SearchResult("mem-french_emb", 0.85f),     // Relevant
-                SearchResult("mem-louvre_emb", 0.80f),     // Relevant
-                SearchResult("mem-provence_emb", 0.75f),   // Relevant
-                SearchResult("mem-python_emb", 0.60f),     // Not relevant (to test filtering)
-                SearchResult("mem-kotlin_emb", 0.55f)      // Not relevant (to test filtering)
+                VectorSearchResult("mem-paris_emb", 0.95f),      // Relevant
+                VectorSearchResult("mem-eiffel_emb", 0.90f),     // Relevant
+                VectorSearchResult("mem-french_emb", 0.85f),     // Relevant
+                VectorSearchResult("mem-louvre_emb", 0.80f),     // Relevant
+                VectorSearchResult("mem-provence_emb", 0.75f),   // Relevant
+                VectorSearchResult("mem-python_emb", 0.60f),     // Not relevant (to test filtering)
+                VectorSearchResult("mem-kotlin_emb", 0.55f)      // Not relevant (to test filtering)
             )
         )
 
@@ -151,13 +152,13 @@ class MemoryRetrievalQualityTest {
         // Configure mock to return all France-related memories
         mockVectorSearch.setSearchResults(
             listOf(
-                SearchResult("mem-paris_emb", 0.95f),
-                SearchResult("mem-eiffel_emb", 0.90f),
-                SearchResult("mem-french_emb", 0.85f),
-                SearchResult("mem-louvre_emb", 0.80f),
-                SearchResult("mem-provence_emb", 0.75f),
-                SearchResult("mem-python_emb", 0.60f),
-                SearchResult("mem-soccer_emb", 0.55f)
+                VectorSearchResult("mem-paris_emb", 0.95f),
+                VectorSearchResult("mem-eiffel_emb", 0.90f),
+                VectorSearchResult("mem-french_emb", 0.85f),
+                VectorSearchResult("mem-louvre_emb", 0.80f),
+                VectorSearchResult("mem-provence_emb", 0.75f),
+                VectorSearchResult("mem-python_emb", 0.60f),
+                VectorSearchResult("mem-soccer_emb", 0.55f)
             )
         )
 
@@ -189,11 +190,11 @@ class MemoryRetrievalQualityTest {
 
         mockVectorSearch.setSearchResults(
             listOf(
-                SearchResult("mem-python_emb", 0.95f),     // Highly relevant
-                SearchResult("mem-kotlin_emb", 0.90f),     // Highly relevant
-                SearchResult("mem-react_emb", 0.85f),      // Highly relevant
-                SearchResult("mem-tennis_emb", 0.50f),
-                SearchResult("mem-paris_emb", 0.45f)
+                VectorSearchResult("mem-python_emb", 0.95f),     // Highly relevant
+                VectorSearchResult("mem-kotlin_emb", 0.90f),     // Highly relevant
+                VectorSearchResult("mem-react_emb", 0.85f),      // Highly relevant
+                VectorSearchResult("mem-tennis_emb", 0.50f),
+                VectorSearchResult("mem-paris_emb", 0.45f)
             )
         )
 
@@ -229,7 +230,7 @@ class MemoryRetrievalQualityTest {
                 "python", "kotlin", "react", "docker", "kubernetes",  // Tech (5)
                 "soccer", "tennis", "basketball", "swimming", "cycling"  // Sports (5)
             ).mapIndexed { i, name ->
-                SearchResult("mem-${name}_emb", 0.9f - (i * 0.03f))
+                VectorSearchResult("mem-${name}_emb", 0.9f - (i * 0.03f))
             }
         )
 
@@ -261,9 +262,9 @@ class MemoryRetrievalQualityTest {
         // Return memories with varied characteristics
         mockVectorSearch.setSearchResults(
             listOf(
-                SearchResult("mem-paris_emb", 0.95f),      // High similarity
-                SearchResult("mem-eiffel_emb", 0.90f),     // High similarity
-                SearchResult("mem-french_emb", 0.85f)      // High similarity
+                VectorSearchResult("mem-paris_emb", 0.95f),      // High similarity
+                VectorSearchResult("mem-eiffel_emb", 0.90f),     // High similarity
+                VectorSearchResult("mem-french_emb", 0.85f)      // High similarity
             )
         )
 
