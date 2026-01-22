@@ -1,8 +1,9 @@
 package app.m1k3.ai.assistant.memory
 
-import app.m1k3.ai.assistant.domain.memory.ConversationContext
-import app.m1k3.ai.assistant.domain.memory.ImportanceCalculator
-import app.m1k3.ai.assistant.domain.memory.services.SemanticChunker
+import app.m1k3.ai.domain.memory.ConversationContext
+import app.m1k3.ai.domain.memory.ImportanceCalculator
+import app.m1k3.ai.domain.memory.SimpleTokenCounter
+import app.m1k3.ai.domain.memory.services.SemanticChunker
 import app.m1k3.ai.assistant.memory.test.MockEmbeddingRepository
 import app.m1k3.ai.assistant.memory.test.MockVectorSearchEngine
 import app.m1k3.ai.assistant.test.TestDatabaseFactory

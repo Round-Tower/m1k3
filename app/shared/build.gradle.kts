@@ -24,10 +24,13 @@ kotlin {
     sourceSets {
         commonMain.dependencies {
             // Kotlin Coroutines for Flow support
-            implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.8.0")
+            implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.2")
+            // DateTime for domain layer timestamp handling
+            implementation("org.jetbrains.kotlinx:kotlinx-datetime:0.6.0")
         }
         commonTest.dependencies {
             implementation(libs.kotlin.test)
+            implementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.10.2")
         }
     }
 }

@@ -1,11 +1,11 @@
 package app.m1k3.ai.assistant.memory
 
 import app.m1k3.ai.assistant.database.MemoryMetadata
-import app.m1k3.ai.assistant.domain.memory.ImportanceCalculator
-import app.m1k3.ai.assistant.domain.memory.ConversationContext
-import app.m1k3.ai.assistant.domain.memory.services.Chunk
-import app.m1k3.ai.assistant.domain.memory.services.SemanticChunker
-import app.m1k3.ai.assistant.domain.repositories.EmbeddingRepository
+import app.m1k3.ai.domain.memory.ImportanceCalculator
+import app.m1k3.ai.domain.memory.ConversationContext
+import app.m1k3.ai.domain.memory.services.Chunk
+import app.m1k3.ai.domain.memory.services.SemanticChunker
+import app.m1k3.ai.domain.repositories.EmbeddingRepository
 import kotlinx.datetime.Clock
 
 /**

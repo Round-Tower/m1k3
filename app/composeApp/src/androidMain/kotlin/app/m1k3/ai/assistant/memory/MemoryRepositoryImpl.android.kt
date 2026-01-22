@@ -1,9 +1,9 @@
 package app.m1k3.ai.assistant.memory
 
-import app.m1k3.ai.assistant.domain.memory.ConversationContext
-import app.m1k3.ai.assistant.domain.memory.MemorySearchResult
-import app.m1k3.ai.assistant.domain.memory.MemoryStats
-import app.m1k3.ai.assistant.domain.repositories.MemoryRepository
+import app.m1k3.ai.domain.memory.ConversationContext
+import app.m1k3.ai.domain.memory.MemorySearchResult
+import app.m1k3.ai.domain.memory.MemoryStats
+import app.m1k3.ai.domain.repositories.MemoryRepository
 
 /**
  * MemoryRepositoryImpl - Android implementation of domain MemoryRepository
@@ -66,7 +66,7 @@ class MemoryRepositoryImpl(
         ).map { androidResults ->
             // Convert Android MemorySearchResult to domain MemorySearchResult
             androidResults.map { androidResult ->
-                app.m1k3.ai.assistant.domain.memory.MemorySearchResult(
+                MemorySearchResult(
                     id = androidResult.id,
                     content = androidResult.content,
                     importance = androidResult.importance,
@@ -84,7 +84,7 @@ class MemoryRepositoryImpl(
         return semanticMemoryManager.getHighImportanceMemories(limit).map { androidResults ->
             // Convert Android MemorySearchResult to domain MemorySearchResult
             androidResults.map { androidResult ->
-                app.m1k3.ai.assistant.domain.memory.MemorySearchResult(
+                MemorySearchResult(
                     id = androidResult.id,
                     content = androidResult.content,
                     importance = androidResult.importance,
@@ -101,7 +101,7 @@ class MemoryRepositoryImpl(
     override suspend fun getMemoryStats(): Result<MemoryStats> {
         return semanticMemoryManager.getMemoryStats().map { androidStats ->
             // Convert Android MemoryStats to domain MemoryStats
-            app.m1k3.ai.assistant.domain.memory.MemoryStats(
+            MemoryStats(
                 totalMemories = androidStats.totalMemories,
                 averageImportance = androidStats.averageImportance,
                 hasVectorIndex = androidStats.hasVectorIndex

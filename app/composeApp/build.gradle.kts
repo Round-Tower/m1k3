@@ -97,15 +97,13 @@ kotlin {
             implementation(libs.androidx.navigation.compose)
             implementation(projects.shared)
 
-            // 間 AI - Common dependencies
+            // Common dependencies
             implementation(libs.sqldelight.coroutines)
             implementation(libs.kotlinx.serialization.json)
             implementation(libs.kotlinx.datetime)
 
             // Llamatik - KMP llama.cpp binding for GGUF models
-            // Published on Maven Central: https://mvnrepository.com/artifact/com.llamatik/library
-            // Note: Sampling params (temp=1.0, top_k=64, top_p=0.95) configured in native layer
-            implementation("com.llamatik:library:0.9.0")
+            implementation("com.llamatik:library:0.12.0")
 
             // WebView for Three.js 3D avatar rendering
             implementation("io.github.kevinnzou:compose-webview-multiplatform:2.0.3")
@@ -231,7 +229,7 @@ compose.desktop {
     }
 }
 
-// 間 AI - SQLDelight Configuration
+// SQLDelight Configuration
 sqldelight {
     databases {
         create("MaDatabase") {

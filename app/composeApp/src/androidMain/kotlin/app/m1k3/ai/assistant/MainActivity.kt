@@ -6,8 +6,6 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.lifecycle.lifecycleScope
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.*
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.animation.core.animateDpAsState
@@ -16,41 +14,28 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
 import androidx.compose.foundation.isSystemInDarkTheme
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavType
-import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
-import app.m1k3.ai.assistant.navigation.SidebarMenuItem
 import app.m1k3.ai.assistant.navigation.Screen
 import app.m1k3.ai.assistant.navigation.navigateToBottomNav
-import app.m1k3.ai.assistant.navigation.sidebarItems
 import app.m1k3.ai.assistant.ai.BaseLlmEngine
 import app.m1k3.ai.assistant.ai.LlamaCppEngine
 import app.m1k3.ai.assistant.database.MaDatabase
 import app.m1k3.ai.assistant.design.theme.MaTheme
-import app.m1k3.ai.assistant.design.components.MaButtonPrimary
-import app.m1k3.ai.assistant.design.components.MaCard
 import app.m1k3.ai.assistant.design.tokens.MaColors
-import app.m1k3.ai.assistant.design.tokens.MaRadius
-import app.m1k3.ai.assistant.design.tokens.MaSpacing
-import app.m1k3.ai.assistant.design.tokens.MaTypography
 import app.m1k3.ai.assistant.avatar.*
 import app.m1k3.ai.assistant.ui.ChatScreen
 import app.m1k3.ai.assistant.ui.HistoryScreen
 import app.m1k3.ai.assistant.ui.EcoStatsScreen
-import app.m1k3.ai.assistant.ui.components.UnifiedToolbar
+import app.m1k3.ai.assistant.ui.components.Toolbar
 import app.m1k3.ai.assistant.di.allModules
 import app.m1k3.ai.assistant.utils.Logger
 import app.m1k3.ai.assistant.utils.FilamentSetup
@@ -215,7 +200,7 @@ class MainActivity : ComponentActivity() {
                         ) {
                             Scaffold(
                                 topBar = {
-                                    UnifiedToolbar(
+                                    Toolbar(
                                         screenName = getScreenName(navController.currentBackStackEntryAsState().value?.destination?.route),
                                         engineInitialized = true,
                                         avatarState = appAvatarState,

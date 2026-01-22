@@ -5,10 +5,11 @@ import app.m1k3.ai.assistant.chat.ChatError
 import app.m1k3.ai.assistant.chat.GenerationStats
 import app.m1k3.ai.assistant.chat.QueryType
 import app.m1k3.ai.assistant.chat.GenerationConfigBuilder
-import app.m1k3.ai.assistant.domain.tools.ToolResult
-import app.m1k3.ai.assistant.domain.tools.services.ToolRegistry
-import app.m1k3.ai.assistant.domain.usecases.chat.ProcessLlmOutputUseCase
-import app.m1k3.ai.assistant.domain.usecases.chat.ProcessedOutput
+import app.m1k3.ai.domain.ai.GenerationConfig
+import app.m1k3.ai.domain.tools.ToolResult
+import app.m1k3.ai.domain.tools.services.ToolRegistry
+import app.m1k3.ai.domain.usecases.chat.ProcessLlmOutputUseCase
+import app.m1k3.ai.domain.usecases.chat.ProcessedOutput
 import app.m1k3.ai.assistant.utils.Logger
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
@@ -98,7 +99,7 @@ class ChatWithToolsUseCase(
             // 3. Build generation config
             val queryType = QueryType.fromIntentCategory(context.intentCategory)
             val config = configBuilder?.build(queryType = queryType)
-                ?: app.m1k3.ai.assistant.ai.GenerationConfig()
+                ?: GenerationConfig()
 
             // 4. Generate response
             emit(ChatEvent.Generating)

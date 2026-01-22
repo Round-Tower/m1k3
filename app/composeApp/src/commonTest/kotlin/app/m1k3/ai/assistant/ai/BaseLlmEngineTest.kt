@@ -1,5 +1,6 @@
 package app.m1k3.ai.assistant.ai
 
+import app.m1k3.ai.domain.ai.GenerationConfig
 import kotlinx.coroutines.test.runTest
 import kotlin.test.*
 

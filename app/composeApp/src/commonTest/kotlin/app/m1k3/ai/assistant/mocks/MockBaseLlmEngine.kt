@@ -1,7 +1,7 @@
 package app.m1k3.ai.assistant.mocks
 
 import app.m1k3.ai.assistant.ai.BaseLlmEngine
-import app.m1k3.ai.assistant.ai.GenerationConfig
+import app.m1k3.ai.domain.ai.GenerationConfig
 import app.m1k3.ai.assistant.ai.GenerationResult
 
 /**

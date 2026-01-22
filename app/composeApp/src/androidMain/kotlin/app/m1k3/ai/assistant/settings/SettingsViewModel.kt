@@ -6,7 +6,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.platform.LocalContext
-import app.m1k3.ai.assistant.ai.GenerationConfig
+import app.m1k3.ai.domain.ai.GenerationConfig
 import app.m1k3.ai.assistant.ai.ondevice.AiAvailability
 import app.m1k3.ai.assistant.ai.ondevice.OnDeviceAi
 import kotlinx.coroutines.CoroutineScope

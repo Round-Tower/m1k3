@@ -4,10 +4,10 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.provider.MediaStore
-import app.m1k3.ai.assistant.domain.tools.ToolCall
-import app.m1k3.ai.assistant.domain.tools.ToolError
-import app.m1k3.ai.assistant.domain.tools.ToolResult
-import app.m1k3.ai.assistant.domain.tools.services.ToolExecutor
+import app.m1k3.ai.domain.tools.ToolCall
+import app.m1k3.ai.domain.tools.ToolError
+import app.m1k3.ai.domain.tools.ToolResult
+import app.m1k3.ai.domain.tools.services.ToolExecutor
 
 /**
  * Open Camera Executor - Launches device camera app

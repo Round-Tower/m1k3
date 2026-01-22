@@ -1,7 +1,7 @@
 package domain.memory
 
-import app.m1k3.ai.assistant.domain.memory.ImportanceCalculator
-import app.m1k3.ai.assistant.domain.memory.ConversationContext
+import app.m1k3.ai.domain.memory.ImportanceCalculator
+import app.m1k3.ai.domain.memory.ConversationContext
 import kotlin.test.Test
 import kotlin.test.assertTrue
 import kotlin.test.assertEquals

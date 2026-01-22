@@ -1,5 +1,6 @@
 package app.m1k3.ai.assistant.ai
 
+import app.m1k3.ai.domain.ai.GenerationConfig
 import kotlinx.coroutines.delay
 
 /**
@@ -162,17 +163,19 @@ class MockLlmEngine(
         val parts = mutableListOf<String>()
 
         // System prompt context
-        if (config.systemPrompt != null) {
+        val systemPrompt = config.systemPrompt
+        if (systemPrompt != null) {
             when {
-                config.systemPrompt.contains("pirate") -> parts.add("Ahoy matey!")
-                config.systemPrompt.contains("assistant") -> parts.add("I'm here to help.")
+                systemPrompt.contains("pirate") -> parts.add("Ahoy matey!")
+                systemPrompt.contains("assistant") -> parts.add("I'm here to help.")
             }
         }
 
         // Knowledge context (RAG)
-        if (config.knowledgeContext != null) {
+        val knowledgeContext = config.knowledgeContext
+        if (knowledgeContext != null) {
             when {
-                config.knowledgeContext.contains("Eiffel Tower") &&
+                knowledgeContext.contains("Eiffel Tower") &&
                 prompt.contains("tall", ignoreCase = true) -> {
                     parts.add("The Eiffel Tower is 330 meters tall according to my knowledge.")
                 }
@@ -180,8 +183,9 @@ class MockLlmEngine(
         }
 
         // User context personalization
-        if (config.userContext != null) {
-            val name = config.userContext["name"]
+        val userContext = config.userContext
+        if (userContext != null) {
+            val name = userContext["name"]
             if (name != null && prompt.contains("name", ignoreCase = true)) {
                 parts.add("Your name is $name.")
             }

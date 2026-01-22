@@ -2,7 +2,7 @@ package app.m1k3.ai.assistant.chat.usecase
 
 import app.m1k3.ai.assistant.config.GenerationConstants
 import app.m1k3.ai.assistant.database.MaDatabase
-import app.m1k3.ai.assistant.domain.chat.services.ContextAssembler
+import app.m1k3.ai.domain.chat.services.ContextAssembler
 import app.m1k3.ai.assistant.memory.MemoryManager
 import app.m1k3.ai.assistant.platform.DeviceInfoProviderInterface
 import app.m1k3.ai.assistant.platform.PreferencesStoreInterface

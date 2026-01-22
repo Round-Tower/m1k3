@@ -17,7 +17,7 @@ import app.m1k3.ai.assistant.platform.DeviceInfoProvider
 import app.m1k3.ai.assistant.platform.DeviceInfoProviderInterface
 import app.m1k3.ai.assistant.platform.PreferencesStore
 import app.m1k3.ai.assistant.platform.PreferencesStoreInterface
-import app.m1k3.ai.assistant.domain.tools.services.ToolRegistry
+import app.m1k3.ai.domain.tools.services.ToolRegistry
 import app.m1k3.ai.assistant.tools.AndroidToolRegistry
 import org.koin.dsl.module
 

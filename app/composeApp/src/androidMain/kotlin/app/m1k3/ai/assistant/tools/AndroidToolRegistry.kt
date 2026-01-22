@@ -1,10 +1,10 @@
 package app.m1k3.ai.assistant.tools
 
 import android.content.Context
-import app.m1k3.ai.assistant.domain.tools.Tool
-import app.m1k3.ai.assistant.domain.tools.ToolCategory
-import app.m1k3.ai.assistant.domain.tools.ToolParameter
-import app.m1k3.ai.assistant.domain.tools.ParameterType
+import app.m1k3.ai.domain.tools.Tool
+import app.m1k3.ai.domain.tools.ToolCategory
+import app.m1k3.ai.domain.tools.ToolParameter
+import app.m1k3.ai.domain.tools.ParameterType
 import app.m1k3.ai.assistant.tools.executors.BatteryLevelExecutor
 import app.m1k3.ai.assistant.tools.executors.GetTimeExecutor
 import app.m1k3.ai.assistant.tools.executors.GetVolumeExecutor

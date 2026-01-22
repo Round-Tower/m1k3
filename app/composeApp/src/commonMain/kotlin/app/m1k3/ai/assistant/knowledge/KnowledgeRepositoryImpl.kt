@@ -1,7 +1,7 @@
 package app.m1k3.ai.assistant.knowledge
 
-import app.m1k3.ai.assistant.domain.rag.RetrievedFact
-import app.m1k3.ai.assistant.domain.repositories.KnowledgeRepository
+import app.m1k3.ai.domain.rag.RetrievedFact
+import app.m1k3.ai.domain.repositories.KnowledgeRepository
 
 /**
  * KnowledgeRepositoryImpl - Implementation of domain KnowledgeRepository

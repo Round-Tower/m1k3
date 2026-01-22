@@ -3,6 +3,7 @@ package app.m1k3.ai.assistant.ai
 import android.content.Context
 import app.m1k3.ai.assistant.utils.Logger
 import app.m1k3.ai.assistant.utils.resultOf
+import app.m1k3.ai.domain.ai.GenerationConfig
 import com.llamatik.library.platform.LlamaBridge
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
@@ -507,15 +508,16 @@ class LlamaCppEngine(private val context: Context) : BaseLlmEngine {
         }
 
         // Behavioral rules (HOW) - with anti-hallucination & anti-repetition directives
+        val temperature = config.temperature
         val behavior = when {
-            config.temperature != null && config.temperature < 0.4f -> {
+            temperature != null && temperature < 0.4f -> {
                 " Be concise, factual, and direct. Avoid speculation. No repetition."
             }
-            config.temperature != null && config.temperature >= 0.4f && config.temperature <= 0.8f -> {
+            temperature != null && temperature >= 0.4f && temperature <= 0.8f -> {
                 " Be helpful and accurate. Use only provided facts. If unsure, say so. " +
                 "Avoid repetition. Each sentence must provide new information."
             }
-            config.temperature != null && config.temperature > 0.8f -> {
+            temperature != null && temperature > 0.8f -> {
                 " Be creative and imaginative. Vary your phrasing."
             }
             else -> {

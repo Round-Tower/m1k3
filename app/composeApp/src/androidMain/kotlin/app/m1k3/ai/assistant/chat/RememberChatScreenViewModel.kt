@@ -4,8 +4,8 @@ import android.content.Context
 import androidx.compose.runtime.*
 import app.m1k3.ai.assistant.ai.BaseLlmEngine
 import app.m1k3.ai.assistant.database.MaDatabase
-import app.m1k3.ai.assistant.domain.tools.services.ToolRegistry
-import app.m1k3.ai.assistant.domain.usecases.chat.ProcessLlmOutputUseCase
+import app.m1k3.ai.domain.tools.services.ToolRegistry
+import app.m1k3.ai.domain.usecases.chat.ProcessLlmOutputUseCase
 import app.m1k3.ai.assistant.eco.EcoMetricsRepository
 import app.m1k3.ai.assistant.embedding.EmbeddingEngine
 import app.m1k3.ai.assistant.history.ConversationRepository

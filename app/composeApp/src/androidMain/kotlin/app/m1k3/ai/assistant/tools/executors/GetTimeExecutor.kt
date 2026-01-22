@@ -1,9 +1,9 @@
 package app.m1k3.ai.assistant.tools.executors
 
-import app.m1k3.ai.assistant.domain.tools.ToolCall
-import app.m1k3.ai.assistant.domain.tools.ToolError
-import app.m1k3.ai.assistant.domain.tools.ToolResult
-import app.m1k3.ai.assistant.domain.tools.services.ToolExecutor
+import app.m1k3.ai.domain.tools.ToolCall
+import app.m1k3.ai.domain.tools.ToolError
+import app.m1k3.ai.domain.tools.ToolResult
+import app.m1k3.ai.domain.tools.services.ToolExecutor
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale

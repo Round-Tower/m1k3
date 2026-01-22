@@ -3,8 +3,8 @@ package app.m1k3.ai.assistant.memory
 import android.content.Context
 import android.util.Log
 import app.m1k3.ai.assistant.database.MaDatabase
-import app.m1k3.ai.assistant.domain.memory.ConversationContext
-import app.m1k3.ai.assistant.domain.memory.ImportanceCalculator
+import app.m1k3.ai.domain.memory.ConversationContext
+import app.m1k3.ai.domain.memory.ImportanceCalculator
 import app.m1k3.ai.assistant.embedding.EmbeddingEngine
 import app.m1k3.ai.assistant.embedding.EmbeddingTaskType
 import app.m1k3.ai.assistant.embedding.GemmaEmbeddingEngine

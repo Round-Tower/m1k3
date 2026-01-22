@@ -1,6 +1,6 @@
 package app.m1k3.ai.assistant.memory
 
-import app.m1k3.ai.assistant.domain.repositories.EmbeddingRepository
+import app.m1k3.ai.domain.repositories.EmbeddingRepository
 import app.m1k3.ai.assistant.embedding.EmbeddingEngine as PlatformEmbeddingEngine
 import app.m1k3.ai.assistant.embedding.EmbeddingTaskType
 

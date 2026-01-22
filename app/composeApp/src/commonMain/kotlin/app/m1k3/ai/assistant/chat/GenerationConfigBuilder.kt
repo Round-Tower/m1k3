@@ -1,6 +1,6 @@
 package app.m1k3.ai.assistant.chat
 
-import app.m1k3.ai.assistant.ai.GenerationConfig
+import app.m1k3.ai.domain.ai.GenerationConfig
 import app.m1k3.ai.assistant.config.GenerationConstants
 import app.m1k3.ai.assistant.platform.DeviceInfoProviderInterface
 import app.m1k3.ai.assistant.platform.DeviceTier

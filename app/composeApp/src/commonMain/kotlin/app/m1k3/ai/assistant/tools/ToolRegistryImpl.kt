@@ -1,9 +1,9 @@
 package app.m1k3.ai.assistant.tools
 
-import app.m1k3.ai.assistant.domain.tools.Tool
-import app.m1k3.ai.assistant.domain.tools.ToolCategory
-import app.m1k3.ai.assistant.domain.tools.services.ToolExecutor
-import app.m1k3.ai.assistant.domain.tools.services.ToolRegistry
+import app.m1k3.ai.domain.tools.Tool
+import app.m1k3.ai.domain.tools.ToolCategory
+import app.m1k3.ai.domain.tools.services.ToolExecutor
+import app.m1k3.ai.domain.tools.services.ToolRegistry
 
 /**
  * Base Tool Registry Implementation

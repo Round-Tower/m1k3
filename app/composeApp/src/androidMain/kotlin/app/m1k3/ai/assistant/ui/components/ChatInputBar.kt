@@ -152,7 +152,6 @@ fun ChatInputBar(
                         .height(56.dp)
                         .shadow(
                             elevation = 8.dp,
-                            shape = RoundedCornerShape(28.dp),
                             spotColor = MaColors.Orange.copy(alpha = glowAlpha)
                         )
                 )
@@ -200,7 +199,7 @@ fun ChatInputBar(
                     ) {
                         if (text.isEmpty()) {
                             Text(
-                                text = "Message M1K3 AI...",
+                                text = "Chat with M1K3",
                                 style = MaTypography.bodyLarge,
                                 color = MaColors.textDisabled(),
                                 modifier = Modifier.align(Alignment.CenterStart)

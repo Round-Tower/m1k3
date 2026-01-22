@@ -1,6 +1,6 @@
 package app.m1k3.ai.assistant.memory.test
 
-import app.m1k3.ai.assistant.domain.repositories.EmbeddingRepository
+import app.m1k3.ai.domain.repositories.EmbeddingRepository
 import app.m1k3.ai.assistant.memory.SearchResult
 import app.m1k3.ai.assistant.memory.VectorSearchEngine
 

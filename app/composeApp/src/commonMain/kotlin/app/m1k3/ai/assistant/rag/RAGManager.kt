@@ -1,9 +1,9 @@
 package app.m1k3.ai.assistant.rag
 
 import app.m1k3.ai.assistant.database.MaDatabase
-import app.m1k3.ai.assistant.domain.rag.Intent
-import app.m1k3.ai.assistant.domain.rag.services.IntentClassifier
-import app.m1k3.ai.assistant.domain.usecases.rag.EnrichPromptWithRAGUseCase
+import app.m1k3.ai.domain.rag.Intent
+import app.m1k3.ai.domain.rag.services.IntentClassifier
+import app.m1k3.ai.domain.usecases.rag.EnrichPromptWithRAGUseCase
 import app.m1k3.ai.assistant.embedding.EmbeddingEngine
 import app.m1k3.ai.assistant.knowledge.SemanticRetrievalService
 
