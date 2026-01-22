@@ -136,8 +136,8 @@ fun ChatInputBar(
     )
 
     Surface(
-        modifier = modifier.fillMaxWidth(),
-        color = MaColors.BgPrimary.copy(alpha = 0.0f) // Transparent to show gradient overlay
+        modifier = modifier.fillMaxWidth().padding(16.dp),
+        color = MaColors.BgSecondary // Transparent to show gradient overlay
     ) {
         Box(
             modifier = Modifier
@@ -168,7 +168,6 @@ fun ChatInputBar(
                     .scale(fieldScale)
                     .shadow(
                         elevation = elevation,
-                        shape = RoundedCornerShape(28.dp),
                         spotColor = MaColors.Orange.copy(alpha = 0.3f)
                     ),
                 enabled = enabled,
@@ -189,8 +188,7 @@ fun ChatInputBar(
                         modifier = Modifier
                             .fillMaxWidth()
                             .background(
-                                color = if (enabled) MaColors.BgSecondary else MaColors.BgPrimary,
-                                shape = RoundedCornerShape(28.dp)
+                                color = if (enabled) MaColors.BgSecondary else MaColors.BgPrimary
                             )
                             .border(
                                 width = borderWidth,

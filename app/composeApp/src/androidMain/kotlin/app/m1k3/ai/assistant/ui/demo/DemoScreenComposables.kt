@@ -215,7 +215,7 @@ fun MaAIDemo(
             item {
                 MaButtonPrimary(
                     onClick = onChatClick,
-                    text = "💬 Chat with M1K3 AI",
+                    text = "💬 Chat with M1K3",
                     modifier = Modifier.fillMaxWidth()
                 )
             }

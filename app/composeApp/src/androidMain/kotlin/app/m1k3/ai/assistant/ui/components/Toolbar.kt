@@ -131,8 +131,8 @@ fun Toolbar(
                     showInfo = true,
                     modifier = Modifier
                         .testTag("avatar_unified")
-                        .size(100.dp)
-                        .padding(start = 16.dp)
+                        .size(140.dp)
+                        .padding(start = 46.dp)
                 )
             }
         }

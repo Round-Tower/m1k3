@@ -133,11 +133,6 @@ fun MaChatBubbleAI(
         ) {
             Box(
                 modifier = Modifier
-                    .glassmorphic(
-                        backgroundColor = if (isError) MaColors.ErrorBg else MaColors.bgPrimary(),
-                        borderColor = if (isError) MaColors.Error else MaColors.borderLight(),
-                        borderWidth = 3.dp,
-                    )
                     .padding(horizontal = MaSpacing.md, vertical = MaSpacing.base)
                     .animateContentSize()
             ) {
@@ -146,10 +141,7 @@ fun MaChatBubbleAI(
                     verticalArrangement = Arrangement.spacedBy(MaSpacing.sm)
                 ) {
                     Text(
-                        // Defense-in-depth: trim leading whitespace for non-streaming sources
-                        // (e.g., database retrieval, error messages, manual text entry)
-                        // Note: Streaming text is already cleaned in ChatScreen.kt:cleanStreamingToken()
-                        text = text.trimStart(),
+                        text = text,
                         style = MaTypography.bodyLarge,
                         color = if (isError) MaColors.Error else MaColors.textPrimary()
                     )
@@ -158,7 +150,7 @@ fun MaChatBubbleAI(
                     Text(
                         text = formatTimestamp(timestamp),
                         style = MaTypography.labelSmall,
-                        color = MaColors.textSecondary(),
+                        color = MaColors.textSecondary().copy(alpha = 0.1f),
                         modifier = Modifier.padding(top = MaSpacing.xs)
                     )
 
@@ -192,16 +184,6 @@ fun MaChatBubbleAI(
                                 horizontalArrangement = Arrangement.spacedBy(MaSpacing.xs),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Text(
-                                    text = "📚",
-                                    style = MaTypography.labelSmall
-                                )
-                                Text(
-                                    text = "RAG Enhanced",
-                                    style = MaTypography.labelSmall,
-                                    color = MaColors.Orange,
-                                    fontWeight = FontWeight.SemiBold
-                                )
                                 Text(
                                     text = "• $factCount ${if (factCount == 1) "fact" else "facts"}",
                                     style = MaTypography.labelSmall,
