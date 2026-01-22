@@ -24,26 +24,36 @@ Privacy-first AI companion via Kotlin Multiplatform. Zero network permission.
 - ParallelGC for faster builds
 - Kapt optimization for annotation processing
 
-**TDD Workflow:**
-1. Write failing test first (Red)
-2. Implement minimal code to pass (Green)
-3. Refactor while keeping tests green
-4. Use `runCurrent()` in coroutine tests to avoid `advanceUntilIdle()` cleanup issues
-5. Disable background jobs in ViewModels during tests with constructor params
+**TDD + Domain-First Workflow:**
+1. **Domain first** - Can this logic live in `domain/`? If yes, put it there.
+2. Write failing test first (Red)
+3. Implement minimal code to pass (Green)
+4. Refactor while keeping tests green
+5. Use `runCurrent()` in coroutine tests to avoid `advanceUntilIdle()` cleanup issues
+6. Disable background jobs in ViewModels during tests with constructor params
 
 ## Structure
 ```
 ├── composeApp/src/
 │   ├── commonMain/kotlin/app/m1k3/ai/assistant/
-│   │   ├── ai/              # AI interfaces, availability
-│   │   ├── embedding/       # EmbeddingEngine, repositories
-│   │   ├── memory/          # ContextAssembler, MemoryRepository
+│   │   ├── domain/          # Pure Kotlin business logic (IMPORTANT)
+│   │   │   ├── tools/       # Tool entities, services, registry
+│   │   │   ├── chat/        # ChatFormat, ContextAssembler
+│   │   │   ├── rag/         # Intent, IntentClassifier
+│   │   │   ├── memory/      # MemoryChunk, SemanticChunker
+│   │   │   ├── repositories/# Interfaces (Knowledge, Memory)
+│   │   │   └── usecases/    # Business logic orchestration
+│   │   ├── ai/              # AI interfaces, BaseLlmEngine
+│   │   ├── chat/            # ChatScreenViewModel, ChatUiState
+│   │   ├── embedding/       # EmbeddingEngine, EmbeddingEngineManager
+│   │   ├── memory/          # MemoryManager, MemoryDataSource
 │   │   ├── knowledge/       # SemanticRetrievalService
 │   │   ├── config/          # GenerationConstants
 │   │   └── di/              # Koin modules
 │   ├── androidMain/         # Android implementations
 │   │   ├── ai/ondevice/     # LlamaCpp, MlKitGenAi engines
-│   │   └── embedding/       # MiniLM, Gemma engines
+│   │   ├── embedding/       # MiniLM, Gemma engines
+│   │   └── tools/           # AndroidToolRegistry, executors
 │   └── iosMain/             # iOS (future)
 ├── codingModule/            # Dynamic feature (Qwen code gen)
 └── docs/phases/             # Phase documentation
@@ -67,6 +77,48 @@ Privacy-first AI companion via Kotlin Multiplatform. Zero network permission.
 - `expect`/`actual` for platform code
 - Koin for DI (`di/` modules)
 - Flow for async streams
+
+## Domain Layer First (IMPORTANT)
+
+**All shareable business logic goes in `domain/` as pure Kotlin—no platform dependencies.**
+
+This is as important as TDD:
+1. **Testable** - Unit tests run instantly without emulators/mocks
+2. **Shareable** - Works across Android, iOS, Desktop
+3. **Maintainable** - Clear separation from platform noise
+
+### Domain Structure
+```
+domain/
+├── entities/        # Data classes (Tool, Intent, MemoryChunk)
+├── services/        # Interfaces + pure implementations
+├── repositories/    # Data access interfaces
+└── usecases/        # Business logic orchestration
+```
+
+### When to Use Domain Layer
+- Business logic (validation, calculation, transformation)
+- Use cases (orchestrating multiple operations)
+- Entity definitions (data models)
+- Service interfaces (contracts for platform implementations)
+
+### When NOT to Use Domain Layer
+- Android Intents, Context, Views
+- iOS UIKit, CoreData
+- Platform-specific APIs (Camera, Sensors)
+
+### Pattern: Interface in Domain, Implementation in Platform
+```kotlin
+// domain/repositories/MemoryRepository.kt
+interface MemoryRepository {
+    suspend fun search(query: String): List<MemoryChunk>
+}
+
+// androidMain/.../MemoryRepositoryImpl.kt
+class MemoryRepositoryImpl(context: Context) : MemoryRepository {
+    // Android-specific implementation
+}
+```
 
 ## Privacy
 - **Zero INTERNET permission** in manifest
