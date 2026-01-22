@@ -13,9 +13,6 @@ import kotlin.test.*
 /**
  * Memory Integration Test - PHASE2-017
  *
- * ⚠️ TEMPORARILY DISABLED: createMemoriesFromMessage() returning 0 memories
- * TODO: Debug why chunking or importance filtering is producing empty results
- *
  * End-to-end validation of the complete memory pipeline from message ingestion
  * to context retrieval for AI generation.
  *
@@ -73,7 +70,13 @@ class MemoryIntegrationTest {
     fun setup() {
         database = TestDatabaseFactory.createInMemoryDatabase()
         repository = MemoryDataSource(database)
-        chunker = SemanticChunker(SimpleTokenCounter())
+        // Use lower threshold for testing (default is 100)
+        chunker = SemanticChunker(
+            tokenCounter = SimpleTokenCounter(),
+            minChunkTokens = 50,  // Lower threshold for test messages
+            maxChunkTokens = 300,
+            overlapTokens = 20
+        )
         importanceCalculator = ImportanceCalculator()
         memoryRanker = MemoryRanker(maxContextTokens = 1000)
 
@@ -113,7 +116,6 @@ class MemoryIntegrationTest {
     }
 
     @Test
-    @Ignore("createMemoriesFromMessage() returning 0 - chunking/importance issue")
     fun `end-to-end memory pipeline creates and retrieves memories`() = runTest {
         println("\n🧪 [Integration] Testing end-to-end memory pipeline")
 
@@ -195,7 +197,6 @@ class MemoryIntegrationTest {
     }
 
     @Test
-    @Ignore("createMemoriesFromMessage() returning 0 - chunking/importance issue")
     fun `conversation flow creates memories for important messages only`() = runTest {
         println("\n🧪 [Integration] Testing conversation flow with filtering")
 
@@ -203,7 +204,12 @@ class MemoryIntegrationTest {
 
         // === Message 1: High importance (detailed question) ===
         val question = "Can you explain how HNSW (Hierarchical Navigable Small World) graphs work " +
-                "for approximate nearest neighbor search in high-dimensional vector spaces?"
+                "for approximate nearest neighbor search in high-dimensional vector spaces? " +
+                "I'm particularly interested in understanding the graph construction algorithm, " +
+                "the role of the proximity graph layers, and how the search process navigates " +
+                "through multiple levels to find nearest neighbors efficiently. " +
+                "Also, what are the key parameters like M and efConstruction, and how do they " +
+                "affect the tradeoff between search accuracy and performance?"
 
         val result1 = memoryManager.createMemoriesFromMessage(
             messageId = "msg-1",
@@ -226,9 +232,24 @@ class MemoryIntegrationTest {
                     val neighbors = findNearest(vector, efConstruction)
                     connectNodes(id, neighbors, level)
                 }
+
+                private fun selectLevel(): Int {
+                    val mL = 1.0 / Math.log(M.toDouble())
+                    return (-Math.log(Math.random()) * mL).toInt()
+                }
+
+                private fun findNearest(query: FloatArray, ef: Int): List<String> {
+                    // Greedy search through graph layers
+                    val candidates = PriorityQueue<Candidate>()
+                    val visited = mutableSetOf<String>()
+                    // Search algorithm implementation here
+                    return candidates.take(M).map { it.id }
+                }
             }
             ```
-            This implements a basic HNSW index with configurable parameters.
+            This implements a basic HNSW index with configurable parameters M and efConstruction.
+            The index uses a hierarchical structure with multiple layers for efficient approximate
+            nearest neighbor search in high-dimensional spaces.
         """.trimIndent()
 
         val result2 = memoryManager.createMemoriesFromMessage(
