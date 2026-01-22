@@ -12,7 +12,6 @@ import app.m1k3.ai.assistant.design.tokens.MaColors
 import app.m1k3.ai.assistant.design.tokens.MaTypography
 import app.m1k3.ai.assistant.utils.Logger
 import io.github.sceneview.Scene
-import io.github.sceneview.loaders.ModelLoader
 import io.github.sceneview.node.ModelNode
 import io.github.sceneview.rememberModelLoader
 import io.github.sceneview.rememberNodes
@@ -299,6 +298,7 @@ private fun RenderStaticModel(
             modelLoader = modelLoader,
             cameraNode = cameraNode,
             childNodes = childNodes,
+            isOpaque = false,
             onFrame = { frameTimeNanos ->
                 // Update camera
                 cameraState.applyCameraNode(cameraNode)
@@ -554,6 +554,7 @@ private fun RenderAnimatedModel(
             modelLoader = modelLoader,
             cameraNode = cameraNode,
             childNodes = childNodes,
+            isOpaque = false,
             onFrame = { frameTimeNanos ->
                 // Update camera from controller state
                 cameraState.applyCameraNode(cameraNode)
@@ -645,78 +646,3 @@ actual fun AvatarViewContent3D(state: AvatarState) {
         autoRotate = false
     )
 }
-
-/**
- * Usage Examples:
- * ```kotlin
- * @Composable
- * fun ChatScreenWith3DAvatar() {
- *     val avatarVM = rememberAvatarViewModel()
- *     val state by avatarVM.avatarState.collectAsState()
- *
- *     Column {
- *         // Full-size 3D avatar with Colobus (default)
- *         Avatar3DView(
- *             state = state,
- *             modifier = Modifier.size(280.dp),
- *             enableInteraction = true
- *         )
- *
- *         // Use different model (Sparrow)
- *         Avatar3DView(
- *             state = state,
- *             modifier = Modifier.size(280.dp),
- *             modelConfig = ModelRegistry.getById("sparrow")!!,
- *             enableInteraction = true
- *         )
- *
- *         // Compact 3D avatar for top bar
- *         Avatar3DViewCompact(
- *             state = state,
- *             modifier = Modifier.size(80.dp)
- *         )
- *     }
- * }
- *
- * @Composable
- * fun ModelSelectorExample() {
- *     var selectedModel by remember { mutableStateOf(ModelRegistry.getDefault()) }
- *     val state = AvatarState(emotion = AvatarEmotion.HAPPY)
- *
- *     Column {
- *         // Dropdown to select model
- *         ExposedDropdownMenuBox(...) {
- *             ModelRegistry.allModels.forEach { model ->
- *                 DropdownMenuItem(
- *                     text = { Text(model.name) },
- *                     onClick = { selectedModel = model }
- *                 )
- *             }
- *         }
- *
- *         // Render selected model
- *         Avatar3DView(
- *             state = state,
- *             modelConfig = selectedModel,
- *             enableInteraction = true
- *         )
- *     }
- * }
- *
- * @Composable
- * fun InteractiveAvatarExample() {
- *     val state = AvatarState(emotion = AvatarEmotion.EXCITED)
- *
- *     // Interactive 3D avatar with touch controls:
- *     // - Drag to orbit
- *     // - Pinch to zoom
- *     // - Double-tap to reset
- *     Avatar3DView(
- *         state = state,
- *         modifier = Modifier.fillMaxSize(),
- *         modelConfig = ModelRegistry.getById("gecko")!!,
- *         enableInteraction = true
- *     )
- * }
- * ```
- */
