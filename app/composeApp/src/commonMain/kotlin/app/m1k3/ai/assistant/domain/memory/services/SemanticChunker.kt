@@ -1,9 +1,13 @@
-package app.m1k3.ai.assistant.memory
+package app.m1k3.ai.assistant.domain.memory.services
 
+import app.m1k3.ai.assistant.memory.TokenCounter
+import app.m1k3.ai.assistant.memory.SimpleTokenCounter
 import kotlin.math.min
 
 /**
- * 間 AI - Semantic Chunking Strategy
+ * Semantic Chunker - Sentence-aware text chunking
+ *
+ * Domain service - Pure Kotlin, no platform dependencies.
  *
  * Splits long text into semantic chunks for memory storage.
  * Chunks are 100-300 tokens with semantic boundaries and 20-token overlap.
@@ -60,7 +64,7 @@ import kotlin.math.min
  * println("Created ${chunks.size} chunks")
  * ```
  */
-class SemanticChunker(
+open class SemanticChunker(
     private val tokenCounter: TokenCounter = SimpleTokenCounter(),
     private val minChunkTokens: Int = 100,
     private val maxChunkTokens: Int = 300,
@@ -77,7 +81,7 @@ class SemanticChunker(
      * @param role Message role (user/assistant)
      * @return List of chunks meeting size requirements
      */
-    fun chunkMessage(
+    open fun chunkMessage(
         messageContent: String,
         messageId: String,
         projectId: String?,

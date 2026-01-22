@@ -45,7 +45,10 @@ data class ChatUiState(
     val ragInfo: String? = null,
 
     /** Context window usage tracking */
-    val contextWindow: ContextWindowState = ContextWindowState()
+    val contextWindow: ContextWindowState = ContextWindowState(),
+
+    /** Tool state for tool calling support */
+    val toolState: ToolState = ToolState()
 )
 
 /**
@@ -315,3 +318,60 @@ data class ContextWindowState(
         else -> "${historyMessageCount} msgs (${usagePercent.toInt()}%)"
     }
 }
+
+/**
+ * Tool execution state for agentic capabilities.
+ *
+ * Tracks pending confirmations and executed tool results.
+ */
+data class ToolState(
+    /** Tools awaiting user confirmation */
+    val pendingConfirmations: List<ToolConfirmation> = emptyList(),
+
+    /** Results from executed tools (for display) */
+    val executedTools: List<ToolExecutionResult> = emptyList(),
+
+    /** Whether tools are currently executing */
+    val isExecuting: Boolean = false
+) {
+    /** Whether there are pending confirmations */
+    val hasPendingConfirmations: Boolean
+        get() = pendingConfirmations.isNotEmpty()
+}
+
+/**
+ * Tool confirmation request for user approval.
+ */
+data class ToolConfirmation(
+    /** Unique ID for this confirmation request */
+    val id: String,
+
+    /** Tool ID being requested */
+    val toolId: String,
+
+    /** Human-readable tool name */
+    val toolName: String,
+
+    /** Description of what the tool will do */
+    val description: String,
+
+    /** Arguments being passed to the tool */
+    val arguments: Map<String, String>
+)
+
+/**
+ * Result from an executed tool.
+ */
+data class ToolExecutionResult(
+    /** Tool ID that was executed */
+    val toolId: String,
+
+    /** Human-readable result for display */
+    val displayResult: String,
+
+    /** Whether execution was successful */
+    val isSuccess: Boolean,
+
+    /** Error message if failed */
+    val errorMessage: String? = null
+)

@@ -4,19 +4,19 @@ import app.m1k3.ai.assistant.test.TestDatabaseFactory
 import kotlin.test.*
 
 /**
- * Tests for MemoryRepository
+ * Tests for MemoryDataSource
  *
  * Validates CRUD operations, filtering, and statistics.
  */
 class MemoryRepositoryTest {
 
     private lateinit var database: app.m1k3.ai.assistant.database.MaDatabase
-    private lateinit var repository: MemoryRepository
+    private lateinit var repository: MemoryDataSource
 
     @BeforeTest
     fun setup() {
         database = TestDatabaseFactory.createInMemoryDatabase()
-        repository = MemoryRepository(database)
+        repository = MemoryDataSource(database)
 
         // Create test project
         val now = System.currentTimeMillis()

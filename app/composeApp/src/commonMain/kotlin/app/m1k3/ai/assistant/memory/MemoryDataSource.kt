@@ -4,7 +4,7 @@ import app.m1k3.ai.assistant.database.MaDatabase
 import app.m1k3.ai.assistant.database.MemoryMetadata
 
 /**
- * 間 AI - Memory Repository
+ * 間 AI - Memory Data Source
  *
  * Data layer abstraction for semantic memory persistence.
  * Coordinates SQLDelight metadata storage with vector search indices.
@@ -12,7 +12,7 @@ import app.m1k3.ai.assistant.database.MemoryMetadata
  * **Architecture:**
  * - SQLDelight: Memory metadata (importance, chunks, access tracking)
  * - Vector Index: Embeddings for similarity search (external to SQL)
- * - Clean separation: Repository handles SQL, VectorSearch handles vectors
+ * - Clean separation: DataSource handles SQL, VectorSearch handles vectors
  *
  * **Responsibilities:**
  * - CRUD operations for memory metadata
@@ -25,7 +25,7 @@ import app.m1k3.ai.assistant.database.MemoryMetadata
  * - Type-safe operations via SQLDelight
  * - No business logic (that's for MemoryManager)
  */
-class MemoryRepository(
+class MemoryDataSource(
     private val database: MaDatabase
 ) {
 
@@ -248,11 +248,11 @@ class MemoryRepository(
     /**
      * Get comprehensive memory statistics
      */
-    fun getMemoryStats(projectId: String): MemoryRepositoryStats? {
+    fun getMemoryStats(projectId: String): MemoryDataSourceStats? {
         val stats = database.memoryMetadataQueries.getMemoryStats(projectId)
             .executeAsOneOrNull() ?: return null
 
-        return MemoryRepositoryStats(
+        return MemoryDataSourceStats(
             totalMemories = stats.total_memories ?: 0,
             avgImportance = stats.avg_importance?.toFloat() ?: 0f,
             avgDecay = stats.avg_decay?.toFloat() ?: 1f,
@@ -281,9 +281,9 @@ class MemoryRepository(
 }
 
 /**
- * Memory repository statistics
+ * Memory data source statistics
  */
-data class MemoryRepositoryStats(
+data class MemoryDataSourceStats(
     val totalMemories: Long,
     val avgImportance: Float,
     val avgDecay: Float,

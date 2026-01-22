@@ -18,7 +18,7 @@ import kotlin.math.abs
  * Phase 2 Ticket: PHASE2-007
  * Architecture: Domain layer, pure Kotlin (no platform dependencies)
  */
-class ImportanceCalculator {
+open class ImportanceCalculator {
 
     companion object {
         // Base importance
@@ -90,7 +90,7 @@ class ImportanceCalculator {
      * @param context Conversation context for additional signals
      * @return Importance score (0.0 to 1.0)
      */
-    fun calculateImportance(
+    open fun calculateImportance(
         content: String,
         context: ConversationContext = ConversationContext()
     ): Float {

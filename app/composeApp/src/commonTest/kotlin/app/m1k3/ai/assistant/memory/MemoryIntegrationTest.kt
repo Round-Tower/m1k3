@@ -2,6 +2,7 @@ package app.m1k3.ai.assistant.memory
 
 import app.m1k3.ai.assistant.domain.memory.ConversationContext
 import app.m1k3.ai.assistant.domain.memory.ImportanceCalculator
+import app.m1k3.ai.assistant.domain.memory.services.SemanticChunker
 import app.m1k3.ai.assistant.memory.test.MockEmbeddingEngine
 import app.m1k3.ai.assistant.memory.test.MockVectorSearchEngine
 import app.m1k3.ai.assistant.test.TestDatabaseFactory
@@ -43,9 +44,9 @@ import kotlin.test.*
  *      ↓
  * [Query] → VectorSearch → MemoryRepository
  *      ↓
- * ContextAssembler (composite ranking)
+ * MemoryRanker (composite ranking)
  *      ↓
- * ContextResult (formatted for AI prompt)
+ * MemoryRankingResult (formatted for AI prompt)
  * ```
  *
  * **Success Criteria:**
@@ -59,10 +60,10 @@ import kotlin.test.*
 class MemoryIntegrationTest {
 
     private lateinit var database: app.m1k3.ai.assistant.database.MaDatabase
-    private lateinit var repository: MemoryRepository
+    private lateinit var repository: MemoryDataSource
     private lateinit var chunker: SemanticChunker
     private lateinit var importanceCalculator: ImportanceCalculator
-    private lateinit var contextAssembler: ContextAssembler
+    private lateinit var memoryRanker: MemoryRanker
     private lateinit var memoryManager: MemoryManager
     private lateinit var mockEmbeddingEngine: MockEmbeddingEngine
     private lateinit var mockVectorSearch: MockVectorSearchEngine
@@ -70,10 +71,10 @@ class MemoryIntegrationTest {
     @BeforeTest
     fun setup() {
         database = TestDatabaseFactory.createInMemoryDatabase()
-        repository = MemoryRepository(database)
+        repository = MemoryDataSource(database)
         chunker = SemanticChunker(SimpleTokenCounter())
         importanceCalculator = ImportanceCalculator()
-        contextAssembler = ContextAssembler(maxContextTokens = 1000)
+        memoryRanker = MemoryRanker(maxContextTokens = 1000)
 
         mockEmbeddingEngine = MockEmbeddingEngine()
         mockVectorSearch = MockVectorSearchEngine()
@@ -82,7 +83,7 @@ class MemoryIntegrationTest {
             chunker = chunker,
             repository = repository,
             importanceCalculator = importanceCalculator,
-            contextAssembler = contextAssembler,
+            memoryRanker = memoryRanker,
             projectId = "test-project",
             minImportanceThreshold = 0.3f,
             embeddingEngine = mockEmbeddingEngine,

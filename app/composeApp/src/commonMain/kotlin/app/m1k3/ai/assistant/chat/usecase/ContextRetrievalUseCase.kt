@@ -2,7 +2,7 @@ package app.m1k3.ai.assistant.chat.usecase
 
 import app.m1k3.ai.assistant.config.GenerationConstants
 import app.m1k3.ai.assistant.database.MaDatabase
-import app.m1k3.ai.assistant.memory.ContextResult
+import app.m1k3.ai.assistant.domain.chat.services.ContextAssembler
 import app.m1k3.ai.assistant.memory.MemoryManager
 import app.m1k3.ai.assistant.platform.DeviceInfoProviderInterface
 import app.m1k3.ai.assistant.platform.PreferencesStoreInterface
@@ -48,7 +48,8 @@ class ContextRetrievalUseCase(
     private val database: MaDatabase? = null,
     private val projectId: String? = null,
     private val ragManager: RAGManager? = null,
-    private val memoryManager: MemoryManager? = null
+    private val memoryManager: MemoryManager? = null,
+    private val contextAssembler: ContextAssembler = ContextAssembler()
 ) {
     /**
      * Retrieve context for a given prompt.
@@ -85,8 +86,8 @@ class ContextRetrievalUseCase(
             memoryContext = retrieveMemoryContext(prompt)
         }
 
-        // 4. Combine contexts
-        val combinedContext = buildCombinedContext(conversationHistory, ragContext, memoryContext)
+        // 4. Combine contexts using domain service
+        val combinedContext = contextAssembler.assembleContext(conversationHistory, ragContext, memoryContext)
 
         return EnrichedContext(
             context = combinedContext,
@@ -259,32 +260,6 @@ class ContextRetrievalUseCase(
             logger.w(e) { "Memory retrieval failed" }
             ""
         }
-    }
-
-    private fun buildCombinedContext(
-        conversationHistory: String,
-        ragContext: String,
-        memoryContext: String
-    ): String {
-        val parts = mutableListOf<String>()
-
-        // Add conversation context (simplified for small models)
-        // Note: Using plain text, NOT "User:"/"Assistant:" format
-        if (conversationHistory.isNotEmpty()) {
-            parts.add(conversationHistory)
-        }
-
-        // Add RAG facts as simple bullet points
-        if (ragContext.isNotEmpty()) {
-            parts.add(ragContext)
-        }
-
-        // Add semantic memories
-        if (memoryContext.isNotEmpty()) {
-            parts.add(memoryContext)
-        }
-
-        return parts.joinToString("\n")
     }
 
     /**

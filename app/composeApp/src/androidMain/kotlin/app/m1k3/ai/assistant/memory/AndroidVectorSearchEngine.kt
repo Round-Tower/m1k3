@@ -55,7 +55,7 @@ class AndroidVectorSearchEngine(
      *
      * Maps platform SearchResult to memory SearchResult.
      * Default minSimilarity is 0.0 in platform (accepts all results),
-     * filtering will be done by ContextAssembler based on composite scoring.
+     * filtering will be done by MemoryRanker based on composite scoring.
      *
      * @param queryVector Query embedding
      * @param k Number of results to return
@@ -67,7 +67,7 @@ class AndroidVectorSearchEngine(
     ): Result<List<app.m1k3.ai.assistant.memory.SearchResult>> {
         return try {
             // Call platform search with no similarity threshold
-            // (ContextAssembler will do the ranking)
+            // (MemoryRanker will do the ranking)
             val platformResult = platformSearch.search(
                 queryVector = queryVector,
                 k = k,

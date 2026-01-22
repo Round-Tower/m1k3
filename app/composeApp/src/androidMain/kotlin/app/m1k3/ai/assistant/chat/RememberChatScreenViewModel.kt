@@ -4,6 +4,8 @@ import android.content.Context
 import androidx.compose.runtime.*
 import app.m1k3.ai.assistant.ai.BaseLlmEngine
 import app.m1k3.ai.assistant.database.MaDatabase
+import app.m1k3.ai.assistant.domain.tools.services.ToolRegistry
+import app.m1k3.ai.assistant.domain.usecases.chat.ProcessLlmOutputUseCase
 import app.m1k3.ai.assistant.eco.EcoMetricsRepository
 import app.m1k3.ai.assistant.embedding.EmbeddingEngine
 import app.m1k3.ai.assistant.history.ConversationRepository
@@ -12,6 +14,8 @@ import app.m1k3.ai.assistant.platform.DeviceInfoProvider
 import app.m1k3.ai.assistant.platform.PreferencesStore
 import app.m1k3.ai.assistant.rag.RAGManager
 import kotlinx.coroutines.CoroutineScope
+import org.koin.core.component.KoinComponent
+import org.koin.core.component.inject
 
 /**
  * Remember a ChatScreenViewModel scoped to the composition.
@@ -61,6 +65,29 @@ fun rememberChatScreenViewModel(
 }
 
 /**
+ * Koin helper for dependency injection.
+ */
+private object ViewModelDependencies : KoinComponent {
+    val toolRegistry: ToolRegistry? by lazy {
+        try {
+            val registry: ToolRegistry by inject()
+            registry
+        } catch (e: Exception) {
+            null // Tools not available
+        }
+    }
+
+    val processLlmOutput: ProcessLlmOutputUseCase? by lazy {
+        try {
+            val useCase: ProcessLlmOutputUseCase by inject()
+            useCase
+        } catch (e: Exception) {
+            null // Tools not available
+        }
+    }
+}
+
+/**
  * Create a ChatScreenViewModel with all dependencies.
  *
  * This is the factory function that wires up all dependencies.
@@ -90,6 +117,10 @@ private fun createChatScreenViewModel(
     // Note: MemoryManager requires additional setup that would need to be passed in
     val memoryManager: MemoryManager? = null // TODO: Add MemoryManager when available
 
+    // Get tool calling dependencies from Koin (optional - may not be registered yet)
+    val toolRegistry = ViewModelDependencies.toolRegistry
+    val processLlmOutput = ViewModelDependencies.processLlmOutput
+
     return ChatScreenViewModel(
         aiEngine = aiEngine,
         conversationRepo = conversationRepo,
@@ -100,6 +131,8 @@ private fun createChatScreenViewModel(
         scope = scope,
         projectId = projectId,
         memoryManager = memoryManager,
-        ragManager = ragManager
+        ragManager = ragManager,
+        toolRegistry = toolRegistry,
+        processLlmOutput = processLlmOutput
     )
 }

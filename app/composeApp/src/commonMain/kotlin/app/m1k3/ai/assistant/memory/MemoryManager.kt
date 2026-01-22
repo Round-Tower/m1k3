@@ -3,6 +3,10 @@ package app.m1k3.ai.assistant.memory
 import app.m1k3.ai.assistant.database.MemoryMetadata
 import app.m1k3.ai.assistant.domain.memory.ImportanceCalculator
 import app.m1k3.ai.assistant.domain.memory.ConversationContext
+import app.m1k3.ai.assistant.domain.memory.services.Chunk
+import app.m1k3.ai.assistant.domain.memory.services.SemanticChunker
+import app.m1k3.ai.assistant.memory.SearchResult
+import kotlinx.datetime.Clock
 
 /**
  * Documentation signed: Kev + claude-sonnet-4-5-20250929, 2026-01-15
@@ -52,7 +56,7 @@ import app.m1k3.ai.assistant.domain.memory.ConversationContext
  *                              ↓
  *                        MemoryRepository → [MemoryMetadata]
  *                              ↓
- *                        ContextAssembler → Ranked Context
+ *                        MemoryRanker → Ranked Context
  * ```
  *
  * **Philosophy:**
@@ -68,9 +72,9 @@ import app.m1k3.ai.assistant.domain.memory.ConversationContext
  */
 class MemoryManager(
     private val chunker: SemanticChunker,
-    private val repository: MemoryRepository,
+    private val repository: MemoryDataSource,
     private val importanceCalculator: ImportanceCalculator,
-    private val contextAssembler: ContextAssembler,
+    private val memoryRanker: MemoryRanker,
     private val projectId: String,
     private val minImportanceThreshold: Float = 0.3f,
     /**
@@ -142,7 +146,7 @@ class MemoryManager(
             val vectorSearch = vectorSearch
                 ?: return Result.failure(IllegalStateException("Vector search not initialized"))
 
-            val timestamp = System.currentTimeMillis()
+            val timestamp = Clock.System.now().toEpochMilliseconds()
 
             // Step 1: Chunk message
             val chunks = chunker.chunkMessage(
@@ -220,7 +224,7 @@ class MemoryManager(
      * 1. Embed query text
      * 2. Vector search for similar embeddings
      * 3. Fetch memory metadata from repository
-     * 4. Rank with ContextAssembler (composite scoring)
+     * 4. Rank with MemoryRanker (composite scoring)
      * 5. Select within token budget
      *
      * @param queryText User's current message
@@ -230,7 +234,7 @@ class MemoryManager(
     suspend fun retrieveRelevantMemories(
         queryText: String,
         topK: Int = 20
-    ): Result<ContextResult> {
+    ): Result<MemoryRankingResult> {
         return try {
             val embeddingEngine = embeddingEngine
                 ?: return Result.failure(IllegalStateException("Embedding engine not initialized"))
@@ -249,7 +253,7 @@ class MemoryManager(
             ).getOrThrow()
 
             if (searchResults.isEmpty()) {
-                return Result.success(ContextResult(
+                return Result.success(MemoryRankingResult(
                     selectedMemories = emptyList(),
                     totalTokens = 0,
                     droppedCount = 0,
@@ -262,20 +266,20 @@ class MemoryManager(
                 repository.getMemoryByEmbeddingId(result.id)
             }
 
-            // Step 4: Rank and select with context assembler
-            val context = contextAssembler.assembleContext(
+            // Step 4: Rank and select with memory ranker
+            val rankingResult = memoryRanker.rankAndSelect(
                 searchResults = searchResults,
                 memories = memories,
-                currentTimestamp = System.currentTimeMillis()
+                currentTimestamp = Clock.System.now().toEpochMilliseconds()
             )
 
             // Step 5: Update access tracking for selected memories
-            val now = System.currentTimeMillis()
-            context.selectedMemories.forEach { memory ->
+            val now = Clock.System.now().toEpochMilliseconds()
+            rankingResult.selectedMemories.forEach { memory ->
                 repository.updateMemoryAccess(memory.id, now)
             }
 
-            Result.success(context)
+            Result.success(rankingResult)
 
         } catch (e: Exception) {
             Result.failure(e)
@@ -377,7 +381,7 @@ class MemoryManager(
      *
      * @return Statistics about stored memories
      */
-    fun getMemoryStats(): MemoryRepositoryStats? {
+    fun getMemoryStats(): MemoryDataSourceStats? {
         return repository.getMemoryStats(projectId)
     }
 
@@ -419,6 +423,12 @@ private data class ChunkWithImportance(
 
 /**
  * Embedding engine interface (platform-specific implementation)
+ *
+ * **ARCHITECTURE NOTE:**
+ * This is a legacy interface local to MemoryManager.
+ * The canonical interface is `domain.repositories.EmbeddingRepository`.
+ * AndroidEmbeddingEngine adapts platform implementations to this interface.
+ * TODO: Migrate to EmbeddingRepository when wiring CreateMemoryUseCase.
  *
  * Converts text strings to dense vector representations for semantic similarity.
  * Each text is encoded into a fixed-dimensional vector (e.g., 384-dim, 512-dim)
@@ -468,6 +478,12 @@ interface EmbeddingEngine {
 
 /**
  * Vector search engine interface (platform-specific implementation)
+ *
+ * **ARCHITECTURE NOTE:**
+ * This is a legacy interface local to MemoryManager.
+ * No domain equivalent exists yet - would be VectorSearchRepository.
+ * AndroidVectorSearchEngine adapts platform implementations to this interface.
+ * TODO: Create domain.repositories.VectorSearchRepository when expanding domain layer.
  *
  * Performs nearest neighbor search over embedded vectors using cosine similarity.
  * Maintains an in-memory or disk-backed index for fast approximate or exact search.

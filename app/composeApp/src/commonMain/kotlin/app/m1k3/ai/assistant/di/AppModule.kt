@@ -9,8 +9,28 @@ import app.m1k3.ai.assistant.eco.EcoCalculator
 import app.m1k3.ai.assistant.eco.EcoMetricsRepository
 import app.m1k3.ai.assistant.history.ConversationRepository
 import app.m1k3.ai.assistant.history.SearchRepository
-import app.m1k3.ai.assistant.memory.MemoryRepository
+import app.m1k3.ai.assistant.memory.MemoryDataSource
 import app.m1k3.ai.assistant.platform.DeviceInfoProviderInterface
+import app.m1k3.ai.assistant.domain.ai.services.GenerationConfigService
+import app.m1k3.ai.assistant.domain.chat.services.ContextAssembler
+import app.m1k3.ai.assistant.domain.memory.ImportanceCalculator
+import app.m1k3.ai.assistant.domain.memory.services.SemanticChunker
+import app.m1k3.ai.assistant.domain.rag.services.IntentClassifier
+import app.m1k3.ai.assistant.domain.repositories.KnowledgeRepository
+import app.m1k3.ai.assistant.domain.repositories.MemoryRepository
+import app.m1k3.ai.assistant.domain.usecases.memory.CreateMemoryUseCase
+import app.m1k3.ai.assistant.domain.usecases.memory.SearchMemoriesUseCase
+import app.m1k3.ai.assistant.domain.usecases.rag.EnrichPromptWithRAGUseCase
+import app.m1k3.ai.assistant.domain.usecases.tools.ExecuteToolUseCase
+import app.m1k3.ai.assistant.domain.usecases.tools.ParseToolCallUseCase
+import app.m1k3.ai.assistant.domain.usecases.chat.ProcessLlmOutputUseCase
+import app.m1k3.ai.assistant.domain.chat.format.ChatFormat
+import app.m1k3.ai.assistant.domain.chat.services.ChatFormatter
+import app.m1k3.ai.assistant.domain.chat.services.DefaultChatFormatter
+import app.m1k3.ai.assistant.domain.tools.services.ToolCallParser
+import app.m1k3.ai.assistant.domain.tools.services.DefaultToolCallParser
+import app.m1k3.ai.assistant.knowledge.KnowledgeRepositoryImpl
+import app.m1k3.ai.assistant.knowledge.SemanticRetrievalService
 import org.koin.core.module.Module
 import org.koin.core.module.dsl.singleOf
 import org.koin.dsl.module
@@ -82,11 +102,11 @@ val appModule = module {
     singleOf(::EcoMetricsRepository)
 
     /**
-     * Memory repository
+     * Memory data source
      *
-     * Manages semantic memory chunks with HNSW vector index.
+     * Manages semantic memory metadata via SQLDelight.
      */
-    singleOf(::MemoryRepository)
+    singleOf(::MemoryDataSource)
 
     /**
      * Pet metrics repository
@@ -101,6 +121,153 @@ val appModule = module {
      * Handles full-text search across conversations and messages.
      */
     singleOf(::SearchRepository)
+
+    /**
+     * Semantic retrieval service
+     *
+     * RAG knowledge retrieval using embedding-based semantic search.
+     */
+    single {
+        SemanticRetrievalService(
+            database = get(),
+            embeddingEngine = get() // Platform-specific embedding engine
+        )
+    }
+
+    // ===== Domain Services =====
+
+    /**
+     * Intent classifier
+     *
+     * Classifies user queries into 20 intent categories for RAG routing.
+     */
+    single { IntentClassifier() }
+
+    /**
+     * Semantic chunker
+     *
+     * Chunks long text into 100-300 token segments with semantic boundaries.
+     */
+    single { SemanticChunker() }
+
+    /**
+     * Importance calculator
+     *
+     * Calculates importance scores (0.0-1.0) for memory filtering.
+     */
+    single { ImportanceCalculator() }
+
+    /**
+     * Context assembler
+     *
+     * Combines conversation history, RAG facts, and memories into unified context.
+     */
+    single { ContextAssembler() }
+
+    /**
+     * Generation config service
+     *
+     * Device-adaptive AI generation configuration (tokens, temperature).
+     * Uses device RAM and query type for optimization.
+     */
+    single {
+        val deviceInfo = get<DeviceInfoProviderInterface>()
+        val ramGB = deviceInfo.getDeviceRamGB()
+        val tier = when {
+            ramGB >= 12 -> "Flagship"
+            ramGB >= 8 -> "High-end"
+            ramGB >= 6 -> "Mid-range"
+            else -> "Budget"
+        }
+        GenerationConfigService(
+            deviceRamGB = ramGB,
+            deviceTier = tier
+        )
+    }
+
+    // ===== Domain Repository Implementations =====
+
+    /**
+     * Knowledge repository
+     *
+     * Domain-layer wrapper around SemanticRetrievalService for RAG.
+     */
+    single<KnowledgeRepository> {
+        KnowledgeRepositoryImpl(
+            semanticRetrievalService = get() // SemanticRetrievalService registered in platform module
+        )
+    }
+
+    // Note: MemoryRepository implementation will be registered in platform module
+    // (MemoryRepositoryImpl wraps SemanticMemoryManager which requires Android Context)
+
+    // ===== Domain Use Cases =====
+
+    /**
+     * Search memories use case
+     *
+     * Semantic search over conversation memories.
+     */
+    single {
+        SearchMemoriesUseCase(
+            memoryRepository = get() // Domain MemoryRepository interface
+        )
+    }
+
+    /**
+     * Enrich prompt with RAG use case
+     *
+     * Orchestrates intent classification, knowledge retrieval, and category boosting.
+     */
+    single {
+        EnrichPromptWithRAGUseCase(
+            knowledgeRepository = get(),
+            intentClassifier = get()
+        )
+    }
+
+    // Note: CreateMemoryUseCase will be registered in platform module
+    // (requires platform-specific EmbeddingRepository)
+
+    // ===== Tool Calling Infrastructure =====
+
+    /**
+     * Tool call parser
+     *
+     * Parses LLM output for tool calls in JSON or XML format.
+     */
+    single<ToolCallParser> { DefaultToolCallParser() }
+
+    /**
+     * Chat formatter
+     *
+     * Formats prompts and tool schemas for LLM consumption.
+     * Uses Gemma3 format as default (matches SmolLM2).
+     */
+    single<ChatFormatter> { DefaultChatFormatter(ChatFormat.Gemma3) }
+
+    /**
+     * Parse tool call use case
+     *
+     * Wraps parser with structured result.
+     */
+    single { ParseToolCallUseCase(parser = get()) }
+
+    /**
+     * Execute tool use case
+     *
+     * Orchestrates: find tool → validate → confirm? → execute.
+     * ToolRegistry provided by platform module.
+     */
+    single { ExecuteToolUseCase(toolRegistry = get()) }
+
+    /**
+     * Process LLM output use case
+     *
+     * Orchestrates parsing and execution of tool calls from LLM output.
+     * Primary integration point between LLM generation and tool system.
+     */
+    single { ProcessLlmOutputUseCase(parseToolCallUseCase = get(), executeToolUseCase = get()) }
 
     // ===== Utility Layer =====
 

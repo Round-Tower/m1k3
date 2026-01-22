@@ -18,7 +18,7 @@ import kotlinx.coroutines.launch
  *
  * Architecture:
  * ```
- * ChatScreen → EmbeddingsViewModel → EmbeddingRepository → EmbeddingEngine
+ * ChatScreen → EmbeddingsViewModel → EmbeddingEngineManager → EmbeddingEngine
  * ```
  *
  * State Management:
@@ -47,7 +47,7 @@ import kotlinx.coroutines.launch
  * ```
  */
 class EmbeddingsViewModel(
-    private val repository: EmbeddingRepository,
+    private val engineManager: EmbeddingEngineManager,
     private val scope: CoroutineScope
 ) {
     companion object {
@@ -81,15 +81,15 @@ class EmbeddingsViewModel(
         scope.launch {
             // Update to loading state
             _state.value = _state.value.copy(
-                loadStatus = repository.getStatus().copy(state = LoadState.LOADING)
+                loadStatus = engineManager.getStatus().copy(state = LoadState.LOADING)
             )
 
             logger.i { "Initializing..." }
 
-            // Initialize repository (thread-safe, idempotent)
-            repository.initialize()
+            // Initialize engine manager (thread-safe, idempotent)
+            engineManager.initialize()
                 .onSuccess { engine ->
-                    val status = repository.getStatus()
+                    val status = engineManager.getStatus()
                     _state.value = EmbeddingState(
                         loadStatus = status,
                         modelName = engine.modelName,
@@ -103,7 +103,7 @@ class EmbeddingsViewModel(
                     logger.i { "Ready: ${engine.modelName} (${status.loadTimeMs}ms)" }
                 }
                 .onFailure { error ->
-                    val status = repository.getStatus()
+                    val status = engineManager.getStatus()
                     _state.value = _state.value.copy(loadStatus = status)
                     logger.e(error) { "Initialization failed: ${error.message}" }
                 }
@@ -117,14 +117,14 @@ class EmbeddingsViewModel(
      *
      * @return EmbeddingEngine if loaded, null otherwise
      */
-    fun getEngine(): EmbeddingEngine? = repository.getEngine()
+    fun getEngine(): EmbeddingEngine? = engineManager.getEngine()
 
     /**
      * Check if embeddings are ready to use.
      *
      * @return true if engine is loaded and ready
      */
-    fun isReady(): Boolean = repository.isReady()
+    fun isReady(): Boolean = engineManager.isReady()
 
     /**
      * Search across embedding sources (Phase 3b/3c - future expansion).
@@ -167,7 +167,7 @@ class EmbeddingsViewModel(
      */
     fun release() {
         scope.launch {
-            repository.release()
+            engineManager.release()
             _state.value = EmbeddingState()
             logger.i { "Released" }
         }

@@ -3,12 +3,25 @@ package app.m1k3.ai.assistant.embedding
 /**
  * Embedding Engine Interface - Semantic Text Embeddings
  *
+ * **ARCHITECTURE NOTE:**
+ * This is a PLATFORM-LAYER interface for actual embedding engines.
+ *
+ * ```
+ * Domain Layer:     domain.repositories.EmbeddingRepository ← Use cases
+ *                           ↑
+ * Application Layer: EmbeddingEngineManager                ← Lifecycle
+ *                           ↑
+ * Platform Layer:    EmbeddingEngine (this)               ← ML inference
+ *                           ↑
+ * Implementation:    GemmaEmbeddingEngine                 ← ONNX Runtime
+ * ```
+ *
  * Provides text-to-vector conversion for semantic search and RAG.
  * Supports multiple embedding models (Gemma, MiniLM, etc.)
  *
- * Architecture:
+ * Technical specs:
  * - Model: ONNX quantized for mobile inference
- * - Dimensions: 512 (Matryoshka from 768)
+ * - Dimensions: 384 (EmbeddingGemma)
  * - Context: 2048 tokens max
  * - Quantization: INT8 for speed/size balance
  *

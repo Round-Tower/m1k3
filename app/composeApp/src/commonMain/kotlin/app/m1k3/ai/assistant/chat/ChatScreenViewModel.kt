@@ -5,10 +5,15 @@ import androidx.compose.runtime.State
 import androidx.compose.runtime.collectAsState
 import app.m1k3.ai.assistant.ai.BaseLlmEngine
 import app.m1k3.ai.assistant.ai.GenerationConfig
+import app.m1k3.ai.assistant.chat.usecase.ChatEvent
+import app.m1k3.ai.assistant.chat.usecase.ChatWithToolsUseCase
 import app.m1k3.ai.assistant.chat.usecase.ContextRetrievalUseCase
 import app.m1k3.ai.assistant.chat.usecase.EnrichedContext
 import app.m1k3.ai.assistant.config.GenerationConstants
 import app.m1k3.ai.assistant.database.MaDatabase
+import app.m1k3.ai.assistant.domain.tools.ToolResult
+import app.m1k3.ai.assistant.domain.tools.services.ToolRegistry
+import app.m1k3.ai.assistant.domain.usecases.chat.ProcessLlmOutputUseCase
 import app.m1k3.ai.assistant.eco.EcoCalculator
 import app.m1k3.ai.assistant.eco.EcoMetricsRepository
 import app.m1k3.ai.assistant.history.ConversationRepository
@@ -57,7 +62,10 @@ class ChatScreenViewModel(
     private val scope: CoroutineScope,
     private val projectId: String,
     private val memoryManager: MemoryManager? = null,
-    private val ragManager: RAGManager? = null
+    private val ragManager: RAGManager? = null,
+    // Tool calling support (optional - when provided, enables agentic capabilities)
+    private val toolRegistry: ToolRegistry? = null,
+    private val processLlmOutput: ProcessLlmOutputUseCase? = null
 ) {
     // ===== Use Cases (lazy initialization) =====
 
@@ -75,6 +83,31 @@ class ChatScreenViewModel(
     private val configBuilder: GenerationConfigBuilder by lazy {
         GenerationConfigBuilder(deviceInfo)
     }
+
+    /**
+     * ChatWithToolsUseCase for agentic capabilities.
+     * Only created when tool dependencies are provided.
+     */
+    private val chatWithTools: ChatWithToolsUseCase? by lazy {
+        if (toolRegistry != null && processLlmOutput != null) {
+            ChatWithToolsUseCase(
+                aiEngine = aiEngine,
+                contextRetrieval = contextRetrieval,
+                processLlmOutput = processLlmOutput,
+                toolRegistry = toolRegistry,
+                configBuilder = configBuilder
+            )
+        } else {
+            null
+        }
+    }
+
+    /** Whether tool calling is enabled */
+    val isToolCallingEnabled: Boolean
+        get() = chatWithTools != null
+
+    // Track confirmed tools for re-execution
+    private val confirmedToolIds = mutableSetOf<String>()
 
     // ===== State =====
 
@@ -207,11 +240,13 @@ class ChatScreenViewModel(
                     it.copy(
                         messages = emptyList(),
                         sessionEcoStats = SessionEcoStats(),
-                        error = null
+                        error = null,
+                        toolState = ToolState()
                     )
                 }
 
                 currentConversationId = null
+                confirmedToolIds.clear()
                 initializeConversation()
 
                 logger.i { "Conversation cleared" }
@@ -221,6 +256,64 @@ class ChatScreenViewModel(
                     it.copy(error = ChatError.Unknown("Failed to clear: ${e.message}"))
                 }
             }
+        }
+    }
+
+    /**
+     * Confirm a pending tool execution.
+     *
+     * @param confirmationId The ID of the confirmation to approve
+     */
+    fun confirmTool(confirmationId: String) {
+        val confirmation = _uiState.value.toolState.pendingConfirmations.find { it.id == confirmationId }
+        if (confirmation == null) {
+            logger.w { "Confirmation not found: $confirmationId" }
+            return
+        }
+
+        logger.i { "User confirmed tool: ${confirmation.toolId}" }
+        confirmedToolIds.add(confirmation.toolId)
+
+        // Remove from pending and re-execute
+        _uiState.update { state ->
+            state.copy(
+                toolState = state.toolState.copy(
+                    pendingConfirmations = state.toolState.pendingConfirmations.filter { it.id != confirmationId }
+                )
+            )
+        }
+
+        // Re-send the last user message to trigger tool execution
+        val lastUserMessage = _uiState.value.messages.lastOrNull { it.isUser }
+        if (lastUserMessage != null) {
+            scope.launch {
+                generateResponseWithTools(lastUserMessage.text)
+            }
+        }
+    }
+
+    /**
+     * Deny a pending tool execution.
+     *
+     * @param confirmationId The ID of the confirmation to deny
+     */
+    fun denyTool(confirmationId: String) {
+        val confirmation = _uiState.value.toolState.pendingConfirmations.find { it.id == confirmationId }
+        if (confirmation == null) {
+            logger.w { "Confirmation not found: $confirmationId" }
+            return
+        }
+
+        logger.i { "User denied tool: ${confirmation.toolId}" }
+
+        // Remove from pending
+        _uiState.update { state ->
+            state.copy(
+                toolState = state.toolState.copy(
+                    pendingConfirmations = state.toolState.pendingConfirmations.filter { it.id != confirmationId }
+                ),
+                generationState = GenerationState.Idle
+            )
         }
     }
 
@@ -360,6 +453,13 @@ class ChatScreenViewModel(
     }
 
     private suspend fun generateResponse(prompt: String) {
+        // Use ChatWithToolsUseCase if available for agentic capabilities
+        if (chatWithTools != null) {
+            generateResponseWithTools(prompt)
+            return
+        }
+
+        // Legacy path: direct AI generation without tool support
         val placeholderMessage = ChatMessage(
             text = "",
             isUser = false,
@@ -444,6 +544,179 @@ class ChatScreenViewModel(
         } catch (e: Exception) {
             handleGenerationFailure(e)
         }
+    }
+
+    /**
+     * Generate response using ChatWithToolsUseCase for agentic capabilities.
+     * Handles tool execution, confirmations, and result display.
+     */
+    private suspend fun generateResponseWithTools(prompt: String) {
+        val useCase = chatWithTools ?: run {
+            logger.w { "ChatWithToolsUseCase not available, falling back to legacy path" }
+            return
+        }
+
+        val placeholderMessage = ChatMessage(
+            text = "",
+            isUser = false,
+            timestamp = Clock.System.now().toEpochMilliseconds()
+        )
+
+        _uiState.update {
+            it.copy(
+                messages = it.messages + placeholderMessage,
+                toolState = it.toolState.copy(isExecuting = false)
+            )
+        }
+
+        try {
+            useCase.execute(prompt, confirmedToolIds).collect { event ->
+                when (event) {
+                    is ChatEvent.Started -> {
+                        _uiState.update { it.copy(generationState = GenerationState.Thinking) }
+                    }
+
+                    is ChatEvent.RetrievingContext -> {
+                        // Keep thinking state while retrieving context
+                    }
+
+                    is ChatEvent.ContextRetrieved -> {
+                        updateContextWindowState(event.context)
+                    }
+
+                    is ChatEvent.Generating -> {
+                        // Keep thinking state while generating
+                    }
+
+                    is ChatEvent.Streaming -> {
+                        _uiState.update { state ->
+                            val updatedMessages = state.messages.toMutableList()
+                            if (updatedMessages.isNotEmpty()) {
+                                updatedMessages[updatedMessages.lastIndex] = updatedMessages.last().copy(
+                                    text = event.partialText
+                                )
+                            }
+                            state.copy(
+                                messages = updatedMessages,
+                                generationState = GenerationState.Streaming(
+                                    partialText = event.partialText,
+                                    tokenCount = event.tokenCount
+                                )
+                            )
+                        }
+                    }
+
+                    is ChatEvent.ToolsExecuted -> {
+                        handleToolsExecuted(event)
+                    }
+
+                    is ChatEvent.Complete -> {
+                        handleToolsComplete(event)
+                    }
+
+                    is ChatEvent.Failed -> {
+                        val chatError = event.error
+                        _uiState.update { state ->
+                            val updatedMessages = state.messages.dropLast(1)
+                            state.copy(
+                                messages = updatedMessages,
+                                generationState = GenerationState.Failed(chatError),
+                                error = chatError,
+                                toolState = state.toolState.copy(isExecuting = false)
+                            )
+                        }
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            handleGenerationFailure(e)
+        }
+    }
+
+    private fun handleToolsExecuted(event: ChatEvent.ToolsExecuted) {
+        val executedResults = event.results.map { result ->
+            when (result) {
+                is ToolResult.Success -> ToolExecutionResult(
+                    toolId = result.toolId,
+                    displayResult = result.output,
+                    isSuccess = true
+                )
+                is ToolResult.Failure -> ToolExecutionResult(
+                    toolId = result.toolId,
+                    displayResult = result.error.displayMessage,
+                    isSuccess = false,
+                    errorMessage = result.error.displayMessage
+                )
+                is ToolResult.RequiresConfirmation -> ToolExecutionResult(
+                    toolId = result.toolId,
+                    displayResult = "Awaiting confirmation",
+                    isSuccess = false
+                )
+            }
+        }
+
+        val pendingConfirmations = event.results
+            .filterIsInstance<ToolResult.RequiresConfirmation>()
+            .map { result ->
+                ToolConfirmation(
+                    id = "confirm_${result.toolId}_${Clock.System.now().toEpochMilliseconds()}",
+                    toolId = result.toolId,
+                    toolName = result.toolId.replace("_", " ").replaceFirstChar { it.uppercase() },
+                    description = result.confirmationPrompt,
+                    arguments = result.pendingCall.arguments
+                )
+            }
+
+        _uiState.update { state ->
+            state.copy(
+                toolState = ToolState(
+                    pendingConfirmations = pendingConfirmations,
+                    executedTools = executedResults,
+                    isExecuting = false
+                )
+            )
+        }
+
+        logger.i { "Tools executed: ${executedResults.size}, pending confirmations: ${pendingConfirmations.size}" }
+    }
+
+    private fun handleToolsComplete(event: ChatEvent.Complete) {
+        val response = event.response
+        val stats = response.stats
+
+        // Build display text including tool results
+        val displayText = response.getDisplayText()
+
+        _uiState.update { state ->
+            val updatedMessages = state.messages.toMutableList()
+            if (updatedMessages.isNotEmpty()) {
+                updatedMessages[updatedMessages.lastIndex] = updatedMessages.last().copy(
+                    text = displayText,
+                    inferenceStats = stats.formatFull(),
+                    ragSources = stats.ragSources
+                )
+            }
+            state.copy(
+                messages = updatedMessages,
+                generationState = GenerationState.Complete(
+                    finalText = displayText,
+                    stats = stats
+                ),
+                ragInfo = stats.ragInfo,
+                toolState = state.toolState.copy(isExecuting = false)
+            )
+        }
+
+        recordEcoMetrics(stats.tokenCount)
+        recordMessage(
+            content = displayText,
+            role = "assistant",
+            tokens = stats.tokenCount,
+            ragSources = stats.ragSources,
+            ragConfidence = stats.ragConfidence
+        )
+
+        logger.i { "Response with tools: ${stats.tokenCount} tokens in ${stats.durationMs}ms" }
     }
 
     private fun handleGenerationSuccess(

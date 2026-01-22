@@ -1,6 +1,6 @@
 package app.m1k3.ai.assistant.mocks
 
-import app.m1k3.ai.assistant.rag.IntentClassifier
+import app.m1k3.ai.assistant.domain.rag.Intent
 import app.m1k3.ai.assistant.rag.RAGManager
 
 /**
@@ -16,7 +16,7 @@ import app.m1k3.ai.assistant.rag.RAGManager
  * // Configure response
  * mockRag.setRagResult(
  *     enrichedPrompt = "Knowledge about X...",
- *     intent = IntentClassifier.Intent.SCIENCE,
+ *     intent = Intent.SCIENCE,
  *     confidence = 0.85f,
  *     facts = listOf(...)
  * )
@@ -28,7 +28,7 @@ import app.m1k3.ai.assistant.rag.RAGManager
 class MockRAGManager {
     // Configurable responses
     private var enrichedPrompt: String = ""
-    private var intent: IntentClassifier.Intent = IntentClassifier.Intent.GENERAL
+    private var intent: Intent = Intent.GENERAL
     private var confidence: Float = 0f
     private var retrievedFacts: List<RAGManager.RetrievedFact> = emptyList()
     private var ragApplied: Boolean = false
@@ -52,7 +52,7 @@ class MockRAGManager {
      */
     fun setRagResult(
         enrichedPrompt: String,
-        intent: IntentClassifier.Intent = IntentClassifier.Intent.GENERAL,
+        intent: Intent = Intent.GENERAL,
         confidence: Float = 0.8f,
         facts: List<RAGManager.RetrievedFact> = emptyList(),
         ragApplied: Boolean = true
@@ -69,7 +69,7 @@ class MockRAGManager {
      */
     fun setNoRagResults() {
         this.enrichedPrompt = ""
-        this.intent = IntentClassifier.Intent.GENERAL
+        this.intent = Intent.GENERAL
         this.confidence = 0f
         this.retrievedFacts = emptyList()
         this.ragApplied = false
@@ -103,7 +103,7 @@ class MockRAGManager {
         if (!enableRAG) {
             return RAGManager.RAGResult(
                 enrichedPrompt = systemPrompt,
-                intent = IntentClassifier.Intent.GENERAL,
+                intent = Intent.GENERAL,
                 confidence = 0f,
                 retrievedFacts = emptyList(),
                 ragApplied = false
@@ -140,7 +140,7 @@ class MockRAGManager {
      */
     fun reset() {
         enrichedPrompt = ""
-        intent = IntentClassifier.Intent.GENERAL
+        intent = Intent.GENERAL
         confidence = 0f
         retrievedFacts = emptyList()
         ragApplied = false
@@ -159,7 +159,7 @@ class MockRAGManager {
         fun withScienceFacts() = MockRAGManager().apply {
             setRagResult(
                 enrichedPrompt = "Knowledge: Photosynthesis converts sunlight to energy.",
-                intent = IntentClassifier.Intent.SCIENCE,
+                intent = Intent.SCIENCE,
                 confidence = 0.85f,
                 facts = listOf(
                     RAGManager.RetrievedFact(
@@ -177,7 +177,7 @@ class MockRAGManager {
         fun withCodeDebugFacts() = MockRAGManager().apply {
             setRagResult(
                 enrichedPrompt = "Knowledge: NullPointerException occurs when...",
-                intent = IntentClassifier.Intent.CODE_DEBUG,
+                intent = Intent.CODE_DEBUG,
                 confidence = 0.75f,
                 facts = listOf(
                     RAGManager.RetrievedFact(

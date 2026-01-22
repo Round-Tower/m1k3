@@ -7,7 +7,10 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
 /**
- * Android implementation of EmbeddingRepository
+ * Android implementation of EmbeddingEngineManager
+ *
+ * **Application-layer lifecycle manager** for embedding engines.
+ * For domain-layer contracts, see `domain.repositories.EmbeddingRepository`.
  *
  * Wraps EmbeddingModelManager with proper lifecycle and state management.
  *
@@ -23,32 +26,32 @@ import kotlinx.coroutines.withContext
  *
  * Usage:
  * ```kotlin
- * val repository = EmbeddingRepositoryImpl(context)
+ * val manager = EmbeddingEngineManagerImpl.getInstance(context)
  *
  * // Initialize async
  * scope.launch {
- *     repository.initialize().onSuccess { engine ->
+ *     manager.initialize().onSuccess { engine ->
  *         println("Loaded: ${engine.modelName}")
  *     }
  * }
  * ```
  */
-class EmbeddingRepositoryImpl(
+class EmbeddingEngineManagerImpl(
     private val context: Context
-) : EmbeddingRepository {
+) : EmbeddingEngineManager {
 
     companion object {
-        private const val TAG = "EmbeddingRepository"
+        private const val TAG = "EmbeddingEngineManager"
 
         @Volatile
-        private var INSTANCE: EmbeddingRepositoryImpl? = null
+        private var INSTANCE: EmbeddingEngineManagerImpl? = null
 
         /**
          * Get singleton instance (application-scoped)
          */
-        fun getInstance(context: Context): EmbeddingRepositoryImpl {
+        fun getInstance(context: Context): EmbeddingEngineManagerImpl {
             return INSTANCE ?: synchronized(this) {
-                INSTANCE ?: EmbeddingRepositoryImpl(context.applicationContext).also {
+                INSTANCE ?: EmbeddingEngineManagerImpl(context.applicationContext).also {
                     INSTANCE = it
                 }
             }

@@ -1,10 +1,10 @@
 package app.m1k3.ai.assistant.embedding
 
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
-
 /**
- * Embedding Repository - Manage Embedding Engine Lifecycle
+ * Embedding Engine Manager - Application-Layer Lifecycle Management
+ *
+ * **Note:** This is an APPLICATION-LAYER interface for lifecycle management.
+ * For domain-layer embedding contracts, see `domain.repositories.EmbeddingRepository`.
  *
  * Responsibilities:
  * - Thread-safe embedding engine initialization
@@ -14,7 +14,13 @@ import kotlinx.coroutines.sync.withLock
  *
  * Architecture:
  * ```
- * EmbeddingRepository → EmbeddingModelManager → MiniLmEmbeddingEngine (ONNX Runtime)
+ * EmbeddingEngineManager → EmbeddingModelManager → GemmaEmbeddingEngine (ONNX Runtime)
+ *         ↑
+ *    (lifecycle)
+ *
+ * domain.repositories.EmbeddingRepository → (use cases)
+ *         ↑
+ *    (contracts)
  * ```
  *
  * Thread Safety:
@@ -24,20 +30,20 @@ import kotlinx.coroutines.sync.withLock
  *
  * Usage:
  * ```kotlin
- * val repository = EmbeddingRepository.getInstance(context)
+ * val manager = EmbeddingEngineManager.getInstance(context)
  *
  * // Initialize in background
  * scope.launch {
- *     repository.initialize().onSuccess {
+ *     manager.initialize().onSuccess {
  *         println("Embeddings ready!")
  *     }
  * }
  *
  * // Get cached engine
- * val engine = repository.getEngine()
+ * val engine = manager.getEngine()
  * ```
  */
-interface EmbeddingRepository {
+interface EmbeddingEngineManager {
     /**
      * Initialize embedding engine asynchronously.
      *

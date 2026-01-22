@@ -4,13 +4,13 @@ import app.m1k3.ai.assistant.database.MemoryMetadata
 import kotlin.test.*
 
 /**
- * Tests for ContextAssembler
+ * Tests for MemoryRanker
  *
- * Validates composite ranking, token budget management, and context assembly.
+ * Validates composite ranking, token budget management, and memory selection.
  */
-class ContextAssemblerTest {
+class MemoryRankerTest {
 
-    private val assembler = ContextAssembler(
+    private val ranker = MemoryRanker(
         maxContextTokens = 1000,  // Small budget for testing
         similarityWeight = 0.40f,
         recencyWeight = 0.20f,
@@ -46,8 +46,8 @@ class ContextAssemblerTest {
     }
 
     @Test
-    fun `empty inputs return empty context`() {
-        val result = assembler.assembleContext(
+    fun `empty inputs return empty result`() {
+        val result = ranker.rankAndSelect(
             searchResults = emptyList(),
             memories = emptyList()
         )
@@ -61,7 +61,7 @@ class ContextAssemblerTest {
     fun `single memory within budget is selected`() {
         val memory = createMemory("mem-1", "emb-1", chunkTokens = 100)
 
-        val result = assembler.assembleContext(
+        val result = ranker.rankAndSelect(
             searchResults = listOf(SearchResult("emb-1", 0.9f)),
             memories = listOf(memory)
         )
@@ -79,7 +79,7 @@ class ContextAssemblerTest {
         val memory1 = createMemory("mem-1", "emb-1", importance = 0.5, createdAt = now)
         val memory2 = createMemory("mem-2", "emb-2", importance = 0.5, createdAt = now)
 
-        val result = assembler.assembleContext(
+        val result = ranker.rankAndSelect(
             searchResults = listOf(
                 SearchResult("emb-1", 0.9f),  // High similarity
                 SearchResult("emb-2", 0.3f)   // Low similarity
@@ -101,7 +101,7 @@ class ContextAssemblerTest {
         val recentMemory = createMemory("mem-recent", "emb-1", createdAt = now)
         val oldMemory = createMemory("mem-old", "emb-2", createdAt = weekAgo)
 
-        val result = assembler.assembleContext(
+        val result = ranker.rankAndSelect(
             searchResults = listOf(
                 SearchResult("emb-1", 0.5f),
                 SearchResult("emb-2", 0.5f)
@@ -121,7 +121,7 @@ class ContextAssemblerTest {
         val highImportance = createMemory("mem-high", "emb-1", importance = 0.9, createdAt = now)
         val lowImportance = createMemory("mem-low", "emb-2", importance = 0.2, createdAt = now)
 
-        val result = assembler.assembleContext(
+        val result = ranker.rankAndSelect(
             searchResults = listOf(
                 SearchResult("emb-1", 0.5f),
                 SearchResult("emb-2", 0.5f)
@@ -140,7 +140,7 @@ class ContextAssemblerTest {
         val popularMemory = createMemory("mem-popular", "emb-1", accessCount = 50, createdAt = now)
         val unpopularMemory = createMemory("mem-unpopular", "emb-2", accessCount = 0, createdAt = now)
 
-        val result = assembler.assembleContext(
+        val result = ranker.rankAndSelect(
             searchResults = listOf(
                 SearchResult("emb-1", 0.5f),
                 SearchResult("emb-2", 0.5f)
@@ -164,7 +164,7 @@ class ContextAssemblerTest {
 
         // Budget is 1000 tokens, each memory is 100 tokens
         // Should select exactly 10 memories
-        val result = assembler.assembleContext(
+        val result = ranker.rankAndSelect(
             searchResults = searchResults,
             memories = memories
         )
@@ -180,7 +180,7 @@ class ContextAssemblerTest {
         val memory2 = createMemory("mem-2", "emb-2", chunkTokens = 500)
         val memory3 = createMemory("mem-3", "emb-3", chunkTokens = 400)
 
-        val result = assembler.assembleContext(
+        val result = ranker.rankAndSelect(
             searchResults = listOf(
                 SearchResult("emb-1", 0.9f),
                 SearchResult("emb-2", 0.8f),
@@ -201,7 +201,7 @@ class ContextAssemblerTest {
     fun `null chunk tokens are handled gracefully`() {
         val memory = createMemory("mem-1", "emb-1", chunkTokens = null)
 
-        val result = assembler.assembleContext(
+        val result = ranker.rankAndSelect(
             searchResults = listOf(SearchResult("emb-1", 0.9f)),
             memories = listOf(memory)
         )
@@ -225,7 +225,7 @@ class ContextAssemblerTest {
             chunk_index = 0
         )
 
-        val result = assembler.assembleContext(
+        val result = ranker.rankAndSelect(
             searchResults = listOf(
                 SearchResult("emb-1", 0.9f),
                 SearchResult("emb-2", 0.8f),
@@ -251,7 +251,7 @@ class ContextAssemblerTest {
             content = "Second memory content"
         )
 
-        val result = assembler.assembleContext(
+        val result = ranker.rankAndSelect(
             searchResults = listOf(
                 SearchResult("emb-1", 0.9f),
                 SearchResult("emb-2", 0.8f)
@@ -269,7 +269,7 @@ class ContextAssemblerTest {
 
     @Test
     fun `isEmpty returns true for empty result`() {
-        val result = assembler.assembleContext(
+        val result = ranker.rankAndSelect(
             searchResults = emptyList(),
             memories = emptyList()
         )
@@ -281,7 +281,7 @@ class ContextAssemblerTest {
     fun `isEmpty returns false for non-empty result`() {
         val memory = createMemory("mem-1", "emb-1")
 
-        val result = assembler.assembleContext(
+        val result = ranker.rankAndSelect(
             searchResults = listOf(SearchResult("emb-1", 0.9f)),
             memories = listOf(memory)
         )
@@ -294,7 +294,7 @@ class ContextAssemblerTest {
         val memory1 = createMemory("mem-1", "emb-1", importance = 0.8)
         val memory2 = createMemory("mem-2", "emb-2", importance = 0.6)
 
-        val result = assembler.assembleContext(
+        val result = ranker.rankAndSelect(
             searchResults = listOf(
                 SearchResult("emb-1", 0.9f),
                 SearchResult("emb-2", 0.8f)
@@ -328,7 +328,7 @@ class ContextAssemblerTest {
             accessCount = 20
         )
 
-        val result = assembler.assembleContext(
+        val result = ranker.rankAndSelect(
             searchResults = listOf(
                 SearchResult("emb-1", 0.95f),  // Very high similarity
                 SearchResult("emb-2", 0.60f)   // Medium similarity
@@ -354,7 +354,7 @@ class ContextAssemblerTest {
     fun `unmatched embedding IDs are ignored`() {
         val memory = createMemory("mem-1", "emb-1")
 
-        val result = assembler.assembleContext(
+        val result = ranker.rankAndSelect(
             searchResults = listOf(
                 SearchResult("emb-NONEXISTENT", 0.9f)  // No matching memory
             ),

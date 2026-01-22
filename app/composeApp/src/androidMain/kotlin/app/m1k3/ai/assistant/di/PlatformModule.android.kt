@@ -17,6 +17,8 @@ import app.m1k3.ai.assistant.platform.DeviceInfoProvider
 import app.m1k3.ai.assistant.platform.DeviceInfoProviderInterface
 import app.m1k3.ai.assistant.platform.PreferencesStore
 import app.m1k3.ai.assistant.platform.PreferencesStoreInterface
+import app.m1k3.ai.assistant.domain.tools.services.ToolRegistry
+import app.m1k3.ai.assistant.tools.AndroidToolRegistry
 import org.koin.dsl.module
 
 /**
@@ -130,5 +132,19 @@ actual val platformModule = module {
             mlKitEngine = get<MlKitGenAiEngine>(),
             fallbackEngine = get<LlamaCppFallbackEngine>()
         )
+    }
+
+    // ===== Tool Calling Infrastructure =====
+
+    /**
+     * Android Tool Registry
+     *
+     * Registers Android-specific tools:
+     * - Device info (battery, time)
+     * - System controls (flashlight)
+     * - App launchers (camera, browser, settings)
+     */
+    single<ToolRegistry> {
+        AndroidToolRegistry(context = get<Context>())
     }
 }

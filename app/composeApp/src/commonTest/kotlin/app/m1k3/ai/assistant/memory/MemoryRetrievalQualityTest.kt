@@ -3,6 +3,7 @@ package app.m1k3.ai.assistant.memory
 import app.m1k3.ai.assistant.database.MemoryMetadata
 import app.m1k3.ai.assistant.domain.memory.ConversationContext
 import app.m1k3.ai.assistant.domain.memory.ImportanceCalculator
+import app.m1k3.ai.assistant.domain.memory.services.SemanticChunker
 import app.m1k3.ai.assistant.memory.test.DeterministicEmbeddingEngine
 import app.m1k3.ai.assistant.memory.test.DeterministicVectorSearchEngine
 import app.m1k3.ai.assistant.test.TestDatabaseFactory
@@ -44,10 +45,10 @@ import kotlin.test.*
 class MemoryRetrievalQualityTest {
 
     private lateinit var database: app.m1k3.ai.assistant.database.MaDatabase
-    private lateinit var repository: MemoryRepository
+    private lateinit var repository: MemoryDataSource
     private lateinit var chunker: SemanticChunker
     private lateinit var importanceCalculator: ImportanceCalculator
-    private lateinit var contextAssembler: ContextAssembler
+    private lateinit var memoryRanker: MemoryRanker
     private lateinit var memoryManager: MemoryManager
     private lateinit var mockEmbeddingEngine: DeterministicEmbeddingEngine
     private lateinit var mockVectorSearch: DeterministicVectorSearchEngine
@@ -55,10 +56,10 @@ class MemoryRetrievalQualityTest {
     @BeforeTest
     fun setup() {
         database = TestDatabaseFactory.createInMemoryDatabase()
-        repository = MemoryRepository(database)
+        repository = MemoryDataSource(database)
         chunker = SemanticChunker(SimpleTokenCounter())
         importanceCalculator = ImportanceCalculator()
-        contextAssembler = ContextAssembler(maxContextTokens = 1000)
+        memoryRanker = MemoryRanker(maxContextTokens = 1000)
 
         mockEmbeddingEngine = DeterministicEmbeddingEngine()
         mockVectorSearch = DeterministicVectorSearchEngine()
@@ -67,7 +68,7 @@ class MemoryRetrievalQualityTest {
             chunker = chunker,
             repository = repository,
             importanceCalculator = importanceCalculator,
-            contextAssembler = contextAssembler,
+            memoryRanker = memoryRanker,
             projectId = "test-project",
             minImportanceThreshold = 0.3f,
             embeddingEngine = mockEmbeddingEngine,
@@ -235,7 +236,7 @@ class MemoryRetrievalQualityTest {
 
         val contextResult = result.getOrThrow()
 
-        // Budget is 1000 tokens (set in ContextAssembler)
+        // Budget is 1000 tokens (set in MemoryRanker)
         assertTrue(contextResult.totalTokens <= 1000,
             "Total tokens ${contextResult.totalTokens} exceeds budget 1000")
 

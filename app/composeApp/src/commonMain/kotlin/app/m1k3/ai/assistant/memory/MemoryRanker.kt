@@ -2,9 +2,10 @@ package app.m1k3.ai.assistant.memory
 
 import app.m1k3.ai.assistant.database.MemoryMetadata
 import kotlin.math.exp
+import kotlinx.datetime.Clock
 
 /**
- * 間 AI - Context Assembly Algorithm
+ * 間 AI - Memory Ranker
  *
  * Composite ranking system for selecting optimal memories for AI context.
  * Balances semantic relevance, recency, importance, and access patterns.
@@ -46,13 +47,13 @@ import kotlin.math.exp
  *
  * **Usage:**
  * ```kotlin
- * val assembler = ContextAssembler(maxContextTokens = 1000)
- * val result = assembler.assembleContext(searchResults, memories)
+ * val ranker = MemoryRanker(maxContextTokens = 1000)
+ * val result = ranker.rankAndSelect(searchResults, memories)
  * println(result.getStats())  // Debug statistics
  * val contextText = result.formatAsContext()  // For AI prompt
  * ```
  */
-class ContextAssembler(
+class MemoryRanker(
     private val maxContextTokens: Int = 21000,
     private val similarityWeight: Float = 0.40f,
     private val recencyWeight: Float = 0.20f,
@@ -61,20 +62,20 @@ class ContextAssembler(
 ) {
 
     /**
-     * Assemble context from search results and metadata
+     * Rank and select memories from search results
      *
      * @param searchResults Vector search results (id + similarity score)
      * @param memories Full memory metadata from repository
      * @param currentTimestamp Current time for recency calculation
      * @return Ranked memories within token budget
      */
-    fun assembleContext(
+    fun rankAndSelect(
         searchResults: List<SearchResult>,
         memories: List<MemoryMetadata>,
-        currentTimestamp: Long = System.currentTimeMillis()
-    ): ContextResult {
+        currentTimestamp: Long = Clock.System.now().toEpochMilliseconds()
+    ): MemoryRankingResult {
         if (searchResults.isEmpty() || memories.isEmpty()) {
-            return ContextResult(
+            return MemoryRankingResult(
                 selectedMemories = emptyList(),
                 totalTokens = 0,
                 droppedCount = 0,
@@ -105,7 +106,7 @@ class ContextAssembler(
         // Create score map for debugging
         val scoreMap = selected.associate { it.memory.id to it.score }
 
-        return ContextResult(
+        return MemoryRankingResult(
             selectedMemories = selected.map { it.memory },
             totalTokens = selected.sumOf { it.memory.chunk_tokens ?: 0 }.toInt(),
             droppedCount = rankedMemories.size - selected.size,
@@ -244,9 +245,9 @@ private data class ScoredMemory(
 )
 
 /**
- * Context assembly result
+ * Memory ranking result
  */
-data class ContextResult(
+data class MemoryRankingResult(
     val selectedMemories: List<MemoryMetadata>,
     val totalTokens: Int,
     val droppedCount: Int,
@@ -283,7 +284,7 @@ data class ContextResult(
      */
     fun getStats(): String {
         return """
-            |Context Assembly Statistics:
+            |Memory Ranking Statistics:
             |  Selected: ${selectedMemories.size} memories
             |  Total Tokens: $totalTokens
             |  Dropped: $droppedCount memories (budget exceeded)
