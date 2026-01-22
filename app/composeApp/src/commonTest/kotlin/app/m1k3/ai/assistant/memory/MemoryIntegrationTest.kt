@@ -3,7 +3,7 @@ package app.m1k3.ai.assistant.memory
 import app.m1k3.ai.assistant.domain.memory.ConversationContext
 import app.m1k3.ai.assistant.domain.memory.ImportanceCalculator
 import app.m1k3.ai.assistant.domain.memory.services.SemanticChunker
-import app.m1k3.ai.assistant.memory.test.MockEmbeddingEngine
+import app.m1k3.ai.assistant.memory.test.MockEmbeddingRepository
 import app.m1k3.ai.assistant.memory.test.MockVectorSearchEngine
 import app.m1k3.ai.assistant.test.TestDatabaseFactory
 import kotlinx.coroutines.test.runTest
@@ -65,7 +65,7 @@ class MemoryIntegrationTest {
     private lateinit var importanceCalculator: ImportanceCalculator
     private lateinit var memoryRanker: MemoryRanker
     private lateinit var memoryManager: MemoryManager
-    private lateinit var mockEmbeddingEngine: MockEmbeddingEngine
+    private lateinit var mockEmbeddingRepository: MockEmbeddingRepository
     private lateinit var mockVectorSearch: MockVectorSearchEngine
 
     @BeforeTest
@@ -76,7 +76,7 @@ class MemoryIntegrationTest {
         importanceCalculator = ImportanceCalculator()
         memoryRanker = MemoryRanker(maxContextTokens = 1000)
 
-        mockEmbeddingEngine = MockEmbeddingEngine()
+        mockEmbeddingRepository = MockEmbeddingRepository()
         mockVectorSearch = MockVectorSearchEngine()
 
         memoryManager = MemoryManager(
@@ -86,7 +86,7 @@ class MemoryIntegrationTest {
             memoryRanker = memoryRanker,
             projectId = "test-project",
             minImportanceThreshold = 0.3f,
-            embeddingEngine = mockEmbeddingEngine,
+            embeddingRepository = mockEmbeddingRepository,
             vectorSearch = mockVectorSearch
         )
 

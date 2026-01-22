@@ -4,7 +4,7 @@ import app.m1k3.ai.assistant.database.MemoryMetadata
 import app.m1k3.ai.assistant.domain.memory.ConversationContext
 import app.m1k3.ai.assistant.domain.memory.ImportanceCalculator
 import app.m1k3.ai.assistant.domain.memory.services.SemanticChunker
-import app.m1k3.ai.assistant.memory.test.DeterministicEmbeddingEngine
+import app.m1k3.ai.assistant.memory.test.DeterministicEmbeddingRepository
 import app.m1k3.ai.assistant.memory.test.DeterministicVectorSearchEngine
 import app.m1k3.ai.assistant.test.TestDatabaseFactory
 import kotlinx.coroutines.test.runTest
@@ -50,7 +50,7 @@ class MemoryRetrievalQualityTest {
     private lateinit var importanceCalculator: ImportanceCalculator
     private lateinit var memoryRanker: MemoryRanker
     private lateinit var memoryManager: MemoryManager
-    private lateinit var mockEmbeddingEngine: DeterministicEmbeddingEngine
+    private lateinit var mockEmbeddingRepository: DeterministicEmbeddingRepository
     private lateinit var mockVectorSearch: DeterministicVectorSearchEngine
 
     @BeforeTest
@@ -61,7 +61,7 @@ class MemoryRetrievalQualityTest {
         importanceCalculator = ImportanceCalculator()
         memoryRanker = MemoryRanker(maxContextTokens = 1000)
 
-        mockEmbeddingEngine = DeterministicEmbeddingEngine()
+        mockEmbeddingRepository = DeterministicEmbeddingRepository()
         mockVectorSearch = DeterministicVectorSearchEngine()
 
         memoryManager = MemoryManager(
@@ -71,7 +71,7 @@ class MemoryRetrievalQualityTest {
             memoryRanker = memoryRanker,
             projectId = "test-project",
             minImportanceThreshold = 0.3f,
-            embeddingEngine = mockEmbeddingEngine,
+            embeddingRepository = mockEmbeddingRepository,
             vectorSearch = mockVectorSearch
         )
 
@@ -103,7 +103,7 @@ class MemoryRetrievalQualityTest {
 
         // Query about France
         val query = "Tell me about France and Paris"
-        mockEmbeddingEngine.setQueryVector(floatArrayOf(1.0f, 0.0f, 0.0f))  // France vector
+        mockEmbeddingRepository.setQueryVector(floatArrayOf(1.0f, 0.0f, 0.0f))  // France vector
 
         // Configure mock to return France-related memories with high similarity
         mockVectorSearch.setSearchResults(
@@ -149,7 +149,7 @@ class MemoryRetrievalQualityTest {
 
         // Query about France
         val query = "Tell me about France and Paris"
-        mockEmbeddingEngine.setQueryVector(floatArrayOf(1.0f, 0.0f, 0.0f))
+        mockEmbeddingRepository.setQueryVector(floatArrayOf(1.0f, 0.0f, 0.0f))
 
         // Configure mock to return all France-related memories
         mockVectorSearch.setSearchResults(
@@ -188,7 +188,7 @@ class MemoryRetrievalQualityTest {
         createTestDataset()
 
         val query = "programming languages"
-        mockEmbeddingEngine.setQueryVector(floatArrayOf(0.0f, 1.0f, 0.0f))  // Tech vector
+        mockEmbeddingRepository.setQueryVector(floatArrayOf(0.0f, 1.0f, 0.0f))  // Tech vector
 
         mockVectorSearch.setSearchResults(
             listOf(
@@ -222,7 +222,7 @@ class MemoryRetrievalQualityTest {
         createTestDataset()
 
         val query = "any topic"
-        mockEmbeddingEngine.setQueryVector(floatArrayOf(0.5f, 0.5f, 0.5f))
+        mockEmbeddingRepository.setQueryVector(floatArrayOf(0.5f, 0.5f, 0.5f))
 
         // Return many memories to test budget enforcement
         mockVectorSearch.setSearchResults(
@@ -252,7 +252,7 @@ class MemoryRetrievalQualityTest {
         createTestDataset()
 
         val query = "France"
-        mockEmbeddingEngine.setQueryVector(floatArrayOf(1.0f, 0.0f, 0.0f))
+        mockEmbeddingRepository.setQueryVector(floatArrayOf(1.0f, 0.0f, 0.0f))
 
         val now = System.currentTimeMillis()
 

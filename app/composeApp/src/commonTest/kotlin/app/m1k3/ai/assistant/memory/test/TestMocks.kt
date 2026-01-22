@@ -1,19 +1,19 @@
 package app.m1k3.ai.assistant.memory.test
 
-import app.m1k3.ai.assistant.memory.EmbeddingEngine
+import app.m1k3.ai.assistant.domain.repositories.EmbeddingRepository
 import app.m1k3.ai.assistant.memory.SearchResult
 import app.m1k3.ai.assistant.memory.VectorSearchEngine
 
 /**
  * Shared test utilities for Phase 2 Memory System tests.
  *
- * Provides mock implementations of EmbeddingEngine and VectorSearchEngine
+ * Provides mock implementations of EmbeddingRepository and VectorSearchEngine
  * for consistent testing across MemoryManagerTest, MemoryRetrievalQualityTest,
  * and MemoryIntegrationTest.
  */
 
 /**
- * Mock embedding engine that generates deterministic embeddings based on text hash.
+ * Mock embedding repository that generates deterministic embeddings based on text hash.
  *
  * **Behavior:**
  * - Returns embeddings with values in range [0.0, 1.0]
@@ -22,23 +22,48 @@ import app.m1k3.ai.assistant.memory.VectorSearchEngine
  *
  * **Usage:**
  * ```kotlin
- * val mockEngine = MockEmbeddingEngine(dimensions = 384)
- * val memoryManager = MemoryManager(..., embeddingEngine = mockEngine)
+ * val mockRepo = MockEmbeddingRepository(dimensions = 384)
+ * val memoryManager = MemoryManager(..., embeddingRepository = mockRepo)
  * ```
  */
-class MockEmbeddingEngine(
-    override val dimensions: Int = 384
-) : EmbeddingEngine {
+class MockEmbeddingRepository(
+    override val embeddingDimensions: Int = 384,
+    override val modelName: String = "MockEmbedding"
+) : EmbeddingRepository {
 
-    override suspend fun embed(texts: List<String>): Result<List<FloatArray>> {
-        // Generate deterministic embeddings based on text content
+    override suspend fun loadModel(): Result<Unit> = Result.success(Unit)
+
+    override suspend fun embed(text: String): Result<FloatArray> {
+        val embedding = FloatArray(embeddingDimensions) { i ->
+            ((text.hashCode() + i) % 100) / 100f
+        }
+        return Result.success(embedding)
+    }
+
+    override suspend fun embedBatch(texts: List<String>): Result<List<FloatArray>> {
         val embeddings = texts.map { text ->
-            FloatArray(dimensions) { i ->
-                // Use text hash + index to create deterministic but varied values
+            FloatArray(embeddingDimensions) { i ->
                 ((text.hashCode() + i) % 100) / 100f
             }
         }
         return Result.success(embeddings)
+    }
+
+    override fun cosineSimilarity(embedding1: FloatArray, embedding2: FloatArray): Float {
+        require(embedding1.size == embedding2.size) { "Embeddings must have same dimensions" }
+        var dotProduct = 0f
+        var norm1 = 0f
+        var norm2 = 0f
+        for (i in embedding1.indices) {
+            dotProduct += embedding1[i] * embedding2[i]
+            norm1 += embedding1[i] * embedding1[i]
+            norm2 += embedding2[i] * embedding2[i]
+        }
+        return if (norm1 > 0f && norm2 > 0f) {
+            dotProduct / (kotlin.math.sqrt(norm1) * kotlin.math.sqrt(norm2))
+        } else {
+            0f
+        }
     }
 }
 
@@ -106,7 +131,7 @@ class MockVectorSearchEngine : VectorSearchEngine {
 }
 
 /**
- * Deterministic embedding engine with configurable query vector.
+ * Deterministic embedding repository with configurable query vector.
  *
  * **Behavior:**
  * - Returns the same configured vector for all texts (useful for retrieval testing)
@@ -115,35 +140,61 @@ class MockVectorSearchEngine : VectorSearchEngine {
  *
  * **Usage:**
  * ```kotlin
- * val engine = DeterministicEmbeddingEngine()
- * engine.setQueryVector(floatArrayOf(1.0f, 0.0f, 0.0f))  // France vector
+ * val repo = DeterministicEmbeddingRepository()
+ * repo.setQueryVector(floatArrayOf(1.0f, 0.0f, 0.0f))  // France vector
  * ```
  *
  * Used in MemoryRetrievalQualityTest to test precision/recall with known relevance.
  */
-class DeterministicEmbeddingEngine(
-    override val dimensions: Int = 384
-) : EmbeddingEngine {
+class DeterministicEmbeddingRepository(
+    override val embeddingDimensions: Int = 384,
+    override val modelName: String = "DeterministicMock"
+) : EmbeddingRepository {
     private var queryVector: FloatArray? = null
+
+    override suspend fun loadModel(): Result<Unit> = Result.success(Unit)
 
     /**
      * Set the query vector to return for all embed() calls.
      *
-     * @param vector FloatArray of length `dimensions`
+     * @param vector FloatArray of length `embeddingDimensions`
      */
     fun setQueryVector(vector: FloatArray) {
-        require(vector.size == dimensions) { "Vector must be $dimensions-dimensional" }
+        require(vector.size == embeddingDimensions) { "Vector must be $embeddingDimensions-dimensional" }
         queryVector = vector
     }
 
-    override suspend fun embed(texts: List<String>): Result<List<FloatArray>> {
-        // Use query vector if set, otherwise use content hash
+    override suspend fun embed(text: String): Result<FloatArray> {
+        val embedding = queryVector?.copyOf() ?: FloatArray(embeddingDimensions) { i ->
+            ((text.hashCode() + i) % 100) / 100f
+        }
+        return Result.success(embedding)
+    }
+
+    override suspend fun embedBatch(texts: List<String>): Result<List<FloatArray>> {
         val embeddings = texts.map { text ->
-            queryVector?.copyOf() ?: FloatArray(dimensions) { i ->
+            queryVector?.copyOf() ?: FloatArray(embeddingDimensions) { i ->
                 ((text.hashCode() + i) % 100) / 100f
             }
         }
         return Result.success(embeddings)
+    }
+
+    override fun cosineSimilarity(embedding1: FloatArray, embedding2: FloatArray): Float {
+        require(embedding1.size == embedding2.size) { "Embeddings must have same dimensions" }
+        var dotProduct = 0f
+        var norm1 = 0f
+        var norm2 = 0f
+        for (i in embedding1.indices) {
+            dotProduct += embedding1[i] * embedding2[i]
+            norm1 += embedding1[i] * embedding1[i]
+            norm2 += embedding2[i] * embedding2[i]
+        }
+        return if (norm1 > 0f && norm2 > 0f) {
+            dotProduct / (kotlin.math.sqrt(norm1) * kotlin.math.sqrt(norm2))
+        } else {
+            0f
+        }
     }
 }
 

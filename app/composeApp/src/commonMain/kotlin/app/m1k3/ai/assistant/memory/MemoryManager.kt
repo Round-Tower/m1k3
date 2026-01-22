@@ -5,7 +5,7 @@ import app.m1k3.ai.assistant.domain.memory.ImportanceCalculator
 import app.m1k3.ai.assistant.domain.memory.ConversationContext
 import app.m1k3.ai.assistant.domain.memory.services.Chunk
 import app.m1k3.ai.assistant.domain.memory.services.SemanticChunker
-import app.m1k3.ai.assistant.memory.SearchResult
+import app.m1k3.ai.assistant.domain.repositories.EmbeddingRepository
 import kotlinx.datetime.Clock
 
 /**
@@ -78,7 +78,7 @@ class MemoryManager(
     private val projectId: String,
     private val minImportanceThreshold: Float = 0.3f,
     /**
-     * Embedding engine for text-to-vector conversion (platform-specific)
+     * Embedding repository for text-to-vector conversion (domain interface)
      *
      * **Required for:**
      * - `createMemoriesFromMessage()` - Returns Result.failure(IllegalStateException) if null
@@ -89,13 +89,10 @@ class MemoryManager(
      * - Dependency injection in unit tests with mocked operations
      *
      * **Platform implementations:**
-     * - Android: MiniLmEmbeddingEngine (384-dim) or GemmaEmbeddingEngine (512-dim)
-     * - iOS: Core ML embedding models (future)
-     *   - Expected: MiniLM.mlmodel converted via coremltools
-     *   - Thread: CoreML automatically uses Metal/ANE
-     *   - Dimension matching: Verify 384-dim matches Android
+     * - Android: ONNX Runtime adapters (MiniLM, Gemma)
+     * - iOS: Core ML adapters (future)
      */
-    private val embeddingEngine: EmbeddingEngine? = null,
+    private val embeddingRepository: EmbeddingRepository? = null,
     /**
      * Vector search engine for semantic similarity (platform-specific)
      *
@@ -141,8 +138,8 @@ class MemoryManager(
         conversationContext: ConversationContext
     ): Result<Int> {
         return try {
-            val embeddingEngine = embeddingEngine
-                ?: return Result.failure(IllegalStateException("Embedding engine not initialized"))
+            val embeddingRepo = embeddingRepository
+                ?: return Result.failure(IllegalStateException("Embedding repository not initialized"))
             val vectorSearch = vectorSearch
                 ?: return Result.failure(IllegalStateException("Vector search not initialized"))
 
@@ -181,7 +178,7 @@ class MemoryManager(
 
             // Step 3: Generate embeddings (batch for efficiency)
             val texts = importantChunks.map { it.chunk.content }
-            val embeddings = embeddingEngine.embed(texts).getOrThrow()
+            val embeddings = embeddingRepo.embedBatch(texts).getOrThrow()
 
             // Step 4: Store metadata + vectors
             var storedCount = 0
@@ -236,15 +233,13 @@ class MemoryManager(
         topK: Int = 20
     ): Result<MemoryRankingResult> {
         return try {
-            val embeddingEngine = embeddingEngine
-                ?: return Result.failure(IllegalStateException("Embedding engine not initialized"))
+            val embeddingRepo = embeddingRepository
+                ?: return Result.failure(IllegalStateException("Embedding repository not initialized"))
             val vectorSearch = vectorSearch
                 ?: return Result.failure(IllegalStateException("Vector search not initialized"))
 
             // Step 1: Embed query
-            val queryEmbedding = embeddingEngine.embed(listOf(queryText))
-                .getOrThrow()
-                .first()
+            val queryEmbedding = embeddingRepo.embed(queryText).getOrThrow()
 
             // Step 2: Vector search
             val searchResults = vectorSearch.search(
@@ -420,61 +415,6 @@ private data class ChunkWithImportance(
     val chunk: Chunk,
     val importance: Float
 )
-
-/**
- * Embedding engine interface (platform-specific implementation)
- *
- * **ARCHITECTURE NOTE:**
- * This is a legacy interface local to MemoryManager.
- * The canonical interface is `domain.repositories.EmbeddingRepository`.
- * AndroidEmbeddingEngine adapts platform implementations to this interface.
- * TODO: Migrate to EmbeddingRepository when wiring CreateMemoryUseCase.
- *
- * Converts text strings to dense vector representations for semantic similarity.
- * Each text is encoded into a fixed-dimensional vector (e.g., 384-dim, 512-dim)
- * where semantically similar texts produce similar vectors (high cosine similarity).
- *
- * **Platform Implementations:**
- * - Android: MiniLmEmbeddingEngine (ONNX Runtime, 384-dim)
- * - Android: GemmaEmbeddingEngine (ONNX Runtime, 512-dim, dynamic module)
- * - iOS: Core ML embedding models (future)
- *
- * **Threading:**
- * - Implementations handle their own dispatcher switching (typically Dispatchers.Default for CPU inference)
- * - Safe to call from Main thread - will not block UI (suspends internally)
- * - Concurrent embed() calls are safe but may serialize internally to prevent OOM
- * - ONNX Runtime session is thread-safe but tensor creation should be synchronized
- */
-interface EmbeddingEngine {
-    /**
-     * Generate embeddings for multiple texts in batch
-     *
-     * Encodes text strings into normalized vector representations using the loaded
-     * embedding model. Vectors are L2-normalized to unit length for cosine similarity.
-     *
-     * @param texts List of text strings to embed. Must not be empty.
-     *              Each string should be ≤ model's token limit (typically 256-512 tokens).
-     *              Text exceeding token limit is silently truncated to first N tokens.
-     *              Implementations should log warning at Debug level when truncation occurs.
-     *              Empty strings are allowed but may produce zero vectors.
-     * @return Result.success with list of FloatArray vectors (same length as input)
-     *         where each FloatArray.size == dimensions, OR
-     *         Result.failure if:
-     *         - Model not loaded (call loadModel() first)
-     *         - Input is empty list
-     *         - Inference error (OOM, ONNX Runtime error)
-     * @see dimensions The fixed output dimension for all embeddings
-     */
-    suspend fun embed(texts: List<String>): Result<List<FloatArray>>
-
-    /**
-     * Get embedding vector dimensions
-     *
-     * Fixed size for all embeddings produced by this engine.
-     * Common values: 384 (MiniLM), 512 (Gemma), 768 (BERT-base)
-     */
-    val dimensions: Int
-}
 
 /**
  * Vector search engine interface (platform-specific implementation)
