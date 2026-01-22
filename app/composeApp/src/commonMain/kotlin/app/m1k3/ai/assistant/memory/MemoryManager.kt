@@ -420,10 +420,13 @@ private data class ChunkWithImportance(
  * Vector search engine interface (platform-specific implementation)
  *
  * **ARCHITECTURE NOTE:**
- * This is a legacy interface local to MemoryManager.
- * No domain equivalent exists yet - would be VectorSearchRepository.
- * AndroidVectorSearchEngine adapts platform implementations to this interface.
- * TODO: Create domain.repositories.VectorSearchRepository when expanding domain layer.
+ * This is a LEGACY interface local to MemoryManager.
+ * The domain-layer equivalent exists: app.m1k3.ai.domain.repositories.VectorSearchRepository
+ *
+ * **Migration Path:**
+ * - Short-term: This interface wraps platform implementations for MemoryManager
+ * - Long-term: Migrate MemoryManager to use VectorSearchRepository from domain layer
+ * - AndroidVectorSearchEngine currently adapts platform code to this interface
  *
  * Performs nearest neighbor search over embedded vectors using cosine similarity.
  * Maintains an in-memory or disk-backed index for fast approximate or exact search.
