@@ -49,15 +49,17 @@ class KnowledgeImportManager(
          * Current knowledge base version.
          * Increment when KB content changes.
          *
-         * Current: 1.1.0
-         * - 1,391 comprehensive documents
-         * - 10 M1K3 system documents
-         * - Total: 1,401 documents
+         * Current: 1.0.0 (fresh start with tiered retrieval)
+         * - 1,391 comprehensive documents (VERIFIED/SYNTHETIC based on metadata)
+         * - 10 M1K3 system documents (CURATED)
+         * - 25 AI/ML curated documents (CURATED)
+         * - Total: ~1,426 documents with tiered retrieval
          */
-        const val CURRENT_KB_VERSION = "1.1.0"
+        const val CURRENT_KB_VERSION = "1.0.0"
 
         private const val COMPREHENSIVE_KB_PATH = "composeResources/myapplication.composeapp.generated.resources/files/comprehensive_knowledge_base.json"
         private const val SYSTEM_KB_PATH = "composeResources/myapplication.composeapp.generated.resources/files/m1k3_system_knowledge.json"
+        private const val AI_ML_KB_PATH = "knowledge/ai_ml_knowledge.json"
     }
 
     /**
@@ -140,29 +142,55 @@ class KnowledgeImportManager(
             logger.i { "Importing knowledge bases (1,401 documents from 2 sources)" }
 
             // 1. Load comprehensive knowledge base (1,391 docs)
+            // Uses metadata.synthetic flag to determine tier (SYNTHETIC or VERIFIED)
             val comprehensiveJson = loadAssetFile(COMPREHENSIVE_KB_PATH)
-            val comprehensiveResult = importer.importKnowledgeBase(comprehensiveJson)
+            val comprehensiveResult = importer.importKnowledgeBase(
+                jsonContent = comprehensiveJson,
+                tierOverride = null, // Auto-detect from synthetic flag
+                sourceOverride = "comprehensive_kb"
+            )
             logger.i { "Comprehensive KB: ${comprehensiveResult.imported} documents imported" }
 
-            // 2. Load M1K3 system knowledge base (10 docs)
+            // 2. Load M1K3 system knowledge base (10 docs) - CURATED tier
+            // System knowledge is hand-crafted, high-quality content
             val systemJson = loadAssetFile(SYSTEM_KB_PATH)
-            val systemResult = importer.importKnowledgeBase(systemJson)
-            logger.i { "M1K3 System KB: ${systemResult.imported} documents imported" }
+            val systemResult = importer.importKnowledgeBase(
+                jsonContent = systemJson,
+                tierOverride = "CURATED",
+                sourceOverride = "m1k3_system_kb"
+            )
+            logger.i { "M1K3 System KB: ${systemResult.imported} documents imported (CURATED)" }
+
+            // 3. Load AI/ML curated knowledge base (~25 docs) - CURATED tier
+            // Expert-crafted AI/ML educational content
+            val aiMlJson = loadAssetFile(AI_ML_KB_PATH)
+            val aiMlResult = importer.importCuratedKnowledgeBase(
+                jsonContent = aiMlJson,
+                tier = "CURATED",
+                source = "ai_ml_curated"
+            )
+            logger.i { "AI/ML KB: ${aiMlResult.imported} documents imported (CURATED)" }
 
             // Verify combined import
             val verification = importer.verifyImport()
             logger.d { verification.toString() }
 
-            val totalImported = comprehensiveResult.imported + systemResult.imported
+            val totalImported = comprehensiveResult.imported + systemResult.imported + aiMlResult.imported
 
             // Save KB version after successful import
             prefs.edit().putString("kb_version", CURRENT_KB_VERSION).apply()
             logger.i { "Knowledge base version $CURRENT_KB_VERSION saved" }
 
+            // Log tier breakdown
+            val tierStats = database.triviaFactQueries.getTierStats().executeAsList()
+            tierStats.forEach { stat ->
+                logger.i { "  Tier ${stat.tier}: ${stat.fact_count} facts (avg importance: ${"%.2f".format(stat.avg_importance)})" }
+            }
+
             ImportResult.Success(
                 totalDocs = totalImported,
                 comprehensiveDocs = comprehensiveResult.imported,
-                systemDocs = systemResult.imported,
+                systemDocs = systemResult.imported + aiMlResult.imported, // Combined curated docs
                 version = CURRENT_KB_VERSION
             )
 

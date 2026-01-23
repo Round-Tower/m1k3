@@ -35,10 +35,16 @@ class KnowledgeBaseImporter(
      * Imports the comprehensive knowledge base from JSON.
      *
      * @param jsonContent The knowledge base JSON string
+     * @param tierOverride Force all facts to this tier (null = auto-detect from metadata.synthetic)
+     * @param sourceOverride Override the source field (default: "m1k3_kb_v1")
      * @return Import statistics
      */
     @OptIn(ExperimentalUuidApi::class)
-    suspend fun importKnowledgeBase(jsonContent: String): ImportResult = withContext(Dispatchers.Default) {
+    suspend fun importKnowledgeBase(
+        jsonContent: String,
+        tierOverride: String? = null,
+        sourceOverride: String = "m1k3_kb_v1"
+    ): ImportResult = withContext(Dispatchers.Default) {
         try {
             // Parse knowledge base JSON
             val knowledgeBase = json.decodeFromString<KnowledgeBase>(jsonContent)
@@ -51,7 +57,7 @@ class KnowledgeBaseImporter(
             knowledgeBase.documents.forEach { doc ->
                 try {
                     // Map document to TriviaFact schema
-                    val triviaFact = mapDocumentToTriviaFact(doc)
+                    val triviaFact = mapDocumentToTriviaFact(doc, tierOverride)
 
                     // Check if fact already exists
                     val existingFact = database.triviaFactQueries.getTriviaFactById(triviaFact.id).executeAsOneOrNull()
@@ -71,9 +77,10 @@ class KnowledgeBaseImporter(
                             embedding_id = null,
                             has_embedding = 0L, // SQLite INTEGER: 0 = false, 1 = true
                             embedding_vector = null, // PHASE1.5-005: Embeddings generated on-demand
-                            source = "m1k3_kb_v1",
+                            source = sourceOverride,
                             created_at = Clock.System.now().toEpochMilliseconds(),
-                            updated_at = Clock.System.now().toEpochMilliseconds()
+                            updated_at = Clock.System.now().toEpochMilliseconds(),
+                            tier = triviaFact.tier
                         )
                         successCount++
                     } else {
@@ -102,9 +109,12 @@ class KnowledgeBaseImporter(
 
     /**
      * Maps a knowledge base document to TriviaFact schema.
+     *
+     * @param doc The document to map
+     * @param tierOverride Force this tier (null = auto-detect from metadata.synthetic)
      */
     @OptIn(ExperimentalUuidApi::class)
-    private fun mapDocumentToTriviaFact(doc: KnowledgeDocument): TriviaFactData {
+    private fun mapDocumentToTriviaFact(doc: KnowledgeDocument, tierOverride: String? = null): TriviaFactData {
         // Extract question from title (remove "Problem: " prefix if present)
         val question = doc.title.replace(Regex("^(.*?Problem:|.*?Calculation:|.*?Query:)\\s*"), "")
 
@@ -120,6 +130,9 @@ class KnowledgeBaseImporter(
             else -> 0.5
         }
 
+        // Determine tier: override > synthetic flag > default VERIFIED
+        val tier = tierOverride ?: if (doc.metadata.synthetic == true) "SYNTHETIC" else "VERIFIED"
+
         return TriviaFactData(
             id = doc.id,
             category = doc.category,
@@ -127,7 +140,8 @@ class KnowledgeBaseImporter(
             answer = doc.content,
             questionVariants = questionVariants,
             importance = importance.toFloat(),
-            confidence = 1.0f
+            confidence = 1.0f,
+            tier = tier
         )
     }
 
@@ -144,6 +158,74 @@ class KnowledgeBaseImporter(
             categories = categories,
             categoryBreakdown = categoryCounts.associate { it.category to it.count.toInt() }
         )
+    }
+
+    /**
+     * Imports curated AI/ML knowledge base from simplified JSON format.
+     *
+     * This format uses a simpler schema with direct Q&A facts.
+     *
+     * @param jsonContent The AI/ML knowledge base JSON string
+     * @param tier Knowledge tier for all facts (default: CURATED)
+     * @param source Source identifier (default: "ai_ml_curated")
+     * @return Import statistics
+     */
+    suspend fun importCuratedKnowledgeBase(
+        jsonContent: String,
+        tier: String = "CURATED",
+        source: String = "ai_ml_curated"
+    ): ImportResult = withContext(Dispatchers.Default) {
+        try {
+            val kb = json.decodeFromString<CuratedKnowledgeBase>(jsonContent)
+
+            var successCount = 0
+            var skipCount = 0
+            var errorCount = 0
+
+            kb.facts.forEach { fact ->
+                try {
+                    val existingFact = database.triviaFactQueries.getTriviaFactById(fact.id).executeAsOneOrNull()
+
+                    if (existingFact == null) {
+                        database.triviaFactQueries.insertTriviaFact(
+                            id = fact.id,
+                            category = kb.category,
+                            question = fact.question,
+                            answer = fact.answer,
+                            question_variants = fact.tags.joinToString(","),
+                            importance = fact.importance.toDouble(),
+                            confidence = 1.0,
+                            access_count = 0,
+                            last_accessed_at = null,
+                            embedding_id = null,
+                            has_embedding = 0L,
+                            embedding_vector = null,
+                            source = source,
+                            created_at = Clock.System.now().toEpochMilliseconds(),
+                            updated_at = Clock.System.now().toEpochMilliseconds(),
+                            tier = tier
+                        )
+                        successCount++
+                    } else {
+                        skipCount++
+                    }
+                } catch (e: Exception) {
+                    errorCount++
+                    logger.w(e) { "Failed to import curated fact ${fact.id}" }
+                }
+            }
+
+            ImportResult(
+                totalDocuments = kb.facts.size,
+                imported = successCount,
+                skipped = skipCount,
+                errors = errorCount,
+                categories = 1,
+                version = kb.version
+            )
+        } catch (e: Exception) {
+            throw ImportException("Failed to import curated knowledge base", e)
+        }
     }
 }
 
@@ -188,6 +270,28 @@ data class DocumentMetadata(
 )
 
 /**
+ * Curated knowledge base JSON schema (simplified Q&A format).
+ * Used for high-quality, hand-crafted knowledge like ai_ml_knowledge.json.
+ */
+@Serializable
+data class CuratedKnowledgeBase(
+    val category: String,
+    val description: String,
+    val version: String,
+    val lastUpdated: String,
+    val facts: List<CuratedFact>
+)
+
+@Serializable
+data class CuratedFact(
+    val id: String,
+    val question: String,
+    val answer: String,
+    val importance: Float,
+    val tags: List<String>
+)
+
+/**
  * Internal data class for TriviaFact
  */
 data class TriviaFactData(
@@ -197,7 +301,8 @@ data class TriviaFactData(
     val answer: String,
     val questionVariants: String,
     val importance: Float,
-    val confidence: Float
+    val confidence: Float,
+    val tier: String = "SYNTHETIC" // CURATED, VERIFIED, or SYNTHETIC
 )
 
 /**
