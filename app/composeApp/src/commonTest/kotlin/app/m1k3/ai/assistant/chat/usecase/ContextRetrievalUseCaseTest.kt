@@ -4,6 +4,7 @@ import app.m1k3.ai.assistant.config.GenerationConstants
 import app.m1k3.ai.assistant.mocks.MockDeviceInfoProvider
 import app.m1k3.ai.assistant.mocks.TestPreferencesStore
 import app.m1k3.ai.assistant.platform.PreferenceKeys
+import app.m1k3.ai.domain.chat.EnrichedContext
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -171,7 +172,7 @@ class ContextRetrievalUseCaseTest {
         val useCase = ContextRetrievalUseCase(
             deviceInfo = MockDeviceInfoProvider.midRange(),
             preferences = TestPreferencesStore(),
-            ragManager = null,
+            ragEnricher = null,
             memoryManager = null
         )
 
@@ -194,7 +195,7 @@ class ContextRetrievalUseCaseTest {
         val useCase = ContextRetrievalUseCase(
             deviceInfo = MockDeviceInfoProvider.midRange(),
             preferences = prefs,
-            ragManager = null,
+            ragEnricher = null,
             memoryManager = null
         )
 

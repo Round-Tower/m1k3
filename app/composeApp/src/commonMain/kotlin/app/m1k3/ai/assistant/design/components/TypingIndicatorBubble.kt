@@ -78,10 +78,7 @@ fun TypingIndicatorBubble(
     ) {
         Surface(
             modifier = Modifier
-                .wrapContentSize(),
-            color = MaColors.bgSecondary(),
-            shape = RoundedCornerShape(MaRadius.md),
-            shadowElevation = 1.dp
+                .wrapContentSize()
         ) {
             Row(
                 modifier = Modifier
@@ -96,7 +93,6 @@ fun TypingIndicatorBubble(
                         .alpha(dot1Alpha)
                         .background(
                             color = MaColors.textSecondary(),
-                            shape = CircleShape
                         )
                 )
 
@@ -107,7 +103,6 @@ fun TypingIndicatorBubble(
                         .alpha(dot2Alpha)
                         .background(
                             color = MaColors.textSecondary(),
-                            shape = CircleShape
                         )
                 )
 
@@ -118,7 +113,6 @@ fun TypingIndicatorBubble(
                         .alpha(dot3Alpha)
                         .background(
                             color = MaColors.textSecondary(),
-                            shape = CircleShape
                         )
                 )
             }

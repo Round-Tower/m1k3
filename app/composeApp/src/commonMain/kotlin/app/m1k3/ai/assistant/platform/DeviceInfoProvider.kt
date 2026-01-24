@@ -3,36 +3,12 @@ package app.m1k3.ai.assistant.platform
 import app.m1k3.ai.assistant.config.GenerationConstants
 
 /**
- * DeviceInfoProviderInterface - Common interface for device information providers.
+ * DeviceInfoProviderInterface.
  *
- * This interface allows both the platform-specific DeviceInfoProvider and
- * test mocks to be used interchangeably for testing purposes.
+ * @deprecated Use app.m1k3.ai.domain.platform.DeviceInfoProviderInterface instead.
+ * This typealias exists for backward compatibility.
  */
-interface DeviceInfoProviderInterface {
-    /**
-     * Get device RAM in gigabytes.
-     * Used for adaptive token limit calculation.
-     *
-     * @return RAM in GB (e.g., 8 for 8GB device)
-     */
-    fun getDeviceRamGB(): Int
-
-    /**
-     * Get device model name.
-     * Used for debugging and logging.
-     *
-     * @return Device model (e.g., "Pixel 8 Pro")
-     */
-    fun getDeviceModel(): String
-
-    /**
-     * Get current battery level percentage.
-     * Can be used for power-aware generation.
-     *
-     * @return Battery level 0-100, or null if unavailable
-     */
-    fun getBatteryLevel(): Int?
-}
+typealias DeviceInfoProviderInterface = app.m1k3.ai.domain.platform.DeviceInfoProviderInterface
 
 /**
  * DeviceInfoProvider - Platform abstraction for device information.
@@ -76,20 +52,12 @@ expect class DeviceInfoProvider : DeviceInfoProviderInterface {
 }
 
 /**
- * Device tier based on RAM capacity.
+ * DeviceTier.
+ *
+ * @deprecated Use app.m1k3.ai.domain.platform.DeviceTier instead.
+ * This typealias exists for backward compatibility.
  */
-enum class DeviceTier {
-    /** 12GB+ RAM - Full capabilities */
-    FLAGSHIP,
-    /** 8GB+ RAM - High-end features */
-    HIGH_END,
-    /** 6GB+ RAM - Standard features */
-    MID_RANGE,
-    /** 4GB+ RAM - Basic features */
-    BUDGET,
-    /** <4GB RAM - Minimal features */
-    LOW_END
-}
+typealias DeviceTier = app.m1k3.ai.domain.platform.DeviceTier
 
 /**
  * Extension to get device tier from RAM.

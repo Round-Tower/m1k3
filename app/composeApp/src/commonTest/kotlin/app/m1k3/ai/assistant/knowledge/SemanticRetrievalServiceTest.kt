@@ -42,8 +42,8 @@ class SemanticRetrievalServiceTest {
         // All results should be AI-related
         results.forEach { result ->
             assertTrue(
-                result.fact.category == "ai_ml",
-                "Expected AI/ML category, got ${result.fact.category}"
+                result.category == "ai_ml",
+                "Expected AI/ML category, got ${result.category}"
             )
 
             // High similarity (>0.7 for relevant results)
@@ -192,7 +192,7 @@ class SemanticRetrievalServiceTest {
         val keywordResults = keywordService.retrieve(query, limit = 3)
 
         // Semantic should return AI-related facts
-        val semanticAICount = semanticResults.count { it.fact.category == "ai_ml" }
+        val semanticAICount = semanticResults.count { it.category == "ai_ml" }
 
         // Keyword might return irrelevant results
         val keywordAICount = keywordResults.count { it.fact.category == "ai_ml" }
@@ -225,8 +225,8 @@ class SemanticRetrievalServiceTest {
         // All results should be AI-related
         results.forEach { result ->
             assertTrue(
-                result.fact.category == "ai_ml" || result.fact.question.contains("AI", ignoreCase = true),
-                "Expected AI-related fact, got: ${result.fact.question}"
+                result.category == "ai_ml" || result.question.contains("AI", ignoreCase = true),
+                "Expected AI-related fact, got: ${result.question}"
             )
         }
 
@@ -248,7 +248,7 @@ class SemanticRetrievalServiceTest {
         val results = service.retrieve("What is artificial intelligence?", limit = 10)
 
         val shoppingFacts = results.count {
-            it.fact.category == "digital_life" && it.fact.answer.contains("shopping", ignoreCase = true)
+            it.category == "digital_life" && it.answer.contains("shopping", ignoreCase = true)
         }
 
         assertEquals(

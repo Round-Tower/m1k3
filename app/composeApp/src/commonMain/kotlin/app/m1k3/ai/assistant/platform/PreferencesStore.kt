@@ -3,100 +3,12 @@ package app.m1k3.ai.assistant.platform
 import kotlinx.coroutines.flow.Flow
 
 /**
- * PreferencesStoreInterface - Common interface for preferences storage.
+ * PreferencesStoreInterface.
  *
- * This interface allows both the platform-specific PreferencesStore and
- * test mocks to be used interchangeably for testing purposes.
+ * @deprecated Use app.m1k3.ai.domain.platform.PreferencesStoreInterface instead.
+ * This typealias exists for backward compatibility.
  */
-interface PreferencesStoreInterface {
-    // ===== Boolean =====
-
-    /**
-     * Get a boolean preference.
-     *
-     * @param key Preference key
-     * @param default Default value if not set
-     * @return Current value or default
-     */
-    fun getBoolean(key: String, default: Boolean): Boolean
-
-    /**
-     * Set a boolean preference.
-     *
-     * @param key Preference key
-     * @param value Value to store
-     */
-    fun setBoolean(key: String, value: Boolean)
-
-    /**
-     * Observe a boolean preference as a Flow.
-     *
-     * @param key Preference key
-     * @param default Default value if not set
-     * @return Flow that emits when preference changes
-     */
-    fun observeBoolean(key: String, default: Boolean): Flow<Boolean>
-
-    // ===== String =====
-
-    /**
-     * Get a string preference.
-     *
-     * @param key Preference key
-     * @param default Default value if not set
-     * @return Current value or default
-     */
-    fun getString(key: String, default: String?): String?
-
-    /**
-     * Set a string preference.
-     *
-     * @param key Preference key
-     * @param value Value to store (null removes the preference)
-     */
-    fun setString(key: String, value: String?)
-
-    // ===== Int =====
-
-    /**
-     * Get an integer preference.
-     *
-     * @param key Preference key
-     * @param default Default value if not set
-     * @return Current value or default
-     */
-    fun getInt(key: String, default: Int): Int
-
-    /**
-     * Set an integer preference.
-     *
-     * @param key Preference key
-     * @param value Value to store
-     */
-    fun setInt(key: String, value: Int)
-
-    // ===== Operations =====
-
-    /**
-     * Check if a preference exists.
-     *
-     * @param key Preference key
-     * @return true if preference exists
-     */
-    fun contains(key: String): Boolean
-
-    /**
-     * Remove a preference.
-     *
-     * @param key Preference key
-     */
-    fun remove(key: String)
-
-    /**
-     * Clear all preferences.
-     */
-    fun clear()
-}
+typealias PreferencesStoreInterface = app.m1k3.ai.domain.platform.PreferencesStoreInterface
 
 /**
  * PreferencesStore - Platform abstraction for key-value preferences.

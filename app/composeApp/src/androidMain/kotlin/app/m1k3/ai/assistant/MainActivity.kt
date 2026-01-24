@@ -1,55 +1,85 @@
 package app.m1k3.ai.assistant
 
+import android.content.Context
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.lifecycle.lifecycleScope
-import androidx.compose.foundation.layout.*
-import androidx.compose.material3.*
-import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
-import androidx.compose.runtime.*
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.systemBars
+import androidx.compose.material3.DrawerValue
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalNavigationDrawer
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberDrawerState
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.lifecycleScope
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
-import app.m1k3.ai.assistant.navigation.Screen
-import app.m1k3.ai.assistant.navigation.navigateToBottomNav
 import app.m1k3.ai.assistant.ai.BaseLlmEngine
 import app.m1k3.ai.assistant.ai.LlamaCppEngine
+import app.m1k3.ai.assistant.app.AndroidDatabaseInitializer
+import app.m1k3.ai.assistant.app.AppInitializationManager
+import app.m1k3.ai.assistant.app.DatabaseInitResult
+import app.m1k3.ai.assistant.app.ILogger
+import app.m1k3.ai.assistant.app.InitializationResult
+import app.m1k3.ai.assistant.app.KnowledgeImportResult
+import app.m1k3.ai.assistant.avatar.FilamentEngineManager
+import app.m1k3.ai.assistant.avatar.LocalSharedAvatarVM
+import app.m1k3.ai.assistant.avatar.ProvideSharedEngine
+import app.m1k3.ai.assistant.avatar.collectAsState
+import app.m1k3.ai.assistant.avatar.rememberAvatarViewModel
+import app.m1k3.ai.assistant.chat.ChatScreenViewModel
 import app.m1k3.ai.assistant.database.MaDatabase
 import app.m1k3.ai.assistant.design.theme.MaTheme
 import app.m1k3.ai.assistant.design.tokens.MaColors
-import app.m1k3.ai.assistant.avatar.*
-import app.m1k3.ai.assistant.ui.ChatScreen
-import app.m1k3.ai.assistant.ui.HistoryScreen
-import app.m1k3.ai.assistant.ui.EcoStatsScreen
-import app.m1k3.ai.assistant.ui.components.Toolbar
 import app.m1k3.ai.assistant.di.allModules
-import app.m1k3.ai.assistant.utils.Logger
-import app.m1k3.ai.assistant.utils.FilamentSetup
-import app.m1k3.ai.assistant.app.AppInitializationManager
-import app.m1k3.ai.assistant.app.InitializationResult
-import app.m1k3.ai.assistant.app.AndroidDatabaseInitializer
-import app.m1k3.ai.assistant.app.DatabaseInitResult
-import app.m1k3.ai.assistant.app.KnowledgeImportResult
+import app.m1k3.ai.assistant.embedding.EmbeddingEngine
+import app.m1k3.ai.assistant.navigation.Screen
+import app.m1k3.ai.assistant.navigation.navigateToBottomNav
+import app.m1k3.ai.assistant.ui.ChatScreen
+import app.m1k3.ai.assistant.ui.EcoStatsScreen
+import app.m1k3.ai.assistant.ui.HistoryScreen
+import app.m1k3.ai.assistant.ui.components.Toolbar
 import app.m1k3.ai.assistant.ui.demo.MaAIDemo
 import app.m1k3.ai.assistant.ui.drawer.DrawerContent
+import app.m1k3.ai.assistant.utils.FilamentSetup
+import app.m1k3.ai.assistant.utils.Logger
 import co.touchlab.kermit.Logger as KermitLogger
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import org.koin.android.ext.koin.androidContext
 import org.koin.core.context.startKoin
+import app.m1k3.ai.assistant.chat.createChatScreenViewModel
 
 /**
  * M1K3 AI - MainActivity
@@ -170,6 +200,13 @@ class MainActivity : ComponentActivity() {
                         animationSpec = tween(durationMillis = 300)
                     )
 
+                    val chatViewModel = rememberChatScreenViewModel(
+                        aiEngine = aiEngine,
+                        database = database,
+                        context = this,
+                        projectId = "default",
+                    )
+
                     ModalNavigationDrawer(
                         drawerContent = {
                             DrawerContent(
@@ -187,7 +224,7 @@ class MainActivity : ComponentActivity() {
                                     navController.navigateToBottomNav(screen)
                                     haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                                 },
-                                onMenuClose = { drawerOpen = false }
+                                onMenuClose = { drawerOpen = false },
                             )
                         },
                         scrimColor = if (isDarkMode) MaColors.ScrimMedium else MaColors.ScrimMediumLight,
@@ -230,8 +267,7 @@ class MainActivity : ComponentActivity() {
                                     if (database != null) {
                                         ChatScreen(
                                             onEcoStatsClick = { navController.navigate(Screen.EcoStats.route) },
-                                            aiEngine = aiEngine,
-                                            database = database!!
+                                            viewModel = chatViewModel
                                         )
                                     }
                                 }
@@ -352,12 +388,36 @@ private fun getScreenName(route: String?): String = when (route) {
  * Adapter to convert KermitLogger to ILogger interface
  * Bridges the application's logger with AppInitializationManager's expectations
  */
-class LoggerAdapter(private val logger: KermitLogger) : app.m1k3.ai.assistant.app.ILogger {
+class LoggerAdapter(private val logger: KermitLogger) : ILogger {
     override fun i(message: String) {
         logger.i { message }
     }
 
     override fun e(error: Throwable?, message: String) {
         logger.e(error) { message }
+    }
+}
+
+@Composable
+fun rememberChatScreenViewModel(
+    aiEngine: BaseLlmEngine,
+    database: MaDatabase?,
+    context: Context,
+    projectId: String,
+    embeddingEngine: EmbeddingEngine? = null
+): ChatScreenViewModel? {
+    val scope = rememberCoroutineScope()
+    if (database == null) {
+        return null
+    }
+    return remember(projectId, aiEngine, database) {
+        createChatScreenViewModel(
+            aiEngine = aiEngine,
+            database = database,
+            context = context,
+            projectId = projectId,
+            scope = scope,
+            embeddingEngine = embeddingEngine
+        )
     }
 }

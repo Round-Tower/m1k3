@@ -1,10 +1,12 @@
 package app.m1k3.ai.assistant.mocks
 
 import app.m1k3.ai.domain.rag.Intent
-import app.m1k3.ai.assistant.rag.RAGManager
+import app.m1k3.ai.domain.rag.RetrievedFact
+import app.m1k3.ai.domain.rag.services.RAGEnricherInterface
+import app.m1k3.ai.domain.usecases.rag.RAGResult
 
 /**
- * Mock implementation of RAGManager for testing.
+ * Mock implementation of RAGEnricherInterface for testing.
  *
  * Provides predictable RAG responses without requiring
  * actual database or embedding engine.
@@ -25,12 +27,12 @@ import app.m1k3.ai.assistant.rag.RAGManager
  * // Returns configured result
  * ```
  */
-class MockRAGManager {
+class MockRAGManager : RAGEnricherInterface {
     // Configurable responses
     private var enrichedPrompt: String = ""
     private var intent: Intent = Intent.GENERAL
     private var confidence: Float = 0f
-    private var retrievedFacts: List<RAGManager.RetrievedFact> = emptyList()
+    private var retrievedFacts: List<RetrievedFact> = emptyList()
     private var ragApplied: Boolean = false
 
     // Tracking
@@ -54,7 +56,7 @@ class MockRAGManager {
         enrichedPrompt: String,
         intent: Intent = Intent.GENERAL,
         confidence: Float = 0.8f,
-        facts: List<RAGManager.RetrievedFact> = emptyList(),
+        facts: List<RetrievedFact> = emptyList(),
         ragApplied: Boolean = true
     ) {
         this.enrichedPrompt = enrichedPrompt
@@ -84,13 +86,13 @@ class MockRAGManager {
     }
 
     /**
-     * Simulate enrichPrompt method from RAGManager.
+     * Implements RAGEnricherInterface.enrichPrompt.
      */
-    suspend fun enrichPrompt(
+    override suspend fun enrichPrompt(
         userQuery: String,
         systemPrompt: String,
-        enableRAG: Boolean = true
-    ): RAGManager.RAGResult {
+        enableRAG: Boolean
+    ): RAGResult {
         enrichPromptCallCount++
         lastUserQuery = userQuery
         lastSystemPrompt = systemPrompt
@@ -101,7 +103,7 @@ class MockRAGManager {
         }
 
         if (!enableRAG) {
-            return RAGManager.RAGResult(
+            return RAGResult(
                 enrichedPrompt = systemPrompt,
                 intent = Intent.GENERAL,
                 confidence = 0f,
@@ -110,7 +112,7 @@ class MockRAGManager {
             )
         }
 
-        return RAGManager.RAGResult(
+        return RAGResult(
             enrichedPrompt = enrichedPrompt,
             intent = intent,
             confidence = confidence,
@@ -122,7 +124,7 @@ class MockRAGManager {
     /**
      * Format RAG sources for display.
      */
-    fun formatRAGSources(facts: List<RAGManager.RetrievedFact>): String? {
+    fun formatRAGSources(facts: List<RetrievedFact>): String? {
         if (facts.isEmpty()) return null
         return facts.joinToString("; ") { "${it.category}: ${it.content.take(50)}..." }
     }
@@ -130,7 +132,7 @@ class MockRAGManager {
     /**
      * Calculate RAG confidence.
      */
-    fun calculateRAGConfidence(facts: List<RAGManager.RetrievedFact>): Double? {
+    fun calculateRAGConfidence(facts: List<RetrievedFact>): Double? {
         if (facts.isEmpty()) return null
         return facts.map { it.similarity.toDouble() }.average()
     }
@@ -162,7 +164,7 @@ class MockRAGManager {
                 intent = Intent.SCIENCE,
                 confidence = 0.85f,
                 facts = listOf(
-                    RAGManager.RetrievedFact(
+                    RetrievedFact(
                         content = "Photosynthesis converts sunlight to energy",
                         category = "science_facts",
                         similarity = 0.9f
@@ -180,7 +182,7 @@ class MockRAGManager {
                 intent = Intent.CODE_DEBUG,
                 confidence = 0.75f,
                 facts = listOf(
-                    RAGManager.RetrievedFact(
+                    RetrievedFact(
                         content = "NullPointerException occurs when accessing null reference",
                         category = "code_debug",
                         similarity = 0.8f

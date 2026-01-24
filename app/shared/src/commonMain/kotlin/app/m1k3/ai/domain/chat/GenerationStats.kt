@@ -24,14 +24,22 @@ data class GenerationStats(
     val ragConfidence: Double? = null
 ) {
     /**
-     * Format speed as tokens/second string
+     * Format speed as tokens/second string.
      */
-    fun formatSpeed(): String = "${"%.1f".format(tokensPerSecond)} t/s"
+    fun formatSpeed(): String = "%.1f tok/s".format(tokensPerSecond)
 
     /**
-     * Format full stats string for display
+     * Format duration for display.
      */
-    fun formatFull(): String = "⚡ $tokenCount tokens • ${formatSpeed()}"
+    fun formatDuration(): String = when {
+        durationMs >= 1000 -> "%.1fs".format(durationMs / 1000.0)
+        else -> "${durationMs}ms"
+    }
+
+    /**
+     * Format full stats string for display.
+     */
+    fun formatFull(): String = "⚡ $tokenCount tokens in ${formatDuration()} (${formatSpeed()})"
 
     /**
      * Whether RAG was used in generation

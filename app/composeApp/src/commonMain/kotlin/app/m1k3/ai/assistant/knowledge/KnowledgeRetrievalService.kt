@@ -2,6 +2,7 @@ package app.m1k3.ai.assistant.knowledge
 
 import app.m1k3.ai.assistant.database.MaDatabase
 import app.m1k3.ai.assistant.database.TriviaFact
+import app.m1k3.ai.domain.rag.services.CategoryMatcher
 
 /**
  * Documentation signed: Kev + claude-sonnet-4-5-20250929, 2026-01-15

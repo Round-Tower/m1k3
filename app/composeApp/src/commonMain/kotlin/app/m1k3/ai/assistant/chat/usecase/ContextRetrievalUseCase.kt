@@ -2,13 +2,17 @@ package app.m1k3.ai.assistant.chat.usecase
 
 import app.m1k3.ai.assistant.config.GenerationConstants
 import app.m1k3.ai.assistant.database.MaDatabase
+import app.m1k3.ai.domain.chat.EnrichedContext
 import app.m1k3.ai.domain.chat.services.ContextAssembler
 import app.m1k3.ai.assistant.memory.MemoryManager
 import app.m1k3.ai.assistant.platform.DeviceInfoProviderInterface
 import app.m1k3.ai.assistant.platform.PreferencesStoreInterface
 import app.m1k3.ai.assistant.platform.PreferenceKeys
 import app.m1k3.ai.assistant.platform.getMemoryTopK
-import app.m1k3.ai.assistant.rag.RAGManager
+import app.m1k3.ai.domain.chat.services.ContextRetrieverInterface
+import app.m1k3.ai.domain.rag.services.RAGEnricherInterface
+import app.m1k3.ai.domain.rag.services.calculateRAGConfidence
+import app.m1k3.ai.domain.rag.services.formatRAGSources
 import app.m1k3.ai.assistant.utils.Logger
 
 private val logger = Logger.withTag("ContextRetrievalUseCase")
@@ -29,8 +33,8 @@ private val logger = Logger.withTag("ContextRetrievalUseCase")
  *     preferences = preferencesStore,
  *     database = database,
  *     projectId = "default",
- *     ragManager = ragManager,
- *     memoryManager = memoryManager
+ *     ragEnricher = ragManager,  // Implements RAGEnricherInterface
+ *     memoryManager = memoryManager  // Implements MemoryManagerInterface
  * )
  *
  * val result = useCase.retrieveContext("What is photosynthesis?")
@@ -41,23 +45,24 @@ private val logger = Logger.withTag("ContextRetrievalUseCase")
  * - Single Responsibility: Only retrieves context, doesn't generate
  * - Fail-Safe: Individual retrieval failures don't break the flow
  * - Device-Adaptive: Adjusts history and memory limits based on device tier
+ * - Interface-based: Uses domain interfaces (RAGEnricherInterface, MemoryManagerInterface)
  */
 class ContextRetrievalUseCase(
     private val deviceInfo: DeviceInfoProviderInterface,
     private val preferences: PreferencesStoreInterface,
     private val database: MaDatabase? = null,
     private val projectId: String? = null,
-    private val ragManager: RAGManager? = null,
+    private val ragEnricher: RAGEnricherInterface? = null,
     private val memoryManager: MemoryManager? = null,
     private val contextAssembler: ContextAssembler = ContextAssembler()
-) {
+) : ContextRetrieverInterface {
     /**
      * Retrieve context for a given prompt.
      *
      * @param prompt The user's query
      * @return EnrichedContext containing all retrieved context
      */
-    suspend fun retrieveContext(prompt: String): EnrichedContext {
+    override suspend fun retrieveContext(prompt: String): EnrichedContext {
         var conversationHistory = ""
         var ragContext = ""
         var intentCategory = "GENERAL"
@@ -72,7 +77,7 @@ class ContextRetrievalUseCase(
         }
 
         // 2. RAG retrieval (if enabled)
-        if (isRagEnabled() && ragManager != null) {
+        if (isRagEnabled() && ragEnricher != null) {
             val ragResult = retrieveRagContext(prompt)
             ragContext = ragResult.context
             intentCategory = ragResult.intentCategory
@@ -105,7 +110,7 @@ class ContextRetrievalUseCase(
     /**
      * Check if RAG is enabled in preferences.
      */
-    fun isRagEnabled(): Boolean {
+    override fun isRagEnabled(): Boolean {
         return preferences.getBoolean(PreferenceKeys.RAG_ENABLED, true)
     }
 
@@ -185,7 +190,7 @@ class ContextRetrievalUseCase(
 
     private suspend fun retrieveRagContext(prompt: String): RagResult {
         return try {
-            val result = ragManager!!.enrichPrompt(
+            val result = ragEnricher!!.enrichPrompt(
                 userQuery = prompt,
                 systemPrompt = "",
                 enableRAG = true
@@ -212,8 +217,8 @@ class ContextRetrievalUseCase(
                     context = factsContext,  // Facts only, no instructions
                     intentCategory = result.intent.category,
                     ragInfo = ragInfo,
-                    ragSources = ragManager.formatRAGSources(result.retrievedFacts),
-                    ragConfidence = ragManager.calculateRAGConfidence(result.retrievedFacts)
+                    ragSources = result.retrievedFacts.formatRAGSources(),  // Domain extension
+                    ragConfidence = result.retrievedFacts.calculateRAGConfidence()  // Domain extension
                 )
             } else {
                 RagResult(
@@ -274,52 +279,4 @@ class ContextRetrievalUseCase(
     )
 }
 
-/**
- * Enriched context result containing all retrieved context.
- *
- * This is the output of ContextRetrievalUseCase and contains:
- * - Combined context string for prompt enrichment
- * - Conversation history for multi-turn context
- * - Metadata about what was retrieved (history, RAG, memory)
- * - Intent classification for config building
- */
-data class EnrichedContext(
-    /** Combined context string for prompt enrichment */
-    val context: String,
-
-    /** Formatted conversation history (User: X\nAssistant: Y\n...) */
-    val conversationHistory: String? = null,
-
-    /** Detected intent category from RAG (e.g., "SCIENCE", "CODE_DEBUG") */
-    val intentCategory: String,
-
-    /** Human-readable RAG info (e.g., "✅ SCIENCE (85%) • 3 facts") */
-    val ragInfo: String?,
-
-    /** Formatted RAG sources for display */
-    val ragSources: String?,
-
-    /** RAG confidence score (0.0 - 1.0) */
-    val ragConfidence: Double?,
-
-    /** Whether conversation history was retrieved */
-    val hasConversationHistory: Boolean = false,
-
-    /** Whether RAG context was retrieved */
-    val hasRagContext: Boolean,
-
-    /** Whether memory context was retrieved */
-    val hasMemoryContext: Boolean
-) {
-    /** Check if any context was retrieved */
-    val hasContext: Boolean
-        get() = hasConversationHistory || hasRagContext || hasMemoryContext
-
-    /** Check if context is empty */
-    val isEmpty: Boolean
-        get() = context.isEmpty()
-
-    /** Count of turns in conversation history */
-    val conversationTurnCount: Int
-        get() = conversationHistory?.lines()?.size?.div(2) ?: 0
-}
+// EnrichedContext is now imported from app.m1k3.ai.domain.chat.EnrichedContext

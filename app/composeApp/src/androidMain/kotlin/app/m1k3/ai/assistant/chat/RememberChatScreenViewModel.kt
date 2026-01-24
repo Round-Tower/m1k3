@@ -1,11 +1,11 @@
 package app.m1k3.ai.assistant.chat
 
 import android.content.Context
-import androidx.compose.runtime.*
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import app.m1k3.ai.assistant.ai.BaseLlmEngine
 import app.m1k3.ai.assistant.database.MaDatabase
-import app.m1k3.ai.domain.tools.services.ToolRegistry
-import app.m1k3.ai.domain.usecases.chat.ProcessLlmOutputUseCase
 import app.m1k3.ai.assistant.eco.EcoMetricsRepository
 import app.m1k3.ai.assistant.embedding.EmbeddingEngine
 import app.m1k3.ai.assistant.history.ConversationRepository
@@ -13,6 +13,8 @@ import app.m1k3.ai.assistant.memory.MemoryManager
 import app.m1k3.ai.assistant.platform.DeviceInfoProvider
 import app.m1k3.ai.assistant.platform.PreferencesStore
 import app.m1k3.ai.assistant.rag.RAGManager
+import app.m1k3.ai.domain.tools.services.ToolRegistry
+import app.m1k3.ai.domain.usecases.chat.ProcessLlmOutputUseCase
 import kotlinx.coroutines.CoroutineScope
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
@@ -92,7 +94,7 @@ private object ViewModelDependencies : KoinComponent {
  *
  * This is the factory function that wires up all dependencies.
  */
-private fun createChatScreenViewModel(
+fun createChatScreenViewModel(
     aiEngine: BaseLlmEngine,
     database: MaDatabase,
     context: Context,

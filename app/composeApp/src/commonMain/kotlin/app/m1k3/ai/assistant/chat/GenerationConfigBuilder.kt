@@ -5,6 +5,7 @@ import app.m1k3.ai.assistant.config.GenerationConstants
 import app.m1k3.ai.assistant.platform.DeviceInfoProviderInterface
 import app.m1k3.ai.assistant.platform.DeviceTier
 import app.m1k3.ai.assistant.platform.getDeviceTier
+import app.m1k3.ai.domain.chat.QueryType as DomainQueryType
 
 /**
  * GenerationConfigBuilder - Builds adaptive AI generation configurations.
@@ -102,6 +103,7 @@ class GenerationConfigBuilder(
             QueryType.TECHNICAL -> calculateTechnicalTokens(deviceRamGB)
             QueryType.FACTUAL -> calculateFactualTokens(deviceRamGB)
             QueryType.CONVERSATIONAL -> calculateConversationalTokens(deviceRamGB)
+            QueryType.CREATIVE -> calculateEducationalTokens(deviceRamGB) // Same as educational
         }
     }
 
@@ -117,6 +119,7 @@ class GenerationConfigBuilder(
             QueryType.TECHNICAL -> GenerationConstants.Temperature.FOCUSED
             QueryType.FACTUAL -> GenerationConstants.Temperature.DEFAULT
             QueryType.CONVERSATIONAL -> GenerationConstants.Temperature.CREATIVE
+            QueryType.CREATIVE -> 0.9f // Highest creativity
         }
     }
 
@@ -168,81 +171,10 @@ class GenerationConfigBuilder(
 }
 
 /**
- * Query type classification for generation configuration.
+ * QueryType - Typealias to domain QueryType.
  *
- * Maps RAG intent categories to simplified query types for
- * token limit and temperature selection.
+ * For backward compatibility with code using app.m1k3.ai.assistant.chat.QueryType.
+ *
+ * @see app.m1k3.ai.domain.chat.QueryType for the full implementation
  */
-enum class QueryType {
-    /**
-     * Educational queries: history, science, geography, learning.
-     * Requires longer, detailed responses.
-     */
-    EDUCATIONAL,
-
-    /**
-     * Technical queries: code debugging, math, technical explanations.
-     * Requires precise, structured responses.
-     */
-    TECHNICAL,
-
-    /**
-     * Factual queries: device tech, WiFi, security, troubleshooting, trivia.
-     * Requires accurate, concise responses.
-     */
-    FACTUAL,
-
-    /**
-     * Conversational queries: greetings, casual chat, general topics.
-     * Allows more creative, natural responses.
-     */
-    CONVERSATIONAL;
-
-    companion object {
-        /**
-         * Map RAG intent category to QueryType.
-         *
-         * Intent categories from IntentClassifier are mapped to
-         * simplified query types for configuration purposes.
-         */
-        fun fromIntentCategory(category: String): QueryType {
-            val normalizedCategory = category.uppercase().trim()
-
-            return when {
-                // Educational categories
-                normalizedCategory in EDUCATIONAL_INTENTS -> EDUCATIONAL
-
-                // Technical categories
-                normalizedCategory in TECHNICAL_INTENTS -> TECHNICAL
-
-                // Factual categories
-                normalizedCategory in FACTUAL_INTENTS -> FACTUAL
-
-                // Default to conversational
-                else -> CONVERSATIONAL
-            }
-        }
-
-        // Intent category mappings (from IntentClassifier)
-        private val EDUCATIONAL_INTENTS = setOf(
-            "HISTORY", "SCIENCE", "GEOGRAPHY",
-            "EDUCATION", "AI_ML", "AI & ML",
-            "MOVIES_TV", "MUSIC", "SPORTS",
-            "FOOD", "LIFESTYLE"
-        )
-
-        private val TECHNICAL_INTENTS = setOf(
-            "MATH", "CODE_DEBUG", "CODE DEBUG",
-            "TECHNICAL_EXPLANATION", "TECHNICAL EXPLANATION",
-            "SYSTEM"
-        )
-
-        private val FACTUAL_INTENTS = setOf(
-            "DEVICE_TECH", "DEVICE TECH",
-            "WIFI_NETWORK", "WIFI NETWORK",
-            "SECURITY", "SECURITY_PRIVACY", "SECURITY & PRIVACY",
-            "TROUBLESHOOTING", "DIAGNOSTIC",
-            "TRIVIA", "TECHNOLOGY"
-        )
-    }
-}
+typealias QueryType = DomainQueryType

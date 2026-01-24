@@ -1,5 +1,9 @@
 package app.m1k3.ai.assistant.chat
 
+// Import domain types
+import app.m1k3.ai.domain.chat.ChatError
+import app.m1k3.ai.domain.chat.GenerationStats
+
 /**
  * ChatUiState - Single source of truth for ChatScreen UI state.
  *
@@ -111,89 +115,29 @@ sealed class EngineState {
     data class Failed(val error: ChatError) : EngineState()
 }
 
+// ChatError is imported from app.m1k3.ai.domain.chat.ChatError
+// GenerationStats is imported from app.m1k3.ai.domain.chat.GenerationStats
+
 /**
- * Chat error types for user-friendly error handling.
- *
- * Maps low-level exceptions to user-understandable errors.
+ * Extension: Get user-friendly error message for UI display.
  */
-sealed class ChatError {
-    /** Memory error (OOM during generation) */
-    data class OutOfMemory(val message: String) : ChatError()
-
-    /** Generation timeout */
-    data class Timeout(val message: String) : ChatError()
-
-    /** Model loading or inference error */
-    data class ModelError(val message: String) : ChatError()
-
-    /** Engine initialization error */
-    data class EngineInitError(val message: String) : ChatError()
-
-    /** Unknown/unexpected error */
-    data class Unknown(val message: String) : ChatError()
-
-    /**
-     * Get user-friendly error message.
-     */
-    fun toUserMessage(): String = when (this) {
-        is OutOfMemory -> "Not enough memory. Try closing other apps."
-        is Timeout -> "Response took too long. Please try again."
-        is ModelError -> "AI model error: $message"
-        is EngineInitError -> "Failed to start AI: $message"
-        is Unknown -> "Something went wrong: $message"
-    }
-
-    /**
-     * Get emoji for error type.
-     */
-    fun toEmoji(): String = when (this) {
-        is OutOfMemory -> "💾"
-        is Timeout -> "⏱️"
-        is ModelError -> "🤖"
-        is EngineInitError -> "⚙️"
-        is Unknown -> "❌"
-    }
+fun ChatError.toUserMessage(): String = when (this) {
+    is ChatError.OutOfMemory -> "Not enough memory. Try closing other apps."
+    is ChatError.Timeout -> "Response took too long. Please try again."
+    is ChatError.ModelError -> "AI model error: $message"
+    is ChatError.EngineInitError -> "Failed to start AI: $message"
+    is ChatError.Unknown -> "Something went wrong: $message"
 }
 
 /**
- * Statistics from a completed generation.
+ * Extension: Get emoji for error type in UI display.
  */
-data class GenerationStats(
-    /** Total tokens generated */
-    val tokenCount: Int,
-
-    /** Generation duration in milliseconds */
-    val durationMs: Long,
-
-    /** Tokens per second */
-    val tokensPerSecond: Float,
-
-    /** RAG information if used */
-    val ragInfo: String? = null,
-
-    /** RAG sources for display */
-    val ragSources: String? = null,
-
-    /** RAG confidence score */
-    val ragConfidence: Double? = null
-) {
-    /**
-     * Format speed for display.
-     */
-    fun formatSpeed(): String = "%.1f tok/s".format(tokensPerSecond)
-
-    /**
-     * Format duration for display.
-     */
-    fun formatDuration(): String = when {
-        durationMs >= 1000 -> "%.1fs".format(durationMs / 1000.0)
-        else -> "${durationMs}ms"
-    }
-
-    /**
-     * Format full stats for display.
-     */
-    fun formatFull(): String = "⚡ $tokenCount tokens in ${formatDuration()} (${formatSpeed()})"
+fun ChatError.toEmoji(): String = when (this) {
+    is ChatError.OutOfMemory -> "💾"
+    is ChatError.Timeout -> "⏱️"
+    is ChatError.ModelError -> "🤖"
+    is ChatError.EngineInitError -> "⚙️"
+    is ChatError.Unknown -> "❌"
 }
 
 /**

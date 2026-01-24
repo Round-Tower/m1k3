@@ -28,7 +28,7 @@ import app.m1k3.ai.domain.usecases.tools.ParseToolCallUseCase
 class ProcessLlmOutputUseCase(
     private val parseToolCallUseCase: ParseToolCallUseCase,
     private val executeToolUseCase: ExecuteToolUseCase
-) {
+) : LlmOutputProcessor {
 
     /**
      * Process LLM output for tool calls
@@ -38,9 +38,9 @@ class ProcessLlmOutputUseCase(
      *                         (for tools requiring confirmation)
      * @return ProcessedOutput containing either text only or tool results
      */
-    suspend fun execute(
+    override suspend fun execute(
         llmOutput: String,
-        confirmedToolIds: Set<String> = emptySet()
+        confirmedToolIds: Set<String>
     ): ProcessedOutput {
         // Step 1: Parse for tool calls
         val parseResult = parseToolCallUseCase.execute(llmOutput)
@@ -75,7 +75,7 @@ class ProcessLlmOutputUseCase(
      * @param llmOutput Raw text output from the LLM
      * @return true if tool calls are present
      */
-    fun hasToolCalls(llmOutput: String): Boolean {
+    override fun hasToolCalls(llmOutput: String): Boolean {
         return parseToolCallUseCase.execute(llmOutput).toolCalls.isNotEmpty()
     }
 
@@ -85,7 +85,7 @@ class ProcessLlmOutputUseCase(
      * @param llmOutput Raw text output from the LLM
      * @return Plain text with tool call syntax removed
      */
-    fun extractPlainText(llmOutput: String): String {
+    override fun extractPlainText(llmOutput: String): String {
         return parseToolCallUseCase.execute(llmOutput).plainText
     }
 }

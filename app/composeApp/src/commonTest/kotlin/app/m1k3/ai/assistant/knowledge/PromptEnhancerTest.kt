@@ -1,6 +1,7 @@
 package app.m1k3.ai.assistant.knowledge
 
-import app.m1k3.ai.assistant.database.TriviaFact
+import app.m1k3.ai.domain.rag.KnowledgeTier
+import app.m1k3.ai.domain.rag.SemanticRetrievedFact
 import kotlin.test.Test
 import kotlin.test.Ignore
 import kotlin.test.assertEquals
@@ -65,7 +66,7 @@ class PromptEnhancerTest {
 
         val result = PromptEnhancer.enhancePrompt(
             userQuery = "Tell me about AI",
-            retrievedFacts = facts.map { it.toRetrievedFact() },
+            retrievedFacts = facts,
             minSimilarity = 0.6f
         )
 
@@ -84,7 +85,7 @@ class PromptEnhancerTest {
 
         val result = PromptEnhancer.enhancePrompt(
             userQuery = "Tell me about AI",
-            retrievedFacts = facts.map { it.toRetrievedFact() },
+            retrievedFacts = facts,
             minSimilarity = 0.6f
         )
 
@@ -106,7 +107,7 @@ class PromptEnhancerTest {
 
         val result = PromptEnhancer.enhancePrompt(
             userQuery = "Tell me about AI",
-            retrievedFacts = facts.map { it.toRetrievedFact() }
+            retrievedFacts = facts
         )
 
         // Should show similarity as percentage (89%)
@@ -146,7 +147,7 @@ class PromptEnhancerTest {
 
         val result = PromptEnhancer.enhancePrompt(
             userQuery = "Tell me about AI",
-            retrievedFacts = facts.map { it.toRetrievedFact() }
+            retrievedFacts = facts
         )
 
         // Check for key guardrail phrases
@@ -164,7 +165,7 @@ class PromptEnhancerTest {
 
         val result = PromptEnhancer.enhancePrompt(
             userQuery = "Tell me about AI",
-            retrievedFacts = facts.map { it.toRetrievedFact() }
+            retrievedFacts = facts
         )
 
         // Should explicitly tell model it can ignore irrelevant knowledge
@@ -183,7 +184,7 @@ class PromptEnhancerTest {
 
         val result = PromptEnhancer.enhancePrompt(
             userQuery = "Tell me about AI",
-            retrievedFacts = facts.map { it.toRetrievedFact() }
+            retrievedFacts = facts
         )
 
         val preview = result.knowledgePreview.first()
@@ -244,7 +245,7 @@ class PromptEnhancerTest {
 
         val result = PromptEnhancer.enhancePrompt(
             userQuery = "Can you teach me about artificial intelligence?",
-            retrievedFacts = facts.map { it.toRetrievedFact() },
+            retrievedFacts = facts,
             minSimilarity = 0.6f
         )
 
@@ -294,26 +295,16 @@ class PromptEnhancerTest {
         question: String,
         answer: String,
         category: String = "ai_ml"
-    ): RetrievedFact {
-        val now = System.currentTimeMillis()
-        return RetrievedFact(
-            fact = TriviaFact(
-                id = "fact_${question.hashCode()}",
-                category = category,
-                question = question,
-                answer = answer,
-                question_variants = null,
-                importance = 0.8,
-                confidence = 1.0,
-                access_count = 0,
-                last_accessed_at = null,
-                embedding_id = null,
-                has_embedding = 0,
-                embedding_vector = null,
-                source = "test",
-                created_at = now,
-                updated_at = now
-            ),
+    ): SemanticRetrievedFact {
+        // Legacy keyword retrieval is now represented as SemanticRetrievedFact
+        // with lower similarity to indicate keyword-based (non-semantic) origin
+        return SemanticRetrievedFact(
+            id = "fact_${question.hashCode()}",
+            question = question,
+            answer = answer,
+            category = category,
+            tier = KnowledgeTier.CURATED,
+            similarityScore = 0.7f, // Keyword facts have moderate similarity
             relevanceScore = 0.8,
             retrievalMethod = "keyword"
         )
@@ -324,30 +315,15 @@ class PromptEnhancerTest {
         similarity: Float,
         category: String = "ai_ml"
     ): SemanticRetrievedFact {
-        val now = System.currentTimeMillis()
-        // Mock embedding as byte array (384-dim float32 = 1536 bytes)
-        val mockEmbedding = ByteArray(1536) { 0 }
         return SemanticRetrievedFact(
-            fact = TriviaFact(
-                id = "fact_${question.hashCode()}",
-                category = category,
-                question = question,
-                answer = "Answer to $question",
-                question_variants = null,
-                importance = 0.8,
-                confidence = 1.0,
-                access_count = 0,
-                last_accessed_at = null,
-                embedding_id = "emb_${question.hashCode()}",
-                has_embedding = 1,
-                embedding_vector = mockEmbedding,
-                source = "test",
-                created_at = now,
-                updated_at = now
-            ),
+            id = "fact_${question.hashCode()}",
+            question = question,
+            answer = "Answer to $question",
+            category = category,
+            tier = KnowledgeTier.CURATED,
+            similarityScore = similarity,
             relevanceScore = (similarity * 0.7 + 0.8 * 0.3), // Combined score
-            retrievalMethod = "semantic_embedding",
-            similarityScore = similarity
+            retrievalMethod = "semantic_embedding"
         )
     }
 }

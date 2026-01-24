@@ -2,30 +2,49 @@ package app.m1k3.ai.assistant.ui
 
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Snackbar
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
-import org.jetbrains.compose.ui.tooling.preview.Preview
-import app.m1k3.ai.assistant.ai.BaseLlmEngine
-import app.m1k3.ai.assistant.avatar.*
-import app.m1k3.ai.assistant.chat.*
-import app.m1k3.ai.assistant.database.*
-import app.m1k3.ai.assistant.design.components.*
-import app.m1k3.ai.assistant.design.tokens.*
+import app.m1k3.ai.assistant.avatar.LocalSharedAvatarVM
+import app.m1k3.ai.assistant.chat.ChatMessage
+import app.m1k3.ai.assistant.chat.toEmoji
+import app.m1k3.ai.assistant.chat.toUserMessage
+import app.m1k3.ai.domain.chat.ChatError
+import app.m1k3.ai.assistant.chat.ChatScreenViewModel
+import app.m1k3.ai.assistant.chat.ContextWindowState
+import app.m1k3.ai.assistant.chat.GenerationState
+import app.m1k3.ai.assistant.chat.SessionEcoStats
+import app.m1k3.ai.assistant.chat.collectAsState
+import app.m1k3.ai.assistant.chat.isGenerating
+import app.m1k3.ai.assistant.chat.isInputEnabled
+import app.m1k3.ai.assistant.design.components.MaChatBubbleAI
+import app.m1k3.ai.assistant.design.components.MaChatBubbleUser
 import app.m1k3.ai.assistant.design.theme.MaTheme
-import app.m1k3.ai.assistant.embedding.rememberEmbeddingsViewModel
+import app.m1k3.ai.assistant.design.tokens.MaColors
 import app.m1k3.ai.assistant.ui.components.ChatInputBar
 import app.m1k3.ai.assistant.ui.components.ChatInputBarContainer
 import app.m1k3.ai.assistant.ui.components.ChatMessageList
 import app.m1k3.ai.assistant.ui.components.ContextWindowIndicator
 import app.m1k3.ai.assistant.ui.components.EcoIndicator
 import app.m1k3.ai.assistant.ui.components.EcoIndicatorVariant
+import org.jetbrains.compose.ui.tooling.preview.Preview
 
 /**
  * M1K3 AI - Chat Screen
@@ -47,8 +66,7 @@ import app.m1k3.ai.assistant.ui.components.EcoIndicatorVariant
 @Composable
 fun ChatScreen(
     onEcoStatsClick: () -> Unit = {},
-    aiEngine: BaseLlmEngine,
-    database: MaDatabase,
+    viewModel: ChatScreenViewModel?,
 ) {
     val context = LocalContext.current
     rememberCoroutineScope()
@@ -57,17 +75,11 @@ fun ChatScreen(
     // Avatar state management - use shared app-level ViewModel from CompositionLocal
     val avatarVM = LocalSharedAvatarVM.current
 
-    // Embeddings for RAG (Phase 3)
-    val embeddingsVM = rememberEmbeddingsViewModel()
+    if (viewModel == null) {
+        // Show a loading indicator or an error message
+        return
+    }
 
-    // ChatScreenViewModel - Single source of truth for chat state
-    val viewModel = rememberChatScreenViewModel(
-        aiEngine = aiEngine,
-        database = database,
-        context = context,
-        projectId = "default",
-        embeddingEngine = embeddingsVM.getEngine()
-    )
     val uiState by viewModel.collectAsState()
 
     // Sync avatar with generation state
@@ -125,16 +137,15 @@ fun ChatScreen(
                 messages = uiState.messages,
                 isGenerating = uiState.generationState.isGenerating,
                 listState = listState,
-                showEcoIndicator = uiState.sessionEcoStats.messageCount > 0
+                showEcoIndicator = true
+            )
+
+            // Eco Indicator - Real-time environmental impact
+            EcoIndicatorSection(
+                stats = uiState.sessionEcoStats,
+                onEcoStatsClick = onEcoStatsClick
             )
         }
-
-
-        // Eco Indicator - Real-time environmental impact
-        EcoIndicatorSection(
-            stats = uiState.sessionEcoStats,
-            onEcoStatsClick = onEcoStatsClick
-        )
 
         // Bottom overlay: Input bar with gradient
         ChatInputBarContainer(
@@ -160,17 +171,6 @@ fun ChatScreen(
                 onDismiss = { viewModel.clearError() }
             )
         }
-
-        // Floating Action Button for new chat
-//        FloatingActionButton(
-//            onClick = { viewModel.clearConversation() },
-//            modifier = Modifier
-//                .align(Alignment.BottomEnd)
-//                .padding(16.dp),
-//            containerColor = MaColors.Orange
-//        ) {
-//            Icon(Icons.Filled.Add, contentDescription = "New chat")
-//        }
     }
 }
 

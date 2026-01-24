@@ -101,8 +101,6 @@ fun AvatarView(
                 contentAlignment = Alignment.Center
             ) {
                 if (use3D) {
-                    // 3D model rendering (Android only)
-                    // Defined in Avatar3DView.android.kt via expect/actual
                     AvatarViewContent3D(state = animatedState)
                 } else {
                     // 2D Canvas rendering (all platforms)

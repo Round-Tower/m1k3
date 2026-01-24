@@ -49,7 +49,7 @@ fun ChatMessageList(
         verticalArrangement = Arrangement.spacedBy(12.dp),
         contentPadding = PaddingValues(
             top = if (showEcoIndicator) 180.dp else 120.dp, // Account for toolbar + optional eco indicator
-            bottom = 100.dp, // Account for input bar overlay
+            bottom = 200.dp, // Account for input bar overlay
         ),
     ) {
         items(messages) { message ->
@@ -63,6 +63,7 @@ fun ChatMessageList(
                     modifier = Modifier
                         .fillMaxWidth()
                         .testTag("typing_indicator")
+                        .padding()
                 )
             }
         }

@@ -1,16 +1,21 @@
-package app.m1k3.ai.assistant.knowledge
+package app.m1k3.ai.domain.rag.services
 
 /**
  * CategoryMatcher - Maps keywords to knowledge base categories
  *
- * Simple rule-based system for quick keyword → category mapping.
- * Used for fast RAG retrieval without semantic embeddings.
+ * Simple rule-based system for quick keyword -> category mapping.
+ * Used for fast RAG retrieval without semantic embeddings (fallback).
+ *
+ * Domain service - Pure Kotlin, no platform dependencies.
  */
 object CategoryMatcher {
 
     /**
-     * Map user query to relevant knowledge categories
-     * Returns empty list if no matches found (falls back to full-text search)
+     * Map user query to relevant knowledge categories.
+     * Returns empty list if no matches found (falls back to full-text search).
+     *
+     * @param query User's question or prompt
+     * @return List of matching category names
      */
     fun matchCategories(query: String): List<String> {
         val queryLower = query.lowercase()
@@ -164,7 +169,10 @@ object CategoryMatcher {
     }
 
     /**
-     * Extract keywords from query (remove stop words)
+     * Extract keywords from query (remove stop words).
+     *
+     * @param query User's question or prompt
+     * @return List of meaningful keywords
      */
     fun extractKeywords(query: String): List<String> {
         val stopWords = setOf(

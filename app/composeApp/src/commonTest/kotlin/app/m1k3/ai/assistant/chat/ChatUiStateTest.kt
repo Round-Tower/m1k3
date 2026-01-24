@@ -1,5 +1,7 @@
 package app.m1k3.ai.assistant.chat
 
+import app.m1k3.ai.domain.chat.ChatError
+import app.m1k3.ai.domain.chat.GenerationStats
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse

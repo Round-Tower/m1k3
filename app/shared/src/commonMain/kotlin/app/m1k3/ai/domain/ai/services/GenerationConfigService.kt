@@ -31,10 +31,11 @@ import app.m1k3.ai.domain.chat.QueryType
  * - Budget (<6GB RAM): 192 base tokens
  *
  * **QueryType Behavior:**
- * - CONVERSATIONAL: 50% tokens, high temp (0.8) - fast, creative
+ * - CONVERSATIONAL: 70% tokens, mid-high temp (0.7) - natural, conversational
  * - TECHNICAL: 120% tokens, low temp (0.3) - precise, factual
  * - CREATIVE: 150% tokens, high temp (0.9) - imaginative, varied
  * - FACTUAL: 100% tokens, mid temp (0.5) - balanced
+ * - EDUCATIONAL: 150% tokens, low temp (0.3) - detailed, accurate
  *
  * **Usage:**
  * ```kotlin

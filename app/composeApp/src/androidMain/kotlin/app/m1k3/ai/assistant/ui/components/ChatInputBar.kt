@@ -128,35 +128,18 @@ fun ChatInputBar(
         label = "sendButtonScale"
     )
 
-    // Glow pulse animation when focused
-    val glowAlpha by animateFloatAsState(
-        targetValue = if (isFocused) 0.15f else 0f,
-        animationSpec = tween(durationMillis = 400, easing = FastOutSlowInEasing),
-        label = "glowAlpha"
-    )
-
     Surface(
-        modifier = modifier.fillMaxWidth().padding(16.dp),
+        modifier = modifier.fillMaxWidth().background(
+            color = MaColors.BgSecondary
+        ),
         color = MaColors.BgSecondary // Transparent to show gradient overlay
     ) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(MaSpacing.base)
-        ) {
-            // Glow effect behind field when focused
-            if (isFocused) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(56.dp)
-                        .shadow(
-                            elevation = 8.dp,
-                            spotColor = MaColors.Orange.copy(alpha = glowAlpha)
-                        )
-                )
-            }
 
+        ) {
             // Integrated input field with send button
             BasicTextField(
                 value = text,
@@ -166,10 +149,7 @@ fun ChatInputBar(
                     .fillMaxWidth()
                     .heightIn(min = 56.dp, max = 180.dp)
                     .scale(fieldScale)
-                    .shadow(
-                        elevation = elevation,
-                        spotColor = MaColors.Orange.copy(alpha = 0.3f)
-                    ),
+                    .padding(MaSpacing.base),
                 enabled = enabled,
                 textStyle = MaTypography.bodyLarge.copy(
                     color = if (enabled) MaColors.textPrimary() else MaColors.textDisabled()
@@ -187,13 +167,8 @@ fun ChatInputBar(
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .background(
-                                color = if (enabled) MaColors.BgSecondary else MaColors.BgPrimary
-                            )
-                            .border(
-                                width = borderWidth,
-                                color = borderColor
-                            )
+                            .padding(MaSpacing.base)
+
                     ) {
                         if (text.isEmpty()) {
                             Text(

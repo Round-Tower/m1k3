@@ -1,10 +1,13 @@
 package app.m1k3.ai.assistant.chat.usecase
 
 import app.m1k3.ai.assistant.ai.BaseLlmEngine
-import app.m1k3.ai.assistant.chat.ChatError
 import app.m1k3.ai.assistant.chat.GenerationConfigBuilder
-import app.m1k3.ai.assistant.chat.GenerationStats
 import app.m1k3.ai.assistant.chat.QueryType
+import app.m1k3.ai.domain.chat.ChatError
+import app.m1k3.ai.domain.chat.EnrichedContext
+import app.m1k3.ai.domain.chat.GenerationStats
+import app.m1k3.ai.domain.chat.events.GenerationResponse
+import app.m1k3.ai.domain.chat.events.MessageEvent
 import app.m1k3.ai.assistant.utils.Logger
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
@@ -204,52 +207,4 @@ class SendMessageUseCase(
     }
 }
 
-/**
- * Events emitted during message sending flow.
- *
- * The ViewModel collects these events and updates UI state accordingly.
- */
-sealed class MessageEvent {
-    /** Message flow started, show thinking indicator */
-    data object Started : MessageEvent()
-
-    /** Retrieving context from RAG/memory */
-    data object RetrievingContext : MessageEvent()
-
-    /** Context retrieved successfully */
-    data class ContextRetrieved(val context: EnrichedContext) : MessageEvent()
-
-    /** Token received during streaming (for future streaming support) */
-    data class Streaming(
-        val partialText: String,
-        val tokenCount: Int
-    ) : MessageEvent()
-
-    /** Generation completed successfully */
-    data class Complete(val response: GenerationResponse) : MessageEvent()
-
-    /** Generation failed */
-    data class Failed(val error: ChatError) : MessageEvent()
-}
-
-/**
- * Successful generation response.
- */
-data class GenerationResponse(
-    /** The generated text */
-    val text: String,
-
-    /** Generation statistics */
-    val stats: GenerationStats,
-
-    /** Retrieved context (null for simple generations) */
-    val context: EnrichedContext?
-) {
-    /** Check if RAG was used */
-    val usedRag: Boolean
-        get() = context?.hasRagContext == true
-
-    /** Check if memory was used */
-    val usedMemory: Boolean
-        get() = context?.hasMemoryContext == true
-}
+// MessageEvent and GenerationResponse are now imported from domain

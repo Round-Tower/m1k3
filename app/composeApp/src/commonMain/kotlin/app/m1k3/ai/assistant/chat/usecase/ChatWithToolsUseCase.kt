@@ -1,15 +1,18 @@
 package app.m1k3.ai.assistant.chat.usecase
 
 import app.m1k3.ai.assistant.ai.BaseLlmEngine
-import app.m1k3.ai.assistant.chat.ChatError
-import app.m1k3.ai.assistant.chat.GenerationStats
 import app.m1k3.ai.assistant.chat.QueryType
 import app.m1k3.ai.assistant.chat.GenerationConfigBuilder
+import app.m1k3.ai.domain.chat.ChatError
+import app.m1k3.ai.domain.chat.EnrichedContext
+import app.m1k3.ai.domain.chat.GenerationStats
 import app.m1k3.ai.domain.ai.GenerationConfig
 import app.m1k3.ai.domain.tools.ToolResult
 import app.m1k3.ai.domain.tools.services.ToolRegistry
 import app.m1k3.ai.domain.usecases.chat.ProcessLlmOutputUseCase
 import app.m1k3.ai.domain.usecases.chat.ProcessedOutput
+import app.m1k3.ai.domain.chat.events.ChatEvent
+import app.m1k3.ai.domain.chat.events.ChatResponse
 import app.m1k3.ai.assistant.utils.Logger
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
@@ -233,94 +236,4 @@ class ChatWithToolsUseCase(
     }
 }
 
-/**
- * Events emitted during chat flow with tool support.
- */
-sealed class ChatEvent {
-    /** Chat flow started */
-    data object Started : ChatEvent()
-
-    /** Retrieving context from RAG/memory */
-    data object RetrievingContext : ChatEvent()
-
-    /** Context retrieved successfully */
-    data class ContextRetrieved(val context: EnrichedContext) : ChatEvent()
-
-    /** Generating AI response */
-    data object Generating : ChatEvent()
-
-    /** Streaming token received (for future real-time streaming) */
-    data class Streaming(
-        val partialText: String,
-        val tokenCount: Int
-    ) : ChatEvent()
-
-    /** Tools were detected and executed */
-    data class ToolsExecuted(
-        val results: List<ToolResult>,
-        val hasPendingConfirmations: Boolean
-    ) : ChatEvent() {
-        val allSucceeded: Boolean
-            get() = results.all { it.isSuccess }
-
-        val successfulResults: List<ToolResult.Success>
-            get() = results.filterIsInstance<ToolResult.Success>()
-
-        val failedResults: List<ToolResult.Failure>
-            get() = results.filterIsInstance<ToolResult.Failure>()
-
-        val pendingConfirmations: List<ToolResult.RequiresConfirmation>
-            get() = results.filterIsInstance<ToolResult.RequiresConfirmation>()
-    }
-
-    /** Chat completed successfully */
-    data class Complete(val response: ChatResponse) : ChatEvent()
-
-    /** Chat failed */
-    data class Failed(val error: ChatError) : ChatEvent()
-}
-
-/**
- * Complete chat response including text, stats, and tool results.
- */
-data class ChatResponse(
-    /** The generated/processed text */
-    val text: String,
-
-    /** Generation statistics */
-    val stats: GenerationStats,
-
-    /** Retrieved context */
-    val context: EnrichedContext?,
-
-    /** Tool execution results (null if no tools called) */
-    val toolResults: List<ToolResult>?,
-
-    /** Formatted tool results for display */
-    val toolResultsFormatted: String? = null
-) {
-    /** Whether tools were executed */
-    val hasToolResults: Boolean
-        get() = toolResults?.isNotEmpty() == true
-
-    /** Whether RAG was used */
-    val usedRag: Boolean
-        get() = context?.hasRagContext == true
-
-    /** Whether memory was used */
-    val usedMemory: Boolean
-        get() = context?.hasMemoryContext == true
-
-    /**
-     * Get the full display text (text + tool results)
-     */
-    fun getDisplayText(): String = buildString {
-        if (text.isNotBlank()) {
-            append(text)
-        }
-        if (toolResultsFormatted != null) {
-            if (isNotEmpty()) appendLine()
-            append(toolResultsFormatted)
-        }
-    }
-}
+// ChatEvent and ChatResponse are now imported from domain

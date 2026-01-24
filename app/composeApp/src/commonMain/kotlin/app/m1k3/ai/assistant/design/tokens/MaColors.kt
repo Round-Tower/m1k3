@@ -48,7 +48,7 @@ object MaColors {
     val BgPrimary = Black
 
     /** Secondary background - 2% white transparency */
-    val BgSecondary = Color(0x05FFFFFF)  // rgba(255,255,255,0.02)
+    val BgSecondary = Color(0x15FFFFFF)  // rgba(255,255,255,0.02)
 
     /** Tertiary background - 4% white transparency */
     val BgTertiary = Color(0x0AFFFFFF)   // rgba(255,255,255,0.04)

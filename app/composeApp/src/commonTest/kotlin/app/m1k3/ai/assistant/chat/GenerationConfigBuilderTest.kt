@@ -447,10 +447,11 @@ class GenerationConfigBuilderTest {
     @Test
     fun `QueryType enum has all expected values`() {
         val values = QueryType.entries
-        assertEquals(4, values.size)
+        assertEquals(5, values.size)
         assertTrue(values.contains(QueryType.EDUCATIONAL))
         assertTrue(values.contains(QueryType.TECHNICAL))
         assertTrue(values.contains(QueryType.FACTUAL))
         assertTrue(values.contains(QueryType.CONVERSATIONAL))
+        assertTrue(values.contains(QueryType.CREATIVE))
     }
 }

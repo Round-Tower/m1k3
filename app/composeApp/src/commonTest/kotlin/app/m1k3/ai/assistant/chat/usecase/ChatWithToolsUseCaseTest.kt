@@ -3,6 +3,8 @@ package app.m1k3.ai.assistant.chat.usecase
 import app.m1k3.ai.assistant.ai.BaseLlmEngine
 import app.m1k3.ai.domain.ai.GenerationConfig
 import app.m1k3.ai.assistant.ai.GenerationResult
+import app.m1k3.ai.domain.chat.events.ChatEvent
+import app.m1k3.ai.domain.chat.events.ChatResponse
 import app.m1k3.ai.domain.tools.Tool
 import app.m1k3.ai.domain.tools.ToolCall
 import app.m1k3.ai.domain.tools.ToolCategory

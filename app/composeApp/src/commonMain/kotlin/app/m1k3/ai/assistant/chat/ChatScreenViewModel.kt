@@ -5,10 +5,12 @@ import androidx.compose.runtime.State
 import androidx.compose.runtime.collectAsState
 import app.m1k3.ai.assistant.ai.BaseLlmEngine
 import app.m1k3.ai.domain.ai.GenerationConfig
-import app.m1k3.ai.assistant.chat.usecase.ChatEvent
+import app.m1k3.ai.domain.chat.events.ChatEvent
 import app.m1k3.ai.assistant.chat.usecase.ChatWithToolsUseCase
 import app.m1k3.ai.assistant.chat.usecase.ContextRetrievalUseCase
-import app.m1k3.ai.assistant.chat.usecase.EnrichedContext
+import app.m1k3.ai.domain.chat.ChatError
+import app.m1k3.ai.domain.chat.EnrichedContext
+import app.m1k3.ai.domain.chat.GenerationStats
 import app.m1k3.ai.assistant.config.GenerationConstants
 import app.m1k3.ai.assistant.database.MaDatabase
 import app.m1k3.ai.domain.tools.ToolResult
@@ -75,7 +77,7 @@ class ChatScreenViewModel(
             preferences = preferences,
             database = database,
             projectId = projectId,
-            ragManager = ragManager,
+            ragEnricher = ragManager,  // RAGManager implements RAGEnricherInterface
             memoryManager = memoryManager
         )
     }

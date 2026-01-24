@@ -1,10 +1,14 @@
 package app.m1k3.ai.assistant.chat.usecase
 
-import app.m1k3.ai.assistant.chat.ChatError
 import app.m1k3.ai.assistant.chat.GenerationConfigBuilder
 import app.m1k3.ai.assistant.mocks.MockBaseLlmEngine
 import app.m1k3.ai.assistant.mocks.MockDeviceInfoProvider
 import app.m1k3.ai.assistant.mocks.TestPreferencesStore
+import app.m1k3.ai.domain.chat.ChatError
+import app.m1k3.ai.domain.chat.EnrichedContext
+import app.m1k3.ai.domain.chat.GenerationStats
+import app.m1k3.ai.domain.chat.events.GenerationResponse
+import app.m1k3.ai.domain.chat.events.MessageEvent
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
@@ -31,7 +35,7 @@ class SendMessageUseCaseTest {
         val contextRetrieval = ContextRetrievalUseCase(
             deviceInfo = deviceInfo,
             preferences = preferences,
-            ragManager = null,
+            ragEnricher = null,
             memoryManager = null
         )
         val configBuilder = GenerationConfigBuilder(deviceInfo)
@@ -255,7 +259,7 @@ class SendMessageUseCaseTest {
         )
         val response = GenerationResponse(
             text = "response",
-            stats = app.m1k3.ai.assistant.chat.GenerationStats(10, 100, 10f),
+            stats = GenerationStats(10, 100, 10f),
             context = context
         )
 
@@ -276,7 +280,7 @@ class SendMessageUseCaseTest {
         )
         val response = GenerationResponse(
             text = "response",
-            stats = app.m1k3.ai.assistant.chat.GenerationStats(10, 100, 10f),
+            stats = GenerationStats(10, 100, 10f),
             context = context
         )
 
@@ -288,7 +292,7 @@ class SendMessageUseCaseTest {
     fun `GenerationResponse with null context returns false for usedRag and usedMemory`() {
         val response = GenerationResponse(
             text = "response",
-            stats = app.m1k3.ai.assistant.chat.GenerationStats(10, 100, 10f),
+            stats = GenerationStats(10, 100, 10f),
             context = null
         )
 

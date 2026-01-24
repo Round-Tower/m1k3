@@ -6,7 +6,10 @@ import app.m1k3.ai.assistant.embedding.EmbeddingEngine
 import app.m1k3.ai.assistant.embedding.EmbeddingTaskType
 import app.m1k3.ai.assistant.utils.Logger
 import app.m1k3.ai.domain.rag.KnowledgeTier
+import app.m1k3.ai.domain.rag.SemanticRetrievedFact
 import app.m1k3.ai.domain.rag.TieredRetrievedFact
+import app.m1k3.ai.domain.rag.services.CategoryMatcher
+import app.m1k3.ai.domain.rag.services.EmbeddingSerializer
 import app.m1k3.ai.domain.rag.services.KnowledgeFactFilter
 
 /**
@@ -139,7 +142,7 @@ class SemanticRetrievalService(
             logger.d { "  $tier: $count facts" }
         }
 
-        // 5. Convert back to SemanticRetrievedFact with original TriviaFact
+        // 5. Convert back to SemanticRetrievedFact (domain entity)
         val rankedFacts = mutableListOf<SemanticRetrievedFact>()
         for (tieredFact in filteredTieredFacts) {
             // Find the original TriviaFact by matching content (question)
@@ -150,10 +153,14 @@ class SemanticRetrievalService(
                 val (fact, similarity) = matchingEntry.value
                 rankedFacts.add(
                     SemanticRetrievedFact(
-                        fact = fact,
+                        id = fact.id,
+                        question = fact.question,
+                        answer = fact.answer,
+                        category = fact.category,
+                        tier = KnowledgeTier.fromString(fact.tier),
+                        similarityScore = similarity,
                         relevanceScore = calculateSemanticRelevance(similarity, fact.importance),
-                        retrievalMethod = "tiered_semantic",
-                        similarityScore = similarity
+                        retrievalMethod = "tiered_semantic"
                     )
                 )
             }
@@ -162,11 +169,11 @@ class SemanticRetrievalService(
         // 6. Take top N (already filtered by tier limits, but respect caller's limit)
         val topFacts = rankedFacts.take(limit)
 
-        // 5. Update access counts
+        // 7. Update access counts
         topFacts.forEach { retrieved ->
             database.triviaFactQueries.updateFactAccess(
                 last_accessed_at = System.currentTimeMillis(),
-                id = retrieved.fact.id
+                id = retrieved.id
             )
         }
 
@@ -325,29 +332,17 @@ class SemanticRetrievalService(
 
     /**
      * Serialize FloatArray to ByteArray for BLOB storage.
-     *
-     * Format: IEEE 754 single-precision (4 bytes per float)
-     * 384 dimensions × 4 bytes = 1,536 bytes
+     * Delegates to domain EmbeddingSerializer for KMP compatibility.
      */
-    private fun serializeEmbedding(embedding: FloatArray): ByteArray {
-        val buffer = java.nio.ByteBuffer.allocate(embedding.size * 4)
-        buffer.order(java.nio.ByteOrder.LITTLE_ENDIAN)
-        embedding.forEach { buffer.putFloat(it) }
-        return buffer.array()
-    }
+    private fun serializeEmbedding(embedding: FloatArray): ByteArray =
+        EmbeddingSerializer.serialize(embedding)
 
     /**
      * Deserialize ByteArray from BLOB storage to FloatArray.
+     * Delegates to domain EmbeddingSerializer for KMP compatibility.
      */
-    private fun deserializeEmbedding(bytes: ByteArray): FloatArray {
-        val buffer = java.nio.ByteBuffer.wrap(bytes)
-        buffer.order(java.nio.ByteOrder.LITTLE_ENDIAN)
-        val embedding = FloatArray(bytes.size / 4)
-        for (i in embedding.indices) {
-            embedding[i] = buffer.getFloat()
-        }
-        return embedding
-    }
+    private fun deserializeEmbedding(bytes: ByteArray): FloatArray =
+        EmbeddingSerializer.deserialize(bytes)
 
     /**
      * Fallback to keyword-based search when embedding fails.
@@ -371,10 +366,14 @@ class SemanticRetrievalService(
             facts.forEach { fact ->
                 results.add(
                     SemanticRetrievedFact(
-                        fact = fact,
+                        id = fact.id,
+                        question = fact.question,
+                        answer = fact.answer,
+                        category = fact.category,
+                        tier = KnowledgeTier.fromString(fact.tier),
+                        similarityScore = 0.5f,  // Default similarity for fallback
                         relevanceScore = fact.importance,
-                        retrievalMethod = "keyword_fallback",
-                        similarityScore = 0.5f  // Default similarity for fallback
+                        retrievalMethod = "keyword_fallback"
                     )
                 )
             }
@@ -412,29 +411,6 @@ class SemanticRetrievalService(
          * Weight for importance in relevance calculation.
          */
         private const val IMPORTANCE_WEIGHT = 0.3
-    }
-}
-
-/**
- * Semantically retrieved fact with similarity metadata.
- *
- * Extends RetrievedFact with similarity score for transparency and debugging.
- */
-data class SemanticRetrievedFact(
-    val fact: TriviaFact,
-    val relevanceScore: Double,
-    val retrievalMethod: String,
-    val similarityScore: Float  // NEW: Cosine similarity (0.0 to 1.0)
-) {
-    /**
-     * Convert to legacy RetrievedFact format for compatibility.
-     */
-    fun toRetrievedFact(): RetrievedFact {
-        return RetrievedFact(
-            fact = fact,
-            relevanceScore = relevanceScore,
-            retrievalMethod = retrievalMethod
-        )
     }
 }
 

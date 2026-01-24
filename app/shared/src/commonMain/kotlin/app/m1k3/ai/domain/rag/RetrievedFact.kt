@@ -21,30 +21,55 @@ data class RetrievedFact(
      * Whether this fact is high quality (similarity >= 0.8)
      */
     val isHighQuality: Boolean
-        get() = similarity >= 0.8f
+        get() = QualityTier.isHighQuality(similarity)
 
     /**
      * Whether this fact is medium quality (similarity >= 0.6)
      */
     val isMediumQuality: Boolean
-        get() = similarity >= 0.6f
+        get() = QualityTier.isMediumQuality(similarity)
 
     /**
      * Quality tier for display purposes
      */
     val qualityTier: QualityTier
-        get() = when {
-            similarity >= 0.8f -> QualityTier.HIGH
-            similarity >= 0.6f -> QualityTier.MEDIUM
-            else -> QualityTier.LOW
-        }
+        get() = QualityTier.fromSimilarity(similarity)
 }
 
 /**
- * Quality tier for retrieved facts
+ * Quality tier for retrieved facts based on similarity score.
+ *
+ * Provides centralized quality classification logic used by
+ * RetrievedFact, SemanticRetrievedFact, and other fact types.
  */
 enum class QualityTier {
     HIGH,    // >= 0.8 similarity
     MEDIUM,  // >= 0.6 similarity
-    LOW      // < 0.6 similarity
+    LOW;     // < 0.6 similarity
+
+    companion object {
+        private const val HIGH_THRESHOLD = 0.8f
+        private const val MEDIUM_THRESHOLD = 0.6f
+
+        /**
+         * Determine quality tier from similarity score.
+         */
+        fun fromSimilarity(similarity: Float): QualityTier = when {
+            similarity >= HIGH_THRESHOLD -> HIGH
+            similarity >= MEDIUM_THRESHOLD -> MEDIUM
+            else -> LOW
+        }
+
+        /**
+         * Check if similarity qualifies as high quality (>= 0.8)
+         */
+        fun isHighQuality(similarity: Float): Boolean =
+            similarity >= HIGH_THRESHOLD
+
+        /**
+         * Check if similarity qualifies as medium quality or better (>= 0.6)
+         */
+        fun isMediumQuality(similarity: Float): Boolean =
+            similarity >= MEDIUM_THRESHOLD
+    }
 }

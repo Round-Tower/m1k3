@@ -2,19 +2,24 @@ package app.m1k3.ai.assistant.rag
 
 import app.m1k3.ai.assistant.database.MaDatabase
 import app.m1k3.ai.domain.rag.Intent
+import app.m1k3.ai.domain.rag.RetrievedFact
 import app.m1k3.ai.domain.rag.services.IntentClassifier
+import app.m1k3.ai.domain.rag.services.RAGEnricherInterface
+import app.m1k3.ai.domain.rag.services.calculateRAGConfidence
+import app.m1k3.ai.domain.rag.services.formatRAGSources
 import app.m1k3.ai.domain.usecases.rag.EnrichPromptWithRAGUseCase
+import app.m1k3.ai.domain.usecases.rag.RAGResult
 import app.m1k3.ai.assistant.embedding.EmbeddingEngine
 import app.m1k3.ai.assistant.knowledge.SemanticRetrievalService
 
 /**
  * 間 AI - RAG Manager
  *
- * REFACTORED: Now delegates to EnrichPromptWithRAGUseCase (Clean Architecture).
+ * REFACTORED: Implements RAGEnricherInterface (domain).
  * Thin adapter layer for backward compatibility with existing code.
  *
  * **Architecture (New):**
- * 1. RAGManager (Application Layer) - Adapter for legacy code
+ * 1. RAGManager (Application Layer) - Implements RAGEnricherInterface
  *     ↓
  * 2. EnrichPromptWithRAGUseCase (Domain Layer) - Business logic orchestration
  *     ↓
@@ -22,21 +27,16 @@ import app.m1k3.ai.assistant.knowledge.SemanticRetrievalService
  *
  * **Migration Note:**
  * This class is kept for backward compatibility. New code should use
- * EnrichPromptWithRAGUseCase directly via Koin injection:
+ * RAGEnricherInterface directly via Koin injection:
  * ```kotlin
- * val enrichPromptUseCase: EnrichPromptWithRAGUseCase = get()
- * val result = enrichPromptUseCase.execute(userQuery, systemPrompt, enableRAG)
+ * val ragEnricher: RAGEnricherInterface = get()
+ * val result = ragEnricher.enrichPrompt(userQuery, systemPrompt, enableRAG)
  * ```
- *
- * **Old Architecture (Deprecated):**
- * - IntentClassifier → Detect query type (20 categories)
- * - SemanticRetrievalService → Fetch relevant facts (cosine similarity)
- * - RAGManager → Enrich system prompt with retrieved knowledge
  */
 class RAGManager(
     private val database: MaDatabase,
     private val embeddingEngine: EmbeddingEngine
-) {
+) : RAGEnricherInterface {
     // Legacy fields - kept for initialization but not used
     private val intentClassifier = IntentClassifier()
     private val retrievalService = SemanticRetrievalService(database, embeddingEngine)
@@ -48,49 +48,27 @@ class RAGManager(
     )
 
     /**
-     * RAG Result containing enriched prompt and metadata
-     */
-    data class RAGResult(
-        val enrichedPrompt: String,
-        val intent: Intent,
-        val confidence: Float,
-        val retrievedFacts: List<RetrievedFact>,
-        val ragApplied: Boolean
-    )
-
-    /**
-     * Retrieved fact with source and relevance
-     */
-    data class RetrievedFact(
-        val content: String,
-        val category: String,
-        val similarity: Float
-    )
-
-    /**
-     * Enrich system prompt with RAG knowledge
+     * Enrich system prompt with RAG knowledge.
      *
-     * REFACTORED: Delegates to EnrichPromptWithRAGUseCase.
-     * Legacy method kept for backward compatibility.
+     * Implements RAGEnricherInterface. Delegates to EnrichPromptWithRAGUseCase.
      *
      * @param userQuery User's current question
      * @param systemPrompt Base system prompt
      * @param enableRAG Enable/disable RAG (default: true)
-     * @return RAGResult with enriched prompt and metadata
+     * @return RAGResult (domain type) with enriched prompt and metadata
      */
-    suspend fun enrichPrompt(
+    override suspend fun enrichPrompt(
         userQuery: String,
         systemPrompt: String,
-        enableRAG: Boolean = true
+        enableRAG: Boolean
     ): RAGResult {
-        // Delegate to domain use case
-        val domainResult = enrichPromptUseCase.execute(
+        return enrichPromptUseCase.execute(
             userQuery = userQuery,
             systemPrompt = systemPrompt,
             enableRAG = enableRAG
-        ).getOrElse { error ->
+        ).getOrElse {
             // Fallback on error: return original prompt
-            return RAGResult(
+            RAGResult(
                 enrichedPrompt = systemPrompt,
                 intent = Intent.GENERAL,
                 confidence = 0f,
@@ -98,97 +76,30 @@ class RAGManager(
                 ragApplied = false
             )
         }
-
-        // Map domain result to RAGManager result (types are compatible)
-        return RAGResult(
-            enrichedPrompt = domainResult.enrichedPrompt,
-            intent = domainResult.intent,
-            confidence = domainResult.confidence,
-            retrievedFacts = domainResult.retrievedFacts.map { domainFact ->
-                RetrievedFact(
-                    content = domainFact.content,
-                    category = domainFact.category,
-                    similarity = domainFact.similarity
-                )
-            },
-            ragApplied = domainResult.ragApplied
-        )
     }
 
     /**
-     * Build enriched prompt with retrieved knowledge
+     * Get RAG sources for database tracking.
      *
-     * Formats retrieved facts into a knowledge section that's
-     * prepended to the system prompt.
-     *
-     * @param systemPrompt Base system prompt
-     * @param intent Detected intent
-     * @param facts Retrieved facts
-     * @return Enriched system prompt
-     */
-    private fun buildEnrichedPrompt(
-        systemPrompt: String,
-        intent: Intent,
-        facts: List<RetrievedFact>
-    ): String {
-        val knowledgeSection = buildString {
-            appendLine()
-            appendLine("**Relevant Knowledge (${intent.category}):**")
-            appendLine()
-
-            facts.forEachIndexed { index, fact ->
-                appendLine("${index + 1}. ${fact.content}")
-                appendLine("   [Category: ${fact.category}, Relevance: ${(fact.similarity * 100).toInt()}%]")
-                appendLine()
-            }
-
-            appendLine("**RAG Instructions:**")
-            appendLine("1. **Relevance:** Facts 80%+ = high confidence, 60-79% = use with caution, <60% = ignore")
-            appendLine("2. **Usage:** Only use directly relevant facts. If no facts fit, respond from general knowledge only.")
-            appendLine("3. **Quality:** Cite sources when using facts (e.g., \"According to device troubleshooting...\"). Be honest if knowledge insufficient.")
-            appendLine("4. **Priority:** One highly relevant fact (85%) beats three moderately relevant facts (65%).")
-            appendLine()
-        }
-
-        return knowledgeSection + systemPrompt
-    }
-
-    /**
-     * Get RAG sources for database tracking
-     *
-     * Formats retrieved facts into JSON-compatible string for
-     * storage in message.rag_sources field.
-     *
-     * Shows preview of fact content (first 60 chars) with similarity score.
+     * Delegates to domain extension function.
      *
      * @param retrievedFacts Facts to serialize
-     * @return JSON string of sources
+     * @return Formatted source list, or null if empty
      */
     fun formatRAGSources(retrievedFacts: List<RetrievedFact>): String? {
-        if (retrievedFacts.isEmpty()) return null
-
-        return retrievedFacts.mapIndexed { index, fact ->
-            // Show preview of fact content (first 60 chars)
-            val preview = if (fact.content.length > 60) {
-                fact.content.take(60) + "..."
-            } else {
-                fact.content
-            }
-            "${index + 1}. ${preview} (${(fact.similarity * 100).toInt()}%)"
-        }.joinToString(separator = "\n")
+        return retrievedFacts.formatRAGSources()
     }
 
     /**
-     * Get average RAG confidence
+     * Get average RAG confidence.
+     *
+     * Delegates to domain extension function.
      *
      * @param retrievedFacts Facts with similarity scores
-     * @return Average confidence (0.0-1.0)
+     * @return Average confidence (0.0-1.0), or null if empty
      */
     fun calculateRAGConfidence(retrievedFacts: List<RetrievedFact>): Double? {
-        if (retrievedFacts.isEmpty()) return null
-
-        return retrievedFacts.map { it.similarity.toDouble() }
-            .average()
+        return retrievedFacts.calculateRAGConfidence()
     }
 
     /**

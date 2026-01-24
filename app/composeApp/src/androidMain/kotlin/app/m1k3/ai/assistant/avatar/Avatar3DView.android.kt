@@ -22,7 +22,7 @@ import kotlinx.coroutines.delay
 private val logger = Logger.withTag("Avatar3D")
 
 /**
- * 間 AI Avatar 3D View (Android) - GENERIC GLB LOADER
+ * Avatar 3D View (Android) - GENERIC GLB LOADER
  *
  * **UPDATED:** Universal 3D model renderer with:
  * - Auto-centering camera (CameraAutoFit)
@@ -127,7 +127,7 @@ fun Avatar3DView(
                     verticalArrangement = Arrangement.Center
                 ) {
                     Text(
-                        text = "⚠️ Error",
+                        text = "Error",
                         style = MaTypography.titleMedium,
                         color = MaColors.Error
                     )

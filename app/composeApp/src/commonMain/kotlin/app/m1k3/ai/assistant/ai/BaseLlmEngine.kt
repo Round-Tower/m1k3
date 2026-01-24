@@ -1,9 +1,10 @@
 package app.m1k3.ai.assistant.ai
 
 import app.m1k3.ai.domain.ai.GenerationConfig
+import app.m1k3.ai.domain.ai.LlmEngine
 
 /**
- * BaseLlmEngine - Unified interface for AI inference engines
+ * BaseLlmEngine - App-layer interface extending domain LlmEngine
  *
  * This interface abstracts common LLM functionality across different backends:
  * - LlamaCppEngine (llama.cpp via Llamatik)
@@ -53,7 +54,7 @@ import app.m1k3.ai.domain.ai.GenerationConfig
  * engine.release()
  * ```
  */
-interface BaseLlmEngine {
+interface BaseLlmEngine : LlmEngine {
     /**
      * Initialize the AI engine.
      *
@@ -67,7 +68,7 @@ interface BaseLlmEngine {
      *
      * @return Result.success(Unit) if initialization succeeds, Result.failure(exception) otherwise
      */
-    suspend fun initialize(): Result<Unit>
+    override suspend fun initialize(): Result<Unit>
 
     /**
      * Generate AI response for a given prompt (blocking).
@@ -79,9 +80,9 @@ interface BaseLlmEngine {
      * @return Result.success(GenerationResult) if generation succeeds, Result.failure(exception) otherwise
      *         Common failures: engine not initialized, inference error, model crash
      */
-    suspend fun generate(
+    override suspend fun generate(
         prompt: String,
-        config: GenerationConfig = GenerationConfig()
+        config: GenerationConfig
     ): Result<GenerationResult>
 
     /**
@@ -96,9 +97,9 @@ interface BaseLlmEngine {
      * @return Result.success(Unit) if streaming completes, Result.failure(exception) if error occurs
      *         Common failures: engine not initialized, inference error, callback exception
      */
-    suspend fun generateStreaming(
+    override suspend fun generateStreaming(
         prompt: String,
-        config: GenerationConfig = GenerationConfig(),
+        config: GenerationConfig,
         onToken: (String) -> Unit
     ): Result<Unit>
 
@@ -114,7 +115,7 @@ interface BaseLlmEngine {
      *
      * @return Recommended max tokens (64-512 depending on device)
      */
-    fun getOptimalMaxTokens(): Int
+    override fun getOptimalMaxTokens(): Int
 
     /**
      * Release engine resources.
@@ -127,36 +128,20 @@ interface BaseLlmEngine {
      * Call this when engine is no longer needed to free memory.
      * After calling release(), the engine must be re-initialized before use.
      */
-    fun release()
+    override fun release()
 
     /**
      * Close engine (alias for release() for AutoCloseable compatibility).
      *
      * Allows use with `use {}` blocks for automatic resource management.
      */
-    fun close() = release()
+    override fun close() = release()
 }
 
 /**
- * GenerationResult - Result of AI generation
+ * GenerationResult.
  *
- * Contains the generated text and performance metrics.
- *
- * @param text Generated response text
- * @param tokensGenerated Number of tokens generated (for eco metrics)
- * @param inferenceTimeMs Time taken for generation in milliseconds
- * @param tokensPerSecond Generation speed (performance monitoring)
+ * @deprecated Use app.m1k3.ai.domain.ai.GenerationResult instead.
+ * This typealias exists for backward compatibility.
  */
-data class GenerationResult(
-    val text: String,
-    val tokensGenerated: Int,
-    val inferenceTimeMs: Long,
-    val tokensPerSecond: Float
-) {
-    override fun toString(): String = """
-        Generated: "$text"
-        Tokens: $tokensGenerated
-        Time: ${inferenceTimeMs}ms
-        Speed: ${"%.1f".format(tokensPerSecond)} tokens/sec
-    """.trimIndent()
-}
+typealias GenerationResult = app.m1k3.ai.domain.ai.GenerationResult

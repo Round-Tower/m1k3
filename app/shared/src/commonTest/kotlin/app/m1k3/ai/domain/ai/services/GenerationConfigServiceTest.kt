@@ -102,8 +102,8 @@ class GenerationConfigServiceTest {
 
         val config = service.buildConfig(QueryType.CONVERSATIONAL)
 
-        // 384 base * 0.5 (CONVERSATIONAL) = 192
-        assertEquals(192, config.maxTokens!!)
+        // 384 base * 0.7 (CONVERSATIONAL) = 268
+        assertEquals(268, config.maxTokens!!)
     }
 
     @Test
@@ -145,8 +145,8 @@ class GenerationConfigServiceTest {
 
         val config = service.buildConfig(QueryType.CONVERSATIONAL)
 
-        // CONVERSATIONAL temp = 0.8
-        assertEquals(0.8f, config.temperature!!, 0.01f)
+        // CONVERSATIONAL temp = 0.7
+        assertEquals(0.7f, config.temperature!!, 0.01f)
     }
 
     @Test
@@ -201,9 +201,9 @@ class GenerationConfigServiceTest {
 
         val config = service.buildFromIntent("Casual Conversation")
 
-        // Should use CONVERSATIONAL: 384 * 0.5 = 192 tokens, temp 0.8
-        assertEquals(192, config.maxTokens!!)
-        assertEquals(0.8f, config.temperature!!, 0.01f)
+        // Should use CONVERSATIONAL: 384 * 0.7 = 268 tokens, temp 0.7
+        assertEquals(268, config.maxTokens!!)
+        assertEquals(0.7f, config.temperature!!, 0.01f)
     }
 
     @Test
@@ -336,8 +336,8 @@ class GenerationConfigServiceTest {
 
         val config = service.buildConfig(QueryType.CONVERSATIONAL)
 
-        // 384 base * 0.5 = 192 tokens (fast, concise responses)
-        assertEquals(192, config.maxTokens!!)
-        assertEquals(0.8f, config.temperature!!, 0.01f)
+        // 384 base * 0.7 = 268 tokens (natural, conversational responses)
+        assertEquals(268, config.maxTokens!!)
+        assertEquals(0.7f, config.temperature!!, 0.01f)
     }
 }

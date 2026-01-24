@@ -35,11 +35,11 @@ class KnowledgeRepositoryImpl(
                 minSimilarity = minSimilarity
             )
 
-            // Map to domain entities
+            // Map to domain entities (SemanticRetrievedFact already has flattened fields)
             val domainFacts = semanticFacts.map { semanticFact ->
                 RetrievedFact(
-                    content = semanticFact.fact.answer, // TriviaFact has 'answer', not 'content'
-                    category = semanticFact.fact.category,
+                    content = semanticFact.answer,
+                    category = semanticFact.category,
                     similarity = semanticFact.similarityScore
                 )
             }
