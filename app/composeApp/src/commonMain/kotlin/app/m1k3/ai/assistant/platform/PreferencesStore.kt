@@ -127,6 +127,9 @@ object PreferenceKeys {
     /** RAG (Retrieval-Augmented Generation) enabled */
     const val RAG_ENABLED = "rag_enabled"
 
+    /** Tool calling (agentic capabilities) enabled */
+    const val TOOLS_ENABLED = "tools_enabled"
+
     /** Haptic feedback enabled */
     const val HAPTICS_ENABLED = "haptics_enabled"
 

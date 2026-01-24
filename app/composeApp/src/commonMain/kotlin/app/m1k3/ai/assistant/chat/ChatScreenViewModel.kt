@@ -15,12 +15,17 @@ import app.m1k3.ai.assistant.config.GenerationConstants
 import app.m1k3.ai.assistant.database.MaDatabase
 import app.m1k3.ai.domain.tools.ToolResult
 import app.m1k3.ai.domain.tools.services.ToolRegistry
-import app.m1k3.ai.domain.usecases.chat.ProcessLlmOutputUseCase
+import app.m1k3.ai.domain.usecases.chat.LlmOutputProcessor
+import app.m1k3.ai.domain.chat.services.UnifiedPromptBuilder
+import app.m1k3.ai.domain.chat.services.DefaultChatFormatter
+import app.m1k3.ai.domain.chat.services.ContextAssembler
+import app.m1k3.ai.domain.chat.format.ChatFormat
 import app.m1k3.ai.assistant.eco.EcoCalculator
 import app.m1k3.ai.assistant.eco.EcoMetricsRepository
 import app.m1k3.ai.assistant.history.ConversationRepository
 import app.m1k3.ai.assistant.memory.MemoryManager
 import app.m1k3.ai.assistant.platform.DeviceInfoProviderInterface
+import app.m1k3.ai.assistant.platform.PreferenceKeys
 import app.m1k3.ai.assistant.platform.PreferencesStoreInterface
 import app.m1k3.ai.assistant.rag.RAGManager
 import app.m1k3.ai.assistant.utils.Logger
@@ -67,7 +72,7 @@ class ChatScreenViewModel(
     private val ragManager: RAGManager? = null,
     // Tool calling support (optional - when provided, enables agentic capabilities)
     private val toolRegistry: ToolRegistry? = null,
-    private val processLlmOutput: ProcessLlmOutputUseCase? = null
+    private val processLlmOutput: LlmOutputProcessor? = null
 ) {
     // ===== Use Cases (lazy initialization) =====
 
@@ -87,17 +92,28 @@ class ChatScreenViewModel(
     }
 
     /**
+     * UnifiedPromptBuilder for consistent prompt formatting.
+     */
+    private val promptBuilder: UnifiedPromptBuilder by lazy {
+        val formatter = DefaultChatFormatter(ChatFormat.Gemma3)
+        val assembler = ContextAssembler()
+        UnifiedPromptBuilder(formatter, assembler)
+    }
+
+    /**
      * ChatWithToolsUseCase for agentic capabilities.
-     * Only created when tool dependencies are provided.
+     * Only created when tool dependencies are provided AND tools are enabled in preferences.
      */
     private val chatWithTools: ChatWithToolsUseCase? by lazy {
-        if (toolRegistry != null && processLlmOutput != null) {
+        val toolsEnabled = preferences.getBoolean(PreferenceKeys.TOOLS_ENABLED, true)
+        if (toolsEnabled && toolRegistry != null && processLlmOutput != null) {
             ChatWithToolsUseCase(
                 aiEngine = aiEngine,
                 contextRetrieval = contextRetrieval,
                 processLlmOutput = processLlmOutput,
                 toolRegistry = toolRegistry,
-                configBuilder = configBuilder
+                configBuilder = configBuilder,
+                promptBuilder = promptBuilder
             )
         } else {
             null

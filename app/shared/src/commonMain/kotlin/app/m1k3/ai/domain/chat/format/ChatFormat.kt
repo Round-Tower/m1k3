@@ -35,6 +35,15 @@ sealed class ChatFormat {
     abstract val supportsTools: Boolean
 
     /**
+     * Whether this format supports a distinct system role.
+     *
+     * Formats without system role support (e.g., Gemma3) should have
+     * their system prompt, tool schema, and messages consolidated into
+     * a single user turn for optimal model performance.
+     */
+    abstract val supportsSystemRole: Boolean
+
+    /**
      * Format a single message
      *
      * @param role The message sender's role
@@ -60,6 +69,16 @@ sealed class ChatFormat {
      */
     abstract fun getStopTokens(): List<String>
 
+    /**
+     * Get prompt prefix (e.g., BOS token)
+     *
+     * Some models require a beginning-of-sequence token at the start
+     * of the entire prompt. This is added once before all messages.
+     *
+     * @return Prefix string (empty if not needed)
+     */
+    open fun getPromptPrefix(): String = ""
+
     // ===== ChatML Format =====
 
     /**
@@ -80,6 +99,7 @@ sealed class ChatFormat {
     data object ChatML : ChatFormat() {
         override val name = "ChatML"
         override val supportsTools = true
+        override val supportsSystemRole = true
 
         override fun formatMessage(role: MessageRole, content: String): String =
             "<|im_start|>${role.value}\n$content<|im_end|>\n"
@@ -117,6 +137,7 @@ sealed class ChatFormat {
     data object Llama : ChatFormat() {
         override val name = "Llama"
         override val supportsTools = true
+        override val supportsSystemRole = true
 
         override fun formatMessage(role: MessageRole, content: String): String = when (role) {
             MessageRole.SYSTEM -> "<<SYS>>\n$content\n<</SYS>>\n\n"
@@ -159,6 +180,7 @@ sealed class ChatFormat {
     data object Gemma3 : ChatFormat() {
         override val name = "Gemma3"
         override val supportsTools = true
+        override val supportsSystemRole = false  // Gemma3 only has user/model turns
 
         override fun formatMessage(role: MessageRole, content: String): String = when (role) {
             MessageRole.USER -> "<start_of_turn>user\n$content<end_of_turn>\n"
@@ -179,6 +201,8 @@ sealed class ChatFormat {
         }
 
         override fun getStopTokens(): List<String> = listOf("<end_of_turn>", "<eos>")
+
+        override fun getPromptPrefix(): String = "<bos>"
     }
 
     // ===== Simple Format =====
@@ -193,6 +217,7 @@ sealed class ChatFormat {
     data object Simple : ChatFormat() {
         override val name = "Simple"
         override val supportsTools = false
+        override val supportsSystemRole = false  // Plain text, no roles
 
         override fun formatMessage(role: MessageRole, content: String): String = "$content\n"
 

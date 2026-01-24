@@ -14,6 +14,7 @@ import app.m1k3.ai.assistant.platform.DeviceInfoProvider
 import app.m1k3.ai.assistant.platform.PreferencesStore
 import app.m1k3.ai.assistant.rag.RAGManager
 import app.m1k3.ai.domain.tools.services.ToolRegistry
+import app.m1k3.ai.domain.usecases.chat.LlmOutputProcessor
 import app.m1k3.ai.domain.usecases.chat.ProcessLlmOutputUseCase
 import kotlinx.coroutines.CoroutineScope
 import org.koin.core.component.KoinComponent
@@ -79,10 +80,10 @@ private object ViewModelDependencies : KoinComponent {
         }
     }
 
-    val processLlmOutput: ProcessLlmOutputUseCase? by lazy {
+    val processLlmOutput: LlmOutputProcessor? by lazy {
         try {
             val useCase: ProcessLlmOutputUseCase by inject()
-            useCase
+            useCase as LlmOutputProcessor
         } catch (e: Exception) {
             null // Tools not available
         }

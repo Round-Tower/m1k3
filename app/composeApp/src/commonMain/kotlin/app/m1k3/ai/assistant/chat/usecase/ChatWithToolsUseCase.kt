@@ -6,10 +6,11 @@ import app.m1k3.ai.assistant.chat.GenerationConfigBuilder
 import app.m1k3.ai.domain.chat.ChatError
 import app.m1k3.ai.domain.chat.EnrichedContext
 import app.m1k3.ai.domain.chat.GenerationStats
+import app.m1k3.ai.domain.chat.services.UnifiedPromptBuilder
 import app.m1k3.ai.domain.ai.GenerationConfig
 import app.m1k3.ai.domain.tools.ToolResult
 import app.m1k3.ai.domain.tools.services.ToolRegistry
-import app.m1k3.ai.domain.usecases.chat.ProcessLlmOutputUseCase
+import app.m1k3.ai.domain.usecases.chat.LlmOutputProcessor
 import app.m1k3.ai.domain.usecases.chat.ProcessedOutput
 import app.m1k3.ai.domain.chat.events.ChatEvent
 import app.m1k3.ai.domain.chat.events.ChatResponse
@@ -71,9 +72,10 @@ private val logger = Logger.withTag("ChatWithToolsUseCase")
 class ChatWithToolsUseCase(
     private val aiEngine: BaseLlmEngine,
     private val contextRetrieval: ContextRetrievalUseCase,
-    private val processLlmOutput: ProcessLlmOutputUseCase,
+    private val processLlmOutput: LlmOutputProcessor,
     private val toolRegistry: ToolRegistry,
-    private val configBuilder: GenerationConfigBuilder? = null
+    private val configBuilder: GenerationConfigBuilder? = null,
+    private val promptBuilder: UnifiedPromptBuilder? = null
 ) {
     /**
      * Execute the chat flow with tool support.
@@ -176,37 +178,50 @@ class ChatWithToolsUseCase(
 
     /**
      * Build prompt with context and tool schemas.
+     *
+     * Uses UnifiedPromptBuilder when available for consistent formatting,
+     * falls back to legacy inline building otherwise.
      */
     private suspend fun buildPromptWithTools(
         userPrompt: String,
         context: EnrichedContext
-    ): String = buildString {
-        // Add context if available
-        if (context.hasContext) {
-            appendLine(context.context)
-            appendLine()
+    ): String {
+        val availableTools = toolRegistry.getAvailableTools()
+
+        // Use unified builder if available
+        promptBuilder?.let { builder ->
+            return builder.build(
+                userPrompt = userPrompt,
+                context = context,
+                tools = availableTools
+            )
         }
 
-        // Add tool schemas if tools are available
-        val availableTools = toolRegistry.getAvailableTools()
-        if (availableTools.isNotEmpty()) {
-            appendLine("You have access to the following tools:")
-            availableTools.forEach { tool ->
-                appendLine("- ${tool.id}: ${tool.description}")
-                if (tool.parameters.isNotEmpty()) {
-                    tool.parameters.forEach { param ->
-                        val req = if (param.required) "required" else "optional"
-                        appendLine("    ${param.name} ($req): ${param.description}")
+        // Legacy fallback (for backwards compatibility)
+        return buildString {
+            if (context.hasContext) {
+                appendLine(context.context)
+                appendLine()
+            }
+
+            if (availableTools.isNotEmpty()) {
+                appendLine("You have access to the following tools:")
+                availableTools.forEach { tool ->
+                    appendLine("- ${tool.id}: ${tool.description}")
+                    if (tool.parameters.isNotEmpty()) {
+                        tool.parameters.forEach { param ->
+                            val req = if (param.required) "required" else "optional"
+                            appendLine("    ${param.name} ($req): ${param.description}")
+                        }
                     }
                 }
+                appendLine()
+                appendLine("To use a tool, respond with JSON: {\"tool\": \"tool_id\", \"args\": {...}}")
+                appendLine()
             }
-            appendLine()
-            appendLine("To use a tool, respond with JSON: {\"tool\": \"tool_id\", \"args\": {...}}")
-            appendLine()
-        }
 
-        // Add user prompt
-        append("User: $userPrompt")
+            append("User: $userPrompt")
+        }
     }
 
     private fun buildStats(

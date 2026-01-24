@@ -10,7 +10,7 @@ import app.m1k3.ai.domain.tools.ToolResult
  *
  * Pure Kotlin implementation with no external dependencies.
  *
- * **Prompt Structure:**
+ * **Prompt Structure (formats with system role):**
  * ```
  * [Tool Schema (if tools provided)]
  * [System Prompt]
@@ -18,6 +18,16 @@ import app.m1k3.ai.domain.tools.ToolResult
  * [Message 2]
  * ...
  * [Tool Results (if any)]
+ * [Assistant Turn Start (for generation)]
+ * ```
+ *
+ * **Prompt Structure (formats WITHOUT system role, e.g., Gemma3):**
+ * ```
+ * [Single User Turn containing:
+ *   - System instructions
+ *   - Tool schema (if any)
+ *   - User message
+ * ]
  * [Assistant Turn Start (for generation)]
  * ```
  *
@@ -33,30 +43,110 @@ class DefaultChatFormatter(
         tools: List<Tool>,
         toolResults: List<ToolResult>
     ): String = buildString {
+        // 0. Prompt prefix (e.g., <bos> for Gemma3)
+        val prefix = format.getPromptPrefix()
+        if (prefix.isNotEmpty()) {
+            append(prefix)
+        }
+
+        val effectiveSystemPrompt = systemPrompt.ifBlank {
+            "You are M1k3, a pocket intelligence - always help the user complete their goal, and think step by step"
+        }
+
+        if (format.supportsSystemRole) {
+            // Formats with system role: Use separate turns
+            buildMultiTurnPrompt(effectiveSystemPrompt, messages, tools, toolResults)
+        } else {
+            // Formats without system role (Gemma3): Consolidate into single user turn
+            buildConsolidatedPrompt(effectiveSystemPrompt, messages, tools, toolResults)
+        }
+
+        // Tool results (if any) - always after main content
+        toolResults.forEach { result ->
+            val resultText = formatToolResult(result)
+            append(format.formatMessage(MessageRole.TOOL, resultText))
+        }
+
+        // Start assistant turn (for generation)
+        append(getAssistantTurnStart())
+    }
+
+    /**
+     * Build prompt with separate turns for system, tools, and messages.
+     * Used by formats that support distinct system role (ChatML, Llama).
+     */
+    private fun StringBuilder.buildMultiTurnPrompt(
+        systemPrompt: String,
+        messages: List<ChatMessage>,
+        tools: List<Tool>,
+        toolResults: List<ToolResult>
+    ) {
         // 1. Tool schema (if tools provided and format supports them)
         if (tools.isNotEmpty() && format.supportsTools) {
             append(format.formatToolSchema(tools))
         }
 
         // 2. System prompt
-        if (systemPrompt.isNotBlank()) {
-            append(format.formatMessage(MessageRole.SYSTEM, systemPrompt))
-        }
+        append(format.formatMessage(MessageRole.SYSTEM, systemPrompt))
 
         // 3. Conversation messages
         messages.forEach { message ->
             append(format.formatMessage(message.role, message.content))
         }
+    }
 
-        // 4. Tool results (if any)
-        toolResults.forEach { result ->
-            val resultText = formatToolResult(result)
-            append(format.formatMessage(MessageRole.TOOL, resultText))
+    /**
+     * Build prompt with all content consolidated into a single user turn.
+     * Used by formats without system role support (Gemma3, Simple).
+     *
+     * Structure:
+     * ```
+     * <start_of_turn>user
+     * [System instructions]
+     *
+     * [Tool schema if any]
+     *
+     * [User message with context]
+     * <end_of_turn>
+     * ```
+     */
+    private fun StringBuilder.buildConsolidatedPrompt(
+        systemPrompt: String,
+        messages: List<ChatMessage>,
+        tools: List<Tool>,
+        toolResults: List<ToolResult>
+    ) {
+        val consolidatedContent = buildString {
+            // 1. System instructions first (brief for small models)
+            append(systemPrompt)
+            appendLine()
+            appendLine()
+
+            // 2. Tool schema (if any) - simplified for small models
+            if (tools.isNotEmpty() && format.supportsTools) {
+                appendLine("Available tools (respond with JSON to use):")
+                tools.forEach { tool ->
+                    append("- ${tool.id}: ${tool.description}")
+                    if (tool.parameters.isNotEmpty()) {
+                        val params = tool.parameters.joinToString(", ") { p ->
+                            val req = if (p.required) "" else "?"
+                            "${p.name}$req"
+                        }
+                        append(" ($params)")
+                    }
+                    appendLine()
+                }
+                appendLine("Format: {\"tool\": \"id\", \"args\": {...}}")
+                appendLine()
+            }
+
+            // 3. User message(s)
+            messages.forEach { message ->
+                append(message.content)
+            }
         }
 
-        // 5. Start assistant turn (for generation)
-        // This prompts the model to generate the assistant's response
-        append(getAssistantTurnStart())
+        append(format.formatMessage(MessageRole.USER, consolidatedContent.trim()))
     }
 
     override fun formatToolResult(result: ToolResult): String = when (result) {

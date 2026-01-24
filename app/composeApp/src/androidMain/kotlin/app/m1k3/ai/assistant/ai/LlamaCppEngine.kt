@@ -4,6 +4,11 @@ import android.content.Context
 import app.m1k3.ai.assistant.utils.Logger
 import app.m1k3.ai.assistant.utils.resultOf
 import app.m1k3.ai.domain.ai.GenerationConfig
+import app.m1k3.ai.domain.chat.format.ChatFormat
+import app.m1k3.ai.domain.chat.format.MessageRole
+import app.m1k3.ai.domain.chat.services.ChatFormatter
+import app.m1k3.ai.domain.chat.services.ChatMessage
+import app.m1k3.ai.domain.chat.services.DefaultChatFormatter
 import com.llamatik.library.platform.LlamaBridge
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
@@ -20,71 +25,14 @@ private val logger = Logger.withTag("LlamaCppEngine")
 /**
  * LlamaCppEngine - llama.cpp-based AI inference engine via Llamatik
  *
- * **Migration History:**
- * - v1 (ONNX Runtime): SmolLM2-135M produced severe hallucinations (tokenizer issues)
- * - v2 (InferKt 0.0.2): Native crash (SIGABRT in llama_batch_free, memory corruption)
- * - v3 (Llamatik 0.8.1): Stable with SmolLM2-135M but hallucinations
- * - v4 (Llamatik 0.9.0): Gemma 3 270M IQ3_XXS - requires special prompt handling
- *
- * **Why Llamatik:**
- * - Stable KMP library for llama.cpp on Android/iOS
- * - No native crashes in testing
- * - Simpler API = fewer failure modes
- *
- * **CRITICAL: Gemma 3 Prompt Structure**
- * Gemma 3 does NOT support a separate system role - only `user` and `model` roles.
- * See: https://ai.google.dev/gemma/docs/core/prompt-structure
- *
- * When calling `LlamaBridge.generateWithContextStream()`:
- * - `system` parameter: MUST be empty string
- * - `context` parameter: MUST be empty string
- * - `user` parameter: Combines instructions + context + user query
- *
- * This is handled by `buildGemma3UserMessage()` which structures the prompt as:
- * ```
- * [Instructions]
- * You are M1K3, a helpful assistant...
- *
- * [Context]
- * RAG facts, knowledge base info...
- *
- * [User]
- * The actual user question
- * ```
- *
- * **Sampling Parameters:**
- * Llamatik does NOT expose temperature/top_k/top_p/min_p in its Kotlin API.
- * Sampling is configured in the native llama.cpp layer with Gemma 3 defaults:
- * - temperature: 1.0, top_k: 64, top_p: 0.95
- * Behavioral control is achieved via prompt engineering.
- *
- * **Model Selection: Gemma 3 270M IQ3_XXS (176 MB)**
- * - Gemma 3 270M: Google's efficient small model with excellent reasoning
- * - IQ3_XXS quantization: 176 MB (under 200 MB cellular download limit)
- * - 32K context window
- * - Stop tokens: `<end_of_turn>`, `<eos>` (Gemma-specific only)
- *
- * **Context Window:** 32K tokens
- * **Library:** Llamatik 0.9.0
- *
- * **Usage:**
- * ```kotlin
- * val engine: BaseLlmEngine = LlamaCppEngine(context)
- * engine.initialize()
- *
- * val config = GenerationConfig(
- *     systemPrompt = "You are a helpful assistant"
- * )
- *
- * val result = engine.generate("Hello!", config)
- * println(result.text)
- *
- * engine.release()
- * ```
+ * @param context Android context for file access
+ * @param chatFormatter Optional formatter for prompt construction (defaults to Gemma3)
  */
-class LlamaCppEngine(private val context: Context) : BaseLlmEngine {
+class LlamaCppEngine(
+    private val context: Context,
+    private val chatFormatter: ChatFormatter = DefaultChatFormatter(ChatFormat.Gemma3)
+) : BaseLlmEngine {
 
-    // Thread-safety: Use @Volatile for visibility + Mutex for initialization
     @Volatile
     private var isInitialized = false
     private val initMutex = Mutex()
@@ -97,15 +45,15 @@ class LlamaCppEngine(private val context: Context) : BaseLlmEngine {
         (memInfo.totalMem / (1024 * 1024 * 1024)).toInt()
     }
 
+    private var modelMini = "gemma-3-270m-it-UD-IQ3_XXS.gguf"
+    private var defaultConfig = GenerationConfig()
+
     /**
      * Initialize llama.cpp engine with Gemma 3 270M GGUF model.
      *
      * Steps:
      * 1. Copy GGUF model from assets to internal storage (if not exists)
      * 2. Initialize Llamatik with model path
-     *
-     * Note: Llamatik's initGenerateModel() handles all configuration internally.
-     * Gemma 3 270M provides 32K token context window (4x larger than SmolLM2-135M).
      *
      * @return Result.success(Unit) if initialization succeeds, Result.failure(exception) otherwise
      */
@@ -123,31 +71,34 @@ class LlamaCppEngine(private val context: Context) : BaseLlmEngine {
             }
 
             try {
-                logger.i { "Starting initialization (Device RAM: ${deviceRamGB}GB, Library: Llamatik 0.9.0)" }
+                logger.i { "Starting initialization -> RAM: ${deviceRamGB}GB" }
 
-                // 1. Copy GGUF model from assets to internal storage
-                // Using Gemma 3 270M IQ3_XXS (176 MB) - much better quality than SmolLM2-135M
-                val modelFile = File(context.filesDir, "gemma-3-270m-it-UD-IQ3_XXS.gguf")
+                val modelFile = File(context.filesDir, modelMini)
 
                 if (!modelFile.exists()) {
-                    logger.i { "Copying Gemma 3 270M GGUF to internal storage (IQ3_XXS, 176 MB)" }
-                    context.assets.open("models/gemma-3-270m-it-UD-IQ3_XXS.gguf").use { input ->
+                    logger.i { "Copying $modelMini to internal storage" }
+
+                    context.assets.open("models/${modelMini}").use { input ->
                         modelFile.outputStream().use { output ->
                             input.copyTo(output, bufferSize = 8192)
                         }
                     }
                     logger.i { "Model copied (${modelFile.length() / 1024 / 1024} MB)" }
                 } else {
-                    logger.d { "Gemma 3 270M already in storage (${modelFile.length() / 1024 / 1024} MB)" }
+                    logger.d { "Model already in storage (${modelFile.length() / 1024 / 1024} MB)" }
                 }
 
-                // 2. Initialize Llamatik with model path
-                // Note: Llamatik handles all configuration internally (context window, threads, etc.)
-                logger.i { "Loading model with Llamatik" }
                 LlamaBridge.initGenerateModel(modelFile.absolutePath)
+                LlamaBridge.updateGenerateParams(
+                    temperature = defaultConfig.temperature!!,
+                    maxTokens = getOptimalMaxTokens(),
+                    topP = defaultConfig.topP!!,
+                    topK = defaultConfig.topK!!,
+                    repeatPenalty = defaultConfig.repetitionPenalty!!
+                )
 
                 isInitialized = true
-                logger.i { "Initialization complete - Gemma 3 270M ready (sampling: temp=1.0, top_k=64, top_p=0.95)" }
+                logger.i { "Initialization complete" }
 
                 Result.success(Unit)
             } catch (e: Exception) {
@@ -180,53 +131,29 @@ class LlamaCppEngine(private val context: Context) : BaseLlmEngine {
 
         val startTime = System.currentTimeMillis()
         val responseBuilder = StringBuilder()
-        // Thread-safe counters for native callback access
         val tokenCount = AtomicInteger(0)
 
         // Get maxTokens limit (0 = return empty response immediately)
         val maxTokens = config.maxTokens ?: getOptimalMaxTokens()
 
-        // Handle maxTokens = 0 edge case
-        if (maxTokens == 0) {
-            logger.d { "maxTokens=0, returning empty response" }
-            return@withContext Result.success(
-                GenerationResult(
-                    text = "",
-                    tokensGenerated = 0,
-                    inferenceTimeMs = 0,
-                    tokensPerSecond = 0f
-                )
-            )
-        }
-
         try {
-            // GEMMA 3 PROMPT STRUCTURE: User + Model roles ONLY (no system role!)
-            // Using generateStream() with RAW prompt because generateWithContextStream()
-            // uses <start_of_turn>system which Gemma 3 doesn't support
             val systemPrompt = buildCleanSystemPrompt(config)
             val contextParam = buildContextString(config)
-
-            // Build complete Gemma 3 chat prompt with proper template
-            val chatPrompt = buildGemma3ChatPrompt(systemPrompt, contextParam, prompt)
+            val chatPrompt = buildChatPrompt(systemPrompt, contextParam, prompt)
 
             logger.d {
-                "Llamatik non-streaming (Gemma 3 raw template): prompt=${chatPrompt.length}chars, maxTokens=$maxTokens"
+                "Prompt -> ${chatPrompt} - ${chatPrompt.length}chars - maxTokens=$maxTokens"
             }
 
-            // Use streaming internally and collect full response
-            // Gemma 3 stop tokens ONLY - no ChatML/LLaMA tokens
-            val stopTokens = listOf("<end_of_turn>", "<eos>")
-            // Thread-safe flags for native callback access (prevents double-resume race condition)
+            val stopTokens = chatFormatter.getStopTokens()
             val shouldStop = AtomicBoolean(false)
             val hasResumed = AtomicBoolean(false)
-
-            logger.d { chatPrompt }
 
             suspendCancellableCoroutine { continuation ->
                 LlamaBridge.generateStream(
                     chatPrompt,
                     object : com.llamatik.library.platform.GenStream {
-                        override fun onDelta(delta: String) {
+                        override fun onDelta(text: String) {
                             if (shouldStop.get()) return
 
                             // Check if we've hit maxTokens limit
@@ -241,7 +168,7 @@ class LlamaCppEngine(private val context: Context) : BaseLlmEngine {
                                 return
                             }
 
-                            responseBuilder.append(delta)
+                            responseBuilder.append(text)
                             tokenCount.incrementAndGet()
 
                             // Check if we've hit a stop token
@@ -272,9 +199,9 @@ class LlamaCppEngine(private val context: Context) : BaseLlmEngine {
                             }
                         }
 
-                        override fun onError(error: String) {
+                        override fun onError(message: String) {
                             if (hasResumed.compareAndSet(false, true)) {
-                                logger.e { "Generation error: $error" }
+                                logger.e { "Generation error: $message" }
                                 continuation.resume(Unit)
                             }
                         }
@@ -321,7 +248,7 @@ class LlamaCppEngine(private val context: Context) : BaseLlmEngine {
         prompt: String,
         config: GenerationConfig,
         onToken: (String) -> Unit
-    ): Result<Unit> = withContext(Dispatchers.Default) {
+    ): Result<Unit> = withContext(Dispatchers.IO) {
         if (!isInitialized) {
             return@withContext Result.failure(
                 IllegalStateException("Engine not initialized. Call initialize() first.")
@@ -329,46 +256,30 @@ class LlamaCppEngine(private val context: Context) : BaseLlmEngine {
         }
 
         try {
-            // GEMMA 3 PROMPT STRUCTURE: User + Model roles ONLY (no system role!)
-            // Gemma 3 doesn't support a separate system parameter - it must be combined into user message
-            // See: https://ai.google.dev/gemma/docs/core/prompt-structure
-
-            // Build CLEAN system prompt (identity + behavior only, no facts)
             val systemPrompt = buildCleanSystemPrompt(config)
-
-            // Build context from all available sources (RAG facts, knowledge, conversation)
             val contextParam = buildContextString(config)
+            val chatPrompt = buildChatPrompt(systemPrompt, contextParam, prompt)
 
-            // Build complete Gemma 3 chat prompt with proper template
-            // Using generateStream() instead of generateWithContextStream() because
-            // the latter uses <start_of_turn>system which Gemma 3 doesn't support
-            val chatPrompt = buildGemma3ChatPrompt(systemPrompt, contextParam, prompt)
-
-            // Get maxTokens limit (if 0, still stream but stop immediately)
             val maxTokens = config.maxTokens ?: getOptimalMaxTokens()
 
             logger.d {
-                "Llamatik streaming (Gemma 3 raw template): prompt=${chatPrompt.length} chars, maxTokens=$maxTokens"
+                "Generate with prompt -> ${chatPrompt} - ${chatPrompt.length} chars - maxTokens=$maxTokens"
             }
-
-            // DEBUG: Log actual prompt contents (truncated for readability)
-            logger.v { ">>> PROMPT: ${chatPrompt}" }
 
             // Thread-safe counters and flags for native callback access
             val tokenCount = AtomicInteger(0)
 
-            // Gemma 3 stop tokens ONLY - no ChatML/LLaMA tokens
-            val stopTokens = listOf("<end_of_turn>", "<eos>")
+            val stopTokens = chatFormatter.getStopTokens()
             val responseBuffer = StringBuilder()
             val shouldStop = AtomicBoolean(false)
             val hasResumed = AtomicBoolean(false)
 
             // Stream tokens with Llamatik using RAW prompt (no templating)
-            suspendCancellableCoroutine<Unit> { continuation ->
+            suspendCancellableCoroutine { continuation ->
                 LlamaBridge.generateStream(
                     chatPrompt,
                     object : com.llamatik.library.platform.GenStream {
-                        override fun onDelta(delta: String) {
+                        override fun onDelta(text: String) {
                             if (shouldStop.get()) return
 
                             // Check if we've hit maxTokens limit
@@ -383,7 +294,7 @@ class LlamaCppEngine(private val context: Context) : BaseLlmEngine {
                             }
 
                             // Accumulate tokens to detect stop sequences
-                            responseBuffer.append(delta)
+                            responseBuffer.append(text)
                             tokenCount.incrementAndGet()
 
                             // Check if we've hit a stop token
@@ -391,7 +302,7 @@ class LlamaCppEngine(private val context: Context) : BaseLlmEngine {
                             for (stopToken in stopTokens) {
                                 if (currentText.contains(stopToken)) {
                                     shouldStop.set(true)
-                                    logger.d { "Stop token detected: \"$stopToken\" after ${tokenCount.get()} tokens" }
+                                    logger.d { "STOP TOKEN detected: \"$stopToken\" after ${tokenCount.get()} tokens" }
 
                                     // Send only text before stop token
                                     val textBeforeStop = currentText.substringBefore(stopToken)
@@ -409,24 +320,23 @@ class LlamaCppEngine(private val context: Context) : BaseLlmEngine {
                                 }
                             }
 
-                            onToken(delta)  // Stream to UI
+                            onToken(text)  // Stream to UI
                         }
 
                         override fun onComplete() {
                             if (hasResumed.compareAndSet(false, true)) {
                                 logger.i { "Streaming complete (${tokenCount.get()} tokens)" }
 
-                                // DEBUG: Log final response (truncated)
                                 val finalResponse = responseBuffer.toString()
-                                logger.v { "<<< RESPONSE (${finalResponse.length} chars): ${finalResponse.take(500)}${if (finalResponse.length > 500) "..." else ""}" }
+                                logger.v { "RESPONSE (${finalResponse.length} chars): ${finalResponse.take(500)}${if (finalResponse.length > 500) "..." else ""}" }
 
                                 continuation.resume(Unit)
                             }
                         }
 
-                        override fun onError(error: String) {
+                        override fun onError(message: String) {
                             if (hasResumed.compareAndSet(false, true)) {
-                                logger.e { "Streaming error: $error" }
+                                logger.e { "Streaming error: $message" }
                                 continuation.resume(Unit)
                             }
                         }
@@ -472,8 +382,6 @@ class LlamaCppEngine(private val context: Context) : BaseLlmEngine {
      */
     override fun release() {
         try {
-            // Llamatik doesn't provide cleanup API
-            // Just mark as uninitialized
             isInitialized = false
             logger.i { "Resources released (marked as uninitialized)" }
         } catch (e: Exception) {
@@ -498,7 +406,7 @@ class LlamaCppEngine(private val context: Context) : BaseLlmEngine {
      */
     private fun buildCleanSystemPrompt(config: GenerationConfig): String {
         val deviceInfo = getDeviceContext()
-        val userName = config.userContext?.get("name")
+        val userName = config.userContext?.get("name") ?: "Human"
 
         // Base identity (WHO)
         val identity = if (userName != null) {
@@ -556,57 +464,58 @@ class LlamaCppEngine(private val context: Context) : BaseLlmEngine {
     }
 
     /**
-     * Build Gemma 3 compatible user message.
+     * Build chat prompt using the injected ChatFormatter.
      *
-     * **CRITICAL:** Gemma 3 does NOT support a separate system role!
-     * It only has two roles: user and model.
-     * See: https://ai.google.dev/gemma/docs/core/prompt-structure
+     * This unified approach:
+     * - Works with any ChatFormat (Gemma3, ChatML, Llama, etc.)
+     * - Handles format-specific tokens automatically (BOS, stop tokens)
+     * - Supports pre-formatted prompts (pass-through)
      *
-     * This function combines:
-     * - System instructions (identity + behavior)
-     * - Context (RAG facts, knowledge, conversation history)
-     * - User query
-     *
-     * Into a single user message that Gemma 3 can properly process.
-     *
-     * @param systemPrompt System instructions (identity + behavior)
-     * @param context Background info (RAG, knowledge, conversation)
-     * @param userQuery The actual user question/request
-     * @return Combined user message for Gemma 3
-     */
-    /**
-     * Build a complete Gemma 3 chat prompt with proper template.
-     *
-     * **CRITICAL:** We use LlamaBridge.generateStream() with a RAW prompt because
-     * LlamaBridge.generateWithContextStream() uses a template with `<start_of_turn>system`
-     * which Gemma 3 does NOT support (only `user` and `model` roles).
-     *
-     * Gemma 3 template format:
-     * ```
-     * <bos><start_of_turn>user
-     * {user_message}<end_of_turn>
-     * <start_of_turn>model
-     * ```
-     *
-     * @param systemPrompt System instructions (goes into user message)
+     * @param systemPrompt System instructions (used by formatter)
      * @param context Background info (RAG, knowledge)
-     * @param userQuery The actual user question
-     * @return Complete Gemma 3 chat prompt ready for generation
+     * @param userQuery The user's message OR a pre-formatted prompt
+     * @return Complete chat prompt ready for generation
      */
-    /**
-     * Build Gemma 3 prompt using the testable Gemma3PromptBuilder.
-     *
-     * Note: systemPrompt is intentionally ignored for 270M models.
-     * Complex instructions confuse small models - let RAG + question do the work.
-     */
-    private fun buildGemma3ChatPrompt(
+    private fun buildChatPrompt(
         systemPrompt: String,
         context: String,
         userQuery: String
-    ): String = Gemma3PromptBuilder.build(
-        userQuery = userQuery,
-        context = context.ifBlank { null }
-    )
+    ): String {
+        // If prompt is already formatted (from UnifiedPromptBuilder), use as-is
+        if (isAlreadyFormatted(userQuery)) {
+            return userQuery
+        }
+
+        // Build user message with context prepended
+        val userContent = if (context.isNotBlank()) {
+            "$context\n\n$userQuery"
+        } else {
+            userQuery
+        }
+
+        val messages = listOf(
+            ChatMessage(role = MessageRole.USER, content = userContent)
+        )
+
+        // Use formatter to build format-aware prompt (includes BOS, stop tokens, etc.)
+        return chatFormatter.buildPrompt(
+            systemPrompt = systemPrompt,
+            messages = messages
+        )
+    }
+
+    /**
+     * Check if prompt is already formatted with chat tokens.
+     *
+     * Detection looks for characteristic markers from any supported format.
+     */
+    private fun isAlreadyFormatted(prompt: String): Boolean {
+        return prompt.contains("<start_of_turn>") ||  // Gemma3
+               prompt.contains("<end_of_turn>") ||    // Gemma3
+               prompt.contains("<|im_start|>") ||     // ChatML
+               prompt.contains("[INST]") ||           // Llama
+               prompt.startsWith("<bos>")             // Already has BOS
+    }
 
     /**
      * Get device context string for dynamic system prompts.
