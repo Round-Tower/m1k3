@@ -179,7 +179,8 @@ class ContextRetrievalUseCaseTest {
         val result = useCase.retrieveContext("What is photosynthesis?")
 
         assertTrue(result.isEmpty)
-        assertEquals("GENERAL", result.intentCategory)
+        // Intent is now classified even when RAG is not available
+        assertEquals("Science Facts", result.intentCategory)
         assertFalse(result.hasRagContext)
         assertFalse(result.hasMemoryContext)
         assertNull(result.ragInfo)
@@ -206,7 +207,7 @@ class ContextRetrievalUseCaseTest {
     }
 
     @Test
-    fun `retrieveContext defaults intentCategory to GENERAL`() = runTest {
+    fun `retrieveContext classifies conversational intent correctly`() = runTest {
         val useCase = ContextRetrievalUseCase(
             deviceInfo = MockDeviceInfoProvider.midRange(),
             preferences = TestPreferencesStore()
@@ -214,7 +215,8 @@ class ContextRetrievalUseCaseTest {
 
         val result = useCase.retrieveContext("Hello")
 
-        assertEquals("GENERAL", result.intentCategory)
+        // "Hello" is classified as CONVERSATIONAL, not GENERAL
+        assertEquals("Casual Conversation", result.intentCategory)
     }
 
     // ===== EnrichedContext Field Validation Tests =====

@@ -112,6 +112,25 @@ object GenerationConstants {
     }
 
     /**
+     * RAG context budget configuration.
+     *
+     * Controls how much context is allocated to RAG facts to prevent
+     * overwhelming small models (SmolLM2-360M).
+     *
+     * Uses approximate token counting: 1 token ≈ 4 characters.
+     */
+    object RAGBudget {
+        /** Maximum characters for all RAG context (~400 tokens) */
+        const val MAX_CONTEXT_CHARS = 1600
+
+        /** Maximum characters per fact before truncation */
+        const val MAX_FACT_CHARS = 100
+
+        /** Maximum number of facts regardless of budget */
+        const val MAX_FACT_COUNT = 3
+    }
+
+    /**
      * System prompt hints for adaptive generation.
      * Tuned for small models that tend to deflect with questions.
      */

@@ -13,6 +13,8 @@ import app.m1k3.ai.domain.chat.services.ContextRetrieverInterface
 import app.m1k3.ai.domain.rag.services.RAGEnricherInterface
 import app.m1k3.ai.domain.rag.services.calculateRAGConfidence
 import app.m1k3.ai.domain.rag.services.formatRAGSources
+import app.m1k3.ai.domain.rag.services.IntentClassifier
+import app.m1k3.ai.domain.rag.services.ContextBudgetManager
 import app.m1k3.ai.assistant.utils.Logger
 
 private val logger = Logger.withTag("ContextRetrievalUseCase")
@@ -54,7 +56,9 @@ class ContextRetrievalUseCase(
     private val projectId: String? = null,
     private val ragEnricher: RAGEnricherInterface? = null,
     private val memoryManager: MemoryManager? = null,
-    private val contextAssembler: ContextAssembler = ContextAssembler()
+    private val contextAssembler: ContextAssembler = ContextAssembler(),
+    private val intentClassifier: IntentClassifier = IntentClassifier(),
+    private val contextBudgetManager: ContextBudgetManager = ContextBudgetManager()
 ) : ContextRetrieverInterface {
     /**
      * Retrieve context for a given prompt.
@@ -76,22 +80,28 @@ class ContextRetrievalUseCase(
             conversationHistory = retrieveConversationHistory()
         }
 
-        // 2. RAG retrieval (if enabled)
-        if (isRagEnabled() && ragEnricher != null) {
-            val ragResult = retrieveRagContext(prompt)
+        // 2. Early intent check - skip RAG for conversational queries
+        val (intent, intentConfidence) = intentClassifier.classifyWithConfidence(prompt)
+        intentCategory = intent.category
+        val shouldRetrieveKnowledge = intentClassifier.requiresKnowledgeRetrieval(intent)
+
+        // 3. RAG retrieval (if enabled AND needed based on intent)
+        if (isRagEnabled() && ragEnricher != null && shouldRetrieveKnowledge) {
+            val ragResult = retrieveRagContext(prompt, conversationHistory.length)
             ragContext = ragResult.context
-            intentCategory = ragResult.intentCategory
             ragInfo = ragResult.ragInfo
             ragSources = ragResult.ragSources
             ragConfidence = ragResult.ragConfidence
+        } else if (!shouldRetrieveKnowledge) {
+            logger.d { "Skipping RAG for ${intent.category} query (confidence: ${(intentConfidence * 100).toInt()}%)" }
         }
 
-        // 3. Semantic memory retrieval (if available)
+        // 4. Semantic memory retrieval (if available)
         if (memoryManager != null) {
             memoryContext = retrieveMemoryContext(prompt)
         }
 
-        // 4. Combine contexts using domain service
+        // 5. Combine contexts using domain service
         val combinedContext = contextAssembler.assembleContext(conversationHistory, ragContext, memoryContext)
 
         return EnrichedContext(
@@ -188,7 +198,10 @@ class ContextRetrievalUseCase(
         }
     }
 
-    private suspend fun retrieveRagContext(prompt: String): RagResult {
+    private suspend fun retrieveRagContext(
+        prompt: String,
+        conversationHistoryChars: Int
+    ): RagResult {
         return try {
             val result = ragEnricher!!.enrichPrompt(
                 userQuery = prompt,
@@ -197,12 +210,24 @@ class ContextRetrievalUseCase(
             )
 
             if (result.ragApplied && result.retrievedFacts.isNotEmpty()) {
-                // Build simple facts-only context (NO RAG instructions!)
-                // The enrichedPrompt contains instructions that confuse small models.
-                // Just give the model the raw facts as simple bullet points.
-                val factsContext = result.retrievedFacts.joinToString("\n") { fact ->
-                    "- ${fact.content}"
-                }
+                // Calculate available budget for RAG facts
+                // Reserve space for memory context (retrieved after RAG)
+                // Estimate: topK memories × max content length per memory
+                val estimatedMemoryChars = deviceInfo.getMemoryTopK() *
+                    (GenerationConstants.MemoryPreview.MAX_CONTENT_LENGTH + 10) // +10 for "Memory: " prefix
+                val ragBudget = contextBudgetManager.calculateRagBudget(
+                    historyChars = conversationHistoryChars,
+                    memoryChars = estimatedMemoryChars
+                )
+
+                // Select facts within budget (already sorted by similarity)
+                val selectedFacts = contextBudgetManager.selectFactsWithinBudget(
+                    result.retrievedFacts,
+                    ragBudget
+                )
+
+                // Format as inline string: "Facts: x. y. z."
+                val factsContext = contextBudgetManager.formatFacts(selectedFacts)
 
                 // Build RAG info display string for UI
                 val avgSimilarity = result.retrievedFacts.map { it.similarity }.average().toFloat()
@@ -211,11 +236,14 @@ class ContextRetrievalUseCase(
                     avgSimilarity >= GenerationConstants.Similarity.MEDIUM_QUALITY -> "⚠️"
                     else -> "❓"
                 }
-                val ragInfo = "$qualityEmoji ${result.intent.category} (${(result.confidence * 100).toInt()}%) • ${result.retrievedFacts.size} facts"
+                val usedCount = selectedFacts.size
+                val totalCount = result.retrievedFacts.size
+                val ragInfo = "$qualityEmoji ${result.intent.category} (${(result.confidence * 100).toInt()}%) • $usedCount/$totalCount facts"
+
+                logger.d { "RAG budget: $ragBudget chars, selected $usedCount/$totalCount facts" }
 
                 RagResult(
-                    context = factsContext,  // Facts only, no instructions
-                    intentCategory = result.intent.category,
+                    context = factsContext,  // Inline format, budget-aware
                     ragInfo = ragInfo,
                     ragSources = result.retrievedFacts.formatRAGSources(),  // Domain extension
                     ragConfidence = result.retrievedFacts.calculateRAGConfidence()  // Domain extension
@@ -223,7 +251,6 @@ class ContextRetrievalUseCase(
             } else {
                 RagResult(
                     context = "",
-                    intentCategory = result.intent.category,
                     ragInfo = null,
                     ragSources = null,
                     ragConfidence = null
@@ -233,7 +260,6 @@ class ContextRetrievalUseCase(
             logger.w(e) { "RAG enrichment failed" }
             RagResult(
                 context = "",
-                intentCategory = "GENERAL",
                 ragInfo = null,
                 ragSources = null,
                 ragConfidence = null
@@ -272,7 +298,6 @@ class ContextRetrievalUseCase(
      */
     private data class RagResult(
         val context: String,
-        val intentCategory: String,
         val ragInfo: String?,
         val ragSources: String?,
         val ragConfidence: Double?
