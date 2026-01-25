@@ -75,7 +75,9 @@ fun ChatScreen(
     val context = LocalContext.current
     rememberCoroutineScope()
     val listState = rememberLazyListState()
-    val viewModel = koinViewModel<ChatScreenViewModel>()
+    val viewModel = koinViewModel<ChatScreenViewModel> {
+        parametersOf(projectId)
+    }
 
     // Avatar state management - use shared app-level ViewModel from CompositionLocal
     val avatarVM = LocalSharedAvatarVM.current

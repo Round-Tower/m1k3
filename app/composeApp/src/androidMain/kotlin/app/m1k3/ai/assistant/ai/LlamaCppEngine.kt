@@ -45,8 +45,8 @@ class LlamaCppEngine(
         (memInfo.totalMem / (1024 * 1024 * 1024)).toInt()
     }
 
-//    private var modelMini = "gemma-3-270m-it-UD-IQ3_XXS.gguf"
-    private var modelMini = "gemma-3-270m-it-Q2_K.gguf"
+    private var modelMini = "gemma-3-270m-it-UD-IQ3_XXS.gguf"
+//    private var modelMini = "gemma-3-270m-it-Q2_K.gguf"
     private var defaultConfig = GenerationConfig()
 
     /**

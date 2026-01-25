@@ -214,18 +214,10 @@ actual val platformModule = module {
         )
     }
 
-    /**
-     * MemoryManager (optional)
-     *
-     * Provides semantic memory management for conversation context.
-     * Returns null if dependencies are not available.
-     *
-     * TODO: Enable when EmbeddingEngine and MemoryRanker are properly registered
-     * Currently returns null to match factory function behavior (line 121)
-     */
-    single<MemoryManager?> {
-        null // TODO: Add MemoryManager when all dependencies are available
-    }
+    // ===== MemoryManager (TODO: Not yet implemented) =====
+    // MemoryManager is not registered yet because it requires additional dependencies.
+    // ChatScreenViewModel uses getOrNull<MemoryManager>() which will return null.
+    // TODO: Implement MemoryRepository with projectId scoping, then register MemoryManager
 
     // ===== Initialization Layer =====
 
@@ -260,19 +252,24 @@ actual val platformModule = module {
     }
 
     /**
-     * ChatScreenViewModel (parameterized with projectId)
+     * ChatScreenViewModel (optional projectId parameter)
      *
      * Main chat interface ViewModel with full dependency injection.
-     * Uses parametersOf() for runtime projectId parameter.
+     * Accepts optional projectId via parametersOf(), defaults to "default".
      *
      * Usage:
      * ```kotlin
+     * // With default projectId
+     * val chatViewModel = koinViewModel<ChatScreenViewModel>()
+     *
+     * // With custom projectId
      * val chatViewModel = koinViewModel<ChatScreenViewModel> {
-     *     parametersOf("default")
+     *     parametersOf("my-project")
      * }
      * ```
      */
-    viewModel {
+    viewModel { params ->
+        val projectId = params.getOrNull<String>() ?: "default"
         ChatScreenViewModel(
             aiEngine = get<BaseLlmEngine>(),
             conversationRepo = get<ConversationRepository>(),
@@ -280,6 +277,7 @@ actual val platformModule = module {
             database = get<MaDatabase>(),
             deviceInfo = get<DeviceInfoProviderInterface>(),
             preferences = get<PreferencesStoreInterface>(),
+            projectId = projectId,
             memoryManager = getOrNull<MemoryManager>(),
             ragManager = get<RAGManager>(),
             toolRegistry = get<ToolRegistry>(),
