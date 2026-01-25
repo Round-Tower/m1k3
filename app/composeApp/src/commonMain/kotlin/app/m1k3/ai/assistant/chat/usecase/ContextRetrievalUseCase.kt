@@ -92,8 +92,13 @@ class ContextRetrievalUseCase(
             ragInfo = ragResult.ragInfo
             ragSources = ragResult.ragSources
             ragConfidence = ragResult.ragConfidence
-        } else if (!shouldRetrieveKnowledge) {
-            logger.d { "Skipping RAG for ${intent.category} query (confidence: ${(intentConfidence * 100).toInt()}%)" }
+        } else {
+            // Log why RAG was skipped for debugging
+            when {
+                !isRagEnabled() -> logger.d { "RAG disabled in preferences" }
+                ragEnricher == null -> logger.w { "RAG skipped: ragEnricher is null (embeddingEngine not provided?)" }
+                !shouldRetrieveKnowledge -> logger.d { "Skipping RAG for ${intent.category} query (confidence: ${(intentConfidence * 100).toInt()}%)" }
+            }
         }
 
         // 4. Semantic memory retrieval (if available)

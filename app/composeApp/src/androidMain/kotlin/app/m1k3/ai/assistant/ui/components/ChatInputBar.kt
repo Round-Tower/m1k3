@@ -2,6 +2,7 @@ package app.m1k3.ai.assistant.ui.components
 
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.*
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -137,8 +138,8 @@ fun ChatInputBar(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(MaSpacing.base)
-
+                .navigationBarsPadding()
+                .imePadding()
         ) {
             // Integrated input field with send button
             BasicTextField(
@@ -224,7 +225,7 @@ private fun SendArrowIcon(
     color: androidx.compose.ui.graphics.Color,
     modifier: Modifier = Modifier.size(20.dp)
 ) {
-    androidx.compose.foundation.Canvas(modifier = modifier) {
+    Canvas(modifier = modifier) {
         val strokeWidth = 2.5f
         val centerX = size.width / 2
         val centerY = size.height / 2
@@ -285,9 +286,7 @@ fun ChatInputBarContainer(
                 .background(
                     brush = Brush.verticalGradient(
                         colors = listOf(
-                            MaterialTheme.colorScheme.background.copy(alpha = 0.0f),
-                            MaterialTheme.colorScheme.background.copy(alpha = 0.85f),
-                            MaterialTheme.colorScheme.background.copy(alpha = 0.95f)
+                            MaterialTheme.colorScheme.background,
                         )
                     )
                 )
@@ -355,7 +354,10 @@ private fun ChatInputBarMultilinePreview() {
                 .padding(MaSpacing.base)
         ) {
             ChatInputBar(
-                text = "Can you help me understand:\n1. Machine learning basics\n2. Neural networks\n3. Applications",
+                text = """Can you help me understand:
+1. Machine learning basics
+2. Neural networks
+3. Applications""",
                 onTextChange = PreviewFixtures.noOpOnTextChange,
                 onSend = PreviewFixtures.noOpOnClick,
                 enabled = true,

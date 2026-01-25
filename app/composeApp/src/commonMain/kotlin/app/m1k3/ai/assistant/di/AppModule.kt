@@ -1,6 +1,7 @@
 package app.m1k3.ai.assistant.di
 
-import app.m1k3.ai.assistant.avatar.AvatarViewModel
+import androidx.lifecycle.viewmodel.compose.viewModel
+import app.m1k3.ai.assistant.chat.ChatScreenViewModel
 import app.m1k3.ai.assistant.avatar.PetMetricsRepository
 import app.m1k3.ai.assistant.chat.GenerationConfigBuilder
 import app.m1k3.ai.assistant.database.DatabaseFactory
@@ -9,6 +10,7 @@ import app.m1k3.ai.assistant.eco.EcoCalculator
 import app.m1k3.ai.assistant.eco.EcoMetricsRepository
 import app.m1k3.ai.assistant.history.ConversationRepository
 import app.m1k3.ai.assistant.history.SearchRepository
+import app.m1k3.ai.assistant.history.ExportManager
 import app.m1k3.ai.assistant.memory.MemoryDataSource
 import app.m1k3.ai.assistant.platform.DeviceInfoProviderInterface
 import app.m1k3.ai.domain.ai.services.GenerationConfigService
@@ -17,12 +19,11 @@ import app.m1k3.ai.domain.memory.ImportanceCalculator
 import app.m1k3.ai.domain.memory.services.SemanticChunker
 import app.m1k3.ai.domain.rag.services.IntentClassifier
 import app.m1k3.ai.domain.repositories.KnowledgeRepository
-import app.m1k3.ai.domain.repositories.MemoryRepository
-import app.m1k3.ai.domain.usecases.memory.CreateMemoryUseCase
 import app.m1k3.ai.domain.usecases.memory.SearchMemoriesUseCase
 import app.m1k3.ai.domain.usecases.rag.EnrichPromptWithRAGUseCase
 import app.m1k3.ai.domain.usecases.tools.ExecuteToolUseCase
 import app.m1k3.ai.domain.usecases.tools.ParseToolCallUseCase
+import app.m1k3.ai.domain.usecases.chat.LlmOutputProcessor
 import app.m1k3.ai.domain.usecases.chat.ProcessLlmOutputUseCase
 import app.m1k3.ai.domain.chat.format.ChatFormat
 import app.m1k3.ai.domain.chat.services.ChatFormatter
@@ -34,38 +35,7 @@ import app.m1k3.ai.assistant.knowledge.SemanticRetrievalService
 import org.koin.core.module.Module
 import org.koin.core.module.dsl.singleOf
 import org.koin.dsl.module
-
-/**
- * 間 AI Koin Dependency Injection Modules
- *
- * Provides centralized dependency management for:
- * - ViewModels (ChatViewModel, AvatarViewModel)
- * - Repositories (Conversation, EcoMetrics, Memory)
- * - Database (SQLDelight instance)
- * - AI Engine (LlamaCppEngine)
- *
- * Architecture Benefits:
- * - ✅ Testability: Easy to inject mocks
- * - ✅ Modularity: Clear separation of concerns
- * - ✅ Lifecycle management: Koin handles scopes
- * - ✅ Type safety: Compile-time dependency resolution
- *
- * Usage:
- * ```kotlin
- * // In MainActivity.kt
- * startKoin {
- *     modules(appModule, platformModule)
- * }
- *
- * // In composables
- * @Composable
- * fun ChatScreen() {
- *     val chatVM: ChatViewModel = koinViewModel()
- *     val avatarVM: AvatarViewModel = koinViewModel()
- *     // ...
- * }
- * ```
- */
+import org.koin.core.module.dsl.factoryOf
 
 /**
  * Core application module
@@ -121,6 +91,13 @@ val appModule = module {
      * Handles full-text search across conversations and messages.
      */
     singleOf(::SearchRepository)
+
+    /**
+     * ExportManager
+     *
+     * Handles conversation export to JSON and Markdown formats.
+     */
+    singleOf(::ExportManager)
 
     /**
      * Semantic retrieval service
@@ -203,16 +180,9 @@ val appModule = module {
 
     // ===== Domain Use Cases =====
 
-    /**
-     * Search memories use case
-     *
-     * Semantic search over conversation memories.
-     */
-    single {
-        SearchMemoriesUseCase(
-            memoryRepository = get() // Domain MemoryRepository interface
-        )
-    }
+    // Note: SearchMemoriesUseCase NOT registered here because MemoryRepository
+    // requires projectId scoping. Create instances inline where needed:
+    // val useCase = SearchMemoriesUseCase(memoryRepository)
 
     /**
      * Enrich prompt with RAG use case
@@ -267,7 +237,9 @@ val appModule = module {
      * Orchestrates parsing and execution of tool calls from LLM output.
      * Primary integration point between LLM generation and tool system.
      */
-    single { ProcessLlmOutputUseCase(parseToolCallUseCase = get(), executeToolUseCase = get()) }
+    single<LlmOutputProcessor> {
+        ProcessLlmOutputUseCase(parseToolCallUseCase = get(), executeToolUseCase = get())
+    }
 
     // ===== Utility Layer =====
 
@@ -287,23 +259,9 @@ val appModule = module {
      * Builds device-adaptive AI generation configurations.
      * Uses DeviceInfoProvider for RAM-based token limit scaling.
      */
-    single {
-        GenerationConfigBuilder(get<DeviceInfoProviderInterface>())
-    }
-
+    factoryOf(::GenerationConfigBuilder)
+    
     // ===== ViewModel Layer =====
-
-    // Note: ViewModels are created at the screen level using remember*ViewModel
-    // factories because they require:
-    // - CoroutineScope (provided by rememberCoroutineScope)
-    // - projectId (provided at navigation time)
-    // - Optional dependencies (memoryManager, ragManager)
-    //
-    // This follows the pattern established in:
-    // - RememberHistoryViewModel.kt
-    // - RememberEcoStatsViewModel.kt
-    // - rememberSettingsViewModel() in SettingsViewModel.kt
-    // - rememberAvatarDebugViewModel() in AvatarDebugViewModel.kt
 }
 
 /**
@@ -322,66 +280,3 @@ expect val platformModule: Module
  * Convenience property for startKoin { modules(...) }
  */
 val allModules = listOf(appModule, platformModule)
-
-/**
- * Usage Examples:
- * ```kotlin
- * // ===== In MainActivity.kt (Android) =====
- * class MainActivity : ComponentActivity() {
- *     override fun onCreate(savedInstanceState: Bundle?) {
- *         super.onCreate(savedInstanceState)
- *
- *         // Initialize Koin DI
- *         startKoin {
- *             androidContext(this@MainActivity)
- *             modules(allModules)
- *         }
- *
- *         setContent {
- *             App()
- *         }
- *     }
- * }
- *
- * // ===== In Composables =====
- * @Composable
- * fun ChatScreen() {
- *     // Inject ViewModels via Koin
- *     val chatVM: ChatViewModel = koinViewModel()
- *     val avatarVM: AvatarViewModel = koinViewModel()
- *
- *     // Use ViewModels
- *     val messages by chatVM.messages.collectAsState()
- *     val avatarState by avatarVM.avatarState.collectAsState()
- *
- *     // ... UI
- * }
- *
- * // ===== In Tests =====
- * class ChatViewModelTest {
- *     @Test
- *     fun testSendMessage() {
- *         startKoin {
- *             modules(
- *                 module {
- *                     single<BaseLlmEngine> { MockLlmEngine() }
- *                     single<ConversationRepository> { MockConversationRepo() }
- *                     viewModelOf(::ChatViewModel)
- *                 }
- *             )
- *         }
- *
- *         val chatVM: ChatViewModel = get()
- *         // ... test logic
- *     }
- * }
- *
- * // ===== Manual Dependency Injection (without Koin) =====
- * // If Koin initialization fails, you can still use manual DI:
- * val database = DatabaseFactory().createDatabase()
- * val conversationRepo = ConversationRepository(database)
- * val ecoMetricsRepo = EcoMetricsRepository(database)
- * val aiEngine = LlamaCppEngine("models/gemma-3-270m-it-Q2_K.gguf", 24576)
- * val chatViewModel = ChatViewModel(conversationRepo, ecoMetricsRepo, aiEngine)
- * ```
- */

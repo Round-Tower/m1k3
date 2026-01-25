@@ -1,4 +1,4 @@
-rootProject.name = "MyApplication"
+rootProject.name = "m1k3"
 enableFeaturePreview("TYPESAFE_PROJECT_ACCESSORS")
 
 pluginManagement {
@@ -26,7 +26,7 @@ dependencyResolutionManagement {
             }
         }
         mavenCentral()
-        maven { url = uri("https://jitpack.io") }  // For kotlinllamacpp and other GitHub libraries
+        maven { url = uri("https://jitpack.io") }
     }
 }
 
@@ -36,6 +36,6 @@ plugins {
 
 include(":composeApp")
 include(":shared")
-include(":codingModule")
-include(":gemmaEmbedding")
+//include(":codingModule")
+//include(":gemmaEmbedding")
 // Removed: include(":server") - unused Ktor boilerplate

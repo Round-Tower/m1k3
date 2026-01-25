@@ -7,6 +7,7 @@ import app.m1k3.ai.domain.chat.ChatError
 import app.m1k3.ai.domain.chat.EnrichedContext
 import app.m1k3.ai.domain.chat.GenerationStats
 import app.m1k3.ai.domain.chat.services.UnifiedPromptBuilder
+import app.m1k3.ai.domain.platform.DeviceContext
 import app.m1k3.ai.domain.ai.GenerationConfig
 import app.m1k3.ai.domain.tools.ToolResult
 import app.m1k3.ai.domain.tools.services.ToolRegistry
@@ -86,7 +87,8 @@ class ChatWithToolsUseCase(
      */
     fun execute(
         prompt: String,
-        confirmedToolIds: Set<String> = emptySet()
+        confirmedToolIds: Set<String> = emptySet(),
+        deviceContext: DeviceContext? = null
     ): Flow<ChatEvent> = flow {
         emit(ChatEvent.Started)
         logger.i { "Starting chat flow for: ${prompt.take(50)}..." }
@@ -98,8 +100,8 @@ class ChatWithToolsUseCase(
             emit(ChatEvent.ContextRetrieved(context))
             logger.d { "Context: hasRAG=${context.hasRagContext}, hasMemory=${context.hasMemoryContext}" }
 
-            // 2. Build prompt with tool schemas
-            val fullPrompt = buildPromptWithTools(prompt, context)
+            // 2. Build prompt with tool schemas and device context
+            val fullPrompt = buildPromptWithTools(prompt, context, deviceContext)
 
             // 3. Build generation config
             val queryType = QueryType.fromIntentCategory(context.intentCategory)
@@ -184,7 +186,8 @@ class ChatWithToolsUseCase(
      */
     private suspend fun buildPromptWithTools(
         userPrompt: String,
-        context: EnrichedContext
+        context: EnrichedContext,
+        deviceContext: DeviceContext? = null
     ): String {
         val availableTools = toolRegistry.getAvailableTools()
 
@@ -193,7 +196,8 @@ class ChatWithToolsUseCase(
             return builder.build(
                 userPrompt = userPrompt,
                 context = context,
-                tools = availableTools
+                tools = availableTools,
+                deviceContext = deviceContext
             )
         }
 

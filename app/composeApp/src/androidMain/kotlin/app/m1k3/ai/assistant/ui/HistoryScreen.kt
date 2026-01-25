@@ -20,10 +20,10 @@ import app.m1k3.ai.assistant.design.tokens.MaFontFamilyCaption
 import app.m1k3.ai.assistant.design.tokens.MaSpacing
 import app.m1k3.ai.assistant.design.tokens.MaTypography
 import app.m1k3.ai.assistant.design.theme.MaTheme
-import app.m1k3.ai.assistant.eco.collectAsState
 import app.m1k3.ai.assistant.history.collectAsState
-import app.m1k3.ai.assistant.history.rememberHistoryViewModel
+import app.m1k3.ai.assistant.history.HistoryViewModel
 import app.m1k3.ai.assistant.ui.components.*
+import org.koin.androidx.compose.koinViewModel
 
 /**
  * HistoryScreen - Conversation History Screen
@@ -52,10 +52,7 @@ fun HistoryScreen(
     val haptics = rememberHapticFeedback()
 
     // HistoryViewModel - Single source of truth for history state
-    val viewModel = rememberHistoryViewModel(
-        database = database,
-        projectId = projectId
-    )
+    val viewModel = koinViewModel<HistoryViewModel>()
     val state by viewModel.collectAsState()
 
     // Load conversations on first composition

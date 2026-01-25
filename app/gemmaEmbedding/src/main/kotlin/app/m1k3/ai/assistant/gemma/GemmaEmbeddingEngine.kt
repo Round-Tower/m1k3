@@ -127,7 +127,7 @@ class GemmaEmbeddingEngine(
             val startTime = System.currentTimeMillis()
 
             // Apply task-specific prefix
-            val prefixedText = applyTaskPrefix(text, taskType)
+//            val prefixedText = applyTaskPrefix(text, taskType)
 
             // TODO: Implement actual ONNX inference once model is available
             // For now, return a placeholder embedding
@@ -168,14 +168,16 @@ class GemmaEmbeddingEngine(
 
             // Process texts individually (ONNX Runtime mobile doesn't efficiently batch)
             for ((index, text) in texts.withIndex()) {
-                val result = embed(text, taskType)
-                if (result.isSuccess) {
-                    embeddings.add(result.getOrThrow())
-                } else {
-                    return@withContext Result.failure(
-                        result.exceptionOrNull() ?: Exception("Unknown error at index $index")
-                    )
-                }
+                //TODO Rethink this whole module..
+
+//                val result = embed(text, taskType)
+//                if (result.isSuccess) {
+//                    embeddings.add(result.getOrThrow())
+//                } else {
+//                    return@withContext Result.failure(
+//                        result.exceptionOrNull() ?: Exception("Unknown error at index $index")
+//                    )
+//                }
             }
 
             val duration = System.currentTimeMillis() - startTime
@@ -193,16 +195,16 @@ class GemmaEmbeddingEngine(
     /**
      * Apply task-specific prefix to text (Embedding Gemma prompt format)
      */
-    private fun applyTaskPrefix(text: String, taskType: EmbeddingTaskType): String {
-        return when (taskType) {
-            EmbeddingTaskType.QUERY -> "query: search_query: $text"
-            EmbeddingTaskType.RETRIEVAL -> "query: search_document: $text"
-            EmbeddingTaskType.CLASSIFICATION -> "query: classification: $text"
-            EmbeddingTaskType.CLUSTERING -> "query: clustering: $text"
-            EmbeddingTaskType.DOCUMENT -> "query: search_document: $text"
-            EmbeddingTaskType.CODE -> "query: code: $text"
-        }
-    }
+//    private fun applyTaskPrefix(text: String, taskType: EmbeddingTaskType): String {
+//        return when (taskType) {
+//            EmbeddingTaskType.QUERY -> "query: search_query: $text"
+//            EmbeddingTaskType.RETRIEVAL -> "query: search_document: $text"
+//            EmbeddingTaskType.CLASSIFICATION -> "query: classification: $text"
+//            EmbeddingTaskType.CLUSTERING -> "query: clustering: $text"
+//            EmbeddingTaskType.DOCUMENT -> "query: search_document: $text"
+//            EmbeddingTaskType.CODE -> "query: code: $text"
+//        }
+//    }
 }
 
 /**

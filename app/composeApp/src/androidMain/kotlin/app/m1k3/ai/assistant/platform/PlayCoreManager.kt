@@ -1,4 +1,4 @@
-package platform
+package app.m1k3.ai.assistant.platform
 
 import android.content.Context
 import com.google.android.play.core.splitinstall.*

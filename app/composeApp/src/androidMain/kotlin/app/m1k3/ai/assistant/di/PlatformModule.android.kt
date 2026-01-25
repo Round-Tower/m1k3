@@ -13,13 +13,36 @@ import app.m1k3.ai.assistant.ai.ondevice.RealMlKitAvailabilityChecker
 import app.m1k3.ai.assistant.ai.ondevice.RealMlKitGenAiEngine
 import app.m1k3.ai.assistant.database.DatabaseFactory
 import app.m1k3.ai.assistant.database.MaDatabase
+import app.m1k3.ai.assistant.platform.DateTimeProvider
 import app.m1k3.ai.assistant.platform.DeviceInfoProvider
 import app.m1k3.ai.assistant.platform.DeviceInfoProviderInterface
 import app.m1k3.ai.assistant.platform.PreferencesStore
+import app.m1k3.ai.domain.platform.DateTimeProviderInterface
 import app.m1k3.ai.assistant.platform.PreferencesStoreInterface
 import app.m1k3.ai.domain.tools.services.ToolRegistry
 import app.m1k3.ai.assistant.tools.AndroidToolRegistry
+import app.m1k3.ai.assistant.app.AndroidDatabaseInitializer
+import app.m1k3.ai.assistant.app.IDatabaseInitializer
+import app.m1k3.ai.assistant.app.InitializationViewModel
+import app.m1k3.ai.assistant.app.LoggerAdapter
+import app.m1k3.ai.assistant.utils.Logger
+import app.m1k3.ai.assistant.rag.RAGManager
+import app.m1k3.ai.assistant.memory.MemoryManager
+import app.m1k3.ai.assistant.embedding.EmbeddingEngine
+import app.m1k3.ai.assistant.chat.ChatScreenViewModel
+import app.m1k3.ai.assistant.coding.CodeGenerationViewModel
+import app.m1k3.ai.assistant.history.ConversationRepository
+import app.m1k3.ai.assistant.history.SearchRepository
+import app.m1k3.ai.assistant.history.ExportManager
+import app.m1k3.ai.assistant.history.HistoryViewModel
+import app.m1k3.ai.assistant.eco.EcoMetricsRepository
+import app.m1k3.ai.assistant.eco.EcoStatsViewModel
+import app.m1k3.ai.assistant.embedding.EmbeddingModelManager
+import app.m1k3.ai.domain.usecases.chat.LlmOutputProcessor
+import org.koin.androidx.viewmodel.dsl.viewModel
+import org.koin.core.module.dsl.*
 import org.koin.dsl.module
+
 
 /**
  * Android platform module
@@ -60,6 +83,17 @@ actual val platformModule = module {
     }
 
     /**
+     * DateTimeProvider
+     *
+     * Provides date/time context for prompts:
+     * - Current time for context-aware greetings
+     * - Locale for formatting
+     */
+    single<DateTimeProviderInterface> {
+        DateTimeProvider()
+    }
+
+    /**
      * PreferencesStore
      *
      * SharedPreferences wrapper for feature flags and settings.
@@ -67,6 +101,23 @@ actual val platformModule = module {
      */
     single<PreferencesStoreInterface> {
         PreferencesStore(get<Context>())
+    }
+
+    // ===== Embedding Engine =====
+
+    /**
+     * EmbeddingEngine
+     *
+     * Provides text-to-vector embeddings for semantic search and RAG.
+     * Uses EmbeddingModelManager to select between MiniLM (default) and Gemma (optional).
+     *
+     * Model selection:
+     * - MiniLM-L6-v2 (384-dim, 80MB, built-in)
+     * - Embedding Gemma (512-dim, 180MB, dynamic module)
+     */
+    single<EmbeddingEngine> {
+        val manager = EmbeddingModelManager(get<Context>())
+        manager.getEmbeddingEngine()
     }
 
     // ===== AI Engine Layer =====
@@ -146,5 +197,132 @@ actual val platformModule = module {
      */
     single<ToolRegistry> {
         AndroidToolRegistry(context = get<Context>())
+    }
+
+    // ===== RAG & Memory Layer =====
+
+    /**
+     * RAGManager
+     *
+     * Provides RAG (Retrieval-Augmented Generation) capabilities.
+     * Uses EmbeddingEngine for semantic search over knowledge base.
+     */
+    single<RAGManager> {
+        RAGManager(
+            database = get<MaDatabase>(),
+            embeddingEngine = get<EmbeddingEngine>()
+        )
+    }
+
+    /**
+     * MemoryManager (optional)
+     *
+     * Provides semantic memory management for conversation context.
+     * Returns null if dependencies are not available.
+     *
+     * TODO: Enable when EmbeddingEngine and MemoryRanker are properly registered
+     * Currently returns null to match factory function behavior (line 121)
+     */
+    single<MemoryManager?> {
+        null // TODO: Add MemoryManager when all dependencies are available
+    }
+
+    // ===== Initialization Layer =====
+
+    /**
+     * AndroidDatabaseInitializer
+     *
+     * Handles database initialization and knowledge import.
+     * Registered as singleton to ensure single initialization flow.
+     */
+    single<IDatabaseInitializer> {
+        val logger = Logger.withTag("DatabaseInitializer")
+        AndroidDatabaseInitializer(
+            context = get<Context>(),
+            logger = LoggerAdapter(logger)
+        )
+    }
+
+    // ===== ViewModel Layer =====
+
+    /**
+     * InitializationViewModel
+     *
+     * Manages app initialization state (knowledge import).
+     * Database is created by Koin and injected.
+     * Registered as ViewModel for proper lifecycle management.
+     */
+    viewModel {
+        InitializationViewModel(
+            database = get<MaDatabase>(),
+            databaseInitializer = get<IDatabaseInitializer>()
+        )
+    }
+
+    /**
+     * ChatScreenViewModel (parameterized with projectId)
+     *
+     * Main chat interface ViewModel with full dependency injection.
+     * Uses parametersOf() for runtime projectId parameter.
+     *
+     * Usage:
+     * ```kotlin
+     * val chatViewModel = koinViewModel<ChatScreenViewModel> {
+     *     parametersOf("default")
+     * }
+     * ```
+     */
+    viewModel {
+        ChatScreenViewModel(
+            aiEngine = get<BaseLlmEngine>(),
+            conversationRepo = get<ConversationRepository>(),
+            ecoMetricsRepo = get<EcoMetricsRepository>(),
+            database = get<MaDatabase>(),
+            deviceInfo = get<DeviceInfoProviderInterface>(),
+            preferences = get<PreferencesStoreInterface>(),
+            memoryManager = getOrNull<MemoryManager>(),
+            ragManager = get<RAGManager>(),
+            toolRegistry = get<ToolRegistry>(),
+            processLlmOutput = get<LlmOutputProcessor>(),
+            dateTimeProvider = get<DateTimeProviderInterface>()
+        )
+    }
+
+    /**
+     * CodeGenerationViewModel
+     *
+     * Handles code generation features.
+     * Requires Android Context for engine creation.
+     */
+    viewModel {
+        CodeGenerationViewModel(
+            context = get<Context>()
+        )
+    }
+
+    /**
+     * EcoStatsViewModel
+     *
+     * Manages environmental impact statistics and tracking.
+     * Shows energy, water, and carbon savings from local AI inference.
+     */
+    viewModel {
+        EcoStatsViewModel(
+            repository = get<EcoMetricsRepository>()
+        )
+    }
+
+    /**
+     * HistoryViewModel
+     *
+     * Manages conversation history UI state.
+     * Handles search, export, and conversation management.
+     */
+    viewModel {
+        HistoryViewModel(
+            conversationRepository = get<ConversationRepository>(),
+            searchRepository = get<SearchRepository>(),
+            exportManager = get<ExportManager>()
+        )
     }
 }

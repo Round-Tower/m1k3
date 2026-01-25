@@ -45,6 +45,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import app.cash.sqldelight.db.SqlDriver
 import app.m1k3.ai.assistant.ai.BaseLlmEngine
 import app.m1k3.ai.assistant.ai.LlamaCppEngine
 import app.m1k3.ai.assistant.app.AndroidDatabaseInitializer
@@ -77,9 +78,18 @@ import app.m1k3.ai.assistant.utils.Logger
 import co.touchlab.kermit.Logger as KermitLogger
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
+import org.koin.android.ext.android.inject
 import org.koin.android.ext.koin.androidContext
+import org.koin.androidx.compose.koinViewModel
+import org.koin.compose.koinInject
 import org.koin.core.context.startKoin
-import app.m1k3.ai.assistant.chat.createChatScreenViewModel
+import org.koin.core.parameter.parametersOf
+import app.m1k3.ai.assistant.app.InitializationState
+import app.m1k3.ai.assistant.app.InitializationViewModel
+import app.m1k3.ai.assistant.app.LoggerAdapter
+import androidx.activity.SystemBarStyle
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 
 /**
  * M1K3 AI - MainActivity
@@ -89,12 +99,10 @@ import app.m1k3.ai.assistant.chat.createChatScreenViewModel
  * - Encrypted database foundation
  * - Beautiful Material 3 design
  * - "Negative space" philosophy
+ * - Full Koin DI with koinViewModel()
  */
 class MainActivity : ComponentActivity() {
-    private lateinit var aiEngine: BaseLlmEngine
-    private var driver: app.cash.sqldelight.db.SqlDriver? = null
-    private var database: MaDatabase? = null
-    private var knowledgeImportStatus by mutableStateOf<String?>(null)
+    private val aiEngine: BaseLlmEngine by inject()
     private val logger = Logger.withTag("MainActivity")
 
     @OptIn(ExperimentalMaterial3Api::class)
@@ -102,7 +110,16 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
 
         // Enable edge-to-edge for immersive full-screen experience
-        enableEdgeToEdge()
+        enableEdgeToEdge(
+            statusBarStyle = SystemBarStyle.auto(
+                Color.Transparent.toArgb(),
+                Color.Transparent.toArgb()
+            ),
+            navigationBarStyle = SystemBarStyle.auto(
+                MaColors.BgPrimaryLight.toArgb(),
+                MaColors.BgPrimary.toArgb()
+            )
+        )
 
         // Initialize Koin & Filament using AppInitializationManager
         val appInitManager = AppInitializationManager(
@@ -126,175 +143,206 @@ class MainActivity : ComponentActivity() {
             logger.e { "Filament initialization failed" }
         }
 
-        // Initialize AI engine
-        aiEngine = LlamaCppEngine(this)
+        setContent {
+            MaApp()
+        }
+    }
 
-        // Initialize database and import knowledge base
-        lifecycleScope.launch {
-            try {
-                knowledgeImportStatus = "Loading knowledge..."
+    override fun onDestroy() {
+        // Cleanup resources synchronously with timeout to prevent ANR
+        // Note: lifecycleScope is cancelled before onDestroy(), so we use runBlocking
+        try {
+            kotlinx.coroutines.runBlocking(kotlinx.coroutines.Dispatchers.IO) {
+                kotlinx.coroutines.withTimeout(5000) {  // 5 second timeout
+                    try {
+                        // Close AI engine (ONNX cleanup on IO thread)
+                        aiEngine.close()
 
-                val initializer = AndroidDatabaseInitializer(this@MainActivity, LoggerAdapter(logger))
-
-                // Initialize database
-                val dbResult = initializer.initializeDatabase()
-                when (dbResult) {
-                    is DatabaseInitResult.Success -> {
-                        database = dbResult.database as MaDatabase
-                        driver = null // Driver is managed by MaDatabase
-
-                        // Import knowledge
-                        val knowledgeResult = initializer.importKnowledge(database!!)
-                        knowledgeImportStatus = when (knowledgeResult) {
-                            is KnowledgeImportResult.Success -> {
-                                "✅ Knowledge ready: ${knowledgeResult.totalDocs} documents (${knowledgeResult.comprehensiveDocs} comprehensive + ${knowledgeResult.systemDocs} system)"
-                            }
-                            is KnowledgeImportResult.AlreadyImported -> {
-                                "✅ Knowledge ready: ${knowledgeResult.existingDocs} documents"
-                            }
-                            is KnowledgeImportResult.Error -> {
-                                "⚠️ Knowledge unavailable: ${knowledgeResult.message}"
-                            }
-                        }
-                    }
-                    is DatabaseInitResult.Error -> {
-                        logger.e { "Database initialization failed: ${dbResult.message}" }
-                        knowledgeImportStatus = "⚠️ Knowledge unavailable"
-                        driver = null
+                        // Destroy Filament engine (CRITICAL: prevents memory leaks)
+                        FilamentEngineManager.forceDestroy()
+                    } catch (e: Exception) {
+                        logger.w(e) { "Error during cleanup" }
                     }
                 }
-            } catch (e: Exception) {
-                logger.e(e) { "Database/Knowledge initialization failed" }
-                knowledgeImportStatus = "⚠️ Knowledge unavailable"
+            }
+        } catch (e: kotlinx.coroutines.TimeoutCancellationException) {
+            logger.w { "Cleanup timeout - forcing shutdown" }
+        }
+        super.onDestroy()
+    }
+}
+
+/**
+ * MaApp - Main application composable with initialization management
+ *
+ * Uses InitializationViewModel to handle database and knowledge base setup.
+ * Shows loading, success, or error states based on initialization progress.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun MaApp() {
+    val initViewModel = koinViewModel<InitializationViewModel>()
+    val initState by initViewModel.state.collectAsState()
+
+    LaunchedEffect(Unit) {
+        initViewModel.initialize()
+    }
+
+    when (val state = initState) {
+        is InitializationState.NotStarted -> {
+            // Show nothing or splash
+        }
+        is InitializationState.Loading -> {
+            // TODO: Create proper loading screen
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Text(state.message, style = MaterialTheme.typography.bodyLarge)
             }
         }
-
-        setContent {
-            ProvideSharedEngine {
-                MaTheme {
-                    val navController = rememberNavController()
-                    val appAvatarVM = rememberAvatarViewModel()
-                    val appAvatarState by appAvatarVM.collectAsState()
-                    var drawerOpen by remember { mutableStateOf(false) }
-
-                    val drawerState = rememberDrawerState(DrawerValue.Closed)
-
-                    LaunchedEffect(drawerOpen) {
-                        if (drawerOpen) {
-                            drawerState.open()
-                        } else {
-                            drawerState.close()
-                        }
+        is InitializationState.Success -> {
+            MaAppContent(
+                knowledgeStatus = state.knowledgeStatus
+            )
+        }
+        is InitializationState.Error -> {
+            // TODO: Create proper error screen with retry
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("Initialization failed: ${state.message}")
+                    TextButton(onClick = { initViewModel.retry() }) {
+                        Text("Retry")
                     }
+                }
+            }
+        }
+    }
+}
 
-                    LaunchedEffect(drawerState.currentValue) {
-                        drawerOpen = drawerState.currentValue == DrawerValue.Open
-                    }
+/**
+ * MaAppContent - Main app UI after successful initialization
+ *
+ * Contains navigation, drawer, and all app screens.
+ * Database is available via Koin injection.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun MaAppContent(
+    knowledgeStatus: String
+) {
+    // Get database from Koin for screens that need it directly
+    val database = koinInject<MaDatabase>()
 
-                    val haptics = LocalHapticFeedback.current
-                    val isDarkMode = isSystemInDarkTheme()
+    ProvideSharedEngine {
+        MaTheme {
+            val navController = rememberNavController()
+            val appAvatarVM = rememberAvatarViewModel()
+            val appAvatarState by appAvatarVM.collectAsState()
+            var drawerOpen by remember { mutableStateOf(false) }
 
-                    // Animate content offset based on drawer state
-                    val contentOffset by animateDpAsState(
-                        targetValue = if (drawerOpen) 280.dp else 0.dp,
-                        animationSpec = tween(durationMillis = 300)
+            val drawerState = rememberDrawerState(DrawerValue.Closed)
+
+            LaunchedEffect(drawerOpen) {
+                if (drawerOpen) {
+                    drawerState.open()
+                } else {
+                    drawerState.close()
+                }
+            }
+
+            LaunchedEffect(drawerState.currentValue) {
+                drawerOpen = drawerState.currentValue == DrawerValue.Open
+            }
+
+            val haptics = LocalHapticFeedback.current
+            val isDarkMode = isSystemInDarkTheme()
+
+            // Animate content offset based on drawer state
+            val contentOffset by animateDpAsState(
+                targetValue = if (drawerOpen) 280.dp else 0.dp,
+                animationSpec = tween(durationMillis = 300)
+            )
+
+            ModalNavigationDrawer(
+                drawerContent = {
+                    DrawerContent(
+                        currentRoute = navController.currentBackStackEntryAsState().value?.destination?.route,
+                        isDarkMode = isDarkMode,
+                        onItemClick = { route ->
+                            // Map route to Screen and navigate
+                            val screen = when (route) {
+                                "chat" -> Screen.Chat
+                                "history" -> Screen.History
+                                "ecostats" -> Screen.EcoStats
+                                "settings" -> Screen.Settings
+                                else -> Screen.Chat
+                            }
+                            navController.navigateToBottomNav(screen)
+                            haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                        },
+                        onMenuClose = { drawerOpen = false },
                     )
-
-                    val chatViewModel = rememberChatScreenViewModel(
-                        aiEngine = aiEngine,
-                        database = database,
-                        context = this,
-                        projectId = "default",
-                    )
-
-                    ModalNavigationDrawer(
-                        drawerContent = {
-                            DrawerContent(
-                                currentRoute = navController.currentBackStackEntryAsState().value?.destination?.route,
-                                isDarkMode = isDarkMode,
-                                onItemClick = { route ->
-                                    // Map route to Screen and navigate
-                                    val screen = when (route) {
-                                        "chat" -> Screen.Chat
-                                        "history" -> Screen.History
-                                        "ecostats" -> Screen.EcoStats
-                                        "settings" -> Screen.Settings
-                                        else -> Screen.Chat
-                                    }
-                                    navController.navigateToBottomNav(screen)
-                                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                                },
-                                onMenuClose = { drawerOpen = false },
+                },
+                scrimColor = if (isDarkMode) MaColors.ScrimMedium else MaColors.ScrimMediumLight,
+                drawerState = drawerState
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .offset(x = contentOffset)
+                ) {
+                    Scaffold(
+                        topBar = {
+                            Toolbar(
+                                screenName = getScreenName(navController.currentBackStackEntryAsState().value?.destination?.route),
+                                engineInitialized = true,
+                                avatarState = appAvatarState,
+                                onMenuClick = { drawerOpen = !drawerOpen },
+                                modifier = Modifier.fillMaxWidth()
                             )
                         },
-                        scrimColor = if (isDarkMode) MaColors.ScrimMedium else MaColors.ScrimMediumLight,
-                        drawerState = drawerState
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .offset(x = contentOffset)
+                        contentWindowInsets = WindowInsets.systemBars
+                    ) { paddingValues ->
+                        CompositionLocalProvider(
+                            LocalSharedAvatarVM provides appAvatarVM
                         ) {
-                            Scaffold(
-                                topBar = {
-                                    Toolbar(
-                                        screenName = getScreenName(navController.currentBackStackEntryAsState().value?.destination?.route),
-                                        engineInitialized = true,
-                                        avatarState = appAvatarState,
-                                        onMenuClick = { drawerOpen = !drawerOpen },
-                                        modifier = Modifier.fillMaxWidth()
-                                    )
-                                },
-                            contentWindowInsets = WindowInsets.systemBars
-                        ) { paddingValues ->
-                            CompositionLocalProvider(
-                                LocalSharedAvatarVM provides appAvatarVM
+                            NavHost(
+                                navController = navController,
+                                startDestination = Screen.Chat.route,
                             ) {
-                                NavHost(
-                                    navController = navController,
-                                    startDestination = Screen.Chat.route,
-                                ) {
                                 // Demo Screen
                                 composable(Screen.Demo.route) {
                                     MaAIDemo(
                                         onChatClick = { navController.navigate(Screen.Chat.route) },
-                                        knowledgeStatus = knowledgeImportStatus
+                                        knowledgeStatus = knowledgeStatus
                                     )
                                 }
 
                                 // Chat Screen
                                 composable(Screen.Chat.route) {
-                                    if (database != null) {
-                                        ChatScreen(
-                                            onEcoStatsClick = { navController.navigate(Screen.EcoStats.route) },
-                                            viewModel = chatViewModel
-                                        )
-                                    }
+                                    ChatScreen(
+                                        onEcoStatsClick = { navController.navigate(Screen.EcoStats.route) },
+                                        projectId = "default",
+                                    )
                                 }
 
                                 // History Screen
                                 composable(Screen.History.route) {
-                                    if (database != null) {
-                                        HistoryScreen(
-                                            database = database!!,
-                                            projectId = "default",
-                                            onBackClick = { navController.navigateUp() },
-                                            onConversationClick = { conversationId ->
-                                                navController.navigate("conversation/$conversationId")
-                                            }
-                                        )
-                                    }
+                                    HistoryScreen(
+                                        database = database,
+                                        projectId = "default",
+                                        onBackClick = { navController.navigateUp() },
+                                        onConversationClick = { conversationId ->
+                                            navController.navigate("conversation/$conversationId")
+                                        }
+                                    )
                                 }
 
                                 // Eco Stats Screen
                                 composable(Screen.EcoStats.route) {
-                                    if (database != null) {
-                                        EcoStatsScreen(
-                                            database = database!!,
-                                            projectId = "default",
-                                            onBackClick = { navController.navigateUp() }
-                                        )
-                                    }
+                                    EcoStatsScreen(
+                                        database = database,
+                                        projectId = "default",
+                                        onBackClick = { navController.navigateUp() }
+                                    )
                                 }
 
                                 // Settings Screen
@@ -342,34 +390,6 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
-    }
-    }
-
-    override fun onDestroy() {
-        // Cleanup resources synchronously with timeout to prevent ANR
-        // Note: lifecycleScope is cancelled before onDestroy(), so we use runBlocking
-        try {
-            kotlinx.coroutines.runBlocking(kotlinx.coroutines.Dispatchers.IO) {
-                kotlinx.coroutines.withTimeout(5000) {  // 5 second timeout
-                    try {
-                        // Close database driver (lightweight operation)
-                        driver?.close()
-
-                        // Close AI engine (ONNX cleanup on IO thread)
-                        aiEngine.close()
-
-                        // Destroy Filament engine (CRITICAL: prevents memory leaks)
-                        FilamentEngineManager.forceDestroy()
-                    } catch (e: Exception) {
-                        logger.w(e) { "Error during cleanup" }
-                    }
-                }
-            }
-        } catch (e: kotlinx.coroutines.TimeoutCancellationException) {
-            logger.w { "Cleanup timeout - forcing shutdown" }
-        }
-        super.onDestroy()
-    }
 }
 
 /**
@@ -382,42 +402,4 @@ private fun getScreenName(route: String?): String = when (route) {
     Screen.Settings.route -> "Settings"
     Screen.Demo.route -> "Welcome"
     else -> "M1K3"
-}
-
-/**
- * Adapter to convert KermitLogger to ILogger interface
- * Bridges the application's logger with AppInitializationManager's expectations
- */
-class LoggerAdapter(private val logger: KermitLogger) : ILogger {
-    override fun i(message: String) {
-        logger.i { message }
-    }
-
-    override fun e(error: Throwable?, message: String) {
-        logger.e(error) { message }
-    }
-}
-
-@Composable
-fun rememberChatScreenViewModel(
-    aiEngine: BaseLlmEngine,
-    database: MaDatabase?,
-    context: Context,
-    projectId: String,
-    embeddingEngine: EmbeddingEngine? = null
-): ChatScreenViewModel? {
-    val scope = rememberCoroutineScope()
-    if (database == null) {
-        return null
-    }
-    return remember(projectId, aiEngine, database) {
-        createChatScreenViewModel(
-            aiEngine = aiEngine,
-            database = database,
-            context = context,
-            projectId = projectId,
-            scope = scope,
-            embeddingEngine = embeddingEngine
-        )
-    }
 }

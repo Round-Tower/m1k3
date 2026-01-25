@@ -3,6 +3,8 @@ package app.m1k3.ai.assistant.chat
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.State
 import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
 import app.m1k3.ai.assistant.ai.BaseLlmEngine
 import app.m1k3.ai.domain.ai.GenerationConfig
 import app.m1k3.ai.domain.chat.events.ChatEvent
@@ -25,11 +27,15 @@ import app.m1k3.ai.assistant.eco.EcoMetricsRepository
 import app.m1k3.ai.assistant.history.ConversationRepository
 import app.m1k3.ai.assistant.memory.MemoryManager
 import app.m1k3.ai.assistant.platform.DeviceInfoProviderInterface
+import app.m1k3.ai.assistant.platform.getDeviceTier
 import app.m1k3.ai.assistant.platform.PreferenceKeys
+import app.m1k3.ai.domain.platform.DateTimeProviderInterface
+import app.m1k3.ai.domain.platform.DeviceContext
+import app.m1k3.ai.domain.chat.services.DeviceContextFormatter
+import app.m1k3.ai.domain.status.ChatStatusBuilder
 import app.m1k3.ai.assistant.platform.PreferencesStoreInterface
 import app.m1k3.ai.assistant.rag.RAGManager
 import app.m1k3.ai.assistant.utils.Logger
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -66,14 +72,15 @@ class ChatScreenViewModel(
     private val database: MaDatabase,
     private val deviceInfo: DeviceInfoProviderInterface,
     private val preferences: PreferencesStoreInterface,
-    private val scope: CoroutineScope,
-    private val projectId: String,
+    private val projectId: String = "",
     private val memoryManager: MemoryManager? = null,
     private val ragManager: RAGManager? = null,
     // Tool calling support (optional - when provided, enables agentic capabilities)
     private val toolRegistry: ToolRegistry? = null,
-    private val processLlmOutput: LlmOutputProcessor? = null
-) {
+    private val processLlmOutput: LlmOutputProcessor? = null,
+    // DateTime provider for context-aware prompts (optional for backwards compatibility)
+    private val dateTimeProvider: DateTimeProviderInterface? = null
+) : ViewModel() {
     // ===== Use Cases (lazy initialization) =====
 
     private val contextRetrieval: ContextRetrievalUseCase by lazy {
@@ -97,8 +104,18 @@ class ChatScreenViewModel(
     private val promptBuilder: UnifiedPromptBuilder by lazy {
         val formatter = DefaultChatFormatter(ChatFormat.Gemma3)
         val assembler = ContextAssembler()
-        UnifiedPromptBuilder(formatter, assembler)
+        UnifiedPromptBuilder(formatter, assembler, deviceContextFormatter)
     }
+
+    /**
+     * ChatStatusBuilder for welcome status card.
+     */
+    private val chatStatusBuilder = ChatStatusBuilder()
+
+    /**
+     * DeviceContextFormatter for prompt enrichment.
+     */
+    private val deviceContextFormatter = DeviceContextFormatter()
 
     /**
      * ChatWithToolsUseCase for agentic capabilities.
@@ -153,7 +170,7 @@ class ChatScreenViewModel(
             return
         }
 
-        scope.launch {
+        viewModelScope.launch {
             try {
                 logger.i { "Initializing AI engine..." }
                 _uiState.update { it.copy(engineState = EngineState.Loading) }
@@ -195,7 +212,7 @@ class ChatScreenViewModel(
         if (inputText.isBlank()) return
         if (_uiState.value.generationState.isGenerating) return
 
-        scope.launch {
+        viewModelScope.launch {
             try {
                 // Clear input and add user message
                 val userMessage = ChatMessage(
@@ -243,7 +260,7 @@ class ChatScreenViewModel(
      * Clear all conversation history.
      */
     fun clearConversation() {
-        scope.launch {
+        viewModelScope.launch {
             try {
                 logger.i { "Clearing conversation for project: $projectId" }
 
@@ -304,7 +321,7 @@ class ChatScreenViewModel(
         // Re-send the last user message to trigger tool execution
         val lastUserMessage = _uiState.value.messages.lastOrNull { it.isUser }
         if (lastUserMessage != null) {
-            scope.launch {
+            viewModelScope.launch {
                 generateResponseWithTools(lastUserMessage.text)
             }
         }
@@ -338,7 +355,7 @@ class ChatScreenViewModel(
     // ===== Internal Methods =====
 
     private fun loadMessages() {
-        scope.launch {
+        viewModelScope.launch {
             try {
                 val dbMessages = database.messageQueries
                     .getMessagesForProject(projectId)
@@ -364,7 +381,7 @@ class ChatScreenViewModel(
     }
 
     private fun initializeConversation() {
-        scope.launch {
+        viewModelScope.launch {
             try {
                 currentConversationId = conversationRepo.createConversation(
                     projectId = projectId,
@@ -377,6 +394,52 @@ class ChatScreenViewModel(
     }
 
     private suspend fun generateWelcomeMessage() {
+        // Build status card first
+        val currentHour = dateTimeProvider?.getCurrentHour() ?: 12
+        val memoryCount = memoryManager?.getMemoryCount() ?: 0L
+        val knowledgeCount = try {
+            database.triviaFactQueries.getTotalFactCount().executeAsOne()
+        } catch (_: Exception) {
+            0L
+        }
+        val deviceTier = deviceInfo.getDeviceTier()
+        // Context window scales with device tier
+        val maxContextTokens = when (deviceTier) {
+            app.m1k3.ai.domain.platform.DeviceTier.FLAGSHIP -> 8192
+            app.m1k3.ai.domain.platform.DeviceTier.HIGH_END -> 6144
+            app.m1k3.ai.domain.platform.DeviceTier.MID_RANGE -> 4096
+            else -> 2048
+        }
+
+        // Get last session eco stats (if any)
+        val lastSession = try {
+            ecoMetricsRepo.getSessionStats().firstOrNull()
+        } catch (_: Exception) {
+            null
+        }
+
+        val chatStatus = chatStatusBuilder.build(
+            hour = currentHour,
+            engineReady = true,
+            memoryCount = memoryCount,
+            knowledgeCount = knowledgeCount,
+            maxContextTokens = maxContextTokens,
+            deviceTierName = deviceTier.name.lowercase().replaceFirstChar { it.uppercase() },
+            lastSessionTokens = lastSession?.tokens,
+            lastSessionWaterMl = lastSession?.waterMl,
+            lastSessionEnergyWh = lastSession?.energyWh,
+            lastSessionCo2G = lastSession?.co2G
+        )
+
+        // Add status message to UI
+        val statusMessageText = chatStatusBuilder.formatStatusText(chatStatus)
+        val statusMessage = ChatMessage(
+            text = statusMessageText,
+            isUser = false,
+            timestamp = Clock.System.now().toEpochMilliseconds(),
+            isStatusMessage = true
+        )
+
         val placeholderMessage = ChatMessage(
             text = "",
             isUser = false,
@@ -385,13 +448,20 @@ class ChatScreenViewModel(
 
         _uiState.update {
             it.copy(
-                messages = it.messages + placeholderMessage,
-                generationState = GenerationState.Thinking
+                messages = listOf(statusMessage, placeholderMessage),
+                generationState = GenerationState.Thinking,
+                chatStatus = chatStatus
             )
         }
 
         try {
-            val welcomePrompt = "Say a brief, friendly greeting as M1K3, a helpful AI assistant. Keep it under 2 sentences."
+            // Build context-aware welcome prompt
+            val timeOfDay = when (currentHour) {
+                in 5..11 -> "morning"
+                in 12..17 -> "afternoon"
+                else -> "evening"
+            }
+            val welcomePrompt = "Say a brief, friendly greeting as M1K3, a helpful AI assistant. It's $timeOfDay. Keep it under 2 sentences."
 
             // Use GenerationConfigBuilder for config
             val config = configBuilder.build(
@@ -498,33 +568,28 @@ class ChatScreenViewModel(
             // Use GenerationConfigBuilder for device-adaptive config
             val config = configBuilder.buildFromIntent(context.intentCategory)
 
+            // Build device context for context-aware prompts
+            val deviceTier = deviceInfo.getDeviceTier()
+            val deviceContext = dateTimeProvider?.let { dtProvider ->
+                DeviceContext.from(
+                    dateTimeProvider = dtProvider,
+                    deviceInfoProvider = deviceInfo,
+                    deviceTier = deviceTier
+                )
+            }
+
             val accumulated = StringBuilder()
             var tokenCount = 0
             val startTime = Clock.System.now().toEpochMilliseconds()
 
-            // Build full prompt with context
-            // Note: Don't add "User:" prefix - Gemma3PromptBuilder already wraps in <start_of_turn>user
-            // IMPORTANT: Only use "Facts:" header for actual RAG facts, not conversation history
-            val fullPrompt = buildString {
-                if (context.hasRagContext) {
-                    // RAG facts - use "Facts:" header
-                    append("Facts:\n")
-                    append(context.context)
-                    append("\n\n")
-                    append(prompt)
-                } else if (context.hasConversationHistory) {
-                    // Conversation context only - no "Facts:" header (confuses model)
-                    append("Context: ")
-                    append(context.context)
-                    append("\n\n")
-                    append("Answer this question helpfully:\n")
-                    append(prompt)
-                } else {
-                    // No context - use helpful framing for small models
-                    append("Answer this question helpfully:\n")
-                    append(prompt)
-                }
-            }
+            // Build full prompt with context using UnifiedPromptBuilder
+            val fullPrompt = promptBuilder.build(
+                userPrompt = prompt,
+                context = context,
+                tools = emptyList(),  // Legacy path has no tools
+                systemPrompt = "",
+                deviceContext = deviceContext
+            )
 
             val result = aiEngine.generateStreaming(
                 prompt = fullPrompt,
@@ -574,6 +639,16 @@ class ChatScreenViewModel(
             return
         }
 
+        // Build device context for context-aware prompts
+        val deviceTier = deviceInfo.getDeviceTier()
+        val deviceContext = dateTimeProvider?.let { dtProvider ->
+            DeviceContext.from(
+                dateTimeProvider = dtProvider,
+                deviceInfoProvider = deviceInfo,
+                deviceTier = deviceTier
+            )
+        }
+
         val placeholderMessage = ChatMessage(
             text = "",
             isUser = false,
@@ -588,7 +663,7 @@ class ChatScreenViewModel(
         }
 
         try {
-            useCase.execute(prompt, confirmedToolIds).collect { event ->
+            useCase.execute(prompt, confirmedToolIds, deviceContext).collect { event ->
                 when (event) {
                     is ChatEvent.Started -> {
                         _uiState.update { it.copy(generationState = GenerationState.Thinking) }
@@ -800,7 +875,7 @@ class ChatScreenViewModel(
     private fun recordEcoMetrics(tokenCount: Int) {
         if (tokenCount <= 0) return
 
-        scope.launch {
+        viewModelScope.launch {
             try {
                 val savings = EcoCalculator.calculateSavings(tokenCount)
 
@@ -834,7 +909,7 @@ class ChatScreenViewModel(
         ragSources: String? = null,
         ragConfidence: Double? = null
     ) {
-        scope.launch {
+        viewModelScope.launch {
             try {
                 val now = Clock.System.now().toEpochMilliseconds()
                 val messageId = "msg_${now}_${(0..9999).random()}"

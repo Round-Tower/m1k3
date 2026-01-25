@@ -12,7 +12,7 @@ import kotlin.test.*
  * EcoStatsViewModel Tests
  *
  * Basic sanity checks for EcoStatsViewModel state management and formatting.
- * Since all underlying repositories are extensively tested,
+ * Since all underlying repositories are extensively tested
  * these tests focus on simple state verification and utility functions.
  */
 class EcoStatsViewModelTest {
@@ -24,9 +24,8 @@ class EcoStatsViewModelTest {
         val repository = EcoMetricsRepository(database)
         
         val viewModel = EcoStatsViewModel(
-            repository = repository,
+            repository = repository
 
-            scope = CoroutineScope(Dispatchers.Default)
         )
 
         // Assert
@@ -45,9 +44,8 @@ class EcoStatsViewModelTest {
         val repository = EcoMetricsRepository(database)
         
         val viewModel = EcoStatsViewModel(
-            repository = repository,
+            repository = repository
 
-            scope = CoroutineScope(Dispatchers.Default)
         )
 
         // Act
@@ -64,9 +62,8 @@ class EcoStatsViewModelTest {
         val repository = EcoMetricsRepository(database)
         
         val viewModel = EcoStatsViewModel(
-            repository = repository,
+            repository = repository
 
-            scope = CoroutineScope(Dispatchers.Default)
         )
 
         // Act
@@ -83,9 +80,8 @@ class EcoStatsViewModelTest {
         val repository = EcoMetricsRepository(database)
         
         val viewModel = EcoStatsViewModel(
-            repository = repository,
+            repository = repository
 
-            scope = CoroutineScope(Dispatchers.Default)
         )
 
         // Act
@@ -102,9 +98,8 @@ class EcoStatsViewModelTest {
         val repository = EcoMetricsRepository(database)
         
         val viewModel = EcoStatsViewModel(
-            repository = repository,
+            repository = repository
 
-            scope = CoroutineScope(Dispatchers.Default)
         )
 
         // Act
@@ -121,9 +116,8 @@ class EcoStatsViewModelTest {
         val repository = EcoMetricsRepository(database)
         
         val viewModel = EcoStatsViewModel(
-            repository = repository,
+            repository = repository
 
-            scope = CoroutineScope(Dispatchers.Default)
         )
 
         // Act
@@ -140,9 +134,8 @@ class EcoStatsViewModelTest {
         val repository = EcoMetricsRepository(database)
         
         val viewModel = EcoStatsViewModel(
-            repository = repository,
+            repository = repository
 
-            scope = CoroutineScope(Dispatchers.Default)
         )
 
         // Act
@@ -159,9 +152,8 @@ class EcoStatsViewModelTest {
         val repository = EcoMetricsRepository(database)
         
         val viewModel = EcoStatsViewModel(
-            repository = repository,
+            repository = repository
 
-            scope = CoroutineScope(Dispatchers.Default)
         )
 
         // Act
@@ -178,9 +170,8 @@ class EcoStatsViewModelTest {
         val repository = EcoMetricsRepository(database)
         
         val viewModel = EcoStatsViewModel(
-            repository = repository,
+            repository = repository
 
-            scope = CoroutineScope(Dispatchers.Default)
         )
 
         // Act

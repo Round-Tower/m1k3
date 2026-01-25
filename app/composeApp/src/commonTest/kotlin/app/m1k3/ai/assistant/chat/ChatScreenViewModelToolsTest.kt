@@ -119,7 +119,6 @@ class ChatScreenViewModelToolsTest {
             database = database,
             deviceInfo = MockDeviceInfoProvider.midRange(),
             preferences = preferences,
-            scope = testScope,
             projectId = "test_project",
             memoryManager = null,
             ragManager = null,

@@ -1,7 +1,8 @@
 package app.m1k3.ai.assistant.eco
 
 import androidx.compose.runtime.*
-import kotlinx.coroutines.CoroutineScope
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -42,9 +43,8 @@ import kotlinx.coroutines.launch
  * ```
  */
 class EcoStatsViewModel(
-    private val repository: EcoMetricsRepository,
-    private val scope: CoroutineScope
-) {
+    private val repository: EcoMetricsRepository
+) : ViewModel() {
     // State flows
     private val _state = MutableStateFlow(EcoStatsState())
     val state: StateFlow<EcoStatsState> = _state.asStateFlow()
@@ -63,7 +63,7 @@ class EcoStatsViewModel(
         currentProjectId = projectId
         _state.value = _state.value.copy(isLoading = true, error = null)
 
-        scope.launch {
+        viewModelScope.launch {
             try {
                 // Get all project stats and find the requested project
                 val allProjectStats = repository.getProjectStats()
@@ -102,7 +102,7 @@ class EcoStatsViewModel(
     fun loadLifetimeStats() {
         _state.value = _state.value.copy(isLoading = true, error = null)
 
-        scope.launch {
+        viewModelScope.launch {
             try {
                 val lifetimeStats = repository.getLifetimeStats()
 
@@ -232,25 +232,6 @@ data class EcoComparison(
 
     val co2SavingsPercent: Double
         get() = ((cloudCo2G - localCo2G) / cloudCo2G) * 100.0
-}
-
-/**
- * Create and remember eco stats view model.
- *
- * @param repository Eco-metrics repository
- * @return Eco stats view model scoped to composition
- */
-@Composable
-fun rememberEcoStatsViewModel(
-    repository: EcoMetricsRepository
-): EcoStatsViewModel {
-    val scope = rememberCoroutineScope()
-    return remember {
-        EcoStatsViewModel(
-            repository = repository,
-            scope = scope
-        )
-    }
 }
 
 /**

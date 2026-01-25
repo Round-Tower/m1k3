@@ -54,27 +54,9 @@ fun Toolbar(
         modifier = modifier
             .fillMaxWidth()
     ) {
-        // Gradient overlay for liquid glass effect (theme-aware)
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(120.dp)
-                .padding(top = 42.dp, start = 16.dp, end = 16.dp)
-                .background(
-                    brush = Brush.verticalGradient(
-                        colors = listOf(
-                            MaterialTheme.colorScheme.background.copy(alpha = 0.95f),
-                            MaterialTheme.colorScheme.background.copy(alpha = 0.85f),
-                            MaterialTheme.colorScheme.background.copy(alpha = 0.2f)
-                        )
-                    )
-                )
-        )
-
         // Toolbar content
         Surface(
             modifier = Modifier.fillMaxWidth(),
-            color = MaterialTheme.colorScheme.background.copy(alpha = 0.75f),
         ) {
             Row(
                 modifier = Modifier
@@ -112,9 +94,9 @@ fun Toolbar(
                             if (engineInitialized) avatarState.activity.displayName else "Loading...",
                             style =
                                 TextStyle(
-                                    fontFamily = MaFontFamilyCaption,
-                                    fontWeight = FontWeight.Normal,
-                                    fontSize = 14.sp,
+                                    fontFamily = MaFontFamilyBrand,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 24.sp,
                                     lineHeight = 16.sp,
                                     letterSpacing = 0.25.sp,
 
@@ -132,7 +114,7 @@ fun Toolbar(
                     modifier = Modifier
                         .testTag("avatar_unified")
                         .size(140.dp)
-                        .padding(start = 46.dp)
+                        .statusBarsPadding()
                 )
             }
         }

@@ -4,6 +4,17 @@ import app.m1k3.ai.assistant.database.AndroidDatabaseFactory
 import app.m1k3.ai.assistant.database.MaDatabase
 import app.m1k3.ai.assistant.knowledge.KnowledgeImportManager
 import android.content.Context
+import co.touchlab.kermit.Logger as KermitLogger
+
+/**
+ * Interface for database initialization
+ *
+ * Allows mocking in tests for InitializationViewModel
+ */
+interface IDatabaseInitializer {
+    suspend fun initializeDatabase(): DatabaseInitResult
+    suspend fun importKnowledge(database: MaDatabase): KnowledgeImportResult
+}
 
 /**
  * Android-specific DatabaseInitializer
@@ -42,10 +53,10 @@ import android.content.Context
  * }
  * ```
  */
-class AndroidDatabaseInitializer(
+open class AndroidDatabaseInitializer(
     private val context: Context,
     private val logger: ILogger
-) {
+) : IDatabaseInitializer {
     /**
      * Initialize database with encrypted passphrase
      *
@@ -53,7 +64,7 @@ class AndroidDatabaseInitializer(
      *
      * @return DatabaseInitResult.Success or DatabaseInitResult.Error
      */
-    suspend fun initializeDatabase(): DatabaseInitResult {
+    override suspend fun initializeDatabase(): DatabaseInitResult {
         return try {
             logger.i("Initializing database...")
 
@@ -76,7 +87,7 @@ class AndroidDatabaseInitializer(
      * @param database MaDatabase instance
      * @return KnowledgeImportResult
      */
-    suspend fun importKnowledge(database: MaDatabase): KnowledgeImportResult {
+    override suspend fun importKnowledge(database: MaDatabase): KnowledgeImportResult {
         return try {
             logger.i("Importing knowledge base...")
 
@@ -105,5 +116,20 @@ class AndroidDatabaseInitializer(
             logger.e(e, "Failed to import knowledge")
             KnowledgeImportResult.Error("Knowledge import failed: ${e.message}")
         }
+    }
+}
+
+/**
+ * Adapter to convert KermitLogger to ILogger interface
+ *
+ * Bridges Kermit's logger API with the ILogger interface expected by initialization managers.
+ */
+class LoggerAdapter(private val logger: KermitLogger) : ILogger {
+    override fun i(message: String) {
+        logger.i { message }
+    }
+
+    override fun e(error: Throwable?, message: String) {
+        logger.e(error) { message }
     }
 }

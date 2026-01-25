@@ -6,6 +6,8 @@ import app.m1k3.ai.domain.tools.Tool
 import app.m1k3.ai.domain.tools.ToolCategory
 import app.m1k3.ai.domain.tools.ToolParameter
 import app.m1k3.ai.domain.tools.ParameterType
+import app.m1k3.ai.domain.platform.DeviceContext
+import app.m1k3.ai.domain.platform.DeviceTier
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
@@ -295,7 +297,123 @@ class UnifiedPromptBuilderTest {
         assertContains(prompt, "M1k3")
     }
 
+    // ===== Device Context Tests =====
+
+    @Test
+    fun `builds prompt with device context included`() {
+        val builder = createBuilder()
+        val deviceContext = createDeviceContext()
+
+        val prompt = builder.build(
+            userPrompt = "Hello",
+            context = EnrichedContext.empty(),
+            deviceContext = deviceContext
+        )
+
+        // Should include device context info
+        assertContains(prompt, "Friday")
+        assertContains(prompt, "January 24, 2026")
+    }
+
+    @Test
+    fun `device context appears in system prompt section`() {
+        val builder = createBuilder()
+        val deviceContext = createDeviceContext()
+
+        val prompt = builder.build(
+            userPrompt = "Hello",
+            context = EnrichedContext.empty(),
+            deviceContext = deviceContext
+        )
+
+        // Device context should be formatted with brackets
+        assertContains(prompt, "[Context:")
+    }
+
+    @Test
+    fun `device context includes battery when present`() {
+        val builder = createBuilder()
+        val deviceContext = createDeviceContext(batteryLevel = 42)
+
+        val prompt = builder.build(
+            userPrompt = "What's my battery?",
+            context = EnrichedContext.empty(),
+            deviceContext = deviceContext
+        )
+
+        assertContains(prompt, "42%")
+    }
+
+    @Test
+    fun `device context omits battery when null`() {
+        val builder = createBuilder()
+        val deviceContext = createDeviceContext(batteryLevel = null)
+
+        val prompt = builder.build(
+            userPrompt = "Hello",
+            context = EnrichedContext.empty(),
+            deviceContext = deviceContext
+        )
+
+        assertFalse(prompt.contains("Battery:"))
+    }
+
+    @Test
+    fun `builds prompt without device context when null`() {
+        val builder = createBuilder()
+
+        val prompt = builder.build(
+            userPrompt = "Hello",
+            context = EnrichedContext.empty(),
+            deviceContext = null
+        )
+
+        // Should not crash and should not have device context brackets
+        assertContains(prompt, "Hello")
+        assertFalse(prompt.contains("[Context:"))
+    }
+
+    @Test
+    fun `device context includes device model and tier`() {
+        val builder = createBuilder()
+        val deviceContext = createDeviceContext(
+            deviceModel = "Pixel 8 Pro",
+            deviceTier = DeviceTier.FLAGSHIP
+        )
+
+        val prompt = builder.build(
+            userPrompt = "Hello",
+            context = EnrichedContext.empty(),
+            deviceContext = deviceContext
+        )
+
+        assertContains(prompt, "Pixel 8 Pro")
+        assertContains(prompt, "flagship")
+    }
+
     // ===== Helper Methods =====
+
+    private fun createDeviceContext(
+        hour: Int = 14,
+        dayOfWeek: String = "Friday",
+        formattedDate: String = "January 24, 2026",
+        formattedTime: String = "2:30 PM",
+        timeZone: String = "PST",
+        locale: String = "en-US",
+        batteryLevel: Int? = 75,
+        deviceModel: String = "Pixel 8 Pro",
+        deviceTier: DeviceTier = DeviceTier.HIGH_END
+    ) = DeviceContext(
+        hour = hour,
+        dayOfWeek = dayOfWeek,
+        formattedDate = formattedDate,
+        formattedTime = formattedTime,
+        timeZone = timeZone,
+        locale = locale,
+        batteryLevel = batteryLevel,
+        deviceModel = deviceModel,
+        deviceTier = deviceTier
+    )
 
     private fun createBuilder(format: ChatFormat = ChatFormat.Gemma3): UnifiedPromptBuilder {
         val formatter = DefaultChatFormatter(format)

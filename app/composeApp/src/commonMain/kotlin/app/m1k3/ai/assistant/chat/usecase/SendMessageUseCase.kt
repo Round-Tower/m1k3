@@ -4,7 +4,6 @@ import app.m1k3.ai.assistant.ai.BaseLlmEngine
 import app.m1k3.ai.assistant.chat.GenerationConfigBuilder
 import app.m1k3.ai.assistant.chat.QueryType
 import app.m1k3.ai.domain.chat.ChatError
-import app.m1k3.ai.domain.chat.EnrichedContext
 import app.m1k3.ai.domain.chat.GenerationStats
 import app.m1k3.ai.domain.chat.events.GenerationResponse
 import app.m1k3.ai.domain.chat.events.MessageEvent

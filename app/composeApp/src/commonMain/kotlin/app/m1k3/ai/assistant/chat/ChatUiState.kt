@@ -3,6 +3,7 @@ package app.m1k3.ai.assistant.chat
 // Import domain types
 import app.m1k3.ai.domain.chat.ChatError
 import app.m1k3.ai.domain.chat.GenerationStats
+import app.m1k3.ai.domain.status.ChatStatus
 
 /**
  * ChatUiState - Single source of truth for ChatScreen UI state.
@@ -52,7 +53,10 @@ data class ChatUiState(
     val contextWindow: ContextWindowState = ContextWindowState(),
 
     /** Tool state for tool calling support */
-    val toolState: ToolState = ToolState()
+    val toolState: ToolState = ToolState(),
+
+    /** Chat status for initial status card (null until generated) */
+    val chatStatus: ChatStatus? = null
 )
 
 /**
@@ -186,7 +190,10 @@ data class ChatMessage(
     val inferenceStats: String? = null,
 
     /** RAG sources used for this response */
-    val ragSources: String? = null
+    val ragSources: String? = null,
+
+    /** True if this is a status message (displayed as card, not chat bubble) */
+    val isStatusMessage: Boolean = false
 )
 
 /**

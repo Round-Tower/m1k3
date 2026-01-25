@@ -2,6 +2,7 @@ package app.m1k3.ai.domain.chat.services
 
 import app.m1k3.ai.domain.chat.EnrichedContext
 import app.m1k3.ai.domain.chat.format.MessageRole
+import app.m1k3.ai.domain.platform.DeviceContext
 import app.m1k3.ai.domain.tools.Tool
 
 /**
@@ -29,10 +30,12 @@ import app.m1k3.ai.domain.tools.Tool
  *
  * @property formatter ChatFormatter for format-specific message construction
  * @property contextAssembler ContextAssembler for combining context sources
+ * @property deviceContextFormatter Formatter for device context strings
  */
 class UnifiedPromptBuilder(
     private val formatter: ChatFormatter,
-    private val contextAssembler: ContextAssembler
+    private val contextAssembler: ContextAssembler,
+    private val deviceContextFormatter: DeviceContextFormatter = DeviceContextFormatter()
 ) {
     companion object {
         private const val DEFAULT_SYSTEM_PROMPT =
@@ -46,13 +49,15 @@ class UnifiedPromptBuilder(
      * @param context Enriched context from RAG/memory retrieval
      * @param tools Available tools (empty list disables tool calling)
      * @param systemPrompt Custom system prompt (uses default if empty)
+     * @param deviceContext Device/temporal context for prompt enrichment (optional)
      * @return Complete prompt string ready for LLM
      */
     fun build(
         userPrompt: String,
         context: EnrichedContext,
         tools: List<Tool> = emptyList(),
-        systemPrompt: String = ""
+        systemPrompt: String = "",
+        deviceContext: DeviceContext? = null
     ): String {
         // Build user message with context prepended
         val userMessage = buildUserMessage(userPrompt, context)
@@ -65,12 +70,30 @@ class UnifiedPromptBuilder(
             )
         )
 
+        // Build enriched system prompt with device context
+        val enrichedSystemPrompt = buildSystemPrompt(
+            basePrompt = systemPrompt.ifEmpty { DEFAULT_SYSTEM_PROMPT },
+            deviceContext = deviceContext
+        )
+
         // Use formatter to build format-aware prompt
         return formatter.buildPrompt(
-            systemPrompt = systemPrompt.ifEmpty { DEFAULT_SYSTEM_PROMPT },
+            systemPrompt = enrichedSystemPrompt,
             messages = messages,
             tools = tools
         )
+    }
+
+    /**
+     * Build system prompt with optional device context appended.
+     */
+    private fun buildSystemPrompt(basePrompt: String, deviceContext: DeviceContext?): String {
+        return if (deviceContext != null) {
+            val contextString = deviceContextFormatter.formatForSystemPrompt(deviceContext)
+            "$basePrompt\n\n$contextString"
+        } else {
+            basePrompt
+        }
     }
 
     /**

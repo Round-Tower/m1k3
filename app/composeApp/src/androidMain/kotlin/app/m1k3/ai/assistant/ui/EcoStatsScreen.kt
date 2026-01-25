@@ -24,10 +24,11 @@ import app.m1k3.ai.assistant.design.tokens.MaSpacing
 import app.m1k3.ai.assistant.design.tokens.MaTypography
 import app.m1k3.ai.assistant.design.theme.MaTheme
 import app.m1k3.ai.assistant.eco.EcoStatsState
-import app.m1k3.ai.assistant.eco.rememberEcoStatsViewModel
+import app.m1k3.ai.assistant.eco.EcoStatsViewModel
 import app.m1k3.ai.assistant.eco.collectAsState
 import app.m1k3.ai.assistant.ui.components.*
 import kotlinx.coroutines.launch
+import org.koin.androidx.compose.koinViewModel
 
 /**
  * EcoStatsScreen - Environmental Statistics Screen
@@ -53,10 +54,9 @@ fun EcoStatsScreen(
     onBackClick: () -> Unit = {}
 ) {
     val haptics = rememberHapticFeedback()
-    val scope = rememberCoroutineScope()
 
     // EcoStatsViewModel - Single source of truth for eco stats state
-    val viewModel = rememberEcoStatsViewModel(database = database)
+    val viewModel = koinViewModel<EcoStatsViewModel>()
     val state by viewModel.collectAsState()
 
     // Load stats on first composition
@@ -88,10 +88,8 @@ fun EcoStatsScreen(
         FloatingActionButton(
             onClick = {
                 haptics.performHapticFeedback(HapticFeedbackType.LIGHT)
-                scope.launch {
-                    viewModel.loadLifetimeStats()
-                    projectId?.let { viewModel.loadProjectStats(it) }
-                }
+                viewModel.loadLifetimeStats()
+                projectId?.let { viewModel.loadProjectStats(it) }
             },
             modifier = Modifier
                 .align(Alignment.BottomEnd)

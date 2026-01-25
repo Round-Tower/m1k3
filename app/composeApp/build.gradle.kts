@@ -23,7 +23,7 @@ kotlin {
         iosSimulatorArm64()
     ).forEach { iosTarget ->
         iosTarget.binaries.framework {
-            baseName = "ComposeApp"
+            baseName = "M1K3"
             isStatic = true
         }
     }
@@ -32,7 +32,6 @@ kotlin {
     jvm()
 
     // Note: JS and WASM targets removed - not needed for mobile app
-    // and incompatible with SQLDelight database dependency
 
     sourceSets {
         androidMain.dependencies {
@@ -71,7 +70,7 @@ kotlin {
             implementation(libs.sceneview)
 
             // Coding module for code generation
-            implementation(project(":codingModule"))
+//            implementation(project(":codingModule"))
 
             // Play Core for dynamic feature delivery
             implementation("com.google.android.play:core:1.10.3")
@@ -79,6 +78,7 @@ kotlin {
 
             // Koin Android
             implementation(libs.koin.android)
+            implementation(libs.koin.androidx.compose)
 
             // TODO: JVector for HNSW vector similarity search (not yet in Maven Central)
             // Using linear search fallback for now (fine for <10K vectors)
@@ -103,7 +103,7 @@ kotlin {
             implementation(libs.kotlinx.datetime)
 
             // Llamatik - KMP llama.cpp binding for GGUF models
-            implementation("com.llamatik:library:0.12.0")
+            implementation("com.llamatik:library:0.13.0")
 
             // WebView for Three.js 3D avatar rendering
             implementation("io.github.kevinnzou:compose-webview-multiplatform:2.0.3")
@@ -160,7 +160,8 @@ android {
     }
 
     // Dynamic feature modules
-    dynamicFeatures += setOf(":gemmaEmbedding")
+//    dynamicFeatures += setOf(":gemmaEmbedding")
+
     packaging {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
@@ -168,15 +169,13 @@ android {
     }
     buildTypes {
         getByName("release") {
-            // PHASE1.5: Enable ProGuard for APK size optimization
-            // TEMPORARY: Disabled due to gemmaEmbedding module duplicate class issue
-            // TODO: Fix GemmaEmbeddingEngine$WhenMappings duplication between base and feature modules
-            isMinifyEnabled = false
-            isShrinkResources = false
-            // proguardFiles(
-            //     getDefaultProguardFile("proguard-android-optimize.txt"),
-            //     "proguard-rules.pro"
-            // )
+            isMinifyEnabled = true
+            isShrinkResources = true
+
+             proguardFiles(
+                 getDefaultProguardFile("proguard-android-optimize.txt"),
+                 "proguard-rules.pro"
+             )
         }
     }
 
@@ -207,9 +206,9 @@ dependencies {
     debugImplementation(compose.uiTooling)
 
     // LeakCanary for memory leak detection (debug only)
-    debugImplementation("com.squareup.leakcanary:leakcanary-android:2.12")
+    debugImplementation("com.squareup.leakcanary:leakcanary-android:2.14")
 
-    // 間 AI - Testing dependencies
+    // Testing dependencies
     testImplementation(libs.junit)
     testImplementation(libs.kotlin.test)
     testImplementation(libs.robolectric)

@@ -256,14 +256,14 @@ class LlamaCppEngine(
         }
 
         try {
-            val systemPrompt = buildCleanSystemPrompt(config)
-            val contextParam = buildContextString(config)
-            val chatPrompt = buildChatPrompt(systemPrompt, contextParam, prompt)
+//            val systemPrompt = buildCleanSystemPrompt(config)
+//            val contextParam = buildContextString(config)
+//            val chatPrompt = buildChatPrompt(systemPrompt, contextParam, prompt)
 
             val maxTokens = config.maxTokens ?: getOptimalMaxTokens()
 
             logger.d {
-                "Generate with prompt -> ${chatPrompt} - ${chatPrompt.length} chars - maxTokens=$maxTokens"
+                "Generate with prompt -> ${prompt} - ${prompt.length} chars - maxTokens=$maxTokens"
             }
 
             // Thread-safe counters and flags for native callback access
@@ -277,7 +277,7 @@ class LlamaCppEngine(
             // Stream tokens with Llamatik using RAW prompt (no templating)
             suspendCancellableCoroutine { continuation ->
                 LlamaBridge.generateStream(
-                    chatPrompt,
+                    prompt,
                     object : com.llamatik.library.platform.GenStream {
                         override fun onDelta(text: String) {
                             if (shouldStop.get()) return

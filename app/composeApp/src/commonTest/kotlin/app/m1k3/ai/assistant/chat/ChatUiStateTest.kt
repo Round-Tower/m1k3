@@ -233,4 +233,52 @@ class ChatUiStateTest {
         assertEquals(null, message.inferenceStats)
         assertEquals(null, message.ragSources)
     }
+
+    @Test
+    fun `ChatMessage isStatusMessage defaults to false`() {
+        val message = ChatMessage(
+            text = "Hello",
+            isUser = false,
+            timestamp = 0L
+        )
+        assertFalse(message.isStatusMessage)
+    }
+
+    @Test
+    fun `ChatMessage can be created as status message`() {
+        val message = ChatMessage(
+            text = "Status info",
+            isUser = false,
+            timestamp = 0L,
+            isStatusMessage = true
+        )
+        assertTrue(message.isStatusMessage)
+    }
+
+    // ===== ChatStatus Tests =====
+
+    @Test
+    fun `ChatUiState chatStatus defaults to null`() {
+        val state = ChatUiState()
+        assertEquals(null, state.chatStatus)
+    }
+
+    @Test
+    fun `ChatUiState can have chatStatus set`() {
+        val chatStatus = app.m1k3.ai.domain.status.ChatStatus(
+            greeting = "Good afternoon!",
+            engineReady = true,
+            memoryCount = 100,
+            knowledgeCount = 1000,
+            maxContextTokens = 4096,
+            deviceTierName = "High-End",
+            lastSessionTokens = null,
+            lastSessionWaterMl = null,
+            lastSessionEnergyWh = null,
+            lastSessionCo2G = null
+        )
+        val state = ChatUiState(chatStatus = chatStatus)
+        assertEquals("Good afternoon!", state.chatStatus?.greeting)
+        assertEquals(true, state.chatStatus?.engineReady)
+    }
 }

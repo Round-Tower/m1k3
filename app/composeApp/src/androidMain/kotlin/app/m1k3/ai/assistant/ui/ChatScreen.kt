@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -14,7 +15,6 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
@@ -22,6 +22,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
+import app.m1k3.ai.assistant.app.InitializationViewModel
 import app.m1k3.ai.assistant.avatar.LocalSharedAvatarVM
 import app.m1k3.ai.assistant.chat.ChatMessage
 import app.m1k3.ai.assistant.chat.toEmoji
@@ -45,6 +46,8 @@ import app.m1k3.ai.assistant.ui.components.ContextWindowIndicator
 import app.m1k3.ai.assistant.ui.components.EcoIndicator
 import app.m1k3.ai.assistant.ui.components.EcoIndicatorVariant
 import org.jetbrains.compose.ui.tooling.preview.Preview
+import org.koin.androidx.compose.koinViewModel
+import org.koin.core.parameter.parametersOf
 
 /**
  * M1K3 AI - Chat Screen
@@ -66,19 +69,15 @@ import org.jetbrains.compose.ui.tooling.preview.Preview
 @Composable
 fun ChatScreen(
     onEcoStatsClick: () -> Unit = {},
-    viewModel: ChatScreenViewModel?,
+    projectId: String = "default"
 ) {
     val context = LocalContext.current
     rememberCoroutineScope()
     val listState = rememberLazyListState()
+    val viewModel = koinViewModel<ChatScreenViewModel>()
 
     // Avatar state management - use shared app-level ViewModel from CompositionLocal
     val avatarVM = LocalSharedAvatarVM.current
-
-    if (viewModel == null) {
-        // Show a loading indicator or an error message
-        return
-    }
 
     val uiState by viewModel.collectAsState()
 
@@ -124,6 +123,7 @@ fun ChatScreen(
         modifier = Modifier
             .fillMaxSize()
             .animateContentSize()
+            .navigationBarsPadding()
     ) {
         // Background: Messages list (behind overlays)
         Column(modifier = Modifier.fillMaxSize()) {

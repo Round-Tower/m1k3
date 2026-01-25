@@ -26,14 +26,12 @@ package app.m1k3.ai.domain.ai
  */
 data class GenerationConfig(
     val maxTokens: Int? = null,
-    val temperature: Float? = 0.7f,
+    val temperature: Float? = 1.0f,
     val systemPrompt: String? = null,
     val userContext: Map<String, String>? = null,
     val knowledgeContext: String? = null,
-
-    // Advanced sampling parameters (ONNX-only, ignored by Llamatik)
     val topP: Float? = 0.95f,
-    val topK: Int? = 40,
-    val minP: Float? = 0.05f,
-    val repetitionPenalty: Float? = 1.1f
+    val topK: Int? = 64,
+    val minP: Float? = 0.0f,
+    val repetitionPenalty: Float? = 1.0f
 )
