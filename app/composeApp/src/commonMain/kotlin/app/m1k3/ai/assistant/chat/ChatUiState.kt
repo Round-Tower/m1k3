@@ -193,7 +193,23 @@ data class ChatMessage(
     val ragSources: String? = null,
 
     /** True if this is a status message (displayed as card, not chat bubble) */
-    val isStatusMessage: Boolean = false
+    val isStatusMessage: Boolean = false,
+
+    // Status card fields (only used when isStatusMessage = true)
+    /** Memory count for status card */
+    val statusMemoryCount: Long? = null,
+    /** Knowledge count for status card */
+    val statusKnowledgeCount: Long? = null,
+    /** Max context tokens for status card */
+    val statusMaxTokens: Int? = null,
+    /** Device tier name for status card */
+    val statusDeviceTier: String? = null,
+    /** Last session water saved (ml) for status card */
+    val statusLastWaterMl: Long? = null,
+    /** Last session energy saved (Wh) for status card */
+    val statusLastEnergyWh: Long? = null,
+    /** Last session CO2 saved (g) for status card */
+    val statusLastCo2G: Long? = null
 )
 
 /**

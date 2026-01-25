@@ -432,12 +432,18 @@ class ChatScreenViewModel(
         )
 
         // Add status message to UI
-        val statusMessageText = chatStatusBuilder.formatStatusText(chatStatus)
         val statusMessage = ChatMessage(
-            text = statusMessageText,
+            text = chatStatus.greeting,
             isUser = false,
             timestamp = Clock.System.now().toEpochMilliseconds(),
-            isStatusMessage = true
+            isStatusMessage = true,
+            statusMemoryCount = memoryCount,
+            statusKnowledgeCount = knowledgeCount,
+            statusMaxTokens = maxContextTokens,
+            statusDeviceTier = deviceTier.name.lowercase().replaceFirstChar { it.uppercase() },
+            statusLastWaterMl = lastSession?.waterMl,
+            statusLastEnergyWh = lastSession?.energyWh,
+            statusLastCo2G = lastSession?.co2G
         )
 
         val placeholderMessage = ChatMessage(

@@ -37,6 +37,7 @@ import app.m1k3.ai.assistant.chat.isGenerating
 import app.m1k3.ai.assistant.chat.isInputEnabled
 import app.m1k3.ai.assistant.design.components.MaChatBubbleAI
 import app.m1k3.ai.assistant.design.components.MaChatBubbleUser
+import app.m1k3.ai.assistant.design.components.MaStatusCard
 import app.m1k3.ai.assistant.design.theme.MaTheme
 import app.m1k3.ai.assistant.design.tokens.MaColors
 import app.m1k3.ai.assistant.ui.components.ChatInputBar
@@ -222,23 +223,40 @@ private fun ErrorSnackbar(
 }
 
 /**
- * ChatBubble - Renders a single message bubble.
+ * ChatBubble - Renders a single message bubble or status card.
  */
 @Composable
 fun ChatBubble(message: ChatMessage) {
-    if (message.isUser) {
-        MaChatBubbleUser(
-            text = message.text,
-            timestamp = message.timestamp
-        )
-    } else {
-        MaChatBubbleAI(
-            text = message.text,
-            timestamp = message.timestamp,
-            inferenceStats = message.inferenceStats,
-            isError = message.isError,
-            ragSources = message.ragSources
-        )
+    when {
+        message.isStatusMessage -> {
+            // Status card for welcome/system messages
+            MaStatusCard(
+                greeting = message.text.lines().firstOrNull() ?: "Hello!",
+                engineReady = true,
+                memoryCount = message.statusMemoryCount ?: 0,
+                knowledgeCount = message.statusKnowledgeCount ?: 0,
+                maxContextTokens = message.statusMaxTokens ?: 2048,
+                deviceTierName = message.statusDeviceTier ?: "Unknown",
+                lastSessionWaterMl = message.statusLastWaterMl,
+                lastSessionEnergyWh = message.statusLastEnergyWh,
+                lastSessionCo2G = message.statusLastCo2G
+            )
+        }
+        message.isUser -> {
+            MaChatBubbleUser(
+                text = message.text,
+                timestamp = message.timestamp
+            )
+        }
+        else -> {
+            MaChatBubbleAI(
+                text = message.text,
+                timestamp = message.timestamp,
+                inferenceStats = message.inferenceStats,
+                isError = message.isError,
+                ragSources = message.ragSources
+            )
+        }
     }
 }
 

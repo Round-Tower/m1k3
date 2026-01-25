@@ -122,6 +122,8 @@ kotlin {
         androidInstrumentedTest.dependencies {
             implementation(libs.androidx.testExt.junit)
             implementation(libs.androidx.espresso.core)
+            implementation(libs.koin.test)
+            implementation(libs.kotlin.test)
             implementation(libs.kotlin.test)
             @OptIn(org.jetbrains.compose.ExperimentalComposeLibrary::class)
             implementation(compose.uiTest)
