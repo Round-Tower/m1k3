@@ -124,50 +124,15 @@ class GenerationConfigBuilder(
     }
 
     // ===== Private Token Calculations =====
+    // All return 0 to use engine's getOptimalMaxTokens() for device-adaptive limits
 
-    private fun calculateEducationalTokens(deviceRamGB: Int): Int = when {
-        deviceRamGB >= GenerationConstants.DeviceRam.FLAGSHIP ->
-            GenerationConstants.TokenLimits.Educational.FLAGSHIP
-        deviceRamGB >= GenerationConstants.DeviceRam.HIGH_END ->
-            GenerationConstants.TokenLimits.Educational.HIGH_END
-        deviceRamGB >= GenerationConstants.DeviceRam.MID_RANGE ->
-            GenerationConstants.TokenLimits.Educational.MID_RANGE
-        else ->
-            GenerationConstants.TokenLimits.Educational.BUDGET
-    }
+    private fun calculateEducationalTokens(deviceRamGB: Int): Int = 0
 
-    private fun calculateTechnicalTokens(deviceRamGB: Int): Int = when {
-        deviceRamGB >= GenerationConstants.DeviceRam.FLAGSHIP ->
-            GenerationConstants.TokenLimits.Technical.FLAGSHIP
-        deviceRamGB >= GenerationConstants.DeviceRam.HIGH_END ->
-            GenerationConstants.TokenLimits.Technical.HIGH_END
-        deviceRamGB >= GenerationConstants.DeviceRam.MID_RANGE ->
-            GenerationConstants.TokenLimits.Technical.MID_RANGE
-        else ->
-            GenerationConstants.TokenLimits.Technical.BUDGET
-    }
+    private fun calculateTechnicalTokens(deviceRamGB: Int): Int = 0
 
-    private fun calculateFactualTokens(deviceRamGB: Int): Int = when {
-        deviceRamGB >= GenerationConstants.DeviceRam.FLAGSHIP ->
-            GenerationConstants.TokenLimits.Factual.FLAGSHIP
-        deviceRamGB >= GenerationConstants.DeviceRam.HIGH_END ->
-            GenerationConstants.TokenLimits.Factual.HIGH_END
-        deviceRamGB >= GenerationConstants.DeviceRam.MID_RANGE ->
-            GenerationConstants.TokenLimits.Factual.MID_RANGE
-        else ->
-            GenerationConstants.TokenLimits.Factual.BUDGET
-    }
+    private fun calculateFactualTokens(deviceRamGB: Int): Int = 0
 
-    private fun calculateConversationalTokens(deviceRamGB: Int): Int = when {
-        deviceRamGB >= GenerationConstants.DeviceRam.FLAGSHIP ->
-            GenerationConstants.TokenLimits.Conversational.FLAGSHIP
-        deviceRamGB >= GenerationConstants.DeviceRam.HIGH_END ->
-            GenerationConstants.TokenLimits.Conversational.HIGH_END
-        deviceRamGB >= GenerationConstants.DeviceRam.MID_RANGE ->
-            GenerationConstants.TokenLimits.Conversational.MID_RANGE
-        else ->
-            GenerationConstants.TokenLimits.Conversational.BUDGET
-    }
+    private fun calculateConversationalTokens(deviceRamGB: Int): Int = 0
 }
 
 /**

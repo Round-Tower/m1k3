@@ -112,6 +112,8 @@ class ChatWithToolsUseCaseTest {
         override fun getToolsByCategory(category: ToolCategory): List<Tool> =
             tools.filter { it.category == category }
         override suspend fun getAvailableTools(): List<Tool> = tools
+        override suspend fun getRelevantTools(query: String, maxTools: Int): List<Tool> =
+            tools.take(maxTools)  // Simplified for testing
         override fun findTool(toolId: String): Tool? = tools.find { it.id == toolId }
         override suspend fun isToolAvailable(toolId: String): Boolean =
             tools.any { it.id == toolId }

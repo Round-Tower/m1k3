@@ -57,6 +57,33 @@ interface ToolRegistry {
     suspend fun getAvailableTools(): List<Tool>
 
     /**
+     * Get tools relevant to the user's query (filtered for small models)
+     *
+     * Filters available tools by query relevance to reduce prompt bloat.
+     * Returns 0-3 tools based on keyword and category matching.
+     *
+     * **Purpose:** Small models (e.g., Gemma 270M) drown in context when all
+     * tools are injected (~150 tokens). This method filters to only relevant
+     * tools, saving 67-100% of tool injection tokens.
+     *
+     * **Algorithm:**
+     * - Scores tools by query relevance (keyword + category matching)
+     * - Returns top N tools sorted by score
+     * - Returns empty list if no tools match (e.g., "Teach me about Ireland")
+     *
+     * **Examples:**
+     * - "What time is it?" → [get_current_time] (~35 tokens)
+     * - "Open camera" → [open_camera] (~30 tokens)
+     * - "Teach me about Ireland" → [] (0 tokens)
+     *
+     * @param query The user's query string
+     * @param maxTools Maximum number of tools to return (default: 3)
+     * @return List of relevant tools sorted by relevance, empty if no match
+     * @see ToolFilter for scoring algorithm
+     */
+    suspend fun getRelevantTools(query: String, maxTools: Int = 3): List<Tool>
+
+    /**
      * Find a tool by its ID
      *
      * @param toolId The tool identifier

@@ -3,6 +3,7 @@ package app.m1k3.ai.assistant.tools
 import app.m1k3.ai.domain.tools.Tool
 import app.m1k3.ai.domain.tools.ToolCategory
 import app.m1k3.ai.domain.tools.services.ToolExecutor
+import app.m1k3.ai.domain.tools.services.ToolFilter
 import app.m1k3.ai.domain.tools.services.ToolRegistry
 
 /**
@@ -32,6 +33,7 @@ open class ToolRegistryImpl : ToolRegistry {
 
     private val tools = mutableMapOf<String, Tool>()
     private val executors = mutableMapOf<String, ToolExecutor>()
+    private val toolFilter = ToolFilter()
 
     override fun getAllTools(): List<Tool> = tools.values.toList()
 
@@ -42,6 +44,14 @@ open class ToolRegistryImpl : ToolRegistry {
         tools.values.filter { tool ->
             executors[tool.id]?.isAvailable() == true
         }
+
+    override suspend fun getRelevantTools(query: String, maxTools: Int): List<Tool> {
+        val available = getAvailableTools()
+        if (available.isEmpty()) return emptyList()
+
+        val scored = toolFilter.filterByRelevance(query, available, maxTools)
+        return scored.map { it.first }
+    }
 
     override fun findTool(toolId: String): Tool? = tools[toolId]
 

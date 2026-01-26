@@ -72,7 +72,6 @@ fun ChatScreen(
     onEcoStatsClick: () -> Unit = {},
     projectId: String = "default"
 ) {
-    val context = LocalContext.current
     rememberCoroutineScope()
     val listState = rememberLazyListState()
     val viewModel = koinViewModel<ChatScreenViewModel> {

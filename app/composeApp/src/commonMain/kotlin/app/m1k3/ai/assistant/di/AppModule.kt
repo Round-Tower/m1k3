@@ -15,6 +15,8 @@ import app.m1k3.ai.assistant.memory.MemoryDataSource
 import app.m1k3.ai.assistant.platform.DeviceInfoProviderInterface
 import app.m1k3.ai.domain.ai.services.GenerationConfigService
 import app.m1k3.ai.domain.chat.services.ContextAssembler
+import app.m1k3.ai.domain.chat.services.DeviceContextFormatter
+import app.m1k3.ai.domain.chat.services.UnifiedPromptBuilder
 import app.m1k3.ai.domain.memory.ImportanceCalculator
 import app.m1k3.ai.domain.memory.services.SemanticChunker
 import app.m1k3.ai.domain.rag.services.IntentClassifier
@@ -140,6 +142,19 @@ val appModule = module {
      * Combines conversation history, RAG facts, and memories into unified context.
      */
     single { ContextAssembler() }
+
+    /**
+     * Unified prompt builder
+     *
+     * Single point for prompt construction with context + tool schemas.
+     */
+    single {
+        UnifiedPromptBuilder(
+            formatter = get<ChatFormatter>(),
+            contextAssembler = get(),
+            deviceContextFormatter = DeviceContextFormatter()
+        )
+    }
 
     /**
      * Generation config service

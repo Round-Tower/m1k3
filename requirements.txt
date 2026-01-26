@@ -15,7 +15,7 @@ sounddevice>=0.4.6         # Audio input/output (required for all STT engines)
 # STT Engines (in priority order for minimal footprint)
 # 1. macOS Native (0MB) - requires: pip install pyobjc-framework-Speech pyobjc-framework-AVFoundation
 # 2. Vosk (54MB) - lightweight offline STT with good accuracy
-vosk>=0.3.45               # Lightweight offline speech recognition (primary choice)
+vosk>=0.3.44               # Lightweight offline speech recognition (primary choice)
 
 # 3. Web Speech API (0MB) - fallback for cloud-based recognition
 SpeechRecognition>=3.10.1  # Speech-to-text wrapper for multiple backends
@@ -49,6 +49,7 @@ gTTS>=2.5.0      # Google Text-to-Speech (requires internet)
 
 # Real-time offline TTS engines (NEW - for ultra-fast real-time chat)
 piper-tts>=1.2.0          # Neural TTS optimized for real-time (10x faster than traditional)
+kokoro-onnx>=0.1.0        # Kokoro-82M ONNX TTS (#1 TTS Arena, 82M params, ultra-lightweight)
 espeak>=1.48.15           # Ultra-fast TTS engine (sub-10ms latency, 2MB footprint)
 styletts2>=0.1.0          # High-quality neural TTS (human-level, faster than VITS)
 realtimetts>=0.3.0        # Streaming TTS framework with multiple engines

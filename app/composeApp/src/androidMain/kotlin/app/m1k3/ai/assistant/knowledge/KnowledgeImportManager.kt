@@ -49,17 +49,19 @@ class KnowledgeImportManager(
          * Current knowledge base version.
          * Increment when KB content changes.
          *
-         * Current: 1.0.0 (fresh start with tiered retrieval)
-         * - 1,391 comprehensive documents (VERIFIED/SYNTHETIC based on metadata)
+         * Current: 2.0.0 (curated knowledge only - fresh start)
          * - 10 M1K3 system documents (CURATED)
-         * - 25 AI/ML curated documents (CURATED)
-         * - Total: ~1,426 documents with tiered retrieval
+         * - ~25 AI/ML curated documents (CURATED)
+         * - ~10 conversational enhancement documents (CURATED)
+         * - Total: ~45-50 high-quality curated documents
+         *
+         * Removed comprehensive_knowledge_base.json (1,391 synthetic docs)
          */
-        const val CURRENT_KB_VERSION = "1.0.0"
+        const val CURRENT_KB_VERSION = "2.0.0"
 
-        private const val COMPREHENSIVE_KB_PATH = "composeResources/myapplication.composeapp.generated.resources/files/comprehensive_knowledge_base.json"
-        private const val SYSTEM_KB_PATH = "composeResources/myapplication.composeapp.generated.resources/files/m1k3_system_knowledge.json"
-        private const val AI_ML_KB_PATH = "knowledge/ai_ml_knowledge.json"
+        private const val SYSTEM_KB_PATH = "composeResources/m1k3.composeapp.generated.resources/files/m1k3_system_knowledge.json"
+        private const val AI_ML_KB_PATH = "composeResources/m1k3.composeapp.generated.resources/files/ai_ml_knowledge.json"
+        private const val CONVERSATIONAL_KB_PATH = "composeResources/m1k3.composeapp.generated.resources/files/conversational_enhancement.json"
     }
 
     /**
@@ -69,15 +71,13 @@ class KnowledgeImportManager(
         /**
          * Knowledge base successfully imported.
          *
-         * @param totalDocs Total documents imported
-         * @param comprehensiveDocs Documents from comprehensive KB
-         * @param systemDocs Documents from system KB
+         * @param totalDocs Total documents imported (all curated)
+         * @param curatedDocs Number of curated documents imported
          * @param version KB version imported
          */
         data class Success(
             val totalDocs: Int,
-            val comprehensiveDocs: Int,
-            val systemDocs: Int,
+            val curatedDocs: Int,
             val version: String
         ) : ImportResult()
 
@@ -138,20 +138,10 @@ class KnowledgeImportManager(
                 return ImportResult.AlreadyImported(existingCount, storedVersion)
             }
 
-            // Perform import
-            logger.i { "Importing knowledge bases (1,401 documents from 2 sources)" }
+            // Perform import - CURATED knowledge bases only
+            logger.i { "Importing curated knowledge bases (3 sources)" }
 
-            // 1. Load comprehensive knowledge base (1,391 docs)
-            // Uses metadata.synthetic flag to determine tier (SYNTHETIC or VERIFIED)
-            val comprehensiveJson = loadAssetFile(COMPREHENSIVE_KB_PATH)
-            val comprehensiveResult = importer.importKnowledgeBase(
-                jsonContent = comprehensiveJson,
-                tierOverride = null, // Auto-detect from synthetic flag
-                sourceOverride = "comprehensive_kb"
-            )
-            logger.i { "Comprehensive KB: ${comprehensiveResult.imported} documents imported" }
-
-            // 2. Load M1K3 system knowledge base (10 docs) - CURATED tier
+            // 1. Load M1K3 system knowledge base (10 docs) - CURATED tier
             // System knowledge is hand-crafted, high-quality content
             val systemJson = loadAssetFile(SYSTEM_KB_PATH)
             val systemResult = importer.importKnowledgeBase(
@@ -161,7 +151,7 @@ class KnowledgeImportManager(
             )
             logger.i { "M1K3 System KB: ${systemResult.imported} documents imported (CURATED)" }
 
-            // 3. Load AI/ML curated knowledge base (~25 docs) - CURATED tier
+            // 2. Load AI/ML curated knowledge base (~25 docs) - CURATED tier
             // Expert-crafted AI/ML educational content
             val aiMlJson = loadAssetFile(AI_ML_KB_PATH)
             val aiMlResult = importer.importCuratedKnowledgeBase(
@@ -171,11 +161,21 @@ class KnowledgeImportManager(
             )
             logger.i { "AI/ML KB: ${aiMlResult.imported} documents imported (CURATED)" }
 
+            // 3. Load conversational enhancement knowledge base (~50 docs) - CURATED tier
+            // Conversational patterns and engagement strategies
+            val conversationalJson = loadAssetFile(CONVERSATIONAL_KB_PATH)
+            val conversationalResult = importer.importCuratedKnowledgeBase(
+                jsonContent = conversationalJson,
+                tier = "CURATED",
+                source = "conversational_kb"
+            )
+            logger.i { "Conversational KB: ${conversationalResult.imported} documents imported (CURATED)" }
+
             // Verify combined import
             val verification = importer.verifyImport()
             logger.d { verification.toString() }
 
-            val totalImported = comprehensiveResult.imported + systemResult.imported + aiMlResult.imported
+            val totalImported = systemResult.imported + aiMlResult.imported + conversationalResult.imported
 
             // Save KB version after successful import
             prefs.edit().putString("kb_version", CURRENT_KB_VERSION).apply()
@@ -189,8 +189,7 @@ class KnowledgeImportManager(
 
             ImportResult.Success(
                 totalDocs = totalImported,
-                comprehensiveDocs = comprehensiveResult.imported,
-                systemDocs = systemResult.imported + aiMlResult.imported, // Combined curated docs
+                curatedDocs = totalImported, // All curated now
                 version = CURRENT_KB_VERSION
             )
 
@@ -201,13 +200,20 @@ class KnowledgeImportManager(
     }
 
     /**
-     * Load text file from assets.
+     * Load text file from assets or composeResources.
      *
-     * @param path Asset path relative to assets directory
+     * Handles two sources:
+     * - composeResources: Generated resources (full path in assets)
+     * - androidMain/assets: Legacy assets (direct access)
+     *
+     * @param path Resource path
      * @return File contents as string
      * @throws Exception if file not found or read error
      */
     private fun loadAssetFile(path: String): String {
+        // Both paths work directly with AssetManager
+        // composeResources are packaged with full path:
+        // "composeResources/m1k3.composeapp.generated.resources/files/..."
         return context.assets.open(path).use { input ->
             BufferedReader(InputStreamReader(input)).use { reader ->
                 reader.readText()

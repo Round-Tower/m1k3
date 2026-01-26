@@ -143,7 +143,7 @@ class DomainLayerIntegrationTest {
                     chunkIndex = 0,
                     chunkTotal = 1,
                     messageId = "msg-123",
-                    createdAt = Clock.System.now().toEpochMilliseconds()
+                    createdAt = Clock.System.now().epochMilliseconds
                 )
             )
         )

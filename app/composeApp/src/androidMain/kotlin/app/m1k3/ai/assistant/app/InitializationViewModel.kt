@@ -65,9 +65,7 @@ class InitializationViewModel(
                 val knowledgeResult = databaseInitializer.importKnowledge(database)
                 val knowledgeStatus = when (knowledgeResult) {
                     is KnowledgeImportResult.Success -> {
-                        "✅ Knowledge ready: ${knowledgeResult.totalDocs} documents " +
-                            "(${knowledgeResult.comprehensiveDocs} comprehensive + " +
-                            "${knowledgeResult.systemDocs} system)"
+                        "✅ Knowledge ready: ${knowledgeResult.totalDocs} curated documents"
                     }
                     is KnowledgeImportResult.AlreadyImported -> {
                         "✅ Knowledge ready: ${knowledgeResult.existingDocs} documents"

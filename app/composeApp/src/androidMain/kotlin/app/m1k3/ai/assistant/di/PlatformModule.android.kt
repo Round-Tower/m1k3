@@ -19,6 +19,7 @@ import app.m1k3.ai.assistant.platform.DeviceInfoProviderInterface
 import app.m1k3.ai.assistant.platform.PreferencesStore
 import app.m1k3.ai.domain.platform.DateTimeProviderInterface
 import app.m1k3.ai.assistant.platform.PreferencesStoreInterface
+import app.m1k3.ai.domain.chat.services.UnifiedPromptBuilder
 import app.m1k3.ai.domain.tools.services.ToolRegistry
 import app.m1k3.ai.assistant.tools.AndroidToolRegistry
 import app.m1k3.ai.assistant.app.AndroidDatabaseInitializer
@@ -37,6 +38,8 @@ import app.m1k3.ai.assistant.history.ExportManager
 import app.m1k3.ai.assistant.history.HistoryViewModel
 import app.m1k3.ai.assistant.eco.EcoMetricsRepository
 import app.m1k3.ai.assistant.eco.EcoStatsViewModel
+import app.m1k3.ai.assistant.embedding.EmbeddingEngineManager
+import app.m1k3.ai.assistant.embedding.EmbeddingEngineManagerImpl
 import app.m1k3.ai.assistant.embedding.EmbeddingModelManager
 import app.m1k3.ai.domain.usecases.chat.LlmOutputProcessor
 import org.koin.androidx.viewmodel.dsl.viewModel
@@ -106,6 +109,18 @@ actual val platformModule = module {
     // ===== Embedding Engine =====
 
     /**
+     * EmbeddingEngineManager
+     *
+     * Manages lifecycle and initialization of embedding engines.
+     * Provides thread-safe singleton pattern with lazy model loading.
+     *
+     * Must call initialize() in MainActivity to load the ONNX model.
+     */
+    single<EmbeddingEngineManager> {
+        EmbeddingEngineManagerImpl(get<Context>())
+    }
+
+    /**
      * EmbeddingEngine
      *
      * Provides text-to-vector embeddings for semantic search and RAG.
@@ -114,6 +129,8 @@ actual val platformModule = module {
      * Model selection:
      * - MiniLM-L6-v2 (384-dim, 80MB, built-in)
      * - Embedding Gemma (512-dim, 180MB, dynamic module)
+     *
+     * Note: Engine is created but NOT loaded. Call EmbeddingEngineManager.initialize() in MainActivity to load model.
      */
     single<EmbeddingEngine> {
         val manager = EmbeddingModelManager(get<Context>())

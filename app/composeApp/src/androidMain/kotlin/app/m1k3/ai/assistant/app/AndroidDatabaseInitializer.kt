@@ -96,11 +96,10 @@ open class AndroidDatabaseInitializer(
 
             when (result) {
                 is KnowledgeImportManager.ImportResult.Success -> {
-                    logger.i("Knowledge import succeeded: ${result.totalDocs} documents")
+                    logger.i("Knowledge import succeeded: ${result.totalDocs} curated documents")
                     KnowledgeImportResult.Success(
                         totalDocs = result.totalDocs,
-                        comprehensiveDocs = result.comprehensiveDocs,
-                        systemDocs = result.systemDocs
+                        curatedDocs = result.curatedDocs
                     )
                 }
                 is KnowledgeImportManager.ImportResult.AlreadyImported -> {

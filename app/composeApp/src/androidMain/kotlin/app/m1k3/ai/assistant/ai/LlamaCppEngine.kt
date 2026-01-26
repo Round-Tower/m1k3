@@ -42,11 +42,11 @@ class LlamaCppEngine(
         val activityManager = context.getSystemService(Context.ACTIVITY_SERVICE) as android.app.ActivityManager
         val memInfo = android.app.ActivityManager.MemoryInfo()
         activityManager.getMemoryInfo(memInfo)
+        activityManager.getMemoryInfo(memInfo)
         (memInfo.totalMem / (1024 * 1024 * 1024)).toInt()
     }
 
     private var modelMini = "gemma-3-270m-it-UD-IQ3_XXS.gguf"
-//    private var modelMini = "gemma-3-270m-it-Q2_K.gguf"
     private var defaultConfig = GenerationConfig()
 
     /**
@@ -86,7 +86,7 @@ class LlamaCppEngine(
                     }
                     logger.i { "Model copied (${modelFile.length() / 1024 / 1024} MB)" }
                 } else {
-                    logger.d { "Model already in storage (${modelFile.length() / 1024 / 1024} MB)" }
+                    logger.d { "Model $modelMini already in storage (${modelFile.length() / 1024 / 1024} MB)" }
                 }
 
                 LlamaBridge.initGenerateModel(modelFile.absolutePath)
@@ -123,7 +123,8 @@ class LlamaCppEngine(
     override suspend fun generate(
         prompt: String,
         config: GenerationConfig
-    ): Result<GenerationResult> = withContext(Dispatchers.Default) {
+    ): Result<GenerationResult> = withContext(Dispatchers.IO) {
+        logger.i { "GENERATE" }
         if (!isInitialized) {
             return@withContext Result.failure(
                 IllegalStateException("Engine not initialized. Call initialize() first.")
@@ -134,8 +135,8 @@ class LlamaCppEngine(
         val responseBuilder = StringBuilder()
         val tokenCount = AtomicInteger(0)
 
-        // Get maxTokens limit (0 = return empty response immediately)
-        val maxTokens = config.maxTokens ?: getOptimalMaxTokens()
+        // Get maxTokens limit (0 or null = use engine's device-adaptive limit)
+        val maxTokens = config.maxTokens?.takeIf { it > 0 } ?: getOptimalMaxTokens()
 
         try {
             val systemPrompt = buildCleanSystemPrompt(config)
@@ -143,7 +144,7 @@ class LlamaCppEngine(
             val chatPrompt = buildChatPrompt(systemPrompt, contextParam, prompt)
 
             logger.d {
-                "Prompt -> ${chatPrompt} - ${chatPrompt.length}chars - maxTokens=$maxTokens"
+                "Prompt - User: $prompt  Chat: $chatPrompt - ${chatPrompt.length}chars - maxTokens=$maxTokens"
             }
 
             val stopTokens = chatFormatter.getStopTokens()
@@ -250,6 +251,8 @@ class LlamaCppEngine(
         config: GenerationConfig,
         onToken: (String) -> Unit
     ): Result<Unit> = withContext(Dispatchers.IO) {
+        logger.i { "GENERATE STREAMING" }
+
         if (!isInitialized) {
             return@withContext Result.failure(
                 IllegalStateException("Engine not initialized. Call initialize() first.")
@@ -257,11 +260,8 @@ class LlamaCppEngine(
         }
 
         try {
-//            val systemPrompt = buildCleanSystemPrompt(config)
-//            val contextParam = buildContextString(config)
-//            val chatPrompt = buildChatPrompt(systemPrompt, contextParam, prompt)
-
-            val maxTokens = config.maxTokens ?: getOptimalMaxTokens()
+            // Get maxTokens limit (0 or null = use engine's device-adaptive limit)
+            val maxTokens = config.maxTokens?.takeIf { it > 0 } ?: getOptimalMaxTokens()
 
             logger.d {
                 "Generate with prompt -> ${prompt} - ${prompt.length} chars - maxTokens=$maxTokens"
@@ -275,11 +275,12 @@ class LlamaCppEngine(
             val shouldStop = AtomicBoolean(false)
             val hasResumed = AtomicBoolean(false)
 
-            // Stream tokens with Llamatik using RAW prompt (no templating)
             suspendCancellableCoroutine { continuation ->
-                LlamaBridge.generateStream(
-                    prompt,
-                    object : com.llamatik.library.platform.GenStream {
+                LlamaBridge.generateStreamWithContext(
+                    systemPrompt = "",
+                    contextBlock = "",
+                    userPrompt = prompt,
+                    callback = object : com.llamatik.library.platform.GenStream {
                         override fun onDelta(text: String) {
                             if (shouldStop.get()) return
 

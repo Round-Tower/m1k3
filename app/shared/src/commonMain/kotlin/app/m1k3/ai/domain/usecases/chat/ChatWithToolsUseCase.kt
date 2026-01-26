@@ -13,7 +13,9 @@ import app.m1k3.ai.domain.config.GenerationConfigBuilder
 import app.m1k3.ai.domain.tools.services.ToolRegistry
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
-import kotlinx.datetime.Clock
+import kotlin.time.Clock
+import kotlin.time.ExperimentalTime
+import kotlin.time.Instant
 
 /**
  * ChatWithToolsUseCase - Orchestrates chat with tool calling capabilities.
@@ -67,6 +69,7 @@ import kotlinx.datetime.Clock
  * }
  * ```
  */
+@ExperimentalTime
 class ChatWithToolsUseCase(
     private val aiEngine: LlmEngine,
     private val contextRetrieval: ContextRetrieverInterface,
@@ -176,6 +179,10 @@ class ChatWithToolsUseCase(
 
     /**
      * Build prompt with context and tool schemas.
+     *
+     * **Tool Filtering:** Uses getRelevantTools() to filter by query relevance
+     * for small models, reducing prompt bloat from ~150 tokens (all tools)
+     * to 0-50 tokens (0-3 relevant tools).
      */
     private suspend fun buildPromptWithTools(
         userPrompt: String,
@@ -187,11 +194,11 @@ class ChatWithToolsUseCase(
             appendLine()
         }
 
-        // Add tool schemas if tools are available
-        val availableTools = toolRegistry.getAvailableTools()
-        if (availableTools.isNotEmpty()) {
+        // Add tool schemas for relevant tools only
+        val relevantTools = toolRegistry.getRelevantTools(userPrompt, maxTools = 3)
+        if (relevantTools.isNotEmpty()) {
             appendLine("You have access to the following tools:")
-            availableTools.forEach { tool ->
+            relevantTools.forEach { tool ->
                 appendLine("- ${tool.id}: ${tool.description}")
                 if (tool.parameters.isNotEmpty()) {
                     tool.parameters.forEach { param ->

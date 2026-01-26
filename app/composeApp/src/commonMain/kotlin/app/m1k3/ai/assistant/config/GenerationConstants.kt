@@ -36,46 +36,50 @@ object GenerationConstants {
     /**
      * Token limits by query type and device tier.
      *
-     * Educational queries get more tokens for comprehensive explanations.
-     * Technical queries balance detail with precision.
-     * Factual/Conversational queries are more concise.
+     * ALL SET TO 0 = Use engine's getOptimalMaxTokens() for device-adaptive limits.
+     * This unleashes model intelligence by allowing:
+     * - 2GB devices: 1024 tokens (~768 words)
+     * - 6GB devices: 2048 tokens (~1536 words)
+     * - 12GB+ devices: 4096 tokens (~3000 words)
+     *
+     * Model will naturally stop at <end_of_turn> token before hitting limits.
      */
     object TokenLimits {
 
         /** Educational: Teach me, explain, how does X work */
         object Educational {
-            const val FLAGSHIP = 1536    // Full comprehensive teaching
-            const val HIGH_END = 1024    // Detailed explanations
-            const val MID_RANGE = 768    // Balanced detail
-            const val BUDGET = 512       // Concise but complete
-            const val MINIMUM = 512      // Fallback for very low RAM
+            const val FLAGSHIP = 0       // Use engine's getOptimalMaxTokens()
+            const val HIGH_END = 0       // Use engine's getOptimalMaxTokens()
+            const val MID_RANGE = 0      // Use engine's getOptimalMaxTokens()
+            const val BUDGET = 0         // Use engine's getOptimalMaxTokens()
+            const val MINIMUM = 0        // Use engine's getOptimalMaxTokens()
         }
 
         /** Technical: Code, debugging, technical problems */
         object Technical {
-            const val FLAGSHIP = 1024    // Complex code/debugging
-            const val HIGH_END = 768     // Code with explanations
-            const val MID_RANGE = 512    // Focused technical
-            const val BUDGET = 384       // Minimal technical
-            const val MINIMUM = 384      // Fallback
+            const val FLAGSHIP = 0       // Use engine's getOptimalMaxTokens()
+            const val HIGH_END = 0       // Use engine's getOptimalMaxTokens()
+            const val MID_RANGE = 0      // Use engine's getOptimalMaxTokens()
+            const val BUDGET = 0         // Use engine's getOptimalMaxTokens()
+            const val MINIMUM = 0        // Use engine's getOptimalMaxTokens()
         }
 
         /** Factual: Who/what/when/where factual questions */
         object Factual {
-            const val FLAGSHIP = 512     // Detailed facts
-            const val HIGH_END = 384     // Comprehensive facts
-            const val MID_RANGE = 320    // Focused facts
-            const val BUDGET = 256       // Concise facts
-            const val MINIMUM = 256      // Fallback
+            const val FLAGSHIP = 0       // Use engine's getOptimalMaxTokens()
+            const val HIGH_END = 0       // Use engine's getOptimalMaxTokens()
+            const val MID_RANGE = 0      // Use engine's getOptimalMaxTokens()
+            const val BUDGET = 0         // Use engine's getOptimalMaxTokens()
+            const val MINIMUM = 0        // Use engine's getOptimalMaxTokens()
         }
 
         /** Conversational: Casual chat, greetings, general discussion */
         object Conversational {
-            const val FLAGSHIP = 512     // Natural lengthy chat
-            const val HIGH_END = 384     // Conversational
-            const val MID_RANGE = 320    // Friendly chat
-            const val BUDGET = 256       // Brief chat
-            const val MINIMUM = 256      // Fallback
+            const val FLAGSHIP = 0       // Use engine's getOptimalMaxTokens()
+            const val HIGH_END = 0       // Use engine's getOptimalMaxTokens()
+            const val MID_RANGE = 0      // Use engine's getOptimalMaxTokens()
+            const val BUDGET = 0         // Use engine's getOptimalMaxTokens()
+            const val MINIMUM = 0        // Use engine's getOptimalMaxTokens()
         }
     }
 

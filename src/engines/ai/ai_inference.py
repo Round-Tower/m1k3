@@ -33,28 +33,25 @@ except ImportError:
     PROMPT_LOGGER_AVAILABLE = False
     get_prompt_logger = None
 
-# Import Universal Model Engine
-SMOLLM_ENGINE_AVAILABLE = False  # Ensure flag exists
+# Import Universal Model Engine (unified, mobile-aligned)
 try:
     from .universal_model_engine import UniversalModelEngine
-    import sys
-    import os
-    sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
-    from model_tiers import ModelTierManager, DeviceTier
     UNIVERSAL_ENGINE_AVAILABLE = True
-    print("🤖 Universal Model Engine available")
+    print("🤖 Universal Model Engine available (mobile-aligned defaults)")
 except ImportError as e:
     UNIVERSAL_ENGINE_AVAILABLE = False
-    print(f"⚠️ Universal Model Engine not available: {e}")
-    
-    # Fallback to legacy SmolLM engine if universal not available
-    try:
-        from .smollm_engine import SmolLMEngine
-        SMOLLM_ENGINE_AVAILABLE = True
-        print("🤖 Falling back to SmolLM engine")
-    except ImportError as e:
-        SMOLLM_ENGINE_AVAILABLE = False
-        print(f"⚠️ SmolLM engine also not available: {e}")
+    print(f"❌ Universal Model Engine not available: {e}")
+
+# Import ModelTierManager (optional - UniversalEngine has own RAM detection)
+try:
+    import sys
+    import os
+    sys.path.append(os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'scripts'))
+    from model_tiers import ModelTierManager, DeviceTier
+    MODEL_TIER_MANAGER_AVAILABLE = True
+except ImportError as e:
+    MODEL_TIER_MANAGER_AVAILABLE = False
+    print(f"⚠️ ModelTierManager not available (not critical): {e}")
 
 # Import local model manager
 try:
@@ -95,8 +92,10 @@ except ImportError:
     CTRANSFORMERS_AVAILABLE = False
     print("❌ ctransformers not available")
 
-if not CTRANSFORMERS_AVAILABLE and not TRANSFORMERS_AVAILABLE:
-    print("❌ No AI libraries available. Run: pip install transformers torch")
+if not CTRANSFORMERS_AVAILABLE and not TRANSFORMERS_AVAILABLE and not UNIVERSAL_ENGINE_AVAILABLE:
+    print("❌ No AI backends available. Install one of:")
+    print("   • Ollama (for UniversalEngine): https://ollama.ai")
+    print("   • Transformers: pip install transformers torch")
     raise ImportError("No AI backends available")
 
 @dataclass
@@ -177,44 +176,33 @@ class LocalAIEngine:
             self.logger = None
         self.models_dir.mkdir(exist_ok=True)
         
-        # Initialize Universal Model Engine and tier management
+        # Initialize Universal Model Engine (unified, mobile-aligned)
         self.universal_engine = None
-        self.smollm_engine = None  # Legacy fallback
         self.tier_manager = None
         self.device_tier = None
-        if UNIVERSAL_ENGINE_AVAILABLE or SMOLLM_ENGINE_AVAILABLE:
+        if UNIVERSAL_ENGINE_AVAILABLE:
             try:
-                self.tier_manager = ModelTierManager()
-                device_capability, _ = self.tier_manager.recommend_models_for_device()
-                self.device_tier = device_capability.tier
-                print(f"🎯 Device tier detected: {self.device_tier.value}")
-                
+                # Initialize Universal Model Engine with mobile-aligned defaults
+                self.universal_engine = UniversalModelEngine("gemma3:270m")
+                print(f"🤖 Universal M1K3 engine initialized (mobile-aligned)")
+                print(f"   • RAM: {self.universal_engine.device_ram_gb}GB")
+                print(f"   • Max tokens: {self.universal_engine.get_optimal_max_tokens()}")
+
+                # Optional: Initialize ModelTierManager for device analysis
+                if MODEL_TIER_MANAGER_AVAILABLE:
+                    try:
+                        self.tier_manager = ModelTierManager()
+                        device_capability, _ = self.tier_manager.recommend_models_for_device()
+                        self.device_tier = device_capability.tier
+                        print(f"🎯 Device tier: {self.device_tier.value}")
+                    except Exception as e:
+                        print(f"⚠️ ModelTierManager initialization failed (non-critical): {e}")
+
                 # Log all available models
                 self._log_available_models()
-                
-                # Initialize Universal Model Engine (preferred) or SmolLM2 engine (fallback)
-                if UNIVERSAL_ENGINE_AVAILABLE:
-                    self.universal_engine = UniversalModelEngine("gemma3:270m")
-                    print(f"🤖 Universal M1K3 engine initialized for {self.device_tier.value} tier")
-                elif SMOLLM_ENGINE_AVAILABLE:
-                    self.smollm_engine = SmolLMEngine("smollm_config.json")
-                    print(f"🤖 Legacy M1K3 engine initialized for {self.device_tier.value} tier")
-                
-                # Load metadata for default model
-                model_name = "gemma3:270m"  # Default model name
-                if self.universal_engine:
-                    # Universal engine handles metadata internally
-                    pass
-                elif hasattr(self.smollm_engine, 'backend') and self.smollm_engine.backend:
-                    self.model_metadata = self._load_model_metadata(model_name)
-                    if self.model_metadata:
-                        print(f"📋 Loaded model metadata: {model_name}")
-                    else:
-                        print(f"⚠️ Could not load metadata for {model_name}")
             except Exception as e:
                 print(f"⚠️ M1K3 engine initialization failed: {e}")
                 self.universal_engine = None
-                self.smollm_engine = None
         
         # Choose backend: prefer HuggingFace for x86_64 compatibility
         self.use_transformers = TRANSFORMERS_AVAILABLE
@@ -383,8 +371,7 @@ class LocalAIEngine:
         print(f"\n🔧 Available Backends:")
         print(f"   • HuggingFace Transformers: {'✅' if TRANSFORMERS_AVAILABLE else '❌'}")
         print(f"   • ctransformers: {'✅' if CTRANSFORMERS_AVAILABLE else '❌'}")
-        print(f"   • Universal Engine: {'✅' if UNIVERSAL_ENGINE_AVAILABLE else '❌'}")
-        print(f"   • SmolLM Engine: {'✅' if SMOLLM_ENGINE_AVAILABLE else '❌'}")
+        print(f"   • Universal Engine (mobile-aligned): {'✅' if UNIVERSAL_ENGINE_AVAILABLE else '❌'}")
         
         # Device capabilities
         if self.tier_manager:
@@ -444,14 +431,14 @@ class LocalAIEngine:
         return first_model
     
     def _get_hf_equivalent_for_ollama(self, ollama_model: str) -> Optional[str]:
-        """Get HuggingFace equivalent model for ollama model - DEPRECATED, use SmolLM2 engine instead"""
-        print(f"⚠️ Using deprecated HF mapping for {ollama_model} - consider SmolLM2 engine")
-        
-        # Check if we should use SmolLM2 engine instead
-        if ollama_model.startswith('smollm2'):
-            return None  # Will trigger SmolLM2 engine usage
-        
-        # Limited mapping for non-SmolLM models
+        """Get HuggingFace equivalent model for ollama model - DEPRECATED, use Universal engine instead"""
+        print(f"⚠️ Using deprecated HF mapping for {ollama_model} - Universal engine handles this natively")
+
+        # Check if we should use Universal engine instead
+        if ollama_model.startswith('smollm2') or ollama_model.startswith('gemma'):
+            return None  # Will trigger Universal engine usage
+
+        # Limited mapping for legacy models
         legacy_map = {
             'llama3.2:1b': 'TinyLlama/TinyLlama-1.1B-Chat-v1.0',
             'llama3.2:latest': 'TinyLlama/TinyLlama-1.1B-Chat-v1.0',
@@ -462,7 +449,7 @@ class LocalAIEngine:
         if hf_model and self.model_manager and hf_model in self.model_manager.available_models:
             return hf_model
         
-        return None  # No mapping, let SmolLM2 engine handle it
+        return None  # No mapping, let Universal engine handle it
 
     def _get_target_model_name(self) -> Optional[str]:
         """Get target model name for async loading - prioritizes ollama models"""
@@ -834,61 +821,20 @@ class LocalAIEngine:
                 if rag_context:
                     system_prompt += f"\n\nAdditional Context:\n{rag_context}"
                 
-                # Universal engine supports streaming by default
+                # Universal engine supports streaming by default (uses mobile-aligned defaults)
                 for token in self.universal_engine.generate_streaming_response(
-                    prompt, 
+                    prompt,
                     system_prompt=system_prompt,
-                    max_tokens=max_tokens,
-                    temperature=0.7
+                    max_tokens=max_tokens
+                    # temperature defaults to 1.0 (mobile-aligned)
                 ):
                     yield token
                 return
-                    
+
             except Exception as e:
-                print(f"⚠️ Universal engine generation failed: {e}, falling back to legacy engines")
-        
-        # Priority 2: Use legacy SmolLM engine if universal engine fails
-        elif (self.smollm_engine and 
-            hasattr(self.smollm_engine, 'model') and 
-            (self.smollm_engine.model or self.smollm_engine.backend == "ollama")):
-            
-            try:
-                # Use legacy engine for generation
-                print(f"🤖 Using legacy {self.smollm_engine.current_model_name} for generation")
-                
-                # Get adaptive parameters and auto-select style based on intent
-                adaptive_params = self._get_adaptive_generation_params(max_tokens, prompt)
-                auto_style = self._determine_auto_style(prompt, adaptive_params)
-                
-                # Apply auto style to SmolLM2
-                if auto_style and hasattr(self.smollm_engine, 'set_response_style'):
-                    self.smollm_engine.set_response_style(auto_style)
-                
-                # Pass session context and adaptive params
-                session_context = getattr(self, 'session_context', {})
-                
-                # Add RAG context if available
-                rag_context = self._get_rag_context(prompt)
-                if rag_context:
-                    session_context = session_context.copy()
-                    session_context['rag_context'] = rag_context
-                
-                # Check if streaming is supported
-                if hasattr(self.smollm_engine, 'stream_generate') and self.smollm_engine.backend == "ollama":
-                    # Stream from SmolLM2 if supported
-                    for token in self.smollm_engine.stream_generate(prompt, session_context, adaptive_params):
-                        yield token
-                else:
-                    # Non-streaming generation
-                    response = self.smollm_engine.generate(prompt, use_context=True, session_context=session_context, adaptive_params=adaptive_params)
-                    yield response
-                return
-                
-            except Exception as e:
-                print(f"⚠️ SmolLM2 generation failed: {e}, falling back to legacy engine")
-                # Continue to legacy engine below
-        
-        # Priority 2: Legacy engine fallback
+                print(f"⚠️ Universal engine generation failed: {e}, falling back to SimpleAI")
+
+        # Priority 2: SimpleAI engine fallback
         if not self.model:
             # Try SimpleAI engine as final fallback
             try:
@@ -1142,10 +1088,6 @@ class LocalAIEngine:
         # Also clear Universal engine context if available
         if self.universal_engine and hasattr(self.universal_engine, 'clear_context'):
             self.universal_engine.clear_context()
-        
-        # Also clear SmolLM2 context if available (legacy fallback)
-        if self.smollm_engine and hasattr(self.smollm_engine, 'clear_context'):
-            self.smollm_engine.clear_context()
         
         print("Conversation context cleared.")
         

@@ -32,7 +32,7 @@ class MemoryManagerInterfaceTest {
                 chunkIndex = 0,
                 chunkTotal = 1,
                 messageId = messageId,
-                createdAt = Clock.System.now().toEpochMilliseconds()
+                createdAt = Clock.System.now().epochMilliseconds
             )
             memories.add(memory)
             return Result.success(1)

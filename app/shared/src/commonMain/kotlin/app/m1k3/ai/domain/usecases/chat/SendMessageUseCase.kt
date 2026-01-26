@@ -11,7 +11,10 @@ import app.m1k3.ai.domain.chat.services.ContextRetrieverInterface
 import app.m1k3.ai.domain.config.GenerationConfigBuilder
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
-import kotlinx.datetime.Clock
+import kotlin.time.Clock
+import kotlin.time.ExperimentalTime
+import kotlin.time.Instant
+
 
 /**
  * SendMessageUseCase - Orchestrates sending a message and generating AI response.
@@ -47,6 +50,7 @@ import kotlinx.datetime.Clock
  * - Event-Driven: Emits events for UI updates (no direct state mutation)
  * - Fail-Safe: Catches and reports errors as events
  */
+@ExperimentalTime
 class SendMessageUseCase(
     private val aiEngine: LlmEngine,
     private val contextRetrieval: ContextRetrieverInterface,

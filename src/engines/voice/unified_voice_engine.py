@@ -9,17 +9,22 @@ import time
 import threading
 import numpy as np
 from typing import List, Dict, Any, Optional
+import logging
 
 from src.tts.controllers.kittentts_manager import KittenManager
 from src.tts.controllers.vibevoice_manager import VibeVoiceManager
 from src.tts.controllers.piper_tts_manager import piper_manager
 from src.tts.controllers.espeak_tts_manager import espeak_manager
+from src.tts.controllers.kokoro_tts_manager import kokoro_manager
 from src.utils.text_processors import smart_text_chunking
 from src.tts.effects.audio_effects import AudioEffect
 from src.engines.voice.simple_voice_engine import SimpleVoiceEngine
 from src.tts.effects.audio_completion_engine import AudioCompletionEngine
 from src.tts.streaming.realtime_processor import StreamingTextProcessor, ConversationFlowOptimizer
 from src.engines.voice.intelligent_tts_engine import intelligent_tts_engine, TTSQuality
+from src.tts.profiles import profile_registry
+
+logger = logging.getLogger(__name__)
 
 class UnifiedVoiceEngine:
     """
@@ -40,6 +45,7 @@ class UnifiedVoiceEngine:
         self.kitten_manager = KittenManager  # KittenManager is already a singleton instance
         self.vibevoice_manager = VibeVoiceManager()  # VibeVoice manager instance
         self.piper_manager = piper_manager  # Piper TTS manager (singleton)
+        self.kokoro_manager = kokoro_manager  # Kokoro-82M TTS manager (singleton, ONNX)
         self.espeak_manager = espeak_manager  # eSpeak TTS manager (singleton)
         self.fallback_engine = SimpleVoiceEngine()
 
@@ -72,7 +78,25 @@ class UnifiedVoiceEngine:
         # Voice profiles with audio effect configurations
         # Standard effects: compression, normalization, formant_correction for quality
         # Intercom effects: the main differentiator between profiles
-        self.profiles = {
+
+        # NEW: Load profiles from JSON config (with inline fallback for backward compatibility)
+        try:
+            self.profiles = profile_registry.get_profiles_dict()
+            logger.info(f"Loaded {len(self.profiles)} voice profiles from JSON config")
+        except Exception as e:
+            logger.warning(f"Failed to load profiles from JSON, using inline fallback: {e}")
+            self.profiles = self._get_inline_profiles()
+
+        # Keep inline profiles as private method for fallback
+        self._inline_profiles = self._get_inline_profiles()
+
+    def _get_inline_profiles(self) -> Dict[str, Dict[str, Any]]:
+        """Get inline profile definitions (fallback).
+
+        Returns:
+            Dictionary of profile configurations
+        """
+        return {
             # Real-time optimized profiles (NEW - for ultra-fast chat)
             "realtime": {
                 "description": "Ultra-fast real-time chat using Piper TTS (sub-50ms)",
@@ -94,6 +118,48 @@ class UnifiedVoiceEngine:
                 "preferred_engine": "piper",
                 "speed": 1.0,
                 "optimization": "balanced"
+            },
+            "mobile": {
+                "description": "Mobile-optimized M1K3 voice (Piper Lessac - 60MB, Radio Chat)",
+                "effects": ["light_intercom", "compression", "normalization"],
+                "preferred_engine": "piper",
+                "voice": "en_US-lessac-low",
+                "speed": 1.4,  # Perfect conversational pace
+                "optimization": "mobile"
+            },
+
+            # Kokoro-82M profiles (NEW - SOTA lightweight TTS, #1 on TTS Arena)
+            "kokoro": {
+                "description": "Kokoro-82M M1K3 default (Daniel - British Male, Radio Chat style)",
+                "effects": ["light_intercom", "compression", "normalization"],
+                "preferred_engine": "kokoro",
+                "voice": "bm_daniel",  # British Male - Daniel (M1K3's voice)
+                "speed": 1.0,
+                "optimization": "balanced"
+            },
+            "kokoro_male": {
+                "description": "Kokoro-82M with American Male voice (Adam)",
+                "effects": ["compression", "normalization"],
+                "preferred_engine": "kokoro",
+                "voice": "am_adam",  # American Male - Adam
+                "speed": 1.0,
+                "optimization": "balanced"
+            },
+            "kokoro_british": {
+                "description": "Kokoro-82M with British Female voice (Alice)",
+                "effects": ["light_intercom", "compression", "normalization"],
+                "preferred_engine": "kokoro",
+                "voice": "bf_alice",  # British Female - Alice
+                "speed": 0.95,
+                "optimization": "quality"
+            },
+            "kokoro_fast": {
+                "description": "Kokoro-82M optimized for maximum speed (Sky)",
+                "effects": ["compression"],
+                "preferred_engine": "kokoro",
+                "voice": "af_sky",  # American Female - Sky
+                "speed": 1.2,
+                "optimization": "speed"
             },
 
             # Traditional profiles (updated with new engine priorities)
@@ -254,6 +320,26 @@ class UnifiedVoiceEngine:
                     print("🔄 Piper TTS loading failed, trying next engine...")
             else:
                 print("🔄 Piper TTS not available, trying next engine...")
+
+        # Priority 2.5: Kokoro-82M - SOTA lightweight TTS (#1 TTS Arena, 82M params)
+        if self.preferred_engine == "kokoro" or not self.is_loaded:
+            if self.kokoro_manager.is_available():
+                print("🔄 Attempting Kokoro-82M TTS loading...")
+                start_time = time.time()
+
+                if self.kokoro_manager.load_model():
+                    load_time = time.time() - start_time
+                    self.is_loaded = True
+                    self.voice_enabled = True
+                    self.preferred_engine = "kokoro"
+                    print(f"✅ Kokoro-82M TTS engine loaded successfully ({load_time:.2f}s)")
+                    print(f"   82M parameters - #1 on TTS Arena")
+                    self._configure_effects_pipeline()
+                    return True
+                else:
+                    print("🔄 Kokoro-82M loading failed, trying next engine...")
+            else:
+                print("🔄 Kokoro-82M not available, trying next engine...")
 
         # Priority 3: eSpeak - Ultra-fast fallback (sub-10ms) - ONLY if no better options
         if self.preferred_engine == "espeak" or not self.is_loaded:
@@ -443,6 +529,8 @@ class UnifiedVoiceEngine:
             return self.intelligent_engine.synthesize_and_play(text, background=False, quality=TTSQuality.BALANCED)
         elif self.preferred_engine == "piper" and self.piper_manager.is_available():
             return self._synthesis_with_piper(text)
+        elif self.preferred_engine == "kokoro" and self.kokoro_manager.is_available():
+            return self._synthesis_with_kokoro(text)
         elif self.preferred_engine == "espeak" and self.espeak_manager.is_available():
             return self._synthesis_with_espeak(text)
         elif self.preferred_engine == "vibevoice" and self.vibevoice_manager.is_available():
@@ -499,6 +587,54 @@ class UnifiedVoiceEngine:
 
         except Exception as e:
             print(f"❌ Piper TTS synthesis failed: {e}")
+            return self._synthesis_with_espeak(text)
+
+    def _synthesis_with_kokoro(self, text: str):
+        """Synthesis using Kokoro-82M TTS engine - SOTA lightweight neural TTS"""
+        try:
+            import sounddevice as sd
+
+            print("🎯 Using Kokoro-82M TTS (82M params, #1 TTS Arena)...")
+            start_time = time.time()
+
+            # Get current profile settings for Kokoro optimization
+            profile = self.profiles.get(self.current_profile, {})
+            voice = profile.get("voice", "af")  # Default to American Female
+            speed = profile.get("speed", 1.0)
+
+            # Set voice if profile specifies it
+            if hasattr(self.kokoro_manager, 'set_voice'):
+                self.kokoro_manager.set_voice(voice)
+
+            # Generate audio using Kokoro
+            raw_audio = self.kokoro_manager.generate(text, voice=voice, speed=speed)
+            if raw_audio is None:
+                print("⚠️ Kokoro-82M generation failed, falling back to next engine...")
+                return self._synthesis_with_espeak(text)
+
+            synthesis_time = time.time() - start_time
+            duration = len(raw_audio) / self.kokoro_manager.sample_rate
+
+            # Apply effects pipeline
+            processed_audio = self._apply_effects_pipeline(raw_audio)
+
+            # Add minimal padding for clean playback
+            pre_padding = np.zeros(int(0.01 * self.kokoro_manager.sample_rate), dtype=np.float32)  # 10ms
+            end_padding = np.zeros(int(0.05 * self.kokoro_manager.sample_rate), dtype=np.float32)  # 50ms
+            processed_audio = np.concatenate([pre_padding, processed_audio, end_padding])
+
+            # Play audio
+            if self._safe_audio_play(processed_audio, self.kokoro_manager.sample_rate):
+                print(f"✅ Kokoro-82M: {duration:.2f}s audio in {synthesis_time:.3f}s (RTF: {synthesis_time/duration:.2f}x)")
+                return True
+            else:
+                print("⚠️ Audio playback failed, but synthesis completed successfully")
+                return True
+
+        except Exception as e:
+            print(f"❌ Kokoro-82M synthesis failed: {e}")
+            import traceback
+            traceback.print_exc()
             return self._synthesis_with_espeak(text)
 
     def _synthesis_with_espeak(self, text: str):
@@ -1141,6 +1277,78 @@ class UnifiedVoiceEngine:
             status["conversation_stats"] = self.conversation_optimizer.get_conversation_stats()
 
         return status
+
+    # Profile Discovery API
+    def get_available_profiles(self) -> Dict[str, str]:
+        """Get all available voice profiles.
+
+        Returns:
+            Dictionary mapping profile_id to description
+        """
+        try:
+            return profile_registry.list_all()
+        except Exception as e:
+            logger.warning(f"Failed to get profiles from registry: {e}")
+            # Fallback to inline profiles
+            return {
+                profile_id: config.get("description", "")
+                for profile_id, config in self._inline_profiles.items()
+            }
+
+    def search_profiles(self, query: str) -> Dict[str, str]:
+        """Search profiles by name or description.
+
+        Args:
+            query: Search query (case-insensitive)
+
+        Returns:
+            Dictionary mapping profile_id to description for matching profiles
+        """
+        try:
+            return profile_registry.search_profiles(query)
+        except Exception as e:
+            logger.warning(f"Failed to search profiles in registry: {e}")
+            # Fallback to inline search
+            query_lower = query.lower()
+            return {
+                profile_id: config.get("description", "")
+                for profile_id, config in self._inline_profiles.items()
+                if query_lower in profile_id.lower()
+                or query_lower in config.get("description", "").lower()
+            }
+
+    def list_profiles_by_engine(self, engine: str) -> List[str]:
+        """List profiles for a specific engine.
+
+        Args:
+            engine: Engine name (e.g., 'kokoro', 'piper', 'kitten')
+
+        Returns:
+            List of profile IDs that use this engine
+        """
+        try:
+            return profile_registry.list_by_engine(engine)
+        except Exception as e:
+            logger.warning(f"Failed to list profiles by engine: {e}")
+            # Fallback to inline profiles
+            return [
+                profile_id
+                for profile_id, config in self._inline_profiles.items()
+                if config.get("preferred_engine") == engine
+            ]
+
+    def reload_profiles(self):
+        """Reload profiles from configuration.
+
+        Useful for updating profiles without restarting the application.
+        """
+        try:
+            profile_registry.reload()
+            self.profiles = profile_registry.get_profiles_dict()
+            logger.info(f"Reloaded {len(self.profiles)} voice profiles")
+        except Exception as e:
+            logger.error(f"Failed to reload profiles: {e}")
+            self.profiles = self._inline_profiles
 
 if __name__ == "__main__":
     print("Testing Unified Voice Engine...")

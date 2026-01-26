@@ -1,10 +1,9 @@
 package app.m1k3.ai.assistant.avatar
 
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.hours
 import kotlinx.datetime.Clock
 import kotlinx.datetime.Instant
-import kotlin.time.Duration
-import kotlin.time.Duration.Companion.minutes
-import kotlin.time.Duration.Companion.hours
 
 /**
  * 間 AI Pixel Pet Care System

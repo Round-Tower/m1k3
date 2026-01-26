@@ -33,5 +33,5 @@ data class GenerationConfig(
     val topP: Float? = 0.95f,
     val topK: Int? = 64,
     val minP: Float? = 0.0f,
-    val repetitionPenalty: Float? = 1.0f
+    val repetitionPenalty: Float? = 1.1f
 )

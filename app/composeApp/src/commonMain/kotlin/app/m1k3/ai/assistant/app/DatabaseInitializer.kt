@@ -19,8 +19,7 @@ sealed class DatabaseInitResult {
 sealed class KnowledgeImportResult {
     data class Success(
         val totalDocs: Int,
-        val comprehensiveDocs: Int,
-        val systemDocs: Int
+        val curatedDocs: Int  // All docs are curated in v2.0.0
     ) : KnowledgeImportResult()
 
     data class AlreadyImported(val existingDocs: Long) : KnowledgeImportResult()

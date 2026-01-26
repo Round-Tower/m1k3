@@ -56,6 +56,7 @@ import app.m1k3.ai.assistant.app.InitializationResult
 import app.m1k3.ai.assistant.app.KnowledgeImportResult
 import app.m1k3.ai.assistant.avatar.FilamentEngineManager
 import app.m1k3.ai.assistant.avatar.LocalSharedAvatarVM
+import app.m1k3.ai.assistant.embedding.EmbeddingEngineManager
 import app.m1k3.ai.assistant.avatar.ProvideSharedEngine
 import app.m1k3.ai.assistant.avatar.collectAsState
 import app.m1k3.ai.assistant.avatar.rememberAvatarViewModel
@@ -103,6 +104,7 @@ import androidx.compose.ui.graphics.toArgb
  */
 class MainActivity : ComponentActivity() {
     private val aiEngine: BaseLlmEngine by inject()
+    private val embeddingManager: EmbeddingEngineManager by inject()
     private val logger = Logger.withTag("MainActivity")
 
     @OptIn(ExperimentalMaterial3Api::class)
@@ -141,6 +143,15 @@ class MainActivity : ComponentActivity() {
         val filamentResult = appInitManager.initializeFilament()
         if (filamentResult !is InitializationResult.Success) {
             logger.e { "Filament initialization failed" }
+        }
+
+        // Initialize embedding engine for RAG/semantic search
+        lifecycleScope.launch {
+            embeddingManager.initialize().onFailure { e ->
+                logger.e(e) { "Embedding engine initialization failed" }
+            }.onSuccess {
+                logger.i { "Embedding engine loaded successfully" }
+            }
         }
 
         setContent {

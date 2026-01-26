@@ -272,6 +272,9 @@ class ExecuteToolUseCaseTest {
         override suspend fun getAvailableTools(): List<Tool> =
             tools.values.filter { executors[it.id]?.isAvailable() == true }
 
+        override suspend fun getRelevantTools(query: String, maxTools: Int): List<Tool> =
+            getAvailableTools().take(maxTools)  // Simplified for testing
+
         override fun findTool(toolId: String): Tool? = tools[toolId]
 
         override suspend fun isToolAvailable(toolId: String): Boolean =

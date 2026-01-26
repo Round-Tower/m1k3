@@ -61,6 +61,8 @@ class ProcessLlmOutputUseCaseTest {
         override fun findTool(toolId: String): Tool? = tools[toolId]
         override fun getExecutor(toolId: String): ToolExecutor? = executors[toolId]
         override suspend fun getAvailableTools(): List<Tool> = tools.values.toList()
+        override suspend fun getRelevantTools(query: String, maxTools: Int): List<Tool> =
+            tools.values.take(maxTools)  // Simplified for testing
         override fun getToolsByCategory(category: ToolCategory): List<Tool> =
             tools.values.filter { it.category == category }
         override suspend fun isToolAvailable(toolId: String): Boolean =

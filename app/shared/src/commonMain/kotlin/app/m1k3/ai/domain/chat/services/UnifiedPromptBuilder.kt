@@ -39,7 +39,7 @@ class UnifiedPromptBuilder(
 ) {
     companion object {
         private const val DEFAULT_SYSTEM_PROMPT =
-            "You are M1k3, a pocket intelligence - always help the user complete their goal, always think step by step and be curious"
+            "You are M1k3, a helpful AI. Answer questions directly and conversationally."
     }
 
     /**

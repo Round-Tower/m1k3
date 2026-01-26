@@ -34,6 +34,14 @@ kotlin {
     // Note: JS and WASM targets removed - not needed for mobile app
 
     sourceSets {
+        all {
+            languageSettings {
+                // Enable experimental datetime APIs to suppress warnings
+                optIn("kotlin.time.ExperimentalTime")
+                optIn("kotlinx.datetime.ExperimentalDateTimeApi")
+            }
+        }
+
         androidMain.dependencies {
             implementation(compose.preview)
             implementation(libs.androidx.activity.compose)
