@@ -29,7 +29,8 @@ from src.tts.controllers.piper_tts_manager import PiperTTSManager
 from src.tts.controllers.kokoro_tts_manager import KokoroTTSManager
 from src.tts.effects.audio_effects import (
     PitchShiftEffect, RobotVoiceEffect, EchoEffect,
-    ChorusEffect, LoFiEffect, MultibandLoFiEffect, FlangerEffect, ReverbEffect
+    ChorusEffect, LoFiEffect, MultibandLoFiEffect, FlangerEffect, ReverbEffect,
+    IntercomEffect
 )
 
 # Initialize the TTS engines globally
@@ -94,9 +95,9 @@ async def handle_list_tools() -> list[types.Tool]:
                     },
                     "effect": {
                         "type": "string",
-                        "enum": ["none", "robot", "chipmunk", "giant", "echo", "reverb", "chorus", "lofi", "nostalgic", "flanger"],
-                        "description": "Fun audio effect to apply (default: none). robot=mechanical voice, chipmunk=high pitch, giant=deep voice, echo=delay, reverb=spacious, chorus=rich harmonies, lofi=retro sound, nostalgic=vintage warmth with vocal clarity, flanger=swooshing",
-                        "default": "none"
+                        "enum": ["none", "intercom", "robot", "chipmunk", "giant", "echo", "reverb", "chorus", "lofi", "nostalgic", "flanger"],
+                        "description": "Audio effect to apply (default: intercom). intercom=radio/walkie-talkie bandpass (300-3400Hz), robot=mechanical voice, chipmunk=high pitch, giant=deep voice, echo=delay, reverb=spacious, chorus=rich harmonies, lofi=retro sound, nostalgic=vintage warmth with vocal clarity, flanger=swooshing",
+                        "default": "intercom"
                     },
                     "effect_intensity": {
                         "type": "number",
@@ -182,7 +183,7 @@ async def handle_call_tool(
             # Get voice and effect parameters
             voice_override = arguments.get("voice")
             voice = voice_override or current_voice
-            effect_name = arguments.get("effect", "none")
+            effect_name = arguments.get("effect", "intercom")
             effect_intensity = arguments.get("effect_intensity", 0.7)
 
             # Detect which engine to use based on voice prefix
@@ -238,7 +239,15 @@ async def handle_call_tool(
                 print(f"🎨 Applying {effect_name} effect (intensity: {effect_intensity})", file=sys.stderr)
                 try:
                     # Create and apply effect
-                    if effect_name == "robot":
+                    if effect_name == "intercom":
+                        # Intercom/radio bandpass filter (300-3400 Hz)
+                        effect = IntercomEffect({
+                            "low_freq": 300,
+                            "high_freq": 3400
+                        })
+                        audio_data = effect.apply(audio_data, sample_rate)
+
+                    elif effect_name == "robot":
                         # Default to vintage preset for nostalgic 80s robot sound
                         effect = RobotVoiceEffect({
                             "preset": "vintage",
@@ -492,6 +501,12 @@ async def handle_call_tool(
 async def main():
     """Main entry point for the MCP server"""
     print("🚀 Starting M1K3 TTS MCP Server...", file=sys.stderr)
+
+    # Enable GPU acceleration via CoreML (macOS) or CUDA (Linux/Windows)
+    # kokoro_onnx respects the ONNX_PROVIDER environment variable
+    if not os.getenv("ONNX_PROVIDER"):
+        os.environ["ONNX_PROVIDER"] = "CoreMLExecutionProvider"
+        print("🎮 GPU acceleration enabled (CoreML)", file=sys.stderr)
 
     # Initialize TTS engine
     if not initialize_tts():
