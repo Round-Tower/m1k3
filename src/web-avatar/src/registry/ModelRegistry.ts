@@ -172,6 +172,66 @@ export const MODELS = {
     supportsEmotions: true,
     defaultForNewUsers: false,
   },
+
+  // ============================================================
+  // Community Models (CC0 / Public Domain)
+  // ============================================================
+
+  /** Fox (Khronos glTF sample) */
+  FOX: {
+    id: "fox",
+    name: "Fox",
+    path: "models/Fox.glb",
+    description: "Low-poly fox with Survey, Walk, Run animations",
+    category: "mammal",
+    modelType: "ANIMATED" as ModelType,
+    hasAnimations: true,
+    supportsEmotions: true,
+    defaultForNewUsers: false,
+    attribution: "CC0 - PixelMannen via Khronos glTF Samples",
+  },
+
+  /** Cesium Man (Khronos glTF sample) */
+  CESIUM_MAN: {
+    id: "cesium-man",
+    name: "Cesium Man",
+    path: "models/CesiumMan.glb",
+    description: "Animated human figure with walking animation",
+    category: "humanoid",
+    modelType: "ANIMATED" as ModelType,
+    hasAnimations: true,
+    supportsEmotions: true,
+    defaultForNewUsers: false,
+    attribution: "CC0 - Cesium via Khronos glTF Samples",
+  },
+
+  /** BrainStem Robot (Khronos glTF sample) */
+  BRAINSTEM: {
+    id: "brainstem",
+    name: "BrainStem Robot",
+    path: "models/BrainStem.glb",
+    description: "Animated robot with multiple joint animations",
+    category: "robot",
+    modelType: "ANIMATED" as ModelType,
+    hasAnimations: true,
+    supportsEmotions: true,
+    defaultForNewUsers: false,
+    attribution: "CC0 - Smith Micro via Khronos glTF Samples",
+  },
+
+  /** Simple Robot (sokobot-3d) */
+  ROBOT: {
+    id: "robot",
+    name: "Simple Robot",
+    path: "models/robot.glb",
+    description: "Cute low-poly robot",
+    category: "robot",
+    modelType: "ANIMATED" as ModelType,
+    hasAnimations: true,
+    supportsEmotions: true,
+    defaultForNewUsers: false,
+    attribution: "CC0 - sokobot-3d project",
+  },
 } as const satisfies Record<string, ModelConfig>;
 
 /**
