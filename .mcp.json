@@ -1,8 +1,8 @@
 {
   "mcpServers": {
-    "m1k3-tts": {
+    "m1k3": {
       "command": "python",
-      "args": ["mcp_tts_server.py"],
+      "args": ["mcp_unified_server.py"],
       "env": {
         "PYTHONPATH": "/Users/kevinmurphy/Development/m1k3"
       }

@@ -1,0 +1,359 @@
+/**
+ * 間 AI Avatar Renderer
+ *
+ * Main THREE.js renderer for the 3D avatar system.
+ * Handles scene setup, lighting, camera, and rendering loop.
+ */
+
+import * as THREE from "three";
+import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
+import { GLBModelLoader, type LoadedModel } from "./GLBModelLoader";
+import { CameraAutoFit } from "./CameraAutoFit";
+import { AnimationController } from "../animation/AnimationController";
+import type { AvatarState } from "../animation/AvatarState";
+import { DEFAULT_AVATAR_STATE } from "../animation/AvatarState";
+import { ModelRegistry } from "../registry/ModelRegistry";
+
+/**
+ * Avatar renderer options
+ */
+export interface AvatarRendererOptions {
+  /** Container element or selector */
+  container: HTMLElement | string;
+  /** Initial model ID (default: "colobus") */
+  modelId?: string;
+  /** Base URL for model assets */
+  assetsBasePath?: string;
+  /** Enable orbit controls (default: true) */
+  enableControls?: boolean;
+  /** Background color (default: transparent) */
+  backgroundColor?: string | null;
+  /** Enable shadows (default: false) */
+  enableShadows?: boolean;
+  /** Pixel ratio (default: devicePixelRatio) */
+  pixelRatio?: number;
+  /** Antialias (default: true) */
+  antialias?: boolean;
+}
+
+const DEFAULT_OPTIONS: Required<Omit<AvatarRendererOptions, "container">> = {
+  modelId: "colobus",
+  assetsBasePath: "assets/",
+  enableControls: true,
+  backgroundColor: null,
+  enableShadows: false,
+  pixelRatio: typeof window !== "undefined" ? window.devicePixelRatio : 1,
+  antialias: true,
+};
+
+/**
+ * Avatar Renderer
+ *
+ * Main class for rendering 3D avatars.
+ */
+export class AvatarRenderer {
+  private container: HTMLElement;
+  private options: Required<Omit<AvatarRendererOptions, "container">>;
+
+  private renderer: THREE.WebGLRenderer;
+  private scene: THREE.Scene;
+  private camera: THREE.PerspectiveCamera;
+  private controls: OrbitControls | null = null;
+  private clock: THREE.Clock;
+
+  private currentModel: LoadedModel | null = null;
+  private animationController: AnimationController | null = null;
+  private currentState: AvatarState = DEFAULT_AVATAR_STATE;
+
+  private animationFrameId: number | null = null;
+  private isRunning = false;
+
+  constructor(options: AvatarRendererOptions) {
+    // Resolve container
+    this.container =
+      typeof options.container === "string"
+        ? document.querySelector(options.container) as HTMLElement
+        : options.container;
+
+    if (!this.container) {
+      throw new Error("Container element not found");
+    }
+
+    this.options = { ...DEFAULT_OPTIONS, ...options };
+
+    // Initialize THREE.js
+    this.scene = new THREE.Scene();
+    this.clock = new THREE.Clock();
+
+    // Setup renderer
+    this.renderer = new THREE.WebGLRenderer({
+      antialias: this.options.antialias,
+      alpha: this.options.backgroundColor === null,
+    });
+    this.renderer.setPixelRatio(this.options.pixelRatio);
+    this.renderer.setSize(this.container.clientWidth, this.container.clientHeight);
+    this.renderer.outputColorSpace = THREE.SRGBColorSpace;
+
+    if (this.options.backgroundColor) {
+      this.renderer.setClearColor(this.options.backgroundColor);
+    }
+
+    if (this.options.enableShadows) {
+      this.renderer.shadowMap.enabled = true;
+      this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    }
+
+    this.container.appendChild(this.renderer.domElement);
+
+    // Setup camera
+    const aspect = this.container.clientWidth / this.container.clientHeight;
+    this.camera = new THREE.PerspectiveCamera(45, aspect, 0.1, 1000);
+    this.camera.position.set(0, 1, 5);
+
+    // Setup controls
+    if (this.options.enableControls) {
+      this.controls = new OrbitControls(this.camera, this.renderer.domElement);
+      this.controls.enableDamping = true;
+      this.controls.dampingFactor = 0.05;
+      this.controls.minDistance = 1;
+      this.controls.maxDistance = 20;
+    }
+
+    // Setup lighting
+    this.setupLighting();
+
+    // Handle resize
+    window.addEventListener("resize", this.handleResize);
+  }
+
+  /**
+   * Setup scene lighting
+   */
+  private setupLighting(): void {
+    // Ambient light for base illumination
+    const ambient = new THREE.AmbientLight(0xffffff, 0.6);
+    this.scene.add(ambient);
+
+    // Main directional light (sun-like)
+    const main = new THREE.DirectionalLight(0xffffff, 0.8);
+    main.position.set(5, 10, 7);
+    if (this.options.enableShadows) {
+      main.castShadow = true;
+      main.shadow.mapSize.width = 1024;
+      main.shadow.mapSize.height = 1024;
+    }
+    this.scene.add(main);
+
+    // Fill light from opposite side
+    const fill = new THREE.DirectionalLight(0xffffff, 0.3);
+    fill.position.set(-5, 5, -7);
+    this.scene.add(fill);
+
+    // Rim light for edge definition
+    const rim = new THREE.DirectionalLight(0xffffff, 0.4);
+    rim.position.set(0, 5, -10);
+    this.scene.add(rim);
+  }
+
+  /**
+   * Load and display a model
+   *
+   * @param modelId Model ID from registry
+   * @param onProgress Progress callback (0-1)
+   */
+  async loadModel(
+    modelId: string,
+    onProgress?: (progress: number) => void
+  ): Promise<void> {
+    // Get model config
+    const config = ModelRegistry.getById(modelId);
+    if (!config) {
+      throw new Error(`Model "${modelId}" not found in registry`);
+    }
+
+    // Unload current model
+    this.unloadModel();
+
+    // Load new model
+    const url = this.options.assetsBasePath + config.path;
+    this.currentModel = await GLBModelLoader.load(url, onProgress);
+
+    // Add to scene
+    this.scene.add(this.currentModel.scene);
+
+    // Setup camera to frame model
+    const cameraConfig = CameraAutoFit.threeQuarterView(
+      this.currentModel.metadata,
+      1.8
+    );
+    this.camera.position.set(
+      cameraConfig.position.x,
+      cameraConfig.position.y,
+      cameraConfig.position.z
+    );
+    this.camera.fov = cameraConfig.fov;
+    this.camera.updateProjectionMatrix();
+
+    if (this.controls) {
+      this.controls.target.set(
+        cameraConfig.lookAt.x,
+        cameraConfig.lookAt.y,
+        cameraConfig.lookAt.z
+      );
+      this.controls.update();
+    }
+
+    // Setup animation controller
+    if (this.currentModel.animations.length > 0) {
+      this.animationController = new AnimationController(
+        this.currentModel.scene,
+        this.currentModel.animations,
+        this.currentModel.metadata.animations
+      );
+
+      // Apply current state
+      this.animationController.updateFromState(this.currentState);
+    }
+  }
+
+  /**
+   * Unload current model
+   */
+  unloadModel(): void {
+    if (this.currentModel) {
+      this.scene.remove(this.currentModel.scene);
+      this.currentModel.scene.traverse((object) => {
+        if (object instanceof THREE.Mesh) {
+          object.geometry.dispose();
+          if (Array.isArray(object.material)) {
+            object.material.forEach((m) => m.dispose());
+          } else {
+            object.material.dispose();
+          }
+        }
+      });
+    }
+
+    if (this.animationController) {
+      this.animationController.dispose();
+      this.animationController = null;
+    }
+
+    this.currentModel = null;
+  }
+
+  /**
+   * Update avatar state (emotion, activity, intensity)
+   */
+  setState(state: Partial<AvatarState>): void {
+    this.currentState = { ...this.currentState, ...state };
+
+    if (this.animationController) {
+      this.animationController.updateFromState(this.currentState);
+    }
+  }
+
+  /**
+   * Get current avatar state
+   */
+  getState(): AvatarState {
+    return { ...this.currentState };
+  }
+
+  /**
+   * Start render loop
+   */
+  start(): void {
+    if (this.isRunning) return;
+    this.isRunning = true;
+    this.clock.start();
+    this.animate();
+  }
+
+  /**
+   * Stop render loop
+   */
+  stop(): void {
+    this.isRunning = false;
+    if (this.animationFrameId !== null) {
+      cancelAnimationFrame(this.animationFrameId);
+      this.animationFrameId = null;
+    }
+  }
+
+  /**
+   * Animation loop
+   */
+  private animate = (): void => {
+    if (!this.isRunning) return;
+
+    this.animationFrameId = requestAnimationFrame(this.animate);
+
+    const delta = this.clock.getDelta();
+
+    // Update animation
+    if (this.animationController) {
+      this.animationController.update(delta);
+    }
+
+    // Update controls
+    if (this.controls) {
+      this.controls.update();
+    }
+
+    // Render
+    this.renderer.render(this.scene, this.camera);
+  };
+
+  /**
+   * Handle window resize
+   */
+  private handleResize = (): void => {
+    const width = this.container.clientWidth;
+    const height = this.container.clientHeight;
+
+    this.camera.aspect = width / height;
+    this.camera.updateProjectionMatrix();
+
+    this.renderer.setSize(width, height);
+  };
+
+  /**
+   * Get current model metadata
+   */
+  getModelMetadata() {
+    return this.currentModel?.metadata ?? null;
+  }
+
+  /**
+   * Get animation controller
+   */
+  getAnimationController(): AnimationController | null {
+    return this.animationController;
+  }
+
+  /**
+   * Take screenshot
+   */
+  takeScreenshot(): string {
+    this.renderer.render(this.scene, this.camera);
+    return this.renderer.domElement.toDataURL("image/png");
+  }
+
+  /**
+   * Dispose of all resources
+   */
+  dispose(): void {
+    this.stop();
+    this.unloadModel();
+
+    window.removeEventListener("resize", this.handleResize);
+
+    if (this.controls) {
+      this.controls.dispose();
+    }
+
+    this.renderer.dispose();
+    this.container.removeChild(this.renderer.domElement);
+  }
+}

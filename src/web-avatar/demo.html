@@ -1,0 +1,551 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>間 AI - Avatar Demo</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, #0f0f1a 0%, #1a1a2e 50%, #16213e 100%);
+      color: #fff;
+      min-height: 100vh;
+      overflow: hidden;
+    }
+
+    .demo-container {
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 2rem;
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 1rem;
+    }
+
+    .logo {
+      font-size: 3rem;
+      font-weight: 700;
+      background: linear-gradient(135deg, #E25303, #ff8c42);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .tagline {
+      color: #888;
+      font-size: 1.1rem;
+      margin-top: 0.5rem;
+    }
+
+    .main-content {
+      flex: 1;
+      display: flex;
+      gap: 2rem;
+      min-height: 0;
+    }
+
+    #avatar-container {
+      flex: 2;
+      background: radial-gradient(ellipse at center, #1a1a2e 0%, #0a0a15 100%);
+      border-radius: 24px;
+      position: relative;
+      overflow: hidden;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5), inset 0 0 100px rgba(226, 83, 3, 0.05);
+    }
+
+    .glow-ring {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 300px;
+      height: 300px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(226, 83, 3, 0.15) 0%, transparent 70%);
+      animation: pulse 4s ease-in-out infinite;
+      pointer-events: none;
+    }
+
+    @keyframes pulse {
+      0%, 100% { transform: translate(-50%, -50%) scale(1); opacity: 0.5; }
+      50% { transform: translate(-50%, -50%) scale(1.2); opacity: 0.8; }
+    }
+
+    .sidebar {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+      max-width: 320px;
+    }
+
+    .panel {
+      background: rgba(22, 33, 62, 0.8);
+      border-radius: 16px;
+      padding: 1.25rem;
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .panel-title {
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: #666;
+      margin-bottom: 0.75rem;
+    }
+
+    .demo-button {
+      width: 100%;
+      padding: 1rem 1.5rem;
+      font-size: 1.1rem;
+      font-weight: 600;
+      border: none;
+      border-radius: 12px;
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+
+    .demo-button.primary {
+      background: linear-gradient(135deg, #E25303, #ff6b1a);
+      color: white;
+      box-shadow: 0 4px 20px rgba(226, 83, 3, 0.4);
+    }
+
+    .demo-button.primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 30px rgba(226, 83, 3, 0.6);
+    }
+
+    .demo-button.primary:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .demo-button.secondary {
+      background: rgba(255, 255, 255, 0.1);
+      color: #fff;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+    }
+
+    .demo-button.secondary:hover {
+      background: rgba(255, 255, 255, 0.15);
+    }
+
+    .emotion-display {
+      text-align: center;
+      padding: 1rem;
+    }
+
+    .current-emotion {
+      font-size: 3rem;
+      margin-bottom: 0.5rem;
+    }
+
+    .emotion-label {
+      font-size: 1.2rem;
+      font-weight: 600;
+      color: #E25303;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .emotion-message {
+      color: #888;
+      font-style: italic;
+      margin-top: 0.5rem;
+      min-height: 1.5em;
+    }
+
+    .intensity-bar {
+      height: 4px;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 2px;
+      margin-top: 1rem;
+      overflow: hidden;
+    }
+
+    .intensity-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #E25303, #ff8c42);
+      border-radius: 2px;
+      transition: width 0.5s ease;
+    }
+
+    .model-select {
+      width: 100%;
+      padding: 0.75rem;
+      background: rgba(0, 0, 0, 0.3);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 8px;
+      color: #fff;
+      font-size: 0.9rem;
+      cursor: pointer;
+    }
+
+    .model-select:focus {
+      outline: none;
+      border-color: #E25303;
+    }
+
+    .stats {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.75rem;
+    }
+
+    .stat {
+      text-align: center;
+      padding: 0.75rem;
+      background: rgba(0, 0, 0, 0.2);
+      border-radius: 8px;
+    }
+
+    .stat-value {
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: #E25303;
+    }
+
+    .stat-label {
+      font-size: 0.65rem;
+      text-transform: uppercase;
+      color: #666;
+      letter-spacing: 0.05em;
+    }
+
+    .footer {
+      text-align: center;
+      padding: 1rem;
+      color: #444;
+      font-size: 0.8rem;
+    }
+
+    .footer a {
+      color: #E25303;
+      text-decoration: none;
+    }
+
+    #loading {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      text-align: center;
+      z-index: 10;
+    }
+
+    .spinner {
+      width: 50px;
+      height: 50px;
+      border: 3px solid rgba(226, 83, 3, 0.2);
+      border-top-color: #E25303;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin: 0 auto 1rem;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .quick-emotions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+    }
+
+    .quick-emotion {
+      flex: 1;
+      min-width: calc(33% - 0.5rem);
+      padding: 0.6rem;
+      font-size: 1.2rem;
+      background: rgba(0, 0, 0, 0.3);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .quick-emotion:hover {
+      background: rgba(226, 83, 3, 0.2);
+      border-color: #E25303;
+      transform: scale(1.05);
+    }
+
+    .quick-emotion.active {
+      background: rgba(226, 83, 3, 0.3);
+      border-color: #E25303;
+    }
+  </style>
+</head>
+<body>
+  <div class="demo-container">
+    <header>
+      <div class="logo">間 AI</div>
+      <div class="tagline">Emotionally Intelligent Avatar System</div>
+    </header>
+
+    <div class="main-content">
+      <div id="avatar-container">
+        <div class="glow-ring"></div>
+        <div id="loading">
+          <div class="spinner"></div>
+          <div>Loading avatar...</div>
+        </div>
+      </div>
+
+      <div class="sidebar">
+        <div class="panel" style="display: flex; gap: 0.5rem;">
+          <button id="demo-btn" class="demo-button primary" style="flex: 2;">
+            ▶ Start Demo
+          </button>
+          <button id="random-btn" class="demo-button secondary" style="flex: 1;" title="Random Model">
+            🎲
+          </button>
+        </div>
+
+        <div class="panel emotion-display">
+          <div class="current-emotion" id="emotion-icon">😊</div>
+          <div class="emotion-label" id="emotion-name">Happy</div>
+          <div class="emotion-message" id="emotion-message">Ready to begin!</div>
+          <div class="intensity-bar">
+            <div class="intensity-fill" id="intensity-bar" style="width: 70%"></div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-title">Quick Emotions</div>
+          <div class="quick-emotions">
+            <button class="quick-emotion" data-emotion="HAPPY" data-icon="😊">😊</button>
+            <button class="quick-emotion" data-emotion="EXCITED" data-icon="🤩">🤩</button>
+            <button class="quick-emotion" data-emotion="LOVE" data-icon="😍">😍</button>
+            <button class="quick-emotion" data-emotion="THINKING" data-icon="🤔">🤔</button>
+            <button class="quick-emotion" data-emotion="SURPRISED" data-icon="😲">😲</button>
+            <button class="quick-emotion" data-emotion="SAD" data-icon="😢">😢</button>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-title">Avatar Model</div>
+          <select id="model-select" class="model-select">
+            <option value="colobus">🐒 Colobus Monkey</option>
+            <option value="sparrow">🐦 Sparrow</option>
+            <option value="gecko">🦎 Gecko</option>
+            <option value="muskrat">🐀 Muskrat</option>
+            <option value="pudu">🦌 Pudu Deer</option>
+            <option value="taipan">🐍 Taipan Snake</option>
+            <option value="inkfish">🐙 Inkfish</option>
+            <option value="herring">🐟 Herring</option>
+            <option value="mask">🎭 Mask</option>
+          </select>
+        </div>
+
+        <div class="panel">
+          <div class="panel-title">Stats</div>
+          <div class="stats">
+            <div class="stat">
+              <div class="stat-value" id="anim-count">18</div>
+              <div class="stat-label">Animations</div>
+            </div>
+            <div class="stat">
+              <div class="stat-value" id="fps">60</div>
+              <div class="stat-label">FPS</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer">
+      Built with THREE.js • <a href="https://github.com/anthropics/claude-code">Claude Code</a> • CC0 Models by Quaternius
+    </div>
+  </div>
+
+  <script type="module">
+    import { AvatarRenderer } from './src/index.ts';
+
+    let renderer = null;
+    let demoRunning = false;
+    let demoTimeout = null;
+    let frameCount = 0;
+    let lastFpsUpdate = performance.now();
+
+    const EMOTIONS = {
+      HAPPY: { icon: '😊', name: 'Happy' },
+      EXCITED: { icon: '🤩', name: 'Excited' },
+      LOVE: { icon: '😍', name: 'Love' },
+      THINKING: { icon: '🤔', name: 'Thinking' },
+      SURPRISED: { icon: '😲', name: 'Surprised' },
+      SAD: { icon: '😢', name: 'Sad' },
+      ANGRY: { icon: '😠', name: 'Angry' },
+      SLEEPY: { icon: '😴', name: 'Sleepy' },
+      NEUTRAL: { icon: '😐', name: 'Neutral' },
+    };
+
+    const DEMO_SEQUENCE = [
+      { emotion: 'HAPPY', intensity: 0.8, message: "Hello! I'm your AI companion.", duration: 3000 },
+      { emotion: 'EXCITED', intensity: 0.95, message: "I can express emotions in real-time!", duration: 2500 },
+      { emotion: 'THINKING', intensity: 0.6, message: "Hmm, let me think about that...", duration: 3000 },
+      { emotion: 'SURPRISED', intensity: 0.85, message: "Oh! That's an interesting idea!", duration: 2000 },
+      { emotion: 'LOVE', intensity: 0.9, message: "I love working with you!", duration: 2500 },
+      { emotion: 'THINKING', intensity: 0.7, message: "Processing your request...", duration: 2000 },
+      { emotion: 'EXCITED', intensity: 0.9, message: "Done! Here's what I found!", duration: 2500 },
+      { emotion: 'SAD', intensity: 0.5, message: "Goodbye for now...", duration: 2000 },
+      { emotion: 'SLEEPY', intensity: 0.4, message: "Time to rest...", duration: 2500 },
+      { emotion: 'HAPPY', intensity: 0.75, message: "Demo complete! Try the controls →", duration: 3000 },
+    ];
+
+    async function init() {
+      try {
+        renderer = new AvatarRenderer({
+          container: '#avatar-container',
+          assetsBasePath: '/',
+          enableControls: true,
+        });
+
+        await renderer.loadModel('colobus');
+        renderer.start();
+
+        document.getElementById('loading').style.display = 'none';
+        updateAnimCount();
+
+        // FPS counter
+        requestAnimationFrame(updateFps);
+
+      } catch (error) {
+        console.error('Failed to initialize:', error);
+        document.getElementById('loading').innerHTML = `
+          <div style="color: #F44336;">Error: ${error.message}</div>
+        `;
+      }
+    }
+
+    function updateFps() {
+      frameCount++;
+      const now = performance.now();
+      if (now - lastFpsUpdate >= 1000) {
+        document.getElementById('fps').textContent = frameCount;
+        frameCount = 0;
+        lastFpsUpdate = now;
+      }
+      requestAnimationFrame(updateFps);
+    }
+
+    function updateAnimCount() {
+      const metadata = renderer?.getModelMetadata();
+      if (metadata) {
+        document.getElementById('anim-count').textContent = metadata.animations.length;
+      }
+    }
+
+    function setEmotion(emotion, intensity = 0.7, message = '') {
+      if (!renderer) return;
+
+      const info = EMOTIONS[emotion] || EMOTIONS.NEUTRAL;
+
+      renderer.setState({ emotion, intensity });
+
+      document.getElementById('emotion-icon').textContent = info.icon;
+      document.getElementById('emotion-name').textContent = info.name;
+      document.getElementById('emotion-message').textContent = message;
+      document.getElementById('intensity-bar').style.width = `${intensity * 100}%`;
+
+      // Update active state on quick emotions
+      document.querySelectorAll('.quick-emotion').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.emotion === emotion);
+      });
+    }
+
+    async function runDemo() {
+      const btn = document.getElementById('demo-btn');
+
+      if (demoRunning) {
+        // Stop demo
+        demoRunning = false;
+        if (demoTimeout) clearTimeout(demoTimeout);
+        btn.textContent = '▶ Start Demo';
+        btn.disabled = false;
+        return;
+      }
+
+      demoRunning = true;
+      btn.textContent = '⏹ Stop Demo';
+
+      for (let i = 0; i < DEMO_SEQUENCE.length && demoRunning; i++) {
+        const step = DEMO_SEQUENCE[i];
+        setEmotion(step.emotion, step.intensity, step.message);
+
+        await new Promise(resolve => {
+          demoTimeout = setTimeout(resolve, step.duration);
+        });
+      }
+
+      demoRunning = false;
+      btn.textContent = '▶ Start Demo';
+    }
+
+    // Event listeners
+    document.getElementById('demo-btn').addEventListener('click', runDemo);
+
+    document.querySelectorAll('.quick-emotion').forEach(btn => {
+      btn.addEventListener('click', () => {
+        if (demoRunning) {
+          demoRunning = false;
+          document.getElementById('demo-btn').textContent = '▶ Start Demo';
+        }
+        setEmotion(btn.dataset.emotion, 0.8, '');
+      });
+    });
+
+    document.getElementById('model-select').addEventListener('change', async (e) => {
+      if (!renderer) return;
+      document.getElementById('loading').style.display = 'block';
+      await renderer.loadModel(e.target.value);
+      document.getElementById('loading').style.display = 'none';
+      updateAnimCount();
+    });
+
+    // Random model button
+    document.getElementById('random-btn').addEventListener('click', async () => {
+      if (!renderer) return;
+      const select = document.getElementById('model-select');
+      const options = Array.from(select.options).map(o => o.value);
+      const currentIndex = options.indexOf(select.value);
+
+      // Pick a different random model
+      let newIndex;
+      do {
+        newIndex = Math.floor(Math.random() * options.length);
+      } while (newIndex === currentIndex && options.length > 1);
+
+      select.value = options[newIndex];
+      document.getElementById('loading').style.display = 'block';
+      await renderer.loadModel(options[newIndex]);
+      document.getElementById('loading').style.display = 'none';
+      updateAnimCount();
+
+      // Random emotion too!
+      const emotions = Object.keys(EMOTIONS);
+      const randomEmotion = emotions[Math.floor(Math.random() * emotions.length)];
+      const randomIntensity = 0.5 + Math.random() * 0.5;
+      setEmotion(randomEmotion, randomIntensity, 'New friend appeared!');
+    });
+
+    // Initialize
+    init();
+  </script>
+</body>
+</html>
