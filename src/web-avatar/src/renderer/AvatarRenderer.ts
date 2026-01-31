@@ -8,7 +8,6 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { GLBModelLoader, type LoadedModel } from "./GLBModelLoader";
-import { CameraAutoFit } from "./CameraAutoFit";
 import { AnimationController } from "../animation/AnimationController";
 import type { AvatarState } from "../animation/AvatarState";
 import { DEFAULT_AVATAR_STATE } from "../animation/AvatarState";
@@ -156,6 +155,37 @@ export class AvatarRenderer {
   }
 
   /**
+   * Normalize model position and scale
+   * Centers the model and scales it to a consistent size
+   */
+  private normalizeModel(scene: THREE.Object3D): void {
+    // Calculate bounding box
+    const box = new THREE.Box3().setFromObject(scene);
+    const center = box.getCenter(new THREE.Vector3());
+    const size = box.getSize(new THREE.Vector3());
+
+    // Target height for all models (consistent scale)
+    const targetHeight = 2.0;
+    const currentHeight = size.y;
+    const scale = targetHeight / currentHeight;
+
+    // Apply scale
+    scene.scale.setScalar(scale);
+
+    // Recalculate bounding box after scaling
+    box.setFromObject(scene);
+    box.getCenter(center);
+    box.getSize(size);
+
+    // Center horizontally, place feet at y=0
+    scene.position.x = -center.x;
+    scene.position.z = -center.z;
+    scene.position.y = -box.min.y; // Put bottom of model at y=0
+
+    console.log(`[AvatarRenderer] Normalized model: scale=${scale.toFixed(2)}, height=${size.y.toFixed(2)}`);
+  }
+
+  /**
    * Load and display a model
    *
    * @param modelId Model ID from registry
@@ -178,28 +208,28 @@ export class AvatarRenderer {
     const url = this.options.assetsBasePath + config.path;
     this.currentModel = await GLBModelLoader.load(url, onProgress);
 
+    // Normalize model (center and scale)
+    this.normalizeModel(this.currentModel.scene);
+
     // Add to scene
     this.scene.add(this.currentModel.scene);
 
-    // Setup camera to frame model
-    const cameraConfig = CameraAutoFit.threeQuarterView(
-      this.currentModel.metadata,
-      1.8
-    );
+    // Setup camera to frame normalized model
+    // Model is now ~2 units tall, centered at origin, feet at y=0
+    const cameraDistance = 4.0;
+    const cameraHeight = 1.2;
+    const lookAtHeight = 0.8; // Look slightly below center for better framing
+
     this.camera.position.set(
-      cameraConfig.position.x,
-      cameraConfig.position.y,
-      cameraConfig.position.z
+      cameraDistance * 0.7,  // Slight offset for 3/4 view
+      cameraHeight,
+      cameraDistance * 0.7
     );
-    this.camera.fov = cameraConfig.fov;
+    this.camera.fov = 45;
     this.camera.updateProjectionMatrix();
 
     if (this.controls) {
-      this.controls.target.set(
-        cameraConfig.lookAt.x,
-        cameraConfig.lookAt.y,
-        cameraConfig.lookAt.z
-      );
+      this.controls.target.set(0, lookAtHeight, 0);
       this.controls.update();
     }
 
