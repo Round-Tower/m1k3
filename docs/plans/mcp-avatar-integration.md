@@ -1,8 +1,8 @@
 # M1K3 Avatar + Voice: Claude Desktop & Standalone via Shared Web 3D
 
 > Plan created: 2026-01-30
-> Status: **In Progress** - Milestones 1-3 Complete
-> Last updated: 2026-01-30
+> Status: **In Progress** - Milestones 1-4 Complete
+> Last updated: 2026-01-31
 
 ## Summary
 
@@ -67,8 +67,8 @@ Two-way voice with full 3D animated avatars (animals, masks, custom characters).
 | 1. Web Avatar Foundation | ✅ Complete | THREE.js + TypeScript setup, model loading |
 | 2. Animation System | ✅ Complete | Emotion→animation mapping, controller |
 | 3. Unified MCP Server | ✅ Complete | Python backend with TTS + Avatar + STT tools |
-| 4. MCP App Integration | 🔲 Next | Claude Desktop iframe UI |
-| 5. Standalone Popover | 🔲 Pending | Electron/Tauri wrapper |
+| 4. MCP App Integration | ✅ Complete | Claude Desktop iframe UI with visual states |
+| 5. Standalone Popover | 🔲 Next | Electron/Tauri wrapper |
 
 ---
 
@@ -147,24 +147,37 @@ npm run dev
 
 ---
 
-## Milestone 4: MCP App Integration
+## Completed: Milestone 4 - MCP App Integration
 
-### Files to Create
+### Implemented
 
+**File:** `src/web-avatar/mcp-app.html`
+
+Compact iframe-optimized avatar for Claude Desktop:
+- Orbit controls disabled for iframe embedding
+- Visual state indicators (CSS animations):
+  - **Speaking**: Orange pulsing bar at bottom
+  - **Listening**: Circular ripple effect
+  - **Thinking**: Rotating spinner top-right
+  - **Error**: Red exclamation badge
+- Hover-reveal status bar and controls
+- Microphone button → requests STT via MCP
+- Random model button → cycles through 13 models
+- MCPAppBridge for postMessage communication
+
+### To Test
+
+```bash
+cd src/web-avatar
+npm run dev
+# Open http://localhost:5174/mcp-app.html
 ```
-src/mcp/app_ui/
-├── index.html       # MCP App entry point
-├── app.ts           # Import web-avatar bundle
-└── styles.css       # Compact avatar styles (~300px width)
-```
 
-### Tasks
+### To Deploy in Claude Desktop
 
-1. Build web-avatar as UMD bundle
-2. Create MCP App HTML with iframe-friendly layout
-3. Wire `MCPAppBridge` to `AvatarRenderer`
-4. Add visual states (speaking glow, listening pulse)
-5. Test in Claude Desktop
+1. Build production bundle: `npm run build`
+2. Register as MCP App in Claude Desktop settings
+3. MCP server broadcasts state via postMessage
 
 ---
 
