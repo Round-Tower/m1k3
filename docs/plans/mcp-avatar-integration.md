@@ -1,8 +1,8 @@
 # M1K3 Avatar + Voice: Claude Desktop & Standalone via Shared Web 3D
 
 > Plan created: 2026-01-30
-> Status: **In Progress** - Milestones 1-4 Complete
-> Last updated: 2026-01-31
+> Status: **Complete** - All 5 Milestones Done
+> Last updated: 2026-02-01
 
 ## Summary
 
@@ -68,7 +68,7 @@ Two-way voice with full 3D animated avatars (animals, masks, custom characters).
 | 2. Animation System | ✅ Complete | Emotion→animation mapping, controller |
 | 3. Unified MCP Server | ✅ Complete | Python backend with TTS + Avatar + STT tools |
 | 4. MCP App Integration | ✅ Complete | Claude Desktop iframe UI with visual states |
-| 5. Standalone Popover | 🔲 Next | Electron/Tauri wrapper |
+| 5. Standalone Popover | ✅ Complete | Tauri app with system tray + global hotkey |
 
 ---
 
@@ -181,22 +181,45 @@ npm run dev
 
 ---
 
-## Milestone 5: Standalone Popover
+## Completed: Milestone 5 - Standalone Popover
 
-### Options
+**Directory:** `src/avatar-popover/`
 
-| Framework | Pros | Cons |
-|-----------|------|------|
-| **Electron** | Mature, good THREE.js support | Large bundle (~150MB) |
-| **Tauri** | Small (~10MB), Rust backend | Newer, less ecosystem |
+Tauri desktop app with system tray integration:
 
-### Tasks
+### Features
+- **System Tray**: Click to toggle popover visibility
+- **Global Hotkey**: ⌘+Shift+M to show/hide
+- **Always-on-top**: Floats above other windows
+- **Borderless**: Rounded corners, draggable title bar
+- **WebSocket**: Real-time connection to M1K3 backend
 
-1. Choose framework (recommend Tauri for size)
-2. Create `WebSocketBridge.ts` for direct M1K3 connection
-3. System tray with global hotkey (⌘+Shift+M)
-4. Always-on-top floating window
-5. Direct microphone access
+### Tech Stack
+- Tauri 2.x (Rust backend, ~10MB bundle)
+- Same web-avatar THREE.js frontend
+- WebSocketBridge for avatar_server.py communication
+
+### To Build
+
+```bash
+cd src/avatar-popover
+npm install
+cargo tauri dev      # Development
+cargo tauri build    # Production DMG
+```
+
+### Files
+
+```
+src/avatar-popover/
+├── package.json
+├── vite.config.ts
+├── index.html              # Popover UI
+└── src-tauri/
+    ├── Cargo.toml          # Rust deps
+    ├── tauri.conf.json     # Window config
+    ├── capabilities/       # Permissions
+    └── src/lib.rs          # Tray + global shortcut
 
 ---
 

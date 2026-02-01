@@ -2,7 +2,6 @@ package app.m1k3.ai.assistant.ai
 
 import android.content.Context
 import app.m1k3.ai.assistant.utils.Logger
-import app.m1k3.ai.assistant.utils.resultOf
 import app.m1k3.ai.domain.ai.GenerationConfig
 import app.m1k3.ai.domain.chat.format.ChatFormat
 import app.m1k3.ai.domain.chat.format.MessageRole
@@ -125,6 +124,7 @@ class LlamaCppEngine(
         config: GenerationConfig
     ): Result<GenerationResult> = withContext(Dispatchers.IO) {
         logger.i { "GENERATE" }
+
         if (!isInitialized) {
             return@withContext Result.failure(
                 IllegalStateException("Engine not initialized. Call initialize() first.")

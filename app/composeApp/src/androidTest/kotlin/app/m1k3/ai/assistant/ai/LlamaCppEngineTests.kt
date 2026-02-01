@@ -2,6 +2,7 @@ package app.m1k3.ai.assistant.ai
 
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import app.m1k3.ai.domain.ai.GenerationConfig
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Before
@@ -21,7 +22,7 @@ import kotlin.time.Duration.Companion.seconds
  * Use MockLlmEngine for fast UI tests.
  */
 @RunWith(AndroidJUnit4::class)
-class SmolLM2BasicTest {
+class LlamaCppEngineTests {
 
     private lateinit var engine: LlamaCppEngine
     private val context = InstrumentationRegistry.getInstrumentation().targetContext
