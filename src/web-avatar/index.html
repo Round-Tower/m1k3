@@ -1,317 +1,230 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="terminal">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>間 AI Avatar - Test</title>
-  <style>
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      background: #1a1a2e;
-      color: #fff;
-      min-height: 100vh;
-      display: flex;
-      flex-direction: column;
-    }
-    header {
-      padding: 1rem 2rem;
-      background: #16213e;
-      border-bottom: 1px solid #0f3460;
-    }
-    h1 {
-      font-size: 1.5rem;
-      font-weight: 500;
-      color: #E25303;
-    }
-    main {
-      flex: 1;
-      display: flex;
-      gap: 1rem;
-      padding: 1rem;
-    }
-    #avatar-container {
-      flex: 1;
-      min-height: 400px;
-      background: #0f0f1a;
-      border-radius: 12px;
-      overflow: hidden;
-    }
-    .controls {
-      width: 280px;
-      background: #16213e;
-      border-radius: 12px;
-      padding: 1rem;
-    }
-    .control-group {
-      margin-bottom: 1rem;
-    }
-    .control-group label {
-      display: block;
-      font-size: 0.75rem;
-      color: #888;
-      margin-bottom: 0.5rem;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-    }
-    select, button {
-      width: 100%;
-      padding: 0.75rem;
-      border: 1px solid #0f3460;
-      border-radius: 8px;
-      background: #1a1a2e;
-      color: #fff;
-      font-size: 0.875rem;
-      cursor: pointer;
-    }
-    select:hover, button:hover {
-      border-color: #E25303;
-    }
-    button {
-      background: #E25303;
-      border-color: #E25303;
-      font-weight: 500;
-    }
-    button:hover {
-      background: #ff6b1a;
-    }
-    .emotion-grid {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 0.5rem;
-    }
-    .emotion-btn {
-      padding: 0.5rem;
-      font-size: 1.5rem;
-      background: #1a1a2e;
-    }
-    .emotion-btn.active {
-      background: #E25303;
-    }
-    .status {
-      font-size: 0.75rem;
-      color: #888;
-      padding: 0.5rem;
-      background: #0f0f1a;
-      border-radius: 8px;
-      margin-top: 1rem;
-    }
-    .status-value {
-      color: #4CAF50;
-      font-family: monospace;
-    }
-    #loading {
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      text-align: center;
-      color: #888;
-    }
-    #loading .spinner {
-      width: 40px;
-      height: 40px;
-      border: 3px solid #333;
-      border-top-color: #E25303;
-      border-radius: 50%;
-      animation: spin 1s linear infinite;
-      margin: 0 auto 1rem;
-    }
-    @keyframes spin {
-      to { transform: rotate(360deg); }
-    }
-  </style>
+  <title>M1K3 AVATAR SYSTEM</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=VT323&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/src/styles/main.css">
 </head>
-<body>
-  <header>
-    <h1>間 AI Avatar System</h1>
-  </header>
-  <main>
-    <div id="avatar-container">
-      <div id="loading">
-        <div class="spinner"></div>
-        <div>Loading model...</div>
+<body class="bg-crt-dark text-crt-white min-h-screen overflow-hidden">
+  <!-- Scanlines overlay -->
+  <div class="scanlines"></div>
+
+  <!-- CRT Frame -->
+  <div class="crt-frame">
+    <!-- Terminal Header -->
+    <header class="terminal-header">
+      <div class="flex items-center gap-3">
+        <span class="text-crt-dim">M1K3://</span>
+        <span class="crt-glow">AVATAR SYSTEM</span>
+        <span class="text-crt-dim font-mono text-xs">v1.0</span>
       </div>
+      <div class="flex items-center gap-2 text-xs">
+        <span class="status-dot" id="status-dot"></span>
+        <span id="ws-status" class="font-mono text-crt-dim">OFFLINE</span>
+      </div>
+    </header>
+
+    <!-- Avatar Stage (Center) -->
+    <main id="avatar-container" class="avatar-stage">
+      <div id="loading" class="text-center">
+        <div class="spinner mx-auto mb-4"></div>
+        <div class="font-pixel text-crt-dim">LOADING MODEL...</div>
+      </div>
+    </main>
+
+    <!-- Terminal Footer (Minimal Controls) -->
+    <footer class="terminal-footer">
+      <button class="ctrl-btn" id="btn-emotion" title="Cycle emotion">
+        <span id="emotion-label">EMO</span>
+      </button>
+      <button class="ctrl-btn" id="btn-model" title="Change model">MDL</button>
+      <button class="ctrl-btn" id="btn-random" title="Random model">RND</button>
+      <button class="ctrl-btn" id="btn-activity" title="Cycle activity">ACT</button>
+
+      <div class="flex-1"></div>
+
+      <div class="font-pixel text-xs text-crt-dim">
+        <span id="status-model">-</span>
+        <span class="mx-2">|</span>
+        <span id="status-anim">-</span>
+      </div>
+    </footer>
+  </div>
+
+  <!-- Model Selector Modal -->
+  <div id="model-modal" class="modal-backdrop hidden">
+    <div class="modal-panel">
+      <div class="text-crt-white mb-4 border-b border-white/20 pb-2">SELECT MODEL</div>
+      <div class="grid grid-cols-2 gap-2 max-h-64 overflow-y-auto" id="model-grid"></div>
+      <button class="ctrl-btn w-full mt-4" id="modal-close">CLOSE</button>
     </div>
-    <div class="controls">
-      <div class="control-group">
-        <label>Model</label>
-        <select id="model-select">
-          <optgroup label="Quirky Series">
-            <option value="colobus">Colobus Monkey</option>
-            <option value="sparrow">Sparrow</option>
-            <option value="gecko">Gecko</option>
-            <option value="herring">Herring</option>
-            <option value="muskrat">Muskrat</option>
-            <option value="pudu">Pudu</option>
-            <option value="taipan">Taipan</option>
-            <option value="inkfish">Inkfish</option>
-          </optgroup>
-          <optgroup label="Community (CC0)">
-            <option value="fox">Fox</option>
-            <option value="cesium-man">Cesium Man</option>
-            <option value="brainstem">BrainStem Robot</option>
-            <option value="robot">Simple Robot</option>
-          </optgroup>
-          <optgroup label="Other">
-            <option value="mask">Mask</option>
-          </optgroup>
-        </select>
-      </div>
-
-      <div class="control-group">
-        <label>Emotion</label>
-        <div class="emotion-grid">
-          <button class="emotion-btn" data-emotion="HAPPY" title="Happy">😊</button>
-          <button class="emotion-btn" data-emotion="SAD" title="Sad">😢</button>
-          <button class="emotion-btn" data-emotion="ANGRY" title="Angry">😠</button>
-          <button class="emotion-btn" data-emotion="SURPRISED" title="Surprised">😲</button>
-          <button class="emotion-btn" data-emotion="LOVE" title="Love">😍</button>
-          <button class="emotion-btn" data-emotion="THINKING" title="Thinking">🤔</button>
-          <button class="emotion-btn" data-emotion="SLEEPY" title="Sleepy">😴</button>
-          <button class="emotion-btn" data-emotion="EXCITED" title="Excited">🤩</button>
-          <button class="emotion-btn" data-emotion="NEUTRAL" title="Neutral">😐</button>
-        </div>
-      </div>
-
-      <div class="control-group">
-        <label>Activity</label>
-        <select id="activity-select">
-          <option value="IDLE">Idle</option>
-          <option value="LISTENING">Listening</option>
-          <option value="THINKING">Thinking</option>
-          <option value="GENERATING">Generating</option>
-          <option value="SPEAKING">Speaking</option>
-          <option value="ERROR">Error</option>
-        </select>
-      </div>
-
-      <div class="control-group">
-        <label>Intensity</label>
-        <input type="range" id="intensity-slider" min="0" max="100" value="50" style="width:100%">
-      </div>
-
-      <div class="status">
-        <div>WebSocket: <span id="ws-status" class="status-value" style="color: #F44336;">Disconnected</span></div>
-        <div>Model: <span id="status-model" class="status-value">-</span></div>
-        <div>Animations: <span id="status-anims" class="status-value">-</span></div>
-        <div>Current: <span id="status-current" class="status-value">-</span></div>
-      </div>
-    </div>
-  </main>
+  </div>
 
   <script type="module">
-    // Import from built bundle (run `npm run build` first)
-    // For dev, we'll use dynamic import
-    import { AvatarRenderer, ModelRegistry, EMOTION_INFO } from './src/index.ts';
+    import { AvatarRenderer, ModelRegistry } from './src/index.ts';
     import { WebSocketBridge } from './src/communication/WebSocketBridge.ts';
 
     let renderer = null;
     let bridge = null;
+    let currentEmotionIndex = 0;
+    let currentActivityIndex = 0;
 
-    async function init() {
-      try {
-        // Create renderer
-        renderer = new AvatarRenderer({
-          container: '#avatar-container',
-          assetsBasePath: '/',
-          enableControls: true,
-        });
-
-        // Load default model
-        await renderer.loadModel('colobus');
-        renderer.start();
-
-        // Hide loading
-        document.getElementById('loading').style.display = 'none';
-
-        // Update status
-        updateStatus();
-
-        // Connect to avatar_server.py via WebSocket
-        bridge = new WebSocketBridge({ url: 'ws://localhost:8081' });
-
-        bridge.onConnectionChange((connected) => {
-          const statusEl = document.getElementById('ws-status');
-          if (statusEl) {
-            statusEl.textContent = connected ? 'Connected' : 'Disconnected';
-            statusEl.style.color = connected ? '#4CAF50' : '#F44336';
-          }
-        });
-
-        bridge.onAvatarStateChange((state) => {
-          console.log('State update from server:', state);
-          renderer.setState(state);
-          updateStatus();
-        });
-
-        bridge.onAvatarModelChange(async (modelId) => {
-          console.log('Model change from server:', modelId);
-          await renderer.loadModel(modelId);
-          updateStatus();
-        });
-
-        bridge.connect();
-
-        console.log('Avatar renderer initialized!');
-      } catch (error) {
-        console.error('Failed to initialize:', error);
-        document.getElementById('loading').innerHTML = `
-          <div style="color: #F44336;">Error: ${error.message}</div>
-          <div style="font-size: 0.75rem; margin-top: 1rem;">
-            Make sure to run from a local server (npm run dev)
-          </div>
-        `;
-      }
-    }
+    const EMOTIONS = ['NEUTRAL', 'HAPPY', 'SAD', 'ANGRY', 'SURPRISED', 'LOVE', 'THINKING', 'SLEEPY', 'EXCITED'];
+    const ACTIVITIES = ['IDLE', 'LISTENING', 'THINKING', 'GENERATING', 'SPEAKING'];
+    const container = document.getElementById('avatar-container');
 
     function updateStatus() {
       if (!renderer) return;
       const metadata = renderer.getModelMetadata();
-      const state = renderer.getState();
       const controller = renderer.getAnimationController();
       const currentAnim = controller?.getCurrentAnimation();
 
-      document.getElementById('status-model').textContent = metadata?.modelPath.split('/').pop() || '-';
-      document.getElementById('status-anims').textContent = metadata?.animations.length || '0';
-      document.getElementById('status-current').textContent = currentAnim?.name || '-';
+      document.getElementById('status-model').textContent =
+        metadata?.modelPath.split('/').pop()?.replace('.glb', '').toUpperCase() || '-';
+      document.getElementById('status-anim').textContent =
+        currentAnim?.name?.toUpperCase() || 'IDLE';
     }
 
-    // Event listeners
-    document.getElementById('model-select').addEventListener('change', async (e) => {
+    function updateActivityClass(activity) {
+      container.classList.remove('speaking', 'listening', 'thinking');
+      const cls = { SPEAKING: 'speaking', LISTENING: 'listening', THINKING: 'thinking', GENERATING: 'thinking' }[activity];
+      if (cls) container.classList.add(cls);
+    }
+
+    function updateConnectionStatus(connected) {
+      const dot = document.getElementById('status-dot');
+      const text = document.getElementById('ws-status');
+      if (connected) {
+        dot.classList.add('online');
+        dot.classList.remove('offline');
+        text.textContent = 'ONLINE';
+        text.classList.remove('text-crt-dim');
+        text.classList.add('text-crt-white');
+      } else {
+        dot.classList.remove('online');
+        dot.classList.add('offline');
+        text.textContent = 'OFFLINE';
+        text.classList.add('text-crt-dim');
+        text.classList.remove('text-crt-white');
+      }
+    }
+
+    function populateModelGrid() {
+      const grid = document.getElementById('model-grid');
+      const models = ModelRegistry.allModels;
+      grid.innerHTML = models.map(m => `
+        <button class="dropdown-item" data-model="${m.id}">${m.id.toUpperCase()}</button>
+      `).join('');
+
+      grid.querySelectorAll('[data-model]').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          const modelId = btn.dataset.model;
+          document.getElementById('loading').style.display = 'block';
+          document.getElementById('model-modal').classList.add('hidden');
+          await renderer.loadModel(modelId);
+          document.getElementById('loading').style.display = 'none';
+          updateStatus();
+        });
+      });
+    }
+
+    async function init() {
+      try {
+        renderer = new AvatarRenderer({
+          container: '#avatar-container',
+          assetsBasePath: '/',
+          enableControls: true,
+          backgroundColor: '#0A0A0A',
+        });
+
+        await renderer.loadModel('colobus');
+        renderer.start();
+        document.getElementById('loading').style.display = 'none';
+        updateStatus();
+
+        // Connect to backend
+        bridge = new WebSocketBridge({ url: 'ws://localhost:8081' });
+
+        bridge.onConnectionChange(updateConnectionStatus);
+
+        bridge.onAvatarStateChange((state) => {
+          renderer.setState(state);
+          if (state.activity) updateActivityClass(state.activity);
+          if (state.emotion) {
+            const idx = EMOTIONS.indexOf(state.emotion);
+            if (idx >= 0) currentEmotionIndex = idx;
+          }
+          updateStatus();
+        });
+
+        bridge.onAvatarModelChange(async (modelId) => {
+          document.getElementById('loading').style.display = 'block';
+          await renderer.loadModel(modelId);
+          document.getElementById('loading').style.display = 'none';
+          updateStatus();
+        });
+
+        bridge.connect();
+        populateModelGrid();
+        console.log('[M1K3] Avatar system initialized');
+
+      } catch (err) {
+        console.error('[M1K3] Init error:', err);
+        document.getElementById('loading').innerHTML = `
+          <div class="text-red-400">ERROR: ${err.message}</div>
+          <div class="text-crt-dim text-xs mt-2">Run: npm run dev</div>
+        `;
+      }
+    }
+
+    // Controls
+    document.getElementById('btn-emotion').addEventListener('click', () => {
       if (!renderer) return;
+      currentEmotionIndex = (currentEmotionIndex + 1) % EMOTIONS.length;
+      const emotion = EMOTIONS[currentEmotionIndex];
+      renderer.setState({ emotion });
+      document.getElementById('emotion-label').textContent = emotion.slice(0, 3);
+      updateStatus();
+    });
+
+    document.getElementById('btn-activity').addEventListener('click', () => {
+      if (!renderer) return;
+      currentActivityIndex = (currentActivityIndex + 1) % ACTIVITIES.length;
+      const activity = ACTIVITIES[currentActivityIndex];
+      renderer.setState({ activity });
+      updateActivityClass(activity);
+      updateStatus();
+    });
+
+    document.getElementById('btn-model').addEventListener('click', () => {
+      document.getElementById('model-modal').classList.remove('hidden');
+    });
+
+    document.getElementById('modal-close').addEventListener('click', () => {
+      document.getElementById('model-modal').classList.add('hidden');
+    });
+
+    document.getElementById('btn-random').addEventListener('click', async () => {
+      if (!renderer) return;
+      const models = ModelRegistry.allModels;
+      const model = models[Math.floor(Math.random() * models.length)];
       document.getElementById('loading').style.display = 'block';
-      await renderer.loadModel(e.target.value);
+      await renderer.loadModel(model.id);
       document.getElementById('loading').style.display = 'none';
       updateStatus();
     });
 
-    document.querySelectorAll('.emotion-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        if (!renderer) return;
-        document.querySelectorAll('.emotion-btn').forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-        renderer.setState({ emotion: btn.dataset.emotion });
-        updateStatus();
-      });
+    // Close modal on backdrop click
+    document.getElementById('model-modal').addEventListener('click', (e) => {
+      if (e.target === e.currentTarget) {
+        e.currentTarget.classList.add('hidden');
+      }
     });
 
-    document.getElementById('activity-select').addEventListener('change', (e) => {
-      if (!renderer) return;
-      renderer.setState({ activity: e.target.value });
-      updateStatus();
-    });
-
-    document.getElementById('intensity-slider').addEventListener('input', (e) => {
-      if (!renderer) return;
-      renderer.setState({ intensity: e.target.value / 100 });
-    });
-
-    // Initialize
     init();
   </script>
 </body>

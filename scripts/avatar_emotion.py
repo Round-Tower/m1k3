@@ -2,6 +2,7 @@
 """Quick script to send emotions to the avatar WebSocket server."""
 import sys
 import json
+import time
 
 try:
     from websocket import create_connection
@@ -20,6 +21,7 @@ def send_emotion(emotion: str, intensity: int = 80):
             "emotion": emotion.upper(),
             "intensity": intensity
         }))
+        time.sleep(0.1)  # Allow message to be broadcast before closing
         ws.close()
         print(f"🎭 Avatar → {emotion.upper()} ({intensity}%)")
     except Exception as e:
@@ -33,6 +35,7 @@ def send_state(state: str):
             "type": "state",
             "state": state.lower()
         }))
+        time.sleep(0.1)  # Allow message to be broadcast before closing
         ws.close()
         print(f"⚡ Avatar → {state}")
     except Exception as e:
