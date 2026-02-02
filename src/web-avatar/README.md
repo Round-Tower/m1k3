@@ -14,9 +14,33 @@ npm run dev
 
 | Page | Description |
 |------|-------------|
-| `index.html` | Development test page with full controls |
-| `demo.html` | Polished demo with M1K3 design system |
+| `index.html` | **Retro terminal UI** - Monochrome CRT aesthetic with Tailwind |
+| `demo-legacy.html` | Original polished demo with M1K3 orange design system |
+| `index-old.html` | Original test page with full controls |
 | `mcp-app.html` | Compact iframe for Claude Desktop MCP Apps |
+
+## Styling (Tailwind 3 + DaisyUI)
+
+The new `index.html` uses a retro computing aesthetic:
+
+```
+Theme: Monochrome CRT terminal
+- White phosphor text on dark background
+- Scanlines overlay (CSS repeating gradient)
+- VT323 pixel font + IBM Plex Mono
+- Subtle glow effects (text-shadow)
+```
+
+### Key Files
+- `tailwind.config.js` - Custom "terminal" theme with CRT colors
+- `postcss.config.js` - PostCSS setup for Tailwind
+- `src/styles/main.css` - Tailwind directives + CRT effects
+
+### Customization Ideas
+- Amber mode: Change `crt-white` to `#FFB000` for amber CRT
+- Green mode: Change to `#33FF33` for classic terminal
+- More scanlines: Increase opacity in `.scanlines` class
+- Screen flicker: Enable `flicker` animation on `.crt-frame`
 
 ## Architecture
 
@@ -101,8 +125,26 @@ npm run build        # Library build (ES + UMD)
 npm run typecheck    # TypeScript check
 ```
 
+## CLI Emotion Control
+
+Send emotions to the avatar from command line:
+
+```bash
+# Start the avatar server
+python3 scripts/avatar_server.py &
+
+# Open the avatar UI
+open http://localhost:5174/
+
+# Send emotions
+python3 scripts/avatar_emotion.py happy
+python3 scripts/avatar_emotion.py excited 90  # with intensity
+python3 scripts/avatar_emotion.py --state thinking
+```
+
 ## Related
 
 - `src/avatar-popover/` - Tauri standalone popover app
 - `mcp_unified_server.py` - MCP server with avatar tools
 - `scripts/avatar_server.py` - WebSocket avatar state server
+- `scripts/avatar_emotion.py` - CLI tool for sending emotions
