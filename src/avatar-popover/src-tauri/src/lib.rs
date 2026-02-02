@@ -2,7 +2,6 @@ use tauri::{
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
     Manager,
 };
-use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut};
 
 /// Toggle main window visibility
 fn toggle_window(app: &tauri::AppHandle) {
@@ -19,14 +18,12 @@ fn toggle_window(app: &tauri::AppHandle) {
 /// Position window near system tray (top-right on macOS)
 fn position_window_near_tray(app: &tauri::AppHandle) {
     if let Some(window) = app.get_webview_window("main") {
-        // Get primary monitor dimensions
         if let Some(monitor) = window.primary_monitor().ok().flatten() {
             let screen_size = monitor.size();
             let window_size = window.outer_size().unwrap_or_default();
 
-            // Position near top-right (where menu bar is on macOS)
             let x = screen_size.width as i32 - window_size.width as i32 - 20;
-            let y = 40; // Below menu bar
+            let y = 40;
 
             let _ = window.set_position(tauri::Position::Physical(
                 tauri::PhysicalPosition { x, y },
@@ -38,7 +35,6 @@ fn position_window_near_tray(app: &tauri::AppHandle) {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
-        .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .setup(|app| {
             // Setup logging in debug mode
             if cfg!(debug_assertions) {
@@ -66,29 +62,14 @@ pub fn run() {
                 })
                 .build(app)?;
 
-            // Register global shortcut: Cmd+Shift+M (macOS) / Ctrl+Shift+M (others)
-            let shortcut = Shortcut::new(
-                Some(Modifiers::SUPER | Modifiers::SHIFT),
-                Code::KeyM,
-            );
-
-            let app_handle = app.handle().clone();
-            app.handle().plugin(
-                tauri_plugin_global_shortcut::Builder::new()
-                    .with_handler(move |_app, _shortcut, event| {
-                        if event.state() == tauri_plugin_global_shortcut::ShortcutState::Pressed {
-                            position_window_near_tray(&app_handle);
-                            toggle_window(&app_handle);
-                        }
-                    })
-                    .build(),
-            )?;
-
-            // Register the shortcut
-            app.global_shortcut().register(shortcut)?;
+            // Show window on startup for testing
+            if let Some(window) = app.get_webview_window("main") {
+                position_window_near_tray(app.handle());
+                let _ = window.show();
+            }
 
             log::info!("M1K3 Avatar popover initialized");
-            log::info!("Global shortcut: Cmd+Shift+M to toggle");
+            log::info!("Click the tray icon to toggle visibility");
 
             Ok(())
         })

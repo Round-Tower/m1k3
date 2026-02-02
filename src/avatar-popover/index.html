@@ -247,17 +247,14 @@
   </div>
 
   <script type="module">
-    import { AvatarRenderer, ModelRegistry, EMOTIONS } from '../web-avatar/src/index.ts';
+    import { AvatarRenderer, ModelRegistry } from '../web-avatar/src/index.ts';
     import { WebSocketBridge } from '../web-avatar/src/communication/WebSocketBridge.ts';
 
     let renderer = null;
     let bridge = null;
     let currentEmotionIndex = 0;
     const container = document.getElementById('avatar-container');
-    const emotionList = Object.keys(EMOTIONS || {
-      NEUTRAL: 0, HAPPY: 1, SAD: 2, ANGRY: 3, SURPRISED: 4,
-      LOVE: 5, THINKING: 6, SLEEPY: 7, EXCITED: 8
-    });
+    const emotionList = ['NEUTRAL', 'HAPPY', 'SAD', 'ANGRY', 'SURPRISED', 'LOVE', 'THINKING', 'SLEEPY', 'EXCITED'];
 
     const ACTIVITY_CLASSES = {
       SPEAKING: 'speaking',
@@ -276,7 +273,8 @@
       try {
         renderer = new AvatarRenderer({
           container: '#avatar-container',
-          assetsBasePath: '../web-avatar/public/',
+          // Use the web-avatar dev server for models
+          assetsBasePath: 'http://localhost:5174/',
           enableControls: false,
           backgroundColor: '#000000',
         });

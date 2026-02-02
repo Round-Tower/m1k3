@@ -12,8 +12,6 @@
     "core:window:allow-is-visible",
     "core:window:allow-outer-size",
     "core:window:allow-set-position",
-    "core:window:allow-primary-monitor",
-    "global-shortcut:allow-register",
-    "global-shortcut:allow-unregister"
+    "core:window:allow-primary-monitor"
   ]
 }
