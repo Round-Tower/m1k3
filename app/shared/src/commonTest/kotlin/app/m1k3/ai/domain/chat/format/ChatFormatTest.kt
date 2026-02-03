@@ -248,6 +248,76 @@ class ChatFormatTest {
         assertTrue(schema.contains("<start_of_turn>"))
     }
 
+    // ===== FalconH1 Format Tests =====
+
+    @Test
+    fun `FalconH1 formats user message correctly`() {
+        val format = ChatFormat.FalconH1
+        val message = format.formatMessage(MessageRole.USER, "Hello")
+
+        assertTrue(message.contains("<|start_header_id|>user<|end_header_id|>"))
+        assertTrue(message.contains("Hello"))
+        assertTrue(message.contains("<|eot_id|>"))
+    }
+
+    @Test
+    fun `FalconH1 formats system message correctly`() {
+        val format = ChatFormat.FalconH1
+        val message = format.formatMessage(MessageRole.SYSTEM, "You are helpful.")
+
+        assertTrue(message.contains("<|start_header_id|>system<|end_header_id|>"))
+        assertTrue(message.contains("You are helpful."))
+        assertTrue(message.contains("<|eot_id|>"))
+    }
+
+    @Test
+    fun `FalconH1 formats assistant message correctly`() {
+        val format = ChatFormat.FalconH1
+        val message = format.formatMessage(MessageRole.ASSISTANT, "Hi there!")
+
+        assertTrue(message.contains("<|start_header_id|>assistant<|end_header_id|>"))
+        assertTrue(message.contains("Hi there!"))
+        assertTrue(message.contains("<|eot_id|>"))
+    }
+
+    @Test
+    fun `FalconH1 supports system role`() {
+        assertTrue(ChatFormat.FalconH1.supportsSystemRole)
+    }
+
+    @Test
+    fun `FalconH1 supports tools`() {
+        assertTrue(ChatFormat.FalconH1.supportsTools)
+    }
+
+    @Test
+    fun `FalconH1 has correct stop tokens`() {
+        val stopTokens = ChatFormat.FalconH1.getStopTokens()
+        assertTrue(stopTokens.contains("<|eot_id|>"))
+        assertTrue(stopTokens.contains("<|end_of_text|>"))
+    }
+
+    @Test
+    fun `FalconH1 has BOS prefix`() {
+        val prefix = ChatFormat.FalconH1.getPromptPrefix()
+        assertEquals("<|begin_of_text|>", prefix)
+    }
+
+    @Test
+    fun `FalconH1 formatToolSchema includes tool descriptions`() {
+        val tools = listOf(createTestTool())
+
+        val schema = ChatFormat.FalconH1.formatToolSchema(tools)
+
+        assertTrue(schema.contains("toggle_flashlight"))
+        assertTrue(schema.contains("<|start_header_id|>"))
+    }
+
+    @Test
+    fun `FalconH1 name is correct`() {
+        assertEquals("FalconH1", ChatFormat.FalconH1.name)
+    }
+
     // ===== Helper =====
 
     private fun createTestTool() = Tool(

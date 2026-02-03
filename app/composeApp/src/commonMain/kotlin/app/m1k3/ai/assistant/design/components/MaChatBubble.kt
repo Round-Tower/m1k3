@@ -22,6 +22,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import org.jetbrains.compose.ui.tooling.preview.Preview
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import app.m1k3.ai.assistant.design.effects.glassmorphic
 import app.m1k3.ai.assistant.design.preview.PreviewFixtures
 import app.m1k3.ai.assistant.design.theme.MaTheme
@@ -119,25 +120,22 @@ fun MaChatBubbleAI(
     inferenceStats: String? = null,
     isError: Boolean = false,
     ragSources: String? = null,
+    onSpeak: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     Row(
         modifier = modifier
-            .animateContentSize()
             .fillMaxWidth(),
         horizontalArrangement = Arrangement.Start
     ) {
         Column(
-            modifier = Modifier.animateContentSize(),
             horizontalAlignment = Alignment.Start
         ) {
             Box(
                 modifier = Modifier
                     .padding(horizontal = MaSpacing.md, vertical = MaSpacing.base)
-                    .animateContentSize()
             ) {
                 Column(
-                    modifier = Modifier.animateContentSize(),
                     verticalArrangement = Arrangement.spacedBy(MaSpacing.sm)
                 ) {
                     Text(
@@ -154,14 +152,34 @@ fun MaChatBubbleAI(
                         modifier = Modifier.padding(top = MaSpacing.xs)
                     )
 
-                    // Inference statistics (if available)
-                    if (inferenceStats != null) {
-                        Text(
-                            text = inferenceStats,
-                            style = MaTypography.labelSmall,
-                            color = MaColors.textDisabled(),
-                            fontWeight = FontWeight.Medium
-                        )
+                    // Inference statistics + speak button row
+                    if (inferenceStats != null || onSpeak != null) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(MaSpacing.sm)
+                        ) {
+                            if (inferenceStats != null) {
+                                Text(
+                                    text = inferenceStats,
+                                    style = MaTypography.labelSmall,
+                                    color = MaColors.textDisabled(),
+                                    fontWeight = FontWeight.Medium
+                                )
+                            }
+                            if (onSpeak != null) {
+                                Text(
+                                    text = "\uD83D\uDD0A", // speaker icon
+                                    style = MaTypography.labelSmall,
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(4.dp))
+                                        .clickable(
+                                            indication = null,
+                                            interactionSource = remember { MutableInteractionSource() }
+                                        ) { onSpeak() }
+                                        .padding(horizontal = 4.dp, vertical = 2.dp)
+                                )
+                            }
+                        }
                     }
 
                     // RAG status indicator with collapsible sources

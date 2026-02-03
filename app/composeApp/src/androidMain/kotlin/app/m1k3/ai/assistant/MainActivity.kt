@@ -85,12 +85,16 @@ import org.koin.androidx.compose.koinViewModel
 import org.koin.compose.koinInject
 import org.koin.core.context.startKoin
 import org.koin.core.parameter.parametersOf
+import android.content.Intent
 import app.m1k3.ai.assistant.app.InitializationState
 import app.m1k3.ai.assistant.app.InitializationViewModel
 import app.m1k3.ai.assistant.app.LoggerAdapter
 import androidx.activity.SystemBarStyle
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 
 /**
  * M1K3 AI - MainActivity
@@ -103,6 +107,17 @@ import androidx.compose.ui.graphics.toArgb
  * - Full Koin DI with koinViewModel()
  */
 class MainActivity : ComponentActivity() {
+    companion object {
+        private val _sharedText = MutableStateFlow<String?>(null)
+        val sharedText: StateFlow<String?> = _sharedText.asStateFlow()
+
+        fun consumeSharedText(): String? {
+            val text = _sharedText.value
+            _sharedText.value = null
+            return text
+        }
+    }
+
     private val aiEngine: BaseLlmEngine by inject()
     private val embeddingManager: EmbeddingEngineManager by inject()
     private val logger = Logger.withTag("MainActivity")
@@ -154,8 +169,26 @@ class MainActivity : ComponentActivity() {
             }
         }
 
+        // Handle share intent on cold start
+        handleShareIntent(intent)
+
         setContent {
             MaApp()
+        }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        handleShareIntent(intent)
+    }
+
+    private fun handleShareIntent(intent: Intent?) {
+        if (intent?.action == Intent.ACTION_SEND && intent.type == "text/plain") {
+            val text = intent.getStringExtra(Intent.EXTRA_TEXT)
+            if (!text.isNullOrBlank()) {
+                logger.i { "Received shared text (${text.length} chars)" }
+                _sharedText.value = text
+            }
         }
     }
 

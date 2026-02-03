@@ -38,6 +38,7 @@ fun ChatMessageList(
     isGenerating: Boolean,
     listState: LazyListState,
     showEcoIndicator: Boolean,
+    onSpeak: ((String) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     LazyColumn(
@@ -53,7 +54,7 @@ fun ChatMessageList(
         ),
     ) {
         items(messages) { message ->
-            ChatBubble(message)
+            ChatBubble(message, onSpeak = onSpeak)
         }
 
         // Typing indicator while AI is generating

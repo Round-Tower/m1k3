@@ -6,6 +6,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.m1k3.ai.assistant.ai.BaseLlmEngine
+import app.m1k3.ai.domain.ai.LlmModel
 import app.m1k3.ai.domain.chat.events.ChatEvent
 import app.m1k3.ai.assistant.chat.usecase.ChatWithToolsUseCase
 import app.m1k3.ai.assistant.chat.usecase.ContextRetrievalUseCase
@@ -64,7 +65,7 @@ private val logger = Logger.withTag("ChatScreenViewModel")
  * - Error handling
  */
 class ChatScreenViewModel(
-    private val aiEngine: BaseLlmEngine,
+    private var aiEngine: BaseLlmEngine,
     private val conversationRepo: ConversationRepository,
     private val ecoMetricsRepo: EcoMetricsRepository,
     private val database: MaDatabase,
@@ -77,7 +78,11 @@ class ChatScreenViewModel(
     private val toolRegistry: ToolRegistry? = null,
     private val processLlmOutput: LlmOutputProcessor? = null,
     // DateTime provider for context-aware prompts (optional for backwards compatibility)
-    private val dateTimeProvider: DateTimeProviderInterface? = null
+    private val dateTimeProvider: DateTimeProviderInterface? = null,
+    // Engine factory for runtime model switching (optional)
+    private val engineFactory: ((LlmModel) -> BaseLlmEngine)? = null,
+    // TTS callbacks (platform-injected, optional)
+    private val onSpeakText: (suspend (String) -> Unit)? = null
 ) : ViewModel() {
     // ===== Use Cases (lazy initialization) =====
 
@@ -97,15 +102,6 @@ class ChatScreenViewModel(
     }
 
     /**
-     * UnifiedPromptBuilder for consistent prompt formatting.
-     */
-    private val promptBuilder: UnifiedPromptBuilder by lazy {
-        val formatter = DefaultChatFormatter(ChatFormat.Gemma3)
-        val assembler = ContextAssembler()
-        UnifiedPromptBuilder(formatter, assembler, deviceContextFormatter)
-    }
-
-    /**
      * ChatStatusBuilder for welcome status card.
      */
     private val chatStatusBuilder = ChatStatusBuilder()
@@ -116,12 +112,27 @@ class ChatScreenViewModel(
     private val deviceContextFormatter = DeviceContextFormatter()
 
     /**
+     * UnifiedPromptBuilder for consistent prompt formatting.
+     * Rebuilt on model switch to use the correct ChatFormat.
+     */
+    private var promptBuilder: UnifiedPromptBuilder = createPromptBuilder(LlmModel.default.chatFormat)
+
+    private fun createPromptBuilder(format: ChatFormat): UnifiedPromptBuilder {
+        val formatter = DefaultChatFormatter(format)
+        val assembler = ContextAssembler()
+        return UnifiedPromptBuilder(formatter, assembler, deviceContextFormatter)
+    }
+
+    /**
      * ChatWithToolsUseCase for agentic capabilities.
      * Only created when tool dependencies are provided AND tools are enabled in preferences.
+     * Rebuilt on model switch to use the updated engine and prompt builder.
      */
-    private val chatWithTools: ChatWithToolsUseCase? by lazy {
+    private var chatWithTools: ChatWithToolsUseCase? = createChatWithTools()
+
+    private fun createChatWithTools(): ChatWithToolsUseCase? {
         val toolsEnabled = preferences.getBoolean(PreferenceKeys.TOOLS_ENABLED, true)
-        if (toolsEnabled && toolRegistry != null && processLlmOutput != null) {
+        return if (toolsEnabled && toolRegistry != null && processLlmOutput != null) {
             ChatWithToolsUseCase(
                 aiEngine = aiEngine,
                 contextRetrieval = contextRetrieval,
@@ -252,6 +263,116 @@ class ChatScreenViewModel(
      */
     fun clearError() {
         _uiState.update { it.copy(error = null) }
+    }
+
+    /**
+     * Switch the active LLM model.
+     *
+     * Releases the current engine, creates a new one via the factory,
+     * and re-initializes. Disables input during the switch.
+     */
+    fun switchModel(model: LlmModel) {
+        val factory = engineFactory ?: run {
+            logger.w { "No engine factory, cannot switch models" }
+            return
+        }
+
+        if (model == _uiState.value.currentModel) return
+        if (_uiState.value.generationState.isGenerating) return
+
+        viewModelScope.launch {
+            try {
+                logger.i { "Switching model to ${model.displayName}" }
+                _uiState.update {
+                    it.copy(
+                        currentModel = model,
+                        engineState = EngineState.Loading
+                    )
+                }
+
+                // Release old engine
+                aiEngine.release()
+
+                // Create and initialize new engine
+                aiEngine = factory(model)
+
+                // Rebuild prompt builder and tools for new model's chat format
+                promptBuilder = createPromptBuilder(model.chatFormat)
+                chatWithTools = createChatWithTools()
+
+                val result = aiEngine.initialize()
+
+                result.onSuccess {
+                    _uiState.update { it.copy(engineState = EngineState.Ready) }
+                    logger.i { "Switched to ${model.displayName}" }
+                }.onFailure { e ->
+                    val error = ChatError.EngineInitError("Failed to load ${model.displayName}: ${e.message}")
+                    _uiState.update { it.copy(engineState = EngineState.Failed(error), error = error) }
+                    logger.e(e) { "Model switch failed" }
+                }
+            } catch (e: Exception) {
+                logger.e(e) { "Model switch error" }
+                _uiState.update {
+                    it.copy(
+                        engineState = EngineState.Failed(mapExceptionToError(e)),
+                        error = mapExceptionToError(e)
+                    )
+                }
+            }
+        }
+    }
+
+    /**
+     * Send text from an external share intent.
+     *
+     * Bypasses the input field — adds user message and generates response immediately.
+     */
+    fun sendSharedText(text: String) {
+        val trimmed = text.trim()
+        if (trimmed.isBlank()) return
+        if (_uiState.value.generationState.isGenerating) return
+
+        viewModelScope.launch {
+            val userMessage = ChatMessage(
+                text = trimmed,
+                isUser = true,
+                timestamp = Clock.System.now().toEpochMilliseconds()
+            )
+
+            _uiState.update {
+                it.copy(
+                    messages = it.messages + userMessage,
+                    generationState = GenerationState.Thinking,
+                    error = null
+                )
+            }
+
+            recordMessage(trimmed, "user", 0)
+            generateResponse(trimmed)
+        }
+    }
+
+    /**
+     * Synthesize and play speech for a message.
+     *
+     * Uses the platform-injected TTS callback.
+     */
+    fun speakMessage(text: String) {
+        val speak = onSpeakText ?: run {
+            logger.w { "TTS not available" }
+            return
+        }
+
+        viewModelScope.launch {
+            try {
+                _uiState.update { it.copy(isLoadingTts = true, isSpeaking = true) }
+                speak(text)
+            } catch (e: Exception) {
+                logger.e(e) { "TTS playback failed" }
+            } finally {
+                _uiState.update { it.copy(isLoadingTts = false, isSpeaking = false) }
+            }
+        }
     }
 
     /**
@@ -490,13 +611,13 @@ class ChatScreenViewModel(
                             val updatedMessages = state.messages.toMutableList()
                             if (updatedMessages.isNotEmpty()) {
                                 updatedMessages[updatedMessages.lastIndex] = updatedMessages.last().copy(
-                                    text = accumulated.toString().trim()
+                                    text = accumulated.toString()
                                 )
                             }
                             state.copy(
                                 messages = updatedMessages,
                                 generationState = GenerationState.Streaming(
-                                    partialText = accumulated.toString().trim(),
+                                    partialText = accumulated.toString(),
                                     tokenCount = tokenCount
                                 )
                             )
@@ -517,21 +638,21 @@ class ChatScreenViewModel(
                     val updatedMessages = state.messages.toMutableList()
                     if (updatedMessages.isNotEmpty()) {
                         updatedMessages[updatedMessages.lastIndex] = updatedMessages.last().copy(
-                            text = accumulated.toString().trim(),
+                            text = accumulated.toString(),
                             inferenceStats = stats.formatFull()
                         )
                     }
                     state.copy(
                         messages = updatedMessages,
                         generationState = GenerationState.Complete(
-                            finalText = accumulated.toString().trim(),
+                            finalText = accumulated.toString(),
                             stats = stats
                         )
                     )
                 }
 
                 recordEcoMetrics(tokenCount)
-                recordMessage(accumulated.toString().trim(), "assistant", tokenCount)
+                recordMessage(accumulated.toString(), "assistant", tokenCount)
 
                 logger.i { "Welcome message generated: $tokenCount tokens in ${duration}ms" }
             }.onFailure { e ->
@@ -608,13 +729,13 @@ class ChatScreenViewModel(
                             val updatedMessages = state.messages.toMutableList()
                             if (updatedMessages.isNotEmpty()) {
                                 updatedMessages[updatedMessages.lastIndex] = updatedMessages.last().copy(
-                                    text = accumulated.toString().trim()
+                                    text = accumulated.toString()
                                 )
                             }
                             state.copy(
                                 messages = updatedMessages,
                                 generationState = GenerationState.Streaming(
-                                    partialText = accumulated.toString().trim(),
+                                    partialText = accumulated.toString(),
                                     tokenCount = tokenCount
                                 )
                             )
@@ -836,7 +957,7 @@ class ChatScreenViewModel(
             val updatedMessages = state.messages.toMutableList()
             if (updatedMessages.isNotEmpty()) {
                 updatedMessages[updatedMessages.lastIndex] = updatedMessages.last().copy(
-                    text = accumulated.toString().trim(),
+                    text = accumulated.toString(),
                     inferenceStats = stats.formatFull(),
                     ragSources = context.ragSources
                 )
@@ -844,7 +965,7 @@ class ChatScreenViewModel(
             state.copy(
                 messages = updatedMessages,
                 generationState = GenerationState.Complete(
-                    finalText = accumulated.toString().trim(),
+                    finalText = accumulated.toString(),
                     stats = stats
                 ),
                 ragInfo = context.ragInfo
@@ -853,7 +974,7 @@ class ChatScreenViewModel(
 
         recordEcoMetrics(tokenCount)
         recordMessage(
-            content = accumulated.toString().trim(),
+            content = accumulated.toString(),
             role = "assistant",
             tokens = tokenCount,
             ragSources = context.ragSources,

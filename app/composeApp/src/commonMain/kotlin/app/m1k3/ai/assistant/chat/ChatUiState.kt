@@ -1,6 +1,7 @@
 package app.m1k3.ai.assistant.chat
 
 // Import domain types
+import app.m1k3.ai.domain.ai.LlmModel
 import app.m1k3.ai.domain.chat.ChatError
 import app.m1k3.ai.domain.chat.GenerationStats
 import app.m1k3.ai.domain.status.ChatStatus
@@ -56,7 +57,16 @@ data class ChatUiState(
     val toolState: ToolState = ToolState(),
 
     /** Chat status for initial status card (null until generated) */
-    val chatStatus: ChatStatus? = null
+    val chatStatus: ChatStatus? = null,
+
+    /** Currently selected LLM model */
+    val currentModel: LlmModel = LlmModel.default,
+
+    /** TTS speaking state */
+    val isSpeaking: Boolean = false,
+
+    /** TTS model loading state (first-load latency indicator) */
+    val isLoadingTts: Boolean = false
 )
 
 /**

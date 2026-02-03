@@ -180,6 +180,7 @@ class DefaultChatFormatter(
         is ChatFormat.ChatML -> "<|im_start|>assistant\n"
         is ChatFormat.Llama -> "" // Llama generates after [/INST]
         is ChatFormat.Gemma3 -> "<start_of_turn>model\n"
+        is ChatFormat.FalconH1 -> "<|start_header_id|>assistant<|end_header_id|>\n"
         is ChatFormat.Simple -> ""
     }
 }

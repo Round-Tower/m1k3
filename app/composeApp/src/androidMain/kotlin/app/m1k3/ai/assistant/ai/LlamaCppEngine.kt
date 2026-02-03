@@ -3,6 +3,7 @@ package app.m1k3.ai.assistant.ai
 import android.content.Context
 import app.m1k3.ai.assistant.utils.Logger
 import app.m1k3.ai.domain.ai.GenerationConfig
+import app.m1k3.ai.domain.ai.LlmModel
 import app.m1k3.ai.domain.chat.format.ChatFormat
 import app.m1k3.ai.domain.chat.format.MessageRole
 import app.m1k3.ai.domain.chat.services.ChatFormatter
@@ -25,11 +26,13 @@ private val logger = Logger.withTag("LlamaCppEngine")
  * LlamaCppEngine - llama.cpp-based AI inference engine via Llamatik
  *
  * @param context Android context for file access
- * @param chatFormatter Optional formatter for prompt construction (defaults to Gemma3)
+ * @param model The LLM model to use (default: Gemma3 270M)
+ * @param chatFormatter Optional formatter for prompt construction (derived from model's format)
  */
 class LlamaCppEngine(
     private val context: Context,
-    private val chatFormatter: ChatFormatter = DefaultChatFormatter(ChatFormat.Gemma3)
+    private val model: LlmModel = LlmModel.default,
+    private val chatFormatter: ChatFormatter = DefaultChatFormatter(model.chatFormat)
 ) : BaseLlmEngine {
 
     @Volatile
@@ -41,15 +44,14 @@ class LlamaCppEngine(
         val activityManager = context.getSystemService(Context.ACTIVITY_SERVICE) as android.app.ActivityManager
         val memInfo = android.app.ActivityManager.MemoryInfo()
         activityManager.getMemoryInfo(memInfo)
-        activityManager.getMemoryInfo(memInfo)
         (memInfo.totalMem / (1024 * 1024 * 1024)).toInt()
     }
 
-    private var modelMini = "gemma-3-270m-it-UD-IQ3_XXS.gguf"
+    private val modelFilename = model.filename
     private var defaultConfig = GenerationConfig()
 
     /**
-     * Initialize llama.cpp engine with Gemma 3 270M GGUF model.
+     * Initialize llama.cpp engine with the configured GGUF model.
      *
      * Steps:
      * 1. Copy GGUF model from assets to internal storage (if not exists)
@@ -71,21 +73,21 @@ class LlamaCppEngine(
             }
 
             try {
-                logger.i { "Starting initialization -> RAM: ${deviceRamGB}GB" }
+                logger.i { "Starting initialization -> model=${model.displayName}, RAM: ${deviceRamGB}GB" }
 
-                val modelFile = File(context.filesDir, modelMini)
+                val modelFile = File(context.filesDir, modelFilename)
 
                 if (!modelFile.exists()) {
-                    logger.i { "Copying $modelMini to internal storage" }
+                    logger.i { "Copying $modelFilename to internal storage" }
 
-                    context.assets.open("models/${modelMini}").use { input ->
+                    context.assets.open("models/${modelFilename}").use { input ->
                         modelFile.outputStream().use { output ->
                             input.copyTo(output, bufferSize = 8192)
                         }
                     }
                     logger.i { "Model copied (${modelFile.length() / 1024 / 1024} MB)" }
                 } else {
-                    logger.d { "Model $modelMini already in storage (${modelFile.length() / 1024 / 1024} MB)" }
+                    logger.d { "Model $modelFilename already in storage (${modelFile.length() / 1024 / 1024} MB)" }
                 }
 
                 LlamaBridge.initGenerateModel(modelFile.absolutePath)
@@ -512,11 +514,13 @@ class LlamaCppEngine(
      * Detection looks for characteristic markers from any supported format.
      */
     private fun isAlreadyFormatted(prompt: String): Boolean {
-        return prompt.contains("<start_of_turn>") ||  // Gemma3
-               prompt.contains("<end_of_turn>") ||    // Gemma3
-               prompt.contains("<|im_start|>") ||     // ChatML
-               prompt.contains("[INST]") ||           // Llama
-               prompt.startsWith("<bos>")             // Already has BOS
+        return prompt.contains("<start_of_turn>") ||     // Gemma3
+               prompt.contains("<end_of_turn>") ||       // Gemma3
+               prompt.contains("<|im_start|>") ||        // ChatML
+               prompt.contains("[INST]") ||              // Llama
+               prompt.contains("<|start_header_id|>") || // FalconH1
+               prompt.startsWith("<bos>") ||             // Gemma3 BOS
+               prompt.startsWith("<|begin_of_text|>")    // FalconH1 BOS
     }
 
     /**

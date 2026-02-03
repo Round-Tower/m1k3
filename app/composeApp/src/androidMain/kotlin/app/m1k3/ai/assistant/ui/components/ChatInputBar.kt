@@ -30,6 +30,8 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import org.jetbrains.compose.ui.tooling.preview.Preview
 import app.m1k3.ai.assistant.design.haptics.rememberHapticFeedback
 import app.m1k3.ai.assistant.design.preview.PreviewFixtures
@@ -37,6 +39,7 @@ import app.m1k3.ai.assistant.design.theme.MaTheme
 import app.m1k3.ai.assistant.design.tokens.MaColors
 import app.m1k3.ai.assistant.design.tokens.MaSpacing
 import app.m1k3.ai.assistant.design.tokens.MaTypography
+import app.m1k3.ai.domain.ai.LlmModel
 
 /**
  * ChatInputBar - Beautiful input field with integrated send button.
@@ -59,6 +62,8 @@ fun ChatInputBar(
     onTextChange: (String) -> Unit,
     onSend: () -> Unit,
     enabled: Boolean,
+    currentModel: LlmModel? = null,
+    onModelSwitch: ((LlmModel) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val interactionSource = remember { MutableInteractionSource() }
@@ -135,12 +140,28 @@ fun ChatInputBar(
         ),
         color = MaColors.BgSecondary // Transparent to show gradient overlay
     ) {
-        Box(
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .navigationBarsPadding()
                 .imePadding()
         ) {
+            // Model chip for switching between models
+            if (currentModel != null && onModelSwitch != null) {
+                ModelChip(
+                    currentModel = currentModel,
+                    onModelSwitch = onModelSwitch,
+                    enabled = enabled,
+                    modifier = Modifier.padding(
+                        start = MaSpacing.base,
+                        top = MaSpacing.xs,
+                        bottom = MaSpacing.xs
+                    )
+                )
+            }
+
+            // Input field with send button
+            Box(modifier = Modifier.fillMaxWidth()) {
             // Integrated input field with send button
             BasicTextField(
                 value = text,
@@ -213,7 +234,8 @@ fun ChatInputBar(
                     color = if (hasText && enabled) MaColors.White else MaColors.textDisabled()
                 )
             }
-        }
+            } // Box (input + send button)
+        } // Column
     }
 }
 
@@ -263,6 +285,58 @@ private fun SendArrowIcon(
             strokeWidth = strokeWidth,
             cap = StrokeCap.Round
         )
+    }
+}
+
+/**
+ * Model chip for switching between LLM models.
+ *
+ * Shows current model name; tap to open dropdown with all available models.
+ */
+@Composable
+private fun ModelChip(
+    currentModel: LlmModel,
+    onModelSwitch: (LlmModel) -> Unit,
+    enabled: Boolean,
+    modifier: Modifier = Modifier
+) {
+    var expanded by remember { mutableStateOf(false) }
+
+    Box(modifier = modifier) {
+        Box(
+            modifier = Modifier
+                .clip(RoundedCornerShape(12.dp))
+                .background(MaColors.Orange.copy(alpha = if (enabled) 0.15f else 0.08f))
+                .clickable(enabled = enabled) { expanded = true }
+                .padding(horizontal = 10.dp, vertical = 4.dp)
+        ) {
+            Text(
+                text = currentModel.displayName,
+                style = MaTypography.labelSmall,
+                color = if (enabled) MaColors.Orange else MaColors.textDisabled()
+            )
+        }
+
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false }
+        ) {
+            LlmModel.all().forEach { model ->
+                DropdownMenuItem(
+                    text = {
+                        Text(
+                            text = model.displayName,
+                            style = MaTypography.bodyMedium,
+                            color = if (model == currentModel) MaColors.Orange else MaColors.textPrimary()
+                        )
+                    },
+                    onClick = {
+                        expanded = false
+                        if (model != currentModel) onModelSwitch(model)
+                    }
+                )
+            }
+        }
     }
 }
 

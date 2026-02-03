@@ -47,6 +47,7 @@ import app.m1k3.ai.assistant.ui.components.ContextWindowIndicator
 import app.m1k3.ai.assistant.ui.components.EcoIndicator
 import app.m1k3.ai.assistant.ui.components.EcoIndicatorVariant
 import org.jetbrains.compose.ui.tooling.preview.Preview
+import app.m1k3.ai.assistant.MainActivity
 import org.koin.androidx.compose.koinViewModel
 import org.koin.core.parameter.parametersOf
 
@@ -105,9 +106,15 @@ fun ChatScreen(
         }
     }
 
-    // Initialize AI engine
+    // Initialize AI engine + consume shared text
     LaunchedEffect(Unit) {
         viewModel.initializeEngine()
+
+        // Check for shared text from ACTION_SEND intent
+        val sharedText = MainActivity.consumeSharedText()
+        if (sharedText != null) {
+            viewModel.sendSharedText(sharedText)
+        }
     }
 
     // Auto-scroll when new messages arrive
@@ -139,7 +146,8 @@ fun ChatScreen(
                 messages = uiState.messages,
                 isGenerating = uiState.generationState.isGenerating,
                 listState = listState,
-                showEcoIndicator = true
+                showEcoIndicator = true,
+                onSpeak = { text -> viewModel.speakMessage(text) }
             )
 
             // Eco Indicator - Real-time environmental impact
@@ -160,7 +168,9 @@ fun ChatScreen(
                         avatarVM?.processMessage(uiState.inputText, isUserMessage = true)
                         viewModel.sendMessage()
                     },
-                    enabled = uiState.isInputEnabled
+                    enabled = uiState.isInputEnabled,
+                    currentModel = uiState.currentModel,
+                    onModelSwitch = { model -> viewModel.switchModel(model) }
                 )
             },
             modifier = Modifier.align(Alignment.BottomCenter)
@@ -227,10 +237,12 @@ private fun ErrorSnackbar(
  * ChatBubble - Renders a single message bubble or status card.
  */
 @Composable
-fun ChatBubble(message: ChatMessage) {
+fun ChatBubble(
+    message: ChatMessage,
+    onSpeak: ((String) -> Unit)? = null
+) {
     when {
         message.isStatusMessage -> {
-            // Status card for welcome/system messages
             MaStatusCard(
                 greeting = message.text.lines().firstOrNull() ?: "Hello!",
                 engineReady = true,
@@ -255,7 +267,8 @@ fun ChatBubble(message: ChatMessage) {
                 timestamp = message.timestamp,
                 inferenceStats = message.inferenceStats,
                 isError = message.isError,
-                ragSources = message.ragSources
+                ragSources = message.ragSources,
+                onSpeak = if (onSpeak != null) {{ onSpeak(message.text) }} else null
             )
         }
     }

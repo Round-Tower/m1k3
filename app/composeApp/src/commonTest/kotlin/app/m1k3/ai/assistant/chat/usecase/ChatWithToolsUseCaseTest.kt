@@ -105,6 +105,8 @@ class ChatWithToolsUseCaseTest {
         override suspend fun isToolAvailable(toolId: String): Boolean =
             executors[toolId]?.isAvailable() ?: false
         override fun registerTool(tool: Tool, executor: ToolExecutor) {}
+        override suspend fun getRelevantTools(query: String, maxTools: Int): List<Tool> =
+            tools.values.toList().take(maxTools)
     }
 
     private class MockToolExecutor(

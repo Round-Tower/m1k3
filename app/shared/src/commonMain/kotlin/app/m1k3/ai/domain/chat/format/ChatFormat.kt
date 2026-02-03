@@ -205,6 +205,56 @@ sealed class ChatFormat {
         override fun getPromptPrefix(): String = "<bos>"
     }
 
+    // ===== FalconH1 Format =====
+
+    /**
+     * FalconH1 format - TII's Falcon-H1 hybrid Mamba2/Attention model
+     *
+     * Used by: Falcon-H1-Tiny-90M-Instruct, Falcon-H1 family
+     *
+     * Uses Llama 3-style header tokens with end-of-turn markers.
+     *
+     * Format:
+     * ```
+     * <|begin_of_text|><|start_header_id|>system<|end_header_id|>
+     * You are helpful.<|eot_id|>
+     * <|start_header_id|>user<|end_header_id|>
+     * Hello<|eot_id|>
+     * <|start_header_id|>assistant<|end_header_id|>
+     * Hi there!<|eot_id|>
+     * ```
+     */
+    data object FalconH1 : ChatFormat() {
+        override val name = "FalconH1"
+        override val supportsTools = true
+        override val supportsSystemRole = true
+
+        override fun formatMessage(role: MessageRole, content: String): String {
+            val headerRole = when (role) {
+                MessageRole.SYSTEM -> "system"
+                MessageRole.USER -> "user"
+                MessageRole.ASSISTANT -> "assistant"
+                MessageRole.TOOL -> "user" // Tool results go in user turn
+            }
+            val prefix = if (role == MessageRole.TOOL) "[Tool Result] " else ""
+            return "<|start_header_id|>$headerRole<|end_header_id|>\n$prefix$content<|eot_id|>\n"
+        }
+
+        override fun formatToolSchema(tools: List<Tool>): String = buildString {
+            appendLine("<|start_header_id|>system<|end_header_id|>")
+            appendLine("You have access to the following tools:")
+            appendLine()
+            tools.forEach { append(it.toSchemaString()) }
+            appendLine()
+            appendLine("To use a tool, respond with: <tool_call>{\"tool\": \"tool_id\", \"args\": {...}}</tool_call>")
+            appendLine("<|eot_id|>")
+        }
+
+        override fun getStopTokens(): List<String> = listOf("<|eot_id|>", "<|end_of_text|>")
+
+        override fun getPromptPrefix(): String = "<|begin_of_text|>"
+    }
+
     // ===== Simple Format =====
 
     /**

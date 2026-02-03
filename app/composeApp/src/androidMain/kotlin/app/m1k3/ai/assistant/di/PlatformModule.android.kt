@@ -41,6 +41,12 @@ import app.m1k3.ai.assistant.eco.EcoStatsViewModel
 import app.m1k3.ai.assistant.embedding.EmbeddingEngineManager
 import app.m1k3.ai.assistant.embedding.EmbeddingEngineManagerImpl
 import app.m1k3.ai.assistant.embedding.EmbeddingModelManager
+import app.m1k3.ai.assistant.tts.AudioEffectsProcessor
+import app.m1k3.ai.assistant.tts.AudioPlayer
+import app.m1k3.ai.assistant.tts.KokoroTtsEngine
+import app.m1k3.ai.domain.ai.LlmModel
+import app.m1k3.ai.domain.tts.TtsEngine
+import app.m1k3.ai.domain.tts.Voice
 import app.m1k3.ai.domain.usecases.chat.LlmOutputProcessor
 import org.koin.androidx.viewmodel.dsl.viewModel
 import org.koin.core.module.dsl.*
@@ -135,6 +141,36 @@ actual val platformModule = module {
     single<EmbeddingEngine> {
         val manager = EmbeddingModelManager(get<Context>())
         manager.getEmbeddingEngine()
+    }
+
+    // ===== TTS Engine Layer =====
+
+    /**
+     * AudioEffectsProcessor
+     *
+     * DSP effects for TTS audio output (RadioChat, Intercom, etc.).
+     * Stateless — singleton is fine.
+     */
+    single { AudioEffectsProcessor() }
+
+    /**
+     * AudioPlayer
+     *
+     * AudioTrack-based playback for synthesized audio.
+     * 24kHz mono PCM float (Kokoro native format).
+     */
+    single { AudioPlayer() }
+
+    /**
+     * TtsEngine (Kokoro)
+     *
+     * On-device text-to-speech via ONNX Runtime.
+     * INT8 quantized model (~90MB). Daniel voice default.
+     *
+     * Note: Call loadModel() before first synthesis.
+     */
+    single<TtsEngine> {
+        KokoroTtsEngine(get<Context>())
     }
 
     // ===== AI Engine Layer =====
@@ -287,6 +323,10 @@ actual val platformModule = module {
      */
     viewModel { params ->
         val projectId = params.getOrNull<String>() ?: "default"
+        val context = get<Context>()
+        val ttsEngine = get<TtsEngine>()
+        val audioPlayer = get<AudioPlayer>()
+
         ChatScreenViewModel(
             aiEngine = get<BaseLlmEngine>(),
             conversationRepo = get<ConversationRepository>(),
@@ -299,7 +339,21 @@ actual val platformModule = module {
             ragManager = get<RAGManager>(),
             toolRegistry = get<ToolRegistry>(),
             processLlmOutput = get<LlmOutputProcessor>(),
-            dateTimeProvider = get<DateTimeProviderInterface>()
+            dateTimeProvider = get<DateTimeProviderInterface>(),
+            engineFactory = { model -> LlamaCppEngine(context, model) },
+            onSpeakText = { text ->
+                if (text.isBlank()) return@ChatScreenViewModel
+                if (!ttsEngine.isLoaded) ttsEngine.loadModel()
+                val result = ttsEngine.synthesize(text, Voice.default)
+                when (result) {
+                    is app.m1k3.ai.domain.tts.TtsResult.Success -> {
+                        audioPlayer.play(result.audio)
+                    }
+                    is app.m1k3.ai.domain.tts.TtsResult.Error -> {
+                        throw RuntimeException("TTS failed: ${result.message}")
+                    }
+                }
+            }
         )
     }
 
