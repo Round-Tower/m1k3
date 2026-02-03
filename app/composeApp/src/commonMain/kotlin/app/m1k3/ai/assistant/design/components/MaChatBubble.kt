@@ -138,10 +138,9 @@ fun MaChatBubbleAI(
                 Column(
                     verticalArrangement = Arrangement.spacedBy(MaSpacing.sm)
                 ) {
-                    Text(
+                    MarkdownText(
                         text = text,
-                        style = MaTypography.bodyLarge,
-                        color = if (isError) MaColors.Error else MaColors.textPrimary()
+                        isError = isError
                     )
 
                     // Timestamp
