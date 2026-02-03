@@ -94,7 +94,9 @@ class ChatWithToolsUseCaseTest {
                 return Result.failure(RuntimeException(errorMessage))
             }
 
-            responseText.split(" ").forEach { token ->
+            // Emit tokens with natural spacing (like real tokenizers)
+            responseText.split(" ").forEachIndexed { index, word ->
+                val token = if (index == 0) word else " $word"
                 onToken(token)
             }
 
@@ -199,12 +201,71 @@ class ChatWithToolsUseCaseTest {
         val useCase = createUseCase()
         val events = useCase.execute("Hello").toList()
 
-        assertEquals(5, events.size)
+        // Should have: Started, RetrievingContext, ContextRetrieved, Generating, Streaming..., Complete
+        assertTrue(events.size >= 5)
         assertIs<ChatEvent.Started>(events[0])
         assertIs<ChatEvent.RetrievingContext>(events[1])
         assertIs<ChatEvent.ContextRetrieved>(events[2])
         assertIs<ChatEvent.Generating>(events[3])
-        assertIs<ChatEvent.Complete>(events[4])
+        assertIs<ChatEvent.Complete>(events.last())
+    }
+
+    // ===== Streaming Tests =====
+
+    @Test
+    fun `execute emits Streaming events during generation`() = runTest {
+        val engine = FakeLlmEngine(responseText = "Hello world")
+        val useCase = createUseCase(engine = engine)
+
+        val events = useCase.execute("Test").toList()
+        val streamingEvents = events.filterIsInstance<ChatEvent.Streaming>()
+
+        assertTrue(
+            streamingEvents.isNotEmpty(),
+            "Should emit Streaming events during generation"
+        )
+    }
+
+    @Test
+    fun `streaming events contain accumulating text`() = runTest {
+        val engine = FakeLlmEngine(responseText = "one two three")
+        val useCase = createUseCase(engine = engine)
+
+        val events = useCase.execute("Test").toList()
+        val streamingEvents = events.filterIsInstance<ChatEvent.Streaming>()
+
+        // Each streaming event should have progressively more text
+        assertEquals(3, streamingEvents.size)
+        assertEquals("one", streamingEvents[0].partialText)
+        assertEquals("one two", streamingEvents[1].partialText)
+        assertEquals("one two three", streamingEvents[2].partialText)
+    }
+
+    @Test
+    fun `streaming events have incrementing token counts`() = runTest {
+        val engine = FakeLlmEngine(responseText = "a b c")
+        val useCase = createUseCase(engine = engine)
+
+        val events = useCase.execute("Test").toList()
+        val streamingEvents = events.filterIsInstance<ChatEvent.Streaming>()
+
+        assertEquals(3, streamingEvents.size)
+        assertEquals(1, streamingEvents[0].tokenCount)
+        assertEquals(2, streamingEvents[1].tokenCount)
+        assertEquals(3, streamingEvents[2].tokenCount)
+    }
+
+    @Test
+    fun `streaming events appear between Generating and Complete`() = runTest {
+        val useCase = createUseCase()
+        val events = useCase.execute("Hello").toList()
+
+        val generatingIdx = events.indexOfFirst { it is ChatEvent.Generating }
+        val firstStreamingIdx = events.indexOfFirst { it is ChatEvent.Streaming }
+        val completeIdx = events.indexOfFirst { it is ChatEvent.Complete }
+
+        assertTrue(firstStreamingIdx > generatingIdx, "Streaming should come after Generating")
+        assertTrue(firstStreamingIdx < completeIdx, "Streaming should come before Complete")
     }
 
     // ===== Response Tests =====

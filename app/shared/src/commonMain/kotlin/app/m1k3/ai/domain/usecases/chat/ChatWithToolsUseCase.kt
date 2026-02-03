@@ -12,7 +12,7 @@ import app.m1k3.ai.domain.chat.services.ContextRetrieverInterface
 import app.m1k3.ai.domain.config.GenerationConfigBuilder
 import app.m1k3.ai.domain.tools.services.ToolRegistry
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.channelFlow
 import kotlin.time.Clock
 import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
@@ -87,14 +87,14 @@ class ChatWithToolsUseCase(
     fun execute(
         prompt: String,
         confirmedToolIds: Set<String> = emptySet()
-    ): Flow<ChatEvent> = flow {
-        emit(ChatEvent.Started)
+    ): Flow<ChatEvent> = channelFlow {
+        send(ChatEvent.Started)
 
         try {
             // 1. Retrieve context (RAG + memory + history)
-            emit(ChatEvent.RetrievingContext)
+            send(ChatEvent.RetrievingContext)
             val context = contextRetrieval.retrieveContext(prompt)
-            emit(ChatEvent.ContextRetrieved(context))
+            send(ChatEvent.ContextRetrieved(context))
 
             // 2. Build prompt with tool schemas
             val fullPrompt = buildPromptWithTools(prompt, context)
@@ -111,8 +111,8 @@ class ChatWithToolsUseCase(
                 GenerationConfig()
             }
 
-            // 4. Generate response
-            emit(ChatEvent.Generating)
+            // 4. Generate response with streaming
+            send(ChatEvent.Generating)
             val startTime = Clock.System.now().toEpochMilliseconds()
             val accumulated = StringBuilder()
             var tokenCount = 0
@@ -121,17 +121,20 @@ class ChatWithToolsUseCase(
                 prompt = fullPrompt,
                 config = config,
                 onToken = { token ->
-                    val cleanToken = token.trim()
-                    if (cleanToken.isNotEmpty()) {
-                        accumulated.append(cleanToken).append(" ")
+                    if (token.isNotEmpty()) {
+                        accumulated.append(token)
                         tokenCount++
+                        trySend(ChatEvent.Streaming(
+                            partialText = accumulated.toString(),
+                            tokenCount = tokenCount
+                        ))
                     }
                 }
             )
 
             result.onSuccess {
                 val duration = Clock.System.now().toEpochMilliseconds() - startTime
-                val rawResponse = accumulated.toString().trim()
+                val rawResponse = accumulated.toString()
 
                 // 5. Process for tool calls
                 val processed = processLlmOutput.execute(rawResponse, confirmedToolIds)
@@ -146,12 +149,12 @@ class ChatWithToolsUseCase(
                             context = context,
                             toolResults = null
                         )
-                        emit(ChatEvent.Complete(response))
+                        send(ChatEvent.Complete(response))
                     }
 
                     is ProcessedOutput.WithTools -> {
                         // Tools detected and executed
-                        emit(ChatEvent.ToolsExecuted(
+                        send(ChatEvent.ToolsExecuted(
                             results = processed.toolResults,
                             hasPendingConfirmations = processed.hasPendingConfirmations
                         ))
@@ -164,16 +167,16 @@ class ChatWithToolsUseCase(
                             toolResults = processed.toolResults,
                             toolResultsFormatted = processed.formatResultsForDisplay()
                         )
-                        emit(ChatEvent.Complete(response))
+                        send(ChatEvent.Complete(response))
                     }
                 }
 
             }.onFailure { e ->
-                emit(ChatEvent.Failed(mapExceptionToError(e)))
+                send(ChatEvent.Failed(mapExceptionToError(e)))
             }
 
         } catch (e: Exception) {
-            emit(ChatEvent.Failed(mapExceptionToError(e)))
+            send(ChatEvent.Failed(mapExceptionToError(e)))
         }
     }
 
