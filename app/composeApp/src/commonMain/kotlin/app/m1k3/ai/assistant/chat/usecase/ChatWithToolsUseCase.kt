@@ -189,14 +189,16 @@ class ChatWithToolsUseCase(
         context: EnrichedContext,
         deviceContext: DeviceContext? = null
     ): String {
-        val availableTools = toolRegistry.getAvailableTools()
+        // Dynamic tool loading: only include tools relevant to the user's query.
+        // Saves 67-100% of tool token overhead for small models.
+        val relevantTools = toolRegistry.getRelevantTools(userPrompt, maxTools = 3)
 
         // Use unified builder if available
         promptBuilder?.let { builder ->
             return builder.build(
                 userPrompt = userPrompt,
                 context = context,
-                tools = availableTools,
+                tools = relevantTools,
                 deviceContext = deviceContext
             )
         }
@@ -208,9 +210,9 @@ class ChatWithToolsUseCase(
                 appendLine()
             }
 
-            if (availableTools.isNotEmpty()) {
+            if (relevantTools.isNotEmpty()) {
                 appendLine("You have access to the following tools:")
-                availableTools.forEach { tool ->
+                relevantTools.forEach { tool ->
                     appendLine("- ${tool.id}: ${tool.description}")
                     if (tool.parameters.isNotEmpty()) {
                         tool.parameters.forEach { param ->

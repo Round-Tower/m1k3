@@ -11,14 +11,10 @@ import app.m1k3.ai.domain.chat.services.ChatMessage
 import app.m1k3.ai.domain.chat.services.DefaultChatFormatter
 import com.llamatik.library.platform.LlamaBridge
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.io.File
-import java.util.concurrent.atomic.AtomicBoolean
-import java.util.concurrent.atomic.AtomicInteger
-import kotlin.coroutines.resume
 
 private val logger = Logger.withTag("LlamaCppEngine")
 
@@ -115,11 +111,19 @@ class LlamaCppEngine(
     /**
      * Generate a single response (non-streaming).
      *
-     * Blocks until full response is generated, then returns GenerationResult.
+     * Uses Llamatik's non-streaming APIs:
+     * - Pre-formatted prompts (from UnifiedPromptBuilder): `generate(prompt)` — pass-through,
+     *   no additional template wrapping by native code.
+     * - Raw prompts: `generateWithContext(system, context, user)` — native code applies
+     *   the model's chat template.
+     *
+     * IMPORTANT: generateWithContext applies its own Gemma-style template in C++.
+     * Passing a pre-formatted prompt as userPrompt causes double-formatting →
+     * model hallucination → invalid UTF-8 bytes → JNI NewStringUTF SIGABRT.
      *
      * @param prompt User input text
      * @param config Generation configuration
-     * @return Result.success(GenerationResult) if generation succeeds, Result.failure(exception) otherwise
+     * @return Result.success(GenerationResult) or Result.failure(exception)
      */
     override suspend fun generate(
         prompt: String,
@@ -134,99 +138,47 @@ class LlamaCppEngine(
         }
 
         val startTime = System.currentTimeMillis()
-        val responseBuilder = StringBuilder()
-        val tokenCount = AtomicInteger(0)
-
-        // Get maxTokens limit (0 or null = use engine's device-adaptive limit)
         val maxTokens = config.maxTokens?.takeIf { it > 0 } ?: getOptimalMaxTokens()
 
         try {
-            val systemPrompt = buildCleanSystemPrompt(config)
-            val contextParam = buildContextString(config)
-            val chatPrompt = buildChatPrompt(systemPrompt, contextParam, prompt)
+            LlamaBridge.updateGenerateParams(
+                temperature = config.temperature ?: 0.7f,
+                maxTokens = maxTokens,
+                topP = 0.9f,
+                topK = 40,
+                repeatPenalty = 1.1f
+            )
 
-            logger.d {
-                "Prompt - User: $prompt  Chat: $chatPrompt - ${chatPrompt.length}chars - maxTokens=$maxTokens"
+            val preformatted = isAlreadyFormatted(prompt)
+            val rawResponse = if (preformatted) {
+                // Pre-formatted prompt (from UnifiedPromptBuilder) — already has chat
+                // template tokens. Use generate() which passes the prompt straight to
+                // the model without additional wrapping.
+                logger.d { "Generate (pre-formatted) -> ${prompt.length}c maxTokens=$maxTokens" }
+                LlamaBridge.generate(prompt)
+            } else {
+                // Raw prompt — let native generateWithContext apply the model's
+                // chat template (Gemma-style system/context/user structure).
+                val systemPrompt = buildCleanSystemPrompt(config)
+                val contextBlock = buildContextString(config)
+                logger.d { "Generate (structured) -> system=${systemPrompt.length}c context=${contextBlock.length}c user=${prompt.length}c maxTokens=$maxTokens" }
+                LlamaBridge.generateWithContext(systemPrompt, contextBlock, prompt)
             }
 
-            val stopTokens = chatFormatter.getStopTokens()
-            val shouldStop = AtomicBoolean(false)
-            val hasResumed = AtomicBoolean(false)
-
-            suspendCancellableCoroutine { continuation ->
-                LlamaBridge.generateStream(
-                    chatPrompt,
-                    object : com.llamatik.library.platform.GenStream {
-                        override fun onDelta(text: String) {
-                            if (shouldStop.get()) return
-
-                            // Check if we've hit maxTokens limit
-                            val currentCount = tokenCount.get()
-                            if (currentCount >= maxTokens) {
-                                shouldStop.set(true)
-                                logger.d { "maxTokens limit reached: $currentCount >= $maxTokens" }
-
-                                if (hasResumed.compareAndSet(false, true)) {
-                                    continuation.resume(Unit)
-                                }
-                                return
-                            }
-
-                            responseBuilder.append(text)
-                            tokenCount.incrementAndGet()
-
-                            // Check if we've hit a stop token
-                            val currentText = responseBuilder.toString()
-                            for (stopToken in stopTokens) {
-                                if (currentText.contains(stopToken)) {
-                                    shouldStop.set(true)
-                                    logger.d { "Stop token detected: \"$stopToken\" after ${tokenCount.get()} tokens" }
-
-                                    // Truncate response at stop token
-                                    val textBeforeStop = currentText.substringBefore(stopToken)
-                                    responseBuilder.clear()
-                                    responseBuilder.append(textBeforeStop)
-
-                                    // Resume only if not already resumed (atomic check-and-set)
-                                    if (hasResumed.compareAndSet(false, true)) {
-                                        continuation.resume(Unit)
-                                    }
-                                    return
-                                }
-                            }
-                        }
-
-                        override fun onComplete() {
-                            if (hasResumed.compareAndSet(false, true)) {
-                                logger.d { "Generation complete" }
-                                continuation.resume(Unit)
-                            }
-                        }
-
-                        override fun onError(message: String) {
-                            if (hasResumed.compareAndSet(false, true)) {
-                                logger.e { "Generation error: $message" }
-                                continuation.resume(Unit)
-                            }
-                        }
-                    }
-                )
-            }
+            val response = stripStopTokens(rawResponse)
 
             val inferenceTimeMs = System.currentTimeMillis() - startTime
-            val finalTokenCount = tokenCount.get()
+            val estimatedTokens = (response.length / 4).coerceAtLeast(1)
             val tokensPerSecond = if (inferenceTimeMs > 0) {
-                (finalTokenCount * 1000f) / inferenceTimeMs
+                (estimatedTokens * 1000f) / inferenceTimeMs
             } else 0f
 
-            val fullResponse = responseBuilder.toString()
-
-            logger.i { "Generation complete (length=${fullResponse.length} chars, tokens=$finalTokenCount, time=${inferenceTimeMs}ms, ${String.format("%.1f", tokensPerSecond)} tok/s)" }
+            logger.i { "Generation complete (${response.length} chars, ~$estimatedTokens tokens, ${inferenceTimeMs}ms, ${String.format("%.1f", tokensPerSecond)} tok/s)" }
 
             Result.success(
                 GenerationResult(
-                    text = fullResponse,
-                    tokensGenerated = finalTokenCount,
+                    text = response,
+                    tokensGenerated = estimatedTokens,
                     inferenceTimeMs = inferenceTimeMs,
                     tokensPerSecond = tokensPerSecond
                 )
@@ -239,21 +191,30 @@ class LlamaCppEngine(
     }
 
     /**
-     * Generate response with streaming token-by-token callback.
+     * Generate response with simulated streaming.
      *
-     * For real-time UI updates, calls onToken() for each generated token.
+     * Generates the complete response first, then emits word-by-word via onToken()
+     * for progressive UI display.
+     *
+     * Uses the same pre-formatted/structured routing as generate():
+     * - Pre-formatted → generate(prompt) — no double-formatting
+     * - Raw → generateWithContext(system, context, user) — native applies template
+     *
+     * WHY simulated: ALL Llamatik streaming APIs (nativeGenerateStream,
+     * nativeGenerateWithContextStream) call JNI NewStringUTF per token with
+     * partial multi-byte UTF-8 sequences → fatal SIGABRT, non-catchable in Kotlin.
      *
      * @param prompt User input text
      * @param config Generation configuration
-     * @param onToken Callback invoked for each generated token
-     * @return Result.success(Unit) if streaming completes, Result.failure(exception) if error occurs
+     * @param onToken Callback invoked for each word chunk
+     * @return Result.success(Unit) or Result.failure(exception)
      */
     override suspend fun generateStreaming(
         prompt: String,
         config: GenerationConfig,
         onToken: (String) -> Unit
     ): Result<Unit> = withContext(Dispatchers.IO) {
-        logger.i { "GENERATE STREAMING" }
+        logger.i { "GENERATE STREAMING (simulated)" }
 
         if (!isInitialized) {
             return@withContext Result.failure(
@@ -262,97 +223,63 @@ class LlamaCppEngine(
         }
 
         try {
-            // Get maxTokens limit (0 or null = use engine's device-adaptive limit)
             val maxTokens = config.maxTokens?.takeIf { it > 0 } ?: getOptimalMaxTokens()
 
-            logger.d {
-                "Generate with prompt -> ${prompt} - ${prompt.length} chars - maxTokens=$maxTokens"
+            LlamaBridge.updateGenerateParams(
+                temperature = config.temperature ?: 0.7f,
+                maxTokens = maxTokens,
+                topP = 0.9f,
+                topK = 40,
+                repeatPenalty = 1.1f
+            )
+
+            val preformatted = isAlreadyFormatted(prompt)
+            val rawResponse = if (preformatted) {
+                logger.d { "Streaming (pre-formatted) -> ${prompt.length}c maxTokens=$maxTokens" }
+                LlamaBridge.generate(prompt)
+            } else {
+                val systemPrompt = buildCleanSystemPrompt(config)
+                val contextBlock = buildContextString(config)
+                logger.d { "Streaming (structured) -> system=${systemPrompt.length}c context=${contextBlock.length}c user=${prompt.length}c maxTokens=$maxTokens" }
+                LlamaBridge.generateWithContext(systemPrompt, contextBlock, prompt)
             }
 
-            // Thread-safe counters and flags for native callback access
-            val tokenCount = AtomicInteger(0)
+            val response = stripStopTokens(rawResponse)
 
-            val stopTokens = chatFormatter.getStopTokens()
-            val responseBuffer = StringBuilder()
-            val shouldStop = AtomicBoolean(false)
-            val hasResumed = AtomicBoolean(false)
-
-            suspendCancellableCoroutine { continuation ->
-                LlamaBridge.generateStreamWithContext(
-                    systemPrompt = "",
-                    contextBlock = "",
-                    userPrompt = prompt,
-                    callback = object : com.llamatik.library.platform.GenStream {
-                        override fun onDelta(text: String) {
-                            if (shouldStop.get()) return
-
-                            // Check if we've hit maxTokens limit
-                            val currentCount = tokenCount.get()
-                            if (currentCount >= maxTokens) {
-                                shouldStop.set(true)
-                                logger.d { "maxTokens limit reached in streaming: $currentCount >= $maxTokens" }
-                                if (hasResumed.compareAndSet(false, true)) {
-                                    continuation.resume(Unit)
-                                }
-                                return
-                            }
-
-                            // Accumulate tokens to detect stop sequences
-                            responseBuffer.append(text)
-                            tokenCount.incrementAndGet()
-
-                            // Check if we've hit a stop token
-                            val currentText = responseBuffer.toString()
-                            for (stopToken in stopTokens) {
-                                if (currentText.contains(stopToken)) {
-                                    shouldStop.set(true)
-                                    logger.d { "STOP TOKEN detected: \"$stopToken\" after ${tokenCount.get()} tokens" }
-
-                                    // Send only text before stop token
-                                    val textBeforeStop = currentText.substringBefore(stopToken)
-                                    if (textBeforeStop.isNotEmpty()) {
-                                        // Clear buffer and send final clean text
-                                        responseBuffer.clear()
-                                        responseBuffer.append(textBeforeStop)
-                                    }
-
-                                    // Resume only if not already resumed (atomic check-and-set)
-                                    if (hasResumed.compareAndSet(false, true)) {
-                                        continuation.resume(Unit)
-                                    }
-                                    return
-                                }
-                            }
-
-                            onToken(text)  // Stream to UI
-                        }
-
-                        override fun onComplete() {
-                            if (hasResumed.compareAndSet(false, true)) {
-                                logger.i { "Streaming complete (${tokenCount.get()} tokens)" }
-
-                                val finalResponse = responseBuffer.toString()
-                                logger.v { "RESPONSE (${finalResponse.length} chars): ${finalResponse.take(500)}${if (finalResponse.length > 500) "..." else ""}" }
-
-                                continuation.resume(Unit)
-                            }
-                        }
-
-                        override fun onError(message: String) {
-                            if (hasResumed.compareAndSet(false, true)) {
-                                logger.e { "Streaming error: $message" }
-                                continuation.resume(Unit)
-                            }
-                        }
-                    }
-                )
+            // Simulate streaming: emit word-by-word for progressive UI display.
+            // Split on whitespace boundaries to preserve natural word spacing.
+            val words = response.split("(?<=\\s)|(?=\\s)".toRegex())
+            for (word in words) {
+                if (word.isNotEmpty()) {
+                    onToken(word)
+                }
             }
+
+            logger.i { "Simulated streaming complete (${response.length} chars, ${words.size} chunks)" }
 
             Result.success(Unit)
         } catch (e: Exception) {
             logger.e(e) { "Streaming failed" }
             Result.failure(RuntimeException("Streaming failed", e))
         }
+    }
+
+    /**
+     * Strip stop tokens from model output.
+     *
+     * The non-streaming API may include stop tokens in the response
+     * that the streaming path would normally detect and truncate at.
+     */
+    private fun stripStopTokens(response: String): String {
+        val stopTokens = chatFormatter.getStopTokens()
+        var cleaned = response
+        for (stopToken in stopTokens) {
+            val idx = cleaned.indexOf(stopToken)
+            if (idx >= 0) {
+                cleaned = cleaned.substring(0, idx)
+            }
+        }
+        return cleaned.trim()
     }
 
     /**

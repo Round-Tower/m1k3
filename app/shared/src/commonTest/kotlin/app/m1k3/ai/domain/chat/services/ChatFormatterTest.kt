@@ -165,6 +165,70 @@ class ChatFormatterTest {
         assertTrue(llama.getStopTokens().contains("</s>"))
     }
 
+    // ===== Gemma3 Consolidated Prompt Tests (regression: system prompt leak) =====
+
+    @Test
+    fun `Gemma3 consolidates system prompt into single user turn`() {
+        val formatter = DefaultChatFormatter(ChatFormat.Gemma3)
+
+        val prompt = formatter.buildPrompt(
+            systemPrompt = "You are M1k3, a helpful AI.",
+            messages = listOf(ChatMessage(MessageRole.USER, "Hello"))
+        )
+
+        // Gemma3 has no system role - everything goes in one user turn
+        // Count user turns: should be exactly ONE
+        val userTurnCount = prompt.split("<start_of_turn>user").size - 1
+        assertEquals(1, userTurnCount, "Gemma3 should have exactly one user turn (consolidated)")
+
+        // System prompt should be INSIDE the user turn, not a separate turn
+        assertTrue(prompt.contains("<start_of_turn>user\nYou are M1k3"))
+        // Should end with model turn start for generation
+        assertTrue(prompt.contains("<start_of_turn>model"))
+    }
+
+    @Test
+    fun `Gemma3 prompt is detectable as pre-formatted`() {
+        val formatter = DefaultChatFormatter(ChatFormat.Gemma3)
+
+        val prompt = formatter.buildPrompt(
+            systemPrompt = "You are M1k3.",
+            messages = listOf(ChatMessage(MessageRole.USER, "Hi"))
+        )
+
+        // Pre-formatted prompts should contain Gemma3 markers
+        assertTrue(prompt.contains("<start_of_turn>"), "Should contain Gemma3 turn marker")
+        assertTrue(prompt.startsWith("<bos>"), "Should start with BOS token")
+    }
+
+    @Test
+    fun `FalconH1 prompt is detectable as pre-formatted`() {
+        val formatter = DefaultChatFormatter(ChatFormat.FalconH1)
+
+        val prompt = formatter.buildPrompt(
+            systemPrompt = "You are M1k3.",
+            messages = listOf(ChatMessage(MessageRole.USER, "Hi"))
+        )
+
+        assertTrue(prompt.contains("<|start_header_id|>"), "Should contain FalconH1 header marker")
+        assertTrue(prompt.startsWith("<|begin_of_text|>"), "Should start with FalconH1 BOS")
+    }
+
+    @Test
+    fun `FalconH1 uses separate system turn`() {
+        val formatter = DefaultChatFormatter(ChatFormat.FalconH1)
+
+        val prompt = formatter.buildPrompt(
+            systemPrompt = "You are M1k3.",
+            messages = listOf(ChatMessage(MessageRole.USER, "Hello"))
+        )
+
+        // FalconH1 supports system role - should have separate system and user turns
+        assertTrue(prompt.contains("<|start_header_id|>system<|end_header_id|>"))
+        assertTrue(prompt.contains("<|start_header_id|>user<|end_header_id|>"))
+        assertTrue(prompt.contains("<|start_header_id|>assistant<|end_header_id|>"))
+    }
+
     // ===== Helper =====
 
     private fun createBatteryTool() = Tool(

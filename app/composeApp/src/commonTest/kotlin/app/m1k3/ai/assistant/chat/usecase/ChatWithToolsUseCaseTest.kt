@@ -20,6 +20,7 @@ import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
@@ -94,19 +95,34 @@ class ChatWithToolsUseCaseTest {
 
     private class MockToolRegistry(
         private val tools: Map<String, Tool> = emptyMap(),
-        private val executors: Map<String, ToolExecutor> = emptyMap()
+        private val executors: Map<String, ToolExecutor> = emptyMap(),
+        private val relevantToolIds: Set<String>? = null // null = return all tools
     ) : ToolRegistry {
+        var getAvailableToolsCalled = false
+        var getRelevantToolsCalled = false
+        var lastRelevantQuery: String? = null
+
         override fun getAllTools(): List<Tool> = tools.values.toList()
         override fun findTool(toolId: String): Tool? = tools[toolId]
         override fun getExecutor(toolId: String): ToolExecutor? = executors[toolId]
-        override suspend fun getAvailableTools(): List<Tool> = tools.values.toList()
+        override suspend fun getAvailableTools(): List<Tool> {
+            getAvailableToolsCalled = true
+            return tools.values.toList()
+        }
         override fun getToolsByCategory(category: ToolCategory): List<Tool> =
             tools.values.filter { it.category == category }
         override suspend fun isToolAvailable(toolId: String): Boolean =
             executors[toolId]?.isAvailable() ?: false
         override fun registerTool(tool: Tool, executor: ToolExecutor) {}
-        override suspend fun getRelevantTools(query: String, maxTools: Int): List<Tool> =
-            tools.values.toList().take(maxTools)
+        override suspend fun getRelevantTools(query: String, maxTools: Int): List<Tool> {
+            getRelevantToolsCalled = true
+            lastRelevantQuery = query
+            return if (relevantToolIds != null) {
+                tools.values.filter { it.id in relevantToolIds }.take(maxTools)
+            } else {
+                tools.values.toList().take(maxTools)
+            }
+        }
     }
 
     private class MockToolExecutor(
@@ -389,5 +405,76 @@ class ChatWithToolsUseCaseTest {
         // Should have Started and Complete events
         assertTrue(events.isNotEmpty(), "Should emit events")
         assertIs<ChatEvent.Started>(events.first(), "Should start with Started event")
+    }
+
+    // ===== Tests: Dynamic Tool Loading =====
+
+    @Test
+    fun `uses getRelevantTools instead of getAvailableTools for prompt building`() = runTest {
+        val registry = MockToolRegistry(
+            tools = mapOf("get_battery_level" to batteryTool),
+            executors = mapOf("get_battery_level" to MockToolExecutor(
+                "get_battery_level",
+                ToolResult.Success("get_battery_level", "75%", null, 5)
+            ))
+        )
+        val engine = MockLlmEngine()
+
+        val useCase = buildUseCase(
+            llmEngine = engine,
+            toolRegistry = registry
+        )
+
+        useCase.execute("What's my battery?").toList()
+
+        assertTrue(registry.getRelevantToolsCalled,
+            "Should call getRelevantTools for dynamic tool loading")
+        assertFalse(registry.getAvailableToolsCalled,
+            "Should NOT call getAvailableTools (wastes tokens on small models)")
+    }
+
+    @Test
+    fun `passes user query to getRelevantTools for filtering`() = runTest {
+        val registry = MockToolRegistry(
+            tools = mapOf("get_battery_level" to batteryTool),
+            executors = mapOf("get_battery_level" to MockToolExecutor(
+                "get_battery_level",
+                ToolResult.Success("get_battery_level", "75%", null, 5)
+            ))
+        )
+
+        val useCase = buildUseCase(toolRegistry = registry)
+
+        useCase.execute("What's my battery level?").toList()
+
+        assertEquals("What's my battery level?", registry.lastRelevantQuery,
+            "Should pass user's original query for relevance filtering")
+    }
+
+    @Test
+    fun `does not inject tools when no relevant tools found`() = runTest {
+        val registry = MockToolRegistry(
+            tools = mapOf("get_battery_level" to batteryTool),
+            executors = mapOf("get_battery_level" to MockToolExecutor(
+                "get_battery_level",
+                ToolResult.Success("get_battery_level", "75%", null, 5)
+            )),
+            relevantToolIds = emptySet() // No relevant tools for this query
+        )
+        val engine = MockLlmEngine()
+
+        val useCase = buildUseCase(
+            llmEngine = engine,
+            toolRegistry = registry
+        )
+
+        useCase.execute("Tell me about Ireland").toList()
+
+        // Prompt should NOT contain tool schema
+        assertTrue(engine.lastPrompt != null)
+        assertFalse(engine.lastPrompt!!.contains("get_battery_level"),
+            "Irrelevant tools should not be in prompt")
+        assertFalse(engine.lastPrompt!!.contains("You have access to the following tools"),
+            "Tool header should not appear when no relevant tools")
     }
 }
