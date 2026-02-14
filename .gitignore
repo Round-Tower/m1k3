@@ -51,6 +51,7 @@ venv/
 venv-*/
 ENV/
 env/
+mlx-env/
 
 # IDE files
 .vscode/

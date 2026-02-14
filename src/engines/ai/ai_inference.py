@@ -92,11 +92,123 @@ except ImportError:
     CTRANSFORMERS_AVAILABLE = False
     print("❌ ctransformers not available")
 
-if not CTRANSFORMERS_AVAILABLE and not TRANSFORMERS_AVAILABLE and not UNIVERSAL_ENGINE_AVAILABLE:
+# MLX-LM Apple Silicon support (native Metal acceleration)
+# MLX runs as a separate server; we just need an HTTP client to talk to it.
+MLX_HTTP_AVAILABLE = False
+try:
+    import requests
+    MLX_HTTP_AVAILABLE = True
+except ImportError:
+    print("⚠️  MLX-LM: requests library not available (pip install requests)")
+
+# MLX configuration (mlx_lm.server defaults to port 8080)
+MLX_SERVER_PORT = int(os.environ.get("MLX_SERVER_PORT", "8080"))
+MLX_MODEL_NAME = os.environ.get("MLX_MODEL", "mlx-community/Qwen3-Coder-Next-4bit")
+
+if not CTRANSFORMERS_AVAILABLE and not TRANSFORMERS_AVAILABLE and not UNIVERSAL_ENGINE_AVAILABLE and not MLX_HTTP_AVAILABLE:
     print("❌ No AI backends available. Install one of:")
+    print("   • MLX-LM (Apple Silicon): pip install mlx-lm")
     print("   • Ollama (for UniversalEngine): https://ollama.ai")
     print("   • Transformers: pip install transformers torch")
     raise ImportError("No AI backends available")
+
+class MLXServerError(Exception):
+    """Raised when the MLX-LM server returns an error or is unreachable."""
+    pass
+
+
+class MLXClient:
+    """
+    Native Apple Silicon MLX-LM client.
+    Connects to a local mlx_lm.server instance for Metal-accelerated inference.
+    Uses the OpenAI-compatible API: /v1/models, /v1/chat/completions.
+    """
+
+    def __init__(self, model: str = None, port: int = MLX_SERVER_PORT):
+        self.model = model or MLX_MODEL_NAME
+        self.port = port
+        self.base_url = f"http://localhost:{port}"
+        self._session = requests.Session()
+        self._session.headers.update({"Content-Type": "application/json"})
+
+    def is_server_ready(self) -> bool:
+        """Check if mlx-lm server is running via GET /v1/models."""
+        try:
+            response = self._session.get(f"{self.base_url}/v1/models", timeout=2)
+            return response.status_code == 200
+        except Exception:
+            return False
+
+    def get_model_info(self) -> Dict:
+        """Get model information via GET /v1/models (OpenAI format)."""
+        try:
+            response = self._session.get(f"{self.base_url}/v1/models", timeout=5)
+            if response.status_code == 200:
+                data = response.json()
+                for model in data.get("data", []):
+                    model_id = model.get("id", "")
+                    if model_id == self.model or model_id.endswith(self.model.split("/")[-1]):
+                        return model
+            return {}
+        except Exception:
+            return {}
+
+    def generate(self, prompt: str, max_tokens: int = 512,
+                temperature: float = 0.7, system_prompt: str = None) -> Generator[str, None, None]:
+        """Generate streaming response via POST /v1/chat/completions."""
+
+        messages = []
+        if system_prompt:
+            messages.append({"role": "system", "content": system_prompt})
+        messages.append({"role": "user", "content": prompt})
+
+        payload = {
+            "model": self.model,
+            "messages": messages,
+            "max_tokens": max_tokens,
+            "temperature": temperature,
+            "stream": True
+        }
+
+        try:
+            response = self._session.post(
+                f"{self.base_url}/v1/chat/completions",
+                json=payload,
+                stream=True,
+                timeout=120
+            )
+
+            if response.status_code != 200:
+                raise MLXServerError(f"Server returned {response.status_code}")
+
+            for line in response.iter_lines():
+                if line:
+                    line = line.decode('utf-8')
+                    if line.startswith('data: '):
+                        data = line[6:]
+                        if data == '[DONE]':
+                            break
+                        try:
+                            chunk = json.loads(data)
+                            content = chunk.get("choices", [{}])[0].get("delta", {}).get("content", "")
+                            if content:
+                                yield content
+                        except (json.JSONDecodeError, KeyError, IndexError):
+                            continue
+
+        except MLXServerError:
+            raise
+        except Exception as e:
+            raise MLXServerError(f"Connection to MLX server failed: {e}") from e
+
+    def generate_sync(self, prompt: str, max_tokens: int = 512,
+                     temperature: float = 0.7, system_prompt: str = None) -> str:
+        """Generate response synchronously."""
+        result = []
+        for token in self.generate(prompt, max_tokens, temperature, system_prompt):
+            result.append(token)
+        return "".join(result)
+
 
 @dataclass
 class ConversationContext:
@@ -203,6 +315,26 @@ class LocalAIEngine:
             except Exception as e:
                 print(f"⚠️ M1K3 engine initialization failed: {e}")
                 self.universal_engine = None
+        
+        # Initialize MLX-LM client (Apple Silicon Metal acceleration)
+        self.mlx_client = None
+        self.mlx_available = False
+        if MLX_HTTP_AVAILABLE:
+            try:
+                self.mlx_client = MLXClient()
+                if self.mlx_client.is_server_ready():
+                    self.mlx_available = True
+                    model_info = self.mlx_client.get_model_info()
+                    print(f"🚀 MLX-LM server detected and ready!")
+                    print(f"   • Model: {self.mlx_client.model}")
+                    print(f"   • Port: {self.mlx_client.port}")
+                    if model_info:
+                        print(f"   • Model ID: {model_info.get('id', 'N/A')}")
+                else:
+                    print(f"⚠️  MLX-LM server not running on port {MLX_SERVER_PORT}")
+                    print(f"   Start with: mlx_lm.server --model {MLX_MODEL_NAME} --port {MLX_SERVER_PORT}")
+            except Exception as e:
+                print(f"⚠️ MLX client initialization failed: {e}")
         
         # Choose backend: prefer HuggingFace for x86_64 compatibility
         self.use_transformers = TRANSFORMERS_AVAILABLE
@@ -804,7 +936,37 @@ class LocalAIEngine:
     def generate_response(self, prompt: str, max_tokens: int = 512, show_thinking: bool = False) -> Generator[str, None, None]:
         """Generate streaming response with adaptive strategy"""
         
-        # Priority 1: Use universal engine if available and loaded
+        # Priority 1: MLX-LM (Apple Silicon Metal acceleration) - highest priority
+        if self.mlx_available and self.mlx_client:
+            try:
+                print(f"🚀 Using MLX-LM (Apple Silicon) for generation")
+                
+                # Check if server is still ready
+                if not self.mlx_client.is_server_ready():
+                    print("⚠️ MLX-LM server no longer available, falling back...")
+                    self.mlx_available = False
+                    raise Exception("MLX server disconnected")
+                
+                # Add RAG context if available
+                rag_context = self._get_rag_context(prompt)
+                system_prompt = "You are M1K3 (Mike), an eco-conscious, context-aware edge AI system. You run locally on user devices for privacy and sustainability. Be helpful, efficient, and mindful of system resources."
+                if rag_context:
+                    system_prompt += f"\n\nAdditional Context:\n{rag_context}"
+                
+                # Generate using MLX client
+                for token in self.mlx_client.generate(
+                    prompt,
+                    max_tokens=max_tokens,
+                    temperature=0.7,
+                    system_prompt=system_prompt
+                ):
+                    yield token
+                return
+                    
+            except Exception as e:
+                print(f"⚠️ MLX-LM generation failed: {e}, falling back to next engine")
+
+        # Priority 2: Universal Engine (Ollama) fallback
         if self.universal_engine and self.universal_engine.engine_loaded:
             try:
                 # Use universal engine for generation
@@ -834,7 +996,7 @@ class LocalAIEngine:
             except Exception as e:
                 print(f"⚠️ Universal engine generation failed: {e}, falling back to SimpleAI")
 
-        # Priority 2: SimpleAI engine fallback
+        # Priority 3: SimpleAI engine fallback
         if not self.model:
             # Try SimpleAI engine as final fallback
             try:

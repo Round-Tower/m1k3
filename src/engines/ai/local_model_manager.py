@@ -25,7 +25,7 @@ class ModelSpec:
     ram_required_mb: int
     description: str
     speed_estimate: str
-    model_type: str  # "hf_transformers", "gguf", "local"
+    model_type: str  # "hf_transformers", "gguf", "local", "mlx", "ollama"
     
 @dataclass 
 class DeviceCapability:
@@ -51,24 +51,119 @@ class LocalModelManager:
         self._discover_local_models()
         
     def _discover_local_models(self):
-        """Discover all available local models"""
+        """Discover all available local models.
+
+        Order matters: later sources overwrite earlier ones for the same model ID.
+        MLX goes last because it's the fastest backend on Apple Silicon.
+        """
         self.available_models = {}
-        
-        # 1. Check HuggingFace cache for complete models
+
+        # 1. Check HuggingFace cache for complete models (lowest priority)
         hf_models = self._discover_hf_cached_models()
         self.available_models.update(hf_models)
-        
+
         # 2. Check local GGUF models
         gguf_models = self._discover_gguf_models()
         self.available_models.update(gguf_models)
-        
+
         # 3. Check symlinked models in models directory
         symlink_models = self._discover_symlinked_models()
         self.available_models.update(symlink_models)
-        
-        # 4. Check ollama models (prioritize for performance)
+
+        # 4. Check ollama models
         ollama_models = self._discover_ollama_models()
         self.available_models.update(ollama_models)
+
+        # 5. Check MLX-LM server (Apple Silicon - highest priority, wins on conflict)
+        mlx_models = self._discover_mlx_models()
+        self.available_models.update(mlx_models)
+    
+    def _discover_mlx_models(self) -> Dict[str, ModelSpec]:
+        """Discover available MLX-LM models via GET /v1/models (OpenAI format)."""
+        models = {}
+
+        mlx_port = int(os.environ.get("MLX_SERVER_PORT", "8080"))
+
+        try:
+            import requests
+            response = requests.get(f"http://localhost:{mlx_port}/v1/models", timeout=2)
+            if response.status_code == 200:
+                data = response.json()
+                for model in data.get("data", []):
+                    model_id = model.get("id", "unknown")
+
+                    # /v1/models doesn't include size; estimate from model name
+                    size_mb = self._estimate_mlx_model_size(model_id)
+
+                    # Estimate RAM requirement (MLX is efficient, ~1.2x model size)
+                    ram_required = int(size_mb * 1.2)
+
+                    description, speed = self._analyze_mlx_model_characteristics(model_id, size_mb)
+
+                    models[model_id] = ModelSpec(
+                        name=model_id,
+                        path=f"http://localhost:{mlx_port}",
+                        size_mb=round(size_mb, 1),
+                        ram_required_mb=ram_required,
+                        description=description,
+                        speed_estimate=speed,
+                        model_type="mlx"
+                    )
+
+                print(f"🍎 Discovered {len(models)} MLX models on port {mlx_port}")
+
+        except Exception as e:
+            print(f"🔍 MLX-LM server not available on port {mlx_port}: {e}")
+
+        return models
+
+    def _estimate_mlx_model_size(self, model_id: str) -> float:
+        """Estimate model size in MB from model ID naming conventions."""
+        name_lower = model_id.lower()
+        # Extract parameter count hints from name
+        if "80b" in name_lower or "next" in name_lower:
+            return 46000.0  # ~46GB for 4-bit 80B MoE
+        elif "30b" in name_lower or "32b" in name_lower:
+            return 18000.0
+        elif "8b" in name_lower or "7b" in name_lower:
+            return 4500.0
+        elif "3b" in name_lower:
+            return 1800.0
+        elif "1b" in name_lower or "1.5b" in name_lower:
+            return 900.0
+        elif "135m" in name_lower or "360m" in name_lower:
+            return 200.0
+        elif "0.6b" in name_lower or "500m" in name_lower:
+            return 350.0
+        return 500.0  # Conservative default
+    
+    def _analyze_mlx_model_characteristics(self, model_name: str, size_mb: float) -> Tuple[str, str]:
+        """Analyze MLX model characteristics including quantization type."""
+        name_lower = model_name.lower()
+
+        # Detect quantization type
+        quant = "4-bit"
+        if "dwq" in name_lower:
+            quant = "DWQ (Dynamic Weight Quantization)"
+        elif "8bit" in name_lower or "q8" in name_lower:
+            quant = "8-bit"
+        elif "4bit" in name_lower or "q4" in name_lower:
+            quant = "4-bit"
+
+        if "qwen3" in name_lower and "coder" in name_lower:
+            return f"Qwen3 Coder - Optimized for code generation with 256K context [{quant}]", "~30-50 tokens/sec"
+        elif "dwq" in name_lower:
+            # DWQ-specific: emphasise the quantization advantage
+            base = model_name.split("/")[-1].replace("-DWQ", "").replace("-dwq", "")
+            return f"{base} - DWQ (Dynamic Weight Quantization) for optimal quality/speed", "~25-45 tokens/sec"
+        elif "qwen3" in name_lower:
+            return f"Qwen3 - Latest reasoning model with thinking mode [{quant}]", "~25-45 tokens/sec"
+        elif "llama3" in name_lower or "llama-3" in name_lower:
+            return f"Llama 3 - Meta's instruction-tuned model [{quant}]", "~20-40 tokens/sec"
+        elif "gemma" in name_lower:
+            return f"Gemma - Google's instruction model [{quant}]", "~20-35 tokens/sec"
+        else:
+            return f"MLX model - Size: {size_mb:.0f}MB [{quant}]", "~20-40 tokens/sec"
         
     def _discover_hf_cached_models(self) -> Dict[str, ModelSpec]:
         """Discover cached HuggingFace models"""
@@ -310,8 +405,12 @@ class LocalModelManager:
         for name, spec in self.available_models.items():
             ram_req_gb = spec.ram_required_mb / 1024
             if ram_req_gb <= available_ram_gb:
-                # Score based on quality and capabilities (prioritize ollama models for UX development)
-                if "smollm2:135m" in name.lower():
+                # Score based on quality and capabilities (prioritize MLX for Apple Silicon)
+                if spec.model_type == "mlx":
+                    priority = 130  # TOP PRIORITY - MLX-LM is fastest on Apple Silicon
+                    if "coder" in name.lower():
+                        priority = 135  # Even higher for coding models
+                elif "smollm2:135m" in name.lower():
                     priority = 120  # TOP PRIORITY - Ultra-fast, perfect for UX development
                 elif spec.model_type == "ollama" and "smollm2" in name.lower():
                     priority = 115  # Very high - Any smollm2 variant
@@ -374,6 +473,22 @@ class LocalModelManager:
         # Group by model type
         hf_models = [(name, spec) for name, spec in self.available_models.items() if spec.model_type == "hf_transformers"]
         gguf_models = [(name, spec) for name, spec in self.available_models.items() if spec.model_type == "gguf"]
+        mlx_models = [(name, spec) for name, spec in self.available_models.items() if spec.model_type == "mlx"]
+        
+        if mlx_models:
+            print("\n  🍎 MLX-LM Models (Apple Silicon Metal):")
+            for name, spec in sorted(mlx_models, key=lambda x: x[1].size_mb):
+                ram_req_gb = spec.ram_required_mb / 1024
+                status = "🚀 ACTIVE" if name in device.recommended_models else "✅ Available"
+                if ram_req_gb > device.available_ram_gb:
+                    status = "⚠️  High RAM usage"
+                
+                print(f"    {status}")
+                print(f"      📦 {name}")
+                print(f"      💾 Size: {spec.size_mb:.1f}MB | RAM: {ram_req_gb:.1f}GB")
+                print(f"      📝 {spec.description}")
+                print(f"      ⚡ Speed: {spec.speed_estimate}")
+                print()
         
         if hf_models:
             print("\n  🤗 HuggingFace Transformers Models:")
