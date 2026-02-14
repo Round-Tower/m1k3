@@ -166,14 +166,23 @@ class CLICommandHandler:
             examples=["avatar start", "avatar status", "avatar emotion happy 80", "avatar test"]
         ))
         
-        # Model commands  
+        # Model commands
         self._register_command(Command(
-            name="model", aliases=[], 
+            name="model", aliases=[],
             description="Switch AI models, view available models, get recommendations",
             category=CommandCategory.MODEL, handler=self.handle_model,
             requires_args=True,
             usage="model <list|switch|recommend|download>",
             examples=["model list", "model switch gemma3:270m", "model recommend", "model download gemma3:270m"]
+        ))
+
+        # MLX backend commands (Apple Silicon)
+        self._register_command(Command(
+            name="mlx", aliases=["🍎"],
+            description="MLX-LM backend for Apple Silicon (list, switch, test models)",
+            category=CommandCategory.MODEL, handler=self.handle_mlx,
+            usage="mlx <status|list|switch|test>",
+            examples=["mlx status", "mlx list", "mlx switch SmolLM2-135M-Instruct", "mlx test"]
         ))
         
         # Performance commands
@@ -815,6 +824,16 @@ class CLICommandHandler:
         else:
             print("⚠️ Model management not available")
         return True
+
+    def handle_mlx(self, args: List[str]) -> bool:
+        """Handle MLX backend command"""
+        try:
+            from .mlx_model_commands import handle_mlx_command
+            return handle_mlx_command(args)
+        except ImportError as e:
+            print(f"⚠️ MLX commands not available: {e}")
+            print("💡 Make sure mlx-model-commands.py is in src/cli/")
+            return True
     
     def handle_performance(self, args: List[str]) -> bool:
         """Handle performance command"""
