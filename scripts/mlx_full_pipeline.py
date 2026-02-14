@@ -7,6 +7,7 @@ MLX Intelligence → Kokoro Voice → Intercom Effects → Speaker
 import sys
 import os
 import time
+import re
 import numpy as np
 import requests
 import kokoro_onnx
@@ -91,13 +92,29 @@ def ask(question):
 
         answer = r.json()['choices'][0]['message']['content'].strip()
 
-        # Strip thinking tags (closed or unclosed)
+        # Strip thinking tags — extract visible answer
         if '<think>' in answer:
             if '</think>' in answer:
-                answer = answer.split('</think>')[-1].strip()
+                after_think = answer.split('</think>')[-1].strip()
+                if after_think:
+                    answer = after_think
+                else:
+                    # Everything inside think block — grab last paragraph
+                    think_content = answer.split('</think>')[0].split('<think>')[-1]
+                    paragraphs = [p.strip() for p in think_content.split('\n\n') if p.strip()]
+                    answer = paragraphs[-1] if paragraphs else ""
             else:
-                # Unclosed think tag - discard thinking entirely
-                answer = answer.split('<think>')[0].strip()
+                before = answer.split('<think>')[0].strip()
+                if before:
+                    answer = before
+                else:
+                    inner = answer.split('<think>')[-1]
+                    paragraphs = [p.strip() for p in inner.split('\n\n') if p.strip()]
+                    answer = paragraphs[-1] if paragraphs else ""
+
+        answer = re.sub(r'</?think>', '', answer)
+        answer = re.sub(r'\\[\[\]]', '', answer)
+        answer = answer.strip()
 
         if not answer:
             answer = "Hmm, let me think about that differently."

@@ -247,16 +247,36 @@ def ask(question):
 
         answer = r.json()['choices'][0]['message']['content'].strip()
 
-        # Strip think tags
+        # Strip think tags — extract visible answer
         if '<think>' in answer:
             if '</think>' in answer:
-                answer = answer.split('</think>')[-1].strip()
+                # Take content after the last </think>
+                after_think = answer.split('</think>')[-1].strip()
+                if after_think:
+                    answer = after_think
+                else:
+                    # Model put everything inside think block — grab last paragraph
+                    think_content = answer.split('</think>')[0].split('<think>')[-1]
+                    paragraphs = [p.strip() for p in think_content.split('\n\n') if p.strip()]
+                    answer = paragraphs[-1] if paragraphs else ""
             else:
-                answer = ""
-        answer = re.sub(r'</?think>', '', answer).strip()
+                # Unclosed think — model ran out of tokens mid-thought
+                # Grab whatever came before <think> or last paragraph inside
+                before = answer.split('<think>')[0].strip()
+                if before:
+                    answer = before
+                else:
+                    inner = answer.split('<think>')[-1]
+                    paragraphs = [p.strip() for p in inner.split('\n\n') if p.strip()]
+                    answer = paragraphs[-1] if paragraphs else ""
+
+        # Clean any stray tags and LaTeX
+        answer = re.sub(r'</?think>', '', answer)
+        answer = re.sub(r'\\[\[\]]', '', answer)  # strip \[ \] LaTeX delimiters
+        answer = answer.strip()
 
         if not answer:
-            answer = "(thinking model used all tokens reasoning — no visible answer)"
+            answer = "(model produced no visible answer)"
 
         return answer, latency
     except Exception as e:
