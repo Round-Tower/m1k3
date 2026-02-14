@@ -129,6 +129,18 @@ MODELS = [
 # ═══ Interview Questions ═══
 INTERVIEW = [
     {
+        "name": "Daily Summary",
+        "question": (
+            "Summarise my day from this data:\n"
+            "Notifications: 3 Slack messages (work), 2 WhatsApp (Mam, Dave), 1 missed call (unknown)\n"
+            "Locations: Home until 9am, Office 9:30-5pm, Tesco 5:20pm, Home 6pm\n"
+            "Emails: 12 received (4 marketing, 3 JIRA, 2 from boss, 1 calendar invite, 2 newsletters)\n"
+            "Screen time: 6h 22m (1h 45m Slack, 1h 20m VS Code, 58m Safari, 45m YouTube, 34m Twitter)\n"
+            "Steps: 4,812 | Weather: 11°C, light rain"
+        ),
+        "tests": "structured data comprehension, summarisation, tone",
+    },
+    {
         "name": "Introduction",
         "question": "Introduce yourself in one sentence.",
         "tests": "coherence, personality",
@@ -152,18 +164,6 @@ INTERVIEW = [
         "name": "Helpfulness",
         "question": "How do I make a cup of tea?",
         "tests": "practical knowledge, conciseness",
-    },
-    {
-        "name": "Daily Summary",
-        "question": (
-            "Summarise my day from this data:\n"
-            "Notifications: 3 Slack messages (work), 2 WhatsApp (Mam, Dave), 1 missed call (unknown)\n"
-            "Locations: Home until 9am, Office 9:30-5pm, Tesco 5:20pm, Home 6pm\n"
-            "Emails: 12 received (4 marketing, 3 JIRA, 2 from boss, 1 calendar invite, 2 newsletters)\n"
-            "Screen time: 6h 22m (1h 45m Slack, 1h 20m VS Code, 58m Safari, 45m YouTube, 34m Twitter)\n"
-            "Steps: 4,812 | Weather: 11°C, light rain"
-        ),
-        "tests": "structured data comprehension, summarisation, tone",
     },
 ]
 
