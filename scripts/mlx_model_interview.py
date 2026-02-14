@@ -124,6 +124,14 @@ MODELS = [
         "tags": ["mamba2", "thinking"],
         "app_note": "Big brother of app's Falcon-H1 90M",
     },
+    # ── Large (reference / ceiling) ──
+    {
+        "id": "mlx-community/Qwen3-Coder-Next-4bit",
+        "name": "Qwen3-Coder-Next 80B",
+        "params": "80B MoE",
+        "tags": ["thinking"],
+        "app_note": "Reference ceiling — too large for device, shows what's possible",
+    },
 ]
 
 # ═══ Interview Questions ═══
