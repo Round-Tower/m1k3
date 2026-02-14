@@ -157,8 +157,8 @@ INTERVIEW = [
 
 SYSTEM_PROMPT = (
     "You are M1K3, a local AI running on Apple Silicon. "
-    "Warm, Irish, fun. Under 40 words. "
-    "Answer directly. Do NOT use <think> tags."
+    "Warm, Irish, fun. Keep answers concise but complete. "
+    "Answer directly."
 )
 
 # ═══ Load Kokoro ═══
@@ -240,9 +240,9 @@ def ask(question):
                 {"role": "system", "content": SYSTEM_PROMPT},
                 {"role": "user", "content": question}
             ],
-            "max_tokens": 500,
+            "max_tokens": 1024,
             "temperature": 0.7
-        }, timeout=120.0)
+        }, timeout=180.0)
         latency = time.time() - start
 
         answer = r.json()['choices'][0]['message']['content'].strip()
