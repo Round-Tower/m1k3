@@ -79,6 +79,7 @@ Models: Colobus (default), Sparrow, Gecko, Herring, Muskrat, Pudu, Taipan, Inkfi
 
 ## Docs
 - **MLX setup**: `docs/MLX_SETUP.md` (Apple Silicon inference)
+- **Falcon Mamba2**: `docs/FALCON_MAMBA2_TEST.md` (Hybrid SSM+Attention test results)
 - Avatar plan: `docs/plans/mcp-avatar-integration.md`
 - STT setup: `docs/STT_QUICK_START.md`
 - Voice profiles: `docs/VIBEVOICE_DEMO_GUIDE.md`
