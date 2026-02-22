@@ -12,6 +12,7 @@ import { AnimationController } from "../animation/AnimationController";
 import type { AvatarState } from "../animation/AvatarState";
 import { DEFAULT_AVATAR_STATE } from "../animation/AvatarState";
 import { ModelRegistry } from "../registry/ModelRegistry";
+import { ShaderEffectManager, type ShaderEffect } from "../effects/ShaderEffectManager";
 
 /**
  * Avatar renderer options
@@ -33,6 +34,8 @@ export interface AvatarRendererOptions {
   pixelRatio?: number;
   /** Antialias (default: true) */
   antialias?: boolean;
+  /** Enable shader effects (default: true) */
+  enableShaders?: boolean;
 }
 
 const DEFAULT_OPTIONS: Required<Omit<AvatarRendererOptions, "container">> = {
@@ -43,6 +46,7 @@ const DEFAULT_OPTIONS: Required<Omit<AvatarRendererOptions, "container">> = {
   enableShadows: false,
   pixelRatio: typeof window !== "undefined" ? window.devicePixelRatio : 1,
   antialias: true,
+  enableShaders: true,
 };
 
 /**
@@ -63,6 +67,8 @@ export class AvatarRenderer {
   private currentModel: LoadedModel | null = null;
   private animationController: AnimationController | null = null;
   private currentState: AvatarState = DEFAULT_AVATAR_STATE;
+
+  private shaderManager: ShaderEffectManager | null = null;
 
   private animationFrameId: number | null = null;
   private isRunning = false;
@@ -120,6 +126,15 @@ export class AvatarRenderer {
 
     // Setup lighting
     this.setupLighting();
+
+    // Setup shader effects
+    if (this.options.enableShaders) {
+      this.shaderManager = new ShaderEffectManager(
+        this.renderer,
+        this.scene,
+        this.camera
+      );
+    }
 
     // Handle resize
     window.addEventListener("resize", this.handleResize);
@@ -281,6 +296,14 @@ export class AvatarRenderer {
     if (this.animationController) {
       this.animationController.updateFromState(this.currentState);
     }
+
+    // Update shader effects based on state
+    if (this.shaderManager) {
+      this.shaderManager.updateForState(
+        this.currentState.emotion,
+        this.currentState.activity
+      );
+    }
   }
 
   /**
@@ -331,8 +354,12 @@ export class AvatarRenderer {
       this.controls.update();
     }
 
-    // Render
-    this.renderer.render(this.scene, this.camera);
+    // Render (with or without shaders)
+    if (this.shaderManager) {
+      this.shaderManager.render();
+    } else {
+      this.renderer.render(this.scene, this.camera);
+    }
   };
 
   /**
@@ -346,6 +373,10 @@ export class AvatarRenderer {
     this.camera.updateProjectionMatrix();
 
     this.renderer.setSize(width, height);
+
+    if (this.shaderManager) {
+      this.shaderManager.setSize(width, height);
+    }
   };
 
   /**
@@ -360,6 +391,39 @@ export class AvatarRenderer {
    */
   getAnimationController(): AnimationController | null {
     return this.animationController;
+  }
+
+  /**
+   * Set shader effect manually (overrides emotion-reactive)
+   */
+  setShaderEffect(effect: ShaderEffect, intensity = 0.7): void {
+    if (this.shaderManager) {
+      this.shaderManager.setEmotionReactive(false);
+      this.shaderManager.setEffect(effect, intensity);
+    }
+  }
+
+  /**
+   * Enable/disable emotion-reactive shaders
+   */
+  setShaderEmotionReactive(enabled: boolean): void {
+    if (this.shaderManager) {
+      this.shaderManager.setEmotionReactive(enabled);
+      if (enabled) {
+        // Re-apply shader for current state
+        this.shaderManager.updateForState(
+          this.currentState.emotion,
+          this.currentState.activity
+        );
+      }
+    }
+  }
+
+  /**
+   * Get shader effect manager (for advanced control)
+   */
+  getShaderManager(): ShaderEffectManager | null {
+    return this.shaderManager;
   }
 
   /**
@@ -381,6 +445,10 @@ export class AvatarRenderer {
 
     if (this.controls) {
       this.controls.dispose();
+    }
+
+    if (this.shaderManager) {
+      this.shaderManager.dispose();
     }
 
     this.renderer.dispose();

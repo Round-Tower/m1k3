@@ -69,6 +69,21 @@ export type { CameraAutoFitOptions } from "./renderer/CameraAutoFit";
 export { AvatarRenderer } from "./renderer/AvatarRenderer";
 export type { AvatarRendererOptions } from "./renderer/AvatarRenderer";
 
+// Effects
+export { ShaderEffectManager } from "./effects/ShaderEffectManager";
+export type { ShaderEffect, EffectConfig } from "./effects/ShaderEffectManager";
+
+// Loaders
+export { DynamicModelLoader, dynamicModelLoader } from "./loader/DynamicModelLoader";
+export type { DynamicModelEntry } from "./loader/DynamicModelLoader";
+
+export { GitHubModelExplorer, githubExplorer, formatFileSize } from "./loader/GitHubModelExplorer";
+export type { GitHubModelResult, GitHubRepo, GitHubSearchOptions } from "./loader/GitHubModelExplorer";
+
+// UI
+export { ModelDropZone } from "./ui/ModelDropZone";
+export type { ModelDropZoneOptions, ModelDropCallback, ErrorCallback } from "./ui/ModelDropZone";
+
 // Communication
 export { MCPAppBridge } from "./communication/MCPAppBridge";
 export { WebSocketBridge } from "./communication/WebSocketBridge";
