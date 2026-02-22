@@ -9,17 +9,23 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
@@ -72,6 +78,11 @@ fun ChatInputBar(
 
     // Haptic feedback controller
     val haptics = rememberHapticFeedback()
+
+    // Focus management
+    val focusRequester = remember { FocusRequester() }
+    val focusManager = LocalFocusManager.current
+    val keyboardController = LocalSoftwareKeyboardController.current
 
     // Track previous text for "typing start" detection
     var previousText by remember { mutableStateOf(text) }
@@ -171,7 +182,9 @@ fun ChatInputBar(
                     .fillMaxWidth()
                     .heightIn(min = 56.dp, max = 180.dp)
                     .scale(fieldScale)
-                    .padding(MaSpacing.base),
+                    .padding(MaSpacing.base)
+                    .focusRequester(focusRequester)
+                    .verticalScroll(rememberScrollState()), // Fix multiline scroll
                 enabled = enabled,
                 textStyle = MaTypography.bodyLarge.copy(
                     color = if (enabled) MaColors.textPrimary() else MaColors.textDisabled()
@@ -182,7 +195,14 @@ fun ChatInputBar(
                     imeAction = ImeAction.Send
                 ),
                 keyboardActions = KeyboardActions(
-                    onSend = { if (hasText && enabled) onSend() }
+                    onSend = {
+                        if (hasText && enabled) {
+                            onSend()
+                            // Dismiss keyboard and clear focus after send
+                            keyboardController?.hide()
+                            focusManager.clearFocus()
+                        }
+                    }
                 ),
                 interactionSource = interactionSource,
                 decorationBox = { innerTextField ->
@@ -223,6 +243,9 @@ fun ChatInputBar(
                         onClick = {
                             haptics.strong() // Strong feedback on send
                             onSend()
+                            // Dismiss keyboard and clear focus after send
+                            keyboardController?.hide()
+                            focusManager.clearFocus()
                         },
                         indication = null,
                         interactionSource = remember { MutableInteractionSource() }

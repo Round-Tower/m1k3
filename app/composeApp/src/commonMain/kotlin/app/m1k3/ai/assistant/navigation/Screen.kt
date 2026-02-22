@@ -49,6 +49,31 @@ sealed class Screen(val route: String) {
     data object AvatarWebViewDemo : Screen("avatar-webview-demo")
 
     /**
+     * About M1K3 screen - App mission, privacy-first messaging, version info
+     */
+    data object About : Screen("about")
+
+    /**
+     * Help & Documentation screen - Feature guides, tips, FAQ
+     */
+    data object Help : Screen("help")
+
+    /**
+     * Send Feedback screen - GitHub issues, bug reports, feature requests
+     */
+    data object Feedback : Screen("feedback")
+
+    /**
+     * Privacy Policy screen - Zero-network promise, data handling
+     */
+    data object Privacy : Screen("privacy")
+
+    /**
+     * Export Data screen - Backup conversations, export eco stats
+     */
+    data object Export : Screen("export")
+
+    /**
      * Conversation Detail screen - View specific conversation messages
      *
      * Route: "conversation/{conversationId}"

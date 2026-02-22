@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.systemBars
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -66,11 +67,17 @@ import app.m1k3.ai.assistant.design.theme.MaTheme
 import app.m1k3.ai.assistant.design.tokens.MaColors
 import app.m1k3.ai.assistant.di.allModules
 import app.m1k3.ai.assistant.embedding.EmbeddingEngine
+import app.m1k3.ai.assistant.navigation.BottomNavigationBar
 import app.m1k3.ai.assistant.navigation.Screen
 import app.m1k3.ai.assistant.navigation.navigateToBottomNav
+import app.m1k3.ai.assistant.ui.AboutScreen
 import app.m1k3.ai.assistant.ui.ChatScreen
 import app.m1k3.ai.assistant.ui.EcoStatsScreen
+import app.m1k3.ai.assistant.ui.ExportScreen
+import app.m1k3.ai.assistant.ui.FeedbackScreen
+import app.m1k3.ai.assistant.ui.HelpScreen
 import app.m1k3.ai.assistant.ui.HistoryScreen
+import app.m1k3.ai.assistant.ui.PrivacyScreen
 import app.m1k3.ai.assistant.ui.components.Toolbar
 import app.m1k3.ai.assistant.ui.demo.MaAIDemo
 import app.m1k3.ai.assistant.ui.drawer.DrawerContent
@@ -344,6 +351,12 @@ private fun MaAppContent(
                                 modifier = Modifier.fillMaxWidth()
                             )
                         },
+                        bottomBar = {
+                            BottomNavigationBar(
+                                navController = navController,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        },
                         contentWindowInsets = WindowInsets.systemBars
                     ) { paddingValues ->
                         CompositionLocalProvider(
@@ -352,6 +365,7 @@ private fun MaAppContent(
                             NavHost(
                                 navController = navController,
                                 startDestination = Screen.Chat.route,
+                                modifier = Modifier.padding(paddingValues)
                             ) {
                                 // Demo Screen
                                 composable(Screen.Demo.route) {
@@ -393,6 +407,27 @@ private fun MaAppContent(
                                 // Settings Screen
                                 composable(Screen.Settings.route) {
                                     app.m1k3.ai.assistant.ui.SettingsScreen()
+                                }
+
+                                // Meta Screens (Drawer actions)
+                                composable(Screen.About.route) {
+                                    AboutScreen()
+                                }
+
+                                composable(Screen.Help.route) {
+                                    HelpScreen()
+                                }
+
+                                composable(Screen.Feedback.route) {
+                                    FeedbackScreen()
+                                }
+
+                                composable(Screen.Privacy.route) {
+                                    PrivacyScreen()
+                                }
+
+                                composable(Screen.Export.route) {
+                                    ExportScreen()
                                 }
 
                                 // WebView Avatar Demo (Phase 1)
