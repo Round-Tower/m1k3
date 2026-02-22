@@ -13,7 +13,45 @@ import app.m1k3.ai.assistant.ai.ondevice.RealMlKitAvailabilityChecker
 import app.m1k3.ai.assistant.ai.ondevice.RealMlKitGenAiEngine
 import app.m1k3.ai.assistant.database.DatabaseFactory
 import app.m1k3.ai.assistant.database.MaDatabase
+import app.m1k3.ai.assistant.platform.DateTimeProvider
+import app.m1k3.ai.assistant.platform.DeviceInfoProvider
+import app.m1k3.ai.assistant.platform.DeviceInfoProviderInterface
+import app.m1k3.ai.assistant.platform.PreferencesStore
+import app.m1k3.ai.domain.platform.DateTimeProviderInterface
+import app.m1k3.ai.assistant.platform.PreferencesStoreInterface
+import app.m1k3.ai.domain.chat.services.UnifiedPromptBuilder
+import app.m1k3.ai.domain.tools.services.ToolRegistry
+import app.m1k3.ai.assistant.tools.AndroidToolRegistry
+import app.m1k3.ai.assistant.app.AndroidDatabaseInitializer
+import app.m1k3.ai.assistant.app.IDatabaseInitializer
+import app.m1k3.ai.assistant.app.InitializationViewModel
+import app.m1k3.ai.assistant.app.LoggerAdapter
+import app.m1k3.ai.assistant.utils.Logger
+import app.m1k3.ai.assistant.rag.RAGManager
+import app.m1k3.ai.assistant.memory.MemoryManager
+import app.m1k3.ai.assistant.embedding.EmbeddingEngine
+import app.m1k3.ai.assistant.chat.ChatScreenViewModel
+import app.m1k3.ai.assistant.coding.CodeGenerationViewModel
+import app.m1k3.ai.assistant.history.ConversationRepository
+import app.m1k3.ai.assistant.history.SearchRepository
+import app.m1k3.ai.assistant.history.ExportManager
+import app.m1k3.ai.assistant.history.HistoryViewModel
+import app.m1k3.ai.assistant.eco.EcoMetricsRepository
+import app.m1k3.ai.assistant.eco.EcoStatsViewModel
+import app.m1k3.ai.assistant.embedding.EmbeddingEngineManager
+import app.m1k3.ai.assistant.embedding.EmbeddingEngineManagerImpl
+import app.m1k3.ai.assistant.embedding.EmbeddingModelManager
+import app.m1k3.ai.assistant.tts.AudioEffectsProcessor
+import app.m1k3.ai.assistant.tts.AudioPlayer
+import app.m1k3.ai.assistant.tts.KokoroTtsEngine
+import app.m1k3.ai.domain.ai.LlmModel
+import app.m1k3.ai.domain.tts.TtsEngine
+import app.m1k3.ai.domain.tts.Voice
+import app.m1k3.ai.domain.usecases.chat.LlmOutputProcessor
+import org.koin.androidx.viewmodel.dsl.viewModel
+import org.koin.core.module.dsl.*
 import org.koin.dsl.module
+
 
 /**
  * Android platform module
@@ -37,6 +75,102 @@ actual val platformModule = module {
                 name = "ma_ai.db"
             )
         )
+    }
+
+    // ===== Platform Abstractions =====
+
+    /**
+     * DeviceInfoProvider
+     *
+     * Provides device information for adaptive generation:
+     * - RAM for token limit scaling
+     * - Device model for debugging
+     * - Battery level for power-aware generation
+     */
+    single<DeviceInfoProviderInterface> {
+        DeviceInfoProvider(get<Context>())
+    }
+
+    /**
+     * DateTimeProvider
+     *
+     * Provides date/time context for prompts:
+     * - Current time for context-aware greetings
+     * - Locale for formatting
+     */
+    single<DateTimeProviderInterface> {
+        DateTimeProvider()
+    }
+
+    /**
+     * PreferencesStore
+     *
+     * SharedPreferences wrapper for feature flags and settings.
+     * Thread-safe with reactive observation support.
+     */
+    single<PreferencesStoreInterface> {
+        PreferencesStore(get<Context>())
+    }
+
+    // ===== Embedding Engine =====
+
+    /**
+     * EmbeddingEngineManager
+     *
+     * Manages lifecycle and initialization of embedding engines.
+     * Provides thread-safe singleton pattern with lazy model loading.
+     *
+     * Must call initialize() in MainActivity to load the ONNX model.
+     */
+    single<EmbeddingEngineManager> {
+        EmbeddingEngineManagerImpl(get<Context>())
+    }
+
+    /**
+     * EmbeddingEngine
+     *
+     * Provides text-to-vector embeddings for semantic search and RAG.
+     * Uses EmbeddingModelManager to select between MiniLM (default) and Gemma (optional).
+     *
+     * Model selection:
+     * - MiniLM-L6-v2 (384-dim, 80MB, built-in)
+     * - Embedding Gemma (512-dim, 180MB, dynamic module)
+     *
+     * Note: Engine is created but NOT loaded. Call EmbeddingEngineManager.initialize() in MainActivity to load model.
+     */
+    single<EmbeddingEngine> {
+        val manager = EmbeddingModelManager(get<Context>())
+        manager.getEmbeddingEngine()
+    }
+
+    // ===== TTS Engine Layer =====
+
+    /**
+     * AudioEffectsProcessor
+     *
+     * DSP effects for TTS audio output (RadioChat, Intercom, etc.).
+     * Stateless — singleton is fine.
+     */
+    single { AudioEffectsProcessor() }
+
+    /**
+     * AudioPlayer
+     *
+     * AudioTrack-based playback for synthesized audio.
+     * 24kHz mono PCM float (Kokoro native format).
+     */
+    single { AudioPlayer() }
+
+    /**
+     * TtsEngine (Kokoro)
+     *
+     * On-device text-to-speech via ONNX Runtime.
+     * INT8 quantized model (~90MB). Daniel voice default.
+     *
+     * Note: Call loadModel() before first synthesis.
+     */
+    single<TtsEngine> {
+        KokoroTtsEngine(get<Context>())
     }
 
     // ===== AI Engine Layer =====
@@ -101,6 +235,163 @@ actual val platformModule = module {
             mlKitChecker = get<MlKitAvailabilityChecker>(),
             mlKitEngine = get<MlKitGenAiEngine>(),
             fallbackEngine = get<LlamaCppFallbackEngine>()
+        )
+    }
+
+    // ===== Tool Calling Infrastructure =====
+
+    /**
+     * Android Tool Registry
+     *
+     * Registers Android-specific tools:
+     * - Device info (battery, time)
+     * - System controls (flashlight)
+     * - App launchers (camera, browser, settings)
+     */
+    single<ToolRegistry> {
+        AndroidToolRegistry(context = get<Context>())
+    }
+
+    // ===== RAG & Memory Layer =====
+
+    /**
+     * RAGManager
+     *
+     * Provides RAG (Retrieval-Augmented Generation) capabilities.
+     * Uses EmbeddingEngine for semantic search over knowledge base.
+     */
+    single<RAGManager> {
+        RAGManager(
+            database = get<MaDatabase>(),
+            embeddingEngine = get<EmbeddingEngine>()
+        )
+    }
+
+    // ===== MemoryManager (TODO: Not yet implemented) =====
+    // MemoryManager is not registered yet because it requires additional dependencies.
+    // ChatScreenViewModel uses getOrNull<MemoryManager>() which will return null.
+    // TODO: Implement MemoryRepository with projectId scoping, then register MemoryManager
+
+    // ===== Initialization Layer =====
+
+    /**
+     * AndroidDatabaseInitializer
+     *
+     * Handles database initialization and knowledge import.
+     * Registered as singleton to ensure single initialization flow.
+     */
+    single<IDatabaseInitializer> {
+        val logger = Logger.withTag("DatabaseInitializer")
+        AndroidDatabaseInitializer(
+            context = get<Context>(),
+            logger = LoggerAdapter(logger)
+        )
+    }
+
+    // ===== ViewModel Layer =====
+
+    /**
+     * InitializationViewModel
+     *
+     * Manages app initialization state (knowledge import).
+     * Database is created by Koin and injected.
+     * Registered as ViewModel for proper lifecycle management.
+     */
+    viewModel {
+        InitializationViewModel(
+            database = get<MaDatabase>(),
+            databaseInitializer = get<IDatabaseInitializer>()
+        )
+    }
+
+    /**
+     * ChatScreenViewModel (optional projectId parameter)
+     *
+     * Main chat interface ViewModel with full dependency injection.
+     * Accepts optional projectId via parametersOf(), defaults to "default".
+     *
+     * Usage:
+     * ```kotlin
+     * // With default projectId
+     * val chatViewModel = koinViewModel<ChatScreenViewModel>()
+     *
+     * // With custom projectId
+     * val chatViewModel = koinViewModel<ChatScreenViewModel> {
+     *     parametersOf("my-project")
+     * }
+     * ```
+     */
+    viewModel { params ->
+        val projectId = params.getOrNull<String>() ?: "default"
+        val context = get<Context>()
+        val ttsEngine = get<TtsEngine>()
+        val audioPlayer = get<AudioPlayer>()
+
+        ChatScreenViewModel(
+            aiEngine = get<BaseLlmEngine>(),
+            conversationRepo = get<ConversationRepository>(),
+            ecoMetricsRepo = get<EcoMetricsRepository>(),
+            database = get<MaDatabase>(),
+            deviceInfo = get<DeviceInfoProviderInterface>(),
+            preferences = get<PreferencesStoreInterface>(),
+            projectId = projectId,
+            memoryManager = getOrNull<MemoryManager>(),
+            ragManager = get<RAGManager>(),
+            toolRegistry = get<ToolRegistry>(),
+            processLlmOutput = get<LlmOutputProcessor>(),
+            dateTimeProvider = get<DateTimeProviderInterface>(),
+            engineFactory = { model -> LlamaCppEngine(context, model) },
+            onSpeakText = { text ->
+                if (text.isBlank()) return@ChatScreenViewModel
+                if (!ttsEngine.isLoaded) ttsEngine.loadModel()
+                val result = ttsEngine.synthesize(text, Voice.default)
+                when (result) {
+                    is app.m1k3.ai.domain.tts.TtsResult.Success -> {
+                        audioPlayer.play(result.audio)
+                    }
+                    is app.m1k3.ai.domain.tts.TtsResult.Error -> {
+                        throw RuntimeException("TTS failed: ${result.message}")
+                    }
+                }
+            }
+        )
+    }
+
+    /**
+     * CodeGenerationViewModel
+     *
+     * Handles code generation features.
+     * Requires Android Context for engine creation.
+     */
+    viewModel {
+        CodeGenerationViewModel(
+            context = get<Context>()
+        )
+    }
+
+    /**
+     * EcoStatsViewModel
+     *
+     * Manages environmental impact statistics and tracking.
+     * Shows energy, water, and carbon savings from local AI inference.
+     */
+    viewModel {
+        EcoStatsViewModel(
+            repository = get<EcoMetricsRepository>()
+        )
+    }
+
+    /**
+     * HistoryViewModel
+     *
+     * Manages conversation history UI state.
+     * Handles search, export, and conversation management.
+     */
+    viewModel {
+        HistoryViewModel(
+            conversationRepository = get<ConversationRepository>(),
+            searchRepository = get<SearchRepository>(),
+            exportManager = get<ExportManager>()
         )
     }
 }

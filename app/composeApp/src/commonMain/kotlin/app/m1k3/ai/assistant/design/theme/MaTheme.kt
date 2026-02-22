@@ -2,19 +2,25 @@ package app.m1k3.ai.assistant.design.theme
 
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.foundation.isSystemInDarkTheme
 import app.m1k3.ai.assistant.design.tokens.MaColors
 import app.m1k3.ai.assistant.design.tokens.MaTypography
 
 /**
  * M1K3 AI Theme
  *
- * Pure AMOLED black design system with M1K3 orange branding.
- * Optimized for battery efficiency, readability, and wabi-sabi aesthetic.
+ * Dual-mode design system with M1K3 orange branding.
+ * - Dark mode: Pure AMOLED black (#000000) for battery efficiency
+ * - Light mode: Off-white (#F9F9FA) for readability
+ *
+ * System-aware: Automatically switches based on system dark mode preference.
+ * Both modes optimized for wabi-sabi aesthetic and glassmorphic design.
  *
  * Key Features:
- * - Pure black (#000000) for AMOLED displays (15-20% battery savings)
- * - M1K3 orange (#E25303) signature branding
+ * - Respects system dark mode setting
+ * - M1K3 orange (#E25303) signature branding (consistent across modes)
  * - Transparent layers for glassmorphic depth
  * - Terminal-inspired minimalism
  */
@@ -92,10 +98,83 @@ private val MaDarkColorScheme = darkColorScheme(
 )
 
 /**
+ * M1K3 AI Light Color Scheme
+ *
+ * Off-white background with near-black text for excellent readability in bright environments.
+ * Maintains the glassmorphic aesthetic using transparent black layers.
+ */
+private val MaLightColorScheme = lightColorScheme(
+    // ============================================
+    // Primary Colors (M1K3 Orange)
+    // ============================================
+    primary = MaColors.Orange,
+    onPrimary = MaColors.White,
+    primaryContainer = MaColors.Orange.copy(alpha = 0.1f),
+    onPrimaryContainer = MaColors.Orange,
+
+    // ============================================
+    // Secondary Colors (Subtle grays)
+    // ============================================
+    secondary = MaColors.Black,
+    onSecondary = MaColors.White,
+    secondaryContainer = MaColors.Black.copy(alpha = 0.1f),
+    onSecondaryContainer = MaColors.TextPrimaryLight,
+
+    // ============================================
+    // Tertiary Colors (Info blue)
+    // ============================================
+    tertiary = MaColors.Info,
+    onTertiary = MaColors.White,
+    tertiaryContainer = MaColors.InfoBg,
+    onTertiaryContainer = MaColors.Info,
+
+    // ============================================
+    // Background & Surface (Light mode)
+    // ============================================
+    background = MaColors.BgPrimaryLight,
+    onBackground = MaColors.TextPrimaryLight,
+
+    surface = MaColors.BgPrimaryLight,
+    onSurface = MaColors.TextPrimaryLight,
+
+    surfaceVariant = MaColors.BgSecondaryLight,
+    onSurfaceVariant = MaColors.TextSecondaryLight,
+
+    surfaceTint = MaColors.Orange,
+
+    // ============================================
+    // Inverse Colors (For special cases)
+    // ============================================
+    inverseSurface = MaColors.Black,
+    inverseOnSurface = MaColors.White,
+    inversePrimary = MaColors.Orange,
+
+    // ============================================
+    // Error Colors
+    // ============================================
+    error = MaColors.Error,
+    onError = MaColors.White,
+    errorContainer = MaColors.ErrorBg,
+    onErrorContainer = MaColors.Error,
+
+    // ============================================
+    // Outline & Borders
+    // ============================================
+    outline = MaColors.BorderMediumLight,
+    outlineVariant = MaColors.BorderLightLight,
+
+    // ============================================
+    // Scrim (Overlay backgrounds)
+    // ============================================
+    scrim = MaColors.ScrimMediumLight
+)
+
+/**
  * 間 AI Theme Composable
  *
  * Apply this at the root of your app to enable the complete design system.
- * Provides Material3 theming with our custom color scheme and typography.
+ * Automatically detects system dark mode preference and applies the appropriate color scheme.
+ * Provides Material3 theming with our custom color schemes and typography.
  *
  * Example Usage:
  * ```kotlin
@@ -108,14 +187,21 @@ private val MaDarkColorScheme = darkColorScheme(
  * }
  * ```
  *
+ * The theme will automatically switch between:
+ * - Dark mode: Pure black (#000000) background + white text
+ * - Light mode: Off-white (#F9F9FA) background + near-black text
+ *
  * @param content The composable content to theme
  */
 @Composable
 fun MaTheme(
     content: @Composable () -> Unit
 ) {
+    val isDarkMode = isSystemInDarkTheme()
+    val colorScheme = if (isDarkMode) MaDarkColorScheme else MaLightColorScheme
+
     MaterialTheme(
-        colorScheme = MaDarkColorScheme,
+        colorScheme = colorScheme,
         typography = MaTypography,
         content = content
     )

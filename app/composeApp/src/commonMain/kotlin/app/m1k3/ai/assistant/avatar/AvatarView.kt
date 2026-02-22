@@ -7,6 +7,7 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
@@ -83,8 +84,7 @@ fun AvatarView(
     ) {
         Column(
             modifier = Modifier
-                .fillMaxSize()
-                .padding(MaSpacing.base),
+                .fillMaxSize(),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
@@ -101,8 +101,6 @@ fun AvatarView(
                 contentAlignment = Alignment.Center
             ) {
                 if (use3D) {
-                    // 3D model rendering (Android only)
-                    // Defined in Avatar3DView.android.kt via expect/actual
                     AvatarViewContent3D(state = animatedState)
                 } else {
                     // 2D Canvas rendering (all platforms)
@@ -132,7 +130,7 @@ fun AvatarView(
                     Text(
                         text = state.activity.displayName,
                         style = MaTypography.bodySmall,
-                        color = MaColors.TextSecondary
+                        color = MaColors.textSecondary()
                     )
                 }
 
@@ -142,7 +140,7 @@ fun AvatarView(
                     Text(
                         text = state.message,
                         style = MaTypography.labelSmall,
-                        color = MaColors.TextDisabled
+                        color = MaColors.textDisabled()
                     )
                 }
 
@@ -150,7 +148,7 @@ fun AvatarView(
                 Text(
                     text = "Intensity: ${(state.intensity * 100).toInt()}%",
                     style = MaTypography.labelSmall,
-                    color = MaColors.TextDisabled
+                    color = MaColors.textDisabled()
                 )
             }
         }
@@ -229,7 +227,7 @@ fun AvatarEmotionSelector(
             text = "Avatar Emotions",
             style = MaTypography.titleMedium,
             fontWeight = FontWeight.Bold,
-            color = MaColors.TextPrimary
+            color = MaColors.textPrimary()
         )
 
         // Grid of emotion buttons
@@ -286,6 +284,7 @@ fun AvatarActivityIndicator(
     modifier: Modifier = Modifier
 ) {
     val activityAnim = rememberActivityAnimation(activity)
+    val idleColor = MaColors.textDisabled()
 
     Row(
         modifier = modifier
@@ -305,12 +304,12 @@ fun AvatarActivityIndicator(
             Canvas(modifier = Modifier.fillMaxSize()) {
                 drawCircle(
                     color = when (activity) {
-                        AvatarActivity.LISTENING -> androidx.compose.ui.graphics.Color.Blue
-                        AvatarActivity.THINKING -> androidx.compose.ui.graphics.Color.Magenta
+                        AvatarActivity.LISTENING -> MaColors.Info
+                        AvatarActivity.THINKING -> MaColors.Warning
                         AvatarActivity.GENERATING -> MaColors.Orange
-                        AvatarActivity.SPEAKING -> androidx.compose.ui.graphics.Color.Green
+                        AvatarActivity.SPEAKING -> MaColors.Success
                         AvatarActivity.ERROR -> MaColors.Error
-                        AvatarActivity.IDLE -> MaColors.TextDisabled
+                        AvatarActivity.IDLE -> idleColor
                     }
                 )
             }
@@ -319,7 +318,7 @@ fun AvatarActivityIndicator(
         Text(
             text = activity.displayName,
             style = MaTypography.bodySmall,
-            color = if (activity.isActive) MaColors.TextPrimary else MaColors.TextDisabled,
+            color = if (activity.isActive) MaColors.textPrimary() else MaColors.textDisabled(),
             fontWeight = if (activity.isActive) FontWeight.Medium else FontWeight.Normal
         )
     }
@@ -364,6 +363,9 @@ fun PixelPetView(
     showResolutionDebug: Boolean = false,
     useRoundedPixels: Boolean = true
 ) {
+    // Get system theme setting for theme-aware colors
+    val isDarkMode = isSystemInDarkTheme()
+
     // Collect particle effects
     val particleEffects by petViewModel.particleEffects.collectAsState()
 
@@ -410,7 +412,8 @@ fun PixelPetView(
                             showEnvironment = showEnvironment,
                             showPixelGrid = showPixelGrid,
                             showResolutionDebug = showResolutionDebug,
-                            useRoundedPixels = useRoundedPixels
+                            useRoundedPixels = useRoundedPixels,
+                            isDarkMode = isDarkMode
                         )
 
                         // Render particles (use current timestamp as animationProgress)
@@ -490,7 +493,7 @@ fun PixelPetView(
                             Text(
                                 text = stage.displayName,
                                 style = MaTypography.bodySmall,
-                                color = MaColors.TextSecondary
+                                color = MaColors.textSecondary()
                             )
                         }
                     }
@@ -516,6 +519,8 @@ fun PixelPetViewCompact(
     avatarState: AvatarState,
     modifier: Modifier = Modifier
 ) {
+    val isDarkMode = isSystemInDarkTheme()
+
     Box(
         modifier = modifier.size(120.dp),
         contentAlignment = Alignment.Center
@@ -527,7 +532,8 @@ fun PixelPetViewCompact(
                 geometry = RobotGeometry(),
                 animation = AvatarAnimation(),
                 showStatBars = false,
-                showEnvironment = false
+                showEnvironment = false,
+                isDarkMode = isDarkMode
             )
         }
     }

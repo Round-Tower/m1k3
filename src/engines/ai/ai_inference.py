@@ -33,28 +33,25 @@ except ImportError:
     PROMPT_LOGGER_AVAILABLE = False
     get_prompt_logger = None
 
-# Import Universal Model Engine
-SMOLLM_ENGINE_AVAILABLE = False  # Ensure flag exists
+# Import Universal Model Engine (unified, mobile-aligned)
 try:
     from .universal_model_engine import UniversalModelEngine
-    import sys
-    import os
-    sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
-    from model_tiers import ModelTierManager, DeviceTier
     UNIVERSAL_ENGINE_AVAILABLE = True
-    print("🤖 Universal Model Engine available")
+    print("🤖 Universal Model Engine available (mobile-aligned defaults)")
 except ImportError as e:
     UNIVERSAL_ENGINE_AVAILABLE = False
-    print(f"⚠️ Universal Model Engine not available: {e}")
-    
-    # Fallback to legacy SmolLM engine if universal not available
-    try:
-        from .smollm_engine import SmolLMEngine
-        SMOLLM_ENGINE_AVAILABLE = True
-        print("🤖 Falling back to SmolLM engine")
-    except ImportError as e:
-        SMOLLM_ENGINE_AVAILABLE = False
-        print(f"⚠️ SmolLM engine also not available: {e}")
+    print(f"❌ Universal Model Engine not available: {e}")
+
+# Import ModelTierManager (optional - UniversalEngine has own RAM detection)
+try:
+    import sys
+    import os
+    sys.path.append(os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'scripts'))
+    from model_tiers import ModelTierManager, DeviceTier
+    MODEL_TIER_MANAGER_AVAILABLE = True
+except ImportError as e:
+    MODEL_TIER_MANAGER_AVAILABLE = False
+    print(f"⚠️ ModelTierManager not available (not critical): {e}")
 
 # Import local model manager
 try:
@@ -95,9 +92,123 @@ except ImportError:
     CTRANSFORMERS_AVAILABLE = False
     print("❌ ctransformers not available")
 
-if not CTRANSFORMERS_AVAILABLE and not TRANSFORMERS_AVAILABLE:
-    print("❌ No AI libraries available. Run: pip install transformers torch")
+# MLX-LM Apple Silicon support (native Metal acceleration)
+# MLX runs as a separate server; we just need an HTTP client to talk to it.
+MLX_HTTP_AVAILABLE = False
+try:
+    import requests
+    MLX_HTTP_AVAILABLE = True
+except ImportError:
+    print("⚠️  MLX-LM: requests library not available (pip install requests)")
+
+# MLX configuration (mlx_lm.server defaults to port 8080)
+MLX_SERVER_PORT = int(os.environ.get("MLX_SERVER_PORT", "8080"))
+MLX_MODEL_NAME = os.environ.get("MLX_MODEL", "mlx-community/Qwen3-Coder-Next-4bit")
+
+if not CTRANSFORMERS_AVAILABLE and not TRANSFORMERS_AVAILABLE and not UNIVERSAL_ENGINE_AVAILABLE and not MLX_HTTP_AVAILABLE:
+    print("❌ No AI backends available. Install one of:")
+    print("   • MLX-LM (Apple Silicon): pip install mlx-lm")
+    print("   • Ollama (for UniversalEngine): https://ollama.ai")
+    print("   • Transformers: pip install transformers torch")
     raise ImportError("No AI backends available")
+
+class MLXServerError(Exception):
+    """Raised when the MLX-LM server returns an error or is unreachable."""
+    pass
+
+
+class MLXClient:
+    """
+    Native Apple Silicon MLX-LM client.
+    Connects to a local mlx_lm.server instance for Metal-accelerated inference.
+    Uses the OpenAI-compatible API: /v1/models, /v1/chat/completions.
+    """
+
+    def __init__(self, model: str = None, port: int = MLX_SERVER_PORT):
+        self.model = model or MLX_MODEL_NAME
+        self.port = port
+        self.base_url = f"http://localhost:{port}"
+        self._session = requests.Session()
+        self._session.headers.update({"Content-Type": "application/json"})
+
+    def is_server_ready(self) -> bool:
+        """Check if mlx-lm server is running via GET /v1/models."""
+        try:
+            response = self._session.get(f"{self.base_url}/v1/models", timeout=2)
+            return response.status_code == 200
+        except Exception:
+            return False
+
+    def get_model_info(self) -> Dict:
+        """Get model information via GET /v1/models (OpenAI format)."""
+        try:
+            response = self._session.get(f"{self.base_url}/v1/models", timeout=5)
+            if response.status_code == 200:
+                data = response.json()
+                for model in data.get("data", []):
+                    model_id = model.get("id", "")
+                    if model_id == self.model or model_id.endswith(self.model.split("/")[-1]):
+                        return model
+            return {}
+        except Exception:
+            return {}
+
+    def generate(self, prompt: str, max_tokens: int = 512,
+                temperature: float = 0.7, system_prompt: str = None) -> Generator[str, None, None]:
+        """Generate streaming response via POST /v1/chat/completions."""
+
+        messages = []
+        if system_prompt:
+            messages.append({"role": "system", "content": system_prompt})
+        messages.append({"role": "user", "content": prompt})
+
+        payload = {
+            "model": self.model,
+            "messages": messages,
+            "max_tokens": max_tokens,
+            "temperature": temperature,
+            "stream": True
+        }
+
+        try:
+            response = self._session.post(
+                f"{self.base_url}/v1/chat/completions",
+                json=payload,
+                stream=True,
+                timeout=120
+            )
+
+            if response.status_code != 200:
+                raise MLXServerError(f"Server returned {response.status_code}")
+
+            for line in response.iter_lines():
+                if line:
+                    line = line.decode('utf-8')
+                    if line.startswith('data: '):
+                        data = line[6:]
+                        if data == '[DONE]':
+                            break
+                        try:
+                            chunk = json.loads(data)
+                            content = chunk.get("choices", [{}])[0].get("delta", {}).get("content", "")
+                            if content:
+                                yield content
+                        except (json.JSONDecodeError, KeyError, IndexError):
+                            continue
+
+        except MLXServerError:
+            raise
+        except Exception as e:
+            raise MLXServerError(f"Connection to MLX server failed: {e}") from e
+
+    def generate_sync(self, prompt: str, max_tokens: int = 512,
+                     temperature: float = 0.7, system_prompt: str = None) -> str:
+        """Generate response synchronously."""
+        result = []
+        for token in self.generate(prompt, max_tokens, temperature, system_prompt):
+            result.append(token)
+        return "".join(result)
+
 
 @dataclass
 class ConversationContext:
@@ -177,44 +288,53 @@ class LocalAIEngine:
             self.logger = None
         self.models_dir.mkdir(exist_ok=True)
         
-        # Initialize Universal Model Engine and tier management
+        # Initialize Universal Model Engine (unified, mobile-aligned)
         self.universal_engine = None
-        self.smollm_engine = None  # Legacy fallback
         self.tier_manager = None
         self.device_tier = None
-        if UNIVERSAL_ENGINE_AVAILABLE or SMOLLM_ENGINE_AVAILABLE:
+        if UNIVERSAL_ENGINE_AVAILABLE:
             try:
-                self.tier_manager = ModelTierManager()
-                device_capability, _ = self.tier_manager.recommend_models_for_device()
-                self.device_tier = device_capability.tier
-                print(f"🎯 Device tier detected: {self.device_tier.value}")
-                
+                # Initialize Universal Model Engine with mobile-aligned defaults
+                self.universal_engine = UniversalModelEngine("gemma3:270m")
+                print(f"🤖 Universal M1K3 engine initialized (mobile-aligned)")
+                print(f"   • RAM: {self.universal_engine.device_ram_gb}GB")
+                print(f"   • Max tokens: {self.universal_engine.get_optimal_max_tokens()}")
+
+                # Optional: Initialize ModelTierManager for device analysis
+                if MODEL_TIER_MANAGER_AVAILABLE:
+                    try:
+                        self.tier_manager = ModelTierManager()
+                        device_capability, _ = self.tier_manager.recommend_models_for_device()
+                        self.device_tier = device_capability.tier
+                        print(f"🎯 Device tier: {self.device_tier.value}")
+                    except Exception as e:
+                        print(f"⚠️ ModelTierManager initialization failed (non-critical): {e}")
+
                 # Log all available models
                 self._log_available_models()
-                
-                # Initialize Universal Model Engine (preferred) or SmolLM2 engine (fallback)
-                if UNIVERSAL_ENGINE_AVAILABLE:
-                    self.universal_engine = UniversalModelEngine("gemma3:270m")
-                    print(f"🤖 Universal M1K3 engine initialized for {self.device_tier.value} tier")
-                elif SMOLLM_ENGINE_AVAILABLE:
-                    self.smollm_engine = SmolLMEngine("smollm_config.json")
-                    print(f"🤖 Legacy M1K3 engine initialized for {self.device_tier.value} tier")
-                
-                # Load metadata for default model
-                model_name = "gemma3:270m"  # Default model name
-                if self.universal_engine:
-                    # Universal engine handles metadata internally
-                    pass
-                elif hasattr(self.smollm_engine, 'backend') and self.smollm_engine.backend:
-                    self.model_metadata = self._load_model_metadata(model_name)
-                    if self.model_metadata:
-                        print(f"📋 Loaded model metadata: {model_name}")
-                    else:
-                        print(f"⚠️ Could not load metadata for {model_name}")
             except Exception as e:
                 print(f"⚠️ M1K3 engine initialization failed: {e}")
                 self.universal_engine = None
-                self.smollm_engine = None
+        
+        # Initialize MLX-LM client (Apple Silicon Metal acceleration)
+        self.mlx_client = None
+        self.mlx_available = False
+        if MLX_HTTP_AVAILABLE:
+            try:
+                self.mlx_client = MLXClient()
+                if self.mlx_client.is_server_ready():
+                    self.mlx_available = True
+                    model_info = self.mlx_client.get_model_info()
+                    print(f"🚀 MLX-LM server detected and ready!")
+                    print(f"   • Model: {self.mlx_client.model}")
+                    print(f"   • Port: {self.mlx_client.port}")
+                    if model_info:
+                        print(f"   • Model ID: {model_info.get('id', 'N/A')}")
+                else:
+                    print(f"⚠️  MLX-LM server not running on port {MLX_SERVER_PORT}")
+                    print(f"   Start with: mlx_lm.server --model {MLX_MODEL_NAME} --port {MLX_SERVER_PORT}")
+            except Exception as e:
+                print(f"⚠️ MLX client initialization failed: {e}")
         
         # Choose backend: prefer HuggingFace for x86_64 compatibility
         self.use_transformers = TRANSFORMERS_AVAILABLE
@@ -383,8 +503,7 @@ class LocalAIEngine:
         print(f"\n🔧 Available Backends:")
         print(f"   • HuggingFace Transformers: {'✅' if TRANSFORMERS_AVAILABLE else '❌'}")
         print(f"   • ctransformers: {'✅' if CTRANSFORMERS_AVAILABLE else '❌'}")
-        print(f"   • Universal Engine: {'✅' if UNIVERSAL_ENGINE_AVAILABLE else '❌'}")
-        print(f"   • SmolLM Engine: {'✅' if SMOLLM_ENGINE_AVAILABLE else '❌'}")
+        print(f"   • Universal Engine (mobile-aligned): {'✅' if UNIVERSAL_ENGINE_AVAILABLE else '❌'}")
         
         # Device capabilities
         if self.tier_manager:
@@ -444,14 +563,14 @@ class LocalAIEngine:
         return first_model
     
     def _get_hf_equivalent_for_ollama(self, ollama_model: str) -> Optional[str]:
-        """Get HuggingFace equivalent model for ollama model - DEPRECATED, use SmolLM2 engine instead"""
-        print(f"⚠️ Using deprecated HF mapping for {ollama_model} - consider SmolLM2 engine")
-        
-        # Check if we should use SmolLM2 engine instead
-        if ollama_model.startswith('smollm2'):
-            return None  # Will trigger SmolLM2 engine usage
-        
-        # Limited mapping for non-SmolLM models
+        """Get HuggingFace equivalent model for ollama model - DEPRECATED, use Universal engine instead"""
+        print(f"⚠️ Using deprecated HF mapping for {ollama_model} - Universal engine handles this natively")
+
+        # Check if we should use Universal engine instead
+        if ollama_model.startswith('smollm2') or ollama_model.startswith('gemma'):
+            return None  # Will trigger Universal engine usage
+
+        # Limited mapping for legacy models
         legacy_map = {
             'llama3.2:1b': 'TinyLlama/TinyLlama-1.1B-Chat-v1.0',
             'llama3.2:latest': 'TinyLlama/TinyLlama-1.1B-Chat-v1.0',
@@ -462,7 +581,7 @@ class LocalAIEngine:
         if hf_model and self.model_manager and hf_model in self.model_manager.available_models:
             return hf_model
         
-        return None  # No mapping, let SmolLM2 engine handle it
+        return None  # No mapping, let Universal engine handle it
 
     def _get_target_model_name(self) -> Optional[str]:
         """Get target model name for async loading - prioritizes ollama models"""
@@ -817,7 +936,37 @@ class LocalAIEngine:
     def generate_response(self, prompt: str, max_tokens: int = 512, show_thinking: bool = False) -> Generator[str, None, None]:
         """Generate streaming response with adaptive strategy"""
         
-        # Priority 1: Use universal engine if available and loaded
+        # Priority 1: MLX-LM (Apple Silicon Metal acceleration) - highest priority
+        if self.mlx_available and self.mlx_client:
+            try:
+                print(f"🚀 Using MLX-LM (Apple Silicon) for generation")
+                
+                # Check if server is still ready
+                if not self.mlx_client.is_server_ready():
+                    print("⚠️ MLX-LM server no longer available, falling back...")
+                    self.mlx_available = False
+                    raise Exception("MLX server disconnected")
+                
+                # Add RAG context if available
+                rag_context = self._get_rag_context(prompt)
+                system_prompt = "You are M1K3 (Mike), an eco-conscious, context-aware edge AI system. You run locally on user devices for privacy and sustainability. Be helpful, efficient, and mindful of system resources."
+                if rag_context:
+                    system_prompt += f"\n\nAdditional Context:\n{rag_context}"
+                
+                # Generate using MLX client
+                for token in self.mlx_client.generate(
+                    prompt,
+                    max_tokens=max_tokens,
+                    temperature=0.7,
+                    system_prompt=system_prompt
+                ):
+                    yield token
+                return
+                    
+            except Exception as e:
+                print(f"⚠️ MLX-LM generation failed: {e}, falling back to next engine")
+
+        # Priority 2: Universal Engine (Ollama) fallback
         if self.universal_engine and self.universal_engine.engine_loaded:
             try:
                 # Use universal engine for generation
@@ -834,61 +983,20 @@ class LocalAIEngine:
                 if rag_context:
                     system_prompt += f"\n\nAdditional Context:\n{rag_context}"
                 
-                # Universal engine supports streaming by default
+                # Universal engine supports streaming by default (uses mobile-aligned defaults)
                 for token in self.universal_engine.generate_streaming_response(
-                    prompt, 
+                    prompt,
                     system_prompt=system_prompt,
-                    max_tokens=max_tokens,
-                    temperature=0.7
+                    max_tokens=max_tokens
+                    # temperature defaults to 1.0 (mobile-aligned)
                 ):
                     yield token
                 return
-                    
+
             except Exception as e:
-                print(f"⚠️ Universal engine generation failed: {e}, falling back to legacy engines")
-        
-        # Priority 2: Use legacy SmolLM engine if universal engine fails
-        elif (self.smollm_engine and 
-            hasattr(self.smollm_engine, 'model') and 
-            (self.smollm_engine.model or self.smollm_engine.backend == "ollama")):
-            
-            try:
-                # Use legacy engine for generation
-                print(f"🤖 Using legacy {self.smollm_engine.current_model_name} for generation")
-                
-                # Get adaptive parameters and auto-select style based on intent
-                adaptive_params = self._get_adaptive_generation_params(max_tokens, prompt)
-                auto_style = self._determine_auto_style(prompt, adaptive_params)
-                
-                # Apply auto style to SmolLM2
-                if auto_style and hasattr(self.smollm_engine, 'set_response_style'):
-                    self.smollm_engine.set_response_style(auto_style)
-                
-                # Pass session context and adaptive params
-                session_context = getattr(self, 'session_context', {})
-                
-                # Add RAG context if available
-                rag_context = self._get_rag_context(prompt)
-                if rag_context:
-                    session_context = session_context.copy()
-                    session_context['rag_context'] = rag_context
-                
-                # Check if streaming is supported
-                if hasattr(self.smollm_engine, 'stream_generate') and self.smollm_engine.backend == "ollama":
-                    # Stream from SmolLM2 if supported
-                    for token in self.smollm_engine.stream_generate(prompt, session_context, adaptive_params):
-                        yield token
-                else:
-                    # Non-streaming generation
-                    response = self.smollm_engine.generate(prompt, use_context=True, session_context=session_context, adaptive_params=adaptive_params)
-                    yield response
-                return
-                
-            except Exception as e:
-                print(f"⚠️ SmolLM2 generation failed: {e}, falling back to legacy engine")
-                # Continue to legacy engine below
-        
-        # Priority 2: Legacy engine fallback
+                print(f"⚠️ Universal engine generation failed: {e}, falling back to SimpleAI")
+
+        # Priority 3: SimpleAI engine fallback
         if not self.model:
             # Try SimpleAI engine as final fallback
             try:
@@ -1142,10 +1250,6 @@ class LocalAIEngine:
         # Also clear Universal engine context if available
         if self.universal_engine and hasattr(self.universal_engine, 'clear_context'):
             self.universal_engine.clear_context()
-        
-        # Also clear SmolLM2 context if available (legacy fallback)
-        if self.smollm_engine and hasattr(self.smollm_engine, 'clear_context'):
-            self.smollm_engine.clear_context()
         
         print("Conversation context cleared.")
         

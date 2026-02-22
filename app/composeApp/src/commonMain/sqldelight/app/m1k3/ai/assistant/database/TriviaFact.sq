@@ -45,7 +45,10 @@ CREATE TABLE IF NOT EXISTS TriviaFact (
     -- Source metadata
     source TEXT, -- Origin (e.g., 'm1k3_kb_v1', 'user_generated')
     created_at INTEGER NOT NULL,
-    updated_at INTEGER NOT NULL
+    updated_at INTEGER NOT NULL,
+
+    -- Knowledge tier for tiered retrieval (CURATED > VERIFIED > SYNTHETIC)
+    tier TEXT NOT NULL DEFAULT 'SYNTHETIC' -- CURATED, VERIFIED, or SYNTHETIC
 );
 
 -- Indexes for efficient knowledge retrieval
@@ -67,6 +70,10 @@ WHERE embedding_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_trivia_access
 ON TriviaFact(category, access_count DESC);
 
+-- For tiered retrieval (CURATED > VERIFIED > SYNTHETIC)
+CREATE INDEX IF NOT EXISTS idx_trivia_tier
+ON TriviaFact(tier, category, importance DESC);
+
 -- Queries
 
 -- Insert new trivia fact
@@ -86,8 +93,9 @@ INSERT INTO TriviaFact (
     embedding_vector,
     source,
     created_at,
-    updated_at
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+    updated_at,
+    tier
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 
 -- Get fact by ID
 getTriviaFactById:
@@ -254,3 +262,44 @@ getFactsByImportanceRange:
 SELECT * FROM TriviaFact
 WHERE importance BETWEEN ? AND ?
 ORDER BY category, importance DESC;
+
+-- Tiered retrieval queries
+
+-- Get facts by tier
+getFactsByTier:
+SELECT * FROM TriviaFact
+WHERE tier = ?
+ORDER BY category, importance DESC;
+
+-- Get curated facts (highest quality)
+getCuratedFacts:
+SELECT * FROM TriviaFact
+WHERE tier = 'CURATED'
+ORDER BY category, importance DESC;
+
+-- Update fact tier
+updateFactTier:
+UPDATE TriviaFact
+SET tier = ?
+WHERE id = ?;
+
+-- Bulk update tier by source (e.g., mark ai_ml_knowledge.json as CURATED)
+updateTierBySource:
+UPDATE TriviaFact
+SET tier = ?
+WHERE source = ?;
+
+-- Get tier statistics
+getTierStats:
+SELECT
+    tier,
+    COUNT(*) AS fact_count,
+    AVG(importance) AS avg_importance
+FROM TriviaFact
+GROUP BY tier
+ORDER BY
+    CASE tier
+        WHEN 'CURATED' THEN 1
+        WHEN 'VERIFIED' THEN 2
+        WHEN 'SYNTHETIC' THEN 3
+    END;

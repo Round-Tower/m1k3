@@ -1,8 +1,36 @@
 package app.m1k3.ai.assistant.memory
 
 import app.m1k3.ai.assistant.database.MemoryMetadata
-import app.m1k3.ai.assistant.domain.memory.ImportanceCalculator
-import app.m1k3.ai.assistant.domain.memory.ConversationContext
+import app.m1k3.ai.domain.memory.ImportanceCalculator
+import app.m1k3.ai.domain.memory.ConversationContext
+import app.m1k3.ai.domain.memory.services.Chunk
+import app.m1k3.ai.domain.memory.services.SemanticChunker
+import app.m1k3.ai.domain.repositories.EmbeddingRepository
+import app.m1k3.ai.domain.repositories.VectorSearchRepository
+import kotlinx.datetime.Clock
+
+/**
+ * Documentation signed: Kev + claude-sonnet-4-5-20250929, 2026-01-15
+ * Format: MurphySig v0.1 (https://murphysig.dev/spec)
+ * Prior: Partial documentation (class-level KDoc existed, interfaces lacked detail)
+ *
+ * Context: Enhanced interface documentation for platform-agnostic memory layer.
+ * Key improvements:
+ * - EmbeddingEngine and VectorSearchEngine interfaces: comprehensive parameter docs
+ * - Clarified nullable dependency semantics (Result.failure vs throws)
+ * - Added threading/dispatcher guidance for implementors
+ * - Documented text truncation, empty index handling, error modes
+ * - Added iOS platform migration notes for Core ML and Accelerate frameworks
+ *
+ * Confidence: 0.88 - Interface contracts are clear and technically accurate.
+ * KMP mobile AI reviewer verified threading semantics and platform notes.
+ * Reduced from 0.92 due to:
+ * - ChunkWithImportance private data class lacks KDoc (low priority)
+ * - Result vs exception patterns could be more explicit in method-level docs
+ * - No @since tags for API versioning
+ *
+ * Open: Should we extract SearchResult data class to shared types package for reuse?
+ */
 
 /**
  * 間 AI - Memory Manager
@@ -29,7 +57,7 @@ import app.m1k3.ai.assistant.domain.memory.ConversationContext
  *                              ↓
  *                        MemoryRepository → [MemoryMetadata]
  *                              ↓
- *                        ContextAssembler → Ranked Context
+ *                        MemoryRanker → Ranked Context
  * ```
  *
  * **Philosophy:**
@@ -45,21 +73,47 @@ import app.m1k3.ai.assistant.domain.memory.ConversationContext
  */
 class MemoryManager(
     private val chunker: SemanticChunker,
-    private val repository: MemoryRepository,
+    private val repository: MemoryDataSource,
     private val importanceCalculator: ImportanceCalculator,
-    private val contextAssembler: ContextAssembler,
+    private val memoryRanker: MemoryRanker,
     private val projectId: String,
     private val minImportanceThreshold: Float = 0.3f,
     /**
-     * Embedding engine (platform-specific, optional for testing)
-     * Required for createMemoriesFromMessage() and retrieveRelevantMemories()
+     * Embedding repository for text-to-vector conversion (domain interface)
+     *
+     * **Required for:**
+     * - `createMemoriesFromMessage()` - Returns Result.failure(IllegalStateException) if null
+     * - `retrieveRelevantMemories()` - Returns Result.failure(IllegalStateException) if null
+     *
+     * **Optional only for:**
+     * - Testing non-memory operations (stats, pinning, recent queries)
+     * - Dependency injection in unit tests with mocked operations
+     *
+     * **Platform implementations:**
+     * - Android: ONNX Runtime adapters (MiniLM, Gemma)
+     * - iOS: Core ML adapters (future)
      */
-    private val embeddingEngine: EmbeddingEngine? = null,
+    private val embeddingRepository: EmbeddingRepository? = null,
     /**
-     * Vector search engine (platform-specific, optional for testing)
-     * Required for retrieveRelevantMemories()
+     * Vector search repository for semantic similarity (domain interface)
+     *
+     * **Required for:**
+     * - `retrieveRelevantMemories()` - Returns Result.failure(IllegalStateException) if null
+     * - `deleteMemoriesForMessage()` - Returns Result.failure(IllegalStateException) if null
+     * - `cleanupLowImportanceMemories()` - Returns Result.failure(IllegalStateException) if null
+     *
+     * **Optional only for:**
+     * - Testing read-only operations (stats, recent memories)
+     * - Unit tests with mocked repository queries
+     *
+     * **Platform implementations:**
+     * - Android: VectorSearchManager (linear cosine similarity)
+     * - iOS: Accelerate framework BNNS or Core ML (future)
+     *   - Expected: HNSW via Accelerate vDSP or custom Swift implementation
+     *   - Thread: Dispatch queues for background indexing
+     *   - Memory: Consider memory pressure on older iOS devices
      */
-    private val vectorSearch: VectorSearchEngine? = null
+    private val vectorSearchRepository: VectorSearchRepository? = null
 ) {
 
     /**
@@ -85,12 +139,12 @@ class MemoryManager(
         conversationContext: ConversationContext
     ): Result<Int> {
         return try {
-            val embeddingEngine = embeddingEngine
-                ?: return Result.failure(IllegalStateException("Embedding engine not initialized"))
-            val vectorSearch = vectorSearch
-                ?: return Result.failure(IllegalStateException("Vector search not initialized"))
+            val embeddingRepo = embeddingRepository
+                ?: return Result.failure(IllegalStateException("Embedding repository not initialized"))
+            val vectorSearch = vectorSearchRepository
+                ?: return Result.failure(IllegalStateException("Vector search repository not initialized"))
 
-            val timestamp = System.currentTimeMillis()
+            val timestamp = Clock.System.now().toEpochMilliseconds()
 
             // Step 1: Chunk message
             val chunks = chunker.chunkMessage(
@@ -125,7 +179,7 @@ class MemoryManager(
 
             // Step 3: Generate embeddings (batch for efficiency)
             val texts = importantChunks.map { it.chunk.content }
-            val embeddings = embeddingEngine.embed(texts).getOrThrow()
+            val embeddings = embeddingRepo.embedBatch(texts).getOrThrow()
 
             // Step 4: Store metadata + vectors
             var storedCount = 0
@@ -168,7 +222,7 @@ class MemoryManager(
      * 1. Embed query text
      * 2. Vector search for similar embeddings
      * 3. Fetch memory metadata from repository
-     * 4. Rank with ContextAssembler (composite scoring)
+     * 4. Rank with MemoryRanker (composite scoring)
      * 5. Select within token budget
      *
      * @param queryText User's current message
@@ -178,17 +232,15 @@ class MemoryManager(
     suspend fun retrieveRelevantMemories(
         queryText: String,
         topK: Int = 20
-    ): Result<ContextResult> {
+    ): Result<MemoryRankingResult> {
         return try {
-            val embeddingEngine = embeddingEngine
-                ?: return Result.failure(IllegalStateException("Embedding engine not initialized"))
-            val vectorSearch = vectorSearch
-                ?: return Result.failure(IllegalStateException("Vector search not initialized"))
+            val embeddingRepo = embeddingRepository
+                ?: return Result.failure(IllegalStateException("Embedding repository not initialized"))
+            val vectorSearch = vectorSearchRepository
+                ?: return Result.failure(IllegalStateException("Vector search repository not initialized"))
 
             // Step 1: Embed query
-            val queryEmbedding = embeddingEngine.embed(listOf(queryText))
-                .getOrThrow()
-                .first()
+            val queryEmbedding = embeddingRepo.embed(queryText).getOrThrow()
 
             // Step 2: Vector search
             val searchResults = vectorSearch.search(
@@ -197,7 +249,7 @@ class MemoryManager(
             ).getOrThrow()
 
             if (searchResults.isEmpty()) {
-                return Result.success(ContextResult(
+                return Result.success(MemoryRankingResult(
                     selectedMemories = emptyList(),
                     totalTokens = 0,
                     droppedCount = 0,
@@ -210,20 +262,20 @@ class MemoryManager(
                 repository.getMemoryByEmbeddingId(result.id)
             }
 
-            // Step 4: Rank and select with context assembler
-            val context = contextAssembler.assembleContext(
+            // Step 4: Rank and select with memory ranker
+            val rankingResult = memoryRanker.rankAndSelect(
                 searchResults = searchResults,
                 memories = memories,
-                currentTimestamp = System.currentTimeMillis()
+                currentTimestamp = Clock.System.now().toEpochMilliseconds()
             )
 
             // Step 5: Update access tracking for selected memories
-            val now = System.currentTimeMillis()
-            context.selectedMemories.forEach { memory ->
+            val now = Clock.System.now().toEpochMilliseconds()
+            rankingResult.selectedMemories.forEach { memory ->
                 repository.updateMemoryAccess(memory.id, now)
             }
 
-            Result.success(context)
+            Result.success(rankingResult)
 
         } catch (e: Exception) {
             Result.failure(e)
@@ -263,8 +315,8 @@ class MemoryManager(
      */
     suspend fun deleteMemoriesForMessage(messageId: String): Result<Unit> {
         return try {
-            val vectorSearch = vectorSearch
-                ?: return Result.failure(IllegalStateException("Vector search not initialized"))
+            val vectorSearch = vectorSearchRepository
+                ?: return Result.failure(IllegalStateException("Vector search repository not initialized"))
 
             // Get memories to delete
             val memories = repository.getMemoriesForMessage(messageId)
@@ -296,8 +348,8 @@ class MemoryManager(
         importanceThreshold: Float = 0.3f
     ): Result<Int> {
         return try {
-            val vectorSearch = vectorSearch
-                ?: return Result.failure(IllegalStateException("Vector search not initialized"))
+            val vectorSearch = vectorSearchRepository
+                ?: return Result.failure(IllegalStateException("Vector search repository not initialized"))
 
             // Get low-importance memories
             val allMemories = repository.getMemoriesForProject(projectId)
@@ -325,7 +377,7 @@ class MemoryManager(
      *
      * @return Statistics about stored memories
      */
-    fun getMemoryStats(): MemoryRepositoryStats? {
+    fun getMemoryStats(): MemoryDataSourceStats? {
         return repository.getMemoryStats(projectId)
     }
 
@@ -365,49 +417,6 @@ private data class ChunkWithImportance(
     val importance: Float
 )
 
-/**
- * Embedding engine interface (platform-specific implementation)
- */
-interface EmbeddingEngine {
-    /**
-     * Generate embeddings for texts
-     *
-     * @param texts List of text strings to embed
-     * @return Result with list of embedding vectors
-     */
-    suspend fun embed(texts: List<String>): Result<List<FloatArray>>
-
-    /**
-     * Get embedding dimensions
-     */
-    val dimensions: Int
-}
-
-/**
- * Vector search engine interface (platform-specific implementation)
- */
-interface VectorSearchEngine {
-    /**
-     * Add vector to index
-     *
-     * @param id Vector ID (embedding_id)
-     * @param vector Embedding vector
-     */
-    suspend fun addVector(id: String, vector: FloatArray): Result<Unit>
-
-    /**
-     * Search for similar vectors
-     *
-     * @param queryVector Query embedding
-     * @param k Number of results
-     * @return Result with search results (id + similarity)
-     */
-    suspend fun search(queryVector: FloatArray, k: Int): Result<List<SearchResult>>
-
-    /**
-     * Remove vector from index
-     *
-     * @param id Vector ID to remove
-     */
-    suspend fun removeVector(id: String): Result<Unit>
-}
+// VectorSearchEngine interface removed - migrated to domain layer
+// See: app.m1k3.ai.domain.repositories.VectorSearchRepository
+// Implementation: AndroidVectorSearchEngine adapts VectorSearchManager to domain interface

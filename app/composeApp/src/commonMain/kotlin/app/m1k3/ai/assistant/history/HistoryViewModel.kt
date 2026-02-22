@@ -1,7 +1,8 @@
 package app.m1k3.ai.assistant.history
 
 import androidx.compose.runtime.*
-import kotlinx.coroutines.CoroutineScope
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -48,9 +49,8 @@ import kotlinx.coroutines.launch
 class HistoryViewModel(
     private val conversationRepository: ConversationRepository,
     private val searchRepository: SearchRepository,
-    private val exportManager: ExportManager,
-    private val scope: CoroutineScope
-) {
+    private val exportManager: ExportManager
+) : ViewModel() {
     // State flows
     private val _state = MutableStateFlow(HistoryState())
     val state: StateFlow<HistoryState> = _state.asStateFlow()
@@ -67,7 +67,7 @@ class HistoryViewModel(
         currentProjectId = projectId
         _state.value = _state.value.copy(isLoading = true, error = null)
 
-        scope.launch {
+        viewModelScope.launch {
             try {
                 val conversations = conversationRepository.getConversationsByProject(projectId)
                 _state.value = _state.value.copy(
@@ -100,7 +100,7 @@ class HistoryViewModel(
             return
         }
 
-        scope.launch {
+        viewModelScope.launch {
             try {
                 val results = searchRepository.searchMessages(
                     query = query,
@@ -127,7 +127,7 @@ class HistoryViewModel(
      * @param conversationId Conversation ID to delete
      */
     fun deleteConversation(conversationId: Long) {
-        scope.launch {
+        viewModelScope.launch {
             try {
                 conversationRepository.deleteConversation(conversationId)
 
@@ -239,31 +239,6 @@ data class HistoryState(
 enum class ExportFormat {
     JSON,
     MARKDOWN
-}
-
-/**
- * Create and remember history view model.
- *
- * @param conversationRepository Conversation repository
- * @param searchRepository Search repository
- * @param exportManager Export manager
- * @return History view model scoped to composition
- */
-@Composable
-fun rememberHistoryViewModel(
-    conversationRepository: ConversationRepository,
-    searchRepository: SearchRepository,
-    exportManager: ExportManager
-): HistoryViewModel {
-    val scope = rememberCoroutineScope()
-    return remember {
-        HistoryViewModel(
-            conversationRepository = conversationRepository,
-            searchRepository = searchRepository,
-            exportManager = exportManager,
-            scope = scope
-        )
-    }
 }
 
 /**

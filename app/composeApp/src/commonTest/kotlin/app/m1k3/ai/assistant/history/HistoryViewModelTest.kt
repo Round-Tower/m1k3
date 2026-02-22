@@ -29,7 +29,6 @@ class HistoryViewModelTest {
             conversationRepository = conversationRepo,
             searchRepository = searchRepo,
             exportManager = exportManager,
-            scope = CoroutineScope(Dispatchers.Default)
         )
 
         // Assert
@@ -53,7 +52,6 @@ class HistoryViewModelTest {
             conversationRepository = conversationRepo,
             searchRepository = searchRepo,
             exportManager = exportManager,
-            scope = CoroutineScope(Dispatchers.Default)
         )
 
         val projectId = "project_001"
@@ -79,7 +77,6 @@ class HistoryViewModelTest {
             conversationRepository = conversationRepo,
             searchRepository = searchRepo,
             exportManager = exportManager,
-            scope = CoroutineScope(Dispatchers.Default)
         )
 
         val projectId = "project_001"
@@ -105,7 +102,6 @@ class HistoryViewModelTest {
             conversationRepository = conversationRepo,
             searchRepository = searchRepo,
             exportManager = exportManager,
-            scope = CoroutineScope(Dispatchers.Default)
         )
 
         val projectId = "project_001"
@@ -132,7 +128,6 @@ class HistoryViewModelTest {
             conversationRepository = conversationRepo,
             searchRepository = searchRepo,
             exportManager = exportManager,
-            scope = CoroutineScope(Dispatchers.Default)
         )
 
         // Manually set search state
@@ -158,7 +153,6 @@ class HistoryViewModelTest {
             conversationRepository = conversationRepo,
             searchRepository = searchRepo,
             exportManager = exportManager,
-            scope = CoroutineScope(Dispatchers.Default)
         )
 
         // Act
@@ -179,7 +173,6 @@ class HistoryViewModelTest {
             conversationRepository = conversationRepo,
             searchRepository = searchRepo,
             exportManager = exportManager,
-            scope = CoroutineScope(Dispatchers.Default)
         )
 
         // Act

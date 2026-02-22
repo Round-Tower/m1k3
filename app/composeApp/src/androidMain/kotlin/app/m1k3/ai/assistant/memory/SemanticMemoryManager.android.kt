@@ -3,8 +3,8 @@ package app.m1k3.ai.assistant.memory
 import android.content.Context
 import android.util.Log
 import app.m1k3.ai.assistant.database.MaDatabase
-import app.m1k3.ai.assistant.domain.memory.ConversationContext
-import app.m1k3.ai.assistant.domain.memory.ImportanceCalculator
+import app.m1k3.ai.domain.memory.ConversationContext
+import app.m1k3.ai.domain.memory.ImportanceCalculator
 import app.m1k3.ai.assistant.embedding.EmbeddingEngine
 import app.m1k3.ai.assistant.embedding.EmbeddingTaskType
 import app.m1k3.ai.assistant.embedding.GemmaEmbeddingEngine
@@ -168,6 +168,73 @@ class SemanticMemoryManager(
 
         } catch (e: Exception) {
             Log.e(TAG, "Failed to create memory from message", e)
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Store a single memory chunk with its pre-computed embedding
+     *
+     * Low-level storage method used by domain CreateMemoryUseCase after
+     * chunking and embedding are complete. Stores both:
+     * - Metadata in database (content, importance, etc.)
+     * - Embedding vector in search index
+     *
+     * @param messageId Associated message ID
+     * @param content Chunk text content
+     * @param importance Importance score (0.0-1.0)
+     * @param chunkIndex Index of this chunk (0-based)
+     * @param chunkTotal Total number of chunks
+     * @param chunkTokens Approximate token count
+     * @param embedding Pre-computed embedding vector
+     * @return memoryId of stored chunk
+     */
+    suspend fun storeChunkWithEmbedding(
+        messageId: String,
+        content: String,
+        importance: Float,
+        chunkIndex: Int,
+        chunkTotal: Int,
+        chunkTokens: Int,
+        embedding: FloatArray
+    ): Result<String> = withContext(Dispatchers.IO) {
+        try {
+            require(isInitialized) { "Memory system not initialized" }
+            require(embedding.size == embeddingEngine.embeddingDimensions) {
+                "Embedding dimensions mismatch: expected ${embeddingEngine.embeddingDimensions}, got ${embedding.size}"
+            }
+
+            val memoryId = UUID.randomUUID().toString()
+            val embeddingId = "$memoryId-embedding"
+            val timestamp = System.currentTimeMillis()
+
+            // Insert memory metadata
+            database.memoryMetadataQueries.insertMemory(
+                id = memoryId,
+                message_id = messageId,
+                project_id = projectId,
+                content = content,
+                importance = importance.toDouble(),
+                created_at = timestamp,
+                chunk_index = chunkIndex.toLong(),
+                chunk_total = chunkTotal.toLong(),
+                chunk_tokens = chunkTokens.toLong(),
+                embedding_id = embeddingId,
+                embedding_model = embeddingEngine.modelName,
+                access_count = 0,
+                last_accessed_at = null,
+                decay_factor = 1.0,
+                is_pinned = 0
+            )
+
+            // Add embedding to vector index
+            vectorSearch.addVector(embeddingId, embedding).getOrThrow()
+
+            Log.d(TAG, "Stored chunk $chunkIndex/$chunkTotal for message $messageId (memoryId: $memoryId)")
+            Result.success(memoryId)
+
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to store chunk with embedding", e)
             Result.failure(e)
         }
     }

@@ -1,6 +1,6 @@
 package app.m1k3.ai.assistant.ai.ondevice
 
-import app.m1k3.ai.assistant.ai.GenerationConfig
+import app.m1k3.ai.domain.ai.GenerationConfig
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 

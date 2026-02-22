@@ -1,10 +1,13 @@
 package app.m1k3.ai.assistant.memory
 
-import app.m1k3.ai.assistant.domain.memory.ConversationContext
-import app.m1k3.ai.assistant.domain.memory.ImportanceCalculator
-import app.m1k3.ai.assistant.memory.test.MockEmbeddingEngine
+import app.m1k3.ai.domain.memory.ConversationContext
+import app.m1k3.ai.domain.memory.ImportanceCalculator
+import app.m1k3.ai.domain.memory.SimpleTokenCounter
+import app.m1k3.ai.domain.memory.services.SemanticChunker
+import app.m1k3.ai.assistant.memory.test.MockEmbeddingRepository
 import app.m1k3.ai.assistant.memory.test.MockVectorSearchEngine
 import app.m1k3.ai.assistant.test.TestDatabaseFactory
+import app.m1k3.ai.domain.repositories.VectorSearchResult
 import kotlinx.coroutines.test.runTest
 import kotlin.test.*
 
@@ -40,9 +43,9 @@ import kotlin.test.*
  *      ↓
  * [Query] → VectorSearch → MemoryRepository
  *      ↓
- * ContextAssembler (composite ranking)
+ * MemoryRanker (composite ranking)
  *      ↓
- * ContextResult (formatted for AI prompt)
+ * MemoryRankingResult (formatted for AI prompt)
  * ```
  *
  * **Success Criteria:**
@@ -56,34 +59,40 @@ import kotlin.test.*
 class MemoryIntegrationTest {
 
     private lateinit var database: app.m1k3.ai.assistant.database.MaDatabase
-    private lateinit var repository: MemoryRepository
+    private lateinit var repository: MemoryDataSource
     private lateinit var chunker: SemanticChunker
     private lateinit var importanceCalculator: ImportanceCalculator
-    private lateinit var contextAssembler: ContextAssembler
+    private lateinit var memoryRanker: MemoryRanker
     private lateinit var memoryManager: MemoryManager
-    private lateinit var mockEmbeddingEngine: MockEmbeddingEngine
+    private lateinit var mockEmbeddingRepository: MockEmbeddingRepository
     private lateinit var mockVectorSearch: MockVectorSearchEngine
 
     @BeforeTest
     fun setup() {
         database = TestDatabaseFactory.createInMemoryDatabase()
-        repository = MemoryRepository(database)
-        chunker = SemanticChunker(SimpleTokenCounter())
+        repository = MemoryDataSource(database)
+        // Use lower threshold for testing (default is 100)
+        chunker = SemanticChunker(
+            tokenCounter = SimpleTokenCounter(),
+            minChunkTokens = 50,  // Lower threshold for test messages
+            maxChunkTokens = 300,
+            overlapTokens = 20
+        )
         importanceCalculator = ImportanceCalculator()
-        contextAssembler = ContextAssembler(maxContextTokens = 1000)
+        memoryRanker = MemoryRanker(maxContextTokens = 1000)
 
-        mockEmbeddingEngine = MockEmbeddingEngine()
+        mockEmbeddingRepository = MockEmbeddingRepository()
         mockVectorSearch = MockVectorSearchEngine()
 
         memoryManager = MemoryManager(
             chunker = chunker,
             repository = repository,
             importanceCalculator = importanceCalculator,
-            contextAssembler = contextAssembler,
+            memoryRanker = memoryRanker,
             projectId = "test-project",
             minImportanceThreshold = 0.3f,
-            embeddingEngine = mockEmbeddingEngine,
-            vectorSearch = mockVectorSearch
+            embeddingRepository = mockEmbeddingRepository,
+            vectorSearchRepository = mockVectorSearch
         )
 
         // Create test project
@@ -153,7 +162,7 @@ class MemoryIntegrationTest {
         // Configure mock to return stored memories with similarity scores
         mockVectorSearch.setSearchResults(
             storedMemories.map { memory ->
-                SearchResult(memory.embedding_id, 0.8f) // High similarity
+                VectorSearchResult(memory.embedding_id, 0.8f) // High similarity
             }
         )
 
@@ -196,7 +205,12 @@ class MemoryIntegrationTest {
 
         // === Message 1: High importance (detailed question) ===
         val question = "Can you explain how HNSW (Hierarchical Navigable Small World) graphs work " +
-                "for approximate nearest neighbor search in high-dimensional vector spaces?"
+                "for approximate nearest neighbor search in high-dimensional vector spaces? " +
+                "I'm particularly interested in understanding the graph construction algorithm, " +
+                "the role of the proximity graph layers, and how the search process navigates " +
+                "through multiple levels to find nearest neighbors efficiently. " +
+                "Also, what are the key parameters like M and efConstruction, and how do they " +
+                "affect the tradeoff between search accuracy and performance?"
 
         val result1 = memoryManager.createMemoriesFromMessage(
             messageId = "msg-1",
@@ -219,9 +233,24 @@ class MemoryIntegrationTest {
                     val neighbors = findNearest(vector, efConstruction)
                     connectNodes(id, neighbors, level)
                 }
+
+                private fun selectLevel(): Int {
+                    val mL = 1.0 / Math.log(M.toDouble())
+                    return (-Math.log(Math.random()) * mL).toInt()
+                }
+
+                private fun findNearest(query: FloatArray, ef: Int): List<String> {
+                    // Greedy search through graph layers
+                    val candidates = PriorityQueue<Candidate>()
+                    val visited = mutableSetOf<String>()
+                    // Search algorithm implementation here
+                    return candidates.take(M).map { it.id }
+                }
             }
             ```
-            This implements a basic HNSW index with configurable parameters.
+            This implements a basic HNSW index with configurable parameters M and efConstruction.
+            The index uses a hierarchical structure with multiple layers for efficient approximate
+            nearest neighbor search in high-dimensional spaces.
         """.trimIndent()
 
         val result2 = memoryManager.createMemoriesFromMessage(
@@ -309,7 +338,7 @@ class MemoryIntegrationTest {
         // Perform some retrievals to increment access count
         mockVectorSearch.setSearchResults(
             repository.getMemoriesForProject("test-project").take(3).map { memory ->
-                SearchResult(memory.embedding_id, 0.9f)
+                VectorSearchResult(memory.embedding_id, 0.9f)
             }
         )
 

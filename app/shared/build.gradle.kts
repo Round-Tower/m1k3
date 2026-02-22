@@ -22,12 +22,23 @@ kotlin {
     // and incompatible with some dependencies
 
     sourceSets {
+        all {
+            languageSettings {
+                // Enable experimental datetime APIs to suppress warnings
+                optIn("kotlin.time.ExperimentalTime")
+                optIn("kotlinx.datetime.ExperimentalDateTimeApi")
+            }
+        }
+
         commonMain.dependencies {
             // Kotlin Coroutines for Flow support
-            implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.8.0")
+            implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.2")
+            // DateTime for domain layer timestamp handling
+            implementation(libs.kotlinx.datetime)
         }
         commonTest.dependencies {
             implementation(libs.kotlin.test)
+            implementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.10.2")
         }
     }
 }

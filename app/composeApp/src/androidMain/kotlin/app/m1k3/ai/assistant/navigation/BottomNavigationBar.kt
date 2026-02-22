@@ -24,7 +24,6 @@ import app.m1k3.ai.assistant.design.tokens.MaColors
  * - Chat: Main AI conversation interface
  * - History: Browse past conversations
  * - Eco Stats: Environmental impact dashboard
- * - Avatar: 3D avatar + statistics
  * - Settings: App configuration
  * - Demo: Welcome and feature showcase
  *
@@ -62,10 +61,7 @@ fun BottomNavigationBar(
                     )
                 },
                 label = {
-                    Text(
-                        text = item.label,
-                        color = MaColors.White
-                    )
+                    Text(text = item.label)
                 },
                 selected = isSelected,
                 onClick = {
@@ -107,11 +103,6 @@ val bottomNavItems = listOf(
         screen = Screen.EcoStats,
         label = "Eco Stats",
         icon = Icons.Default.Eco
-    ),
-    BottomNavItem(
-        screen = Screen.Avatar,
-        label = "Avatar",
-        icon = Icons.Default.Face
     ),
     BottomNavItem(
         screen = Screen.Settings,

@@ -498,11 +498,12 @@ fun DrawScope.drawPixelArtPet(
     showEnvironment: Boolean = true,
     showPixelGrid: Boolean = false,
     showResolutionDebug: Boolean = false,
-    useRoundedPixels: Boolean = true
+    useRoundedPixels: Boolean = true,
+    isDarkMode: Boolean = true
 ) {
-    // 1. Draw environment background
+    // 1. Draw environment background (theme-aware)
     if (showEnvironment) {
-        drawEnvironmentBackground(petState.environment, petState.evolutionStage)
+        drawEnvironmentBackground(petState.environment, petState.evolutionStage, isDarkMode)
     }
 
     // 2. Calculate optimal grid size based on container size
@@ -619,42 +620,78 @@ fun DrawScope.drawResolutionDebugInfo(
 }
 
 /**
- * Draw environment background (from AvatarEngine)
+ * Draw environment background (theme-aware)
+ * @param isDarkMode If true, uses dark theme colors; if false, uses light theme colors
  */
 private fun DrawScope.drawEnvironmentBackground(
     environment: Environment,
-    stage: EvolutionStage
+    stage: EvolutionStage,
+    isDarkMode: Boolean = true
 ) {
     when (environment) {
         Environment.VOID -> {
-            drawRect(color = Color(0xFF0A0A0A), size = size)
+            // Simple gradient (dark or light)
+            drawRect(
+                color = if (isDarkMode) Color(0xFF0A0A0A) else Color(0xFFF0F0F0),
+                size = size
+            )
         }
         Environment.OFFICE -> {
-            drawRect(Color(0xFF1A1A1A), size = size)
-            drawRect(Color(0xFF2A2A2A), Offset(0f, 0f), Size(size.width, size.height * 0.3f))
+            // Modern office: floor + window hints
+            if (isDarkMode) {
+                drawRect(Color(0xFF1A1A1A), size = size) // Dark floor
+                drawRect(Color(0xFF2A2A2A), Offset(0f, 0f), Size(size.width, size.height * 0.3f)) // Window hint
+            } else {
+                drawRect(Color(0xFFE8E8E8), size = size) // Light floor
+                drawRect(Color(0xFFD0D0D0), Offset(0f, 0f), Size(size.width, size.height * 0.3f)) // Window hint
+            }
         }
         Environment.GARDEN -> {
-            drawRect(Color(0xFF0D1F0D), size = size)
-            drawRect(Color(0xFF1A3A1A), Offset(0f, size.height * 0.7f), Size(size.width, size.height * 0.3f))
+            // Green tones with grass (theme-aware)
+            if (isDarkMode) {
+                drawRect(Color(0xFF0D1F0D), size = size) // Dark green
+                drawRect(Color(0xFF1A3A1A), Offset(0f, size.height * 0.7f), Size(size.width, size.height * 0.3f))
+            } else {
+                drawRect(Color(0xFFC8E6C9), size = size) // Light green
+                drawRect(Color(0xFFA5D6A7), Offset(0f, size.height * 0.7f), Size(size.width, size.height * 0.3f)) // Grass
+            }
         }
         Environment.LAB -> {
-            drawRect(Color(0xFF0A0F1F), size = size)
-            val gridSpacing = 40f
-            for (i in 0..((size.width / gridSpacing).toInt())) {
-                drawLine(
-                    Color(0xFF1A2F4F),
-                    Offset(i * gridSpacing, 0f),
-                    Offset(i * gridSpacing, size.height),
-                    strokeWidth = 1f
-                )
+            // Tech lab: blue tones with grid
+            if (isDarkMode) {
+                drawRect(Color(0xFF0A0F1F), size = size)
+                // Grid lines
+                val gridSpacing = 40f
+                for (i in 0..((size.width / gridSpacing).toInt())) {
+                    drawLine(
+                        Color(0xFF1A2F4F),
+                        Offset(i * gridSpacing, 0f),
+                        Offset(i * gridSpacing, size.height),
+                        strokeWidth = 1f
+                    )
+                }
+            } else {
+                drawRect(Color(0xFFE3F2FD), size = size) // Light blue background
+                // Grid lines in light mode
+                val gridSpacing = 40f
+                for (i in 0..((size.width / gridSpacing).toInt())) {
+                    drawLine(
+                        Color(0xFFBBDEFB),
+                        Offset(i * gridSpacing, 0f),
+                        Offset(i * gridSpacing, size.height),
+                        strokeWidth = 1f
+                    )
+                }
             }
         }
         Environment.SPACE_STATION -> {
-            drawRect(Color.Black, size = size)
+            // Space: deep background with stars (always dark for space aesthetic)
+            drawRect(Color(0xFF000814), size = size) // Even darker for space
+            // Draw random stars (always bright)
             repeat(30) {
                 val x = (0..size.width.toInt()).random().toFloat()
                 val y = (0..size.height.toInt()).random().toFloat()
-                drawCircle(Color.White, radius = 1f, center = Offset(x, y))
+                drawCircle(Color(0xFFFAFAFA), radius = 1f, center = Offset(x, y))
             }
         }
     }

@@ -120,32 +120,48 @@ python cli.py --stt-engine none        # Disable voice input
 - **Inter-Segment Pauses**: Natural pauses between different content types
 - **Effects Integration**: Ready for advanced audio effects (reverb, warmth, pitch modulation)
 
-### 🧘 Avatar System - Real-Time Web Dashboard
+### 🧘 Avatar System - 3D Animated Companions (NEW!)
 
-M1K3 features a sophisticated **pixel art avatar system** with real-time emotion tracking:
+M1K3 features a sophisticated **3D avatar system** with 13 animated models powered by THREE.js:
 
 #### **Key Features**
-- **📱 Web Dashboard**: Accessible at `http://localhost:8080` with multi-device support
-- **🎭 8 Emotion Types**: happy, sad, angry, surprised, love, thinking, sleepy, excited
+- **🎮 3D Animated Models**: 13 GLB models with skeletal animations (Quirky Series + Community)
+- **🎭 9 Emotion Types**: neutral, happy, sad, angry, surprised, love, thinking, sleepy, excited
 - **⚡ Real-Time Updates**: WebSocket communication for live state changes
-- **🎨 6 Avatar Styles**: robot, organic, crystal, ghost, energy, cute
-- **✨ Particle Effects**: Emotion-specific visual effects and breathing animations
-- **🔊 Sound Integration**: Audio feedback synchronized with emotions
+- **🖥️ Multiple Interfaces**: Web demo, Claude Desktop MCP App, Standalone Tauri popover
+- **✨ Visual Effects**: Breathing motion, speaking/listening/thinking indicators
+- **🎨 M1K3 Design System**: AMOLED black, M1K3 orange, Silkscreen font
 
-#### **Avatar Commands**
+#### **Quick Start - 3D Avatar**
 ```bash
-avatar start                      # Launch web server and dashboard
-avatar status                     # Show server status and avatar state  
-avatar emotion happy 80           # Set specific emotion (0-100 intensity)
-avatar style crystal #FF6B6B      # Change avatar style and color
-avatar test                       # Cycle through all emotions
-avatar stop                       # Stop avatar server
+# Web Demo (recommended)
+cd src/web-avatar && npm install && npm run dev
+# Open http://localhost:5174/demo.html
+
+# Standalone Popover (Tauri)
+cd src/avatar-popover && cargo tauri dev
+# Press ⌘+Shift+M to toggle
 ```
 
-#### **Auto-Start Avatar**
+#### **Available Models**
+| Category | Models |
+|----------|--------|
+| **Quirky Series** | Colobus (default), Sparrow, Gecko, Herring, Muskrat, Pudu, Taipan, Inkfish, Mask |
+| **Community (CC0)** | Fox, CesiumMan, BrainStem, Robot |
+
+#### **MCP Integration (Claude Desktop)**
 ```bash
-python m1k3.py --auto-avatar      # Start with avatar dashboard (opens browser)
-python cli.py --with-avatar       # CLI with avatar integration
+# Add to Claude Desktop MCP servers
+python mcp_unified_server.py
+
+# Available tools: speak, set_avatar_emotion, set_avatar_model, start_voice_input
+```
+
+#### **Legacy Pixel Art Avatar**
+```bash
+avatar start                      # Launch pixel art web dashboard
+avatar emotion happy 80           # Set emotion (0-100 intensity)
+avatar test                       # Cycle through emotions
 ```
 
 ## 🤖 AI Architecture - Multi-Backend System
@@ -518,9 +534,15 @@ m1k3/
 │   └── rag_admin.html            # Knowledge base management interface
 │
 ├── 🧘 Avatar System
-│   ├── avatar_server.py           # HTTP + WebSocket server
-│   ├── avatar_controller.py       # Emotion analysis and state management
-│   └── m1k3_avatar.html          # Web dashboard interface
+│   ├── src/web-avatar/            # THREE.js 3D avatar (13 models)
+│   │   ├── demo.html              # Full demo with M1K3 design
+│   │   ├── mcp-app.html           # Claude Desktop iframe
+│   │   └── src/                   # TypeScript source
+│   ├── src/avatar-popover/        # Tauri standalone app
+│   │   ├── src-tauri/             # Rust backend (tray, hotkey)
+│   │   └── index.html             # Popover UI
+│   ├── scripts/avatar_server.py   # WebSocket state server
+│   └── mcp_unified_server.py      # MCP tools (TTS+Avatar+STT)
 │
 ├── 🎭 Intelligent Voice & Audio
 │   ├── intelligent_tts_controller.py  # Content-aware TTS orchestration
@@ -630,4 +652,4 @@ MIT License - Built for privacy-focused local AI development and experimentation
 
 **🤖 M1K3** - Your comprehensive local AI companion with voice synthesis, real-time avatar visualization, and complete privacy. Powered by open-source models and designed for universal compatibility and optimal performance.
 
-*Latest Update: 2025-08-25 - Repository Optimization Complete (90% size reduction) - SMOL & Kitten Models Integration*
+*Latest Update: 2026-02-01 - 3D Avatar System Complete with THREE.js, MCP Integration, and Tauri Standalone Popover*

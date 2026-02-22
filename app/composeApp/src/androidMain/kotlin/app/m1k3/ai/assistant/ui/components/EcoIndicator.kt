@@ -20,6 +20,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import org.jetbrains.compose.ui.tooling.preview.Preview
 import app.m1k3.ai.assistant.chat.SessionEcoStats
 import app.m1k3.ai.assistant.design.components.MaCard
 import app.m1k3.ai.assistant.design.haptics.HapticFeedbackController
@@ -182,7 +183,7 @@ private fun CompactEcoIndicator(
                 Icon(
                     imageVector = Icons.Default.Info,
                     contentDescription = "View details",
-                    tint = MaColors.TextMuted,
+                    tint = MaColors.textMuted(),
                     modifier = Modifier.size(16.dp),
                 )
             }
@@ -230,21 +231,21 @@ private fun ExpandedEcoIndicator(
                     text = "🌿 Environmental Savings",
                     style = MaTypography.titleSmall,
                     fontWeight = FontWeight.Bold,
-                    color = MaColors.TextPrimary,
+                    color = MaColors.textPrimary(),
                 )
 
                 if (onClick != null) {
                     Icon(
                         imageVector = Icons.Default.Info,
                         contentDescription = "View details",
-                        tint = MaColors.TextMuted,
+                        tint = MaColors.textMuted(),
                         modifier = Modifier.size(18.dp),
                     )
                 }
             }
 
             HorizontalDivider(
-                color = MaColors.BorderLight,
+                color = MaColors.borderLight(),
                 thickness = 1.dp,
             )
 
@@ -281,13 +282,13 @@ private fun ExpandedEcoIndicator(
                 Text(
                     text = "${stats.messageCount} messages",
                     style = MaTypography.bodySmall,
-                    color = MaColors.TextMuted,
+                    color = MaColors.textMuted(),
                 )
 
                 Text(
                     text = "${stats.totalTokens} tokens",
                     style = MaTypography.bodySmall,
-                    color = MaColors.TextMuted,
+                    color = MaColors.textMuted(),
                 )
             }
         }
@@ -363,7 +364,7 @@ private fun EcoMetricRow(
                         lineHeight = 16.sp,
                         letterSpacing = 0.25.sp,
                     ),
-                color = MaColors.TextSecondary,
+                color = MaColors.textSecondary(),
             )
         }
 
@@ -414,8 +415,9 @@ enum class EcoIndicatorVariant {
 /**
  * Preview helpers (for Android Studio preview)
  */
+@Preview
 @Composable
-fun EcoIndicatorPreview() {
+private fun EcoIndicatorPreview() {
     val sampleStats =
         SessionEcoStats(
             totalTokens = 1250,
@@ -442,7 +444,7 @@ fun EcoIndicatorPreview() {
                     lineHeight = 16.sp,
                     letterSpacing = 0.25.sp,
                 ),
-            color = MaColors.TextPrimary,
+            color = MaColors.textPrimary(),
         )
         EcoIndicator(
             stats = sampleStats,
@@ -460,7 +462,7 @@ fun EcoIndicatorPreview() {
                     lineHeight = 16.sp,
                     letterSpacing = 0.25.sp,
                 ),
-            color = MaColors.TextPrimary,
+            color = MaColors.textPrimary(),
         )
         EcoIndicator(
             stats = sampleStats,

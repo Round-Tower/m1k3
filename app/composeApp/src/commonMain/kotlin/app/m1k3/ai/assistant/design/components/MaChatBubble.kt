@@ -21,7 +21,11 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import org.jetbrains.compose.ui.tooling.preview.Preview
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import app.m1k3.ai.assistant.design.effects.glassmorphic
+import app.m1k3.ai.assistant.design.preview.PreviewFixtures
+import app.m1k3.ai.assistant.design.theme.MaTheme
 import app.m1k3.ai.assistant.design.tokens.MaColors
 import app.m1k3.ai.assistant.design.tokens.MaRadius
 import app.m1k3.ai.assistant.design.tokens.MaSpacing
@@ -69,34 +73,29 @@ fun MaChatBubbleUser(
         horizontalArrangement = Arrangement.End
     ) {
         Column(
-            modifier = Modifier.widthIn(max = 280.dp),
+            modifier = Modifier.fillMaxWidth(),
             horizontalAlignment = Alignment.End
         ) {
-            Box(
+            Column (
+                horizontalAlignment = Alignment.End,
                 modifier = Modifier
-                    .clip(RoundedCornerShape(MaRadius.md))
-                    .background(MaColors.BgTertiary)
-                    .border(
-                        width = 1.5.dp,
-                        color = MaColors.Orange,
-                        shape = RoundedCornerShape(MaRadius.md)
-                    )
+                    .fillMaxWidth()
                     .padding(horizontal = MaSpacing.md, vertical = MaSpacing.base)
             ) {
                 Text(
                     text = text,
                     style = MaTypography.bodyLarge,
-                    color = MaColors.TextPrimary
+                    color = MaColors.textPrimary()
+                )
+
+                // Timestamp
+                Text(
+                    text = formatTimestamp(timestamp),
+                    style = MaTypography.labelSmall,
+                    color = MaColors.textDisabled(),
+                    modifier = Modifier.padding(top = MaSpacing.xs, end = MaSpacing.sm)
                 )
             }
-
-            // Timestamp
-            Text(
-                text = formatTimestamp(timestamp),
-                style = MaTypography.labelSmall,
-                color = MaColors.TextDisabled,
-                modifier = Modifier.padding(top = MaSpacing.xs, end = MaSpacing.sm)
-            )
         }
     }
 }
@@ -121,51 +120,65 @@ fun MaChatBubbleAI(
     inferenceStats: String? = null,
     isError: Boolean = false,
     ragSources: String? = null,
+    onSpeak: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     Row(
         modifier = modifier
-            .animateContentSize()
-            .fillMaxWidth()
-            .padding(horizontal = MaSpacing.base, vertical = MaSpacing.sm),
+            .fillMaxWidth(),
         horizontalArrangement = Arrangement.Start
     ) {
         Column(
-            modifier = Modifier.animateContentSize(),
             horizontalAlignment = Alignment.Start
         ) {
             Box(
                 modifier = Modifier
-                    .glassmorphic(
-                        backgroundColor = if (isError) MaColors.ErrorBg else MaColors.BgElevated,
-                        borderColor = if (isError) MaColors.Error else MaColors.BorderLight,
-                        borderWidth = 0.dp,
-                        shape = RoundedCornerShape(MaRadius.md)
-                    )
                     .padding(horizontal = MaSpacing.md, vertical = MaSpacing.base)
-                    .animateContentSize()
             ) {
                 Column(
-                    modifier = Modifier.animateContentSize(),
                     verticalArrangement = Arrangement.spacedBy(MaSpacing.sm)
                 ) {
-                    Text(
-                        // Defense-in-depth: trim leading whitespace for non-streaming sources
-                        // (e.g., database retrieval, error messages, manual text entry)
-                        // Note: Streaming text is already cleaned in ChatScreen.kt:cleanStreamingToken()
-                        text = text.trimStart(),
-                        style = MaTypography.bodyLarge,
-                        color = if (isError) MaColors.Error else MaColors.TextPrimary
+                    MarkdownText(
+                        text = text,
+                        isError = isError
                     )
 
-                    // Inference statistics (if available)
-                    if (inferenceStats != null) {
-                        Text(
-                            text = inferenceStats,
-                            style = MaTypography.labelSmall,
-                            color = MaColors.TextDisabled,
-                            fontWeight = FontWeight.Medium
-                        )
+                    // Timestamp
+                    Text(
+                        text = formatTimestamp(timestamp),
+                        style = MaTypography.labelSmall,
+                        color = MaColors.textSecondary().copy(alpha = 0.1f),
+                        modifier = Modifier.padding(top = MaSpacing.xs)
+                    )
+
+                    // Inference statistics + speak button row
+                    if (inferenceStats != null || onSpeak != null) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(MaSpacing.sm)
+                        ) {
+                            if (inferenceStats != null) {
+                                Text(
+                                    text = inferenceStats,
+                                    style = MaTypography.labelSmall,
+                                    color = MaColors.textDisabled(),
+                                    fontWeight = FontWeight.Medium
+                                )
+                            }
+                            if (onSpeak != null) {
+                                Text(
+                                    text = "\uD83D\uDD0A", // speaker icon
+                                    style = MaTypography.labelSmall,
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(4.dp))
+                                        .clickable(
+                                            indication = null,
+                                            interactionSource = remember { MutableInteractionSource() }
+                                        ) { onSpeak() }
+                                        .padding(horizontal = 4.dp, vertical = 2.dp)
+                                )
+                            }
+                        }
                     }
 
                     // RAG status indicator with collapsible sources
@@ -189,24 +202,14 @@ fun MaChatBubbleAI(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Text(
-                                    text = "📚",
-                                    style = MaTypography.labelSmall
-                                )
-                                Text(
-                                    text = "RAG Enhanced",
-                                    style = MaTypography.labelSmall,
-                                    color = MaColors.Orange,
-                                    fontWeight = FontWeight.SemiBold
-                                )
-                                Text(
                                     text = "• $factCount ${if (factCount == 1) "fact" else "facts"}",
                                     style = MaTypography.labelSmall,
-                                    color = MaColors.TextSecondary
+                                    color = MaColors.textSecondary()
                                 )
                                 Text(
                                     text = if (isExpanded) "▲" else "▼",
                                     style = MaTypography.labelSmall,
-                                    color = MaColors.TextDisabled
+                                    color = MaColors.textDisabled()
                                 )
                             }
 
@@ -219,7 +222,7 @@ fun MaChatBubbleAI(
                                 Text(
                                     text = ragSources,
                                     style = MaTypography.labelSmall,
-                                    color = MaColors.TextSecondary,
+                                    color = MaColors.textSecondary(),
                                     modifier = Modifier.padding(
                                         start = MaSpacing.sm,
                                         top = MaSpacing.xs,
@@ -231,14 +234,6 @@ fun MaChatBubbleAI(
                     }
                 }
             }
-
-            // Timestamp
-            Text(
-                text = formatTimestamp(timestamp),
-                style = MaTypography.labelSmall,
-                color = MaColors.TextDisabled,
-                modifier = Modifier.padding(top = MaSpacing.xs, start = MaSpacing.sm)
-            )
         }
     }
 }
@@ -291,3 +286,163 @@ private fun formatTimestamp(timestamp: Long): String {
  * )
  * ```
  */
+
+// ============================================================
+// Previews
+// ============================================================
+
+@Preview
+@Composable
+private fun MaChatBubbleUserPreview() {
+    MaTheme {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(MaColors.bgPrimary())
+                .padding(MaSpacing.base)
+        ) {
+            MaChatBubbleUser(
+                text = PreviewFixtures.sampleShortText,
+                timestamp = PreviewFixtures.sampleUserMessageTimestamp
+            )
+        }
+    }
+}
+
+@Preview
+@Composable
+private fun MaChatBubbleUserLongTextPreview() {
+    MaTheme {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(MaColors.bgPrimary())
+                .padding(MaSpacing.base)
+        ) {
+            MaChatBubbleUser(
+                text = PreviewFixtures.sampleLongText,
+                timestamp = PreviewFixtures.sampleUserMessageTimestamp
+            )
+        }
+    }
+}
+
+@Preview
+@Composable
+private fun MaChatBubbleAIPreview() {
+    MaTheme {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(MaColors.bgPrimary())
+                .padding(MaSpacing.base)
+        ) {
+            MaChatBubbleAI(
+                text = "Hi there! How can I help you today?",
+                timestamp = PreviewFixtures.sampleAiMessageTimestamp
+            )
+        }
+    }
+}
+
+@Preview
+@Composable
+private fun MaChatBubbleAIWithStatsPreview() {
+    MaTheme {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(MaColors.bgPrimary())
+                .padding(MaSpacing.base)
+        ) {
+            MaChatBubbleAI(
+                text = "Machine learning is a subset of artificial intelligence where systems learn and improve from experience without being explicitly programmed.",
+                timestamp = PreviewFixtures.sampleAiMessageTimestamp,
+                inferenceStats = PreviewFixtures.sampleInferenceStatsLong
+            )
+        }
+    }
+}
+
+@Preview
+@Composable
+private fun MaChatBubbleAIWithRagPreview() {
+    MaTheme {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(MaColors.bgPrimary())
+                .padding(MaSpacing.base)
+        ) {
+            MaChatBubbleAI(
+                text = "Based on the knowledge base, machine learning algorithms can be categorized into supervised, unsupervised, and reinforcement learning.",
+                timestamp = PreviewFixtures.sampleAiMessageTimestamp,
+                inferenceStats = PreviewFixtures.sampleInferenceStatsMedium,
+                ragSources = PreviewFixtures.sampleRagSourceMultiple
+            )
+        }
+    }
+}
+
+@Preview
+@Composable
+private fun MaChatBubbleAIErrorPreview() {
+    MaTheme {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(MaColors.bgPrimary())
+                .padding(MaSpacing.base)
+        ) {
+            MaChatBubbleAI(
+                text = "⚠️ Model initialization failed. Please try again.",
+                timestamp = PreviewFixtures.sampleAiMessageTimestamp,
+                isError = true
+            )
+        }
+    }
+}
+
+@Preview
+@Composable
+private fun MaChatBubbleConversationPreview() {
+    MaTheme {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(MaColors.bgPrimary())
+                .padding(MaSpacing.base),
+            verticalArrangement = Arrangement.spacedBy(MaSpacing.base)
+        ) {
+            Text(
+                "Sample Conversation:",
+                style = MaTypography.labelSmall,
+                color = MaColors.textSecondary(),
+                modifier = Modifier.padding(bottom = MaSpacing.sm)
+            )
+
+            MaChatBubbleUser(
+                text = "Hello! What is machine learning?",
+                timestamp = PreviewFixtures.sampleUserMessageTimestamp
+            )
+
+            MaChatBubbleAI(
+                text = "Machine learning is a subset of artificial intelligence where systems learn and improve from experience without being explicitly programmed.",
+                timestamp = PreviewFixtures.sampleAiMessageTimestamp,
+                inferenceStats = PreviewFixtures.sampleInferenceStatsLong,
+                ragSources = PreviewFixtures.sampleRagSourceSingle
+            )
+
+            MaChatBubbleUser(
+                text = "Tell me more!",
+                timestamp = PreviewFixtures.sampleUserMessageTimestamp + 2000
+            )
+
+            MaChatBubbleAI(
+                text = "There are three main types: supervised learning (with labeled data), unsupervised learning (finding patterns), and reinforcement learning (reward-based).",
+                timestamp = PreviewFixtures.sampleAiMessageTimestamp + 2000,
+                inferenceStats = PreviewFixtures.sampleInferenceStatsLong
+            )
+        }
+    }
+}

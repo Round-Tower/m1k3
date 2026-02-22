@@ -26,15 +26,18 @@ except ImportError:
 # M1K3 imports
 from src.engines.voice.intelligent_tts_engine import IntelligentTTSEngine, TTSQuality
 from src.tts.controllers.piper_tts_manager import PiperTTSManager
+from src.tts.controllers.kokoro_tts_manager import KokoroTTSManager
 from src.tts.effects.audio_effects import (
     PitchShiftEffect, RobotVoiceEffect, EchoEffect,
-    ChorusEffect, LoFiEffect, MultibandLoFiEffect, FlangerEffect, ReverbEffect
+    ChorusEffect, LoFiEffect, MultibandLoFiEffect, FlangerEffect, ReverbEffect,
+    IntercomEffect
 )
 
 # Initialize the TTS engines globally
 tts_engine = None
+kokoro_manager = KokoroTTSManager()
 piper_manager = PiperTTSManager()
-current_voice = "en_US-ryan-high"  # Default Piper voice (Ryan - male, professional)
+current_voice = "bm_daniel"  # Default Kokoro voice (Daniel - British Male, professional)
 
 def initialize_tts():
     """Initialize the TTS engine"""
@@ -52,6 +55,21 @@ def initialize_tts():
         traceback.print_exc(file=sys.stderr)
         return False
 
+def detect_engine_from_voice(voice_id: str) -> str:
+    """
+    Auto-detect which TTS engine handles this voice based on naming prefix.
+
+    Args:
+        voice_id: Voice identifier (e.g., "bm_daniel", "en_US-ryan-high")
+
+    Returns:
+        'kokoro' for Kokoro voices (bm_*, bf_*, am_*, af_* patterns)
+        'piper' for Piper voices (en_US-* pattern) and default
+    """
+    if any(voice_id.startswith(prefix) for prefix in ['bm_', 'bf_', 'am_', 'af_']):
+        return 'kokoro'
+    return 'piper'
+
 # Create the MCP server
 app = Server("m1k3-tts")
 
@@ -61,7 +79,7 @@ async def handle_list_tools() -> list[types.Tool]:
     return [
         types.Tool(
             name="speak",
-            description="Convert text to speech and play it aloud using M1K3's Piper TTS engine. Fast, natural-sounding neural voices with optional audio effects!",
+            description="Convert text to speech and play it aloud using M1K3's dual-engine TTS system (Kokoro & Piper). Ultra-lightweight neural voices with optional audio effects!",
             inputSchema={
                 "type": "object",
                 "properties": {
@@ -72,14 +90,14 @@ async def handle_list_tools() -> list[types.Tool]:
                     "quality": {
                         "type": "string",
                         "enum": ["fast", "balanced", "high_quality"],
-                        "description": "Voice quality preference (default: balanced). Maps to Piper voice variants.",
+                        "description": "(Piper only) Voice quality preference (default: balanced). Ignored for Kokoro voices.",
                         "default": "balanced"
                     },
                     "effect": {
                         "type": "string",
-                        "enum": ["none", "robot", "chipmunk", "giant", "echo", "reverb", "chorus", "lofi", "nostalgic", "flanger"],
-                        "description": "Fun audio effect to apply (default: none). robot=mechanical voice, chipmunk=high pitch, giant=deep voice, echo=delay, reverb=spacious, chorus=rich harmonies, lofi=retro sound, nostalgic=vintage warmth with vocal clarity, flanger=swooshing",
-                        "default": "none"
+                        "enum": ["none", "intercom", "robot", "chipmunk", "giant", "echo", "reverb", "chorus", "lofi", "nostalgic", "flanger"],
+                        "description": "Audio effect to apply (default: intercom). intercom=radio/walkie-talkie bandpass (300-3400Hz), robot=mechanical voice, chipmunk=high pitch, giant=deep voice, echo=delay, reverb=spacious, chorus=rich harmonies, lofi=retro sound, nostalgic=vintage warmth with vocal clarity, flanger=swooshing",
+                        "default": "intercom"
                     },
                     "effect_intensity": {
                         "type": "number",
@@ -90,7 +108,7 @@ async def handle_list_tools() -> list[types.Tool]:
                     },
                     "voice": {
                         "type": "string",
-                        "description": "Voice to use. Available: en_US-ryan-high (male, professional - default), en_US-lessac-high (professional), en_US-lessac-medium (balanced), en_US-amy-medium (female, warm)"
+                        "description": "Voice to use (auto-detects engine). Kokoro: bm_daniel (British Male, professional - DEFAULT), bm_lewis, bm_george, bf_emma, bf_lily, bf_alice, am_michael, am_adam, am_eric, af_sky, af_nova, af_sarah, af_nicole. Piper: en_US-ryan-high, en_US-lessac-high/medium, en_US-amy-medium, en_US-joe-medium."
                     }
                 },
                 "required": ["text"]
@@ -122,13 +140,13 @@ async def handle_list_tools() -> list[types.Tool]:
         ),
         types.Tool(
             name="set_voice",
-            description="Set the default voice for Piper TTS",
+            description="Set the default voice for TTS (auto-detects Kokoro or Piper engine)",
             inputSchema={
                 "type": "object",
                 "properties": {
                     "voice": {
                         "type": "string",
-                        "description": "Voice name: en_US-ryan-high (male, professional), en_US-lessac-high, en_US-lessac-medium, en_US-amy-medium (female, warm)"
+                        "description": "Voice ID from either Kokoro (bm_*, bf_*, am_*, af_*) or Piper (en_US-*) engines. Use list_voices to see all options."
                     }
                 },
                 "required": ["voice"]
@@ -136,7 +154,7 @@ async def handle_list_tools() -> list[types.Tool]:
         ),
         types.Tool(
             name="list_voices",
-            description="List all available Piper TTS voices",
+            description="List all available TTS voices from both Kokoro and Piper engines",
             inputSchema={
                 "type": "object",
                 "properties": {},
@@ -165,36 +183,71 @@ async def handle_call_tool(
             # Get voice and effect parameters
             voice_override = arguments.get("voice")
             voice = voice_override or current_voice
-            effect_name = arguments.get("effect", "none")
+            effect_name = arguments.get("effect", "intercom")
             effect_intensity = arguments.get("effect_intensity", 0.7)
 
-            print(f"🎤 Speaking (Piper): {text[:50]}{'...' if len(text) > 50 else ''}", file=sys.stderr)
+            # Detect which engine to use based on voice prefix
+            engine = detect_engine_from_voice(voice)
 
-            # Set voice and load model
-            piper_manager.set_voice(voice)
-            if not piper_manager.load_model():
-                return [types.TextContent(
-                    type="text",
-                    text="❌ Failed to load Piper TTS model"
-                )]
+            # Route to appropriate TTS engine
+            if engine == 'kokoro':
+                print(f"🎤 Speaking (Kokoro): {text[:50]}{'...' if len(text) > 50 else ''}", file=sys.stderr)
 
-            # Generate audio
-            audio_data = piper_manager.generate(text)
+                # Set voice and load model
+                kokoro_manager.set_voice(voice)
+                if not kokoro_manager.load_model():
+                    return [types.TextContent(
+                        type="text",
+                        text="❌ Failed to load Kokoro TTS model"
+                    )]
 
-            if audio_data is None:
-                return [types.TextContent(
-                    type="text",
-                    text="❌ Piper TTS generation failed"
-                )]
+                # Generate audio
+                audio_data = kokoro_manager.generate(text)
 
-            sample_rate = piper_manager.sample_rate
+                if audio_data is None:
+                    return [types.TextContent(
+                        type="text",
+                        text="❌ Kokoro TTS generation failed"
+                    )]
+
+                sample_rate = kokoro_manager.sample_rate
+
+            else:  # piper
+                print(f"🎤 Speaking (Piper): {text[:50]}{'...' if len(text) > 50 else ''}", file=sys.stderr)
+
+                # Set voice and load model
+                piper_manager.set_voice(voice)
+                if not piper_manager.load_model():
+                    return [types.TextContent(
+                        type="text",
+                        text="❌ Failed to load Piper TTS model"
+                    )]
+
+                # Generate audio
+                audio_data = piper_manager.generate(text)
+
+                if audio_data is None:
+                    return [types.TextContent(
+                        type="text",
+                        text="❌ Piper TTS generation failed"
+                    )]
+
+                sample_rate = piper_manager.sample_rate
 
             # Apply effects if requested
             if effect_name != "none":
                 print(f"🎨 Applying {effect_name} effect (intensity: {effect_intensity})", file=sys.stderr)
                 try:
                     # Create and apply effect
-                    if effect_name == "robot":
+                    if effect_name == "intercom":
+                        # Intercom/radio bandpass filter (300-3400 Hz)
+                        effect = IntercomEffect({
+                            "low_freq": 300,
+                            "high_freq": 3400
+                        })
+                        audio_data = effect.apply(audio_data, sample_rate)
+
+                    elif effect_name == "robot":
                         # Default to vintage preset for nostalgic 80s robot sound
                         effect = RobotVoiceEffect({
                             "preset": "vintage",
@@ -283,7 +336,8 @@ async def handle_call_tool(
             sd.wait()
 
             # Build result message
-            result_text = f"✅ Speech played successfully (Piper TTS, voice: {voice}"
+            engine_name = "Kokoro TTS" if engine == 'kokoro' else "Piper TTS"
+            result_text = f"✅ Speech played successfully ({engine_name}, voice: {voice}"
             if effect_name != "none":
                 result_text += f", {effect_name} effect"
             result_text += ")"
@@ -294,17 +348,55 @@ async def handle_call_tool(
             )]
 
         elif name == "list_voices":
-            # List all available Piper voices
-            available_voices = piper_manager.available_voices
+            # List all available voices from both engines
+            voices_text = "🎤 Available TTS Voices\n\n"
 
-            voices_text = "🎤 Available Piper TTS Voices:\n\n"
-            for voice_id, voice_info in available_voices.items():
-                voices_text += f"  • **{voice_id}**\n"
-                voices_text += f"    Name: {voice_info['name']}\n"
-                voices_text += f"    Character: {voice_info['character']}\n"
-                voices_text += f"    Best for: {voice_info['best_for']}\n\n"
+            # KOKORO voices (grouped by region/gender)
+            voices_text += "**KOKORO (Ultra-lightweight, #1 TTS Arena):**\n\n"
 
-            voices_text += f"**Current Voice:** {current_voice}\n"
+            # Group Kokoro voices
+            bm_voices = {k: v for k, v in kokoro_manager.available_voices.items() if k.startswith('bm_')}
+            bf_voices = {k: v for k, v in kokoro_manager.available_voices.items() if k.startswith('bf_')}
+            am_voices = {k: v for k, v in kokoro_manager.available_voices.items() if k.startswith('am_')}
+            af_voices = {k: v for k, v in kokoro_manager.available_voices.items() if k.startswith('af_')}
+
+            if bm_voices:
+                voices_text += "  British Male:\n"
+                for voice_id, voice_info in bm_voices.items():
+                    default_marker = " (DEFAULT)" if voice_id == current_voice else ""
+                    voices_text += f"    • **{voice_id}** - {voice_info['character']}{default_marker}\n"
+                voices_text += "\n"
+
+            if bf_voices:
+                voices_text += "  British Female:\n"
+                for voice_id, voice_info in bf_voices.items():
+                    default_marker = " (DEFAULT)" if voice_id == current_voice else ""
+                    voices_text += f"    • **{voice_id}** - {voice_info['character']}{default_marker}\n"
+                voices_text += "\n"
+
+            if am_voices:
+                voices_text += "  American Male:\n"
+                for voice_id, voice_info in am_voices.items():
+                    default_marker = " (DEFAULT)" if voice_id == current_voice else ""
+                    voices_text += f"    • **{voice_id}** - {voice_info['character']}{default_marker}\n"
+                voices_text += "\n"
+
+            if af_voices:
+                voices_text += "  American Female:\n"
+                for voice_id, voice_info in af_voices.items():
+                    default_marker = " (DEFAULT)" if voice_id == current_voice else ""
+                    voices_text += f"    • **{voice_id}** - {voice_info['character']}{default_marker}\n"
+                voices_text += "\n"
+
+            # PIPER voices
+            voices_text += "**PIPER (Ultra-fast Neural):**\n\n"
+            for voice_id, voice_info in piper_manager.available_voices.items():
+                default_marker = " (DEFAULT)" if voice_id == current_voice else ""
+                voices_text += f"  • **{voice_id}** - {voice_info['character']}{default_marker}\n"
+
+            # Current status
+            current_engine = "Kokoro" if detect_engine_from_voice(current_voice) == 'kokoro' else "Piper"
+            voices_text += f"\n**Current Voice:** {current_voice} ({current_engine})\n"
 
             return [types.TextContent(
                 type="text",
@@ -320,8 +412,15 @@ async def handle_call_tool(
                     text="❌ No voice specified"
                 )]
 
-            # Check if voice is available
-            if voice_name in piper_manager.available_voices or voice_name == piper_manager.current_voice:
+            # Check which engine has this voice and set accordingly
+            if voice_name in kokoro_manager.available_voices:
+                kokoro_manager.set_voice(voice_name)
+                current_voice = voice_name
+                return [types.TextContent(
+                    type="text",
+                    text=f"✅ Voice set to: {voice_name} (Kokoro TTS)"
+                )]
+            elif voice_name in piper_manager.available_voices:
                 piper_manager.set_voice(voice_name)
                 current_voice = voice_name
                 return [types.TextContent(
@@ -331,21 +430,36 @@ async def handle_call_tool(
             else:
                 return [types.TextContent(
                     type="text",
-                    text=f"❌ Invalid voice: {voice_name}. Use list_voices to see available options."
+                    text=f"❌ Invalid voice: {voice_name}. Use list_voices to see available options from both Kokoro and Piper engines."
                 )]
 
         elif name == "get_voice_status":
-            # Get Piper TTS status
-            status_text = f"""🎤 M1K3 Piper TTS System Status
+            # Get multi-engine TTS status
+            current_engine = detect_engine_from_voice(current_voice)
+            engine_name = "Kokoro TTS" if current_engine == 'kokoro' else "Piper TTS"
 
-**Current Configuration:**
-  Engine: Piper TTS (Ultra-fast Neural)
-  Current Voice: {current_voice}
-  Sample Rate: {piper_manager.sample_rate}Hz
-  Voice Loaded: {piper_manager.voice is not None}
+            if current_engine == 'kokoro':
+                sample_rate = kokoro_manager.sample_rate
+                voice_loaded = kokoro_manager.tts is not None
+                voice_info = kokoro_manager.available_voices.get(current_voice, {})
+                voice_desc = voice_info.get('character', 'Unknown')
+            else:
+                sample_rate = piper_manager.sample_rate
+                voice_loaded = piper_manager.voice is not None
+                voice_info = piper_manager.available_voices.get(current_voice, {})
+                voice_desc = voice_info.get('character', 'Unknown')
 
-**Available Voices:**
-  {len(piper_manager.available_voices)} voices available
+            status_text = f"""🎤 M1K3 Multi-Engine TTS System Status
+
+**CURRENT:**
+  Engine: {engine_name}
+  Voice: {current_voice} ({voice_desc})
+  Sample Rate: {sample_rate}Hz
+  Voice Loaded: {voice_loaded}
+
+**AVAILABLE:**
+  ✅ Kokoro: {len(kokoro_manager.available_voices)} voices (24000Hz)
+  ✅ Piper: {len(piper_manager.available_voices)} voices (22050Hz)
 """
 
             return [types.TextContent(
@@ -387,6 +501,12 @@ async def handle_call_tool(
 async def main():
     """Main entry point for the MCP server"""
     print("🚀 Starting M1K3 TTS MCP Server...", file=sys.stderr)
+
+    # Enable GPU acceleration via CoreML (macOS) or CUDA (Linux/Windows)
+    # kokoro_onnx respects the ONNX_PROVIDER environment variable
+    if not os.getenv("ONNX_PROVIDER"):
+        os.environ["ONNX_PROVIDER"] = "CoreMLExecutionProvider"
+        print("🎮 GPU acceleration enabled (CoreML)", file=sys.stderr)
 
     # Initialize TTS engine
     if not initialize_tts():

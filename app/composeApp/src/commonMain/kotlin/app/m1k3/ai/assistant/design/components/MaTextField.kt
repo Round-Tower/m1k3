@@ -22,6 +22,9 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
+import org.jetbrains.compose.ui.tooling.preview.Preview
+import app.m1k3.ai.assistant.design.preview.PreviewFixtures
+import app.m1k3.ai.assistant.design.theme.MaTheme
 import app.m1k3.ai.assistant.design.tokens.MaColors
 import app.m1k3.ai.assistant.design.tokens.MaDurations
 import app.m1k3.ai.assistant.design.tokens.MaRadius
@@ -71,8 +74,9 @@ fun MaTextField(
     val isFocused by interactionSource.collectIsFocusedAsState()
 
     // Animated focus glow
+    val defaultBorderColor = MaColors.borderLight()
     val borderColor by animateColorAsState(
-        targetValue = if (isFocused) MaColors.Orange else MaColors.BorderLight,
+        targetValue = if (isFocused) MaColors.Orange else defaultBorderColor,
         animationSpec = tween(durationMillis = MaDurations.fast),
         label = "borderColor"
     )
@@ -91,7 +95,7 @@ fun MaTextField(
             .heightIn(min = 56.dp),
         enabled = enabled,
         textStyle = MaTypography.bodyLarge.copy(
-            color = if (enabled) MaColors.TextPrimary else MaColors.TextDisabled
+            color = if (enabled) MaColors.textPrimary() else MaColors.textDisabled()
         ),
         cursorBrush = SolidColor(MaColors.Orange),
         singleLine = singleLine,
@@ -105,7 +109,7 @@ fun MaTextField(
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(MaRadius.sm))
                     .background(
-                        color = if (enabled) MaColors.BgSecondary else MaColors.BgPrimary,
+                        color = if (enabled) MaColors.bgSecondary() else MaColors.bgPrimary(),
                         shape = RoundedCornerShape(MaRadius.sm)
                     )
                     .border(
@@ -120,7 +124,7 @@ fun MaTextField(
                     Text(
                         text = placeholder,
                         style = MaTypography.bodyLarge,
-                        color = MaColors.TextDisabled
+                        color = MaColors.textDisabled()
                     )
                 }
                 innerTextField()
@@ -242,3 +246,256 @@ fun MaTextFieldSearch(
  * )
  * ```
  */
+
+// ============================================================
+// Previews
+// ============================================================
+
+@Preview
+@Composable
+private fun MaTextFieldEmptyPreview() {
+    MaTheme {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(MaColors.bgPrimary())
+                .padding(MaSpacing.base),
+            verticalArrangement = Arrangement.spacedBy(MaSpacing.base)
+        ) {
+            MaTextField(
+                value = "",
+                onValueChange = PreviewFixtures.noOpOnTextChange,
+                placeholder = PreviewFixtures.sampleInputPlaceholder,
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
+    }
+}
+
+@Preview
+@Composable
+private fun MaTextFieldWithTextPreview() {
+    MaTheme {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(MaColors.bgPrimary())
+                .padding(MaSpacing.base),
+            verticalArrangement = Arrangement.spacedBy(MaSpacing.base)
+        ) {
+            MaTextField(
+                value = PreviewFixtures.sampleInputText,
+                onValueChange = PreviewFixtures.noOpOnTextChange,
+                placeholder = PreviewFixtures.sampleInputPlaceholder,
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
+    }
+}
+
+@Preview
+@Composable
+private fun MaTextFieldDisabledPreview() {
+    MaTheme {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(MaColors.bgPrimary())
+                .padding(MaSpacing.base),
+            verticalArrangement = Arrangement.spacedBy(MaSpacing.base)
+        ) {
+            MaTextField(
+                value = PreviewFixtures.sampleInputText,
+                onValueChange = PreviewFixtures.noOpOnTextChange,
+                placeholder = PreviewFixtures.sampleInputPlaceholder,
+                enabled = false,
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
+    }
+}
+
+@Preview
+@Composable
+private fun MaTextFieldMultilinePreview() {
+    MaTheme {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(MaColors.bgPrimary())
+                .padding(MaSpacing.base),
+            verticalArrangement = Arrangement.spacedBy(MaSpacing.base)
+        ) {
+            MaTextField(
+                value = "Line 1\nLine 2\nLine 3",
+                onValueChange = PreviewFixtures.noOpOnTextChange,
+                placeholder = "Multi-line text...",
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
+    }
+}
+
+@Preview
+@Composable
+private fun MaTextFieldChatEmptyPreview() {
+    MaTheme {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(MaColors.bgPrimary())
+                .padding(MaSpacing.base),
+            verticalArrangement = Arrangement.spacedBy(MaSpacing.base)
+        ) {
+            Text(
+                "Chat Input (Empty):",
+                style = MaTypography.labelSmall,
+                color = MaColors.textSecondary(),
+                modifier = Modifier.padding(bottom = MaSpacing.sm)
+            )
+
+            MaTextFieldChat(
+                value = "",
+                onValueChange = PreviewFixtures.noOpOnTextChange,
+                onSend = PreviewFixtures.noOpOnClick,
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
+    }
+}
+
+@Preview
+@Composable
+private fun MaTextFieldChatWithMessagePreview() {
+    MaTheme {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(MaColors.bgPrimary())
+                .padding(MaSpacing.base),
+            verticalArrangement = Arrangement.spacedBy(MaSpacing.base)
+        ) {
+            Text(
+                "Chat Input (With Message):",
+                style = MaTypography.labelSmall,
+                color = MaColors.textSecondary(),
+                modifier = Modifier.padding(bottom = MaSpacing.sm)
+            )
+
+            MaTextFieldChat(
+                value = "What is machine learning?",
+                onValueChange = PreviewFixtures.noOpOnTextChange,
+                onSend = PreviewFixtures.noOpOnClick,
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
+    }
+}
+
+@Preview
+@Composable
+private fun MaTextFieldSearchEmptyPreview() {
+    MaTheme {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(MaColors.bgPrimary())
+                .padding(MaSpacing.base),
+            verticalArrangement = Arrangement.spacedBy(MaSpacing.base)
+        ) {
+            Text(
+                "Search Field (Empty):",
+                style = MaTypography.labelSmall,
+                color = MaColors.textSecondary(),
+                modifier = Modifier.padding(bottom = MaSpacing.sm)
+            )
+
+            MaTextFieldSearch(
+                value = "",
+                onValueChange = PreviewFixtures.noOpOnTextChange,
+                onSearch = PreviewFixtures.noOpOnClick,
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
+    }
+}
+
+@Preview
+@Composable
+private fun MaTextFieldSearchWithQueryPreview() {
+    MaTheme {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(MaColors.bgPrimary())
+                .padding(MaSpacing.base),
+            verticalArrangement = Arrangement.spacedBy(MaSpacing.base)
+        ) {
+            Text(
+                "Search Field (With Query):",
+                style = MaTypography.labelSmall,
+                color = MaColors.textSecondary(),
+                modifier = Modifier.padding(bottom = MaSpacing.sm)
+            )
+
+            MaTextFieldSearch(
+                value = "machine learning",
+                onValueChange = PreviewFixtures.noOpOnTextChange,
+                onSearch = PreviewFixtures.noOpOnClick,
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
+    }
+}
+
+@Preview
+@Composable
+private fun MaTextFieldAllVariantsPreview() {
+    MaTheme {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(MaColors.bgPrimary())
+                .padding(MaSpacing.base),
+            verticalArrangement = Arrangement.spacedBy(MaSpacing.base)
+        ) {
+            Text(
+                "Basic TextField:",
+                style = MaTypography.labelSmall,
+                color = MaColors.textSecondary()
+            )
+            MaTextField(
+                value = "",
+                onValueChange = PreviewFixtures.noOpOnTextChange,
+                placeholder = "Enter text...",
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            Text(
+                "Chat TextField:",
+                style = MaTypography.labelSmall,
+                color = MaColors.textSecondary(),
+                modifier = Modifier.padding(top = MaSpacing.base)
+            )
+            MaTextFieldChat(
+                value = "",
+                onValueChange = PreviewFixtures.noOpOnTextChange,
+                onSend = PreviewFixtures.noOpOnClick,
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            Text(
+                "Search TextField:",
+                style = MaTypography.labelSmall,
+                color = MaColors.textSecondary(),
+                modifier = Modifier.padding(top = MaSpacing.base)
+            )
+            MaTextFieldSearch(
+                value = "",
+                onValueChange = PreviewFixtures.noOpOnTextChange,
+                onSearch = PreviewFixtures.noOpOnClick,
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
+    }
+}

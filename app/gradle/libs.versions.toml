@@ -1,5 +1,5 @@
 [versions]
-agp = "8.13.1"
+agp = "9.0.0"
 android-compileSdk = "36"
 android-minSdk = "27"
 android-targetSdk = "36"
@@ -30,7 +30,7 @@ mlkit-objects = "17.0.1"
 mlkit-genai-prompt = "1.0.0-alpha1"
 mlkit-genai-summarization = "1.0.0-beta1"
 kotlinx-serialization = "1.7.3"
-kotlinx-datetime = "0.6.1"
+kotlinx-datetime = "0.6.2"
 sqlcipher = "4.5.4"
 androidx-security = "1.1.0-alpha06"
 compose-ui-text-googlefonts = "1.9.1"
@@ -95,6 +95,8 @@ kermit = { module = "co.touchlab:kermit", version.ref = "kermit" }
 koin-core = { module = "io.insert-koin:koin-core", version.ref = "koin-core" }
 koin-compose = { module = "io.insert-koin:koin-compose", version.ref = "koin-compose" }
 koin-android = { module = "io.insert-koin:koin-android", version.ref = "koin-core" }
+koin-androidx-compose = { module = "io.insert-koin:koin-androidx-compose", version.ref = "koin-core" }
+koin-test = { module = "io.insert-koin:koin-test", version.ref = "koin-core" }
 
 [plugins]
 androidApplication = { id = "com.android.application", version.ref = "agp" }

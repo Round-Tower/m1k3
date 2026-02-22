@@ -1,49 +1,43 @@
 package app.m1k3.ai.assistant.di
 
-import app.m1k3.ai.assistant.avatar.AvatarViewModel
+import androidx.lifecycle.viewmodel.compose.viewModel
+import app.m1k3.ai.assistant.chat.ChatScreenViewModel
 import app.m1k3.ai.assistant.avatar.PetMetricsRepository
+import app.m1k3.ai.assistant.chat.GenerationConfigBuilder
 import app.m1k3.ai.assistant.database.DatabaseFactory
 import app.m1k3.ai.assistant.database.MaDatabase
 import app.m1k3.ai.assistant.eco.EcoCalculator
 import app.m1k3.ai.assistant.eco.EcoMetricsRepository
 import app.m1k3.ai.assistant.history.ConversationRepository
 import app.m1k3.ai.assistant.history.SearchRepository
-import app.m1k3.ai.assistant.memory.MemoryRepository
+import app.m1k3.ai.assistant.history.ExportManager
+import app.m1k3.ai.assistant.memory.MemoryDataSource
+import app.m1k3.ai.assistant.platform.DeviceInfoProviderInterface
+import app.m1k3.ai.domain.ai.services.GenerationConfigService
+import app.m1k3.ai.domain.chat.services.ContextAssembler
+import app.m1k3.ai.domain.chat.services.DeviceContextFormatter
+import app.m1k3.ai.domain.chat.services.UnifiedPromptBuilder
+import app.m1k3.ai.domain.memory.ImportanceCalculator
+import app.m1k3.ai.domain.memory.services.SemanticChunker
+import app.m1k3.ai.domain.rag.services.IntentClassifier
+import app.m1k3.ai.domain.repositories.KnowledgeRepository
+import app.m1k3.ai.domain.usecases.memory.SearchMemoriesUseCase
+import app.m1k3.ai.domain.usecases.rag.EnrichPromptWithRAGUseCase
+import app.m1k3.ai.domain.usecases.tools.ExecuteToolUseCase
+import app.m1k3.ai.domain.usecases.tools.ParseToolCallUseCase
+import app.m1k3.ai.domain.usecases.chat.LlmOutputProcessor
+import app.m1k3.ai.domain.usecases.chat.ProcessLlmOutputUseCase
+import app.m1k3.ai.domain.chat.format.ChatFormat
+import app.m1k3.ai.domain.chat.services.ChatFormatter
+import app.m1k3.ai.domain.chat.services.DefaultChatFormatter
+import app.m1k3.ai.domain.tools.services.ToolCallParser
+import app.m1k3.ai.domain.tools.services.DefaultToolCallParser
+import app.m1k3.ai.assistant.knowledge.KnowledgeRepositoryImpl
+import app.m1k3.ai.assistant.knowledge.SemanticRetrievalService
 import org.koin.core.module.Module
 import org.koin.core.module.dsl.singleOf
 import org.koin.dsl.module
-
-/**
- * 間 AI Koin Dependency Injection Modules
- *
- * Provides centralized dependency management for:
- * - ViewModels (ChatViewModel, AvatarViewModel)
- * - Repositories (Conversation, EcoMetrics, Memory)
- * - Database (SQLDelight instance)
- * - AI Engine (LlamaCppEngine)
- *
- * Architecture Benefits:
- * - ✅ Testability: Easy to inject mocks
- * - ✅ Modularity: Clear separation of concerns
- * - ✅ Lifecycle management: Koin handles scopes
- * - ✅ Type safety: Compile-time dependency resolution
- *
- * Usage:
- * ```kotlin
- * // In MainActivity.kt
- * startKoin {
- *     modules(appModule, platformModule)
- * }
- *
- * // In composables
- * @Composable
- * fun ChatScreen() {
- *     val chatVM: ChatViewModel = koinViewModel()
- *     val avatarVM: AvatarViewModel = koinViewModel()
- *     // ...
- * }
- * ```
- */
+import org.koin.core.module.dsl.factoryOf
 
 /**
  * Core application module
@@ -80,11 +74,11 @@ val appModule = module {
     singleOf(::EcoMetricsRepository)
 
     /**
-     * Memory repository
+     * Memory data source
      *
-     * Manages semantic memory chunks with HNSW vector index.
+     * Manages semantic memory metadata via SQLDelight.
      */
-    singleOf(::MemoryRepository)
+    singleOf(::MemoryDataSource)
 
     /**
      * Pet metrics repository
@@ -100,6 +94,168 @@ val appModule = module {
      */
     singleOf(::SearchRepository)
 
+    /**
+     * ExportManager
+     *
+     * Handles conversation export to JSON and Markdown formats.
+     */
+    singleOf(::ExportManager)
+
+    /**
+     * Semantic retrieval service
+     *
+     * RAG knowledge retrieval using embedding-based semantic search.
+     */
+    single {
+        SemanticRetrievalService(
+            database = get(),
+            embeddingEngine = get() // Platform-specific embedding engine
+        )
+    }
+
+    // ===== Domain Services =====
+
+    /**
+     * Intent classifier
+     *
+     * Classifies user queries into 20 intent categories for RAG routing.
+     */
+    single { IntentClassifier() }
+
+    /**
+     * Semantic chunker
+     *
+     * Chunks long text into 100-300 token segments with semantic boundaries.
+     */
+    single { SemanticChunker() }
+
+    /**
+     * Importance calculator
+     *
+     * Calculates importance scores (0.0-1.0) for memory filtering.
+     */
+    single { ImportanceCalculator() }
+
+    /**
+     * Context assembler
+     *
+     * Combines conversation history, RAG facts, and memories into unified context.
+     */
+    single { ContextAssembler() }
+
+    /**
+     * Unified prompt builder
+     *
+     * Single point for prompt construction with context + tool schemas.
+     */
+    single {
+        UnifiedPromptBuilder(
+            formatter = get<ChatFormatter>(),
+            contextAssembler = get(),
+            deviceContextFormatter = DeviceContextFormatter()
+        )
+    }
+
+    /**
+     * Generation config service
+     *
+     * Device-adaptive AI generation configuration (tokens, temperature).
+     * Uses device RAM and query type for optimization.
+     */
+    single {
+        val deviceInfo = get<DeviceInfoProviderInterface>()
+        val ramGB = deviceInfo.getDeviceRamGB()
+        val tier = when {
+            ramGB >= 12 -> "Flagship"
+            ramGB >= 8 -> "High-end"
+            ramGB >= 6 -> "Mid-range"
+            else -> "Budget"
+        }
+        GenerationConfigService(
+            deviceRamGB = ramGB,
+            deviceTier = tier
+        )
+    }
+
+    // ===== Domain Repository Implementations =====
+
+    /**
+     * Knowledge repository
+     *
+     * Domain-layer wrapper around SemanticRetrievalService for RAG.
+     */
+    single<KnowledgeRepository> {
+        KnowledgeRepositoryImpl(
+            semanticRetrievalService = get() // SemanticRetrievalService registered in platform module
+        )
+    }
+
+    // Note: MemoryRepository implementation will be registered in platform module
+    // (MemoryRepositoryImpl wraps SemanticMemoryManager which requires Android Context)
+
+    // ===== Domain Use Cases =====
+
+    // Note: SearchMemoriesUseCase NOT registered here because MemoryRepository
+    // requires projectId scoping. Create instances inline where needed:
+    // val useCase = SearchMemoriesUseCase(memoryRepository)
+
+    /**
+     * Enrich prompt with RAG use case
+     *
+     * Orchestrates intent classification, knowledge retrieval, and category boosting.
+     */
+    single {
+        EnrichPromptWithRAGUseCase(
+            knowledgeRepository = get(),
+            intentClassifier = get()
+        )
+    }
+
+    // Note: CreateMemoryUseCase will be registered in platform module
+    // (requires platform-specific EmbeddingRepository)
+
+    // ===== Tool Calling Infrastructure =====
+
+    /**
+     * Tool call parser
+     *
+     * Parses LLM output for tool calls in JSON or XML format.
+     */
+    single<ToolCallParser> { DefaultToolCallParser() }
+
+    /**
+     * Chat formatter
+     *
+     * Formats prompts and tool schemas for LLM consumption.
+     * Uses Gemma3 format as default (matches SmolLM2).
+     */
+    single<ChatFormatter> { DefaultChatFormatter(ChatFormat.Gemma3) }
+
+    /**
+     * Parse tool call use case
+     *
+     * Wraps parser with structured result.
+     */
+    single { ParseToolCallUseCase(parser = get()) }
+
+    /**
+     * Execute tool use case
+     *
+     * Orchestrates: find tool → validate → confirm? → execute.
+     * ToolRegistry provided by platform module.
+     */
+    single { ExecuteToolUseCase(toolRegistry = get()) }
+
+    /**
+     * Process LLM output use case
+     *
+     * Orchestrates parsing and execution of tool calls from LLM output.
+     * Primary integration point between LLM generation and tool system.
+     */
+    single<LlmOutputProcessor> {
+        ProcessLlmOutputUseCase(parseToolCallUseCase = get(), executeToolUseCase = get())
+    }
+
     // ===== Utility Layer =====
 
     /**
@@ -110,10 +266,17 @@ val appModule = module {
      */
     single { EcoCalculator }
 
-    // ===== ViewModel Layer =====
+    // ===== Use Case Layer =====
 
-    // TODO: Add ViewModels once we resolve CoroutineScope injection
-    // Avatar ViewModel requires CoroutineScope parameter
+    /**
+     * GenerationConfigBuilder
+     *
+     * Builds device-adaptive AI generation configurations.
+     * Uses DeviceInfoProvider for RAM-based token limit scaling.
+     */
+    factoryOf(::GenerationConfigBuilder)
+    
+    // ===== ViewModel Layer =====
 }
 
 /**
@@ -132,66 +295,3 @@ expect val platformModule: Module
  * Convenience property for startKoin { modules(...) }
  */
 val allModules = listOf(appModule, platformModule)
-
-/**
- * Usage Examples:
- * ```kotlin
- * // ===== In MainActivity.kt (Android) =====
- * class MainActivity : ComponentActivity() {
- *     override fun onCreate(savedInstanceState: Bundle?) {
- *         super.onCreate(savedInstanceState)
- *
- *         // Initialize Koin DI
- *         startKoin {
- *             androidContext(this@MainActivity)
- *             modules(allModules)
- *         }
- *
- *         setContent {
- *             App()
- *         }
- *     }
- * }
- *
- * // ===== In Composables =====
- * @Composable
- * fun ChatScreen() {
- *     // Inject ViewModels via Koin
- *     val chatVM: ChatViewModel = koinViewModel()
- *     val avatarVM: AvatarViewModel = koinViewModel()
- *
- *     // Use ViewModels
- *     val messages by chatVM.messages.collectAsState()
- *     val avatarState by avatarVM.avatarState.collectAsState()
- *
- *     // ... UI
- * }
- *
- * // ===== In Tests =====
- * class ChatViewModelTest {
- *     @Test
- *     fun testSendMessage() {
- *         startKoin {
- *             modules(
- *                 module {
- *                     single<BaseLlmEngine> { MockLlmEngine() }
- *                     single<ConversationRepository> { MockConversationRepo() }
- *                     viewModelOf(::ChatViewModel)
- *                 }
- *             )
- *         }
- *
- *         val chatVM: ChatViewModel = get()
- *         // ... test logic
- *     }
- * }
- *
- * // ===== Manual Dependency Injection (without Koin) =====
- * // If Koin initialization fails, you can still use manual DI:
- * val database = DatabaseFactory().createDatabase()
- * val conversationRepo = ConversationRepository(database)
- * val ecoMetricsRepo = EcoMetricsRepository(database)
- * val aiEngine = LlamaCppEngine("models/gemma-3-270m-it-Q2_K.gguf", 24576)
- * val chatViewModel = ChatViewModel(conversationRepo, ecoMetricsRepo, aiEngine)
- * ```
- */

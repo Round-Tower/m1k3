@@ -122,11 +122,11 @@ def main():
 
     # Voice profiles (Updated with new real-time profiles and reverb)
     tts_group.add_argument("--voice-profile",
-                          choices=["realtime", "instant", "chat", "natural", "assistant", "broadcast", "terminal", "debug", "minimal",
+                          choices=["kokoro", "realtime", "instant", "chat", "natural", "assistant", "broadcast", "terminal", "debug", "minimal",
                                   "kitten_natural", "kitten_fast", "conversational", "narrative", "assistant_duo",
                                   "studio", "hall", "intimate", "realtime_chat", "studio_chat", "intimate_chat"],
-                          default="realtime",
-                          help="Voice profile: realtime (Piper, sub-50ms), instant (eSpeak, sub-10ms), chat (conversational AI), natural/assistant/broadcast/terminal (traditional), debug/minimal (fast), studio/hall/intimate (reverb effects), realtime_chat/studio_chat/intimate_chat (optimized chat with reverb)")
+                          default="kokoro",
+                          help="Voice profile: kokoro (M1K3 default - Daniel, British, Radio Chat), realtime (Piper, sub-50ms), instant (eSpeak, sub-10ms), chat (conversational AI), natural/assistant/broadcast/terminal (traditional), debug/minimal (fast), studio/hall/intimate (reverb effects), realtime_chat/studio_chat/intimate_chat (optimized chat with reverb)")
     
     # Speech-to-Text (STT) options
     stt_group = parser.add_argument_group('Speech Recognition Options')

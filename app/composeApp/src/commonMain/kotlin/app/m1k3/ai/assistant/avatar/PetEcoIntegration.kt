@@ -281,19 +281,26 @@ object PetEcoIntegration {
     ): PixelPetState {
         val (healthBoost, energyBoost, happinessBoost) = calculateSessionBoosts(savings)
 
+        // Calculate new lifetime totals
+        val newLifetimeWaterMl = currentState.lifetimeWaterMl + savings.waterSavedMl
+        val newLifetimeEnergyWh = currentState.lifetimeEnergyWh + savings.energySavedWh
+        val newLifetimeCO2G = currentState.lifetimeCO2G + savings.co2PreventedG
+
         return currentState.copy(
             health = min(currentState.health + healthBoost, 100f),
             energy = min(currentState.energy + energyBoost, 100f),
             happiness = min(currentState.happiness + happinessBoost, 100f),
             // Update lifetime metrics
-            lifetimeWaterMl = currentState.lifetimeWaterMl + savings.waterSavedMl,
-            lifetimeEnergyWh = currentState.lifetimeEnergyWh + savings.energySavedWh,
-            lifetimeCO2G = currentState.lifetimeCO2G + savings.co2PreventedG,
+            lifetimeWaterMl = newLifetimeWaterMl,
+            lifetimeEnergyWh = newLifetimeEnergyWh,
+            lifetimeCO2G = newLifetimeCO2G,
             totalEcoCredits = getTotalEcoCredits(
-                currentState.lifetimeWaterMl + savings.waterSavedMl,
-                currentState.lifetimeEnergyWh + savings.energySavedWh,
-                currentState.lifetimeCO2G + savings.co2PreventedG
-            )
+                newLifetimeWaterMl,
+                newLifetimeEnergyWh,
+                newLifetimeCO2G
+            ),
+            conversationCount = currentState.conversationCount + 1,
+            currentAchievement = getAchievementName(newLifetimeWaterMl)
         )
     }
 }

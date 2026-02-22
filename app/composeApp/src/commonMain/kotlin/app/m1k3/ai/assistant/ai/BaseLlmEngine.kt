@@ -1,7 +1,10 @@
 package app.m1k3.ai.assistant.ai
 
+import app.m1k3.ai.domain.ai.GenerationConfig
+import app.m1k3.ai.domain.ai.LlmEngine
+
 /**
- * BaseLlmEngine - Unified interface for AI inference engines
+ * BaseLlmEngine - App-layer interface extending domain LlmEngine
  *
  * This interface abstracts common LLM functionality across different backends:
  * - LlamaCppEngine (llama.cpp via Llamatik)
@@ -51,7 +54,7 @@ package app.m1k3.ai.assistant.ai
  * engine.release()
  * ```
  */
-interface BaseLlmEngine {
+interface BaseLlmEngine : LlmEngine {
     /**
      * Initialize the AI engine.
      *
@@ -65,7 +68,7 @@ interface BaseLlmEngine {
      *
      * @return Result.success(Unit) if initialization succeeds, Result.failure(exception) otherwise
      */
-    suspend fun initialize(): Result<Unit>
+    override suspend fun initialize(): Result<Unit>
 
     /**
      * Generate AI response for a given prompt (blocking).
@@ -77,9 +80,9 @@ interface BaseLlmEngine {
      * @return Result.success(GenerationResult) if generation succeeds, Result.failure(exception) otherwise
      *         Common failures: engine not initialized, inference error, model crash
      */
-    suspend fun generate(
+    override suspend fun generate(
         prompt: String,
-        config: GenerationConfig = GenerationConfig()
+        config: GenerationConfig
     ): Result<GenerationResult>
 
     /**
@@ -94,9 +97,9 @@ interface BaseLlmEngine {
      * @return Result.success(Unit) if streaming completes, Result.failure(exception) if error occurs
      *         Common failures: engine not initialized, inference error, callback exception
      */
-    suspend fun generateStreaming(
+    override suspend fun generateStreaming(
         prompt: String,
-        config: GenerationConfig = GenerationConfig(),
+        config: GenerationConfig,
         onToken: (String) -> Unit
     ): Result<Unit>
 
@@ -112,7 +115,7 @@ interface BaseLlmEngine {
      *
      * @return Recommended max tokens (64-512 depending on device)
      */
-    fun getOptimalMaxTokens(): Int
+    override fun getOptimalMaxTokens(): Int
 
     /**
      * Release engine resources.
@@ -125,76 +128,20 @@ interface BaseLlmEngine {
      * Call this when engine is no longer needed to free memory.
      * After calling release(), the engine must be re-initialized before use.
      */
-    fun release()
+    override fun release()
 
     /**
      * Close engine (alias for release() for AutoCloseable compatibility).
      *
      * Allows use with `use {}` blocks for automatic resource management.
      */
-    fun close() = release()
+    override fun close() = release()
 }
 
 /**
- * GenerationConfig - Unified configuration for AI generation
+ * GenerationResult.
  *
- * This data class supports a range of engine capabilities:
- * - Full-featured engines (ONNX) can use all parameters
- * - Limited engines (Llamatik) ignore unsupported parameters
- * - null values indicate "use engine default"
- *
- * Design philosophy: **Graceful degradation**
- * If an engine doesn't support a parameter (e.g., Llamatik lacks sampling APIs),
- * it should ignore it gracefully without errors.
- *
- * @param maxTokens Maximum tokens to generate (null = use engine default, typically 128-512)
- * @param temperature Sampling temperature 0.0-1.0 (null = engine doesn't support or use default 0.7)
- *                    - 0.0 = deterministic (greedy decoding)
- *                    - 0.7 = balanced creativity
- *                    - 1.0 = maximum creativity
- *                    Note: Llamatik ignores this - use prompt engineering instead
- * @param systemPrompt Custom system prompt (null = use engine's default M1K3 prompt)
- * @param userContext User-specific context for personalization (e.g., {"name": "Alice"})
- * @param knowledgeContext RAG-retrieved knowledge to inject into prompt
- * @param topP Nucleus sampling top-P (null = engine doesn't support or use default 0.95)
- * @param topK Top-K sampling (null = engine doesn't support or use default 40)
- * @param minP Minimum probability threshold (null = engine doesn't support or use default 0.05)
- * @param repetitionPenalty Penalty for repeated tokens (null = engine doesn't support or use default 1.1)
+ * @deprecated Use app.m1k3.ai.domain.ai.GenerationResult instead.
+ * This typealias exists for backward compatibility.
  */
-data class GenerationConfig(
-    val maxTokens: Int? = null,
-    val temperature: Float? = 0.7f,
-    val systemPrompt: String? = null,
-    val userContext: Map<String, String>? = null,
-    val knowledgeContext: String? = null,
-
-    // Advanced sampling parameters (ONNX-only, ignored by Llamatik)
-    val topP: Float? = 0.95f,
-    val topK: Int? = 40,
-    val minP: Float? = 0.05f,
-    val repetitionPenalty: Float? = 1.1f
-)
-
-/**
- * GenerationResult - Result of AI generation
- *
- * Contains the generated text and performance metrics.
- *
- * @param text Generated response text
- * @param tokensGenerated Number of tokens generated (for eco metrics)
- * @param inferenceTimeMs Time taken for generation in milliseconds
- * @param tokensPerSecond Generation speed (performance monitoring)
- */
-data class GenerationResult(
-    val text: String,
-    val tokensGenerated: Int,
-    val inferenceTimeMs: Long,
-    val tokensPerSecond: Float
-) {
-    override fun toString(): String = """
-        Generated: "$text"
-        Tokens: $tokensGenerated
-        Time: ${inferenceTimeMs}ms
-        Speed: ${"%.1f".format(tokensPerSecond)} tokens/sec
-    """.trimIndent()
-}
+typealias GenerationResult = app.m1k3.ai.domain.ai.GenerationResult

@@ -1,5 +1,8 @@
 package app.m1k3.ai.assistant.memory
 
+import app.m1k3.ai.domain.memory.SimpleTokenCounter
+import app.m1k3.ai.domain.memory.services.Chunk
+import app.m1k3.ai.domain.memory.services.SemanticChunker
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue

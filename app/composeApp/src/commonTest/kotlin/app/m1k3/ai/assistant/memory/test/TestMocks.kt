@@ -1,19 +1,20 @@
 package app.m1k3.ai.assistant.memory.test
 
-import app.m1k3.ai.assistant.memory.EmbeddingEngine
-import app.m1k3.ai.assistant.memory.SearchResult
-import app.m1k3.ai.assistant.memory.VectorSearchEngine
+import app.m1k3.ai.domain.repositories.EmbeddingRepository
+import app.m1k3.ai.domain.repositories.VectorSearchRepository
+import app.m1k3.ai.domain.repositories.VectorSearchResult
+import app.m1k3.ai.domain.repositories.VectorIndexStats
 
 /**
  * Shared test utilities for Phase 2 Memory System tests.
  *
- * Provides mock implementations of EmbeddingEngine and VectorSearchEngine
+ * Provides mock implementations of EmbeddingRepository and VectorSearchEngine
  * for consistent testing across MemoryManagerTest, MemoryRetrievalQualityTest,
  * and MemoryIntegrationTest.
  */
 
 /**
- * Mock embedding engine that generates deterministic embeddings based on text hash.
+ * Mock embedding repository that generates deterministic embeddings based on text hash.
  *
  * **Behavior:**
  * - Returns embeddings with values in range [0.0, 1.0]
@@ -22,28 +23,53 @@ import app.m1k3.ai.assistant.memory.VectorSearchEngine
  *
  * **Usage:**
  * ```kotlin
- * val mockEngine = MockEmbeddingEngine(dimensions = 384)
- * val memoryManager = MemoryManager(..., embeddingEngine = mockEngine)
+ * val mockRepo = MockEmbeddingRepository(dimensions = 384)
+ * val memoryManager = MemoryManager(..., embeddingRepository = mockRepo)
  * ```
  */
-class MockEmbeddingEngine(
-    override val dimensions: Int = 384
-) : EmbeddingEngine {
+class MockEmbeddingRepository(
+    override val embeddingDimensions: Int = 384,
+    override val modelName: String = "MockEmbedding"
+) : EmbeddingRepository {
 
-    override suspend fun embed(texts: List<String>): Result<List<FloatArray>> {
-        // Generate deterministic embeddings based on text content
+    override suspend fun loadModel(): Result<Unit> = Result.success(Unit)
+
+    override suspend fun embed(text: String): Result<FloatArray> {
+        val embedding = FloatArray(embeddingDimensions) { i ->
+            ((text.hashCode() + i) % 100) / 100f
+        }
+        return Result.success(embedding)
+    }
+
+    override suspend fun embedBatch(texts: List<String>): Result<List<FloatArray>> {
         val embeddings = texts.map { text ->
-            FloatArray(dimensions) { i ->
-                // Use text hash + index to create deterministic but varied values
+            FloatArray(embeddingDimensions) { i ->
                 ((text.hashCode() + i) % 100) / 100f
             }
         }
         return Result.success(embeddings)
     }
+
+    override fun cosineSimilarity(embedding1: FloatArray, embedding2: FloatArray): Float {
+        require(embedding1.size == embedding2.size) { "Embeddings must have same dimensions" }
+        var dotProduct = 0f
+        var norm1 = 0f
+        var norm2 = 0f
+        for (i in embedding1.indices) {
+            dotProduct += embedding1[i] * embedding2[i]
+            norm1 += embedding1[i] * embedding1[i]
+            norm2 += embedding2[i] * embedding2[i]
+        }
+        return if (norm1 > 0f && norm2 > 0f) {
+            dotProduct / (kotlin.math.sqrt(norm1) * kotlin.math.sqrt(norm2))
+        } else {
+            0f
+        }
+    }
 }
 
 /**
- * Mock vector search engine with configurable search results.
+ * Mock vector search repository with configurable search results.
  *
  * **Behavior:**
  * - Stores vectors in memory (HashMap)
@@ -55,22 +81,22 @@ class MockEmbeddingEngine(
  * ```kotlin
  * val mockSearch = MockVectorSearchEngine()
  * mockSearch.setSearchResults(listOf(
- *     SearchResult("mem-1", 0.95f),
- *     SearchResult("mem-2", 0.80f)
+ *     VectorSearchResult("mem-1", 0.95f),
+ *     VectorSearchResult("mem-2", 0.80f)
  * ))
- * val memoryManager = MemoryManager(..., vectorSearch = mockSearch)
+ * val memoryManager = MemoryManager(..., vectorSearchRepository = mockSearch)
  * ```
  */
-class MockVectorSearchEngine : VectorSearchEngine {
+class MockVectorSearchEngine : VectorSearchRepository {
     private val vectors = mutableMapOf<String, FloatArray>()
-    private var searchResults: List<SearchResult>? = null
+    private var searchResults: List<VectorSearchResult>? = null
 
     /**
      * Configure search results to return for next search() call.
      *
-     * @param results List of SearchResult with memory IDs and similarity scores
+     * @param results List of VectorSearchResult with memory IDs and similarity scores
      */
-    fun setSearchResults(results: List<SearchResult>) {
+    fun setSearchResults(results: List<VectorSearchResult>) {
         searchResults = results
     }
 
@@ -91,10 +117,10 @@ class MockVectorSearchEngine : VectorSearchEngine {
         return Result.success(Unit)
     }
 
-    override suspend fun search(queryVector: FloatArray, k: Int): Result<List<SearchResult>> {
+    override suspend fun search(queryVector: FloatArray, k: Int): Result<List<VectorSearchResult>> {
         // Return pre-configured results if set, otherwise return all vectors
         val results = searchResults ?: vectors.keys.sorted().take(k).map { id ->
-            SearchResult(id, 0.9f)  // Dummy high similarity
+            VectorSearchResult(id, 0.9f)  // Dummy high similarity
         }
         return Result.success(results.take(k))
     }
@@ -103,10 +129,18 @@ class MockVectorSearchEngine : VectorSearchEngine {
         vectors.remove(id)
         return Result.success(Unit)
     }
+
+    override fun getStats(): VectorIndexStats {
+        return VectorIndexStats(
+            vectorCount = vectors.size,
+            dimensions = 384,  // Default test dimensions
+            indexType = "mock"
+        )
+    }
 }
 
 /**
- * Deterministic embedding engine with configurable query vector.
+ * Deterministic embedding repository with configurable query vector.
  *
  * **Behavior:**
  * - Returns the same configured vector for all texts (useful for retrieval testing)
@@ -115,40 +149,66 @@ class MockVectorSearchEngine : VectorSearchEngine {
  *
  * **Usage:**
  * ```kotlin
- * val engine = DeterministicEmbeddingEngine()
- * engine.setQueryVector(floatArrayOf(1.0f, 0.0f, 0.0f))  // France vector
+ * val repo = DeterministicEmbeddingRepository()
+ * repo.setQueryVector(floatArrayOf(1.0f, 0.0f, 0.0f))  // France vector
  * ```
  *
  * Used in MemoryRetrievalQualityTest to test precision/recall with known relevance.
  */
-class DeterministicEmbeddingEngine(
-    override val dimensions: Int = 384
-) : EmbeddingEngine {
+class DeterministicEmbeddingRepository(
+    override val embeddingDimensions: Int = 384,
+    override val modelName: String = "DeterministicMock"
+) : EmbeddingRepository {
     private var queryVector: FloatArray? = null
+
+    override suspend fun loadModel(): Result<Unit> = Result.success(Unit)
 
     /**
      * Set the query vector to return for all embed() calls.
      *
-     * @param vector FloatArray of length `dimensions`
+     * @param vector FloatArray of length `embeddingDimensions`
      */
     fun setQueryVector(vector: FloatArray) {
-        require(vector.size == dimensions) { "Vector must be $dimensions-dimensional" }
+        require(vector.size == embeddingDimensions) { "Vector must be $embeddingDimensions-dimensional" }
         queryVector = vector
     }
 
-    override suspend fun embed(texts: List<String>): Result<List<FloatArray>> {
-        // Use query vector if set, otherwise use content hash
+    override suspend fun embed(text: String): Result<FloatArray> {
+        val embedding = queryVector?.copyOf() ?: FloatArray(embeddingDimensions) { i ->
+            ((text.hashCode() + i) % 100) / 100f
+        }
+        return Result.success(embedding)
+    }
+
+    override suspend fun embedBatch(texts: List<String>): Result<List<FloatArray>> {
         val embeddings = texts.map { text ->
-            queryVector?.copyOf() ?: FloatArray(dimensions) { i ->
+            queryVector?.copyOf() ?: FloatArray(embeddingDimensions) { i ->
                 ((text.hashCode() + i) % 100) / 100f
             }
         }
         return Result.success(embeddings)
     }
+
+    override fun cosineSimilarity(embedding1: FloatArray, embedding2: FloatArray): Float {
+        require(embedding1.size == embedding2.size) { "Embeddings must have same dimensions" }
+        var dotProduct = 0f
+        var norm1 = 0f
+        var norm2 = 0f
+        for (i in embedding1.indices) {
+            dotProduct += embedding1[i] * embedding2[i]
+            norm1 += embedding1[i] * embedding1[i]
+            norm2 += embedding2[i] * embedding2[i]
+        }
+        return if (norm1 > 0f && norm2 > 0f) {
+            dotProduct / (kotlin.math.sqrt(norm1) * kotlin.math.sqrt(norm2))
+        } else {
+            0f
+        }
+    }
 }
 
 /**
- * Deterministic vector search engine with configurable search results.
+ * Deterministic vector search repository with configurable search results.
  *
  * **Behavior:**
  * - Stores vectors internally
@@ -159,21 +219,21 @@ class DeterministicEmbeddingEngine(
  * ```kotlin
  * val engine = DeterministicVectorSearchEngine()
  * engine.setSearchResults(listOf(
- *     SearchResult("mem-paris", 0.95f),      // Relevant
- *     SearchResult("mem-python", 0.60f)      // Not relevant
+ *     VectorSearchResult("mem-paris_emb", 0.95f),      // Relevant
+ *     VectorSearchResult("mem-python_emb", 0.60f)      // Not relevant
  * ))
  * ```
  *
  * Used in MemoryRetrievalQualityTest to validate precision/recall metrics.
  */
-class DeterministicVectorSearchEngine : VectorSearchEngine {
+class DeterministicVectorSearchEngine : VectorSearchRepository {
     private val vectors = mutableMapOf<String, FloatArray>()
-    private var searchResults: List<SearchResult>? = null
+    private var searchResults: List<VectorSearchResult>? = null
 
     /**
      * Configure search results to return for next search() call.
      */
-    fun setSearchResults(results: List<SearchResult>) {
+    fun setSearchResults(results: List<VectorSearchResult>) {
         searchResults = results
     }
 
@@ -189,10 +249,10 @@ class DeterministicVectorSearchEngine : VectorSearchEngine {
         return Result.success(Unit)
     }
 
-    override suspend fun search(queryVector: FloatArray, k: Int): Result<List<SearchResult>> {
+    override suspend fun search(queryVector: FloatArray, k: Int): Result<List<VectorSearchResult>> {
         // Return pre-configured results if set, otherwise return all
         val results = searchResults ?: vectors.keys.map { id ->
-            SearchResult(id, 0.8f)
+            VectorSearchResult(id, 0.8f)
         }
         return Result.success(results.take(k))
     }
@@ -200,5 +260,13 @@ class DeterministicVectorSearchEngine : VectorSearchEngine {
     override suspend fun removeVector(id: String): Result<Unit> {
         vectors.remove(id)
         return Result.success(Unit)
+    }
+
+    override fun getStats(): VectorIndexStats {
+        return VectorIndexStats(
+            vectorCount = vectors.size,
+            dimensions = 384,
+            indexType = "deterministic-mock"
+        )
     }
 }

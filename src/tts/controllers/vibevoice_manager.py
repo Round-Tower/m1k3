@@ -150,9 +150,9 @@ class VibeVoiceManager:
             self.cfg_scales = {"fast": 1.0, "balanced": 1.3, "quality": 1.5, "emotional": 1.8}
             
             # Device configuration
-            if torch.cuda.is_available():
+            if TORCH_AVAILABLE and torch.cuda.is_available():
                 self.device = "cuda"
-            elif hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
+            elif TORCH_AVAILABLE and hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
                 self.device = "mps"
             else:
                 self.device = "cpu"

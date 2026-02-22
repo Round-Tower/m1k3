@@ -12,12 +12,10 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.yield
-import kotlin.coroutines.coroutineContext
 import kotlin.math.exp
 import kotlin.random.Random
 import java.io.File
 import java.nio.LongBuffer
-import kotlin.system.measureTimeMillis
 
 /**
  * Android implementation of CodingEngine using ONNX Runtime
@@ -88,46 +86,54 @@ class QwenCodingEngine(
      * @return Result indicating success or failure
      */
     override suspend fun loadModel(): Result<Unit> = withContext(Dispatchers.IO) {
+        // Check if already loaded (thread-safe read)
         synchronized(modelLock) {
             if (isModelLoaded) {
                 return@withContext Result.success(Unit)
             }
+        }
 
-            try {
-                // 1. Create ONNX Runtime environment
-                ortEnvironment = OrtEnvironment.getEnvironment()
+        try {
+            // 1. Create ONNX Runtime environment
+            val env = OrtEnvironment.getEnvironment()
 
-                // 2. Load model
-                val modelPath = copyAssetToCache("$modelDir/model_quantized.onnx")
-                val sessionOptions = OrtSession.SessionOptions().apply {
-                    setIntraOpNumThreads(4) // Use 4 CPU threads
-                    setInterOpNumThreads(2)
-                    setOptimizationLevel(OrtSession.SessionOptions.OptLevel.ALL_OPT)
-                }
+            // 2. Load model
+            val modelPath = copyAssetToCache("$modelDir/model_quantized.onnx")
+            val sessionOptions = OrtSession.SessionOptions().apply {
+                setIntraOpNumThreads(4) // Use 4 CPU threads
+                setInterOpNumThreads(2)
+                setOptimizationLevel(OrtSession.SessionOptions.OptLevel.ALL_OPT)
+            }
 
-                ortSession = ortEnvironment!!.createSession(
-                    modelPath,
-                    sessionOptions
-                )
+            val session = env.createSession(modelPath, sessionOptions)
 
-                // 3. Initialize tokenizer
-                val tokenizerPath = copyAssetToCache("$modelDir/tokenizer.model")
-                tokenizer = SentencePieceTokenizer(tokenizerPath)
+            // 3. Initialize tokenizer
+            val tokenizerPath = copyAssetToCache("$modelDir/tokenizer.model")
+            val tok = SentencePieceTokenizer(tokenizerPath)
 
-                // 4. Warm up (test inference)
-                warmUpModel()
-
+            // Update state atomically
+            synchronized(modelLock) {
+                ortEnvironment = env
+                ortSession = session
+                tokenizer = tok
                 isModelLoaded = true
-                Result.success(Unit)
-            } catch (e: Exception) {
+            }
+
+            // 4. Warm up (test inference) - outside synchronized block
+            warmUpModel()
+
+            Result.success(Unit)
+        } catch (e: Exception) {
+            synchronized(modelLock) {
                 ortSession?.close()
                 ortSession = null
                 ortEnvironment?.close()
                 ortEnvironment = null
                 tokenizer?.close()
                 tokenizer = null
-                Result.failure(e)
+                isModelLoaded = false
             }
+            Result.failure(e)
         }
     }
 
@@ -166,7 +172,7 @@ class QwenCodingEngine(
 
         try {
             // 1. Started
-            emit(GenerationEvent.Started(startTime))
+            emit(GenerationEvent.Started(request.templateType))
 
             // Check model loaded
             if (!isModelLoaded) {
@@ -188,7 +194,7 @@ class QwenCodingEngine(
             val prompt = buildPrompt(request.templateType, request.topic, example, request.config)
 
             // 4. Generate with streaming
-            emit(GenerationEvent.Generating(0))
+            emit(GenerationEvent.Generating(0f))
             val inferenceStart = System.currentTimeMillis()
 
             var generatedContent = ""
@@ -199,15 +205,17 @@ class QwenCodingEngine(
 
             // Generate tokens iteratively
             val maxNewTokens = request.config.maxTokens
-            val stopTokens = request.config.stopSequences.map { tokenizer!!.encode(it) }
+            // Default stop sequences for JSON generation
+            val stopSequences = listOf("```", "\n\n\n", "END")
+            val stopTokens = stopSequences.map { seq -> tokenizer!!.encode(seq) }
 
             for (i in 0 until maxNewTokens) {
                 // Check for cancellation before each token generation
-                coroutineContext.ensureActive()
+                kotlinx.coroutines.currentCoroutineContext().ensureActive()
                 yield() // Allow cancellation between iterations
 
                 val nextToken = generateNextToken(
-                    inputIds + generatedContent.let { tokenizer!!.encode(it) },
+                    inputIds + tokenizer!!.encode(generatedContent),
                     request.config.temperature,
                     request.config.topP
                 )
@@ -218,8 +226,8 @@ class QwenCodingEngine(
                 tokensGenerated++
 
                 // Emit progress
-                val progress = ((i + 1) * 100) / maxNewTokens
-                emit(GenerationEvent.Generating(progress.coerceIn(0, 100)))
+                val progress = ((i + 1) * 100f) / maxNewTokens
+                emit(GenerationEvent.Generating(progress.coerceIn(0f, 100f)))
 
                 // Emit partial result every 10 tokens
                 if (i % 10 == 0) {
@@ -227,7 +235,7 @@ class QwenCodingEngine(
                 }
 
                 // Check stop conditions
-                if (stopTokens.any { generatedContent.endsWith(tokenizer!!.decode(it)) }) {
+                if (stopTokens.any { tokens -> generatedContent.endsWith(tokenizer!!.decode(tokens)) }) {
                     break
                 }
             }
@@ -389,6 +397,7 @@ class QwenCodingEngine(
             AudienceLevel.BEGINNER -> 0.8f
             AudienceLevel.GENERAL -> 1.0f
             AudienceLevel.ADVANCED -> 1.2f
+            AudienceLevel.EXPERT -> 1.4f
         }
 
         return (baseTime * complexityFactor).toLong()

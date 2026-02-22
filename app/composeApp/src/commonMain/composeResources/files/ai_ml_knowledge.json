@@ -1,0 +1,183 @@
+{
+  "category": "ai_ml",
+  "description": "Artificial Intelligence and Machine Learning educational knowledge base",
+  "version": "1.0.0",
+  "lastUpdated": "2025-11-04",
+  "facts": [
+    {
+      "id": "ai_ml_001",
+      "question": "What is Artificial Intelligence?",
+      "answer": "Artificial Intelligence (AI) is the simulation of human intelligence processes by machines, especially computer systems. These processes include learning (acquiring information and rules for using it), reasoning (using rules to reach approximate or definite conclusions), and self-correction. AI powers virtual assistants, recommendation systems, autonomous vehicles, medical diagnosis, and many other applications in our daily lives.",
+      "importance": 0.95,
+      "tags": ["ai", "definition", "basics", "introduction", "fundamentals"]
+    },
+    {
+      "id": "ai_ml_002",
+      "question": "What is Machine Learning?",
+      "answer": "Machine Learning (ML) is a subset of AI that enables systems to learn and improve from experience without being explicitly programmed. ML algorithms use statistical techniques to identify patterns in data and make predictions or decisions based on those patterns. Examples include email spam filters, image recognition systems, product recommendations, and language models like this assistant.",
+      "importance": 0.95,
+      "tags": ["ml", "machine learning", "learning", "training", "algorithms"]
+    },
+    {
+      "id": "ai_ml_003",
+      "question": "What are Neural Networks?",
+      "answer": "Neural networks are computing systems inspired by the biological neural networks in animal brains. They consist of interconnected nodes (neurons) organized in layers: an input layer, one or more hidden layers, and an output layer. Each connection has a weight that adjusts as learning proceeds. Deep neural networks with many layers power modern AI breakthroughs in computer vision, natural language processing, and game playing.",
+      "importance": 0.90,
+      "tags": ["neural networks", "deep learning", "neurons", "architecture", "layers"]
+    },
+    {
+      "id": "ai_ml_004",
+      "question": "What is Natural Language Processing?",
+      "answer": "Natural Language Processing (NLP) is the branch of AI that helps computers understand, interpret, and generate human language in a valuable way. NLP combines computational linguistics with statistical, machine learning, and deep learning models. Applications include chatbots, machine translation, sentiment analysis, text summarization, and question answering. This assistant uses NLP to understand your questions and generate helpful responses.",
+      "importance": 0.90,
+      "tags": ["nlp", "language", "text", "processing", "linguistics"]
+    },
+    {
+      "id": "ai_ml_005",
+      "question": "What is On-Device AI?",
+      "answer": "On-device AI, also called edge AI, runs AI models directly on smartphones, tablets, or computers without sending data to the cloud. Benefits include: (1) Privacy - your data never leaves your device, (2) Speed - no network latency means faster responses, (3) Offline functionality - works without internet connection, and (4) Lower costs - no cloud computing fees. This assistant is 100% on-device for your privacy and security.",
+      "importance": 0.92,
+      "tags": ["on-device", "edge ai", "privacy", "local", "mobile ai", "offline"]
+    },
+    {
+      "id": "ai_ml_006",
+      "question": "What is Supervised Learning?",
+      "answer": "Supervised learning is a type of machine learning where the algorithm learns from labeled training data. Each training example consists of an input and the desired output (label). The algorithm learns to map inputs to outputs by finding patterns in the labeled examples. Common applications include image classification (cat vs dog), spam detection (spam vs not spam), and medical diagnosis (disease vs healthy).",
+      "importance": 0.85,
+      "tags": ["supervised learning", "labeled data", "classification", "training"]
+    },
+    {
+      "id": "ai_ml_007",
+      "question": "What is Unsupervised Learning?",
+      "answer": "Unsupervised learning is machine learning with unlabeled data. The algorithm tries to find hidden patterns or structures in the data without being told what to look for. Common techniques include clustering (grouping similar items together), dimensionality reduction (simplifying complex data), and anomaly detection (finding unusual patterns). Applications include customer segmentation, recommendation systems, and data compression.",
+      "importance": 0.82,
+      "tags": ["unsupervised learning", "clustering", "patterns", "unlabeled data"]
+    },
+    {
+      "id": "ai_ml_008",
+      "question": "What are Transformers in AI?",
+      "answer": "Transformers are a type of neural network architecture introduced in 2017 that revolutionized natural language processing. Unlike previous architectures, transformers use self-attention mechanisms to process entire sequences at once, making them highly parallel and efficient. They power modern language models like GPT, BERT, and this assistant. Transformers excel at understanding context and relationships between words in text, enabling breakthrough performance in translation, summarization, and generation tasks.",
+      "importance": 0.88,
+      "tags": ["transformers", "attention", "architecture", "language models", "bert", "gpt"]
+    },
+    {
+      "id": "ai_ml_009",
+      "question": "What is Training vs Inference in AI?",
+      "answer": "Training is the process of teaching an AI model by feeding it large amounts of data and adjusting its parameters to minimize errors. This happens once (or periodically) and requires significant computational resources. Inference is using the trained model to make predictions on new data - this is what happens when you interact with an AI assistant. Inference is much faster and requires less computing power, which is why on-device inference is possible on mobile phones.",
+      "importance": 0.87,
+      "tags": ["training", "inference", "model", "deployment", "prediction"]
+    },
+    {
+      "id": "ai_ml_010",
+      "question": "What is Model Quantization?",
+      "answer": "Model quantization is a technique to reduce the size and computational requirements of AI models by representing weights and activations with fewer bits. For example, converting from 32-bit floating point (FP32) to 8-bit integers (INT8) or even 4-bit (INT4). This can reduce model size by 4-8x with minimal accuracy loss, making large models fit on mobile devices. This assistant uses quantized models to run efficiently on your phone.",
+      "importance": 0.83,
+      "tags": ["quantization", "compression", "optimization", "mobile", "efficiency"]
+    },
+    {
+      "id": "ai_ml_011",
+      "question": "What is Computer Vision?",
+      "answer": "Computer Vision is a field of AI that trains computers to interpret and understand visual information from the world. It involves acquiring, processing, analyzing, and understanding digital images or videos. Applications include facial recognition, object detection, autonomous driving, medical image analysis, and augmented reality. Modern computer vision relies heavily on convolutional neural networks (CNNs) to recognize patterns in images.",
+      "importance": 0.86,
+      "tags": ["computer vision", "image processing", "cnn", "recognition", "detection"]
+    },
+    {
+      "id": "ai_ml_012",
+      "question": "What is Reinforcement Learning?",
+      "answer": "Reinforcement Learning (RL) is a type of machine learning where an agent learns to make decisions by interacting with an environment. The agent receives rewards for good actions and penalties for bad ones, gradually learning the optimal strategy. RL powers game-playing AI (like AlphaGo), robotics, recommendation systems, and autonomous systems. Unlike supervised learning, RL learns from experience rather than labeled examples.",
+      "importance": 0.80,
+      "tags": ["reinforcement learning", "rewards", "agent", "environment", "decision making"]
+    },
+    {
+      "id": "ai_ml_013",
+      "question": "What are Large Language Models?",
+      "answer": "Large Language Models (LLMs) are AI models with billions of parameters trained on massive amounts of text data. They can understand and generate human-like text, answer questions, write code, summarize documents, and perform many language tasks. Examples include GPT-4, Claude, and smaller models like this assistant. LLMs use transformer architecture and are trained to predict the next word in a sequence, which surprisingly enables them to develop broad language understanding and reasoning abilities.",
+      "importance": 0.91,
+      "tags": ["llm", "language models", "gpt", "claude", "text generation", "ai models"]
+    },
+    {
+      "id": "ai_ml_014",
+      "question": "What is Transfer Learning?",
+      "answer": "Transfer Learning is a technique where a model trained on one task is repurposed for a related task. Instead of training from scratch, you start with a pre-trained model and fine-tune it on your specific data. This saves time, computational resources, and often achieves better results with less data. For example, a model trained on millions of general images can be fine-tuned to recognize specific medical conditions with just thousands of medical images.",
+      "importance": 0.81,
+      "tags": ["transfer learning", "fine-tuning", "pre-training", "adaptation"]
+    },
+    {
+      "id": "ai_ml_015",
+      "question": "What is AI Ethics?",
+      "answer": "AI Ethics addresses the moral implications and societal impact of artificial intelligence. Key concerns include: (1) Bias and fairness - ensuring AI doesn't discriminate, (2) Privacy - protecting personal data, (3) Transparency - making AI decisions explainable, (4) Accountability - determining responsibility for AI actions, (5) Safety - preventing harmful AI behavior, and (6) Job displacement - addressing economic impacts. Responsible AI development considers these ethical dimensions from the start.",
+      "importance": 0.89,
+      "tags": ["ethics", "bias", "fairness", "privacy", "responsibility", "safety"]
+    },
+    {
+      "id": "ai_ml_016",
+      "question": "What is Overfitting in Machine Learning?",
+      "answer": "Overfitting occurs when a model learns the training data too well, including its noise and peculiarities, making it perform poorly on new, unseen data. It's like memorizing answers to practice questions instead of understanding the underlying concepts. Signs include high training accuracy but low test accuracy. Solutions include using more training data, regularization techniques, simpler models, cross-validation, and early stopping during training.",
+      "importance": 0.79,
+      "tags": ["overfitting", "generalization", "training", "validation", "regularization"]
+    },
+    {
+      "id": "ai_ml_017",
+      "question": "What are Embeddings?",
+      "answer": "Embeddings are dense vector representations of data (like words, sentences, or images) in a continuous space where similar items are close together. For text, word embeddings like Word2Vec or sentence embeddings capture semantic meaning - for example, 'king' and 'queen' would have similar vectors. This assistant uses embeddings to understand the meaning of your questions and find relevant information from its knowledge base, enabling semantic search rather than simple keyword matching.",
+      "importance": 0.84,
+      "tags": ["embeddings", "vectors", "semantic", "representation", "word2vec"]
+    },
+    {
+      "id": "ai_ml_018",
+      "question": "What is Retrieval-Augmented Generation?",
+      "answer": "Retrieval-Augmented Generation (RAG) is a technique that combines information retrieval with text generation. When you ask a question, the system first searches a knowledge base for relevant information, then uses that information to generate a more accurate and grounded response. This reduces hallucinations (making up facts) and allows AI to access up-to-date or specialized information beyond its training data. This assistant uses RAG to provide more accurate answers based on its knowledge base.",
+      "importance": 0.88,
+      "tags": ["rag", "retrieval", "generation", "knowledge base", "grounding"]
+    },
+    {
+      "id": "ai_ml_019",
+      "question": "What is Prompt Engineering?",
+      "answer": "Prompt Engineering is the art and science of crafting effective inputs (prompts) to get desired outputs from AI language models. Good prompts are clear, specific, and provide context. Techniques include few-shot learning (showing examples), chain-of-thought prompting (asking for step-by-step reasoning), and role prompting (asking the AI to take on a specific persona). Well-engineered prompts can dramatically improve AI performance without changing the underlying model.",
+      "importance": 0.82,
+      "tags": ["prompt engineering", "prompting", "instructions", "interaction"]
+    },
+    {
+      "id": "ai_ml_020",
+      "question": "What are AI Model Parameters?",
+      "answer": "Parameters are the learned values in a neural network that the model adjusts during training. They include weights (connection strengths between neurons) and biases (offset values). The number of parameters roughly indicates model capacity - more parameters can capture more complex patterns but require more memory and computation. For example, GPT-3 has 175 billion parameters, while this assistant uses a much smaller model (under 1 billion parameters) optimized to run efficiently on your device.",
+      "importance": 0.80,
+      "tags": ["parameters", "weights", "model size", "capacity", "training"]
+    },
+    {
+      "id": "ai_ml_021",
+      "question": "What is the difference between AI, ML, and Deep Learning?",
+      "answer": "AI (Artificial Intelligence) is the broadest concept - any technique enabling computers to mimic human intelligence. ML (Machine Learning) is a subset of AI focused on learning from data without explicit programming. Deep Learning is a subset of ML using neural networks with multiple layers (hence 'deep'). Think of them as nested concepts: Deep Learning ⊂ Machine Learning ⊂ Artificial Intelligence. For example, rule-based expert systems are AI but not ML, decision trees are ML but not deep learning, and transformers are deep learning.",
+      "importance": 0.91,
+      "tags": ["ai", "ml", "deep learning", "differences", "hierarchy", "concepts"]
+    },
+    {
+      "id": "ai_ml_022",
+      "question": "What is AI Hallucination?",
+      "answer": "AI hallucination occurs when language models generate false or nonsensical information presented as fact. This happens because models are trained to predict plausible-sounding text, not necessarily accurate text. They can confidently state incorrect facts, fabricate citations, or make up information. Hallucinations are reduced by: (1) using retrieval-augmented generation (RAG) to ground responses in real data, (2) smaller, more focused models, (3) careful prompt engineering, and (4) user awareness and fact-checking.",
+      "importance": 0.85,
+      "tags": ["hallucination", "accuracy", "reliability", "limitations", "grounding"]
+    },
+    {
+      "id": "ai_ml_023",
+      "question": "What is Model Context Window?",
+      "answer": "A context window is the maximum amount of text (measured in tokens) that a language model can process at once. It includes both your input and the model's response. For example, a 2048-token context window might allow ~1500 words of conversation history. Larger context windows enable longer conversations and processing of bigger documents, but require more memory and computation. Modern models range from 2K tokens to 256K+ tokens. This assistant adapts its context window based on your device's available memory.",
+      "importance": 0.83,
+      "tags": ["context window", "tokens", "memory", "conversation", "length"]
+    },
+    {
+      "id": "ai_ml_024",
+      "question": "What is Few-Shot Learning?",
+      "answer": "Few-shot learning enables AI models to learn new tasks from just a few examples, mimicking human learning ability. Instead of requiring thousands of labeled examples, few-shot models can adapt with 1-10 examples. This is especially useful in language models - you can provide a few examples of a task in your prompt, and the model will understand and perform similar tasks. For instance, showing 3 examples of translation can enable the model to translate new sentences.",
+      "importance": 0.80,
+      "tags": ["few-shot", "learning", "examples", "adaptation", "transfer"]
+    },
+    {
+      "id": "ai_ml_025",
+      "question": "What is AI Model Fine-Tuning?",
+      "answer": "Fine-tuning is the process of taking a pre-trained AI model and further training it on a specific dataset or task. This adapts the general model to perform better on your particular use case. For example, a general language model can be fine-tuned on medical texts to become a medical assistant, or on code to become a programming helper. Fine-tuning is faster and requires less data than training from scratch, and often produces better results for specialized tasks.",
+      "importance": 0.82,
+      "tags": ["fine-tuning", "adaptation", "specialization", "training", "customization"]
+    }
+  ]
+}

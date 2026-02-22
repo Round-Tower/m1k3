@@ -51,6 +51,11 @@ venv/
 venv-*/
 ENV/
 env/
+mlx-env/
+
+# MLX server artifacts
+mlx_*.log
+mlx_*.pid
 
 # IDE files
 .vscode/

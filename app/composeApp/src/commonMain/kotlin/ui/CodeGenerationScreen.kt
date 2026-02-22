@@ -15,8 +15,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import domain.coding.*
-import viewmodel.CodeGenerationViewModel
+import viewmodel.BaseCodeGenerationViewModel
 import viewmodel.CodeGenerationUiState
+import app.m1k3.ai.assistant.design.tokens.MaColors
 
 /**
  * Code Generation Screen - M1K3's Visual Expression Canvas
@@ -40,7 +41,7 @@ import viewmodel.CodeGenerationUiState
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CodeGenerationScreen(
-    viewModel: CodeGenerationViewModel,
+    viewModel: BaseCodeGenerationViewModel,
     modifier: Modifier = Modifier
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -159,7 +160,7 @@ private fun CodeGenerationTopBar(
                     Icon(
                         imageVector = if (isModelLoaded) Icons.Filled.CheckCircle else Icons.Filled.Warning,
                         contentDescription = null,
-                        tint = if (isModelLoaded) Color.Green else MaterialTheme.colorScheme.primary
+                        tint = if (isModelLoaded) MaColors.Success else MaterialTheme.colorScheme.primary
                     )
                 },
                 enabled = !isGenerating,
@@ -209,7 +210,7 @@ private fun ModuleUnavailableView(modifier: Modifier = Modifier) {
 @Composable
 private fun ConfigurationView(
     uiState: CodeGenerationUiState,
-    viewModel: CodeGenerationViewModel,
+    viewModel: BaseCodeGenerationViewModel,
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -351,7 +352,7 @@ private fun TopicInputSection(
 @Composable
 private fun AdvancedConfigSection(
     uiState: CodeGenerationUiState,
-    viewModel: CodeGenerationViewModel
+    viewModel: BaseCodeGenerationViewModel
 ) {
     var expanded by remember { mutableStateOf(false) }
 

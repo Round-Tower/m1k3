@@ -1,5 +1,6 @@
 package app.m1k3.ai.assistant.ai
 
+import app.m1k3.ai.domain.ai.GenerationConfig
 import kotlinx.coroutines.test.runTest
 import kotlin.test.*
 
@@ -296,7 +297,12 @@ class BaseLlmEngineTest {
         assertTrue(result.tokensPerSecond >= 0, "Tokens per second should be non-negative")
 
         // Validate tokens per second calculation
-        val expectedTps = (result.tokensGenerated * 1000.0f) / result.inferenceTimeMs
+        // Handle edge case: when inferenceTimeMs is 0, mock returns tokensGenerated as TPS fallback
+        val expectedTps = if (result.inferenceTimeMs > 0) {
+            (result.tokensGenerated * 1000.0f) / result.inferenceTimeMs
+        } else {
+            result.tokensGenerated.toFloat()
+        }
         assertEquals(expectedTps, result.tokensPerSecond, 0.1f,
             "Tokens per second should match calculation")
     }

@@ -43,7 +43,8 @@ import kotlinx.datetime.Clock
  */
 class PetViewModel(
     private val ecoRepo: EcoMetricsRepository,
-    private val scope: CoroutineScope = CoroutineScope(Dispatchers.Default)
+    private val scope: CoroutineScope = CoroutineScope(Dispatchers.Default),
+    private val startBackgroundJobs: Boolean = true
 ) {
     // === State Management ===
 
@@ -62,8 +63,10 @@ class PetViewModel(
     // === Initialization ===
 
     init {
-        startPeriodicEcoSync()
-        startStressMonitoring()
+        if (startBackgroundJobs) {
+            startPeriodicEcoSync()
+            startStressMonitoring()
+        }
     }
 
     /**
@@ -204,13 +207,12 @@ class PetViewModel(
 
         _particleEffects.update { current -> current + newParticles }
 
-        // Auto-cleanup particles after lifetime
+        // Auto-cleanup particles after lifetime (use delay-based cleanup for test compatibility)
         scope.launch {
             delay(2500) // Max lifetime + buffer
             _particleEffects.update { particles ->
-                particles.filter { particle ->
-                    Clock.System.now().toEpochMilliseconds() - particle.spawnTime < particle.lifetime
-                }
+                // Remove the particles we just spawned after they expire
+                particles - newParticles
             }
         }
     }

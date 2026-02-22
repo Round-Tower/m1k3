@@ -1,229 +1,105 @@
 package app.m1k3.ai.assistant.rag
 
 import app.m1k3.ai.assistant.database.MaDatabase
+import app.m1k3.ai.domain.rag.Intent
+import app.m1k3.ai.domain.rag.RetrievedFact
+import app.m1k3.ai.domain.rag.services.IntentClassifier
+import app.m1k3.ai.domain.rag.services.RAGEnricherInterface
+import app.m1k3.ai.domain.rag.services.calculateRAGConfidence
+import app.m1k3.ai.domain.rag.services.formatRAGSources
+import app.m1k3.ai.domain.usecases.rag.EnrichPromptWithRAGUseCase
+import app.m1k3.ai.domain.usecases.rag.RAGResult
 import app.m1k3.ai.assistant.embedding.EmbeddingEngine
 import app.m1k3.ai.assistant.knowledge.SemanticRetrievalService
 
 /**
  * 間 AI - RAG Manager
  *
- * Orchestrates Retrieval-Augmented Generation (RAG) with intent-aware
- * knowledge retrieval. Combines IntentClassifier + SemanticRetrievalService
- * for intelligent, context-aware responses.
+ * REFACTORED: Implements RAGEnricherInterface (domain).
+ * Thin adapter layer for backward compatibility with existing code.
  *
- * **Philosophy:**
- * Smart retrieval beats blind retrieval. Classify intent first,
- * then fetch only relevant knowledge. No noise, just signal.
+ * **Architecture (New):**
+ * 1. RAGManager (Application Layer) - Implements RAGEnricherInterface
+ *     ↓
+ * 2. EnrichPromptWithRAGUseCase (Domain Layer) - Business logic orchestration
+ *     ↓
+ * 3. KnowledgeRepository + IntentClassifier (Domain Layer) - Pure Kotlin services
  *
- * **Architecture:**
- * 1. IntentClassifier → Detect query type (20 categories)
- * 2. SemanticRetrievalService → Fetch relevant facts (cosine similarity)
- * 3. RAGManager → Enrich system prompt with retrieved knowledge
- *
- * **Example:**
+ * **Migration Note:**
+ * This class is kept for backward compatibility. New code should use
+ * RAGEnricherInterface directly via Koin injection:
  * ```kotlin
- * val ragManager = RAGManager(database, embeddingEngine)
- * val enrichedPrompt = ragManager.enrichPrompt(
- *     userQuery = "My phone battery drains quickly",
- *     systemPrompt = "You are a helpful AI assistant..."
- * )
- * // Returns: systemPrompt + device troubleshooting knowledge
+ * val ragEnricher: RAGEnricherInterface = get()
+ * val result = ragEnricher.enrichPrompt(userQuery, systemPrompt, enableRAG)
  * ```
  */
 class RAGManager(
     private val database: MaDatabase,
     private val embeddingEngine: EmbeddingEngine
-) {
+) : RAGEnricherInterface {
+    // Legacy fields - kept for initialization but not used
     private val intentClassifier = IntentClassifier()
     private val retrievalService = SemanticRetrievalService(database, embeddingEngine)
 
-    /**
-     * RAG Result containing enriched prompt and metadata
-     */
-    data class RAGResult(
-        val enrichedPrompt: String,
-        val intent: IntentClassifier.Intent,
-        val confidence: Float,
-        val retrievedFacts: List<RetrievedFact>,
-        val ragApplied: Boolean
+    // NEW: Domain use case handles business logic
+    private val enrichPromptUseCase = EnrichPromptWithRAGUseCase(
+        knowledgeRepository = app.m1k3.ai.assistant.knowledge.KnowledgeRepositoryImpl(retrievalService),
+        intentClassifier = intentClassifier
     )
 
     /**
-     * Retrieved fact with source and relevance
-     */
-    data class RetrievedFact(
-        val content: String,
-        val category: String,
-        val similarity: Float
-    )
-
-    /**
-     * Enrich system prompt with RAG knowledge
+     * Enrich system prompt with RAG knowledge.
      *
-     * Detects intent, retrieves relevant facts, and prepends
-     * knowledge to system prompt for context-aware responses.
+     * Implements RAGEnricherInterface. Delegates to EnrichPromptWithRAGUseCase.
      *
      * @param userQuery User's current question
      * @param systemPrompt Base system prompt
      * @param enableRAG Enable/disable RAG (default: true)
-     * @return RAGResult with enriched prompt and metadata
+     * @return RAGResult (domain type) with enriched prompt and metadata
      */
-    suspend fun enrichPrompt(
+    override suspend fun enrichPrompt(
         userQuery: String,
         systemPrompt: String,
-        enableRAG: Boolean = true
+        enableRAG: Boolean
     ): RAGResult {
-        // Early exit if RAG disabled or query is empty
-        if (!enableRAG || userQuery.isBlank()) {
-            return RAGResult(
+        return enrichPromptUseCase.execute(
+            userQuery = userQuery,
+            systemPrompt = systemPrompt,
+            enableRAG = enableRAG
+        ).getOrElse {
+            // Fallback on error: return original prompt
+            RAGResult(
                 enrichedPrompt = systemPrompt,
-                intent = IntentClassifier.Intent.GENERAL,
+                intent = Intent.GENERAL,
                 confidence = 0f,
                 retrievedFacts = emptyList(),
                 ragApplied = false
             )
         }
-
-        // 1. Classify intent
-        val (intent, confidence) = intentClassifier.classifyWithConfidence(userQuery)
-
-        // 2. Check if retrieval needed
-        if (!intentClassifier.requiresKnowledgeRetrieval(intent)) {
-            return RAGResult(
-                enrichedPrompt = systemPrompt,
-                intent = intent,
-                confidence = confidence,
-                retrievedFacts = emptyList(),
-                ragApplied = false
-            )
-        }
-
-        // 3. Retrieve relevant knowledge with category boosting
-        // Lower threshold to catch more candidates, then boost matching categories
-        val retrievalLimit = intentClassifier.getRetrievalLimit(intent)
-        val semanticFacts = retrievalService.retrieve(
-            query = userQuery,
-            limit = retrievalLimit * 2,  // Get more candidates for re-ranking
-            minSimilarity = 0.40f  // Lower threshold to capture category matches (boosted later)
-        )
-
-        // Apply category boosting: +0.15 for facts matching the detected intent
-        // This ensures "ai_ml_facts" ranks higher than "casual_conversation" for AI queries
-        val intentCategory = intent.category.lowercase().replace(" ", "_").replace("&", "").trim()
-        val boostedFacts = semanticFacts.map { semanticFact ->
-            val factCategory = semanticFact.fact.category.lowercase()
-            // Boost if category matches intent (e.g., "ai_ml" in intent matches "ai_ml_facts")
-            val categoryMatch = factCategory.contains(intentCategory) ||
-                    intentCategory.contains(factCategory.removeSuffix("_facts"))
-            val boost = if (categoryMatch) CATEGORY_BOOST else 0f
-            val boostedSimilarity = (semanticFact.similarityScore + boost).coerceAtMost(1.0f)
-
-            semanticFact to boostedSimilarity
-        }
-
-        // Re-rank by boosted similarity, filter by effective threshold, take limit
-        val retrievedFacts = boostedFacts
-            .filter { it.second >= EFFECTIVE_MIN_SIMILARITY }
-            .sortedByDescending { it.second }
-            .take(retrievalLimit)
-            .map { (semanticFact, boostedSim) ->
-                RetrievedFact(
-                    content = semanticFact.fact.answer,
-                    category = semanticFact.fact.category,
-                    similarity = boostedSim  // Use boosted similarity for display
-                )
-            }
-
-        // 4. Build enriched prompt
-        val enrichedPrompt = if (retrievedFacts.isNotEmpty()) {
-            buildEnrichedPrompt(systemPrompt, intent, retrievedFacts)
-        } else {
-            systemPrompt
-        }
-
-        return RAGResult(
-            enrichedPrompt = enrichedPrompt,
-            intent = intent,
-            confidence = confidence,
-            retrievedFacts = retrievedFacts,
-            ragApplied = retrievedFacts.isNotEmpty()
-        )
     }
 
     /**
-     * Build enriched prompt with retrieved knowledge
+     * Get RAG sources for database tracking.
      *
-     * Formats retrieved facts into a knowledge section that's
-     * prepended to the system prompt.
-     *
-     * @param systemPrompt Base system prompt
-     * @param intent Detected intent
-     * @param facts Retrieved facts
-     * @return Enriched system prompt
-     */
-    private fun buildEnrichedPrompt(
-        systemPrompt: String,
-        intent: IntentClassifier.Intent,
-        facts: List<RetrievedFact>
-    ): String {
-        val knowledgeSection = buildString {
-            appendLine()
-            appendLine("**Relevant Knowledge (${intent.category}):**")
-            appendLine()
-
-            facts.forEachIndexed { index, fact ->
-                appendLine("${index + 1}. ${fact.content}")
-                appendLine("   [Category: ${fact.category}, Relevance: ${(fact.similarity * 100).toInt()}%]")
-                appendLine()
-            }
-
-            appendLine("**RAG Instructions:**")
-            appendLine("1. **Relevance:** Facts 80%+ = high confidence, 60-79% = use with caution, <60% = ignore")
-            appendLine("2. **Usage:** Only use directly relevant facts. If no facts fit, respond from general knowledge only.")
-            appendLine("3. **Quality:** Cite sources when using facts (e.g., \"According to device troubleshooting...\"). Be honest if knowledge insufficient.")
-            appendLine("4. **Priority:** One highly relevant fact (85%) beats three moderately relevant facts (65%).")
-            appendLine()
-        }
-
-        return knowledgeSection + systemPrompt
-    }
-
-    /**
-     * Get RAG sources for database tracking
-     *
-     * Formats retrieved facts into JSON-compatible string for
-     * storage in message.rag_sources field.
-     *
-     * Shows preview of fact content (first 60 chars) with similarity score.
+     * Delegates to domain extension function.
      *
      * @param retrievedFacts Facts to serialize
-     * @return JSON string of sources
+     * @return Formatted source list, or null if empty
      */
     fun formatRAGSources(retrievedFacts: List<RetrievedFact>): String? {
-        if (retrievedFacts.isEmpty()) return null
-
-        return retrievedFacts.mapIndexed { index, fact ->
-            // Show preview of fact content (first 60 chars)
-            val preview = if (fact.content.length > 60) {
-                fact.content.take(60) + "..."
-            } else {
-                fact.content
-            }
-            "${index + 1}. ${preview} (${(fact.similarity * 100).toInt()}%)"
-        }.joinToString(separator = "\n")
+        return retrievedFacts.formatRAGSources()
     }
 
     /**
-     * Get average RAG confidence
+     * Get average RAG confidence.
+     *
+     * Delegates to domain extension function.
      *
      * @param retrievedFacts Facts with similarity scores
-     * @return Average confidence (0.0-1.0)
+     * @return Average confidence (0.0-1.0), or null if empty
      */
     fun calculateRAGConfidence(retrievedFacts: List<RetrievedFact>): Double? {
-        if (retrievedFacts.isEmpty()) return null
-
-        return retrievedFacts.map { it.similarity.toDouble() }
-            .average()
+        return retrievedFacts.calculateRAGConfidence()
     }
 
     /**
@@ -250,18 +126,4 @@ class RAGManager(
         }
     }
 
-    companion object {
-        /**
-         * Category boost for facts matching the detected intent.
-         * Applied to semantic similarity scores to prioritize category-relevant facts.
-         * Example: AI_ML query + ai_ml_facts category → +0.15 boost
-         */
-        private const val CATEGORY_BOOST = 0.15f
-
-        /**
-         * Effective minimum similarity after category boosting.
-         * Facts must meet this threshold to be included in results.
-         */
-        private const val EFFECTIVE_MIN_SIMILARITY = 0.5f
-    }
 }

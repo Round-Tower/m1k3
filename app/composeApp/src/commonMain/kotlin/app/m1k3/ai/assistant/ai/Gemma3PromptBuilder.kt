@@ -3,32 +3,37 @@ package app.m1k3.ai.assistant.ai
 /**
  * Gemma 3 Prompt Builder - Generates properly formatted prompts for Gemma 3 models.
  *
+ * @deprecated Use `ChatFormatter` with `ChatFormat.Gemma3` instead for unified
+ * prompt building across all model formats. This class is kept for reference
+ * and backward compatibility but will be removed in a future version.
+ *
+ * **Migration:**
+ * ```kotlin
+ * // Old
+ * val prompt = Gemma3PromptBuilder.build(userQuery, context)
+ *
+ * // New
+ * val formatter = DefaultChatFormatter(ChatFormat.Gemma3)
+ * val prompt = formatter.buildPrompt(systemPrompt, messages)
+ * ```
+ *
  * **Key Insight:** Gemma 3 only supports `user` and `model` roles. NO system role!
  * See: https://ai.google.dev/gemma/docs/core/prompt-structure
- *
- * **Design Philosophy for Small Models (270M):**
- * - SIMPLE single-turn format (no fake multi-turn conversations)
- * - RAG facts BEFORE the question (model sees context first)
- * - No complex instructions (small models get confused)
- * - Let the model's training handle personality
- *
- * **Format:**
- * ```
- * <bos><start_of_turn>user
- * Facts:
- * [RAG facts if any]
- *
- * [User question]
- * <end_of_turn>
- * <start_of_turn>model
- * ```
  */
+@Deprecated(
+    message = "Use ChatFormatter with ChatFormat.Gemma3 for unified prompt building",
+    replaceWith = ReplaceWith(
+        "DefaultChatFormatter(ChatFormat.Gemma3).buildPrompt(systemPrompt, messages)",
+        "app.m1k3.ai.domain.chat.services.DefaultChatFormatter",
+        "app.m1k3.ai.domain.chat.format.ChatFormat"
+    )
+)
 object Gemma3PromptBuilder {
 
     private const val BOS = "<bos>"
-    private const val START_USER = "<start_of_turn>user\n"
-    private const val START_MODEL = "<start_of_turn>model\n"
-    private const val END_TURN = "<end_of_turn>\n"
+    private const val START_USER = "<start_of_turn>user\n\n"
+    private const val START_MODEL = "<start_of_turn>model\n\n"
+    private const val END_TURN = "<end_of_turn>\n\n"
 
     /**
      * Build a simple Gemma 3 chat prompt.
@@ -44,19 +49,9 @@ object Gemma3PromptBuilder {
         append(BOS)
         append(START_USER)
 
-        // RAG facts FIRST (so model sees context before question)
-        // Note: "0 facts" check guards against empty KB summary like "I have access to 0 facts..."
-        // This is fragile but prevents showing useless context to the model
-        val hasValidContext = !context.isNullOrBlank() && !context.contains("0 facts")
+        val hasValidContext = !context.isNullOrBlank()
         if (hasValidContext) {
-            append("Facts:\n")
             append(context.trim())
-            append("\n\n")
-        }
-        // DEBUG: Log if context was skipped (helps trace RAG issues)
-        // Note: This logs only in debug builds - consider using platform-specific logger for production
-        if (!context.isNullOrBlank() && !hasValidContext) {
-            println("[Gemma3PromptBuilder] WARNING: Context skipped due to '0 facts' check. Context preview: ${context.take(100)}")
         }
 
         // User question
@@ -89,12 +84,9 @@ object Gemma3PromptBuilder {
         append(instruction.trim())
         append("\n\n")
 
-        // RAG facts (same "0 facts" guard as build())
-        val hasValidContext = !context.isNullOrBlank() && !context.contains("0 facts")
+        val hasValidContext = !context.isNullOrBlank()
         if (hasValidContext) {
-            append("Facts:\n")
             append(context.trim())
-            append("\n\n")
         }
 
         // User question

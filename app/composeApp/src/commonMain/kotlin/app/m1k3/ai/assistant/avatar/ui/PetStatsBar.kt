@@ -10,11 +10,16 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import org.jetbrains.compose.ui.tooling.preview.Preview
 import app.m1k3.ai.assistant.avatar.PixelPetState
+import app.m1k3.ai.assistant.avatar.EvolutionStage
+import app.m1k3.ai.assistant.design.theme.MaTheme
+import app.m1k3.ai.assistant.design.tokens.MaColors
 import app.m1k3.ai.assistant.eco.EcoCalculator
 
 /**
@@ -54,7 +59,7 @@ fun PetStatsBar(
             label = "Health",
             value = petState.health,
             maxValue = 100f,
-            color = Color(0xFF4CAF50), // Green
+            color = MaColors.Success, // Green - theme-aware
             icon = "💧",
             isSelected = selectedStat == StatType.HEALTH,
             onTap = {
@@ -78,7 +83,7 @@ fun PetStatsBar(
             label = "Energy",
             value = petState.energy,
             maxValue = 100f,
-            color = Color(0xFFFFEB3B), // Yellow
+            color = MaColors.Warning, // Yellow - theme-aware
             icon = "⚡",
             isSelected = selectedStat == StatType.ENERGY,
             onTap = {
@@ -102,7 +107,7 @@ fun PetStatsBar(
             label = "Happiness",
             value = petState.happiness,
             maxValue = 100f,
-            color = Color(0xFFE91E63), // Pink
+            color = Color(0xFFE91E63), // Pink - semantic stat color (not in MaColors)
             icon = "💕",
             isSelected = selectedStat == StatType.HAPPINESS,
             onTap = {
@@ -133,7 +138,7 @@ fun PetStatsBar(
                 Text(
                     text = "✨ ${petState.evolutionStage.displayName} Stage",
                     style = MaterialTheme.typography.labelSmall,
-                    color = Color(0xFFFFD700), // Gold
+                    color = MaColors.Orange, // Gold - use theme's accent
                     fontSize = 11.sp
                 )
             }
@@ -204,7 +209,7 @@ private fun StatBarRow(
                 .fillMaxWidth()
                 .height(if (compact) 6.dp else 8.dp)
                 .clip(RoundedCornerShape(if (compact) 3.dp else 4.dp))
-                .background(Color(0xFF1A1A1A)) // Dark background
+                .background(MaterialTheme.colorScheme.surfaceVariant) // Theme-aware background
                 .clickable(onClick = onTap)
         ) {
             // Fill
@@ -220,7 +225,7 @@ private fun StatBarRow(
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .background(Color.White.copy(alpha = 0.2f))
+                        .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.2f))
                 )
             }
         }
@@ -242,7 +247,7 @@ private fun EcoTooltip(
             .fillMaxWidth()
             .padding(vertical = 4.dp, horizontal = 8.dp)
             .clip(RoundedCornerShape(8.dp))
-            .background(Color(0xFF2A2A2A))
+            .background(MaterialTheme.colorScheme.surface) // Theme-aware background
             .padding(8.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
@@ -273,7 +278,7 @@ private fun EcoTooltip(
         Text(
             text = value,
             style = MaterialTheme.typography.labelMedium,
-            color = Color(0xFF00FF85), // M1K3 Green
+            color = MaColors.Success, // Theme-aware eco color
             fontSize = 12.sp
         )
     }
@@ -304,17 +309,17 @@ fun MiniPetStatsBar(
         // Compact vertical bars
         MiniStatBar(
             value = petState.health,
-            color = Color(0xFF4CAF50),
+            color = MaColors.Success, // Green - theme-aware
             icon = "💧"
         )
         MiniStatBar(
             value = petState.energy,
-            color = Color(0xFFFFEB3B),
+            color = MaColors.Warning, // Yellow - theme-aware
             icon = "⚡"
         )
         MiniStatBar(
             value = petState.happiness,
-            color = Color(0xFFE91E63),
+            color = Color(0xFFE91E63), // Pink - semantic stat color
             icon = "💕"
         )
     }
@@ -347,7 +352,7 @@ private fun MiniStatBar(
                 .width(12.dp)
                 .height(40.dp)
                 .clip(RoundedCornerShape(6.dp))
-                .background(Color(0xFF1A1A1A))
+                .background(MaterialTheme.colorScheme.surfaceVariant) // Theme-aware background
         ) {
             // Fill from bottom
             Box(
@@ -384,3 +389,123 @@ private fun MiniStatBar(
  * )
  * ```
  */
+
+// ============================================================
+// Previews
+// ============================================================
+
+@Preview
+@Composable
+private fun PetStatsBarFullPreview() {
+    MaTheme {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(MaColors.BgPrimary)
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            PetStatsBar(
+                petState = PixelPetState(
+                    health = 85f,
+                    energy = 70f,
+                    happiness = 85f,
+                    lifetimeWaterMl = 15000,
+                    lifetimeEnergyWh = 28000,
+                    lifetimeCO2G = 8500,
+                    evolutionStage = EvolutionStage.INTERMEDIATE
+                ),
+                showEcoTooltips = true,
+                compact = false
+            )
+        }
+    }
+}
+
+@Preview
+@Composable
+private fun PetStatsBarCompactPreview() {
+    MaTheme {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(MaColors.BgPrimary)
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            Text(
+                "Compact Mode:",
+                style = androidx.compose.material3.MaterialTheme.typography.labelSmall
+            )
+
+            PetStatsBar(
+                petState = PixelPetState(
+                    health = 70f,
+                    energy = 60f,
+                    happiness = 75f
+                ),
+                showEcoTooltips = false,
+                compact = true
+            )
+        }
+    }
+}
+
+@Preview
+@Composable
+private fun PetStatsBarLowHealthPreview() {
+    MaTheme {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(MaColors.BgPrimary)
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            Text(
+                "Low Health State:",
+                style = androidx.compose.material3.MaterialTheme.typography.labelSmall
+            )
+
+            PetStatsBar(
+                petState = PixelPetState(
+                    health = 25f,
+                    energy = 15f,
+                    happiness = 30f,
+                    lifetimeWaterMl = 3000,
+                    lifetimeEnergyWh = 5000,
+                    lifetimeCO2G = 1500
+                ),
+                showEcoTooltips = true,
+                compact = false
+            )
+        }
+    }
+}
+
+@Preview
+@Composable
+private fun MiniPetStatsBarPreview() {
+    MaTheme {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(MaColors.BgPrimary)
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            Text(
+                "Mini Stats Bar:",
+                style = androidx.compose.material3.MaterialTheme.typography.labelSmall
+            )
+
+            MiniPetStatsBar(
+                petState = PixelPetState(
+                    health = 90f,
+                    energy = 85f,
+                    happiness = 95f
+                )
+            )
+        }
+    }
+}

@@ -9,7 +9,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
+import org.jetbrains.compose.ui.tooling.preview.Preview
 import app.m1k3.ai.assistant.chat.ChatMessage
+import app.m1k3.ai.assistant.design.preview.PreviewFixtures
+import app.m1k3.ai.assistant.design.theme.MaTheme
+import androidx.compose.foundation.lazy.rememberLazyListState
 import app.m1k3.ai.assistant.ui.ChatBubble
 import app.m1k3.ai.assistant.design.components.TypingIndicatorBubble
 
@@ -34,6 +38,7 @@ fun ChatMessageList(
     isGenerating: Boolean,
     listState: LazyListState,
     showEcoIndicator: Boolean,
+    onSpeak: ((String) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     LazyColumn(
@@ -41,16 +46,15 @@ fun ChatMessageList(
         modifier = modifier
             .testTag("message_list")
             .animateContentSize()
-            .fillMaxSize()
-            .padding(horizontal = 16.dp),
+            .fillMaxSize(),
         verticalArrangement = Arrangement.spacedBy(12.dp),
         contentPadding = PaddingValues(
             top = if (showEcoIndicator) 180.dp else 120.dp, // Account for toolbar + optional eco indicator
-            bottom = 100.dp, // Account for input bar overlay
+            bottom = 200.dp, // Account for input bar overlay
         ),
     ) {
         items(messages) { message ->
-            ChatBubble(message)
+            ChatBubble(message, onSpeak = onSpeak)
         }
 
         // Typing indicator while AI is generating
@@ -60,8 +64,92 @@ fun ChatMessageList(
                     modifier = Modifier
                         .fillMaxWidth()
                         .testTag("typing_indicator")
+                        .padding()
                 )
             }
         }
+    }
+}
+
+// ============================================================
+// Previews
+// ============================================================
+
+@Preview
+@Composable
+private fun ChatMessageListEmptyPreview() {
+    MaTheme {
+        ChatMessageList(
+            messages = emptyList(),
+            isGenerating = false,
+            listState = rememberLazyListState(),
+            showEcoIndicator = false,
+            modifier = Modifier.fillMaxSize()
+        )
+    }
+}
+
+@Preview
+@Composable
+private fun ChatMessageListWithMessagesPreview() {
+    MaTheme {
+        ChatMessageList(
+            messages = listOf(
+                ChatMessage(
+                    text = "Hello! How are you?",
+                    isUser = true,
+                    timestamp = System.currentTimeMillis()
+                ),
+                ChatMessage(
+                    text = "I'm doing great! How can I help you?",
+                    isUser = false,
+                    timestamp = System.currentTimeMillis()
+                )
+            ),
+            isGenerating = false,
+            listState = rememberLazyListState(),
+            showEcoIndicator = false,
+            modifier = Modifier.fillMaxSize()
+        )
+    }
+}
+
+@Preview
+@Composable
+private fun ChatMessageListGeneratingPreview() {
+    MaTheme {
+        ChatMessageList(
+            messages = listOf(
+                ChatMessage(
+                    text = "Tell me about machine learning",
+                    isUser = true,
+                    timestamp = System.currentTimeMillis()
+                )
+            ),
+            isGenerating = true,
+            listState = rememberLazyListState(),
+            showEcoIndicator = false,
+            modifier = Modifier.fillMaxSize()
+        )
+    }
+}
+
+@Preview
+@Composable
+private fun ChatMessageListWithEcoIndicatorPreview() {
+    MaTheme {
+        ChatMessageList(
+            messages = List(5) { index ->
+                ChatMessage(
+                    text = "Message $index",
+                    isUser = index % 2 == 0,
+                    timestamp = System.currentTimeMillis() + (index * 1000)
+                )
+            },
+            isGenerating = false,
+            listState = rememberLazyListState(),
+            showEcoIndicator = true,
+            modifier = Modifier.fillMaxSize()
+        )
     }
 }

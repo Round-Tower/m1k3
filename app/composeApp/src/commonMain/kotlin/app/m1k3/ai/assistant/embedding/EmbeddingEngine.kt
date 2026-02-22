@@ -3,12 +3,25 @@ package app.m1k3.ai.assistant.embedding
 /**
  * Embedding Engine Interface - Semantic Text Embeddings
  *
+ * **ARCHITECTURE NOTE:**
+ * This is a PLATFORM-LAYER interface for actual embedding engines.
+ *
+ * ```
+ * Domain Layer:     domain.repositories.EmbeddingRepository ← Use cases
+ *                           ↑
+ * Application Layer: EmbeddingEngineManager                ← Lifecycle
+ *                           ↑
+ * Platform Layer:    EmbeddingEngine (this)               ← ML inference
+ *                           ↑
+ * Implementation:    GemmaEmbeddingEngine                 ← ONNX Runtime
+ * ```
+ *
  * Provides text-to-vector conversion for semantic search and RAG.
  * Supports multiple embedding models (Gemma, MiniLM, etc.)
  *
- * Architecture:
+ * Technical specs:
  * - Model: ONNX quantized for mobile inference
- * - Dimensions: 512 (Matryoshka from 768)
+ * - Dimensions: 384 (EmbeddingGemma)
  * - Context: 2048 tokens max
  * - Quantization: INT8 for speed/size balance
  *
@@ -102,56 +115,17 @@ interface EmbeddingEngine {
 }
 
 /**
- * Embedding task types for task-specific prompts
+ * Embedding task types for task-specific prompts.
  *
- * Embedding Gemma supports different prompts for different use cases
+ * @deprecated Use app.m1k3.ai.domain.embedding.EmbeddingTaskType instead.
+ * This typealias exists for backward compatibility.
  */
-enum class EmbeddingTaskType {
-    /** General text retrieval (documents, passages) */
-    RETRIEVAL,
-
-    /** Search queries */
-    QUERY,
-
-    /** Classification tasks */
-    CLASSIFICATION,
-
-    /** Clustering/grouping */
-    CLUSTERING,
-
-    /** Document with title */
-    DOCUMENT,
-
-    /** Code retrieval */
-    CODE
-}
+typealias EmbeddingTaskType = app.m1k3.ai.domain.embedding.EmbeddingTaskType
 
 /**
- * Embedding result with metadata
+ * Embedding result with metadata.
+ *
+ * @deprecated Use app.m1k3.ai.domain.embedding.EmbeddingResult instead.
+ * This typealias exists for backward compatibility.
  */
-data class EmbeddingResult(
-    val embedding: FloatArray,
-    val text: String,
-    val dimensions: Int,
-    val inferenceTimeMs: Long
-) {
-    override fun equals(other: Any?): Boolean {
-        if (this === other) return true
-        if (other == null || this::class != other::class) return false
-
-        other as EmbeddingResult
-
-        if (!embedding.contentEquals(other.embedding)) return false
-        if (text != other.text) return false
-        if (dimensions != other.dimensions) return false
-
-        return true
-    }
-
-    override fun hashCode(): Int {
-        var result = embedding.contentHashCode()
-        result = 31 * result + text.hashCode()
-        result = 31 * result + dimensions
-        return result
-    }
-}
+typealias EmbeddingResult = app.m1k3.ai.domain.embedding.EmbeddingResult

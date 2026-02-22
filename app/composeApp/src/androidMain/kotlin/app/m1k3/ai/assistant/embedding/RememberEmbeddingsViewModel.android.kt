@@ -13,7 +13,7 @@ import androidx.compose.ui.platform.LocalContext
  * - Survives configuration changes
  * - Auto-initializes embedding engine in background
  * - Cleans up resources on disposal
- * - Uses singleton repository (application-scoped)
+ * - Uses singleton engine manager (application-scoped)
  *
  * Usage:
  * ```kotlin
@@ -40,8 +40,8 @@ fun rememberEmbeddingsViewModel(): EmbeddingsViewModel {
 
     // Remember ViewModel across recompositions
     val viewModel = remember(context) {
-        val repository = EmbeddingRepositoryImpl.getInstance(context)
-        EmbeddingsViewModel(repository, scope)
+        val engineManager = EmbeddingEngineManagerImpl.getInstance(context)
+        EmbeddingsViewModel(engineManager, scope)
     }
 
     // Clean up on disposal

@@ -16,6 +16,7 @@ import androidx.compose.ui.unit.dp
 import app.m1k3.ai.assistant.avatar.AvatarEngine.drawRobotAvatar
 import app.m1k3.ai.assistant.design.effects.glassmorphic
 import app.m1k3.ai.assistant.design.tokens.MaRadius
+import app.m1k3.ai.assistant.design.tokens.MaColors
 
 /**
  * 間 AI Mini Avatar Indicator
@@ -48,6 +49,7 @@ fun MiniAvatarIndicator(
     val animatedState = rememberAnimatedAvatarState(state, transitionDuration = 200)
     val activityAnim = rememberActivityAnimation(state.activity)
     val glowPulse = rememberGlowPulse(state.isAnimating)
+    val idleActivityColor = MaColors.textDisabled()
 
     Box(
         modifier = modifier
@@ -105,12 +107,12 @@ fun MiniAvatarIndicator(
                 Canvas(modifier = Modifier.fillMaxSize()) {
                     drawCircle(
                         color = when (state.activity) {
-                            AvatarActivity.LISTENING -> androidx.compose.ui.graphics.Color.Blue
-                            AvatarActivity.THINKING -> androidx.compose.ui.graphics.Color.Magenta
-                            AvatarActivity.GENERATING -> androidx.compose.ui.graphics.Color(0xFFE25303) // M1K3 Orange
-                            AvatarActivity.SPEAKING -> androidx.compose.ui.graphics.Color.Green
-                            AvatarActivity.ERROR -> androidx.compose.ui.graphics.Color.Red
-                            else -> androidx.compose.ui.graphics.Color.Gray
+                            AvatarActivity.LISTENING -> MaColors.Info
+                            AvatarActivity.THINKING -> MaColors.Warning
+                            AvatarActivity.GENERATING -> MaColors.Orange
+                            AvatarActivity.SPEAKING -> MaColors.Success
+                            AvatarActivity.ERROR -> MaColors.Error
+                            else -> idleActivityColor
                         }
                     )
                 }
@@ -238,7 +240,7 @@ fun MiniAvatarRow(
                 androidx.compose.material3.Text(
                     text = "+${states.size - maxVisible}",
                     style = app.m1k3.ai.assistant.design.tokens.MaTypography.labelMedium,
-                    color = app.m1k3.ai.assistant.design.tokens.MaColors.TextSecondary
+                    color = app.m1k3.ai.assistant.design.tokens.MaColors.textSecondary()
                 )
             }
         }
