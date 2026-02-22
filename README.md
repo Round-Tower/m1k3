@@ -7,6 +7,10 @@
 ![Test Count](https://img.shields.io/badge/Tests-166-blue?style=for-the-badge&logo=testinglibrary)
 ![Security Audit](https://img.shields.io/badge/Security-Audited-green?style=for-the-badge&logo=security)
 
+<a href="./diagram.svg">
+  <img src="./diagram.svg" alt="Repo visualization diagram" />
+</a>
+
 🤖 **Optimized privacy-focused local AI assistant** with SmolLM2 & KittenTTS integration, real-time avatar visualization, and 90% smaller repository size. Built with efficient multi-backend AI system that works on any architecture.
 
 ## ✅ Current Status (2025-08-25) - PRODUCTION READY & OPTIMIZED
