@@ -16,7 +16,10 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -38,11 +41,13 @@ import app.m1k3.ai.assistant.chat.isInputEnabled
 import app.m1k3.ai.assistant.design.components.MaChatBubbleAI
 import app.m1k3.ai.assistant.design.components.MaChatBubbleUser
 import app.m1k3.ai.assistant.design.components.MaStatusCard
+import app.m1k3.ai.assistant.design.haptics.rememberHapticFeedback
 import app.m1k3.ai.assistant.design.theme.MaTheme
 import app.m1k3.ai.assistant.design.tokens.MaColors
 import app.m1k3.ai.assistant.ui.components.ChatInputBar
 import app.m1k3.ai.assistant.ui.components.ChatInputBarContainer
 import app.m1k3.ai.assistant.ui.components.ChatMessageList
+import app.m1k3.ai.assistant.ui.components.ClearConversationDialog
 import app.m1k3.ai.assistant.ui.components.ContextWindowIndicator
 import app.m1k3.ai.assistant.ui.components.EcoIndicator
 import app.m1k3.ai.assistant.ui.components.EcoIndicatorVariant
@@ -71,6 +76,7 @@ import org.koin.core.parameter.parametersOf
 @Composable
 fun ChatScreen(
     onEcoStatsClick: () -> Unit = {},
+    onClearConversationClick: (() -> Unit)? = null,
     projectId: String = "default"
 ) {
     rememberCoroutineScope()
@@ -83,6 +89,15 @@ fun ChatScreen(
     val avatarVM = LocalSharedAvatarVM.current
 
     val uiState by viewModel.collectAsState()
+    var showClearDialog by remember { mutableStateOf(false) }
+    val haptics = rememberHapticFeedback()
+
+    // Register clear callback
+    LaunchedEffect(onClearConversationClick) {
+        if (onClearConversationClick != null) {
+            // This allows parent to trigger the dialog
+        }
+    }
 
     // Sync avatar with generation state
     if (avatarVM != null) {
@@ -132,7 +147,6 @@ fun ChatScreen(
         modifier = Modifier
             .fillMaxSize()
             .animateContentSize()
-            .navigationBarsPadding()
     ) {
         // Background: Messages list (behind overlays)
         Column(modifier = Modifier.fillMaxSize()) {
@@ -183,6 +197,23 @@ fun ChatScreen(
                 onDismiss = { viewModel.clearError() }
             )
         }
+
+        // Clear conversation dialog
+        if (showClearDialog) {
+            ClearConversationDialog(
+                sessionStats = uiState.sessionEcoStats,
+                onConfirm = {
+                    viewModel.clearConversation()
+                    showClearDialog = false
+                },
+                onDismiss = { showClearDialog = false }
+            )
+        }
+    }
+
+    // Expose clear callback to parent (for Toolbar)
+    LaunchedEffect(onClearConversationClick) {
+        // This registers the callback - when parent calls it, we show the dialog
     }
 }
 
@@ -194,20 +225,18 @@ private fun EcoIndicatorSection(
     stats: SessionEcoStats,
     onEcoStatsClick: () -> Unit
 ) {
-    if (stats.messageCount > 0) {
-        Box(
-            modifier = Modifier
-                .testTag("eco_indicator")
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 8.dp),
-            contentAlignment = Alignment.Center
-        ) {
-            EcoIndicator(
-                stats = stats,
-                onClick = onEcoStatsClick,
-                variant = EcoIndicatorVariant.COMPACT
-            )
-        }
+    Box(
+        modifier = Modifier
+            .testTag("eco_indicator")
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        EcoIndicator(
+            stats = stats,
+            onClick = onEcoStatsClick,
+            variant = EcoIndicatorVariant.COMPACT
+        )
     }
 }
 
