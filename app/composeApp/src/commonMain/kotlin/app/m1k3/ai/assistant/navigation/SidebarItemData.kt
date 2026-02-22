@@ -41,5 +41,10 @@ val sidebarItems = listOf(
         screen = Screen.Demo,
         label = "Demo",
         icon = Icons.Default.Info
+    ),
+    NavItem(
+        screen = Screen.AvatarWebViewDemo,
+        label = "WebView Avatar",
+        icon = Icons.Default.Face
     )
 )

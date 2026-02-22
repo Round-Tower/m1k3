@@ -249,3 +249,125 @@ sqldelight {
         }
     }
 }
+
+// ============================================================================
+// Web Avatar Integration - Asset Bundling
+// ============================================================================
+
+/**
+ * Build web-avatar with Vite (production bundle)
+ *
+ * This task:
+ * 1. Runs `npm install` in src/web-avatar/ (if needed)
+ * 2. Runs `npm run build` to create optimized dist/
+ * 3. Outputs to: src/web-avatar/dist/
+ */
+/**
+ * Install npm dependencies for web-avatar
+ */
+tasks.register<Exec>("installWebAvatarDeps") {
+    group = "web-avatar"
+    description = "Install npm dependencies for web-avatar"
+
+    workingDir(file("../../src/web-avatar"))
+    commandLine("npm", "install")
+
+    onlyIf {
+        !File(file("../../src/web-avatar"), "node_modules").exists()
+    }
+}
+
+/**
+ * Build web-avatar production bundle
+ */
+tasks.register<Exec>("buildWebAvatar") {
+    group = "web-avatar"
+    description = "Build web-avatar production bundle with Vite"
+
+    dependsOn("installWebAvatarDeps")
+
+    workingDir(file("../../src/web-avatar"))
+    commandLine("npm", "run", "build:app")
+
+    inputs.files(
+        fileTree("../../src/web-avatar/src"),
+        file("../../src/web-avatar/index.html"),
+        file("../../src/web-avatar/package.json"),
+        file("../../src/web-avatar/vite.config.app.ts")
+    )
+    outputs.dir("../../src/web-avatar/dist-app")
+}
+
+/**
+ * Copy web-avatar dist to Android assets
+ *
+ * This task:
+ * 1. Copies dist/ → composeApp/src/androidMain/assets/web-avatar/
+ * 2. Includes index.html, JS, CSS, and bundled models
+ * 3. Runs automatically before Android build
+ */
+tasks.register<Copy>("copyWebAvatarToAndroid") {
+    group = "web-avatar"
+    description = "Copy web-avatar dist to Android assets"
+
+    dependsOn("buildWebAvatar")
+
+    from("../../src/web-avatar/dist-app") {
+        include("**/*")
+    }
+    into("src/androidMain/assets/web-avatar")
+
+    doFirst {
+        println("📋 Copying web-avatar to Android assets...")
+    }
+
+    doLast {
+        println("✅ Web avatar bundled for Android")
+    }
+}
+
+/**
+ * Copy web-avatar dist to iOS resources
+ *
+ * This task:
+ * 1. Copies dist/ → ../iosApp/iosApp/Resources/web-avatar/
+ * 2. Xcode will include this in app bundle
+ * 3. Manual step: Add folder to Xcode project (blue folder reference)
+ */
+tasks.register<Copy>("copyWebAvatarToIOS") {
+    group = "web-avatar"
+    description = "Copy web-avatar dist to iOS resources (requires Xcode setup)"
+
+    dependsOn("buildWebAvatar")
+
+    from("../../src/web-avatar/dist-app") {
+        include("**/*")
+    }
+    into("../iosApp/iosApp/Resources/web-avatar")
+
+    doFirst {
+        println("📋 Copying web-avatar to iOS resources...")
+    }
+
+    doLast {
+        println("✅ Web avatar copied for iOS")
+        println("⚠️  MANUAL STEP: Add Resources/web-avatar/ to Xcode project as folder reference (blue folder)")
+    }
+}
+
+/**
+ * Bundle web-avatar for all platforms
+ */
+tasks.register("bundleWebAvatar") {
+    group = "web-avatar"
+    description = "Build and bundle web-avatar for Android and iOS"
+
+    dependsOn("copyWebAvatarToAndroid", "copyWebAvatarToIOS")
+}
+
+/**
+ * Auto-bundle web-avatar before Android build
+ */
+tasks.named("preBuild") {
+    dependsOn("copyWebAvatarToAndroid")
+}
