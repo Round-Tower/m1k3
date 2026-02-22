@@ -44,6 +44,11 @@ sealed class Screen(val route: String) {
     data object Settings : Screen("settings")
 
     /**
+     * WebView Avatar Demo - Test THREE.js avatar with shader effects (Phase 1)
+     */
+    data object AvatarWebViewDemo : Screen("avatar-webview-demo")
+
+    /**
      * Conversation Detail screen - View specific conversation messages
      *
      * Route: "conversation/{conversationId}"

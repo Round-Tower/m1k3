@@ -76,6 +76,7 @@ import app.m1k3.ai.assistant.ui.demo.MaAIDemo
 import app.m1k3.ai.assistant.ui.drawer.DrawerContent
 import app.m1k3.ai.assistant.utils.FilamentSetup
 import app.m1k3.ai.assistant.utils.Logger
+import app.m1k3.ai.assistant.avatar.webview.AvatarWebViewDemoScreen
 import co.touchlab.kermit.Logger as KermitLogger
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
@@ -312,14 +313,14 @@ private fun MaAppContent(
                         isDarkMode = isDarkMode,
                         onItemClick = { route ->
                             // Map route to Screen and navigate
-                            val screen = when (route) {
-                                "chat" -> Screen.Chat
-                                "history" -> Screen.History
-                                "ecostats" -> Screen.EcoStats
-                                "settings" -> Screen.Settings
-                                else -> Screen.Chat
+                            when (route) {
+                                "chat" -> navController.navigateToBottomNav(Screen.Chat)
+                                "history" -> navController.navigateToBottomNav(Screen.History)
+                                "ecostats" -> navController.navigateToBottomNav(Screen.EcoStats)
+                                "settings" -> navController.navigateToBottomNav(Screen.Settings)
+                                "avatar-webview-demo" -> navController.navigate(Screen.AvatarWebViewDemo.route)
+                                else -> navController.navigateToBottomNav(Screen.Chat)
                             }
-                            navController.navigateToBottomNav(screen)
                             haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                         },
                         onMenuClose = { drawerOpen = false },
@@ -392,6 +393,13 @@ private fun MaAppContent(
                                 // Settings Screen
                                 composable(Screen.Settings.route) {
                                     app.m1k3.ai.assistant.ui.SettingsScreen()
+                                }
+
+                                // WebView Avatar Demo (Phase 1)
+                                composable("avatar-webview-demo") {
+                                    AvatarWebViewDemoScreen(
+                                        onBackClick = { navController.navigateUp() }
+                                    )
                                 }
 
                                 // Conversation Detail Screen

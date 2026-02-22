@@ -78,11 +78,13 @@ const ACTIVITY_SHADERS: Record<AvatarActivity, ShaderEffect | null> = {
 export class ShaderEffectManager {
   private composer: EffectComposer;
   private renderer: THREE.WebGLRenderer;
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   private scene: THREE.Scene;
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   private camera: THREE.Camera;
 
   private renderPass: RenderPass;
-  private activeEffects = new Map<ShaderEffect, ShaderPass>();
+  private activeEffects = new Map<ShaderEffect, ShaderPass | UnrealBloomPass>();
 
   private currentEffect: ShaderEffect = "none";
   private intensity = 0.7;
