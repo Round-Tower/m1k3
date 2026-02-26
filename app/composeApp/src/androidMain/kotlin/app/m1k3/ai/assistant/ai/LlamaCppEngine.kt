@@ -4,10 +4,7 @@ import android.content.Context
 import app.m1k3.ai.assistant.utils.Logger
 import app.m1k3.ai.domain.ai.GenerationConfig
 import app.m1k3.ai.domain.ai.LlmModel
-import app.m1k3.ai.domain.chat.format.ChatFormat
-import app.m1k3.ai.domain.chat.format.MessageRole
 import app.m1k3.ai.domain.chat.services.ChatFormatter
-import app.m1k3.ai.domain.chat.services.ChatMessage
 import app.m1k3.ai.domain.chat.services.DefaultChatFormatter
 import com.llamatik.library.platform.LlamaBridge
 import kotlinx.coroutines.Dispatchers
@@ -144,9 +141,9 @@ class LlamaCppEngine(
             LlamaBridge.updateGenerateParams(
                 temperature = config.temperature ?: 0.7f,
                 maxTokens = maxTokens,
-                topP = 0.9f,
-                topK = 40,
-                repeatPenalty = 1.1f
+                topP = config.topP ?: 0.95f,
+                topK = config.topK ?: 64,
+                repeatPenalty = config.repetitionPenalty ?: 1.1f
             )
 
             val preformatted = isAlreadyFormatted(prompt)
@@ -228,9 +225,9 @@ class LlamaCppEngine(
             LlamaBridge.updateGenerateParams(
                 temperature = config.temperature ?: 0.7f,
                 maxTokens = maxTokens,
-                topP = 0.9f,
-                topK = 40,
-                repeatPenalty = 1.1f
+                topP = config.topP ?: 0.95f,
+                topK = config.topK ?: 64,
+                repeatPenalty = config.repetitionPenalty ?: 1.1f
             )
 
             val preformatted = isAlreadyFormatted(prompt)
@@ -340,11 +337,7 @@ class LlamaCppEngine(
         val userName = config.userContext?.get("name") ?: "Human"
 
         // Base identity (WHO)
-        val identity = if (userName != null) {
-            "You are M1K3 (Mike), $userName's local AI assistant running on $deviceInfo."
-        } else {
-            "You are M1K3 (Mike), a local AI assistant running on $deviceInfo."
-        }
+        val identity = "You are M1K3 (Mike), $userName's local AI assistant running on $deviceInfo."
 
         // Behavioral rules (HOW) - with anti-hallucination & anti-repetition directives
         val temperature = config.temperature
@@ -394,46 +387,6 @@ class LlamaCppEngine(
         return contextParts.joinToString("\n\n")
     }
 
-    /**
-     * Build chat prompt using the injected ChatFormatter.
-     *
-     * This unified approach:
-     * - Works with any ChatFormat (Gemma3, ChatML, Llama, etc.)
-     * - Handles format-specific tokens automatically (BOS, stop tokens)
-     * - Supports pre-formatted prompts (pass-through)
-     *
-     * @param systemPrompt System instructions (used by formatter)
-     * @param context Background info (RAG, knowledge)
-     * @param userQuery The user's message OR a pre-formatted prompt
-     * @return Complete chat prompt ready for generation
-     */
-    private fun buildChatPrompt(
-        systemPrompt: String,
-        context: String,
-        userQuery: String
-    ): String {
-        // If prompt is already formatted (from UnifiedPromptBuilder), use as-is
-        if (isAlreadyFormatted(userQuery)) {
-            return userQuery
-        }
-
-        // Build user message with context prepended
-        val userContent = if (context.isNotBlank()) {
-            "$context\n\n$userQuery"
-        } else {
-            userQuery
-        }
-
-        val messages = listOf(
-            ChatMessage(role = MessageRole.USER, content = userContent)
-        )
-
-        // Use formatter to build format-aware prompt (includes BOS, stop tokens, etc.)
-        return chatFormatter.buildPrompt(
-            systemPrompt = systemPrompt,
-            messages = messages
-        )
-    }
 
     /**
      * Check if prompt is already formatted with chat tokens.
