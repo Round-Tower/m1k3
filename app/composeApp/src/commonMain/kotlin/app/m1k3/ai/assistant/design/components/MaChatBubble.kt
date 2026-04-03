@@ -66,36 +66,45 @@ fun MaChatBubbleUser(
     timestamp: Long,
     modifier: Modifier = Modifier
 ) {
+    val bubbleShape = RoundedCornerShape(
+        topStart = MaRadius.xl,
+        topEnd = MaRadius.xl,
+        bottomStart = MaRadius.xl,
+        bottomEnd = MaRadius.xs  // Sharp corner on sender side
+    )
+
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = MaSpacing.base, vertical = MaSpacing.sm),
+            .padding(horizontal = MaSpacing.base, vertical = MaSpacing.xs),
         horizontalArrangement = Arrangement.End
     ) {
         Column(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalAlignment = Alignment.End
+            horizontalAlignment = Alignment.End,
+            modifier = Modifier
+                .widthIn(max = 320.dp)
+                .clip(bubbleShape)
+                .background(MaColors.OrangeFaint)
+                .border(
+                    width = 1.dp,
+                    color = MaColors.OrangeDim,
+                    shape = bubbleShape
+                )
+                .padding(horizontal = MaSpacing.md, vertical = MaSpacing.md)
         ) {
-            Column (
-                horizontalAlignment = Alignment.End,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = MaSpacing.md, vertical = MaSpacing.base)
-            ) {
-                Text(
-                    text = text,
-                    style = MaTypography.bodyLarge,
-                    color = MaColors.textPrimary()
-                )
+            Text(
+                text = text,
+                style = MaTypography.bodyLarge,
+                color = MaColors.textPrimary()
+            )
 
-                // Timestamp
-                Text(
-                    text = formatTimestamp(timestamp),
-                    style = MaTypography.labelSmall,
-                    color = MaColors.textDisabled(),
-                    modifier = Modifier.padding(top = MaSpacing.xs, end = MaSpacing.sm)
-                )
-            }
+            // Timestamp
+            Text(
+                text = formatTimestamp(timestamp),
+                style = MaTypography.labelSmall,
+                color = MaColors.textDisabled(),
+                modifier = Modifier.padding(top = MaSpacing.xs)
+            )
         }
     }
 }
@@ -123,17 +132,37 @@ fun MaChatBubbleAI(
     onSpeak: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
+    val bubbleShape = RoundedCornerShape(
+        topStart = MaRadius.xl,
+        topEnd = MaRadius.xl,
+        bottomStart = MaRadius.xs,  // Sharp corner on sender side
+        bottomEnd = MaRadius.xl
+    )
+
+    val borderColor = if (isError) MaColors.Error.copy(alpha = 0.3f) else MaColors.borderSubtle()
+    val bgColor = if (isError) MaColors.ErrorBg else MaColors.bgGlass()
+
     Row(
         modifier = modifier
             .fillMaxWidth(),
         horizontalArrangement = Arrangement.Start
     ) {
         Column(
-            horizontalAlignment = Alignment.Start
+            horizontalAlignment = Alignment.Start,
+            modifier = Modifier
+                .widthIn(max = 340.dp)
+                .padding(horizontal = MaSpacing.sm, vertical = MaSpacing.xs)
+                .clip(bubbleShape)
+                .background(bgColor)
+                .border(
+                    width = 1.dp,
+                    color = borderColor,
+                    shape = bubbleShape
+                )
         ) {
             Box(
                 modifier = Modifier
-                    .padding(horizontal = MaSpacing.md, vertical = MaSpacing.base)
+                    .padding(horizontal = MaSpacing.md, vertical = MaSpacing.md)
             ) {
                 Column(
                     verticalArrangement = Arrangement.spacedBy(MaSpacing.sm)
@@ -147,7 +176,7 @@ fun MaChatBubbleAI(
                     Text(
                         text = formatTimestamp(timestamp),
                         style = MaTypography.labelSmall,
-                        color = MaColors.textSecondary().copy(alpha = 0.1f),
+                        color = MaColors.textDisabled(),
                         modifier = Modifier.padding(top = MaSpacing.xs)
                     )
 

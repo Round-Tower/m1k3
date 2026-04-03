@@ -28,6 +28,7 @@ import app.m1k3.ai.assistant.design.haptics.HapticFeedbackType
 import app.m1k3.ai.assistant.design.haptics.rememberHapticFeedback
 import app.m1k3.ai.assistant.design.tokens.MaColors
 import app.m1k3.ai.assistant.design.tokens.MaFontFamilyCaption
+import app.m1k3.ai.assistant.design.tokens.MaRadius
 import app.m1k3.ai.assistant.design.tokens.MaSpacing
 import app.m1k3.ai.assistant.design.tokens.MaTypography
 
@@ -151,8 +152,8 @@ private fun CompactEcoIndicator(
             modifier =
                 Modifier
                     .background(
-                        color = MaColors.BgElevated,
-                        shape = RoundedCornerShape(12.dp),
+                        color = MaColors.bgElevated(),
+                        shape = RoundedCornerShape(MaRadius.md),
                     ).padding(horizontal = MaSpacing.md, vertical = MaSpacing.sm),
             horizontalArrangement = Arrangement.spacedBy(MaSpacing.md),
             verticalAlignment = Alignment.CenterVertically,
