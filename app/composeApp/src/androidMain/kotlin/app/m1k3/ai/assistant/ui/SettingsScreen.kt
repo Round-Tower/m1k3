@@ -1,5 +1,6 @@
 package app.m1k3.ai.assistant.ui
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
@@ -13,6 +14,9 @@ import androidx.compose.ui.text.font.FontWeight
 import org.jetbrains.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import app.m1k3.ai.assistant.ai.ondevice.OnDeviceAi
+import app.m1k3.ai.assistant.design.theme.MaTheme
+import app.m1k3.ai.assistant.design.tokens.MaColors
+import app.m1k3.ai.assistant.design.tokens.MaSpacing
 import app.m1k3.ai.assistant.settings.collectAsState
 import app.m1k3.ai.assistant.settings.rememberSettingsViewModel
 import app.m1k3.ai.assistant.ui.components.*
@@ -55,8 +59,9 @@ fun SettingsScreen(modifier: Modifier = Modifier) {
     LazyColumn(
         modifier = modifier
             .fillMaxSize()
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+            .background(MaColors.bgPrimary())
+            .padding(MaSpacing.base),
+        verticalArrangement = Arrangement.spacedBy(MaSpacing.base)
     ) {
         // Privacy Section
         item {
@@ -325,7 +330,7 @@ private fun AboutSection(
 @Preview(showBackground = true)
 @Composable
 private fun SettingsScreenPreview() {
-    MaterialTheme {
+    MaTheme {
         SettingsScreen()
     }
 }

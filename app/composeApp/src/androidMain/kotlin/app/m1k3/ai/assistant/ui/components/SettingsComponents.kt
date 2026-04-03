@@ -1,13 +1,17 @@
 package app.m1k3.ai.assistant.ui.components
 
 import android.os.Build
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -17,7 +21,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.m1k3.ai.assistant.ai.ondevice.AiAvailability
+import app.m1k3.ai.assistant.design.tokens.MaColors
 import app.m1k3.ai.assistant.design.tokens.MaFontFamilyCaption
+import app.m1k3.ai.assistant.design.tokens.MaRadius
+import app.m1k3.ai.assistant.design.tokens.MaSpacing
+import app.m1k3.ai.assistant.design.tokens.MaTypography
 import app.m1k3.ai.assistant.design.theme.MaTheme
 import app.m1k3.ai.assistant.settings.MlKitStatus
 
@@ -34,33 +42,42 @@ fun SettingsSection(
     icon: ImageVector,
     content: @Composable ColumnScope.() -> Unit
 ) {
+    val sectionShape = RoundedCornerShape(MaRadius.md)
+
     Column(
-        verticalArrangement = Arrangement.spacedBy(8.dp)
+        verticalArrangement = Arrangement.spacedBy(MaSpacing.sm)
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            modifier = Modifier.padding(bottom = 8.dp)
+            horizontalArrangement = Arrangement.spacedBy(MaSpacing.sm),
+            modifier = Modifier.padding(bottom = MaSpacing.xs)
         ) {
             Icon(
                 imageVector = icon,
                 contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary
+                tint = MaColors.Orange,
+                modifier = Modifier.size(20.dp)
             )
             Text(
                 text = title,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSurface
+                style = MaTypography.titleMedium,
+                color = MaColors.textPrimary()
             )
         }
 
-        Card(modifier = Modifier.fillMaxWidth()) {
-            Column(
-                modifier = Modifier.padding(8.dp),
-                content = content
-            )
-        }
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(sectionShape)
+                .background(MaColors.bgElevated())
+                .border(
+                    width = 1.dp,
+                    color = MaColors.borderSubtle(),
+                    shape = sectionShape
+                )
+                .padding(MaSpacing.sm),
+            content = content
+        )
     }
 }
 
@@ -83,49 +100,44 @@ fun SettingsItem(
 ) {
     Surface(
         onClick = onClick,
-        modifier = Modifier.fillMaxWidth()
+        modifier = Modifier.fillMaxWidth(),
+        color = androidx.compose.ui.graphics.Color.Transparent
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(12.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                .padding(MaSpacing.md),
+            horizontalArrangement = Arrangement.spacedBy(MaSpacing.md),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(
                 imageVector = icon,
                 contentDescription = null,
-                tint = if (isDestructive) {
-                    MaterialTheme.colorScheme.error
-                } else {
-                    MaterialTheme.colorScheme.onSurfaceVariant
-                }
+                modifier = Modifier.size(22.dp),
+                tint = if (isDestructive) MaColors.Error else MaColors.textSecondary()
             )
 
             Column(
                 modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(4.dp)
+                verticalArrangement = Arrangement.spacedBy(MaSpacing.xs)
             ) {
                 Text(
                     text = title,
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = if (isDestructive) {
-                        MaterialTheme.colorScheme.error
-                    } else {
-                        MaterialTheme.colorScheme.onSurface
-                    }
+                    style = MaTypography.bodyLarge,
+                    color = if (isDestructive) MaColors.Error else MaColors.textPrimary()
                 )
                 Text(
                     text = subtitle,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    style = MaTypography.bodySmall,
+                    color = MaColors.textMuted()
                 )
             }
 
             Icon(
                 imageVector = Icons.Default.ChevronRight,
                 contentDescription = "Navigate",
-                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                modifier = Modifier.size(18.dp),
+                tint = MaColors.textDisabled()
             )
         }
     }
@@ -153,28 +165,28 @@ fun SettingsToggleItem(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(16.dp),
+            .padding(MaSpacing.md),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
         Column(modifier = Modifier.weight(1f)) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.spacedBy(MaSpacing.sm)
             ) {
                 Icon(
                     imageVector = icon,
                     contentDescription = null,
                     modifier = Modifier.size(20.dp),
-                    tint = MaterialTheme.colorScheme.primary
+                    tint = MaColors.Orange
                 )
                 Text(
                     text = title,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold
+                    style = MaTypography.titleMedium,
+                    color = MaColors.textPrimary()
                 )
             }
-            Spacer(modifier = Modifier.height(4.dp))
+            Spacer(modifier = Modifier.height(MaSpacing.xs))
             Text(
                 text = subtitle,
                 style = TextStyle(
@@ -184,7 +196,7 @@ fun SettingsToggleItem(
                     lineHeight = 16.sp,
                     letterSpacing = 0.25.sp
                 ),
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = MaColors.textMuted()
             )
         }
 
@@ -193,7 +205,13 @@ fun SettingsToggleItem(
             onCheckedChange = { enabled ->
                 haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                 onCheckedChange(enabled)
-            }
+            },
+            colors = SwitchDefaults.colors(
+                checkedThumbColor = MaColors.White,
+                checkedTrackColor = MaColors.Orange,
+                uncheckedThumbColor = MaColors.textMuted(),
+                uncheckedTrackColor = MaColors.bgElevated()
+            )
         )
     }
 }
@@ -216,24 +234,24 @@ fun MlKitStatusSection(
     val haptics = LocalHapticFeedback.current
 
     val (statusText, statusColor) = when (status) {
-        is MlKitStatus.Checking -> "Checking..." to MaterialTheme.colorScheme.onSurfaceVariant
+        is MlKitStatus.Checking -> "Checking..." to MaColors.textMuted()
         is MlKitStatus.Loaded -> when (val availability = status.availability) {
-            is AiAvailability.Available -> "Available (Gemini Nano)" to MaterialTheme.colorScheme.primary
-            is AiAvailability.Downloading -> "Downloading model..." to MaterialTheme.colorScheme.tertiary
-            is AiAvailability.Unavailable -> "Unavailable: ${availability.reason}" to MaterialTheme.colorScheme.error
-            is AiAvailability.Fallback -> "Fallback: ${availability.engineName}" to MaterialTheme.colorScheme.secondary
+            is AiAvailability.Available -> "Available (Gemini Nano)" to MaColors.Success
+            is AiAvailability.Downloading -> "Downloading model..." to MaColors.Info
+            is AiAvailability.Unavailable -> "Unavailable: ${availability.reason}" to MaColors.Error
+            is AiAvailability.Fallback -> "Fallback: ${availability.engineName}" to MaColors.Warning
         }
     }
 
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
+            .padding(MaSpacing.md),
+        verticalArrangement = Arrangement.spacedBy(MaSpacing.sm)
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+            horizontalArrangement = Arrangement.spacedBy(MaSpacing.sm)
         ) {
             Icon(
                 imageVector = Icons.Default.Memory,
@@ -243,34 +261,41 @@ fun MlKitStatusSection(
             )
             Text(
                 text = "Status: $statusText",
-                style = MaterialTheme.typography.bodyMedium,
+                style = MaTypography.bodyMedium,
                 color = statusColor
             )
         }
 
         Text(
             text = "Android ${Build.VERSION.SDK_INT} (requires 34+)",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+            style = MaTypography.bodySmall,
+            color = MaColors.textMuted()
         )
 
         // Test generation result
         testResult?.let { result ->
-            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+            HorizontalDivider(
+                modifier = Modifier.padding(vertical = MaSpacing.sm),
+                color = MaColors.borderSubtle()
+            )
             Text(
                 text = "Test Result:",
-                style = MaterialTheme.typography.labelMedium,
-                fontWeight = FontWeight.SemiBold
+                style = MaTypography.labelMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = MaColors.textSecondary()
             )
             Text(
                 text = result,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                style = MaTypography.bodySmall,
+                color = MaColors.textMuted()
             )
         }
     }
 
-    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+    HorizontalDivider(
+        modifier = Modifier.padding(horizontal = MaSpacing.md),
+        color = MaColors.borderSubtle()
+    )
 
     // Test Generation Button
     Surface(
@@ -281,41 +306,42 @@ fun MlKitStatusSection(
             }
         },
         modifier = Modifier.fillMaxWidth(),
-        color = MaterialTheme.colorScheme.surface
+        color = androidx.compose.ui.graphics.Color.Transparent
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(12.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                .padding(MaSpacing.md),
+            horizontalArrangement = Arrangement.spacedBy(MaSpacing.md),
             verticalAlignment = Alignment.CenterVertically
         ) {
             if (isTestRunning) {
                 CircularProgressIndicator(
                     modifier = Modifier.size(24.dp),
-                    strokeWidth = 2.dp
+                    strokeWidth = 2.dp,
+                    color = MaColors.Orange
                 )
             } else {
                 Icon(
                     imageVector = Icons.Default.PlayArrow,
                     contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary
+                    tint = MaColors.Orange
                 )
             }
 
             Column(
                 modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(4.dp)
+                verticalArrangement = Arrangement.spacedBy(MaSpacing.xs)
             ) {
                 Text(
                     text = if (isTestRunning) "Running test..." else "Test Generation",
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurface
+                    style = MaTypography.bodyLarge,
+                    color = MaColors.textPrimary()
                 )
                 Text(
                     text = "Send 'Hello, what is 2+2?' to AI",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    style = MaTypography.bodySmall,
+                    color = MaColors.textMuted()
                 )
             }
         }

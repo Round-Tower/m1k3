@@ -109,9 +109,9 @@ fun DrawerContent(
 }
 
 /**
- * DrawerHeader - M1K3 branding header
+ * DrawerHeader - M1K3 branding header with animated logo
  *
- * Displays app name and tagline
+ * Displays app name, kanji mark, and tagline
  *
  * @param isDarkMode Whether dark mode is active (for potential future styling)
  */
@@ -126,18 +126,31 @@ private fun DrawerHeader(isDarkMode: Boolean) {
             ),
         horizontalAlignment = Alignment.Start
     ) {
-        Text(
-            "M1K3",
-            style = MaTypography.displayLarge,
-            fontWeight = FontWeight.Bold,
-            color = MaColors.Orange,
-            modifier = Modifier.padding(bottom = MaSpacing.sm)
-        )
-        Text(
-            "Call me Mike",
-            style = MaTypography.bodySmall,
-            color = MaColors.textSecondary()
-        )
+        // Kanji mark + brand name row
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(MaSpacing.md)
+        ) {
+            // 間 mark
+            Text(
+                "間",
+                style = MaTypography.displaySmall,
+                color = MaColors.Orange
+            )
+            Column {
+                Text(
+                    "M1K3",
+                    style = MaTypography.headlineLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = MaColors.textPrimary()
+                )
+                Text(
+                    "Call me Mike",
+                    style = MaTypography.bodySmall,
+                    color = MaColors.textMuted()
+                )
+            }
+        }
     }
 }
 

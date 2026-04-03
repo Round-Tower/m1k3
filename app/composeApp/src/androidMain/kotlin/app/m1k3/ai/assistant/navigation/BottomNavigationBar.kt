@@ -46,7 +46,9 @@ fun BottomNavigationBar(
     val currentDestination = navBackStackEntry?.destination
 
     NavigationBar(
-        modifier = modifier
+        modifier = modifier,
+        containerColor = MaColors.BgPrimary,
+        contentColor = MaColors.TextSecondary
     ) {
         bottomNavItems.forEach { item ->
             val isSelected = currentDestination?.hierarchy?.any {
@@ -70,7 +72,14 @@ fun BottomNavigationBar(
                         navController.navigateToBottomNav(item.screen)
                     }
                 },
-                alwaysShowLabel = true
+                alwaysShowLabel = true,
+                colors = NavigationBarItemDefaults.colors(
+                    selectedIconColor = MaColors.Orange,
+                    selectedTextColor = MaColors.Orange,
+                    unselectedIconColor = MaColors.TextMuted,
+                    unselectedTextColor = MaColors.TextMuted,
+                    indicatorColor = MaColors.OrangeFaint
+                )
             )
         }
     }
@@ -101,17 +110,12 @@ val bottomNavItems = listOf(
     ),
     BottomNavItem(
         screen = Screen.EcoStats,
-        label = "Eco Stats",
+        label = "Eco",
         icon = Icons.Default.Eco
     ),
     BottomNavItem(
         screen = Screen.Settings,
         label = "Settings",
         icon = Icons.Default.Settings
-    ),
-    BottomNavItem(
-        screen = Screen.Demo,
-        label = "Demo",
-        icon = Icons.Default.Info
     )
 )
