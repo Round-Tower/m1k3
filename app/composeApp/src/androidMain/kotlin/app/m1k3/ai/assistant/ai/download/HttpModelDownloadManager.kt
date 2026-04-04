@@ -63,25 +63,15 @@ class HttpModelDownloadManager(
         emit(DownloadProgress.Starting(model.id))
 
         try {
-            val connection = URL(url).openConnection() as HttpURLConnection
-            connection.connectTimeout = 30_000
-            connection.readTimeout = 60_000
+            // Follow redirects manually (HttpURLConnection won't follow cross-host redirects)
+            val finalConnection = followRedirects(url, tempFile)
 
-            // Support resume
-            if (tempFile.exists()) {
-                connection.setRequestProperty("Range", "bytes=${tempFile.length()}-")
-                logger.i { "Resuming download from ${tempFile.length()} bytes" }
-            }
-
-            connection.instanceFollowRedirects = true
-            connection.connect()
-
-            val totalBytes = connection.contentLengthLong + (if (tempFile.exists()) tempFile.length() else 0L)
+            val totalBytes = finalConnection.contentLengthLong + (if (tempFile.exists()) tempFile.length() else 0L)
             var downloadedBytes = if (tempFile.exists()) tempFile.length() else 0L
 
-            connection.inputStream.use { input ->
+            finalConnection.inputStream.use { input ->
                 tempFile.outputStream().let { output ->
-                    val buffer = ByteArray(8192)
+                    val buffer = ByteArray(65536) // 64KB buffer for large downloads
                     var bytesRead: Int
 
                     while (input.read(buffer).also { bytesRead = it } != -1) {
@@ -112,6 +102,54 @@ class HttpModelDownloadManager(
             emit(DownloadProgress.Failed(model.id, e.message ?: "Download failed"))
         }
     }.flowOn(Dispatchers.IO)
+
+    /**
+     * Follow HTTP redirects manually, including cross-host redirects.
+     *
+     * Java's HttpURLConnection.instanceFollowRedirects does NOT follow
+     * redirects across different hosts (e.g., huggingface.co → xethub.hf.co).
+     * HuggingFace uses cross-host 302s to CDN, so we handle it manually.
+     */
+    private fun followRedirects(initialUrl: String, tempFile: File, maxRedirects: Int = 5): HttpURLConnection {
+        var url = initialUrl
+        var redirectCount = 0
+
+        while (redirectCount < maxRedirects) {
+            val connection = URL(url).openConnection() as HttpURLConnection
+            connection.connectTimeout = 30_000
+            connection.readTimeout = 60_000
+            connection.instanceFollowRedirects = false // We handle redirects ourselves
+
+            // Support resume
+            if (tempFile.exists() && tempFile.length() > 0) {
+                connection.setRequestProperty("Range", "bytes=${tempFile.length()}-")
+            }
+
+            connection.connect()
+            val responseCode = connection.responseCode
+
+            if (responseCode in 300..399) {
+                val location = connection.getHeaderField("Location")
+                connection.disconnect()
+
+                if (location == null) {
+                    throw java.io.IOException("Redirect without Location header")
+                }
+
+                logger.d { "Following redirect ($responseCode) → ${location.take(80)}..." }
+                url = location
+                redirectCount++
+            } else if (responseCode in 200..299) {
+                logger.i { "Connected: $responseCode, content-length: ${connection.contentLengthLong}" }
+                return connection
+            } else {
+                connection.disconnect()
+                throw java.io.IOException("HTTP $responseCode: ${connection.responseMessage}")
+            }
+        }
+
+        throw java.io.IOException("Too many redirects ($maxRedirects)")
+    }
 
     /**
      * Get the HuggingFace download URL for a model.
