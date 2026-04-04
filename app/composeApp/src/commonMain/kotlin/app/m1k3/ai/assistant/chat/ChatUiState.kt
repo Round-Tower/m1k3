@@ -66,7 +66,10 @@ data class ChatUiState(
     val isSpeaking: Boolean = false,
 
     /** TTS model loading state (first-load latency indicator) */
-    val isLoadingTts: Boolean = false
+    val isLoadingTts: Boolean = false,
+
+    /** Model download progress (null when not downloading) */
+    val modelDownload: ModelDownloadState? = null
 )
 
 /**
@@ -352,3 +355,28 @@ data class ToolExecutionResult(
     /** Error message if failed */
     val errorMessage: String? = null
 )
+
+/**
+ * Model download state for large GGUF models.
+ *
+ * Tracks progress when downloading models like Gemma 4 E2B
+ * that are too large to bundle in the APK.
+ */
+sealed class ModelDownloadState {
+    /** Download is starting */
+    data class Starting(val modelName: String) : ModelDownloadState()
+
+    /** Download in progress with percentage */
+    data class InProgress(
+        val modelName: String,
+        val progressPercent: Int,
+        val downloadedMB: Long,
+        val totalMB: Long
+    ) : ModelDownloadState()
+
+    /** Download complete, model ready */
+    data class Complete(val modelName: String) : ModelDownloadState()
+
+    /** Download failed */
+    data class Failed(val modelName: String, val error: String) : ModelDownloadState()
+}

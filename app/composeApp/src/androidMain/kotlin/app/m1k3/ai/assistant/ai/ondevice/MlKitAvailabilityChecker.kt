@@ -137,19 +137,21 @@ class RealMlKitAvailabilityChecker(
             // Requires API 34+ minimum
             if (Build.VERSION.SDK_INT < 34) return@withContext false
 
-            // TODO: Probe AICore preview track when API is available
-            // val previewConfig = generationConfig {
-            //     modelConfig = ModelConfig {
-            //         releaseTrack = ModelReleaseTrack.PREVIEW
-            //         preference = ModelPreference.SPEED
-            //     }
-            // }
-            // val model = Generation.getClient(previewConfig)
-            // val status = model.checkStatus()
-            // status == FeatureStatus.AVAILABLE || status == FeatureStatus.DOWNLOADABLE
+            val previewConfig = com.google.mlkit.genai.prompt.generationConfig {
+                modelConfig = com.google.mlkit.genai.prompt.modelConfig {
+                    releaseStage = com.google.mlkit.genai.prompt.ModelReleaseStage.PREVIEW
+                    preference = com.google.mlkit.genai.prompt.ModelPreference.FAST
+                }
+            }
+            val model = Generation.getClient(previewConfig)
+            val status = model.checkStatus()
 
-            logger.d { "AICore Preview check: API not yet available" }
-            false
+            val available = status == FeatureStatus.AVAILABLE ||
+                status == FeatureStatus.DOWNLOADABLE ||
+                status == FeatureStatus.DOWNLOADING
+
+            logger.i { "AICore Preview available: $available (status: $status)" }
+            available
         } catch (e: Exception) {
             logger.w(e) { "Error checking AICore Preview: ${e.message}" }
             false

@@ -81,6 +81,10 @@ class ChatScreenViewModel(
     private val dateTimeProvider: DateTimeProviderInterface? = null,
     // Engine factory for runtime model switching (optional)
     private val engineFactory: ((LlmModel) -> BaseLlmEngine)? = null,
+    // Model download check (platform-injected, optional — for large downloadable models)
+    private val isModelDownloaded: ((LlmModel) -> Boolean)? = null,
+    // Model download trigger (platform-injected, optional)
+    private val downloadModel: ((LlmModel, (ModelDownloadState) -> Unit) -> Unit)? = null,
     // TTS callbacks (platform-injected, optional)
     private val onSpeakText: (suspend (String) -> Unit)? = null
 ) : ViewModel() {
@@ -280,6 +284,50 @@ class ChatScreenViewModel(
         if (model == _uiState.value.currentModel) return
         if (_uiState.value.generationState.isGenerating) return
 
+        // Check if model needs downloading (large models like Gemma 4)
+        if (model.minRamGB > 0 && isModelDownloaded?.invoke(model) == false) {
+            logger.i { "Model ${model.displayName} needs download" }
+            startModelDownload(model, factory)
+            return
+        }
+
+        performModelSwitch(model, factory)
+    }
+
+    /**
+     * Start downloading a model, then switch to it on completion.
+     */
+    private fun startModelDownload(model: LlmModel, factory: (LlmModel) -> BaseLlmEngine) {
+        val download = downloadModel ?: run {
+            logger.w { "No download function, cannot download ${model.displayName}" }
+            return
+        }
+
+        _uiState.update {
+            it.copy(modelDownload = ModelDownloadState.Starting(model.displayName))
+        }
+
+        download(model) { state ->
+            _uiState.update { it.copy(modelDownload = state) }
+
+            if (state is ModelDownloadState.Complete) {
+                // Download finished — now switch
+                performModelSwitch(model, factory)
+                _uiState.update { it.copy(modelDownload = null) }
+            } else if (state is ModelDownloadState.Failed) {
+                // Clear download state after a delay
+                viewModelScope.launch {
+                    kotlinx.coroutines.delay(3000)
+                    _uiState.update { it.copy(modelDownload = null) }
+                }
+            }
+        }
+    }
+
+    /**
+     * Perform the actual model switch (release old, create new, init).
+     */
+    private fun performModelSwitch(model: LlmModel, factory: (LlmModel) -> BaseLlmEngine) {
         viewModelScope.launch {
             try {
                 logger.i { "Switching model to ${model.displayName}" }

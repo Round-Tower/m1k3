@@ -48,6 +48,7 @@ import app.m1k3.ai.assistant.tts.AudioPlayer
 import app.m1k3.ai.assistant.tts.KokoroTtsEngine
 import app.m1k3.ai.domain.ai.AiCoreModelPreference
 import app.m1k3.ai.domain.ai.LlmModel
+import kotlinx.coroutines.launch
 import app.m1k3.ai.domain.tts.TtsEngine
 import app.m1k3.ai.domain.tts.Voice
 import app.m1k3.ai.domain.usecases.chat.LlmOutputProcessor
@@ -361,7 +362,42 @@ actual val platformModule = module {
             toolRegistry = get<ToolRegistry>(),
             processLlmOutput = get<LlmOutputProcessor>(),
             dateTimeProvider = get<DateTimeProviderInterface>(),
-            engineFactory = { model -> LlamaCppEngine(context, model) },
+            engineFactory = { model ->
+                val downloadManager = get<ModelDownloadManager>()
+                val overridePath = downloadManager.getModelPath(model.id)
+                LlamaCppEngine(context, model, overrideModelPath = overridePath)
+            },
+            isModelDownloaded = { model ->
+                // Bundled models (minRamGB == 0) are always "downloaded"
+                if (model.minRamGB == 0) true
+                else get<ModelDownloadManager>().isModelAvailable(model.id)
+            },
+            downloadModel = { model, onProgress ->
+                val httpManager = get<ModelDownloadManager>() as HttpModelDownloadManager
+                @OptIn(kotlinx.coroutines.DelicateCoroutinesApi::class)
+                kotlinx.coroutines.GlobalScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                    httpManager.download(model).collect { progress ->
+                        val state = when (progress) {
+                            is app.m1k3.ai.assistant.ai.download.DownloadProgress.Starting ->
+                                app.m1k3.ai.assistant.chat.ModelDownloadState.Starting(model.displayName)
+                            is app.m1k3.ai.assistant.ai.download.DownloadProgress.InProgress ->
+                                app.m1k3.ai.assistant.chat.ModelDownloadState.InProgress(
+                                    modelName = model.displayName,
+                                    progressPercent = progress.progressPercent,
+                                    downloadedMB = progress.bytesDownloaded / 1_000_000,
+                                    totalMB = progress.totalBytes / 1_000_000
+                                )
+                            is app.m1k3.ai.assistant.ai.download.DownloadProgress.Complete ->
+                                app.m1k3.ai.assistant.chat.ModelDownloadState.Complete(model.displayName)
+                            is app.m1k3.ai.assistant.ai.download.DownloadProgress.Failed ->
+                                app.m1k3.ai.assistant.chat.ModelDownloadState.Failed(model.displayName, progress.error)
+                        }
+                        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                            onProgress(state)
+                        }
+                    }
+                }
+            },
             onSpeakText = { text ->
                 if (text.isBlank()) return@ChatScreenViewModel
                 if (!ttsEngine.isLoaded) ttsEngine.loadModel()
