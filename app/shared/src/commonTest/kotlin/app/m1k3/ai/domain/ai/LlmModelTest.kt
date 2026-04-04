@@ -151,8 +151,8 @@ class LlmModelTest {
     }
 
     @Test
-    fun `Gemma4_E2B requires 8GB RAM`() {
-        assertEquals(8, LlmModel.Gemma4_E2B.minRamGB)
+    fun `Gemma4_E2B requires 6GB RAM`() {
+        assertEquals(6, LlmModel.Gemma4_E2B.minRamGB)
     }
 
     @Test
@@ -161,8 +161,8 @@ class LlmModelTest {
     }
 
     @Test
-    fun `Gemma4_E2B is available for 8GB devices`() {
-        assertTrue(LlmModel.availableFor(8).contains(LlmModel.Gemma4_E2B))
+    fun `Gemma4_E2B is available for 6GB devices`() {
+        assertTrue(LlmModel.availableFor(6).contains(LlmModel.Gemma4_E2B))
     }
 
     @Test

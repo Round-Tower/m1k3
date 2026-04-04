@@ -71,7 +71,7 @@ sealed class LlmModel(
         filename = "gemma-4-E2B-it-Q4_K_M.gguf",
         parameterCount = 2_300_000_000L,
         chatFormat = ChatFormat.Gemma4,
-        minRamGB = 8
+        minRamGB = 6
     )
 
     companion object {
