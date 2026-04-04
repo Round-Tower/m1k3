@@ -6,8 +6,10 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.platform.LocalContext
+import app.m1k3.ai.domain.ai.AiCoreModelPreference
 import app.m1k3.ai.domain.ai.GenerationConfig
 import app.m1k3.ai.assistant.ai.ondevice.AiAvailability
+import app.m1k3.ai.assistant.ai.ondevice.AndroidOnDeviceAi
 import app.m1k3.ai.assistant.ai.ondevice.OnDeviceAi
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -136,11 +138,39 @@ class SettingsViewModel(
     }
 
     /**
+     * Switch AICore model preference.
+     *
+     * Updates the ML Kit engine to use the selected Gemma 4 variant
+     * or fall back to stable Gemini Nano.
+     */
+    fun switchAiCorePreference(preference: AiCoreModelPreference) {
+        if (preference == _state.value.aiCorePreference) return
+
+        _state.value = _state.value.copy(aiCorePreference = preference)
+        prefs.edit().putString("aicore_preference", preference.name).apply()
+
+        scope.launch {
+            val androidAi = onDeviceAi as? AndroidOnDeviceAi ?: return@launch
+            androidAi.switchAiCoreModel(preference)
+
+            // Refresh model info
+            val modelInfo = onDeviceAi.getModelInfo()
+            _state.value = _state.value.copy(modelInfo = modelInfo)
+        }
+    }
+
+    /**
      * Initialize state from preferences.
      */
     fun initializeFromPreferences() {
+        val savedPreference = prefs.getString("aicore_preference", null)
+        val aiCorePreference = savedPreference?.let {
+            try { AiCoreModelPreference.valueOf(it) } catch (_: Exception) { null }
+        } ?: AiCoreModelPreference.STABLE
+
         _state.value = _state.value.copy(
-            ragEnabled = prefs.getBoolean("rag_enabled", true)
+            ragEnabled = prefs.getBoolean("rag_enabled", true),
+            aiCorePreference = aiCorePreference
         )
     }
 }
@@ -153,7 +183,8 @@ data class SettingsState(
     val modelInfo: String = "Loading...",
     val ragEnabled: Boolean = true,
     val isTestRunning: Boolean = false,
-    val testResult: String? = null
+    val testResult: String? = null,
+    val aiCorePreference: AiCoreModelPreference = AiCoreModelPreference.STABLE
 )
 
 /**

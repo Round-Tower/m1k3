@@ -29,6 +29,13 @@ interface MlKitAvailabilityChecker {
      * @return true if ML Kit GenAI can be used, false otherwise
      */
     suspend fun isGenAiAvailable(): Boolean
+
+    /**
+     * Check if AICore Developer Preview (Gemma 4) is available.
+     *
+     * @return true if AICore Preview track is available, false otherwise
+     */
+    suspend fun isAiCorePreviewAvailable(): Boolean = false
 }
 
 /**
@@ -112,6 +119,39 @@ class RealMlKitAvailabilityChecker(
             }
         } catch (e: Exception) {
             logger.w(e) { "Error checking ML Kit GenAI availability: ${e.message}" }
+            false
+        }
+    }
+
+    /**
+     * Check if AICore Developer Preview (Gemma 4) is available.
+     *
+     * TODO: Enable once mlkit-genai-prompt dependency supports ModelConfig API.
+     * Will use Generation.getClient(previewConfig).checkStatus() to probe
+     * whether the PREVIEW release track is available on this device.
+     *
+     * @return true if AICore Preview is available, false otherwise
+     */
+    override suspend fun isAiCorePreviewAvailable(): Boolean = withContext(Dispatchers.IO) {
+        try {
+            // Requires API 34+ minimum
+            if (Build.VERSION.SDK_INT < 34) return@withContext false
+
+            // TODO: Probe AICore preview track when API is available
+            // val previewConfig = generationConfig {
+            //     modelConfig = ModelConfig {
+            //         releaseTrack = ModelReleaseTrack.PREVIEW
+            //         preference = ModelPreference.SPEED
+            //     }
+            // }
+            // val model = Generation.getClient(previewConfig)
+            // val status = model.checkStatus()
+            // status == FeatureStatus.AVAILABLE || status == FeatureStatus.DOWNLOADABLE
+
+            logger.d { "AICore Preview check: API not yet available" }
+            false
+        } catch (e: Exception) {
+            logger.w(e) { "Error checking AICore Preview: ${e.message}" }
             false
         }
     }
