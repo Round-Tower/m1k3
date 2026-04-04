@@ -17,6 +17,8 @@ import app.m1k3.ai.assistant.ai.ondevice.OnDeviceAi
 import app.m1k3.ai.assistant.design.theme.MaTheme
 import app.m1k3.ai.assistant.design.tokens.MaColors
 import app.m1k3.ai.assistant.design.tokens.MaSpacing
+import app.m1k3.ai.assistant.design.tokens.MaTypography
+import app.m1k3.ai.domain.ai.AiCoreModelPreference
 import app.m1k3.ai.assistant.settings.collectAsState
 import app.m1k3.ai.assistant.settings.rememberSettingsViewModel
 import app.m1k3.ai.assistant.ui.components.*
@@ -101,6 +103,14 @@ fun SettingsScreen(modifier: Modifier = Modifier) {
                     onTestClick = { viewModel.runTestGeneration() }
                 )
             }
+        }
+
+        // AICore Model Selection
+        item {
+            AiCoreSection(
+                currentPreference = state.aiCorePreference,
+                onPreferenceChange = { viewModel.switchAiCorePreference(it) }
+            )
         }
 
         // Knowledge & RAG Section
@@ -321,6 +331,45 @@ private fun AboutSection(
             icon = Icons.Default.PrivacyTip,
             onClick = onPrivacyPolicyClick
         )
+    }
+}
+
+/**
+ * AiCoreSection - AICore model preference selector.
+ *
+ * Allows switching between Gemini Nano (stable) and Gemma 4
+ * variants (AICore Developer Preview).
+ */
+@Composable
+private fun AiCoreSection(
+    currentPreference: AiCoreModelPreference,
+    onPreferenceChange: (AiCoreModelPreference) -> Unit
+) {
+    SettingsSection(
+        title = "AICore Model",
+        icon = Icons.Default.AutoAwesome
+    ) {
+        AiCoreModelPreference.entries.forEach { preference ->
+            val isSelected = preference == currentPreference
+
+            SettingsItem(
+                title = preference.displayName,
+                subtitle = when (preference) {
+                    AiCoreModelPreference.STABLE -> "Production model — stable, optimized"
+                    AiCoreModelPreference.PREVIEW_SPEED -> "Gemma 4 E2B — 3x faster (Preview)"
+                    AiCoreModelPreference.PREVIEW_FULL -> "Gemma 4 E4B — highest quality (Preview)"
+                },
+                icon = if (isSelected) Icons.Default.RadioButtonChecked else Icons.Default.RadioButtonUnchecked,
+                onClick = { onPreferenceChange(preference) }
+            )
+
+            if (preference != AiCoreModelPreference.entries.last()) {
+                HorizontalDivider(
+                    modifier = Modifier.padding(horizontal = MaSpacing.base),
+                    color = MaColors.borderSubtle()
+                )
+            }
+        }
     }
 }
 

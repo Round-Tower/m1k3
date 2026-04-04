@@ -1,5 +1,6 @@
 package app.m1k3.ai.assistant.ai.ondevice
 
+import app.m1k3.ai.domain.ai.AiCoreModelPreference
 import app.m1k3.ai.domain.ai.GenerationConfig
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.sync.Mutex
@@ -60,8 +61,9 @@ import java.util.concurrent.atomic.AtomicReference
  */
 class AndroidOnDeviceAi(
     private val mlKitChecker: MlKitAvailabilityChecker,
-    private val mlKitEngine: MlKitGenAiEngine,
-    private val fallbackEngine: OnDeviceAi
+    private var mlKitEngine: MlKitGenAiEngine,
+    private val fallbackEngine: OnDeviceAi,
+    private val mlKitEngineFactory: ((AiCoreModelPreference) -> MlKitGenAiEngine)? = null
 ) : OnDeviceAi {
 
     /**
@@ -265,6 +267,38 @@ class AndroidOnDeviceAi(
             ActiveEngine.ML_KIT -> mlKitEngine.getModelInfo()
             ActiveEngine.FALLBACK -> fallbackEngine.getModelInfo()
             ActiveEngine.NONE -> "AndroidOnDeviceAi (not initialized)"
+        }
+    }
+
+    /**
+     * Switch the AICore model preference (e.g., STABLE → PREVIEW_SPEED).
+     *
+     * Releases the current ML Kit engine and creates a new one with the
+     * requested preference. Re-initializes if ML Kit was the active engine.
+     *
+     * @param preference The desired AICore model preference
+     */
+    suspend fun switchAiCoreModel(preference: AiCoreModelPreference) {
+        val factory = mlKitEngineFactory ?: return
+
+        initMutex.withLock {
+            val currentState = engineState.get()
+
+            // Release current ML Kit engine
+            if (currentState.engine == ActiveEngine.ML_KIT) {
+                mlKitEngine.release()
+            }
+
+            // Create new engine with updated preference
+            mlKitEngine = factory(preference)
+
+            // Re-initialize if ML Kit was active
+            if (currentState.engine == ActiveEngine.ML_KIT) {
+                val result = mlKitEngine.downloadModelIfNeeded()
+                if (result.isSuccess) {
+                    engineState.set(EngineState(ActiveEngine.ML_KIT, true))
+                }
+            }
         }
     }
 

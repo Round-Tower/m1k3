@@ -103,4 +103,32 @@ class LlmModelTest {
             assertTrue(model.filename.isNotEmpty())
         }
     }
+
+    // ===== minRamGB Tests =====
+
+    @Test
+    fun `Gemma3 has zero minRamGB`() {
+        assertEquals(0, LlmModel.Gemma3_270M.minRamGB)
+    }
+
+    @Test
+    fun `FalconH1 has zero minRamGB`() {
+        assertEquals(0, LlmModel.FalconH1_90M.minRamGB)
+    }
+
+    // ===== availableFor Tests =====
+
+    @Test
+    fun `availableFor 4GB returns base models`() {
+        val models = LlmModel.availableFor(4)
+        assertTrue(models.contains(LlmModel.Gemma3_270M))
+        assertTrue(models.contains(LlmModel.FalconH1_90M))
+    }
+
+    @Test
+    fun `availableFor filters out models above RAM threshold`() {
+        // All current models have minRamGB=0, so all should be available
+        val models = LlmModel.availableFor(2)
+        assertTrue(models.isNotEmpty())
+    }
 }

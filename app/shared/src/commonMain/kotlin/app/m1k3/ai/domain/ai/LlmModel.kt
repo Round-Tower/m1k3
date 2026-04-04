@@ -27,7 +27,8 @@ sealed class LlmModel(
     val displayName: String,
     val filename: String,
     val parameterCount: Long,
-    val chatFormat: ChatFormat
+    val chatFormat: ChatFormat,
+    val minRamGB: Int = 0
 ) {
     /**
      * Gemma 3 270M - Google's compact model
@@ -85,5 +86,16 @@ sealed class LlmModel(
          */
         fun findByFilename(filename: String): LlmModel? =
             all().find { it.filename == filename }
+
+        /**
+         * Get models available for a given device RAM
+         *
+         * Filters out models that require more RAM than available.
+         *
+         * @param deviceRamGB Device RAM in gigabytes
+         * @return List of models that can run on this device
+         */
+        fun availableFor(deviceRamGB: Int): List<LlmModel> =
+            all().filter { it.minRamGB <= deviceRamGB }
     }
 }

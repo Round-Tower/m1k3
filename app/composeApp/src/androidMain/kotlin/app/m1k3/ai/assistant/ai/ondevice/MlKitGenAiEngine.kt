@@ -1,6 +1,7 @@
 package app.m1k3.ai.assistant.ai.ondevice
 
 import android.content.Context
+import app.m1k3.ai.domain.ai.AiCoreModelPreference
 import app.m1k3.ai.domain.ai.GenerationConfig
 import co.touchlab.kermit.Logger
 import com.google.mlkit.genai.common.FeatureStatus
@@ -135,7 +136,8 @@ class StubMlKitGenAiEngine : MlKitGenAiEngine {
  * @param context Android context for ML Kit initialization
  */
 class RealMlKitGenAiEngine(
-    @Suppress("unused") private val context: Context
+    @Suppress("unused") private val context: Context,
+    private val modelPreference: AiCoreModelPreference = AiCoreModelPreference.STABLE
 ) : MlKitGenAiEngine {
 
     private val logger = Logger.withTag("RealMlKitGenAiEngine")
@@ -315,9 +317,10 @@ class RealMlKitGenAiEngine(
             val model = getOrCreateGenerativeModel()
             val status = model.checkStatus()
             val modelName = model.getBaseModelName()
-            "ML Kit GenAI ($modelName) - Status: $status"
+            val preferenceName = modelPreference.displayName
+            "ML Kit GenAI ($modelName / $preferenceName) - Status: $status"
         } catch (e: Exception) {
-            "ML Kit GenAI (Gemini Nano) - Error: ${e.message}"
+            "ML Kit GenAI (${modelPreference.displayName}) - Error: ${e.message}"
         }
     }
 
@@ -333,9 +336,44 @@ class RealMlKitGenAiEngine(
     // --- Private Helpers ---
 
     private fun getOrCreateGenerativeModel(): GenerativeModel {
-        return generativeModel ?: Generation.getClient().also {
+        return generativeModel ?: createGenerativeModel().also {
             generativeModel = it
         }
+    }
+
+    /**
+     * Create GenerativeModel with AICore configuration.
+     *
+     * For STABLE: uses default client (Gemini Nano)
+     * For PREVIEW_SPEED/FULL: configures AICore Developer Preview
+     * with ModelReleaseTrack.PREVIEW and appropriate ModelPreference.
+     *
+     * Note: The AICore Developer Preview API (ModelConfig, ModelReleaseTrack,
+     * ModelPreference) requires an updated ML Kit GenAI dependency.
+     * Until that dependency is bumped, preview modes fall back to stable.
+     */
+    private fun createGenerativeModel(): GenerativeModel {
+        if (!modelPreference.isPreview) {
+            logger.i { "Creating ML Kit GenAI client (STABLE - Gemini Nano)" }
+            return Generation.getClient()
+        }
+
+        // AICore Developer Preview configuration
+        // TODO: Enable once mlkit-genai-prompt dependency supports ModelConfig API
+        // val config = generationConfig {
+        //     modelConfig = ModelConfig {
+        //         releaseTrack = ModelReleaseTrack.PREVIEW
+        //         preference = when (modelPreference) {
+        //             AiCoreModelPreference.PREVIEW_SPEED -> ModelPreference.SPEED
+        //             AiCoreModelPreference.PREVIEW_FULL -> ModelPreference.FULL
+        //             else -> ModelPreference.SPEED
+        //         }
+        //     }
+        // }
+        // return Generation.getClient(config)
+
+        logger.w { "AICore Preview requested ($modelPreference) but API not yet available — using STABLE" }
+        return Generation.getClient()
     }
 
     private fun <T> mapExceptionToAiResult(e: Exception): AiResult<T> {

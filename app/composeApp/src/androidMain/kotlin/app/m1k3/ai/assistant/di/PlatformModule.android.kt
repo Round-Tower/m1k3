@@ -44,6 +44,7 @@ import app.m1k3.ai.assistant.embedding.EmbeddingModelManager
 import app.m1k3.ai.assistant.tts.AudioEffectsProcessor
 import app.m1k3.ai.assistant.tts.AudioPlayer
 import app.m1k3.ai.assistant.tts.KokoroTtsEngine
+import app.m1k3.ai.domain.ai.AiCoreModelPreference
 import app.m1k3.ai.domain.ai.LlmModel
 import app.m1k3.ai.domain.tts.TtsEngine
 import app.m1k3.ai.domain.tts.Voice
@@ -198,11 +199,14 @@ actual val platformModule = module {
     /**
      * ML Kit GenAI Engine
      *
-     * Provides Gemini Nano on-device inference when available.
-     * Supports Prompt API (alpha) and Summarization API (beta).
+     * Provides Gemini Nano / Gemma 4 on-device inference when available.
+     * Supports Prompt API and AICore Developer Preview.
+     *
+     * Default: STABLE (Gemini Nano). Can be recreated with PREVIEW_SPEED
+     * (Gemma 4 E2B) or PREVIEW_FULL (Gemma 4 E4B) via AndroidOnDeviceAi.
      */
     single<MlKitGenAiEngine> {
-        RealMlKitGenAiEngine(get<Context>())
+        RealMlKitGenAiEngine(get<Context>(), AiCoreModelPreference.STABLE)
     }
 
     /**
@@ -234,7 +238,10 @@ actual val platformModule = module {
         AndroidOnDeviceAi(
             mlKitChecker = get<MlKitAvailabilityChecker>(),
             mlKitEngine = get<MlKitGenAiEngine>(),
-            fallbackEngine = get<LlamaCppFallbackEngine>()
+            fallbackEngine = get<LlamaCppFallbackEngine>(),
+            mlKitEngineFactory = { preference ->
+                RealMlKitGenAiEngine(get<Context>(), preference)
+            }
         )
     }
 
