@@ -25,7 +25,8 @@ private val logger = Logger.withTag("LlamaCppEngine")
 class LlamaCppEngine(
     private val context: Context,
     private val model: LlmModel = LlmModel.default,
-    private val chatFormatter: ChatFormatter = DefaultChatFormatter(model.chatFormat)
+    private val chatFormatter: ChatFormatter = DefaultChatFormatter(model.chatFormat),
+    private val overrideModelPath: String? = null
 ) : BaseLlmEngine {
 
     @Volatile
@@ -42,6 +43,43 @@ class LlamaCppEngine(
 
     private val modelFilename = model.filename
     private var defaultConfig = GenerationConfig()
+
+    /**
+     * Resolve the model file path with fallback chain:
+     * 1. overrideModelPath (e.g., from ModelDownloadManager for large models)
+     * 2. Downloaded model in filesDir/models/ (from HttpModelDownloadManager)
+     * 3. Copy from assets/models/ (bundled small models)
+     */
+    private fun resolveModelPath(): String {
+        // 1. Override path (already downloaded externally)
+        overrideModelPath?.let { path ->
+            val file = File(path)
+            if (file.exists()) return path
+            logger.w { "Override path does not exist: $path" }
+        }
+
+        // 2. Check downloaded models directory
+        val downloadedFile = File(File(context.filesDir, "models"), modelFilename)
+        if (downloadedFile.exists() && downloadedFile.length() > 0) {
+            logger.d { "Found downloaded model (${downloadedFile.length() / 1024 / 1024} MB)" }
+            return downloadedFile.absolutePath
+        }
+
+        // 3. Copy from assets (bundled models)
+        val assetFile = File(context.filesDir, modelFilename)
+        if (!assetFile.exists()) {
+            logger.i { "Copying $modelFilename from assets to internal storage" }
+            context.assets.open("models/$modelFilename").use { input ->
+                assetFile.outputStream().use { output ->
+                    input.copyTo(output, bufferSize = 8192)
+                }
+            }
+            logger.i { "Model copied (${assetFile.length() / 1024 / 1024} MB)" }
+        } else {
+            logger.d { "Model $modelFilename already in storage (${assetFile.length() / 1024 / 1024} MB)" }
+        }
+        return assetFile.absolutePath
+    }
 
     /**
      * Initialize llama.cpp engine with the configured GGUF model.
@@ -68,22 +106,11 @@ class LlamaCppEngine(
             try {
                 logger.i { "Starting initialization -> model=${model.displayName}, RAM: ${deviceRamGB}GB" }
 
-                val modelFile = File(context.filesDir, modelFilename)
+                // Resolve model path: override > downloaded > assets
+                val modelPath = resolveModelPath()
+                logger.i { "Using model at: $modelPath" }
 
-                if (!modelFile.exists()) {
-                    logger.i { "Copying $modelFilename to internal storage" }
-
-                    context.assets.open("models/${modelFilename}").use { input ->
-                        modelFile.outputStream().use { output ->
-                            input.copyTo(output, bufferSize = 8192)
-                        }
-                    }
-                    logger.i { "Model copied (${modelFile.length() / 1024 / 1024} MB)" }
-                } else {
-                    logger.d { "Model $modelFilename already in storage (${modelFile.length() / 1024 / 1024} MB)" }
-                }
-
-                LlamaBridge.initGenerateModel(modelFile.absolutePath)
+                LlamaBridge.initGenerateModel(modelPath)
                 LlamaBridge.updateGenerateParams(
                     temperature = defaultConfig.temperature!!,
                     maxTokens = getOptimalMaxTokens(),

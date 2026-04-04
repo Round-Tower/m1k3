@@ -347,11 +347,20 @@ private fun ModelChip(
             LlmModel.all().forEach { model ->
                 DropdownMenuItem(
                     text = {
-                        Text(
-                            text = model.displayName,
-                            style = MaTypography.bodyMedium,
-                            color = if (model == currentModel) MaColors.Orange else MaColors.textPrimary()
-                        )
+                        Column {
+                            Text(
+                                text = model.displayName,
+                                style = MaTypography.bodyMedium,
+                                color = if (model == currentModel) MaColors.Orange else MaColors.textPrimary()
+                            )
+                            if (model.minRamGB > 0) {
+                                Text(
+                                    text = "${model.minRamGB}GB+ RAM required",
+                                    style = MaTypography.labelSmall,
+                                    color = MaColors.textMuted()
+                                )
+                            }
+                        }
                     },
                     onClick = {
                         expanded = false

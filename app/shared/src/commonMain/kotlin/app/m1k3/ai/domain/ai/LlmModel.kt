@@ -58,6 +58,22 @@ sealed class LlmModel(
         chatFormat = ChatFormat.FalconH1
     )
 
+    /**
+     * Gemma 4 E2B - Google's efficient on-device model
+     *
+     * 2.3B effective params (5.1B total with Per-Layer Embeddings).
+     * Multimodal (text+image+audio), 128K context, function calling.
+     * Requires 8GB+ RAM at 4-bit quantization.
+     */
+    data object Gemma4_E2B : LlmModel(
+        id = "gemma-4-e2b",
+        displayName = "Gemma 4 (2.3B)",
+        filename = "gemma-4-E2B-it-Q4_K_M.gguf",
+        parameterCount = 2_300_000_000L,
+        chatFormat = ChatFormat.Gemma4,
+        minRamGB = 8
+    )
+
     companion object {
         /**
          * Default model - Gemma 3 270M
@@ -69,7 +85,8 @@ sealed class LlmModel(
          */
         fun all(): List<LlmModel> = listOf(
             Gemma3_270M,
-            FalconH1_90M
+            FalconH1_90M,
+            Gemma4_E2B
         )
 
         /**
