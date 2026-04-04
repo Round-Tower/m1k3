@@ -73,6 +73,7 @@ class HttpModelDownloadManager(
                 logger.i { "Resuming download from ${tempFile.length()} bytes" }
             }
 
+            connection.instanceFollowRedirects = true
             connection.connect()
 
             val totalBytes = connection.contentLengthLong + (if (tempFile.exists()) tempFile.length() else 0L)
@@ -118,7 +119,7 @@ class HttpModelDownloadManager(
     private fun getDownloadUrl(model: LlmModel): String {
         return when (model) {
             is LlmModel.Gemma4_E2B ->
-                "https://huggingface.co/ggml-org/gemma-4-E2B-it-GGUF/resolve/main/${model.filename}"
+                "https://huggingface.co/unsloth/gemma-4-E2B-it-GGUF/resolve/main/${model.filename}"
             else ->
                 "https://huggingface.co/models/${model.filename}"
         }
