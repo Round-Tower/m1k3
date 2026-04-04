@@ -346,11 +346,7 @@ class RealMlKitGenAiEngine(
      *
      * For STABLE: uses default client (Gemini Nano)
      * For PREVIEW_SPEED/FULL: configures AICore Developer Preview
-     * with ModelReleaseTrack.PREVIEW and appropriate ModelPreference.
-     *
-     * Note: The AICore Developer Preview API (ModelConfig, ModelReleaseTrack,
-     * ModelPreference) requires an updated ML Kit GenAI dependency.
-     * Until that dependency is bumped, preview modes fall back to stable.
+     * with ModelReleaseStage.PREVIEW and appropriate ModelPreference.
      */
     private fun createGenerativeModel(): GenerativeModel {
         if (!modelPreference.isPreview) {
@@ -358,22 +354,24 @@ class RealMlKitGenAiEngine(
             return Generation.getClient()
         }
 
-        // AICore Developer Preview configuration
-        // TODO: Enable once mlkit-genai-prompt dependency supports ModelConfig API
-        // val config = generationConfig {
-        //     modelConfig = ModelConfig {
-        //         releaseTrack = ModelReleaseTrack.PREVIEW
-        //         preference = when (modelPreference) {
-        //             AiCoreModelPreference.PREVIEW_SPEED -> ModelPreference.SPEED
-        //             AiCoreModelPreference.PREVIEW_FULL -> ModelPreference.FULL
-        //             else -> ModelPreference.SPEED
-        //         }
-        //     }
-        // }
-        // return Generation.getClient(config)
+        return try {
+            logger.i { "Creating ML Kit GenAI client (AICore Preview - ${modelPreference.displayName})" }
 
-        logger.w { "AICore Preview requested ($modelPreference) but API not yet available — using STABLE" }
-        return Generation.getClient()
+            val config = com.google.mlkit.genai.prompt.generationConfig {
+                modelConfig = com.google.mlkit.genai.prompt.modelConfig {
+                    releaseStage = com.google.mlkit.genai.prompt.ModelReleaseStage.PREVIEW
+                    preference = when (modelPreference) {
+                        AiCoreModelPreference.PREVIEW_SPEED -> com.google.mlkit.genai.prompt.ModelPreference.FAST
+                        AiCoreModelPreference.PREVIEW_FULL -> com.google.mlkit.genai.prompt.ModelPreference.FULL
+                        else -> com.google.mlkit.genai.prompt.ModelPreference.FAST
+                    }
+                }
+            }
+            Generation.getClient(config)
+        } catch (e: Exception) {
+            logger.w(e) { "AICore Preview not available, falling back to STABLE: ${e.message}" }
+            Generation.getClient()
+        }
     }
 
     private fun <T> mapExceptionToAiResult(e: Exception): AiResult<T> {

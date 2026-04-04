@@ -2,8 +2,16 @@ package app.m1k3.ai.assistant.ui
 
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
@@ -34,6 +42,7 @@ import app.m1k3.ai.domain.chat.ChatError
 import app.m1k3.ai.assistant.chat.ChatScreenViewModel
 import app.m1k3.ai.assistant.chat.ContextWindowState
 import app.m1k3.ai.assistant.chat.GenerationState
+import app.m1k3.ai.assistant.chat.ModelDownloadState
 import app.m1k3.ai.assistant.chat.SessionEcoStats
 import app.m1k3.ai.assistant.chat.collectAsState
 import app.m1k3.ai.assistant.chat.isGenerating
@@ -171,6 +180,15 @@ fun ChatScreen(
             )
         }
 
+        // Download progress overlay
+        uiState.modelDownload?.let { downloadState ->
+            ModelDownloadOverlay(
+                state = downloadState,
+                modifier = Modifier.align(Alignment.BottomCenter)
+                    .padding(bottom = 120.dp)
+            )
+        }
+
         // Bottom overlay: Input bar with gradient
         ChatInputBarContainer(
             inputBar = {
@@ -299,6 +317,87 @@ fun ChatBubble(
                 ragSources = message.ragSources,
                 onSpeak = if (onSpeak != null) {{ onSpeak(message.text) }} else null
             )
+        }
+    }
+}
+
+/**
+ * Download progress overlay for large model downloads.
+ */
+@Composable
+private fun ModelDownloadOverlay(
+    state: ModelDownloadState,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp)
+            .background(
+                color = MaColors.bgElevated(),
+                shape = RoundedCornerShape(12.dp)
+            )
+            .border(
+                width = 1.dp,
+                color = MaColors.OrangeDim,
+                shape = RoundedCornerShape(12.dp)
+            )
+            .padding(16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        when (state) {
+            is ModelDownloadState.Starting -> {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(24.dp),
+                    color = MaColors.Orange,
+                    strokeWidth = 2.dp
+                )
+                Text(
+                    "Preparing ${state.modelName}...",
+                    style = app.m1k3.ai.assistant.design.tokens.MaTypography.bodyMedium,
+
+                    color = MaColors.textPrimary()
+                )
+            }
+            is ModelDownloadState.InProgress -> {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        "Downloading ${state.modelName}",
+                        style = app.m1k3.ai.assistant.design.tokens.MaTypography.bodyMedium,
+
+                        color = MaColors.textPrimary()
+                    )
+                    Spacer(Modifier.size(4.dp))
+                    LinearProgressIndicator(
+                        progress = { state.progressPercent / 100f },
+                        modifier = Modifier.fillMaxWidth(),
+                        color = MaColors.Orange,
+                        trackColor = MaColors.bgSecondary()
+                    )
+                    Text(
+                        "${state.downloadedMB}MB / ${state.totalMB}MB (${state.progressPercent}%)",
+                        style = app.m1k3.ai.assistant.design.tokens.MaTypography.labelSmall,
+                        color = MaColors.textMuted()
+                    )
+                }
+            }
+            is ModelDownloadState.Complete -> {
+                Text(
+                    "${state.modelName} ready!",
+                    style = app.m1k3.ai.assistant.design.tokens.MaTypography.bodyMedium,
+
+                    color = MaColors.Success
+                )
+            }
+            is ModelDownloadState.Failed -> {
+                Text(
+                    "Download failed: ${state.error}",
+                    style = app.m1k3.ai.assistant.design.tokens.MaTypography.bodyMedium,
+
+                    color = MaColors.Error
+                )
+            }
         }
     }
 }
