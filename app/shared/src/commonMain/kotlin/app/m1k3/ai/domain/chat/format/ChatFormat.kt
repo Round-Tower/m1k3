@@ -255,6 +255,55 @@ sealed class ChatFormat {
         override fun getPromptPrefix(): String = "<|begin_of_text|>"
     }
 
+    // ===== Gemma4 Format =====
+
+    /**
+     * Gemma4 format - Google's Gemma 4 family
+     *
+     * Used by: Gemma 4 E2B, Gemma 4 E4B, Gemma 4 26B, Gemma 4 31B
+     *
+     * Extends Gemma 3 format with:
+     * - System role support (<start_of_turn>system)
+     * - Extended thinking (<start_of_thinking> / <end_of_thinking>)
+     * - Function calling (<tool_call> / <tool_response>)
+     *
+     * Format:
+     * ```
+     * <bos><start_of_turn>system
+     * You are helpful.<end_of_turn>
+     * <start_of_turn>user
+     * Hello<end_of_turn>
+     * <start_of_turn>model
+     * Hi there!<end_of_turn>
+     * ```
+     */
+    data object Gemma4 : ChatFormat() {
+        override val name = "Gemma4"
+        override val supportsTools = true
+        override val supportsSystemRole = true
+
+        override fun formatMessage(role: MessageRole, content: String): String = when (role) {
+            MessageRole.SYSTEM -> "<start_of_turn>system\n$content<end_of_turn>\n"
+            MessageRole.USER -> "<start_of_turn>user\n$content<end_of_turn>\n"
+            MessageRole.ASSISTANT -> "<start_of_turn>model\n$content<end_of_turn>\n"
+            MessageRole.TOOL -> "<start_of_turn>user\n<tool_response>$content</tool_response><end_of_turn>\n"
+        }
+
+        override fun formatToolSchema(tools: List<Tool>): String = buildString {
+            appendLine("<start_of_turn>system")
+            appendLine("You have access to the following tools:")
+            appendLine()
+            tools.forEach { append(it.toSchemaString()) }
+            appendLine()
+            appendLine("To use a tool, respond with: <tool_call>{\"tool\": \"tool_id\", \"args\": {...}}</tool_call>")
+            appendLine("<end_of_turn>")
+        }
+
+        override fun getStopTokens(): List<String> = listOf("<end_of_turn>", "<eos>")
+
+        override fun getPromptPrefix(): String = "<bos>"
+    }
+
     // ===== Simple Format =====
 
     /**

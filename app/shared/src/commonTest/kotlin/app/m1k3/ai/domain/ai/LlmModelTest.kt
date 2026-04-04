@@ -4,6 +4,7 @@ import app.m1k3.ai.domain.chat.format.ChatFormat
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
+import kotlin.test.assertFalse
 import kotlin.test.assertIs
 
 /**
@@ -130,5 +131,47 @@ class LlmModelTest {
         // All current models have minRamGB=0, so all should be available
         val models = LlmModel.availableFor(2)
         assertTrue(models.isNotEmpty())
+    }
+
+    // ===== Gemma4 E2B Tests =====
+
+    @Test
+    fun `Gemma4_E2B has correct id`() {
+        assertEquals("gemma-4-e2b", LlmModel.Gemma4_E2B.id)
+    }
+
+    @Test
+    fun `Gemma4_E2B has correct display name`() {
+        assertEquals("Gemma 4 (2.3B)", LlmModel.Gemma4_E2B.displayName)
+    }
+
+    @Test
+    fun `Gemma4_E2B uses Gemma4 chat format`() {
+        assertIs<ChatFormat.Gemma4>(LlmModel.Gemma4_E2B.chatFormat)
+    }
+
+    @Test
+    fun `Gemma4_E2B requires 8GB RAM`() {
+        assertEquals(8, LlmModel.Gemma4_E2B.minRamGB)
+    }
+
+    @Test
+    fun `Gemma4_E2B is in all models list`() {
+        assertTrue(LlmModel.all().contains(LlmModel.Gemma4_E2B))
+    }
+
+    @Test
+    fun `Gemma4_E2B is available for 8GB devices`() {
+        assertTrue(LlmModel.availableFor(8).contains(LlmModel.Gemma4_E2B))
+    }
+
+    @Test
+    fun `Gemma4_E2B is not available for 4GB devices`() {
+        assertFalse(LlmModel.availableFor(4).contains(LlmModel.Gemma4_E2B))
+    }
+
+    @Test
+    fun `findById returns Gemma4_E2B`() {
+        assertEquals(LlmModel.Gemma4_E2B, LlmModel.findById("gemma-4-e2b"))
     }
 }

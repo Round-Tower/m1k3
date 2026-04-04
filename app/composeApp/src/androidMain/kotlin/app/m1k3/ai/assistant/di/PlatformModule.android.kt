@@ -4,6 +4,8 @@ import android.content.Context
 import app.cash.sqldelight.driver.android.AndroidSqliteDriver
 import app.m1k3.ai.assistant.ai.BaseLlmEngine
 import app.m1k3.ai.assistant.ai.LlamaCppEngine
+import app.m1k3.ai.assistant.ai.download.HttpModelDownloadManager
+import app.m1k3.ai.domain.ai.ModelDownloadManager
 import app.m1k3.ai.assistant.ai.ondevice.AndroidOnDeviceAi
 import app.m1k3.ai.assistant.ai.ondevice.LlamaCppFallbackEngine
 import app.m1k3.ai.assistant.ai.ondevice.MlKitAvailabilityChecker
@@ -243,6 +245,18 @@ actual val platformModule = module {
                 RealMlKitGenAiEngine(get<Context>(), preference)
             }
         )
+    }
+
+    // ===== Model Download Manager =====
+
+    /**
+     * HttpModelDownloadManager
+     *
+     * Downloads GGUF model files from HuggingFace to internal storage.
+     * Used for large models (Gemma 4 E2B) that can't be bundled in APK.
+     */
+    single<ModelDownloadManager> {
+        HttpModelDownloadManager(get<Context>())
     }
 
     // ===== Tool Calling Infrastructure =====
