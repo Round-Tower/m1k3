@@ -16,51 +16,44 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.platform.LocalFocusManager
-import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
-import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import org.jetbrains.compose.ui.tooling.preview.Preview
 import app.m1k3.ai.assistant.design.haptics.rememberHapticFeedback
 import app.m1k3.ai.assistant.design.preview.PreviewFixtures
 import app.m1k3.ai.assistant.design.theme.MaTheme
 import app.m1k3.ai.assistant.design.tokens.MaColors
+import app.m1k3.ai.assistant.design.tokens.MaRadius
 import app.m1k3.ai.assistant.design.tokens.MaSpacing
 import app.m1k3.ai.assistant.design.tokens.MaTypography
 import app.m1k3.ai.domain.ai.LlmModel
 
 /**
- * ChatInputBar - Beautiful input field with integrated send button.
+ * ChatInputBar - Glassmorphic floating input with integrated send.
  *
- * Features:
- * - Claude-style integrated send button
- * - Focus animations with glow effect
- * - Haptic feedback on typing and send
- * - Accessible with test tags
- *
- * @param text Current input text
- * @param onTextChange Callback when text changes
- * @param onSend Callback when send button is pressed
- * @param enabled Whether input is enabled
- * @param modifier Modifier for the container
+ * Modern pill-shaped input field inspired by Claude/ChatGPT:
+ * - Glassmorphic container with subtle border
+ * - Orange glow on focus
+ * - Animated send button (appears when text present)
+ * - Model chip above input for quick switching
+ * - Haptic feedback on typing start and send
  */
 @Composable
 fun ChatInputBar(
@@ -75,190 +68,162 @@ fun ChatInputBar(
     val interactionSource = remember { MutableInteractionSource() }
     val isFocused by interactionSource.collectIsFocusedAsState()
     val hasText = text.isNotBlank()
-
-    // Haptic feedback controller
     val haptics = rememberHapticFeedback()
-
-    // Focus management
     val focusRequester = remember { FocusRequester() }
     val focusManager = LocalFocusManager.current
     val keyboardController = LocalSoftwareKeyboardController.current
 
-    // Track previous text for "typing start" detection
     var previousText by remember { mutableStateOf(text) }
 
-    // Detect typing start for haptic feedback
     LaunchedEffect(text) {
         if (previousText.isEmpty() && text.isNotEmpty()) {
-            haptics.light() // Subtle feedback when typing starts
+            haptics.light()
         }
         previousText = text
     }
 
-    // Enhanced focus animations
+    // Animated border color: orange on focus, subtle otherwise
     val borderColor by animateColorAsState(
         targetValue = when {
-            !enabled -> MaColors.BorderLight
-            isFocused -> MaColors.Orange
+            !enabled -> MaColors.BorderSubtle
+            isFocused -> MaColors.Orange.copy(alpha = 0.6f)
             else -> MaColors.BorderLight
         },
-        animationSpec = tween(durationMillis = 300, easing = FastOutSlowInEasing),
+        animationSpec = tween(durationMillis = 250),
         label = "borderColor"
     )
 
-    val borderWidth by animateDpAsState(
-        targetValue = if (isFocused) 2.dp else 1.dp,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioMediumBouncy,
-            stiffness = Spring.StiffnessMedium
-        ),
-        label = "borderWidth"
-    )
-
-    // Subtle elevation on focus
-    val elevation by animateDpAsState(
-        targetValue = if (isFocused) 4.dp else 0.dp,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioLowBouncy,
-            stiffness = Spring.StiffnessMedium
-        ),
-        label = "elevation"
-    )
-
-    // Subtle scale on focus for depth perception
-    val fieldScale by animateFloatAsState(
-        targetValue = if (isFocused) 1.01f else 1f,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioMediumBouncy,
-            stiffness = Spring.StiffnessMediumLow
-        ),
-        label = "fieldScale"
-    )
-
-    // Animated send button scale with bouncy spring
+    // Send button scale: bouncy entrance when text appears
     val sendButtonScale by animateFloatAsState(
-        targetValue = if (hasText && enabled) 1f else 0.85f,
+        targetValue = if (hasText && enabled) 1f else 0f,
         animationSpec = spring(
             dampingRatio = Spring.DampingRatioMediumBouncy,
-            stiffness = Spring.StiffnessLow
+            stiffness = Spring.StiffnessMedium
         ),
         label = "sendButtonScale"
     )
 
-    Surface(
-        modifier = modifier.fillMaxWidth().background(
-            color = MaColors.BgSecondary
-        ),
-        color = MaColors.BgSecondary // Transparent to show gradient overlay
+    val pillShape = RoundedCornerShape(MaRadius.xl)
+
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .navigationBarsPadding()
+            .imePadding()
+            .padding(start = MaSpacing.md, end = MaSpacing.md, bottom = MaSpacing.sm)
     ) {
-        Column(
+        // Model chip row
+        if (currentModel != null && onModelSwitch != null) {
+            ModelChip(
+                currentModel = currentModel,
+                onModelSwitch = onModelSwitch,
+                enabled = enabled,
+                modifier = Modifier.padding(
+                    start = MaSpacing.xs,
+                    bottom = MaSpacing.xs
+                )
+            )
+        }
+
+        // Glassmorphic pill input
+        Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .navigationBarsPadding()
-                .imePadding()
-        ) {
-            // Model chip for switching between models
-            if (currentModel != null && onModelSwitch != null) {
-                ModelChip(
-                    currentModel = currentModel,
-                    onModelSwitch = onModelSwitch,
-                    enabled = enabled,
-                    modifier = Modifier.padding(
-                        start = MaSpacing.base,
-                        top = MaSpacing.xs,
-                        bottom = MaSpacing.xs
-                    )
+                .clip(pillShape)
+                .background(
+                    color = MaColors.BgElevated,
+                    shape = pillShape
                 )
-            }
-
-            // Input field with send button
-            Box(modifier = Modifier.fillMaxWidth()) {
-            // Integrated input field with send button
-            BasicTextField(
-                value = text,
-                onValueChange = onTextChange,
+                .border(
+                    width = if (isFocused) 1.5.dp else 1.dp,
+                    color = borderColor,
+                    shape = pillShape
+                )
+        ) {
+            Row(
                 modifier = Modifier
-                    .testTag("input_field")
                     .fillMaxWidth()
-                    .heightIn(min = 56.dp, max = 180.dp)
-                    .scale(fieldScale)
-                    .padding(MaSpacing.base)
-                    .focusRequester(focusRequester)
-                    .verticalScroll(rememberScrollState()), // Fix multiline scroll
-                enabled = enabled,
-                textStyle = MaTypography.bodyLarge.copy(
-                    color = if (enabled) MaColors.textPrimary() else MaColors.textDisabled()
-                ),
-                cursorBrush = SolidColor(MaColors.Orange),
-                maxLines = 6,
-                keyboardOptions = KeyboardOptions.Default.copy(
-                    imeAction = ImeAction.Send
-                ),
-                keyboardActions = KeyboardActions(
-                    onSend = {
-                        if (hasText && enabled) {
-                            onSend()
-                            // Dismiss keyboard and clear focus after send
-                            keyboardController?.hide()
-                            focusManager.clearFocus()
+                    .heightIn(min = 48.dp),
+                verticalAlignment = Alignment.Bottom
+            ) {
+                // Text field — takes remaining space
+                BasicTextField(
+                    value = text,
+                    onValueChange = onTextChange,
+                    modifier = Modifier
+                        .testTag("input_field")
+                        .weight(1f)
+                        .heightIn(min = 48.dp, max = 160.dp)
+                        .padding(
+                            start = MaSpacing.base,
+                            top = MaSpacing.md,
+                            bottom = MaSpacing.md,
+                            end = MaSpacing.xs
+                        )
+                        .focusRequester(focusRequester)
+                        .verticalScroll(rememberScrollState()),
+                    enabled = enabled,
+                    textStyle = MaTypography.bodyLarge.copy(
+                        color = if (enabled) MaColors.textPrimary() else MaColors.textDisabled()
+                    ),
+                    cursorBrush = SolidColor(MaColors.Orange),
+                    maxLines = 6,
+                    keyboardOptions = KeyboardOptions.Default.copy(
+                        imeAction = ImeAction.Send
+                    ),
+                    keyboardActions = KeyboardActions(
+                        onSend = {
+                            if (hasText && enabled) {
+                                haptics.strong()
+                                onSend()
+                                keyboardController?.hide()
+                                focusManager.clearFocus()
+                            }
+                        }
+                    ),
+                    interactionSource = interactionSource,
+                    decorationBox = { innerTextField ->
+                        Box(contentAlignment = Alignment.CenterStart) {
+                            if (text.isEmpty()) {
+                                Text(
+                                    text = "Chat with M1K3...",
+                                    style = MaTypography.bodyLarge,
+                                    color = MaColors.textMuted()
+                                )
+                            }
+                            innerTextField()
                         }
                     }
-                ),
-                interactionSource = interactionSource,
-                decorationBox = { innerTextField ->
+                )
+
+                // Send button — circular, aligned to bottom-right
+                if (sendButtonScale > 0.01f) {
                     Box(
                         modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(MaSpacing.base)
-
+                            .testTag("send_button")
+                            .padding(end = MaSpacing.xs, bottom = MaSpacing.xs)
+                            .size(36.dp)
+                            .scale(sendButtonScale)
+                            .clip(CircleShape)
+                            .background(MaColors.Orange, CircleShape)
+                            .clickable(
+                                enabled = hasText && enabled,
+                                onClick = {
+                                    haptics.strong()
+                                    onSend()
+                                    keyboardController?.hide()
+                                    focusManager.clearFocus()
+                                },
+                                indication = null,
+                                interactionSource = remember { MutableInteractionSource() }
+                            ),
+                        contentAlignment = Alignment.Center
                     ) {
-                        if (text.isEmpty()) {
-                            Text(
-                                text = "Chat with M1K3",
-                                style = MaTypography.bodyLarge,
-                                color = MaColors.textDisabled(),
-                                modifier = Modifier.align(Alignment.CenterStart)
-                            )
-                        }
-                        innerTextField()
+                        SendArrowIcon(color = MaColors.White)
                     }
                 }
-            )
-
-            // Integrated send button (Claude-style)
-            Box(
-                modifier = Modifier
-                    .testTag("send_button")
-                    .align(Alignment.CenterEnd)
-                    .padding(end = 8.dp)
-                    .size(40.dp)
-                    .scale(sendButtonScale)
-                    .clip(CircleShape)
-                    .background(
-                        color = if (hasText && enabled) MaColors.Orange else MaColors.BgSecondary,
-                        shape = CircleShape
-                    )
-                    .clickable(
-                        enabled = hasText && enabled,
-                        onClick = {
-                            haptics.strong() // Strong feedback on send
-                            onSend()
-                            // Dismiss keyboard and clear focus after send
-                            keyboardController?.hide()
-                            focusManager.clearFocus()
-                        },
-                        indication = null,
-                        interactionSource = remember { MutableInteractionSource() }
-                    ),
-                contentAlignment = Alignment.Center
-            ) {
-                // Custom arrow icon (↑)
-                SendArrowIcon(
-                    color = if (hasText && enabled) MaColors.White else MaColors.textDisabled()
-                )
             }
-            } // Box (input + send button)
-        } // Column
+        }
     }
 }
 
@@ -268,7 +233,7 @@ fun ChatInputBar(
 @Composable
 private fun SendArrowIcon(
     color: androidx.compose.ui.graphics.Color,
-    modifier: Modifier = Modifier.size(20.dp)
+    modifier: Modifier = Modifier.size(18.dp)
 ) {
     Canvas(modifier = modifier) {
         val strokeWidth = 2.5f
@@ -276,7 +241,6 @@ private fun SendArrowIcon(
         val centerY = size.height / 2
         val arrowLength = size.height * 0.5f
 
-        // Draw arrow shaft (vertical line)
         drawLine(
             color = color,
             start = Offset(centerX, centerY + arrowLength / 2),
@@ -284,27 +248,17 @@ private fun SendArrowIcon(
             strokeWidth = strokeWidth,
             cap = StrokeCap.Round
         )
-
-        // Draw arrow head (left line)
         drawLine(
             color = color,
             start = Offset(centerX, centerY - arrowLength / 2),
-            end = Offset(
-                centerX - arrowLength / 3,
-                centerY - arrowLength / 2 + arrowLength / 3
-            ),
+            end = Offset(centerX - arrowLength / 3, centerY - arrowLength / 2 + arrowLength / 3),
             strokeWidth = strokeWidth,
             cap = StrokeCap.Round
         )
-
-        // Draw arrow head (right line)
         drawLine(
             color = color,
             start = Offset(centerX, centerY - arrowLength / 2),
-            end = Offset(
-                centerX + arrowLength / 3,
-                centerY - arrowLength / 2 + arrowLength / 3
-            ),
+            end = Offset(centerX + arrowLength / 3, centerY - arrowLength / 2 + arrowLength / 3),
             strokeWidth = strokeWidth,
             cap = StrokeCap.Round
         )
@@ -313,8 +267,6 @@ private fun SendArrowIcon(
 
 /**
  * Model chip for switching between LLM models.
- *
- * Shows current model name; tap to open dropdown with all available models.
  */
 @Composable
 private fun ModelChip(
@@ -328,7 +280,7 @@ private fun ModelChip(
     Box(modifier = modifier) {
         Box(
             modifier = Modifier
-                .clip(RoundedCornerShape(12.dp))
+                .clip(RoundedCornerShape(MaRadius.sm))
                 .background(MaColors.Orange.copy(alpha = if (enabled) 0.15f else 0.08f))
                 .clickable(enabled = enabled) { expanded = true }
                 .padding(horizontal = 10.dp, vertical = 4.dp)
@@ -373,34 +325,39 @@ private fun ModelChip(
 }
 
 /**
- * Container for ChatInputBar with gradient overlay for liquid glass effect.
+ * Container for ChatInputBar with gradient fade above.
  *
- * @param inputBar The ChatInputBar composable
- * @param modifier Modifier for positioning
+ * Creates a smooth transition from chat content to the input area.
  */
 @Composable
 fun ChatInputBarContainer(
     inputBar: @Composable () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Box(modifier = modifier.fillMaxWidth()) {
-        // Gradient overlay for liquid glass effect (theme-aware)
+    Column(modifier = modifier.fillMaxWidth()) {
+        // Gradient fade from transparent to background
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(100.dp)
+                .height(32.dp)
                 .background(
                     brush = Brush.verticalGradient(
                         colors = listOf(
-                            MaterialTheme.colorScheme.background.copy(alpha = 0.0f),
-                            MaterialTheme.colorScheme.background.copy(alpha = 0.95f)
+                            MaColors.bgPrimary().copy(alpha = 0f),
+                            MaColors.bgPrimary()
                         )
                     )
                 )
         )
 
-        // Input bar content
-        inputBar()
+        // Input bar on solid background
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(MaColors.bgPrimary())
+        ) {
+            inputBar()
+        }
     }
 }
 

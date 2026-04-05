@@ -17,10 +17,10 @@ kotlin {
             jvmTarget.set(JvmTarget.JVM_11)
         }
     }
-    
+
     listOf(
         iosArm64(),
-        iosSimulatorArm64()
+        iosSimulatorArm64(),
     ).forEach { iosTarget ->
         iosTarget.binaries.framework {
             baseName = "M1K3"
@@ -53,7 +53,7 @@ kotlin {
             implementation(libs.androidx.security.crypto)
 
             // Inference engines
-            implementation(libs.onnxruntime.android)  // Keep for Gemma3Engine (Phase 4)
+            implementation(libs.onnxruntime.android) // Keep for Gemma3Engine (Phase 4)
 
             // CameraX
             implementation(libs.camerax.core)
@@ -111,7 +111,7 @@ kotlin {
             implementation(libs.kotlinx.datetime)
 
             // Llamatik - KMP llama.cpp binding for GGUF models
-            implementation("com.llamatik:library:0.13.0")
+            implementation("com.llamatik:library:0.18.2")
 
             // WebView for Three.js 3D avatar rendering
             implementation("io.github.kevinnzou:compose-webview-multiplatform:2.0.3")
@@ -156,12 +156,21 @@ kotlin {
 
 android {
     namespace = "app.m1k3.ai.assistant"
-    compileSdk = libs.versions.android.compileSdk.get().toInt()
+    compileSdk =
+        libs.versions.android.compileSdk
+            .get()
+            .toInt()
 
     defaultConfig {
         applicationId = "app.m1k3.ai.assistant"
-        minSdk = libs.versions.android.minSdk.get().toInt()
-        targetSdk = libs.versions.android.targetSdk.get().toInt()
+        minSdk =
+            libs.versions.android.minSdk
+                .get()
+                .toInt()
+        targetSdk =
+            libs.versions.android.targetSdk
+                .get()
+                .toInt()
         versionCode = 1
         versionName = "0.1.0"
 
@@ -182,10 +191,10 @@ android {
             isMinifyEnabled = true
             isShrinkResources = true
 
-             proguardFiles(
-                 getDefaultProguardFile("proguard-android-optimize.txt"),
-                 "proguard-rules.pro"
-             )
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro",
+            )
         }
     }
 
@@ -293,7 +302,7 @@ tasks.register<Exec>("buildWebAvatar") {
         fileTree("../../src/web-avatar/src"),
         file("../../src/web-avatar/index.html"),
         file("../../src/web-avatar/package.json"),
-        file("../../src/web-avatar/vite.config.app.ts")
+        file("../../src/web-avatar/vite.config.app.ts"),
     )
     outputs.dir("../../src/web-avatar/dist-app")
 }

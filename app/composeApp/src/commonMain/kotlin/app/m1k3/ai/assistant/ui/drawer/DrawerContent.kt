@@ -1,45 +1,5 @@
 package app.m1k3.ai.assistant.ui.drawer
 
-/**
- * DrawerContent Composables
- *
- * Extracted drawer UI components from MainActivity
- *
- * **Responsibilities:**
- * - Render M1K3 branding header
- * - Display navigation menu items (Chat, History, Eco Stats, Settings)
- * - Manage drawer open/close state
- * - Apply theme-aware colors (dark/light mode)
- * - Handle user interactions (item selection, auto-close)
- *
- * **Composables:**
- * - `@Composable fun DrawerContent(...)` - Main drawer composite
- * - `@Composable fun DrawerHeader(...)` - Header with M1K3 branding
- * - `@Composable fun MenuItems(...)` - Navigation item list
- *
- * **Data Classes:**
- * - `SidebarMenuItem` - Single menu item data
- * - `DrawerState` - Manages drawer visibility state
- *
- * **Integration:**
- * Used in MainActivity with ModalNavigationDrawer
- *
- * ```kotlin
- * ModalNavigationDrawer(
- *     drawerContent = {
- *         DrawerContent(
- *             currentRoute = navController.currentRoute,
- *             isDarkMode = isDarkMode,
- *             onItemClick = { screen -> navController.navigate(screen) },
- *             onMenuClose = { drawerOpen = false }
- *         )
- *     }
- * ) {
- *     // Main content
- * }
- * ```
- */
-
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
@@ -53,22 +13,19 @@ import app.m1k3.ai.assistant.design.tokens.MaColors
 import app.m1k3.ai.assistant.design.tokens.MaSpacing
 import app.m1k3.ai.assistant.design.tokens.MaTypography
 import app.m1k3.ai.assistant.navigation.SidebarMenuItem
+import app.m1k3.ai.assistant.navigation.primaryNavItems
 import app.m1k3.ai.assistant.navigation.sidebarItems
 
 /**
- * DrawerContent - Main drawer composable
+ * DrawerContent - Navigation drawer with primary + secondary items.
  *
- * Renders the navigation drawer with:
- * - M1K3 branding header
- * - Navigation menu items
- * - Theme-aware colors
- * - Auto-close behavior on selection
+ * Layout:
+ * - 間 M1K3 branded header
+ * - Primary nav (Chat, History, Eco Stats, Settings)
+ * - Divider
+ * - Secondary nav (About, Help, Feedback, Privacy, Export)
  *
- * @param currentRoute Current navigation route for highlighting selected item
- * @param isDarkMode Whether dark mode is active
- * @param onItemClick Callback when menu item selected
- * @param onMenuClose Callback to close drawer after navigation
- * @param modifier Optional modifier for drawer content
+ * This is the sole navigation paradigm — no bottom nav bar.
  */
 @Composable
 fun DrawerContent(
@@ -84,7 +41,6 @@ fun DrawerContent(
             .width(280.dp),
         drawerContainerColor = if (isDarkMode) MaColors.BgPrimary else MaColors.BgPrimaryLight
     ) {
-        // Header
         DrawerHeader(isDarkMode = isDarkMode)
 
         HorizontalDivider(
@@ -92,29 +48,37 @@ fun DrawerContent(
             thickness = 1.dp
         )
 
-        Spacer(modifier = Modifier.height(MaSpacing.base))
+        Spacer(modifier = Modifier.height(MaSpacing.md))
 
-        // Menu Items
-        MenuItems(
+        // Primary navigation items
+        PrimaryNavSection(
             currentRoute = currentRoute,
-            isDarkMode = isDarkMode,
             onItemClick = onItemClick,
             onMenuClose = onMenuClose
         )
 
-        // Bottom spacer for visual balance
+        Spacer(modifier = Modifier.height(MaSpacing.sm))
+
+        HorizontalDivider(
+            modifier = Modifier.padding(horizontal = MaSpacing.lg),
+            color = if (isDarkMode) MaColors.BorderSubtle else MaColors.BorderSubtleLight,
+            thickness = 1.dp
+        )
+
+        Spacer(modifier = Modifier.height(MaSpacing.sm))
+
+        // Secondary / meta navigation items
+        SecondaryNavSection(
+            currentRoute = currentRoute,
+            onItemClick = onItemClick,
+            onMenuClose = onMenuClose
+        )
+
         Spacer(modifier = Modifier.weight(1f))
         Spacer(modifier = Modifier.height(MaSpacing.lg))
     }
 }
 
-/**
- * DrawerHeader - M1K3 branding header with animated logo
- *
- * Displays app name, kanji mark, and tagline
- *
- * @param isDarkMode Whether dark mode is active (for potential future styling)
- */
 @Composable
 private fun DrawerHeader(isDarkMode: Boolean) {
     Column(
@@ -126,12 +90,10 @@ private fun DrawerHeader(isDarkMode: Boolean) {
             ),
         horizontalAlignment = Alignment.Start
     ) {
-        // Kanji mark + brand name row
         Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(MaSpacing.md)
         ) {
-            // 間 mark
             Text(
                 "間",
                 style = MaTypography.displaySmall,
@@ -154,20 +116,40 @@ private fun DrawerHeader(isDarkMode: Boolean) {
     }
 }
 
-/**
- * MenuItems - Navigation menu items list
- *
- * Displays all sidebar navigation items with selection highlighting
- *
- * @param currentRoute Current navigation route
- * @param isDarkMode Whether dark mode is active
- * @param onItemClick Callback when item selected
- * @param onMenuClose Callback to close drawer after selection
- */
 @Composable
-private fun MenuItems(
+private fun PrimaryNavSection(
     currentRoute: String?,
-    isDarkMode: Boolean,
+    onItemClick: (String) -> Unit,
+    onMenuClose: () -> Unit
+) {
+    val haptics = LocalHapticFeedback.current
+
+    primaryNavItems.forEach { item ->
+        val isSelected = currentRoute == item.screen.route
+
+        SidebarMenuItem(
+            icon = item.icon,
+            label = item.label,
+            isSelected = isSelected,
+            onClick = {
+                if (!isSelected) {
+                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                    onItemClick(item.screen.route)
+                }
+                onMenuClose()
+            },
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = MaSpacing.base)
+        )
+
+        Spacer(modifier = Modifier.height(MaSpacing.xs))
+    }
+}
+
+@Composable
+private fun SecondaryNavSection(
+    currentRoute: String?,
     onItemClick: (String) -> Unit,
     onMenuClose: () -> Unit
 ) {
@@ -185,7 +167,6 @@ private fun MenuItems(
                     haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                     onItemClick(item.screen.route)
                 }
-                // Auto-close drawer after selection
                 onMenuClose()
             },
             modifier = Modifier
@@ -193,6 +174,6 @@ private fun MenuItems(
                 .padding(horizontal = MaSpacing.base)
         )
 
-        Spacer(modifier = Modifier.height(MaSpacing.md))
+        Spacer(modifier = Modifier.height(MaSpacing.xs))
     }
 }
