@@ -1,6 +1,6 @@
 package app.m1k3.ai.assistant.ui.components
 
-import app.m1k3.ai.assistant.eco.SessionEcoStats
+import app.m1k3.ai.assistant.chat.SessionEcoStats
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue

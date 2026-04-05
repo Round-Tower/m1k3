@@ -111,6 +111,11 @@ class LlamaCppEngine(
                 logger.i { "Using model at: $modelPath" }
 
                 LlamaBridge.initGenerateModel(modelPath)
+
+                // Note: LlamaBridge.initGenerateModel logs "gen model load failed"
+                // but doesn't throw on failure. The null-safe stripStopTokens and
+                // empty-response checks in generate/generateStreaming handle this
+                // gracefully at generation time.
                 LlamaBridge.updateGenerateParams(
                     temperature = defaultConfig.temperature!!,
                     maxTokens = getOptimalMaxTokens(),
@@ -191,6 +196,13 @@ class LlamaCppEngine(
 
             val response = stripStopTokens(rawResponse)
 
+            if (response.isEmpty()) {
+                logger.w { "LlamaBridge returned null or empty — native model context may be invalid" }
+                return@withContext Result.failure(
+                    RuntimeException("Model returned empty response. The native context may have been lost.")
+                )
+            }
+
             val inferenceTimeMs = System.currentTimeMillis() - startTime
             val estimatedTokens = (response.length / 4).coerceAtLeast(1)
             val tokensPerSecond = if (inferenceTimeMs > 0) {
@@ -270,6 +282,13 @@ class LlamaCppEngine(
 
             val response = stripStopTokens(rawResponse)
 
+            if (response.isEmpty()) {
+                logger.w { "LlamaBridge returned null or empty — native model context may be invalid" }
+                return@withContext Result.failure(
+                    RuntimeException("Model returned empty response. The native context may have been lost.")
+                )
+            }
+
             // Simulate streaming: emit word-by-word for progressive UI display.
             // Split on whitespace boundaries to preserve natural word spacing.
             val words = response.split("(?<=\\s)|(?=\\s)".toRegex())
@@ -294,9 +313,16 @@ class LlamaCppEngine(
      * The non-streaming API may include stop tokens in the response
      * that the streaming path would normally detect and truncate at.
      */
-    private fun stripStopTokens(response: String): String {
+    /**
+     * Strip stop tokens from model output.
+     *
+     * Accepts nullable String because JNI bridge returns Java platform type
+     * (null when native ctx/model is null). Returns empty string for null input.
+     */
+    private fun stripStopTokens(response: String?): String {
+        if (response == null) return ""
         val stopTokens = chatFormatter.getStopTokens()
-        var cleaned = response
+        var cleaned: String = response
         for (stopToken in stopTokens) {
             val idx = cleaned.indexOf(stopToken)
             if (idx >= 0) {

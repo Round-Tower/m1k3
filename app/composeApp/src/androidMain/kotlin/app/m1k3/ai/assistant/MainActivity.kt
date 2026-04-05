@@ -67,7 +67,6 @@ import app.m1k3.ai.assistant.design.theme.MaTheme
 import app.m1k3.ai.assistant.design.tokens.MaColors
 import app.m1k3.ai.assistant.di.allModules
 import app.m1k3.ai.assistant.embedding.EmbeddingEngine
-import app.m1k3.ai.assistant.navigation.BottomNavigationBar
 import app.m1k3.ai.assistant.navigation.Screen
 import app.m1k3.ai.assistant.navigation.navigateToBottomNav
 import app.m1k3.ai.assistant.ui.AboutScreen
@@ -319,14 +318,24 @@ private fun MaAppContent(
                         currentRoute = navController.currentBackStackEntryAsState().value?.destination?.route,
                         isDarkMode = isDarkMode,
                         onItemClick = { route ->
-                            // Map route to Screen and navigate
-                            when (route) {
-                                "chat" -> navController.navigateToBottomNav(Screen.Chat)
-                                "history" -> navController.navigateToBottomNav(Screen.History)
-                                "ecostats" -> navController.navigateToBottomNav(Screen.EcoStats)
-                                "settings" -> navController.navigateToBottomNav(Screen.Settings)
-                                "avatar-webview-demo" -> navController.navigate(Screen.AvatarWebViewDemo.route)
-                                else -> navController.navigateToBottomNav(Screen.Chat)
+                            // Primary nav uses navigateToBottomNav for proper back stack
+                            val primaryRoutes = setOf(
+                                Screen.Chat.route,
+                                Screen.History.route,
+                                Screen.EcoStats.route,
+                                Screen.Settings.route
+                            )
+                            if (route in primaryRoutes) {
+                                val screen = when (route) {
+                                    Screen.Chat.route -> Screen.Chat
+                                    Screen.History.route -> Screen.History
+                                    Screen.EcoStats.route -> Screen.EcoStats
+                                    Screen.Settings.route -> Screen.Settings
+                                    else -> Screen.Chat
+                                }
+                                navController.navigateToBottomNav(screen)
+                            } else {
+                                navController.navigate(route)
                             }
                             haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                         },
@@ -348,12 +357,6 @@ private fun MaAppContent(
                                 engineInitialized = true,
                                 avatarState = appAvatarState,
                                 onMenuClick = { drawerOpen = !drawerOpen },
-                                modifier = Modifier.fillMaxWidth()
-                            )
-                        },
-                        bottomBar = {
-                            BottomNavigationBar(
-                                navController = navController,
                                 modifier = Modifier.fillMaxWidth()
                             )
                         },

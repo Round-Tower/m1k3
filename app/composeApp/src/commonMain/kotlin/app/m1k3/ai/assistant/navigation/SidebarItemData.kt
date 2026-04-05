@@ -14,14 +14,38 @@ data class NavItem(
 )
 
 /**
- * Sidebar menu items configuration - Meta/secondary actions
+ * Primary navigation items — main app workflows.
  *
- * **Philosophy:**
- * Bottom nav = primary workflow (Chat, History, Eco Stats, Settings, Demo)
- * Drawer = meta/app-level actions (About, Help, Feedback, etc.)
+ * These are the core screens the user moves between frequently.
+ * Displayed prominently at the top of the drawer.
+ */
+val primaryNavItems = listOf(
+    NavItem(
+        screen = Screen.Chat,
+        label = "Chat",
+        icon = Icons.Default.Chat
+    ),
+    NavItem(
+        screen = Screen.History,
+        label = "History",
+        icon = Icons.Default.History
+    ),
+    NavItem(
+        screen = Screen.EcoStats,
+        label = "Eco Stats",
+        icon = Icons.Default.Eco
+    ),
+    NavItem(
+        screen = Screen.Settings,
+        label = "Settings",
+        icon = Icons.Default.Settings
+    )
+)
+
+/**
+ * Secondary navigation items — meta/app-level actions.
  *
- * This differentiation prevents redundancy and gives each navigation
- * method a clear purpose.
+ * Less frequently accessed screens shown below a divider.
  */
 val sidebarItems = listOf(
     NavItem(
