@@ -74,6 +74,11 @@ sealed class Screen(val route: String) {
     data object Privacy : Screen("privacy")
 
     /**
+     * Open Source Licenses screen - All third-party libraries, assets, and attributions
+     */
+    data object Licenses : Screen("licenses")
+
+    /**
      * Export Data screen - Backup conversations, export eco stats
      */
     data object Export : Screen("export")

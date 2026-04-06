@@ -77,6 +77,7 @@ import app.m1k3.ai.assistant.ui.ExportScreen
 import app.m1k3.ai.assistant.ui.FeedbackScreen
 import app.m1k3.ai.assistant.ui.HelpScreen
 import app.m1k3.ai.assistant.ui.HistoryScreen
+import app.m1k3.ai.assistant.ui.LicensesScreen
 import app.m1k3.ai.assistant.ui.PrivacyScreen
 import app.m1k3.ai.assistant.ui.components.Toolbar
 import app.m1k3.ai.assistant.ui.demo.MaAIDemo
@@ -447,6 +448,9 @@ private fun MaAppContent(
                                     app.m1k3.ai.assistant.ui.SettingsScreen(
                                         onNavigateToAvatarGallery = {
                                             navController.navigate(Screen.AvatarGallery.route)
+                                        },
+                                        onNavigateToLicenses = {
+                                            navController.navigate(Screen.Licenses.route)
                                         }
                                     )
                                 }
@@ -468,6 +472,10 @@ private fun MaAppContent(
                                 // Meta Screens (Drawer actions)
                                 composable(Screen.About.route) {
                                     AboutScreen()
+                                }
+
+                                composable(Screen.Licenses.route) {
+                                    LicensesScreen()
                                 }
 
                                 composable(Screen.Help.route) {

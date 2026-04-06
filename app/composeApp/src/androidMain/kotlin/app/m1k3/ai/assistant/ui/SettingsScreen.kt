@@ -54,6 +54,7 @@ import org.koin.compose.koinInject
 @Composable
 fun SettingsScreen(
     onNavigateToAvatarGallery: (() -> Unit)? = null,
+    onNavigateToLicenses: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val haptics = LocalHapticFeedback.current
@@ -154,7 +155,7 @@ fun SettingsScreen(
         item {
             AboutSection(
                 onVersionClick = {},
-                onLicensesClick = {},
+                onLicensesClick = { onNavigateToLicenses?.invoke() },
                 onPrivacyPolicyClick = {}
             )
         }
