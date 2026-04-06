@@ -227,4 +227,65 @@ class AudioEffectsProcessorTest {
 
         assertTrue(result.isEmpty)
     }
+// ===== Theatrical Effect =====
+
+    @Test
+    fun `Theatrical modifies audio — not a pass-through`() {
+        val input = sineWave()
+        val result = processor.apply(input, TtsEffect.Theatrical())
+        var different = false
+        for (i in input.samples.indices) {
+            if (abs(input.samples[i] - result.samples[i]) > 0.001f) { different = true; break }
+        }
+        assertTrue(different, "Theatrical should modify the signal")
+    }
+
+    @Test
+    fun `Theatrical keeps samples in valid range`() {
+        val input = sineWave()
+        val result = processor.apply(input, TtsEffect.Theatrical())
+        assertTrue(result.samples.all { it in -1.0f..1.0f }, "Theatrical must not clip")
+    }
+
+    @Test
+    fun `Theatrical preserves sample count`() {
+        val input = sineWave()
+        val result = processor.apply(input, TtsEffect.Theatrical())
+        assertEquals(input.samples.size, result.samples.size)
+    }
+
+    @Test
+    fun `Theatrical VHS_HIFI keeps samples in valid range`() {
+        val input = sineWave()
+        val result = processor.apply(input, TtsEffect.Theatrical(TtsEffect.Theatrical.Preset.VHS_HIFI))
+        assertTrue(result.samples.all { it in -1.0f..1.0f })
+    }
+
+    @Test
+    fun `Theatrical VHS_LINEAR keeps samples in valid range`() {
+        val input = sineWave()
+        val result = processor.apply(input, TtsEffect.Theatrical(TtsEffect.Theatrical.Preset.VHS_LINEAR))
+        assertTrue(result.samples.all { it in -1.0f..1.0f })
+    }
+
+    @Test
+    fun `Theatrical output stays within safe headroom`() {
+        // Saturation + mid EQ + compression should keep output well within [-1, 1]
+        // (EQ mid boost can slightly nudge peak, but compression brings it back)
+        val samples = FloatArray(2400) { i ->
+            (0.9f * kotlin.math.sin(2.0 * Math.PI * 440.0 * i / 24000)).toFloat()
+        }
+        val input = AudioSample(samples, 24000)
+        val result = processor.apply(input, TtsEffect.Theatrical())
+        val outputPeak = result.samples.maxOf { abs(it) }
+        assertTrue(outputPeak <= 1.0f, "Theatrical must not exceed unity gain (got $outputPeak)")
+    }
+
+    @Test
+    fun `M1K3_DEFAULT chain with Theatrical produces valid output`() {
+        val input = sineWave()
+        val result = processor.apply(input, TtsEffect.Chain.M1K3_DEFAULT)
+        assertTrue(result.samples.isNotEmpty())
+        assertTrue(result.samples.all { it in -1.0f..1.0f })
+    }
 }

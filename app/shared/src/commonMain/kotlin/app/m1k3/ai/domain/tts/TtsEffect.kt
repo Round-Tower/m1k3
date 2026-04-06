@@ -86,20 +86,34 @@ sealed class TtsEffect {
             /**
              * M1K3's default effect chain
              */
+            /** Warm tape character — Theatrical + gentle compression + normalize */
             val M1K3_DEFAULT = Chain(
                 listOf(
-                    Intercom(distortion = 0.1f),
-                    Compression(threshold = 0.6f, ratio = 0.3f),
-                    Normalization(level = 0.8f)
+                    Theatrical(Theatrical.Preset.THEATRICAL),
+                    Normalization(level = 0.85f)
                 )
             )
         }
     }
 
+    /**
+     * Theatrical warmth — analog tape character for M1K3's nostalgic vibe.
+     *
+     * Port of the Python Film80sEffect. Three presets:
+     *
+     *  THEATRICAL  — subtle saturation, academy EQ, minimal hiss (-70dB). Default.
+     *  VHS_HIFI    — slightly driven, 12kHz bandwidth, subtle hiss (-60dB).
+     *  VHS_LINEAR  — lo-fi, 6kHz bandwidth, noticeable hiss (-50dB).
+     *
+     * Signal chain:
+     *   tape saturation → academy EQ → vintage compression → noise floor → normalize
+     */
+    data class Theatrical(val preset: Preset = Preset.THEATRICAL) : TtsEffect() {
+        enum class Preset { THEATRICAL, VHS_HIFI, VHS_LINEAR }
+    }
+
     companion object {
-        /**
-         * Default effect for M1K3 - RadioChat style
-         */
-        val default: TtsEffect = RadioChat()
+        /** Default effect — warm tape character */
+        val default: TtsEffect = Theatrical()
     }
 }
