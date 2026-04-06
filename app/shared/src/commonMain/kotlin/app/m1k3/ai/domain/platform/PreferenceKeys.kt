@@ -24,6 +24,12 @@ object PreferenceKeys {
     /** Voice output enabled */
     const val VOICE_ENABLED = "voice_enabled"
 
+    /** Auto voice reply - automatically speak AI responses */
+    const val VOICE_AUTO_REPLY = "voice_auto_reply"
+
+    /** Selected avatar model ID */
+    const val SELECTED_AVATAR = "selected_avatar"
+
     /** Debug mode enabled */
     const val DEBUG_MODE = "debug_mode"
 

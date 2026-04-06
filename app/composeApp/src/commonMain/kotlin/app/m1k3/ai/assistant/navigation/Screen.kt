@@ -49,6 +49,11 @@ sealed class Screen(val route: String) {
     data object AvatarWebViewDemo : Screen("avatar-webview-demo")
 
     /**
+     * Avatar Gallery screen - Full-screen avatar selection with 3D previews
+     */
+    data object AvatarGallery : Screen("avatar_gallery")
+
+    /**
      * About M1K3 screen - App mission, privacy-first messaging, version info
      */
     data object About : Screen("about")

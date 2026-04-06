@@ -6,6 +6,9 @@
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
 
+    <!-- Microphone permission for voice input (STT) -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+
     <!-- Camera permission for multi-modal vision features -->
     <uses-permission android:name="android.permission.CAMERA" />
 

@@ -60,8 +60,15 @@ import app.m1k3.ai.assistant.ui.components.ClearConversationDialog
 import app.m1k3.ai.assistant.ui.components.ContextWindowIndicator
 import app.m1k3.ai.assistant.ui.components.EcoIndicator
 import app.m1k3.ai.assistant.ui.components.EcoIndicatorVariant
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.collectAsState as collectFlowAsState
 import org.jetbrains.compose.ui.tooling.preview.Preview
 import app.m1k3.ai.assistant.MainActivity
+import app.m1k3.ai.assistant.stt.AndroidSttEngine
+import app.m1k3.ai.assistant.globe.GlobeBackground
+import app.m1k3.ai.assistant.globe.GlobeMode
+import app.m1k3.ai.domain.stt.SttState
+import app.m1k3.ai.domain.stt.isListening
 import org.koin.androidx.compose.koinViewModel
 import org.koin.core.parameter.parametersOf
 
@@ -90,6 +97,7 @@ fun ChatScreen(
 ) {
     rememberCoroutineScope()
     val listState = rememberLazyListState()
+    val context = LocalContext.current
     val viewModel = koinViewModel<ChatScreenViewModel> {
         parametersOf(projectId)
     }
@@ -101,6 +109,29 @@ fun ChatScreen(
     var showClearDialog by remember { mutableStateOf(false) }
     val haptics = rememberHapticFeedback()
 
+    // Speech-to-Text engine
+    val sttEngine = remember { AndroidSttEngine(context) }
+    val sttState by sttEngine.state.collectFlowAsState()
+
+    // Cleanup STT on dispose
+    DisposableEffect(Unit) {
+        onDispose { sttEngine.release() }
+    }
+
+    // When STT produces a result, populate the input field
+    LaunchedEffect(sttState) {
+        when (val state = sttState) {
+            is SttState.Result -> {
+                haptics.success()
+                viewModel.updateInputText(state.text)
+            }
+            is SttState.Error -> {
+                haptics.error()
+            }
+            else -> {}
+        }
+    }
+
     // Register clear callback
     LaunchedEffect(onClearConversationClick) {
         if (onClearConversationClick != null) {
@@ -108,23 +139,34 @@ fun ChatScreen(
         }
     }
 
-    // Sync avatar with generation state
+    // Sync avatar with generation state + haptics on state transitions
     if (avatarVM != null) {
         LaunchedEffect(uiState.generationState) {
             when (uiState.generationState) {
                 is GenerationState.Thinking -> avatarVM.startThinking()
                 is GenerationState.Streaming -> avatarVM.startSpeaking()
                 is GenerationState.Complete -> {
+                    haptics.success()
                     val complete = uiState.generationState as GenerationState.Complete
                     avatarVM.processMessage(complete.finalText, isUserMessage = false)
                     kotlinx.coroutines.delay(2000)
                     avatarVM.returnToIdle()
                 }
                 is GenerationState.Failed -> {
+                    haptics.error()
                     avatarVM.showError("Generation failed")
                     kotlinx.coroutines.delay(2000)
                     avatarVM.returnToIdle()
                 }
+                else -> {}
+            }
+        }
+    } else {
+        // No avatar VM — still fire haptics on generation events
+        LaunchedEffect(uiState.generationState) {
+            when (uiState.generationState) {
+                is GenerationState.Complete -> haptics.success()
+                is GenerationState.Failed -> haptics.error()
                 else -> {}
             }
         }
@@ -157,7 +199,14 @@ fun ChatScreen(
             .fillMaxSize()
             .animateContentSize()
     ) {
-        // Background: Messages list (behind overlays)
+        // Layer 0: Globe background — Rubin dot globe, dims during generation
+        GlobeBackground(
+            mode = GlobeMode.RUBIN,
+            dimmed = uiState.generationState.isGenerating,
+            modifier = Modifier.fillMaxSize()
+        )
+
+        // Layer 1: Messages list (behind overlays)
         Column(modifier = Modifier.fillMaxSize()) {
             // Context Window Indicator - Shows conversation history usage
             ContextWindowIndicator(
@@ -202,17 +251,39 @@ fun ChatScreen(
                     },
                     enabled = uiState.isInputEnabled,
                     currentModel = uiState.currentModel,
-                    onModelSwitch = { model -> viewModel.switchModel(model) }
+                    onModelSwitch = { model -> viewModel.switchModel(model) },
+                    autoVoiceReply = uiState.autoVoiceReply,
+                    onAutoVoiceToggle = {
+                        haptics.medium()
+                        viewModel.toggleAutoVoiceReply()
+                    },
+                    isListening = sttState.isListening,
+                    onMicClick = if (sttEngine.isAvailable()) {
+                        {
+                            if (sttState.isListening) {
+                                sttEngine.stopListening()
+                            } else {
+                                sttEngine.startListening()
+                            }
+                        }
+                    } else null,
+                    listeningPartialText = (sttState as? SttState.Listening)?.partialText ?: ""
                 )
             },
             modifier = Modifier.align(Alignment.BottomCenter)
         )
 
-        // Error dialog
+        // Error dialog — haptic on appear
         uiState.error?.let { error ->
+            LaunchedEffect(error) {
+                haptics.error()
+            }
             ErrorSnackbar(
                 error = error,
-                onDismiss = { viewModel.clearError() }
+                onDismiss = {
+                    haptics.light()
+                    viewModel.clearError()
+                }
             )
         }
 
@@ -221,10 +292,14 @@ fun ChatScreen(
             ClearConversationDialog(
                 sessionStats = uiState.sessionEcoStats,
                 onConfirm = {
+                    haptics.strong()
                     viewModel.clearConversation()
                     showClearDialog = false
                 },
-                onDismiss = { showClearDialog = false }
+                onDismiss = {
+                    haptics.light()
+                    showClearDialog = false
+                }
             )
         }
     }

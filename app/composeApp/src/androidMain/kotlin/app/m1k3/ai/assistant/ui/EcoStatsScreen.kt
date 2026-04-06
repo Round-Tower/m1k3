@@ -180,12 +180,26 @@ private fun EcoStatsContent(
             )
         }
 
-        // Lifetime stats
+        // Hero section — big animated numbers
+        state.lifetimeStats?.let { stats ->
+            EcoStatsHero(stats = stats)
+        }
+
+        // Savings rings — visual cloud comparison
+        state.cloudComparison?.let { comparison ->
+            SavingsRingsRow(
+                waterPercent = comparison.waterSavingsPercent,
+                energyPercent = comparison.energySavingsPercent,
+                co2Percent = comparison.co2SavingsPercent
+            )
+        }
+
+        // Detailed lifetime stats
         state.lifetimeStats?.let { stats ->
             LifetimeStatsCard(stats = stats)
         }
 
-        // Cloud comparison
+        // Cloud comparison detail
         state.cloudComparison?.let { comparison ->
             CloudComparisonCard(comparison = comparison)
         }

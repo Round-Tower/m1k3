@@ -63,6 +63,11 @@ fun ChatInputBar(
     enabled: Boolean,
     currentModel: LlmModel? = null,
     onModelSwitch: ((LlmModel) -> Unit)? = null,
+    autoVoiceReply: Boolean = false,
+    onAutoVoiceToggle: (() -> Unit)? = null,
+    isListening: Boolean = false,
+    onMicClick: (() -> Unit)? = null,
+    listeningPartialText: String = "",
     modifier: Modifier = Modifier
 ) {
     val interactionSource = remember { MutableInteractionSource() }
@@ -146,6 +151,38 @@ fun ChatInputBar(
                     .heightIn(min = 48.dp),
                 verticalAlignment = Alignment.Bottom
             ) {
+                // Voice toggle — small speaker icon
+                if (onAutoVoiceToggle != null) {
+                    val voiceIconAlpha by animateFloatAsState(
+                        targetValue = if (autoVoiceReply) 1f else 0.4f,
+                        animationSpec = tween(200),
+                        label = "voiceIconAlpha"
+                    )
+                    Box(
+                        modifier = Modifier
+                            .padding(start = MaSpacing.xs, bottom = MaSpacing.xs)
+                            .size(36.dp)
+                            .clip(CircleShape)
+                            .background(
+                                if (autoVoiceReply) MaColors.Orange.copy(alpha = 0.15f)
+                                else MaColors.BorderSubtle.copy(alpha = 0.1f),
+                                CircleShape
+                            )
+                            .clickable(
+                                onClick = onAutoVoiceToggle,
+                                indication = null,
+                                interactionSource = remember { MutableInteractionSource() }
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        VoiceToggleIcon(
+                            active = autoVoiceReply,
+                            color = if (autoVoiceReply) MaColors.Orange else MaColors.textMuted(),
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                }
+
                 // Text field — takes remaining space
                 BasicTextField(
                     value = text,
@@ -186,15 +223,63 @@ fun ChatInputBar(
                         Box(contentAlignment = Alignment.CenterStart) {
                             if (text.isEmpty()) {
                                 Text(
-                                    text = "Chat with M1K3...",
+                                    text = if (isListening) {
+                                        listeningPartialText.ifBlank { "Listening..." }
+                                    } else {
+                                        "Chat with M1K3..."
+                                    },
                                     style = MaTypography.bodyLarge,
-                                    color = MaColors.textMuted()
+                                    color = if (isListening) MaColors.Orange.copy(alpha = 0.7f) else MaColors.textMuted()
                                 )
                             }
                             innerTextField()
                         }
                     }
                 )
+
+                // Mic button — shows when no text and mic available
+                if (!hasText && onMicClick != null && sendButtonScale < 0.01f) {
+                    // Pulsing animation when listening
+                    val micPulse by animateFloatAsState(
+                        targetValue = if (isListening) 1.15f else 1f,
+                        animationSpec = if (isListening) {
+                            infiniteRepeatable(
+                                animation = tween(600, easing = FastOutSlowInEasing),
+                                repeatMode = RepeatMode.Reverse
+                            )
+                        } else {
+                            tween(200)
+                        },
+                        label = "micPulse"
+                    )
+
+                    Box(
+                        modifier = Modifier
+                            .testTag("mic_button")
+                            .padding(end = MaSpacing.xs, bottom = MaSpacing.xs)
+                            .size(36.dp)
+                            .scale(micPulse)
+                            .clip(CircleShape)
+                            .background(
+                                if (isListening) MaColors.Orange else MaColors.Orange.copy(alpha = 0.15f),
+                                CircleShape
+                            )
+                            .clickable(
+                                enabled = enabled,
+                                onClick = {
+                                    haptics.medium()
+                                    onMicClick()
+                                },
+                                indication = null,
+                                interactionSource = remember { MutableInteractionSource() }
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        MicIcon(
+                            color = if (isListening) MaColors.White else MaColors.Orange
+                        )
+                    }
+                }
 
                 // Send button — circular, aligned to bottom-right
                 if (sendButtonScale > 0.01f) {
@@ -266,6 +351,91 @@ private fun SendArrowIcon(
 }
 
 /**
+ * Microphone icon drawn with Canvas.
+ */
+@Composable
+private fun MicIcon(
+    color: androidx.compose.ui.graphics.Color,
+    modifier: Modifier = Modifier.size(18.dp)
+) {
+    Canvas(modifier = modifier) {
+        val sw = 2.5f
+        val cx = size.width / 2
+        val cy = size.height / 2
+
+        // Mic body (rectangle with rounded top)
+        val micWidth = size.width * 0.25f
+        val micHeight = size.height * 0.4f
+        val micTop = cy - micHeight / 2 - size.height * 0.05f
+
+        drawLine(color, Offset(cx - micWidth / 2, micTop + micHeight), Offset(cx - micWidth / 2, micTop + micWidth / 2), sw, StrokeCap.Round)
+        drawLine(color, Offset(cx + micWidth / 2, micTop + micHeight), Offset(cx + micWidth / 2, micTop + micWidth / 2), sw, StrokeCap.Round)
+        // Top arc (approximated)
+        drawLine(color, Offset(cx - micWidth / 2, micTop + micWidth / 2), Offset(cx, micTop), sw, StrokeCap.Round)
+        drawLine(color, Offset(cx + micWidth / 2, micTop + micWidth / 2), Offset(cx, micTop), sw, StrokeCap.Round)
+
+        // Base cup
+        val cupY = micTop + micHeight + size.height * 0.03f
+        drawLine(color, Offset(cx - micWidth, cupY), Offset(cx - micWidth, cupY - size.height * 0.08f), sw, StrokeCap.Round)
+        drawLine(color, Offset(cx + micWidth, cupY), Offset(cx + micWidth, cupY - size.height * 0.08f), sw, StrokeCap.Round)
+        drawLine(color, Offset(cx - micWidth, cupY), Offset(cx + micWidth, cupY), sw, StrokeCap.Round)
+
+        // Stand
+        val standBottom = size.height * 0.85f
+        drawLine(color, Offset(cx, cupY), Offset(cx, standBottom), sw, StrokeCap.Round)
+        drawLine(color, Offset(cx - micWidth * 0.8f, standBottom), Offset(cx + micWidth * 0.8f, standBottom), sw, StrokeCap.Round)
+    }
+}
+
+/**
+ * Voice toggle icon — speaker with optional sound waves.
+ *
+ * When active: speaker with radiating waves (auto-reply ON)
+ * When inactive: speaker with X (auto-reply OFF)
+ */
+@Composable
+private fun VoiceToggleIcon(
+    active: Boolean,
+    color: androidx.compose.ui.graphics.Color,
+    modifier: Modifier = Modifier.size(18.dp)
+) {
+    Canvas(modifier = modifier) {
+        val sw = 2f
+        val cx = size.width * 0.35f
+        val cy = size.height / 2
+
+        // Speaker body (small rectangle)
+        drawRect(
+            color = color,
+            topLeft = Offset(size.width * 0.15f, cy - size.height * 0.15f),
+            size = androidx.compose.ui.geometry.Size(size.width * 0.15f, size.height * 0.3f)
+        )
+
+        // Speaker cone (triangle via lines)
+        drawLine(color, Offset(cx, cy - size.height * 0.15f), Offset(cx + size.width * 0.15f, cy - size.height * 0.3f), sw, StrokeCap.Round)
+        drawLine(color, Offset(cx, cy + size.height * 0.15f), Offset(cx + size.width * 0.15f, cy + size.height * 0.3f), sw, StrokeCap.Round)
+        drawLine(color, Offset(cx + size.width * 0.15f, cy - size.height * 0.3f), Offset(cx + size.width * 0.15f, cy + size.height * 0.3f), sw, StrokeCap.Round)
+
+        if (active) {
+            // Sound waves (arcs approximated as small curves)
+            val waveX = size.width * 0.65f
+            drawLine(color, Offset(waveX, cy - size.height * 0.15f), Offset(waveX + size.width * 0.05f, cy), sw, StrokeCap.Round)
+            drawLine(color, Offset(waveX + size.width * 0.05f, cy), Offset(waveX, cy + size.height * 0.15f), sw, StrokeCap.Round)
+
+            val wave2X = size.width * 0.75f
+            drawLine(color, Offset(wave2X, cy - size.height * 0.25f), Offset(wave2X + size.width * 0.08f, cy), sw, StrokeCap.Round)
+            drawLine(color, Offset(wave2X + size.width * 0.08f, cy), Offset(wave2X, cy + size.height * 0.25f), sw, StrokeCap.Round)
+        } else {
+            // X mark (muted)
+            val xCenter = size.width * 0.75f
+            val xSize = size.height * 0.15f
+            drawLine(color, Offset(xCenter - xSize, cy - xSize), Offset(xCenter + xSize, cy + xSize), sw, StrokeCap.Round)
+            drawLine(color, Offset(xCenter + xSize, cy - xSize), Offset(xCenter - xSize, cy + xSize), sw, StrokeCap.Round)
+        }
+    }
+}
+
+/**
  * Model chip for switching between LLM models.
  */
 @Composable
@@ -276,13 +446,17 @@ private fun ModelChip(
     modifier: Modifier = Modifier
 ) {
     var expanded by remember { mutableStateOf(false) }
+    val haptics = rememberHapticFeedback()
 
     Box(modifier = modifier) {
         Box(
             modifier = Modifier
                 .clip(RoundedCornerShape(MaRadius.sm))
                 .background(MaColors.Orange.copy(alpha = if (enabled) 0.15f else 0.08f))
-                .clickable(enabled = enabled) { expanded = true }
+                .clickable(enabled = enabled) {
+                    haptics.light()
+                    expanded = true
+                }
                 .padding(horizontal = 10.dp, vertical = 4.dp)
         ) {
             Text(
@@ -315,6 +489,7 @@ private fun ModelChip(
                         }
                     },
                     onClick = {
+                        haptics.medium()
                         expanded = false
                         if (model != currentModel) onModelSwitch(model)
                     }

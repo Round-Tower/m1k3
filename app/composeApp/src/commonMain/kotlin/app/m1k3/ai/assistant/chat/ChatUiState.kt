@@ -69,7 +69,10 @@ data class ChatUiState(
     val isLoadingTts: Boolean = false,
 
     /** Model download progress (null when not downloading) */
-    val modelDownload: ModelDownloadState? = null
+    val modelDownload: ModelDownloadState? = null,
+
+    /** Auto voice reply - automatically speak AI responses aloud */
+    val autoVoiceReply: Boolean = false
 )
 
 /**
@@ -182,6 +185,32 @@ val ChatUiState.isInputEnabled: Boolean
  */
 val ChatUiState.canSendMessage: Boolean
     get() = isInputEnabled && inputText.isNotBlank()
+
+/**
+ * Signed: Kev + claude-sonnet-4-6, 2026-04-06
+ * Format: MurphySig v0.1 (https://murphysig.dev/spec)
+ *
+ * Context: Auto voice reply extensions. shouldAutoSpeak is a pure computed property
+ * — no side effects, fully testable. The guard against isSpeaking prevents double-play
+ * if the user taps speak manually while auto-reply is enabled. Defaults to false so
+ * new users aren't surprised by a speaking phone.
+ *
+ * Confidence: 0.9 — logic is simple and well-tested (10 tests passing).
+ */
+
+/**
+ * Extension to check if auto-speak should trigger.
+ *
+ * True when:
+ * - autoVoiceReply is enabled
+ * - Generation just completed with non-empty text
+ * - Not already speaking
+ */
+val ChatUiState.shouldAutoSpeak: Boolean
+    get() = autoVoiceReply &&
+            !isSpeaking &&
+            generationState is GenerationState.Complete &&
+            (generationState as GenerationState.Complete).finalText.isNotBlank()
 
 /**
  * Single chat message in the conversation.

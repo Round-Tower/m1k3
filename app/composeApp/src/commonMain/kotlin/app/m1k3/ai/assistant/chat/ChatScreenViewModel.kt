@@ -169,6 +169,7 @@ class ChatScreenViewModel(
     init {
         loadMessages()
         initializeConversation()
+        loadAutoVoiceReplyPreference()
     }
 
     // ===== Public Actions =====
@@ -421,6 +422,39 @@ class ChatScreenViewModel(
                 _uiState.update { it.copy(isLoadingTts = false, isSpeaking = false) }
             }
         }
+    }
+
+    /**
+     * Toggle auto voice reply on/off.
+     *
+     * Persists preference and updates UI state.
+     */
+    fun toggleAutoVoiceReply() {
+        val newValue = !_uiState.value.autoVoiceReply
+        preferences.setBoolean(PreferenceKeys.VOICE_AUTO_REPLY, newValue)
+        _uiState.update { it.copy(autoVoiceReply = newValue) }
+        logger.i { "Auto voice reply: $newValue" }
+    }
+
+    /**
+     * Load auto voice reply preference from storage.
+     */
+    private fun loadAutoVoiceReplyPreference() {
+        val enabled = preferences.getBoolean(PreferenceKeys.VOICE_AUTO_REPLY, false)
+        _uiState.update { it.copy(autoVoiceReply = enabled) }
+    }
+
+    /**
+     * Auto-speak the completed response if auto voice reply is enabled.
+     *
+     * Called after generation completes. Checks shouldAutoSpeak guard.
+     */
+    private fun autoSpeakIfEnabled() {
+        val state = _uiState.value
+        if (!state.shouldAutoSpeak) return
+
+        val finalText = (state.generationState as? GenerationState.Complete)?.finalText ?: return
+        speakMessage(finalText)
     }
 
     /**
@@ -983,6 +1017,9 @@ class ChatScreenViewModel(
         )
 
         logger.i { "Response with tools: ${stats.tokenCount} tokens in ${stats.durationMs}ms" }
+
+        // Auto voice reply: speak the response if enabled
+        autoSpeakIfEnabled()
     }
 
     private fun handleGenerationSuccess(
@@ -1030,6 +1067,9 @@ class ChatScreenViewModel(
         )
 
         logger.i { "Response generated: $tokenCount tokens in ${duration}ms (${stats.formatSpeed()})" }
+
+        // Auto voice reply: speak the response if enabled
+        autoSpeakIfEnabled()
     }
 
     private fun handleGenerationFailure(e: Throwable) {
