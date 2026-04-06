@@ -84,6 +84,10 @@ kotlin {
             implementation("com.google.android.play:core:1.10.3")
             implementation("com.google.android.play:core-ktx:1.8.1")
 
+            // User context — local intelligence ("never leaves your phone")
+            implementation(libs.health.connect)
+            implementation(libs.play.services.location)
+
             // Koin Android
             implementation(libs.koin.android)
             implementation(libs.koin.androidx.compose)

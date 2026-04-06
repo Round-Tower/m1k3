@@ -219,7 +219,8 @@ fun ChatScreen(
                 isGenerating = uiState.generationState.isGenerating,
                 listState = listState,
                 showEcoIndicator = true,
-                onSpeak = { text -> viewModel.speakMessage(text) }
+                onSpeak = { text -> viewModel.speakMessage(text) },
+                userContext = uiState.userContext
             )
 
             // Eco Indicator - Real-time environmental impact
@@ -361,21 +362,30 @@ private fun ErrorSnackbar(
 @Composable
 fun ChatBubble(
     message: ChatMessage,
+    userContext: app.m1k3.ai.domain.context.UserContext? = null,
     onSpeak: ((String) -> Unit)? = null
 ) {
     when {
         message.isStatusMessage -> {
-            MaStatusCard(
-                greeting = message.text.lines().firstOrNull() ?: "Hello!",
-                engineReady = true,
-                memoryCount = message.statusMemoryCount ?: 0,
-                knowledgeCount = message.statusKnowledgeCount ?: 0,
-                maxContextTokens = message.statusMaxTokens ?: 2048,
-                deviceTierName = message.statusDeviceTier ?: "Unknown",
-                lastSessionWaterMl = message.statusLastWaterMl,
-                lastSessionEnergyWh = message.statusLastEnergyWh,
-                lastSessionCo2G = message.statusLastCo2G
-            )
+            if (userContext != null) {
+                // Contextual welcome — uses real user data
+                app.m1k3.ai.assistant.context.ContextualWelcomeCard(
+                    context = userContext
+                )
+            } else {
+                // Fallback — classic status card (no context available)
+                MaStatusCard(
+                    greeting = message.text.lines().firstOrNull() ?: "Hello!",
+                    engineReady = true,
+                    memoryCount = message.statusMemoryCount ?: 0,
+                    knowledgeCount = message.statusKnowledgeCount ?: 0,
+                    maxContextTokens = message.statusMaxTokens ?: 2048,
+                    deviceTierName = message.statusDeviceTier ?: "Unknown",
+                    lastSessionWaterMl = message.statusLastWaterMl,
+                    lastSessionEnergyWh = message.statusLastEnergyWh,
+                    lastSessionCo2G = message.statusLastCo2G
+                )
+            }
         }
         message.isUser -> {
             MaChatBubbleUser(

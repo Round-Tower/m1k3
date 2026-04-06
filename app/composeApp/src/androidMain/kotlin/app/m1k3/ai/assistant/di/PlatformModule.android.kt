@@ -412,7 +412,8 @@ actual val platformModule = module {
                         throw RuntimeException("TTS failed: ${result.message}")
                     }
                 }
-            }
+            },
+            userContextProvider = app.m1k3.ai.assistant.context.UserContextManager(context)
         )
     }
 

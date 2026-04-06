@@ -86,7 +86,9 @@ class ChatScreenViewModel(
     // Model download trigger (platform-injected, optional)
     private val downloadModel: ((LlmModel, (ModelDownloadState) -> Unit) -> Unit)? = null,
     // TTS callbacks (platform-injected, optional)
-    private val onSpeakText: (suspend (String) -> Unit)? = null
+    private val onSpeakText: (suspend (String) -> Unit)? = null,
+    // User context for personalised welcome (platform-injected, optional)
+    private val userContextProvider: app.m1k3.ai.domain.context.UserContextProvider? = null
 ) : ViewModel() {
     // ===== Use Cases (lazy initialization) =====
 
@@ -595,8 +597,18 @@ class ChatScreenViewModel(
     }
 
     private suspend fun generateWelcomeMessage() {
+        // Fetch user context in parallel with other setup
+        val userContext = try {
+            userContextProvider?.getContext()
+        } catch (_: Exception) { null }
+
+        // Store in state so ChatScreen can render ContextualWelcomeCard
+        if (userContext != null) {
+            _uiState.update { it.copy(userContext = userContext) }
+        }
+
         // Build status card first
-        val currentHour = dateTimeProvider?.getCurrentHour() ?: 12
+        val currentHour = userContext?.hourOfDay ?: dateTimeProvider?.getCurrentHour() ?: 12
         val memoryCount = memoryManager?.getMemoryCount() ?: 0L
         val knowledgeCount = try {
             database.triviaFactQueries.getTotalFactCount().executeAsOne()

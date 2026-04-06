@@ -72,7 +72,10 @@ data class ChatUiState(
     val modelDownload: ModelDownloadState? = null,
 
     /** Auto voice reply - automatically speak AI responses aloud */
-    val autoVoiceReply: Boolean = false
+    val autoVoiceReply: Boolean = false,
+
+    /** User's real-world context for the welcome card (null until loaded) */
+    val userContext: app.m1k3.ai.domain.context.UserContext? = null
 )
 
 /**
