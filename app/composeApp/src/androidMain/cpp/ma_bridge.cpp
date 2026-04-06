@@ -91,7 +91,10 @@ Java_app_m1k3_ai_assistant_ai_ma_MaBridge_init(
     const int n_threads = std::min(4, (int)std::thread::hardware_concurrency());
 
     llama_context_params cparams = llama_context_default_params();
-    cparams.n_ctx            = 4096;
+    // 2048 tokens = ~1500 words. Halves KV cache vs 4096 (302MB → 151MB),
+    // meaningfully faster cold-start on mobile. Gemma 4 E2B supports 128K
+    // in theory but mobile RAM and latency constraints make 2K the sweet spot.
+    cparams.n_ctx            = 2048;
     cparams.n_threads        = n_threads;
     cparams.n_threads_batch  = n_threads;
     cparams.flash_attn_type  = LLAMA_FLASH_ATTN_TYPE_DISABLED; // CPU-only: no flash attn
