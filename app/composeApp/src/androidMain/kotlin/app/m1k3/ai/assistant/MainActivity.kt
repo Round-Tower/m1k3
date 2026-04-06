@@ -99,6 +99,7 @@ import app.m1k3.ai.assistant.app.LoggerAdapter
 import androidx.activity.SystemBarStyle
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -133,16 +134,24 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Enable edge-to-edge for immersive full-screen experience
+        // Enable edge-to-edge with explicit dark system bar styles.
+        //
+        // SystemBarStyle.dark(Color.TRANSPARENT) means:
+        //   - Status bar  : transparent, icons are always WHITE (light content)
+        //   - Nav bar     : transparent, icons are always WHITE
+        //
+        // We do NOT use SystemBarStyle.auto() because that injects a translucent
+        // dark scrim behind the nav bar on light-content screens, which breaks our
+        // AMOLED black immersive design. Our background (#000000) already provides
+        // sufficient contrast for gesture handles.
+        //
+        // enforceContrast = false suppresses the API 29+ automatic dark scrim that
+        // the OS would otherwise draw over a fully transparent nav bar.
+        //
+        // MurphySig: https://murphysig.dev — API 21-36 confirmed approach.
         enableEdgeToEdge(
-            statusBarStyle = SystemBarStyle.auto(
-                Color.Transparent.toArgb(),
-                Color.Transparent.toArgb()
-            ),
-            navigationBarStyle = SystemBarStyle.auto(
-                MaColors.BgPrimaryLight.toArgb(),
-                MaColors.BgPrimary.toArgb()
-            )
+            statusBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
+            navigationBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT)
         )
 
         // Initialize Koin & Filament using AppInitializationManager
@@ -233,7 +242,9 @@ class MainActivity : ComponentActivity() {
 @Composable
 private fun MaApp() {
     val initViewModel = koinViewModel<InitializationViewModel>()
-    val initState by initViewModel.state.collectAsState()
+    // collectAsStateWithLifecycle stops collection when the app is backgrounded,
+    // preventing wasted work during the init flow while the screen is off.
+    val initState by initViewModel.state.collectAsStateWithLifecycle()
 
     LaunchedEffect(Unit) {
         initViewModel.initialize()
@@ -360,7 +371,12 @@ private fun MaAppContent(
                                 modifier = Modifier.fillMaxWidth()
                             )
                         },
-                        contentWindowInsets = WindowInsets.systemBars
+                        // Zero out Scaffold's automatic inset padding so content can
+                        // extend to true screen edges (globe behind status/nav bars).
+                        // Individual screens call windowInsetsPadding where they need it.
+                        // The Toolbar sits in topBar and Compose positions it below the
+                        // status bar automatically via the slot's own inset handling.
+                        contentWindowInsets = WindowInsets(0, 0, 0, 0)
                     ) { paddingValues ->
                         CompositionLocalProvider(
                             LocalSharedAvatarVM provides appAvatarVM
@@ -368,7 +384,9 @@ private fun MaAppContent(
                             NavHost(
                                 navController = navController,
                                 startDestination = Screen.Chat.route,
-                                modifier = Modifier.padding(paddingValues)
+                                // Only top padding from the Toolbar slot — bottom/sides
+                                // are screen-owned so the globe bleeds to all edges.
+                                modifier = Modifier.padding(top = paddingValues.calculateTopPadding())
                             ) {
                                 // Demo Screen
                                 composable(Screen.Demo.route) {
