@@ -195,7 +195,20 @@ actual val platformModule = module {
      * Also used directly for fine-grained LLM control.
      */
     single<BaseLlmEngine> {
-        LlamaCppEngine(get<Context>())
+        // Use whichever model the user installed during onboarding.
+        // SELECTED_M1K3_TIER is saved as "mini" | "lil" | "big" when the
+        // download completes. Default to Gemma3_1B (Lil M1K3) if not set.
+        val prefs = get<PreferencesStoreInterface>()
+        val tierKey = prefs.getString(
+            app.m1k3.ai.assistant.platform.PreferenceKeys.SELECTED_M1K3_TIER, "lil"
+        ) ?: "lil"
+        val model: LlmModel = when (tierKey) {
+            "mini" -> LlmModel.Gemma3_270M
+            "big"  -> LlmModel.Gemma4_E2B
+            else   -> LlmModel.Gemma3_1B
+        }
+        val overridePath = get<ModelDownloadManager>().getModelPath(model.id)
+        LlamaCppEngine(get<Context>(), model, overrideModelPath = overridePath)
     }
 
     /**
