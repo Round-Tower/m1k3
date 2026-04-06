@@ -148,14 +148,19 @@ class ModelDownloadWorker(
         }
 
         /**
-         * Observe a WorkManager download as a [OnboardingDownloadState] Flow.
-         * Pair with [enqueue] — pass the returned UUID here.
+         * Observe a running download as a [OnboardingDownloadState] Flow.
+         *
+         * Observes by **unique work name** (not UUID) so that re-enqueueing
+         * with [ExistingWorkPolicy.KEEP] still returns progress from the
+         * original running job, not the abandoned new request.
          */
-        fun observeAsFlow(context: Context, workId: UUID): Flow<OnboardingDownloadState> =
+        fun observeAsFlow(context: Context, model: LlmModel): Flow<OnboardingDownloadState> =
             WorkManager.getInstance(context)
-                .getWorkInfoByIdFlow(workId)
-                .mapNotNull { info ->
-                    when (info?.state) {
+                .getWorkInfosForUniqueWorkFlow("download_${model.id}")
+                .mapNotNull { infoList ->
+                    // Take the most recent work item (last in list)
+                    val info = infoList.lastOrNull() ?: return@mapNotNull null
+                    when (info.state) {
                         WorkInfo.State.ENQUEUED ->
                             OnboardingDownloadState.Starting
 
@@ -178,7 +183,7 @@ class ModelDownloadWorker(
                                 info.outputData.getString(KEY_ERROR) ?: "Download failed"
                             )
 
-                        else -> null // BLOCKED or null — no update yet
+                        else -> null
                     }
                 }
 

@@ -458,8 +458,8 @@ actual val platformModule = module {
             // WorkManager download — survives screen lock, Doze, backgrounding
             downloadModel = { model ->
                 val ctx = get<Context>()
-                val workId = ModelDownloadWorker.enqueue(ctx, model)
-                ModelDownloadWorker.observeAsFlow(ctx, workId)
+                ModelDownloadWorker.enqueue(ctx, model) // KEEP — safe to call repeatedly
+                ModelDownloadWorker.observeAsFlow(ctx, model) // observe by name, not UUID
             },
             prefs = get<PreferencesStoreInterface>()
         )
