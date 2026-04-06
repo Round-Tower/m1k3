@@ -2,18 +2,20 @@ package app.m1k3.ai.assistant.globe
 
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 
 /**
  * Android implementation of GlobeBackground.
  *
- * Rubin mode: pure Compose Canvas, no extra deps.
- * MapLibre mode: WebView with MapLibre GL JS.
+ * Alpha is passed directly into each renderer's draw calls rather than
+ * wrapping in a Box with Modifier.alpha(). This avoids an extra RenderNode
+ * layer and keeps the composable tree flat.
+ *
+ * For Rubin: alpha flows into Canvas drawCircle calls directly.
+ * For MapLibre: alpha controls WebView opacity via JS bridge.
  */
 @Composable
 actual fun GlobeBackground(
@@ -25,27 +27,24 @@ actual fun GlobeBackground(
 ) {
     if (mode == GlobeMode.NONE) return
 
-    val targetAlpha = if (dimmed) 0.08f else 0.35f
     val alpha by animateFloatAsState(
-        targetValue = targetAlpha,
+        targetValue = if (dimmed) 0.08f else 0.35f,
         animationSpec = tween(1200),
         label = "globe_alpha"
     )
 
-    Box(modifier = modifier.alpha(alpha)) {
-        when (mode) {
-            GlobeMode.RUBIN -> RubinGlobe(
-                modifier = Modifier.fillMaxSize(),
-                focusLocation = focusLocation,
-                alpha = 1f,           // alpha already applied by Box
-                performanceTier = performanceTier
-            )
-            GlobeMode.MAPLIBRE -> MapLibreGlobeView(
-                modifier = Modifier.fillMaxSize(),
-                focusLocation = focusLocation,
-                alpha = 1f
-            )
-            GlobeMode.NONE -> Unit
-        }
+    when (mode) {
+        GlobeMode.RUBIN -> RubinGlobe(
+            modifier = modifier,
+            focusLocation = focusLocation,
+            alpha = alpha,
+            performanceTier = performanceTier
+        )
+        GlobeMode.MAPLIBRE -> MapLibreGlobeView(
+            modifier = modifier,
+            focusLocation = focusLocation,
+            alpha = alpha
+        )
+        GlobeMode.NONE -> Unit
     }
 }

@@ -94,7 +94,7 @@ Java_app_m1k3_ai_assistant_ai_ma_MaBridge_init(
     cparams.n_ctx            = 4096;
     cparams.n_threads        = n_threads;
     cparams.n_threads_batch  = n_threads;
-    cparams.flash_attn       = false; // stable default
+    cparams.flash_attn_type  = LLAMA_FLASH_ATTN_TYPE_DISABLED; // CPU-only: no flash attn
 
     llama_context *ctx = llama_new_context_with_model(model, cparams);
     if (!ctx) {
