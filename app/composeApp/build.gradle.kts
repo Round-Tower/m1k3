@@ -88,6 +88,9 @@ kotlin {
             implementation(libs.health.connect)
             implementation(libs.play.services.location)
 
+            // WorkManager — background downloads survive screen lock
+            implementation(libs.androidx.work.runtime)
+
             // Koin Android
             implementation(libs.koin.android)
             implementation(libs.koin.androidx.compose)

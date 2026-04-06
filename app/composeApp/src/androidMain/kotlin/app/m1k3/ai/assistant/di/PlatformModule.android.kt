@@ -49,9 +49,9 @@ import app.m1k3.ai.assistant.tts.KokoroTtsEngine
 import app.m1k3.ai.domain.ai.AiCoreModelPreference
 import app.m1k3.ai.domain.ai.LlmModel
 import app.m1k3.ai.domain.platform.DeviceTier
+import app.m1k3.ai.assistant.ai.download.ModelDownloadWorker
 import app.m1k3.ai.assistant.onboarding.OnboardingDownloadState
 import app.m1k3.ai.assistant.onboarding.OnboardingViewModel
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import app.m1k3.ai.domain.tts.TtsEngine
 import app.m1k3.ai.domain.tts.Voice
@@ -83,6 +83,11 @@ actual val platformModule = module {
                 name = "ma_ai.db"
             )
         )
+    }
+
+    // ===== User Context (singleton — shared across ViewModels) =====
+    single<app.m1k3.ai.domain.context.UserContextProvider> {
+        app.m1k3.ai.assistant.context.UserContextManager(get<Context>())
     }
 
     // ===== Platform Abstractions =====
@@ -413,7 +418,7 @@ actual val platformModule = module {
                     }
                 }
             },
-            userContextProvider = app.m1k3.ai.assistant.context.UserContextManager(context)
+            userContextProvider = get<app.m1k3.ai.domain.context.UserContextProvider>()
         )
     }
 
@@ -437,23 +442,11 @@ actual val platformModule = module {
                     else        -> DeviceTier.LOW_END
                 }
             },
+            // WorkManager download — survives screen lock, Doze, backgrounding
             downloadModel = { model ->
-                httpManager.download(model).map { progress ->
-                    when (progress) {
-                        is app.m1k3.ai.assistant.ai.download.DownloadProgress.Starting ->
-                            OnboardingDownloadState.Starting
-                        is app.m1k3.ai.assistant.ai.download.DownloadProgress.InProgress ->
-                            OnboardingDownloadState.Downloading(
-                                progressPercent = progress.progressPercent,
-                                downloadedMb = (progress.bytesDownloaded / 1_000_000).toInt(),
-                                totalMb = (progress.totalBytes / 1_000_000).toInt()
-                            )
-                        is app.m1k3.ai.assistant.ai.download.DownloadProgress.Complete ->
-                            OnboardingDownloadState.Complete
-                        is app.m1k3.ai.assistant.ai.download.DownloadProgress.Failed ->
-                            OnboardingDownloadState.Failed(progress.error)
-                    }
-                }
+                val ctx = get<Context>()
+                val workId = ModelDownloadWorker.enqueue(ctx, model)
+                ModelDownloadWorker.observeAsFlow(ctx, workId)
             },
             prefs = get<PreferencesStoreInterface>()
         )

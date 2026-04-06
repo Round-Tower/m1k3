@@ -20,6 +20,8 @@ kotlinx-coroutines = "1.10.2"
 ktor = "3.3.1"
 logback = "1.5.20"
 
+androidx-work = "2.10.1"
+
 # M1K3 AI Dependencies
 sqldelight = "2.0.2"
 onnxruntime = "1.23.2"
@@ -46,6 +48,7 @@ kotlin-test = { module = "org.jetbrains.kotlin:kotlin-test", version.ref = "kotl
 kotlin-testJunit = { module = "org.jetbrains.kotlin:kotlin-test-junit", version.ref = "kotlin" }
 junit = { module = "junit:junit", version.ref = "junit" }
 androidx-core-ktx = { module = "androidx.core:core-ktx", version.ref = "androidx-core" }
+androidx-work-runtime = { module = "androidx.work:work-runtime-ktx", version.ref = "androidx-work" }
 androidx-testExt-junit = { module = "androidx.test.ext:junit", version.ref = "androidx-testExt" }
 androidx-test-core = { module = "androidx.test:core", version.ref = "androidx-testCore" }
 androidx-espresso-core = { module = "androidx.test.espresso:espresso-core", version.ref = "androidx-espresso" }
