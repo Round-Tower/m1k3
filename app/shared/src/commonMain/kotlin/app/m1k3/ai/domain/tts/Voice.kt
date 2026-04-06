@@ -1,30 +1,23 @@
 package app.m1k3.ai.domain.tts
 
 /**
- * Voice - TTS voice options
+ * Voice - TTS voice options for Kokoro-82M.
  *
- * Domain entity - Pure Kotlin, no platform dependencies.
+ * Domain entity — pure Kotlin, no platform dependencies.
  *
- * Represents available voices for text-to-speech synthesis.
- * Kokoro voices are the primary implementation with Daniel as default.
+ * Voice IDs match asset filenames exactly:
+ *   Voice.Kokoro.Daniel.id == "bm_daniel" → loads bm_daniel.bin
+ *   Voice.Kokoro.Bella.id  == "af_bella"  → loads af_bella.bin
  *
- * **Usage:**
- * ```kotlin
- * val voice = Voice.default  // Daniel (British Male)
- * val allVoices = Voice.all()
- * ```
+ * Kokoro naming convention: {locale_gender}_{name}
+ *   af = American Female, am = American Male
+ *   bf = British Female,  bm = British Male
  */
 sealed class Voice(
     val id: String,
     val displayName: String,
     val language: String
 ) {
-    /**
-     * Kokoro TTS voices - SOTA quality, 82M parameter model
-     *
-     * All Kokoro voices use the same model with different voice embeddings.
-     * Daniel is the default for M1K3.
-     */
     sealed class Kokoro(
         id: String,
         displayName: String,
@@ -32,61 +25,33 @@ sealed class Voice(
     ) : Voice(id, displayName, language) {
 
         /**
-         * Daniel - British Male (M1K3's signature voice)
-         *
-         * Professional, precise, conversational tone.
-         * Highest quality male voice in Kokoro lineup.
+         * Daniel — British Male. M1K3's signature voice.
+         * Professional, warm, conversational. The default.
          */
-        data object Daniel : Kokoro("bm_daniel", "Daniel (British Male)")
+        data object Daniel : Kokoro("bm_daniel", "Daniel")
 
         /**
-         * American Female - Clear, friendly voice
+         * Bella — American Female. Warm and natural.
+         * Great for casual conversation and companion-mode responses.
          */
-        data object AmericanFemale : Kokoro("af", "American Female")
+        data object Bella : Kokoro("af_bella", "Bella")
 
         /**
-         * American Male - Natural, conversational voice
+         * Emma — British Female. Clear and articulate.
+         * Shares Daniel's British accent — feels cohesive as M1K3's alternate voice.
          */
-        data object AmericanMale : Kokoro("am", "American Male")
-
-        /**
-         * British Female - Refined, articulate voice
-         */
-        data object BritishFemale : Kokoro("bf", "British Female")
-
-        /**
-         * British Male - Classic British accent
-         */
-        data object BritishMale : Kokoro("bm", "British Male")
+        data object Emma : Kokoro("bf_emma", "Emma")
     }
 
     companion object {
-        /**
-         * Default voice - Daniel (British Male)
-         *
-         * M1K3's signature voice, used across all platforms.
-         */
         val default: Voice get() = Kokoro.Daniel
 
-        /**
-         * Get all available voices
-         *
-         * @return List of all Voice options
-         */
         fun all(): List<Voice> = listOf(
             Kokoro.Daniel,
-            Kokoro.AmericanFemale,
-            Kokoro.AmericanMale,
-            Kokoro.BritishFemale,
-            Kokoro.BritishMale
+            Kokoro.Bella,
+            Kokoro.Emma
         )
 
-        /**
-         * Find voice by ID
-         *
-         * @param id Voice identifier
-         * @return Voice if found, null otherwise
-         */
         fun findById(id: String): Voice? = all().find { it.id == id }
     }
 }
