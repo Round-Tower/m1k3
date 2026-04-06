@@ -156,6 +156,8 @@ class HttpModelDownloadManager(
      */
     private fun getDownloadUrl(model: LlmModel): String {
         return when (model) {
+            is LlmModel.Gemma3_270M ->
+                "https://huggingface.co/bartowski/gemma-3-270m-it-GGUF/resolve/main/${model.filename}"
             is LlmModel.Gemma3_1B ->
                 "https://huggingface.co/bartowski/gemma-3-1b-it-GGUF/resolve/main/${model.filename}"
             is LlmModel.Gemma4_E2B ->

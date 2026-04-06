@@ -48,6 +48,10 @@ import app.m1k3.ai.assistant.tts.AudioPlayer
 import app.m1k3.ai.assistant.tts.KokoroTtsEngine
 import app.m1k3.ai.domain.ai.AiCoreModelPreference
 import app.m1k3.ai.domain.ai.LlmModel
+import app.m1k3.ai.domain.platform.DeviceTier
+import app.m1k3.ai.assistant.onboarding.OnboardingDownloadState
+import app.m1k3.ai.assistant.onboarding.OnboardingViewModel
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import app.m1k3.ai.domain.tts.TtsEngine
 import app.m1k3.ai.domain.tts.Voice
@@ -411,6 +415,48 @@ actual val platformModule = module {
                     }
                 }
             }
+        )
+    }
+
+    /**
+     * OnboardingViewModel
+     *
+     * Drives the first-launch experience: tier detection, model download,
+     * and onboarding-complete persistence.
+     */
+    viewModel {
+        val deviceInfo = get<DeviceInfoProviderInterface>()
+        val httpManager = get<ModelDownloadManager>() as HttpModelDownloadManager
+        OnboardingViewModel(
+            getDeviceTier = {
+                val ramGB = deviceInfo.getDeviceRamGB()
+                when {
+                    ramGB >= 12 -> DeviceTier.FLAGSHIP
+                    ramGB >= 8  -> DeviceTier.HIGH_END
+                    ramGB >= 6  -> DeviceTier.MID_RANGE
+                    ramGB >= 4  -> DeviceTier.BUDGET
+                    else        -> DeviceTier.LOW_END
+                }
+            },
+            downloadModel = { model ->
+                httpManager.download(model).map { progress ->
+                    when (progress) {
+                        is app.m1k3.ai.assistant.ai.download.DownloadProgress.Starting ->
+                            OnboardingDownloadState.Starting
+                        is app.m1k3.ai.assistant.ai.download.DownloadProgress.InProgress ->
+                            OnboardingDownloadState.Downloading(
+                                progressPercent = progress.progressPercent,
+                                downloadedMb = (progress.bytesDownloaded / 1_000_000).toInt(),
+                                totalMb = (progress.totalBytes / 1_000_000).toInt()
+                            )
+                        is app.m1k3.ai.assistant.ai.download.DownloadProgress.Complete ->
+                            OnboardingDownloadState.Complete
+                        is app.m1k3.ai.assistant.ai.download.DownloadProgress.Failed ->
+                            OnboardingDownloadState.Failed(progress.error)
+                    }
+                }
+            },
+            prefs = get<PreferencesStoreInterface>()
         )
     }
 

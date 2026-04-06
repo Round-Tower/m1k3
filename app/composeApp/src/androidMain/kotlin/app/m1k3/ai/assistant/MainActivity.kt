@@ -241,6 +241,22 @@ class MainActivity : ComponentActivity() {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun MaApp() {
+    val prefs = koinInject<app.m1k3.ai.assistant.platform.PreferencesStoreInterface>()
+    var onboardingComplete by remember {
+        mutableStateOf(
+            prefs.getBoolean(app.m1k3.ai.assistant.platform.PreferenceKeys.ONBOARDING_COMPLETE, false)
+        )
+    }
+
+    if (!onboardingComplete) {
+        app.m1k3.ai.assistant.design.theme.MaTheme {
+            app.m1k3.ai.assistant.ui.OnboardingScreen(
+                onComplete = { onboardingComplete = true }
+            )
+        }
+        return
+    }
+
     val initViewModel = koinViewModel<InitializationViewModel>()
     // collectAsStateWithLifecycle stops collection when the app is backgrounded,
     // preventing wasted work during the init flow while the screen is off.

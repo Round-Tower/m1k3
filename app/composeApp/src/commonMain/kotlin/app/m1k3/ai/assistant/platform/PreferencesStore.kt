@@ -150,4 +150,10 @@ object PreferenceKeys {
 
     /** Current project ID */
     const val CURRENT_PROJECT_ID = "current_project_id"
+
+    /** Whether the user has completed first-launch onboarding */
+    const val ONBOARDING_COMPLETE = "onboarding_complete"
+
+    /** The M1K3 tier the user selected during onboarding ("mini" / "lil" / "big") */
+    const val SELECTED_M1K3_TIER = "selected_m1k3_tier"
 }

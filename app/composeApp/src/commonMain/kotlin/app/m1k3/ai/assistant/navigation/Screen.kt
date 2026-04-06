@@ -79,6 +79,15 @@ sealed class Screen(val route: String) {
     data object Export : Screen("export")
 
     /**
+     * Onboarding screen — first-launch experience.
+     *
+     * Shown once: detects hardware tier, names the user's M1K3 (Mini/Lil/Big),
+     * downloads the appropriate model, and introduces the app's ethos while
+     * the intelligence machine wakes up.
+     */
+    data object Onboarding : Screen("onboarding")
+
+    /**
      * Conversation Detail screen - View specific conversation messages
      *
      * Route: "conversation/{conversationId}"
