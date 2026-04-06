@@ -96,7 +96,9 @@ fun SettingsItem(
     subtitle: String,
     icon: ImageVector,
     onClick: () -> Unit,
-    isDestructive: Boolean = false
+    isDestructive: Boolean = false,
+    iconTint: androidx.compose.ui.graphics.Color? = null,
+    trailingContent: @Composable (() -> Unit)? = null
 ) {
     Surface(
         onClick = onClick,
@@ -114,7 +116,8 @@ fun SettingsItem(
                 imageVector = icon,
                 contentDescription = null,
                 modifier = Modifier.size(22.dp),
-                tint = if (isDestructive) MaColors.Error else MaColors.textSecondary()
+                tint = iconTint
+                    ?: if (isDestructive) MaColors.Error else MaColors.textSecondary()
             )
 
             Column(
@@ -133,12 +136,16 @@ fun SettingsItem(
                 )
             }
 
-            Icon(
-                imageVector = Icons.Default.ChevronRight,
-                contentDescription = "Navigate",
-                modifier = Modifier.size(18.dp),
-                tint = MaColors.textDisabled()
-            )
+            if (trailingContent != null) {
+                trailingContent()
+            } else {
+                Icon(
+                    imageVector = Icons.Default.ChevronRight,
+                    contentDescription = "Navigate",
+                    modifier = Modifier.size(18.dp),
+                    tint = MaColors.textDisabled()
+                )
+            }
         }
     }
 }

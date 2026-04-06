@@ -444,7 +444,11 @@ private fun MaAppContent(
 
                                 // Settings Screen
                                 composable(Screen.Settings.route) {
-                                    app.m1k3.ai.assistant.ui.SettingsScreen()
+                                    app.m1k3.ai.assistant.ui.SettingsScreen(
+                                        onNavigateToAvatarGallery = {
+                                            navController.navigate(Screen.AvatarGallery.route)
+                                        }
+                                    )
                                 }
 
                                 // Avatar Gallery
