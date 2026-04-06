@@ -21,14 +21,14 @@ class M1K3TierTest {
     }
 
     @Test
-    fun `Mini uses Qwen3_0B6 model`() {
-        assertIs<LlmModel.Qwen3_0B6>(M1K3Tier.Mini.model)
+    fun `Mini uses Qwen35_0B8 model`() {
+        assertIs<LlmModel.Qwen35_0B8>(M1K3Tier.Mini.model)
     }
 
     @Test
     fun `Mini download size is reasonable`() {
-        assertTrue(M1K3Tier.Mini.downloadSizeMb in 100..500,
-            "Mini download should be 100–500MB, was ${M1K3Tier.Mini.downloadSizeMb}MB")
+        assertTrue(M1K3Tier.Mini.downloadSizeMb in 100..700,
+            "Mini download should be 100–700MB, was ${M1K3Tier.Mini.downloadSizeMb}MB")
     }
 
     // ===== Lil M1K3 =====

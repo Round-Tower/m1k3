@@ -27,12 +27,12 @@ sealed class M1K3Tier(
     /** Short capability description for onboarding screen */
     val description: String
 ) {
-    /** <4GB RAM — Qwen3 0.6B — best sub-1B, May 2025 */
+    /** <4GB RAM — Qwen3.5 0.8B — March 2026, multimodal, best sub-1B */
     data object Mini : M1K3Tier(
         displayName = "Mini M1K3",
         tagline = "Fast and focused",
-        model = LlmModel.Qwen3_0B6,
-        downloadSizeMb = 484,
+        model = LlmModel.Qwen35_0B8,
+        downloadSizeMb = 557,
         description = "Optimised for your device — lightweight intelligence " +
                 "that stays responsive and never misses a beat."
     )

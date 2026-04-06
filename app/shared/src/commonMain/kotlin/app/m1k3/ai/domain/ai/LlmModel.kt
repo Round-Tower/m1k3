@@ -47,11 +47,23 @@ sealed class LlmModel(
     )
 
     /**
-     * Qwen3 0.6B — Mini M1K3 (public, no HF gating)
+     * Qwen3.5 0.8B — Mini M1K3 (public, no HF gating)
      *
-     * May 2025. Best sub-1B instruction follower. Beats SmolLM2-360M.
-     * ChatML format. Q4_K_M ~484MB. Works on any device.
-     * HuggingFace: bartowski/Qwen_Qwen3-0.6B-GGUF
+     * March 2026. Natively multimodal (text + image + video weights).
+     * Best sub-1B model available. ChatML format. Q4_K_M ~557MB.
+     * HuggingFace: bartowski/Qwen_Qwen3.5-0.8B-GGUF
+     */
+    data object Qwen35_0B8 : LlmModel(
+        id = "qwen3.5-0.8b",
+        displayName = "Qwen3.5 (0.8B)",
+        filename = "Qwen_Qwen3.5-0.8B-Q4_K_M.gguf",
+        parameterCount = 800_000_000L,
+        chatFormat = ChatFormat.ChatML
+    )
+
+    /**
+     * Qwen3 0.6B — kept for reference (superseded by Qwen3.5-0.8B)
+     * @see Qwen35_0B8 for the active Mini M1K3 model
      */
     data object Qwen3_0B6 : LlmModel(
         id = "qwen3-0.6b",
@@ -153,7 +165,7 @@ sealed class LlmModel(
          */
         fun all(): List<LlmModel> = listOf(
             Qwen3_1B7,
-            Qwen3_0B6,
+            Qwen35_0B8,
             FalconH1_90M,
             Gemma4_E2B
         )

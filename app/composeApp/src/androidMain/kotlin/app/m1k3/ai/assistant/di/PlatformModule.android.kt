@@ -203,7 +203,7 @@ actual val platformModule = module {
             app.m1k3.ai.assistant.platform.PreferenceKeys.SELECTED_M1K3_TIER, "lil"
         ) ?: "lil"
         val model: LlmModel = when (tierKey) {
-            "mini" -> LlmModel.Qwen3_0B6
+            "mini" -> LlmModel.Qwen35_0B8
             "big"  -> LlmModel.Gemma4_E2B
             else   -> LlmModel.Qwen3_1B7  // "lil" + fallback
         }

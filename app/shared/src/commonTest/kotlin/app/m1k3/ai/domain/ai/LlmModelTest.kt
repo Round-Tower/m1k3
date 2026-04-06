@@ -77,7 +77,7 @@ class LlmModelTest {
     @Test
     fun `all includes active tier models`() {
         val models = LlmModel.all()
-        assertTrue(models.contains(LlmModel.Qwen3_0B6))
+        assertTrue(models.contains(LlmModel.Qwen35_0B8))
         assertTrue(models.contains(LlmModel.Qwen3_1B7))
         assertTrue(models.contains(LlmModel.FalconH1_90M))
         assertTrue(models.contains(LlmModel.Gemma4_E2B))
@@ -124,7 +124,7 @@ class LlmModelTest {
     @Test
     fun `availableFor 4GB returns base models`() {
         val models = LlmModel.availableFor(4)
-        assertTrue(models.contains(LlmModel.Qwen3_0B6))
+        assertTrue(models.contains(LlmModel.Qwen35_0B8))
         assertTrue(models.contains(LlmModel.Qwen3_1B7))
         assertTrue(models.contains(LlmModel.FalconH1_90M))
     }
@@ -211,8 +211,8 @@ class LlmModelTest {
     }
 
     @Test
-    fun `Qwen3_0B6 is in all models list`() {
-        assertTrue(LlmModel.all().contains(LlmModel.Qwen3_0B6))
+    fun `Qwen35_0B8 is in all models list`() {
+        assertTrue(LlmModel.all().contains(LlmModel.Qwen35_0B8))
     }
 
     @Test
