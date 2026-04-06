@@ -62,8 +62,8 @@ class LlmModelTest {
     // ===== Default Model Tests =====
 
     @Test
-    fun `default model is Qwen3_1B7`() {
-        assertEquals(LlmModel.Qwen3_1B7, LlmModel.default)
+    fun `default model is Qwen35_2B`() {
+        assertEquals(LlmModel.Qwen35_2B, LlmModel.default)
     }
 
     // ===== Collection Tests =====
@@ -78,7 +78,7 @@ class LlmModelTest {
     fun `all includes active tier models`() {
         val models = LlmModel.all()
         assertTrue(models.contains(LlmModel.Qwen35_0B8))
-        assertTrue(models.contains(LlmModel.Qwen3_1B7))
+        assertTrue(models.contains(LlmModel.Qwen35_2B))
         assertTrue(models.contains(LlmModel.FalconH1_90M))
         assertTrue(models.contains(LlmModel.Gemma4_E2B))
     }
@@ -125,7 +125,7 @@ class LlmModelTest {
     fun `availableFor 4GB returns base models`() {
         val models = LlmModel.availableFor(4)
         assertTrue(models.contains(LlmModel.Qwen35_0B8))
-        assertTrue(models.contains(LlmModel.Qwen3_1B7))
+        assertTrue(models.contains(LlmModel.Qwen35_2B))
         assertTrue(models.contains(LlmModel.FalconH1_90M))
     }
 
@@ -206,8 +206,8 @@ class LlmModelTest {
     }
 
     @Test
-    fun `Qwen3_1B7 is in all models list`() {
-        assertTrue(LlmModel.all().contains(LlmModel.Qwen3_1B7))
+    fun `Qwen35_2B is in all models list`() {
+        assertTrue(LlmModel.all().contains(LlmModel.Qwen35_2B))
     }
 
     @Test

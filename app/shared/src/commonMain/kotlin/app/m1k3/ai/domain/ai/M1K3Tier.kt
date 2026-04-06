@@ -37,12 +37,12 @@ sealed class M1K3Tier(
                 "that stays responsive and never misses a beat."
     )
 
-    /** 4–8GB RAM — Qwen3 1.7B — full generation ahead of Qwen2.5, May 2025 */
+    /** 4–8GB RAM — Qwen3.5 2B — March 2026, multimodal, ≈ Qwen2.5-7B quality */
     data object Lil : M1K3Tier(
         displayName = "Lil M1K3",
         tagline = "Sharp and capable",
-        model = LlmModel.Qwen3_1B7,
-        downloadSizeMb = 1280,
+        model = LlmModel.Qwen35_2B,
+        downloadSizeMb = 1330,
         description = "A full intelligence engine. Multi-turn conversations, " +
                 "memory, and reasoning that keeps up with you."
     )

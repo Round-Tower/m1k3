@@ -40,7 +40,7 @@ class M1K3TierTest {
 
     @Test
     fun `Lil uses Qwen3_1B7 model`() {
-        assertIs<LlmModel.Qwen3_1B7>(M1K3Tier.Lil.model)
+        assertIs<LlmModel.Qwen35_2B>(M1K3Tier.Lil.model)
     }
 
     @Test

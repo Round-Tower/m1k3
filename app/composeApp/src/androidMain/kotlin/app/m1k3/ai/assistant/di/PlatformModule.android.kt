@@ -205,7 +205,7 @@ actual val platformModule = module {
         val model: LlmModel = when (tierKey) {
             "mini" -> LlmModel.Qwen35_0B8
             "big"  -> LlmModel.Gemma4_E2B
-            else   -> LlmModel.Qwen3_1B7  // "lil" + fallback
+            else   -> LlmModel.Qwen35_2B  // "lil" + fallback
         }
         val overridePath = get<ModelDownloadManager>().getModelPath(model.id)
         LlamaCppEngine(get<Context>(), model, overrideModelPath = overridePath)

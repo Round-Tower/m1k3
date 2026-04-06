@@ -158,6 +158,8 @@ class HttpModelDownloadManager(
                 "https://huggingface.co/bartowski/Qwen_Qwen3.5-0.8B-GGUF/resolve/main/${model.filename}"
             is LlmModel.Qwen3_0B6 ->
                 "https://huggingface.co/bartowski/Qwen_Qwen3-0.6B-GGUF/resolve/main/${model.filename}"
+            is LlmModel.Qwen35_2B ->
+                "https://huggingface.co/bartowski/Qwen_Qwen3.5-2B-GGUF/resolve/main/${model.filename}"
             is LlmModel.Qwen3_1B7 ->
                 "https://huggingface.co/bartowski/Qwen_Qwen3-1.7B-GGUF/resolve/main/${model.filename}"
             is LlmModel.Gemma4_E2B ->

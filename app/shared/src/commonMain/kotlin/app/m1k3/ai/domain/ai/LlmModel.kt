@@ -31,11 +31,24 @@ sealed class LlmModel(
     val minRamGB: Int = 0
 ) {
     /**
-     * Qwen3 1.7B — Lil M1K3 (public, no HF gating)
+     * Qwen3.5 2B — Lil M1K3 (public, no HF gating)
      *
-     * May 2025. Qwen3-1.7B ≈ Qwen2.5-3B quality — full generation ahead.
-     * ChatML format. Q4_K_M ~1.28GB. 4–8GB RAM.
-     * HuggingFace: bartowski/Qwen_Qwen3-1.7B-GGUF
+     * March 2026. Natively multimodal. Qwen3.5-2B ≈ Qwen2.5-7B quality.
+     * ChatML format. Q4_K_M ~1.33GB. 4–8GB RAM.
+     * HuggingFace: bartowski/Qwen_Qwen3.5-2B-GGUF
+     */
+    data object Qwen35_2B : LlmModel(
+        id = "qwen3.5-2b",
+        displayName = "Qwen3.5 (2B)",
+        filename = "Qwen_Qwen3.5-2B-Q4_K_M.gguf",
+        parameterCount = 2_000_000_000L,
+        chatFormat = ChatFormat.ChatML,
+        minRamGB = 2
+    )
+
+    /**
+     * Qwen3 1.7B — kept for reference (superseded by Qwen3.5-2B)
+     * @see Qwen35_2B for the active Lil M1K3 model
      */
     data object Qwen3_1B7 : LlmModel(
         id = "qwen3-1.7b",
@@ -157,14 +170,14 @@ sealed class LlmModel(
         /**
          * Default model - Gemma 3 1B (downloaded on first launch)
          */
-        /** Default — Lil M1K3, Qwen3-1.7B (public, no HF gating) */
-        val default: LlmModel get() = Qwen3_1B7
+        /** Default — Lil M1K3, Qwen3.5-2B (public, no HF gating) */
+        val default: LlmModel get() = Qwen35_2B
 
         /**
          * Get all active models (excludes gated Gemma variants and superseded models)
          */
         fun all(): List<LlmModel> = listOf(
-            Qwen3_1B7,
+            Qwen35_2B,
             Qwen35_0B8,
             FalconH1_90M,
             Gemma4_E2B
