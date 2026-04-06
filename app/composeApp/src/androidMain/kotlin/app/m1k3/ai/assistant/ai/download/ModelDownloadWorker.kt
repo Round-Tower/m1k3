@@ -138,10 +138,13 @@ class ModelDownloadWorker(
                 .setInputData(workDataOf(KEY_MODEL_ID to model.id))
                 .build()
 
+            // REPLACE: safe because download resumes from .tmp (append mode).
+            // Needed so "Try again" after a failure actually restarts the job —
+            // KEEP would silently leave a FAILED job in place.
             WorkManager.getInstance(context)
                 .enqueueUniqueWork(
                     "download_${model.id}",
-                    ExistingWorkPolicy.KEEP,
+                    ExistingWorkPolicy.REPLACE,
                     request
                 )
             return request.id

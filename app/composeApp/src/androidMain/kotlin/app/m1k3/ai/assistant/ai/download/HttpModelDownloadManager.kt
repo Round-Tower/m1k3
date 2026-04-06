@@ -55,44 +55,41 @@ class HttpModelDownloadManager(
      * @return Flow emitting DownloadProgress updates
      */
     fun download(model: LlmModel): Flow<DownloadProgress> = flow {
-        val url = getDownloadUrl(model)
         val targetFile = File(modelsDir, model.filename)
         val tempFile = File(modelsDir, "${model.filename}.tmp")
 
-        logger.i { "Downloading ${model.displayName} from $url" }
+        // Capture existing bytes BEFORE opening any connection
+        val existingBytes = if (tempFile.exists()) tempFile.length() else 0L
+
+        logger.i { "Downloading ${model.displayName} (already on disk: ${existingBytes / 1_000_000}MB)" }
         emit(DownloadProgress.Starting(model.id))
 
         try {
-            // Follow redirects manually (HttpURLConnection won't follow cross-host redirects)
-            val finalConnection = followRedirects(url, tempFile)
+            val conn = followRedirects(getDownloadUrl(model), tempFile)
+            val isResume = conn.responseCode == 206 && existingBytes > 0
 
-            val totalBytes = finalConnection.contentLengthLong + (if (tempFile.exists()) tempFile.length() else 0L)
-            var downloadedBytes = if (tempFile.exists()) tempFile.length() else 0L
+            // For a 206 response the server sends only the remaining bytes,
+            // so totalBytes = server content-length + already on disk.
+            // For a 200 (server ignored Range) start fresh.
+            val totalBytes = conn.contentLengthLong + if (isResume) existingBytes else 0L
+            var downloadedBytes = if (isResume) existingBytes else 0L
 
-            finalConnection.inputStream.use { input ->
-                tempFile.outputStream().let { output ->
-                    val buffer = ByteArray(65536) // 64KB buffer for large downloads
-                    var bytesRead: Int
+            logger.i { "Response ${conn.responseCode}, server bytes: ${conn.contentLengthLong / 1_000_000}MB, resume: $isResume" }
 
-                    while (input.read(buffer).also { bytesRead = it } != -1) {
-                        output.write(buffer, 0, bytesRead)
-                        downloadedBytes += bytesRead
-
-                        val progress = if (totalBytes > 0) {
-                            (downloadedBytes.toFloat() / totalBytes * 100).toInt()
-                        } else 0
-
-                        emit(DownloadProgress.InProgress(
-                            modelId = model.id,
-                            bytesDownloaded = downloadedBytes,
-                            totalBytes = totalBytes,
-                            progressPercent = progress
-                        ))
+            conn.inputStream.use { input ->
+                // CRITICAL: append when resuming so prior bytes are not overwritten
+                java.io.FileOutputStream(tempFile, isResume).use { output ->
+                    val buf = ByteArray(65536)
+                    var n: Int
+                    while (input.read(buf).also { n = it } != -1) {
+                        output.write(buf, 0, n)
+                        downloadedBytes += n
+                        val pct = if (totalBytes > 0) (downloadedBytes * 100L / totalBytes).toInt() else 0
+                        emit(DownloadProgress.InProgress(model.id, downloadedBytes, totalBytes, pct))
                     }
                 }
             }
 
-            // Move temp file to final location
             tempFile.renameTo(targetFile)
             logger.i { "Download complete: ${targetFile.length() / 1_000_000}MB" }
             emit(DownloadProgress.Complete(model.id, targetFile.absolutePath))
