@@ -34,9 +34,12 @@ no authentication required.
 
 | Tier | Rejected | Reason | Accepted |
 |------|----------|--------|---------|
-| Mini | Gemma 3 270M | 401 gated | **Qwen3-0.6B Q4_K_M** |
-| Lil  | Gemma 3 1B   | 401 gated | **Qwen3-1.7B Q4_K_M** |
-| Lil  | Qwen2.5-1.5B | superseded | **Qwen3-1.7B Q4_K_M** |
+| Mini | Gemma 3 270M | 401 gated | Qwen3-0.6B → **Qwen3.5-0.8B Q4_K_M** |
+| Lil  | Gemma 3 1B   | 401 gated | Qwen3-1.7B → **Qwen3.5-2B Q4_K_M** |
+| Lil  | Qwen2.5-1.5B | superseded | → **Qwen3.5-2B Q4_K_M** |
+
+*Both Mini and Lil were further upgraded to Qwen3.5 (March 2026, natively multimodal)
+on the same day as the original selection, after confirming public availability.*
 
 ## Decision
 

@@ -1,7 +1,14 @@
 # M1K3 AI Architecture
 **Project Codename: M1K3 Vision (Ma Vision)**
 
-*Architecture as of November 2025*
+*Architecture as of April 2026*
+
+> **Model Selection Update (Apr 2026):** References to "Gemma 3 270M/4B" throughout
+> this document reflect the original November 2025 design. The current tier model is:
+> Mini → Qwen3.5-0.8B (557MB), Lil → Qwen3.5-2B (1.33GB), Big → Gemma 4 E2B (3.1GB).
+> All Gemma 3 bartowski repos return HTTP 401 without HF auth — see ADR-0003.
+> iOS adds a System tier (Apple Foundation Models, zero download).
+> The Ma inference library (llama.cpp JNI) replaced Llamatik — see ADR-0001.
 
 ## Philosophical Foundation
 
@@ -21,7 +28,7 @@ Every architectural decision considers energy consumption. On-device processing 
 - Continuous infrastructure power draw
 
 **3. Computational Sufficiency**
-We reject the "bigger is better" paradigm. The optimal model is the smallest one that achieves the task. Gemma 3 270M represents our sweet spot—intelligent enough for meaningful conversation, small enough for universal accessibility (120MB quantized).
+We reject the "bigger is better" paradigm. The optimal model is the smallest one that achieves the task. M1K3 uses hardware-matched tiers: Mini (Qwen3.5-0.8B, 557MB), Lil (Qwen3.5-2B, 1.33GB), and Big (Gemma 4 E2B, 3.1GB) — selected at first launch based on device RAM. On iOS, Apple Foundation Models serve as a zero-download base tier. All models are natively multimodal as of March–April 2026.
 
 **4. User Autonomy Through Ownership**
 Users own their AI. No subscriptions to remote services that can disappear, change terms, or analyze usage patterns. The companion lives entirely within the user's control.
