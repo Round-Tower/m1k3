@@ -90,6 +90,20 @@ class HttpModelDownloadManager(
                 }
             }
 
+            // Validate completeness before declaring success.
+            // HTTP streams can end early without an IOException — the loop exits
+            // normally but the file is truncated. Check we got ≥99% of expected bytes.
+            val actualBytes = tempFile.length()
+            if (totalBytes > 0 && actualBytes < totalBytes * 99 / 100) {
+                logger.e { "Truncated download: got ${actualBytes / 1_000_000}MB of ${totalBytes / 1_000_000}MB" }
+                // Keep as .tmp so next attempt resumes from this point
+                emit(DownloadProgress.Failed(
+                    model.id,
+                    "Download incomplete (${actualBytes / 1_000_000}MB of ${totalBytes / 1_000_000}MB). Tap retry to resume."
+                ))
+                return@flow
+            }
+
             tempFile.renameTo(targetFile)
             logger.i { "Download complete: ${targetFile.length() / 1_000_000}MB" }
             emit(DownloadProgress.Complete(model.id, targetFile.absolutePath))
