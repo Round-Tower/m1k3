@@ -46,6 +46,10 @@ target_link_libraries(ma
 
 target_compile_features(ma PRIVATE cxx_std_17)
 
+# Android 15+ requires 16KB page-aligned libraries.
+# Without this the system shows PageSizeMismatchDialog on first launch.
+target_link_options(ma PRIVATE "-Wl,-z,max-page-size=16384")
+
 # Reduce .so size: strip debug symbols in release builds
 if (CMAKE_BUILD_TYPE STREQUAL "Release")
     set_target_properties(ma PROPERTIES LINK_FLAGS "-Wl,--strip-all")
