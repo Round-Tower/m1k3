@@ -172,6 +172,376 @@ data class ModelConfig(
             description = "Squid with jet propulsion animations",
             category = "cephalopod"
         )
+
+        // ── Quaternius Animals (CC0) ──────────────────────────────────────────
+
+        val COW = ModelConfig(
+            id = "cow",
+            name = "Cow",
+            path = "models/Cow.glb",
+            description = "Farmyard cow with walk, run, and idle animations",
+            category = "mammal",
+            modelType = ModelType.ANIMATED,
+            hasAnimations = true,
+            supportsEmotions = true,
+            defaultForNewUsers = false,
+            attribution = "CC0 - Quaternius via Poly Pizza"
+        )
+
+        val DONKEY = ModelConfig(
+            id = "donkey",
+            name = "Donkey",
+            path = "models/Donkey.glb",
+            description = "Stubborn donkey with kick, gallop, and idle animations",
+            category = "mammal",
+            modelType = ModelType.ANIMATED,
+            hasAnimations = true,
+            supportsEmotions = true,
+            defaultForNewUsers = false,
+            attribution = "CC0 - Quaternius via Poly Pizza"
+        )
+
+        val DEER = ModelConfig(
+            id = "deer",
+            name = "Deer",
+            path = "models/Deer.glb",
+            description = "Graceful deer with walk, run, and idle animations",
+            category = "mammal",
+            modelType = ModelType.ANIMATED,
+            hasAnimations = true,
+            supportsEmotions = true,
+            defaultForNewUsers = false,
+            attribution = "CC0 - Quaternius via Poly Pizza"
+        )
+
+        val ALPACA = ModelConfig(
+            id = "alpaca",
+            name = "Alpaca",
+            path = "models/Alpaca.glb",
+            description = "Fluffy alpaca with walk and idle animations",
+            category = "mammal",
+            modelType = ModelType.ANIMATED,
+            hasAnimations = true,
+            supportsEmotions = true,
+            defaultForNewUsers = false,
+            attribution = "CC0 - Quaternius via Poly Pizza"
+        )
+
+        val BULL = ModelConfig(
+            id = "bull",
+            name = "Bull",
+            path = "models/Bull.glb",
+            description = "Powerful bull with charge, stomp, and idle animations",
+            category = "mammal",
+            modelType = ModelType.ANIMATED,
+            hasAnimations = true,
+            supportsEmotions = true,
+            defaultForNewUsers = false,
+            attribution = "CC0 - Quaternius via Poly Pizza"
+        )
+
+        val QFOX = ModelConfig(
+            id = "qfox",
+            name = "Quaternius Fox",
+            path = "models/QFox.glb",
+            description = "Low-poly fox with walk, run, and idle animations",
+            category = "mammal",
+            modelType = ModelType.ANIMATED,
+            hasAnimations = true,
+            supportsEmotions = true,
+            defaultForNewUsers = false,
+            attribution = "CC0 - Quaternius via Poly Pizza"
+        )
+
+        val SHIBA_INU = ModelConfig(
+            id = "shiba-inu",
+            name = "Shiba Inu",
+            path = "models/ShibaInu.glb",
+            description = "Iconic dog with sit, bark, and run animations",
+            category = "mammal",
+            modelType = ModelType.ANIMATED,
+            hasAnimations = true,
+            supportsEmotions = true,
+            defaultForNewUsers = false,
+            attribution = "CC0 - Quaternius via Poly Pizza"
+        )
+
+        val STAG = ModelConfig(
+            id = "stag",
+            name = "Stag",
+            path = "models/Stag.glb",
+            description = "Antlered stag with walk, gallop, and idle animations",
+            category = "mammal",
+            modelType = ModelType.ANIMATED,
+            hasAnimations = true,
+            supportsEmotions = true,
+            defaultForNewUsers = false,
+            attribution = "CC0 - Quaternius via Poly Pizza"
+        )
+
+        val HUSKY = ModelConfig(
+            id = "husky",
+            name = "Husky",
+            path = "models/Husky.glb",
+            description = "Arctic dog with run, howl, and idle animations",
+            category = "mammal",
+            modelType = ModelType.ANIMATED,
+            hasAnimations = true,
+            supportsEmotions = true,
+            defaultForNewUsers = false,
+            attribution = "CC0 - Quaternius via Poly Pizza"
+        )
+
+        val WOLF = ModelConfig(
+            id = "wolf",
+            name = "Wolf",
+            path = "models/Wolf.glb",
+            description = "Wild wolf with prowl, howl, and attack animations",
+            category = "mammal",
+            modelType = ModelType.ANIMATED,
+            hasAnimations = true,
+            supportsEmotions = true,
+            defaultForNewUsers = false,
+            attribution = "CC0 - Quaternius via Poly Pizza"
+        )
+
+        val WHITE_HORSE = ModelConfig(
+            id = "white-horse",
+            name = "White Horse",
+            path = "models/WhiteHorse.glb",
+            description = "White horse with gallop and idle animations",
+            category = "mammal",
+            modelType = ModelType.ANIMATED,
+            hasAnimations = true,
+            supportsEmotions = true,
+            defaultForNewUsers = false,
+            attribution = "CC0 - Quaternius via Poly Pizza"
+        )
+
+        val HORSE = ModelConfig(
+            id = "horse",
+            name = "Horse",
+            path = "models/Horse.glb",
+            description = "Brown horse with gallop and idle animations",
+            category = "mammal",
+            modelType = ModelType.ANIMATED,
+            hasAnimations = true,
+            supportsEmotions = true,
+            defaultForNewUsers = false,
+            attribution = "CC0 - Quaternius via Poly Pizza"
+        )
+
+        // ── Quaternius Dinosaurs (CC0) ────────────────────────────────────────
+
+        val TREX = ModelConfig(
+            id = "trex",
+            name = "T-Rex",
+            path = "models/TRex.glb",
+            description = "Tyrannosaurus Rex with roar, stomp, and attack animations",
+            category = "dinosaur",
+            modelType = ModelType.ANIMATED,
+            hasAnimations = true,
+            supportsEmotions = true,
+            defaultForNewUsers = false,
+            attribution = "CC0 - Quaternius via Poly Pizza"
+        )
+
+        val PARASAUROLOPHUS = ModelConfig(
+            id = "parasaurolophus",
+            name = "Parasaurolophus",
+            path = "models/Parasaurolophus.glb",
+            description = "Crested hadrosaur with walk and idle animations",
+            category = "dinosaur",
+            modelType = ModelType.ANIMATED,
+            hasAnimations = true,
+            supportsEmotions = true,
+            defaultForNewUsers = false,
+            attribution = "CC0 - Quaternius via Poly Pizza"
+        )
+
+        val VELOCIRAPTOR = ModelConfig(
+            id = "velociraptor",
+            name = "Velociraptor",
+            path = "models/Velociraptor.glb",
+            description = "Fast raptor with sprint and slash animations",
+            category = "dinosaur",
+            modelType = ModelType.ANIMATED,
+            hasAnimations = true,
+            supportsEmotions = true,
+            defaultForNewUsers = false,
+            attribution = "CC0 - Quaternius via Poly Pizza"
+        )
+
+        val TRICERATOPS = ModelConfig(
+            id = "triceratops",
+            name = "Triceratops",
+            path = "models/Triceratops.glb",
+            description = "Three-horned dinosaur with charge and idle animations",
+            category = "dinosaur",
+            modelType = ModelType.ANIMATED,
+            hasAnimations = true,
+            supportsEmotions = true,
+            defaultForNewUsers = false,
+            attribution = "CC0 - Quaternius via Poly Pizza"
+        )
+
+        val STEGOSAURUS = ModelConfig(
+            id = "stegosaurus",
+            name = "Stegosaurus",
+            path = "models/Stegosaurus.glb",
+            description = "Plated dinosaur with walk and tail-swing animations",
+            category = "dinosaur",
+            modelType = ModelType.ANIMATED,
+            hasAnimations = true,
+            supportsEmotions = true,
+            defaultForNewUsers = false,
+            attribution = "CC0 - Quaternius via Poly Pizza"
+        )
+
+        val APATOSAURUS = ModelConfig(
+            id = "apatosaurus",
+            name = "Apatosaurus",
+            path = "models/Apatosaurus.glb",
+            description = "Long-necked sauropod with lumbering walk and idle animations",
+            category = "dinosaur",
+            modelType = ModelType.ANIMATED,
+            hasAnimations = true,
+            supportsEmotions = true,
+            defaultForNewUsers = false,
+            attribution = "CC0 - Quaternius via Poly Pizza"
+        )
+
+        // ── Quaternius Fish (CC0) ─────────────────────────────────────────────
+
+        val ANGLERFISH = ModelConfig(
+            id = "anglerfish",
+            name = "Anglerfish",
+            path = "models/Anglerfish.glb",
+            description = "Deep-sea anglerfish with swim animations",
+            category = "fish",
+            modelType = ModelType.ANIMATED,
+            hasAnimations = true,
+            supportsEmotions = true,
+            defaultForNewUsers = false,
+            attribution = "CC0 - Quaternius via Poly Pizza"
+        )
+
+        val SHARK = ModelConfig(
+            id = "shark",
+            name = "Shark",
+            path = "models/Shark.glb",
+            description = "Ocean shark with patrol and dash animations",
+            category = "fish",
+            modelType = ModelType.ANIMATED,
+            hasAnimations = true,
+            supportsEmotions = true,
+            defaultForNewUsers = false,
+            attribution = "CC0 - Quaternius via Poly Pizza"
+        )
+
+        val BLOBFISH = ModelConfig(
+            id = "blobfish",
+            name = "Blobfish",
+            path = "models/Blobfish.glb",
+            description = "Deep-sea blobfish with float and idle animations",
+            category = "fish",
+            modelType = ModelType.ANIMATED,
+            hasAnimations = true,
+            supportsEmotions = true,
+            defaultForNewUsers = false,
+            attribution = "CC0 - Quaternius via Poly Pizza"
+        )
+
+        val PUFFERFISH = ModelConfig(
+            id = "pufferfish",
+            name = "Pufferfish",
+            path = "models/Pufferfish.glb",
+            description = "Spiky pufferfish with inflate and swim animations",
+            category = "fish",
+            modelType = ModelType.ANIMATED,
+            hasAnimations = true,
+            supportsEmotions = true,
+            defaultForNewUsers = false,
+            attribution = "CC0 - Quaternius via Poly Pizza"
+        )
+
+        val PIRANHA = ModelConfig(
+            id = "piranha",
+            name = "Piranha",
+            path = "models/Piranha.glb",
+            description = "Ferocious piranha with bite and frenzy animations",
+            category = "fish",
+            modelType = ModelType.ANIMATED,
+            hasAnimations = true,
+            supportsEmotions = true,
+            defaultForNewUsers = false,
+            attribution = "CC0 - Quaternius via Poly Pizza"
+        )
+
+        val KOI = ModelConfig(
+            id = "koi",
+            name = "Koi",
+            path = "models/Koi.glb",
+            description = "Elegant Japanese koi with graceful swim animations",
+            category = "fish",
+            modelType = ModelType.ANIMATED,
+            hasAnimations = true,
+            supportsEmotions = true,
+            defaultForNewUsers = false,
+            attribution = "CC0 - Quaternius via Poly Pizza"
+        )
+
+        val CLOWNFISH = ModelConfig(
+            id = "clownfish",
+            name = "Clownfish",
+            path = "models/Clownfish.glb",
+            description = "Bright clownfish with swim and dart animations",
+            category = "fish",
+            modelType = ModelType.ANIMATED,
+            hasAnimations = true,
+            supportsEmotions = true,
+            defaultForNewUsers = false,
+            attribution = "CC0 - Quaternius via Poly Pizza"
+        )
+
+        val SWORDFISH = ModelConfig(
+            id = "swordfish",
+            name = "Swordfish",
+            path = "models/Swordfish.glb",
+            description = "Speedy swordfish with sprint and leap animations",
+            category = "fish",
+            modelType = ModelType.ANIMATED,
+            hasAnimations = true,
+            supportsEmotions = true,
+            defaultForNewUsers = false,
+            attribution = "CC0 - Quaternius via Poly Pizza"
+        )
+
+        val BETTA = ModelConfig(
+            id = "betta",
+            name = "Betta",
+            path = "models/Betta.glb",
+            description = "Vivid betta fish with fin-flare and swim animations",
+            category = "fish",
+            modelType = ModelType.ANIMATED,
+            hasAnimations = true,
+            supportsEmotions = true,
+            defaultForNewUsers = false,
+            attribution = "CC0 - Quaternius via Poly Pizza"
+        )
+
+        val GOBLIN_SHARK = ModelConfig(
+            id = "goblin-shark",
+            name = "Goblin Shark",
+            path = "models/GoblinShark.glb",
+            description = "Prehistoric goblin shark with jaw-extend animations",
+            category = "fish",
+            modelType = ModelType.ANIMATED,
+            hasAnimations = true,
+            supportsEmotions = true,
+            defaultForNewUsers = false,
+            attribution = "CC0 - Quaternius via Poly Pizza"
+        )
     }
 }
 
@@ -190,10 +560,15 @@ object ModelRegistry {
     /**
      * Pre-configured models
      *
+     * 41 models: Omabuarts Quirky Series + Quaternius Animals/Dinosaurs/Fish
+     *
      * Includes:
      * - Colobus monkey (DEFAULT - animated, eco-consciousness showcase)
      * - Quirky Series FREE Animals v1.4 (7 additional animated models)
      * - Mask (static, procedural animations alternative)
+     * - Quaternius Animals (12 CC0 mammals)
+     * - Quaternius Dinosaurs (6 CC0 dinosaurs)
+     * - Quaternius Fish (10 CC0 fish)
      */
     private val predefinedModels = listOf(
         ModelConfig.MASK,        // Static model (alternative)
@@ -204,7 +579,38 @@ object ModelRegistry {
         ModelConfig.MUSKRAT,
         ModelConfig.PUDU,
         ModelConfig.TAIPAN,
-        ModelConfig.INKFISH
+        ModelConfig.INKFISH,
+        // Quaternius Animals (CC0)
+        ModelConfig.COW,
+        ModelConfig.DONKEY,
+        ModelConfig.DEER,
+        ModelConfig.ALPACA,
+        ModelConfig.BULL,
+        ModelConfig.QFOX,
+        ModelConfig.SHIBA_INU,
+        ModelConfig.STAG,
+        ModelConfig.HUSKY,
+        ModelConfig.WOLF,
+        ModelConfig.WHITE_HORSE,
+        ModelConfig.HORSE,
+        // Quaternius Dinosaurs (CC0)
+        ModelConfig.TREX,
+        ModelConfig.PARASAUROLOPHUS,
+        ModelConfig.VELOCIRAPTOR,
+        ModelConfig.TRICERATOPS,
+        ModelConfig.STEGOSAURUS,
+        ModelConfig.APATOSAURUS,
+        // Quaternius Fish (CC0)
+        ModelConfig.ANGLERFISH,
+        ModelConfig.SHARK,
+        ModelConfig.BLOBFISH,
+        ModelConfig.PUFFERFISH,
+        ModelConfig.PIRANHA,
+        ModelConfig.KOI,
+        ModelConfig.CLOWNFISH,
+        ModelConfig.SWORDFISH,
+        ModelConfig.BETTA,
+        ModelConfig.GOBLIN_SHARK
     )
 
     /**

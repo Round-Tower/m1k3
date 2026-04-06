@@ -16,9 +16,11 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.items as lazyGridItems
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -65,6 +67,15 @@ fun AvatarGalleryScreen(
     val haptics = rememberHapticFeedback()
     var selectedId by remember { mutableStateOf(currentAvatarId) }
     val models = remember { ModelRegistry.allModels }
+    var selectedCategory by remember { mutableStateOf<String?>(null) }
+
+    val categories = remember(models) {
+        models.map { it.category }.distinct().sorted()
+    }
+    val filteredModels = remember(models, selectedCategory) {
+        if (selectedCategory == null) models
+        else models.filter { it.category == selectedCategory }
+    }
 
     Column(
         modifier = modifier
@@ -85,10 +96,35 @@ fun AvatarGalleryScreen(
                 color = MaColors.textPrimary()
             )
             Text(
-                text = "${models.size} companions available",
+                text = "${filteredModels.size} companions",
                 style = MaTypography.bodyMedium,
                 color = MaColors.textMuted()
             )
+        }
+
+        // Category filter chips
+        LazyRow(
+            contentPadding = PaddingValues(horizontal = MaSpacing.md),
+            horizontalArrangement = Arrangement.spacedBy(MaSpacing.sm),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = MaSpacing.sm)
+        ) {
+            // "All" chip
+            item {
+                CategoryChip(
+                    label = "All",
+                    isSelected = selectedCategory == null,
+                    onClick = { selectedCategory = null }
+                )
+            }
+            items(categories) { category ->
+                CategoryChip(
+                    label = category.replaceFirstChar { it.uppercase() },
+                    isSelected = selectedCategory == category,
+                    onClick = { selectedCategory = category }
+                )
+            }
         }
 
         // Grid of avatar cards
@@ -99,7 +135,7 @@ fun AvatarGalleryScreen(
             verticalArrangement = Arrangement.spacedBy(MaSpacing.md),
             modifier = Modifier.fillMaxSize()
         ) {
-            items(models, key = { it.id }) { model ->
+            lazyGridItems(filteredModels, key = { it.id }) { model ->
                 AvatarCard(
                     model = model,
                     isSelected = model.id == selectedId,
@@ -111,6 +147,52 @@ fun AvatarGalleryScreen(
                 )
             }
         }
+    }
+}
+
+/**
+ * Pill-shaped category filter chip.
+ *
+ * Selected chips use MaColors.Orange fill; unselected use a subtle border.
+ */
+@Composable
+private fun CategoryChip(
+    label: String,
+    isSelected: Boolean,
+    onClick: () -> Unit
+) {
+    val bgColor by animateColorAsState(
+        targetValue = if (isSelected) MaColors.Orange else MaColors.bgElevated(),
+        animationSpec = tween(200),
+        label = "chipBg"
+    )
+    val borderColor by animateColorAsState(
+        targetValue = if (isSelected) MaColors.Orange else MaColors.BorderSubtle,
+        animationSpec = tween(200),
+        label = "chipBorder"
+    )
+    val textColor by animateColorAsState(
+        targetValue = if (isSelected) MaColors.bgPrimary() else MaColors.textPrimary(),
+        animationSpec = tween(200),
+        label = "chipText"
+    )
+    val chipShape = RoundedCornerShape(50)
+
+    Box(
+        modifier = Modifier
+            .clip(chipShape)
+            .background(bgColor, chipShape)
+            .border(width = 1.dp, color = borderColor, shape = chipShape)
+            .clickable(onClick = onClick)
+            .padding(horizontal = MaSpacing.md, vertical = MaSpacing.sm),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = label,
+            style = MaTypography.labelSmall,
+            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+            color = textColor
+        )
     }
 }
 
@@ -228,6 +310,7 @@ private fun categoryEmoji(category: String): String = when (category.lowercase()
     "reptile" -> "🦎"
     "fish" -> "🐟"
     "cephalopod" -> "🦑"
+    "dinosaur" -> "🦕"
     "static" -> "🎭"
     else -> "🌟"
 }
