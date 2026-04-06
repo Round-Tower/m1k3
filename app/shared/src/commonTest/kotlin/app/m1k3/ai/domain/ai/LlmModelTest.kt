@@ -62,8 +62,8 @@ class LlmModelTest {
     // ===== Default Model Tests =====
 
     @Test
-    fun `default model is Gemma3_1B`() {
-        assertEquals(LlmModel.Gemma3_1B, LlmModel.default)
+    fun `default model is Qwen3_1B7`() {
+        assertEquals(LlmModel.Qwen3_1B7, LlmModel.default)
     }
 
     // ===== Collection Tests =====
@@ -75,10 +75,12 @@ class LlmModelTest {
     }
 
     @Test
-    fun `all includes both Gemma3 and FalconH1`() {
+    fun `all includes active tier models`() {
         val models = LlmModel.all()
-        assertTrue(models.contains(LlmModel.Gemma3_270M))
+        assertTrue(models.contains(LlmModel.Qwen3_0B6))
+        assertTrue(models.contains(LlmModel.Qwen3_1B7))
         assertTrue(models.contains(LlmModel.FalconH1_90M))
+        assertTrue(models.contains(LlmModel.Gemma4_E2B))
     }
 
     // ===== findById Tests =====
@@ -122,7 +124,8 @@ class LlmModelTest {
     @Test
     fun `availableFor 4GB returns base models`() {
         val models = LlmModel.availableFor(4)
-        assertTrue(models.contains(LlmModel.Gemma3_270M))
+        assertTrue(models.contains(LlmModel.Qwen3_0B6))
+        assertTrue(models.contains(LlmModel.Qwen3_1B7))
         assertTrue(models.contains(LlmModel.FalconH1_90M))
     }
 
@@ -198,18 +201,18 @@ class LlmModelTest {
     }
 
     @Test
-    fun `Gemma3_1B is the default model`() {
-        assertEquals(LlmModel.Gemma3_1B, LlmModel.default)
+    fun `Gemma3_1B is NOT the default model (replaced by Qwen25_1B5)`() {
+        assertFalse(LlmModel.Gemma3_1B == LlmModel.default)
     }
 
     @Test
-    fun `Gemma3_1B is in all models list`() {
-        assertTrue(LlmModel.all().contains(LlmModel.Gemma3_1B))
+    fun `Qwen3_1B7 is in all models list`() {
+        assertTrue(LlmModel.all().contains(LlmModel.Qwen3_1B7))
     }
 
     @Test
-    fun `Gemma3_1B is available for 4GB devices`() {
-        assertTrue(LlmModel.availableFor(4).contains(LlmModel.Gemma3_1B))
+    fun `Qwen3_0B6 is in all models list`() {
+        assertTrue(LlmModel.all().contains(LlmModel.Qwen3_0B6))
     }
 
     @Test

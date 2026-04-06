@@ -31,11 +31,64 @@ sealed class LlmModel(
     val minRamGB: Int = 0
 ) {
     /**
-     * Gemma 3 1B - Google's quality baseline model
+     * Qwen3 1.7B — Lil M1K3 (public, no HF gating)
      *
-     * Default model for MVP. First real quality tier for on-device chat.
-     * Q4_K_M quantization (~620MB). Downloaded on first launch.
-     * HuggingFace: bartowski/gemma-3-1b-it-GGUF
+     * May 2025. Qwen3-1.7B ≈ Qwen2.5-3B quality — full generation ahead.
+     * ChatML format. Q4_K_M ~1.28GB. 4–8GB RAM.
+     * HuggingFace: bartowski/Qwen_Qwen3-1.7B-GGUF
+     */
+    data object Qwen3_1B7 : LlmModel(
+        id = "qwen3-1.7b",
+        displayName = "Qwen3 (1.7B)",
+        filename = "Qwen_Qwen3-1.7B-Q4_K_M.gguf",
+        parameterCount = 1_700_000_000L,
+        chatFormat = ChatFormat.ChatML,
+        minRamGB = 2
+    )
+
+    /**
+     * Qwen3 0.6B — Mini M1K3 (public, no HF gating)
+     *
+     * May 2025. Best sub-1B instruction follower. Beats SmolLM2-360M.
+     * ChatML format. Q4_K_M ~484MB. Works on any device.
+     * HuggingFace: bartowski/Qwen_Qwen3-0.6B-GGUF
+     */
+    data object Qwen3_0B6 : LlmModel(
+        id = "qwen3-0.6b",
+        displayName = "Qwen3 (0.6B)",
+        filename = "Qwen_Qwen3-0.6B-Q4_K_M.gguf",
+        parameterCount = 600_000_000L,
+        chatFormat = ChatFormat.ChatML
+    )
+
+    /**
+     * Qwen2.5 1.5B — kept for reference (superseded by Qwen3-1.7B)
+     * @see Qwen3_1B7 for the active Lil M1K3 model
+     */
+    data object Qwen25_1B5 : LlmModel(
+        id = "qwen2.5-1.5b",
+        displayName = "Qwen 2.5 (1.5B)",
+        filename = "Qwen2.5-1.5B-Instruct-Q4_K_M.gguf",
+        parameterCount = 1_500_000_000L,
+        chatFormat = ChatFormat.ChatML,
+        minRamGB = 2
+    )
+
+    /**
+     * SmolLM2 360M — kept for reference (superseded by Qwen3-0.6B)
+     * @see Qwen3_0B6 for the active Mini M1K3 model
+     */
+    data object SmolLM2_360M : LlmModel(
+        id = "smollm2-360m",
+        displayName = "SmolLM2 (360M)",
+        filename = "SmolLM2-360M-Instruct-Q4_K_M.gguf",
+        parameterCount = 360_000_000L,
+        chatFormat = ChatFormat.ChatML
+    )
+
+    /**
+     * Gemma 3 1B — kept for reference (requires HF auth, not used in tiers)
+     * @see Qwen25_1B5 for the active Lil M1K3 model
      */
     data object Gemma3_1B : LlmModel(
         id = "gemma-3-1b",
@@ -47,10 +100,8 @@ sealed class LlmModel(
     )
 
     /**
-     * Gemma 3 270M - Google's compact model (legacy)
-     *
-     * Kept for low-end device fallback. Poor chat quality at 270M params.
-     * Uses IQ3_XXS quantization for minimal size.
+     * Gemma 3 270M — kept for reference (requires HF auth, not used in tiers)
+     * @see SmolLM2_360M for the active Mini M1K3 model
      */
     data object Gemma3_270M : LlmModel(
         id = "gemma-3-270m",
@@ -94,14 +145,15 @@ sealed class LlmModel(
         /**
          * Default model - Gemma 3 1B (downloaded on first launch)
          */
-        val default: LlmModel get() = Gemma3_1B
+        /** Default — Lil M1K3, Qwen3-1.7B (public, no HF gating) */
+        val default: LlmModel get() = Qwen3_1B7
 
         /**
-         * Get all available models
+         * Get all active models (excludes gated Gemma variants and superseded models)
          */
         fun all(): List<LlmModel> = listOf(
-            Gemma3_1B,
-            Gemma3_270M,
+            Qwen3_1B7,
+            Qwen3_0B6,
             FalconH1_90M,
             Gemma4_E2B
         )

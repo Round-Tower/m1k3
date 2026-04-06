@@ -203,9 +203,9 @@ actual val platformModule = module {
             app.m1k3.ai.assistant.platform.PreferenceKeys.SELECTED_M1K3_TIER, "lil"
         ) ?: "lil"
         val model: LlmModel = when (tierKey) {
-            "mini" -> LlmModel.Gemma3_270M
+            "mini" -> LlmModel.Qwen3_0B6
             "big"  -> LlmModel.Gemma4_E2B
-            else   -> LlmModel.Gemma3_1B
+            else   -> LlmModel.Qwen3_1B7  // "lil" + fallback
         }
         val overridePath = get<ModelDownloadManager>().getModelPath(model.id)
         LlamaCppEngine(get<Context>(), model, overrideModelPath = overridePath)

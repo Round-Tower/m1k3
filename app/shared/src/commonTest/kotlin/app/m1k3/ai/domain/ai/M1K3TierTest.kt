@@ -21,8 +21,8 @@ class M1K3TierTest {
     }
 
     @Test
-    fun `Mini uses Gemma3_270M model`() {
-        assertIs<LlmModel.Gemma3_270M>(M1K3Tier.Mini.model)
+    fun `Mini uses Qwen3_0B6 model`() {
+        assertIs<LlmModel.Qwen3_0B6>(M1K3Tier.Mini.model)
     }
 
     @Test
@@ -39,14 +39,14 @@ class M1K3TierTest {
     }
 
     @Test
-    fun `Lil uses Gemma3_1B model`() {
-        assertIs<LlmModel.Gemma3_1B>(M1K3Tier.Lil.model)
+    fun `Lil uses Qwen3_1B7 model`() {
+        assertIs<LlmModel.Qwen3_1B7>(M1K3Tier.Lil.model)
     }
 
     @Test
     fun `Lil download size is reasonable`() {
-        assertTrue(M1K3Tier.Lil.downloadSizeMb in 400..900,
-            "Lil download should be 400–900MB, was ${M1K3Tier.Lil.downloadSizeMb}MB")
+        assertTrue(M1K3Tier.Lil.downloadSizeMb in 400..1400,
+            "Lil download should be 400–1400MB, was ${M1K3Tier.Lil.downloadSizeMb}MB")
     }
 
     // ===== Big M1K3 =====

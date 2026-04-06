@@ -153,12 +153,23 @@ class HttpModelDownloadManager(
      */
     private fun getDownloadUrl(model: LlmModel): String {
         return when (model) {
+            // Active tiers — public, no HuggingFace auth required
+            is LlmModel.Qwen3_0B6 ->
+                "https://huggingface.co/bartowski/Qwen_Qwen3-0.6B-GGUF/resolve/main/${model.filename}"
+            is LlmModel.Qwen3_1B7 ->
+                "https://huggingface.co/bartowski/Qwen_Qwen3-1.7B-GGUF/resolve/main/${model.filename}"
+            is LlmModel.Gemma4_E2B ->
+                "https://huggingface.co/unsloth/gemma-4-E2B-it-GGUF/resolve/main/${model.filename}"
+            // Superseded — kept for reference, still downloadable
+            is LlmModel.Qwen25_1B5 ->
+                "https://huggingface.co/bartowski/Qwen2.5-1.5B-Instruct-GGUF/resolve/main/${model.filename}"
+            is LlmModel.SmolLM2_360M ->
+                "https://huggingface.co/bartowski/SmolLM2-360M-Instruct-GGUF/resolve/main/${model.filename}"
+            // Legacy — Gemma 3 requires HF auth (401 without token)
             is LlmModel.Gemma3_270M ->
                 "https://huggingface.co/bartowski/gemma-3-270m-it-GGUF/resolve/main/${model.filename}"
             is LlmModel.Gemma3_1B ->
                 "https://huggingface.co/bartowski/gemma-3-1b-it-GGUF/resolve/main/${model.filename}"
-            is LlmModel.Gemma4_E2B ->
-                "https://huggingface.co/unsloth/gemma-4-E2B-it-GGUF/resolve/main/${model.filename}"
             else ->
                 "https://huggingface.co/models/${model.filename}"
         }

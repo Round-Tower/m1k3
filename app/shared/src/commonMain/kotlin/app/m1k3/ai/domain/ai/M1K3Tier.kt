@@ -27,22 +27,22 @@ sealed class M1K3Tier(
     /** Short capability description for onboarding screen */
     val description: String
 ) {
-    /** <4GB RAM — Gemma 3 270M — quick download, always responsive */
+    /** <4GB RAM — Qwen3 0.6B — best sub-1B, May 2025 */
     data object Mini : M1K3Tier(
         displayName = "Mini M1K3",
         tagline = "Fast and focused",
-        model = LlmModel.Gemma3_270M,
-        downloadSizeMb = 200,
+        model = LlmModel.Qwen3_0B6,
+        downloadSizeMb = 484,
         description = "Optimised for your device — lightweight intelligence " +
                 "that stays responsive and never misses a beat."
     )
 
-    /** 4–8GB RAM — Gemma 3 1B — real conversations, sharp reasoning */
+    /** 4–8GB RAM — Qwen3 1.7B — full generation ahead of Qwen2.5, May 2025 */
     data object Lil : M1K3Tier(
         displayName = "Lil M1K3",
         tagline = "Sharp and capable",
-        model = LlmModel.Gemma3_1B,
-        downloadSizeMb = 620,
+        model = LlmModel.Qwen3_1B7,
+        downloadSizeMb = 1280,
         description = "A full intelligence engine. Multi-turn conversations, " +
                 "memory, and reasoning that keeps up with you."
     )
