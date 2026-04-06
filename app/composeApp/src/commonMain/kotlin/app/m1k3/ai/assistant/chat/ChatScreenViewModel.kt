@@ -674,13 +674,17 @@ class ChatScreenViewModel(
         }
 
         try {
-            // Build context-aware welcome prompt
-            val timeOfDay = when (currentHour) {
-                in 5..11 -> "morning"
-                in 12..17 -> "afternoon"
-                else -> "evening"
+            // Build context-aware welcome prompt — uses real UserContext when available
+            val welcomePrompt = if (userContext != null) {
+                app.m1k3.ai.domain.context.ContextAwareWelcomePromptBuilder().build(userContext)
+            } else {
+                val timeOfDay = when (currentHour) {
+                    in 5..11 -> "morning"
+                    in 12..17 -> "afternoon"
+                    else -> "evening"
+                }
+                "You are M1K3, a private AI assistant. Say a brief, warm, friendly greeting. It's $timeOfDay. 1-2 sentences, no markdown."
             }
-            val welcomePrompt = "Say a brief, friendly greeting as M1K3, a helpful AI assistant. It's $timeOfDay. Keep it under 2 sentences."
 
             // Use GenerationConfigBuilder for config
             val config = configBuilder.build(

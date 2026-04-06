@@ -67,6 +67,12 @@ import app.m1k3.ai.assistant.MainActivity
 import app.m1k3.ai.assistant.stt.AndroidSttEngine
 import app.m1k3.ai.assistant.globe.GlobeBackground
 import app.m1k3.ai.assistant.globe.GlobeMode
+import app.m1k3.ai.assistant.context.rememberContextPermissionRequester
+import app.m1k3.ai.assistant.globe.TIER_HIGH
+import app.m1k3.ai.assistant.globe.TIER_MEDIUM
+import app.m1k3.ai.assistant.globe.TIER_LOW
+import app.m1k3.ai.assistant.platform.PreferenceKeys
+import org.koin.compose.koinInject
 import app.m1k3.ai.domain.stt.SttState
 import app.m1k3.ai.domain.stt.isListening
 import org.koin.androidx.compose.koinViewModel
@@ -108,6 +114,21 @@ fun ChatScreen(
     val uiState by viewModel.collectAsState()
     var showClearDialog by remember { mutableStateOf(false) }
     val haptics = rememberHapticFeedback()
+
+    // Permission requester for context providers
+    val permissionRequester = rememberContextPermissionRequester { _ ->
+        // Permission state changed — ViewModel will pick up new context on next load
+    }
+
+    // Globe mode from preferences (user-configurable in Settings)
+    val prefs = koinInject<app.m1k3.ai.assistant.platform.PreferencesStoreInterface>()
+    val globeMode = remember {
+        when (prefs.getString(PreferenceKeys.GLOBE_MODE, "RUBIN")) {
+            "MAPLIBRE" -> GlobeMode.MAPLIBRE
+            "NONE" -> GlobeMode.NONE
+            else -> GlobeMode.RUBIN
+        }
+    }
 
     // Speech-to-Text engine
     val sttEngine = remember { AndroidSttEngine(context) }
@@ -199,9 +220,9 @@ fun ChatScreen(
             .fillMaxSize()
             .animateContentSize()
     ) {
-        // Layer 0: Globe background — Rubin dot globe, dims during generation
+        // Layer 0: Globe background — mode user-configurable in Settings
         GlobeBackground(
-            mode = GlobeMode.RUBIN,
+            mode = globeMode,
             dimmed = uiState.generationState.isGenerating,
             modifier = Modifier.fillMaxSize()
         )
@@ -220,7 +241,10 @@ fun ChatScreen(
                 listState = listState,
                 showEcoIndicator = true,
                 onSpeak = { text -> viewModel.speakMessage(text) },
-                userContext = uiState.userContext
+                userContext = uiState.userContext,
+                onRequestLocation = permissionRequester.onRequestLocation,
+                onRequestHealth = permissionRequester.onRequestHealth,
+                onRequestScreenTime = permissionRequester.onRequestScreenTime
             )
 
             // Eco Indicator - Real-time environmental impact
@@ -363,6 +387,9 @@ private fun ErrorSnackbar(
 fun ChatBubble(
     message: ChatMessage,
     userContext: app.m1k3.ai.domain.context.UserContext? = null,
+    onRequestLocation: (() -> Unit)? = null,
+    onRequestHealth: (() -> Unit)? = null,
+    onRequestScreenTime: (() -> Unit)? = null,
     onSpeak: ((String) -> Unit)? = null
 ) {
     when {
@@ -370,7 +397,10 @@ fun ChatBubble(
             if (userContext != null) {
                 // Contextual welcome — uses real user data
                 app.m1k3.ai.assistant.context.ContextualWelcomeCard(
-                    context = userContext
+                    context = userContext,
+                    onRequestLocation = onRequestLocation,
+                    onRequestHealth = onRequestHealth,
+                    onRequestScreenTime = onRequestScreenTime
                 )
             } else {
                 // Fallback — classic status card (no context available)

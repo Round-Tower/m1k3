@@ -40,6 +40,9 @@ fun ChatMessageList(
     showEcoIndicator: Boolean,
     onSpeak: ((String) -> Unit)? = null,
     userContext: app.m1k3.ai.domain.context.UserContext? = null,
+    onRequestLocation: (() -> Unit)? = null,
+    onRequestHealth: (() -> Unit)? = null,
+    onRequestScreenTime: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     LazyColumn(
@@ -55,7 +58,14 @@ fun ChatMessageList(
         ),
     ) {
         items(messages) { message ->
-            ChatBubble(message, userContext = userContext, onSpeak = onSpeak)
+            ChatBubble(
+                message = message,
+                userContext = userContext,
+                onRequestLocation = onRequestLocation,
+                onRequestHealth = onRequestHealth,
+                onRequestScreenTime = onRequestScreenTime,
+                onSpeak = onSpeak
+            )
         }
 
         // Typing indicator while AI is generating

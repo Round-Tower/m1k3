@@ -19,6 +19,11 @@ class UserNameProvider(private val context: Context) {
     }
 
     fun getUserFirstName(): String? {
+        // Check user-set name first (overrides account detection)
+        val prefs = context.getSharedPreferences("ma_ai_prefs", Context.MODE_PRIVATE)
+        val storedName = prefs.getString("user_name", null)?.trim()
+        if (!storedName.isNullOrBlank()) return storedName
+
         return try {
             val accountManager = AccountManager.get(context)
             // Google accounts

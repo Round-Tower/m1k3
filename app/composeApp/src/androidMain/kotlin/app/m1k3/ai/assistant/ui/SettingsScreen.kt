@@ -166,6 +166,16 @@ fun SettingsScreen(modifier: Modifier = Modifier) {
         }
 
         // Bottom padding
+        // Appearance — globe background
+        item {
+            GlobeSettingsSection()
+        }
+
+        // Personal — your name
+        item {
+            PersonalSection()
+        }
+
         item {
             Spacer(modifier = Modifier.height(32.dp))
         }
@@ -369,6 +379,94 @@ private fun AiCoreSection(
                     color = MaColors.borderSubtle()
                 )
             }
+        }
+    }
+}
+
+/**
+ * GlobeSettingsSection — globe background on/off/mode toggle.
+ */
+@Composable
+private fun GlobeSettingsSection() {
+    val haptics = LocalHapticFeedback.current
+    val prefs: app.m1k3.ai.assistant.platform.PreferencesStoreInterface = koinInject()
+
+    var globeMode by remember {
+        mutableStateOf(prefs.getString(app.m1k3.ai.assistant.platform.PreferenceKeys.GLOBE_MODE, "RUBIN") ?: "RUBIN")
+    }
+
+    SettingsSection(title = "Background", icon = Icons.Default.Public) {
+        // On/Off toggle
+        SettingsItem(
+            title = "Globe background",
+            subtitle = when (globeMode) {
+                "NONE" -> "Off"
+                "MAPLIBRE" -> "MapLibre (requires internet)"
+                else -> "Rubin dot-globe (offline)"
+            },
+            icon = if (globeMode != "NONE") Icons.Default.Public else Icons.Default.PublicOff,
+            onClick = {
+                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                val next = when (globeMode) {
+                    "RUBIN" -> "MAPLIBRE"
+                    "MAPLIBRE" -> "NONE"
+                    else -> "RUBIN"
+                }
+                globeMode = next
+                prefs.setString(app.m1k3.ai.assistant.platform.PreferenceKeys.GLOBE_MODE, next)
+            }
+        )
+    }
+}
+
+/**
+ * PersonalSection — user name setting.
+ */
+@Composable
+private fun PersonalSection() {
+    val haptics = LocalHapticFeedback.current
+    val prefs: app.m1k3.ai.assistant.platform.PreferencesStoreInterface = koinInject()
+
+    var name by remember {
+        mutableStateOf(prefs.getString(app.m1k3.ai.assistant.platform.PreferenceKeys.USER_NAME, "") ?: "")
+    }
+    var isEditing by remember { mutableStateOf(false) }
+
+    SettingsSection(title = "Personal", icon = Icons.Default.Person) {
+        if (isEditing) {
+            androidx.compose.material3.OutlinedTextField(
+                value = name,
+                onValueChange = { name = it },
+                label = { Text("Your first name") },
+                singleLine = true,
+                modifier = androidx.compose.ui.Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = MaSpacing.base, vertical = MaSpacing.sm),
+                trailingIcon = {
+                    IconButton(onClick = {
+                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                        prefs.setString(app.m1k3.ai.assistant.platform.PreferenceKeys.USER_NAME, name.trim())
+                        isEditing = false
+                    }) {
+                        Icon(Icons.Default.Check, contentDescription = "Save")
+                    }
+                },
+                colors = androidx.compose.material3.OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = MaColors.Orange,
+                    focusedLabelColor = MaColors.Orange,
+                    cursorColor = MaColors.Orange
+                )
+            )
+        } else {
+            SettingsItem(
+                title = "Your name",
+                subtitle = name.ifBlank { "Tap to set — used in your greeting" },
+                icon = Icons.Default.Person,
+                onClick = {
+                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                    isEditing = true
+                }
+            )
         }
     }
 }
