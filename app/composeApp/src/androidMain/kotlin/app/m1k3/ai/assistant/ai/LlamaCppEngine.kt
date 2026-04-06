@@ -1,12 +1,14 @@
 package app.m1k3.ai.assistant.ai
 
 import android.content.Context
+import app.m1k3.ai.assistant.ai.ma.MaBridge
+import app.m1k3.ai.assistant.ai.ma.MaInferenceBackend
 import app.m1k3.ai.assistant.utils.Logger
 import app.m1k3.ai.domain.ai.GenerationConfig
 import app.m1k3.ai.domain.ai.LlmModel
+import app.m1k3.ai.domain.chat.format.MessageRole
 import app.m1k3.ai.domain.chat.services.ChatFormatter
 import app.m1k3.ai.domain.chat.services.DefaultChatFormatter
-import com.llamatik.library.platform.LlamaBridge
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -16,122 +18,124 @@ import java.io.File
 private val logger = Logger.withTag("LlamaCppEngine")
 
 /**
- * LlamaCppEngine - llama.cpp-based AI inference engine via Llamatik
+ * LlamaCppEngine - llama.cpp inference engine via Ma JNI bridge
  *
- * @param context Android context for file access
- * @param model The LLM model to use (default: Gemma3 270M)
- * @param chatFormatter Optional formatter for prompt construction (derived from model's format)
+ * Replaces Llamatik with the Ma library, which:
+ * - Wraps llama.cpp b8637+ directly (required for Gemma 4)
+ * - Provides true token-level streaming (no UTF-8 JNI crash)
+ * - Exposes a handle-based API (multiple contexts can coexist)
+ *
+ * @param context Android context for model path resolution
+ * @param model The LLM model to use (default: Gemma 3 1B)
+ * @param chatFormatter Prompt formatter derived from model's chat format
+ * @param overrideModelPath Absolute path to a model file (skips asset/download resolution)
+ * @param backend Inference backend (injectable for testing)
+ * @param deviceRamGbOverride Override device RAM detection (-1 = auto-detect)
  */
 class LlamaCppEngine(
     private val context: Context,
     private val model: LlmModel = LlmModel.default,
     private val chatFormatter: ChatFormatter = DefaultChatFormatter(model.chatFormat),
-    private val overrideModelPath: String? = null
+    private val overrideModelPath: String? = null,
+    private val backend: MaInferenceBackend = MaBridge,
+    private val deviceRamGbOverride: Int = -1
 ) : BaseLlmEngine {
 
     @Volatile
     private var isInitialized = false
     private val initMutex = Mutex()
 
-    // Device-specific configuration (for getOptimalMaxTokens)
+    /** Opaque handle to the native llama_context (0 = not initialized). */
+    @Volatile
+    private var contextHandle: Long = 0L
+
     private val deviceRamGB: Int by lazy {
-        val activityManager = context.getSystemService(Context.ACTIVITY_SERVICE) as android.app.ActivityManager
+        if (deviceRamGbOverride >= 0) return@lazy deviceRamGbOverride
+        val activityManager =
+            context.getSystemService(Context.ACTIVITY_SERVICE) as android.app.ActivityManager
         val memInfo = android.app.ActivityManager.MemoryInfo()
         activityManager.getMemoryInfo(memInfo)
         (memInfo.totalMem / (1024 * 1024 * 1024)).toInt()
     }
 
     private val modelFilename = model.filename
-    private var defaultConfig = GenerationConfig()
+    private val defaultConfig = GenerationConfig()
 
     /**
-     * Resolve the model file path with fallback chain:
-     * 1. overrideModelPath (e.g., from ModelDownloadManager for large models)
-     * 2. Downloaded model in filesDir/models/ (from HttpModelDownloadManager)
-     * 3. Copy from assets/models/ (bundled small models)
+     * Resolve the model file path:
+     * 1. overrideModelPath (externally-provided)
+     * 2. Downloaded model in filesDir/models/
+     * 3. Copied from assets/models/ (bundled small models)
+     *
+     * @throws NoModelAvailableException when no model file can be found or copied
      */
     private fun resolveModelPath(): String {
-        // 1. Override path (already downloaded externally)
         overrideModelPath?.let { path ->
             val file = File(path)
             if (file.exists()) return path
             logger.w { "Override path does not exist: $path" }
         }
 
-        // 2. Check downloaded models directory
         val downloadedFile = File(File(context.filesDir, "models"), modelFilename)
         if (downloadedFile.exists() && downloadedFile.length() > 0) {
             logger.d { "Found downloaded model (${downloadedFile.length() / 1024 / 1024} MB)" }
             return downloadedFile.absolutePath
         }
 
-        // 3. Copy from assets (bundled models)
+        // Attempt to copy from bundled assets (legacy; removed in no-bundle builds)
         val assetFile = File(context.filesDir, modelFilename)
-        if (!assetFile.exists()) {
-            logger.i { "Copying $modelFilename from assets to internal storage" }
-            context.assets.open("models/$modelFilename").use { input ->
-                assetFile.outputStream().use { output ->
-                    input.copyTo(output, bufferSize = 8192)
+        return try {
+            if (!assetFile.exists()) {
+                logger.i { "Copying $modelFilename from assets to internal storage" }
+                context.assets.open("models/$modelFilename").use { input ->
+                    assetFile.outputStream().use { output -> input.copyTo(output, bufferSize = 8192) }
                 }
+                logger.i { "Model copied (${assetFile.length() / 1024 / 1024} MB)" }
             }
-            logger.i { "Model copied (${assetFile.length() / 1024 / 1024} MB)" }
-        } else {
-            logger.d { "Model $modelFilename already in storage (${assetFile.length() / 1024 / 1024} MB)" }
+            assetFile.absolutePath
+        } catch (e: Exception) {
+            // No assets fallback — model must be downloaded first
+            throw NoModelAvailableException(
+                model = model,
+                cause = e
+            )
         }
-        return assetFile.absolutePath
     }
 
     /**
-     * Initialize llama.cpp engine with the configured GGUF model.
-     *
-     * Steps:
-     * 1. Copy GGUF model from assets to internal storage (if not exists)
-     * 2. Initialize Llamatik with model path
-     *
-     * @return Result.success(Unit) if initialization succeeds, Result.failure(exception) otherwise
+     * Initialize the engine by loading the GGUF model via [MaBridge].
      */
     override suspend fun initialize(): Result<Unit> = withContext(Dispatchers.IO) {
-        // Fast path: already initialized (volatile read)
-        if (isInitialized) {
-            return@withContext Result.success(Unit)
-        }
+        if (isInitialized) return@withContext Result.success(Unit)
 
-        // Thread-safe initialization with mutex (prevents double-init race condition)
         initMutex.withLock {
-            // Double-check after acquiring lock
-            if (isInitialized) {
-                return@withLock Result.success(Unit)
-            }
+            if (isInitialized) return@withLock Result.success(Unit)
 
             try {
-                logger.i { "Starting initialization -> model=${model.displayName}, RAM: ${deviceRamGB}GB" }
+                logger.i { "Initializing -> model=${model.displayName}, RAM: ${deviceRamGB}GB" }
 
-                // Resolve model path: override > downloaded > assets
                 val modelPath = resolveModelPath()
-                logger.i { "Using model at: $modelPath" }
+                logger.i { "Loading model: $modelPath" }
 
-                LlamaBridge.initGenerateModel(modelPath)
+                val handle = backend.init(modelPath)
+                if (handle == 0L) {
+                    return@withLock Result.failure(
+                        RuntimeException("Failed to load model '${model.displayName}'. File may be corrupt or incompatible.")
+                    )
+                }
 
-                // Note: LlamaBridge.initGenerateModel logs "gen model load failed"
-                // but doesn't throw on failure. The null-safe stripStopTokens and
-                // empty-response checks in generate/generateStreaming handle this
-                // gracefully at generation time.
-                LlamaBridge.updateGenerateParams(
-                    temperature = defaultConfig.temperature!!,
-                    maxTokens = getOptimalMaxTokens(),
-                    topP = defaultConfig.topP!!,
-                    topK = defaultConfig.topK!!,
-                    repeatPenalty = defaultConfig.repetitionPenalty!!
-                )
-
+                contextHandle = handle
                 isInitialized = true
-                logger.i { "Initialization complete" }
+                logger.i { "Initialization complete (handle=$handle)" }
 
                 Result.success(Unit)
+            } catch (e: NoModelAvailableException) {
+                logger.w { "No model available: ${e.message}" }
+                Result.failure(e)
             } catch (e: Exception) {
                 logger.e(e) { "Initialization failed" }
-                e.printStackTrace()
                 isInitialized = false
+                contextHandle = 0L
                 Result.failure(RuntimeException("Failed to initialize LlamaCppEngine", e))
             }
         }
@@ -139,27 +143,11 @@ class LlamaCppEngine(
 
     /**
      * Generate a single response (non-streaming).
-     *
-     * Uses Llamatik's non-streaming APIs:
-     * - Pre-formatted prompts (from UnifiedPromptBuilder): `generate(prompt)` — pass-through,
-     *   no additional template wrapping by native code.
-     * - Raw prompts: `generateWithContext(system, context, user)` — native code applies
-     *   the model's chat template.
-     *
-     * IMPORTANT: generateWithContext applies its own Gemma-style template in C++.
-     * Passing a pre-formatted prompt as userPrompt causes double-formatting →
-     * model hallucination → invalid UTF-8 bytes → JNI NewStringUTF SIGABRT.
-     *
-     * @param prompt User input text
-     * @param config Generation configuration
-     * @return Result.success(GenerationResult) or Result.failure(exception)
      */
     override suspend fun generate(
         prompt: String,
         config: GenerationConfig
     ): Result<GenerationResult> = withContext(Dispatchers.IO) {
-        logger.i { "GENERATE" }
-
         if (!isInitialized) {
             return@withContext Result.failure(
                 IllegalStateException("Engine not initialized. Call initialize() first.")
@@ -170,34 +158,24 @@ class LlamaCppEngine(
         val maxTokens = config.maxTokens?.takeIf { it > 0 } ?: getOptimalMaxTokens()
 
         try {
-            LlamaBridge.updateGenerateParams(
-                temperature = config.temperature ?: 0.7f,
+            val resolvedPrompt = resolvePrompt(prompt, config)
+
+            logger.d { "generate -> ${resolvedPrompt.length}c maxTokens=$maxTokens" }
+
+            val rawResponse = backend.generate(
+                handle = contextHandle,
+                prompt = resolvedPrompt,
                 maxTokens = maxTokens,
+                temperature = config.temperature ?: 0.7f,
                 topP = config.topP ?: 0.95f,
                 topK = config.topK ?: 64,
                 repeatPenalty = config.repetitionPenalty ?: 1.1f
             )
 
-            val preformatted = isAlreadyFormatted(prompt)
-            val rawResponse = if (preformatted) {
-                // Pre-formatted prompt (from UnifiedPromptBuilder) — already has chat
-                // template tokens. Use generate() which passes the prompt straight to
-                // the model without additional wrapping.
-                logger.d { "Generate (pre-formatted) -> ${prompt.length}c maxTokens=$maxTokens" }
-                LlamaBridge.generate(prompt)
-            } else {
-                // Raw prompt — let native generateWithContext apply the model's
-                // chat template (Gemma-style system/context/user structure).
-                val systemPrompt = buildCleanSystemPrompt(config)
-                val contextBlock = buildContextString(config)
-                logger.d { "Generate (structured) -> system=${systemPrompt.length}c context=${contextBlock.length}c user=${prompt.length}c maxTokens=$maxTokens" }
-                LlamaBridge.generateWithContext(systemPrompt, contextBlock, prompt)
-            }
-
             val response = stripStopTokens(rawResponse)
 
             if (response.isEmpty()) {
-                logger.w { "LlamaBridge returned null or empty — native model context may be invalid" }
+                logger.w { "Backend returned empty response" }
                 return@withContext Result.failure(
                     RuntimeException("Model returned empty response. The native context may have been lost.")
                 )
@@ -209,7 +187,10 @@ class LlamaCppEngine(
                 (estimatedTokens * 1000f) / inferenceTimeMs
             } else 0f
 
-            logger.i { "Generation complete (${response.length} chars, ~$estimatedTokens tokens, ${inferenceTimeMs}ms, ${String.format("%.1f", tokensPerSecond)} tok/s)" }
+            logger.i {
+                "Generation complete (${response.length} chars, ~$estimatedTokens tokens, " +
+                        "${inferenceTimeMs}ms, ${"%.1f".format(tokensPerSecond)} tok/s)"
+            }
 
             Result.success(
                 GenerationResult(
@@ -221,85 +202,56 @@ class LlamaCppEngine(
             )
         } catch (e: Exception) {
             logger.e(e) { "Generation failed" }
-            e.printStackTrace()
             Result.failure(RuntimeException("Generation failed", e))
         }
     }
 
     /**
-     * Generate response with simulated streaming.
+     * Generate response with true token streaming via Ma JNI callbacks.
      *
-     * Generates the complete response first, then emits word-by-word via onToken()
-     * for progressive UI display.
-     *
-     * Uses the same pre-formatted/structured routing as generate():
-     * - Pre-formatted → generate(prompt) — no double-formatting
-     * - Raw → generateWithContext(system, context, user) — native applies template
-     *
-     * WHY simulated: ALL Llamatik streaming APIs (nativeGenerateStream,
-     * nativeGenerateWithContextStream) call JNI NewStringUTF per token with
-     * partial multi-byte UTF-8 sequences → fatal SIGABRT, non-catchable in Kotlin.
-     *
-     * @param prompt User input text
-     * @param config Generation configuration
-     * @param onToken Callback invoked for each word chunk
-     * @return Result.success(Unit) or Result.failure(exception)
+     * Each token piece is emitted via [onToken] as it is generated — no
+     * word-split simulation. The UTF-8 issue from Llamatik is resolved
+     * because [MaBridge] calls NewStringUTF only on complete token pieces.
      */
     override suspend fun generateStreaming(
         prompt: String,
         config: GenerationConfig,
         onToken: (String) -> Unit
     ): Result<Unit> = withContext(Dispatchers.IO) {
-        logger.i { "GENERATE STREAMING (simulated)" }
-
         if (!isInitialized) {
             return@withContext Result.failure(
                 IllegalStateException("Engine not initialized. Call initialize() first.")
             )
         }
 
-        try {
-            val maxTokens = config.maxTokens?.takeIf { it > 0 } ?: getOptimalMaxTokens()
+        val maxTokens = config.maxTokens?.takeIf { it > 0 } ?: getOptimalMaxTokens()
 
-            LlamaBridge.updateGenerateParams(
-                temperature = config.temperature ?: 0.7f,
+        try {
+            val resolvedPrompt = resolvePrompt(prompt, config)
+
+            logger.d { "generateStreaming -> ${resolvedPrompt.length}c maxTokens=$maxTokens" }
+
+            val rawResponse = backend.generate(
+                handle = contextHandle,
+                prompt = resolvedPrompt,
                 maxTokens = maxTokens,
+                temperature = config.temperature ?: 0.7f,
                 topP = config.topP ?: 0.95f,
                 topK = config.topK ?: 64,
-                repeatPenalty = config.repetitionPenalty ?: 1.1f
+                repeatPenalty = config.repetitionPenalty ?: 1.1f,
+                onToken = onToken  // true streaming: called per token from C++
             )
-
-            val preformatted = isAlreadyFormatted(prompt)
-            val rawResponse = if (preformatted) {
-                logger.d { "Streaming (pre-formatted) -> ${prompt.length}c maxTokens=$maxTokens" }
-                LlamaBridge.generate(prompt)
-            } else {
-                val systemPrompt = buildCleanSystemPrompt(config)
-                val contextBlock = buildContextString(config)
-                logger.d { "Streaming (structured) -> system=${systemPrompt.length}c context=${contextBlock.length}c user=${prompt.length}c maxTokens=$maxTokens" }
-                LlamaBridge.generateWithContext(systemPrompt, contextBlock, prompt)
-            }
 
             val response = stripStopTokens(rawResponse)
 
             if (response.isEmpty()) {
-                logger.w { "LlamaBridge returned null or empty — native model context may be invalid" }
+                logger.w { "Backend returned empty response during streaming" }
                 return@withContext Result.failure(
                     RuntimeException("Model returned empty response. The native context may have been lost.")
                 )
             }
 
-            // Simulate streaming: emit word-by-word for progressive UI display.
-            // Split on whitespace boundaries to preserve natural word spacing.
-            val words = response.split("(?<=\\s)|(?=\\s)".toRegex())
-            for (word in words) {
-                if (word.isNotEmpty()) {
-                    onToken(word)
-                }
-            }
-
-            logger.i { "Simulated streaming complete (${response.length} chars, ${words.size} chunks)" }
-
+            logger.i { "Streaming complete (${response.length} chars)" }
             Result.success(Unit)
         } catch (e: Exception) {
             logger.e(e) { "Streaming failed" }
@@ -307,162 +259,132 @@ class LlamaCppEngine(
         }
     }
 
+    override fun getOptimalMaxTokens(): Int = when {
+        deviceRamGB >= 12 -> 4096
+        deviceRamGB >= 8 -> 3072
+        deviceRamGB >= 6 -> 2048
+        deviceRamGB >= 4 -> 1536
+        else -> 1024
+    }
+
+    override fun release() {
+        val handle = contextHandle
+        if (handle != 0L) {
+            try {
+                backend.release(handle)
+            } catch (e: Exception) {
+                logger.e(e) { "Release failed" }
+            }
+        }
+        contextHandle = 0L
+        isInitialized = false
+        logger.i { "Released" }
+    }
+
+    // ==================== Prompt Construction ====================
+
     /**
-     * Strip stop tokens from model output.
+     * Resolve the final prompt to send to the backend.
      *
-     * The non-streaming API may include stop tokens in the response
-     * that the streaming path would normally detect and truncate at.
+     * If the prompt is already formatted with chat template tokens
+     * (e.g., from UnifiedPromptBuilder), pass it through. Otherwise,
+     * build a formatted prompt using the model's [ChatFormat].
      */
+    private fun resolvePrompt(prompt: String, config: GenerationConfig): String =
+        if (isAlreadyFormatted(prompt)) {
+            prompt
+        } else {
+            buildFormattedPrompt(config, prompt)
+        }
+
     /**
-     * Strip stop tokens from model output.
+     * Build a fully-formatted prompt for an unformatted user input.
      *
-     * Accepts nullable String because JNI bridge returns Java platform type
-     * (null when native ctx/model is null). Returns empty string for null input.
+     * Assembles: BOS prefix + system (if supported) + user turn + model prefix.
      */
+    private fun buildFormattedPrompt(config: GenerationConfig, userMessage: String): String {
+        val format = model.chatFormat
+        val systemPrompt = buildCleanSystemPrompt(config)
+        val contextBlock = buildContextString(config)
+
+        return buildString {
+            append(format.getPromptPrefix())
+
+            if (format.supportsSystemRole && systemPrompt.isNotEmpty()) {
+                append(format.formatMessage(MessageRole.SYSTEM, systemPrompt))
+                val userContent = if (contextBlock.isNotEmpty()) {
+                    "$contextBlock\n\n$userMessage"
+                } else userMessage
+                append(format.formatMessage(MessageRole.USER, userContent))
+            } else {
+                // No system role (Gemma3): prepend system + context into user turn
+                val userContent = buildString {
+                    if (systemPrompt.isNotEmpty()) append("$systemPrompt\n\n")
+                    if (contextBlock.isNotEmpty()) append("$contextBlock\n\n")
+                    append(userMessage)
+                }
+                append(format.formatMessage(MessageRole.USER, userContent))
+            }
+
+            // Open the model/assistant turn for generation
+            append(assistantPrefix(format))
+        }
+    }
+
+    private fun buildCleanSystemPrompt(config: GenerationConfig): String {
+        val deviceInfo = "${android.os.Build.MODEL} (${deviceRamGB}GB RAM)"
+        val userName = config.userContext?.get("name") ?: "Human"
+        val identity = "You are M1K3 (Mike), $userName's local AI assistant running on $deviceInfo."
+        val temperature = config.temperature
+        val behavior = when {
+            temperature != null && temperature < 0.4f ->
+                " Be concise, factual, and direct. Avoid speculation. No repetition."
+            temperature != null && temperature > 0.8f ->
+                " Be creative and imaginative. Vary your phrasing."
+            else ->
+                " Be helpful and accurate. Use only provided facts. If unsure, say so." +
+                        " Avoid repetition. Each sentence must provide new information."
+        }
+        return config.systemPrompt ?: (identity + behavior)
+    }
+
+    private fun buildContextString(config: GenerationConfig): String {
+        val parts = mutableListOf<String>()
+        config.knowledgeContext?.let { parts.add(it) }
+        return parts.joinToString("\n\n")
+    }
+
+    private fun isAlreadyFormatted(prompt: String): Boolean =
+        prompt.contains("<start_of_turn>") ||
+                prompt.contains("<end_of_turn>") ||
+                prompt.contains("<|im_start|>") ||
+                prompt.contains("[INST]") ||
+                prompt.contains("<|start_header_id|>") ||
+                prompt.startsWith("<bos>") ||
+                prompt.startsWith("<|begin_of_text|>")
+
     private fun stripStopTokens(response: String?): String {
-        if (response == null) return ""
+        val nonNull = response ?: return ""
         val stopTokens = chatFormatter.getStopTokens()
-        var cleaned: String = response
+        var cleaned: String = nonNull
         for (stopToken in stopTokens) {
             val idx = cleaned.indexOf(stopToken)
-            if (idx >= 0) {
-                cleaned = cleaned.substring(0, idx)
-            }
+            if (idx >= 0) cleaned = cleaned.substring(0, idx)
         }
         return cleaned.trim()
     }
 
-    /**
-     * Get device-appropriate maximum tokens for generation.
-     *
-     * Returns a very high limit to let the model's stop tokens determine completion naturally.
-     * The model will stop when it generates <end_of_turn> or <eos> tokens.
-     *
-     * Note: High limits are safe because:
-     * 1. Model stop tokens prevent runaway generation
-     * 2. User can interrupt generation in UI
-     * 3. Allows for longer, more complete responses
-     *
-     * @return High token limit (2048-4096 depending on device) to let model decide
-     */
-    override fun getOptimalMaxTokens(): Int {
-        return when {
-            deviceRamGB >= 12 -> 4096   // 12GB+: Let model decide naturally (~3000 words max)
-            deviceRamGB >= 8 -> 3072    // 8-12GB: High limit (~2300 words max)
-            deviceRamGB >= 6 -> 2048    // 6-8GB: Generous limit (~1500 words max)
-            deviceRamGB >= 4 -> 1536    // 4-6GB: Reasonable limit (~1150 words max)
-            else -> 1024                // <4GB: Conservative but usable (~750 words max)
-        }
-    }
-
-    /**
-     * Release llama.cpp resources.
-     *
-     * Note: Llamatik doesn't provide explicit cleanup APIs.
-     * We just mark as uninitialized so re-initialization is required.
-     */
-    override fun release() {
-        try {
-            isInitialized = false
-            logger.i { "Resources released (marked as uninitialized)" }
-        } catch (e: Exception) {
-            logger.e(e) { "Release failed" }
-        }
-    }
-
-    // ==================== Llamatik Three-Parameter Structure ====================
-
-    /**
-     * Build CLEAN system prompt (identity + behavioral rules only).
-     *
-     * Llamatik's API design separates concerns:
-     * - **system**: WHO the AI is + HOW to behave (this function)
-     * - **context**: Background info (RAG facts, knowledge, conversation)
-     * - **user**: The actual query
-     *
-     * This function builds ONLY the system part. NO facts, NO knowledge base descriptions.
-     *
-     * @param config Generation configuration
-     * @return Clean system prompt (50-200 chars typical)
-     */
-    private fun buildCleanSystemPrompt(config: GenerationConfig): String {
-        val deviceInfo = getDeviceContext()
-        val userName = config.userContext?.get("name") ?: "Human"
-
-        // Base identity (WHO)
-        val identity = "You are M1K3 (Mike), $userName's local AI assistant running on $deviceInfo."
-
-        // Behavioral rules (HOW) - with anti-hallucination & anti-repetition directives
-        val temperature = config.temperature
-        val behavior = when {
-            temperature != null && temperature < 0.4f -> {
-                " Be concise, factual, and direct. Avoid speculation. No repetition."
+    companion object {
+        /** Format-specific prefix that opens the model's generation turn. */
+        fun assistantPrefix(format: app.m1k3.ai.domain.chat.format.ChatFormat): String =
+            when (format) {
+                is app.m1k3.ai.domain.chat.format.ChatFormat.Gemma3 -> "<start_of_turn>model\n"
+                is app.m1k3.ai.domain.chat.format.ChatFormat.Gemma4 -> "<start_of_turn>model\n"
+                is app.m1k3.ai.domain.chat.format.ChatFormat.FalconH1 -> "<|start_header_id|>assistant<|end_header_id|>\n"
+                is app.m1k3.ai.domain.chat.format.ChatFormat.ChatML -> "<|im_start|>assistant\n"
+                is app.m1k3.ai.domain.chat.format.ChatFormat.Llama -> ""
+                is app.m1k3.ai.domain.chat.format.ChatFormat.Simple -> ""
+                else -> ""
             }
-            temperature != null && temperature >= 0.4f && temperature <= 0.8f -> {
-                " Be helpful and accurate. Use only provided facts. If unsure, say so. " +
-                "Avoid repetition. Each sentence must provide new information."
-            }
-            temperature != null && temperature > 0.8f -> {
-                " Be creative and imaginative. Vary your phrasing."
-            }
-            else -> {
-                " Be helpful and accurate. Use only provided facts. If unsure, say so. " +
-                "Avoid repetition. Each sentence must provide new information."
-            }
-        }
-
-        // Custom systemPrompt can override (but should also stay clean)
-        return config.systemPrompt ?: (identity + behavior)
-    }
-
-    /**
-     * Build context string from all available sources.
-     *
-     * Llamatik's context parameter should contain:
-     * - RAG-retrieved facts (if available)
-     * - Knowledge base summary (if RAG not used)
-     * - Conversation history (if provided)
-     *
-     * This keeps the system prompt clean while providing background info.
-     *
-     * @param config Generation configuration
-     * @return Context string (may be empty if no context available)
-     */
-    private fun buildContextString(config: GenerationConfig): String {
-        val contextParts = mutableListOf<String>()
-
-        // Add knowledge context if provided (either RAG facts or static KB summary)
-        config.knowledgeContext?.let { contextParts.add(it) }
-
-        // Future: Add conversation history from config.conversationHistory if provided
-        // Future: Add user profile context if provided
-
-        return contextParts.joinToString("\n\n")
-    }
-
-
-    /**
-     * Check if prompt is already formatted with chat tokens.
-     *
-     * Detection looks for characteristic markers from any supported format.
-     */
-    private fun isAlreadyFormatted(prompt: String): Boolean {
-        return prompt.contains("<start_of_turn>") ||     // Gemma3
-               prompt.contains("<end_of_turn>") ||       // Gemma3
-               prompt.contains("<|im_start|>") ||        // ChatML
-               prompt.contains("[INST]") ||              // Llama
-               prompt.contains("<|start_header_id|>") || // FalconH1
-               prompt.startsWith("<bos>") ||             // Gemma3 BOS
-               prompt.startsWith("<|begin_of_text|>")    // FalconH1 BOS
-    }
-
-    /**
-     * Get device context string for dynamic system prompts.
-     *
-     * @return Device info string (e.g., "Google Pixel 6 Pro (12GB RAM)")
-     */
-    private fun getDeviceContext(): String {
-        val deviceModel = android.os.Build.MODEL
-        return "$deviceModel (${deviceRamGB}GB RAM)"
     }
 }

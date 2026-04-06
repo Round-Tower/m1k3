@@ -7,7 +7,7 @@ import app.m1k3.ai.domain.chat.format.ChatFormat
  *
  * Domain entity - Pure Kotlin, no platform dependencies.
  *
- * Represents GGUF models that can be loaded via llama.cpp (Llamatik).
+ * Represents GGUF models that can be loaded via llama.cpp (Ma).
  * Each model specifies its filename, chat format, and parameters.
  *
  * **Usage:**
@@ -31,9 +31,25 @@ sealed class LlmModel(
     val minRamGB: Int = 0
 ) {
     /**
-     * Gemma 3 270M - Google's compact model
+     * Gemma 3 1B - Google's quality baseline model
      *
-     * Current default. Good balance of quality and speed.
+     * Default model for MVP. First real quality tier for on-device chat.
+     * Q4_K_M quantization (~620MB). Downloaded on first launch.
+     * HuggingFace: bartowski/gemma-3-1b-it-GGUF
+     */
+    data object Gemma3_1B : LlmModel(
+        id = "gemma-3-1b",
+        displayName = "Gemma 3 (1B)",
+        filename = "gemma-3-1b-it-Q4_K_M.gguf",
+        parameterCount = 1_000_000_000L,
+        chatFormat = ChatFormat.Gemma3,
+        minRamGB = 2
+    )
+
+    /**
+     * Gemma 3 270M - Google's compact model (legacy)
+     *
+     * Kept for low-end device fallback. Poor chat quality at 270M params.
      * Uses IQ3_XXS quantization for minimal size.
      */
     data object Gemma3_270M : LlmModel(
@@ -76,14 +92,15 @@ sealed class LlmModel(
 
     companion object {
         /**
-         * Default model - Gemma 3 270M
+         * Default model - Gemma 3 1B (downloaded on first launch)
          */
-        val default: LlmModel get() = Gemma3_270M
+        val default: LlmModel get() = Gemma3_1B
 
         /**
          * Get all available models
          */
         fun all(): List<LlmModel> = listOf(
+            Gemma3_1B,
             Gemma3_270M,
             FalconH1_90M,
             Gemma4_E2B

@@ -240,7 +240,7 @@ class LlamaCppFallbackEngine(
      * Get model information.
      */
     override suspend fun getModelInfo(): String {
-        return "Gemma 3 270M (IQ3_XXS, 176MB, 32K context)"
+        return "Gemma 3 1B (Q4_K_M, ~620MB)"
     }
 
     /**

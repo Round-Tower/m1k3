@@ -62,8 +62,8 @@ class LlmModelTest {
     // ===== Default Model Tests =====
 
     @Test
-    fun `default model is Gemma3`() {
-        assertEquals(LlmModel.Gemma3_270M, LlmModel.default)
+    fun `default model is Gemma3_1B`() {
+        assertEquals(LlmModel.Gemma3_1B, LlmModel.default)
     }
 
     // ===== Collection Tests =====
@@ -173,5 +173,49 @@ class LlmModelTest {
     @Test
     fun `findById returns Gemma4_E2B`() {
         assertEquals(LlmModel.Gemma4_E2B, LlmModel.findById("gemma-4-e2b"))
+    }
+
+    // ===== Gemma3 1B Tests =====
+
+    @Test
+    fun `Gemma3_1B has correct id`() {
+        assertEquals("gemma-3-1b", LlmModel.Gemma3_1B.id)
+    }
+
+    @Test
+    fun `Gemma3_1B has correct display name`() {
+        assertEquals("Gemma 3 (1B)", LlmModel.Gemma3_1B.displayName)
+    }
+
+    @Test
+    fun `Gemma3_1B uses Gemma3 chat format`() {
+        assertIs<ChatFormat.Gemma3>(LlmModel.Gemma3_1B.chatFormat)
+    }
+
+    @Test
+    fun `Gemma3_1B has minRamGB of 2`() {
+        assertEquals(2, LlmModel.Gemma3_1B.minRamGB)
+    }
+
+    @Test
+    fun `Gemma3_1B is the default model`() {
+        assertEquals(LlmModel.Gemma3_1B, LlmModel.default)
+    }
+
+    @Test
+    fun `Gemma3_1B is in all models list`() {
+        assertTrue(LlmModel.all().contains(LlmModel.Gemma3_1B))
+    }
+
+    @Test
+    fun `Gemma3_1B is available for 4GB devices`() {
+        assertTrue(LlmModel.availableFor(4).contains(LlmModel.Gemma3_1B))
+    }
+
+    @Test
+    fun `Gemma3_1B filename contains gemma and 1b`() {
+        val filename = LlmModel.Gemma3_1B.filename.lowercase()
+        assertTrue(filename.contains("gemma"))
+        assertTrue(filename.contains("1b") || filename.contains("1B"))
     }
 }

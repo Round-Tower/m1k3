@@ -110,8 +110,8 @@ kotlin {
             implementation(libs.kotlinx.serialization.json)
             implementation(libs.kotlinx.datetime)
 
-            // Llamatik - KMP llama.cpp binding for GGUF models
-            implementation("com.llamatik:library:0.18.2")
+            // Ma - our own JNI bridge to llama.cpp (replaces Llamatik)
+            // Built via NDK/CMake, no Gradle dependency needed (libma.so is compiled locally)
 
             // WebView for Three.js 3D avatar rendering
             implementation("io.github.kevinnzou:compose-webview-multiplatform:2.0.3")
@@ -176,6 +176,30 @@ android {
 
         // Instrumented test runner
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        // Ma native library - llama.cpp JNI bridge
+        externalNativeBuild {
+            cmake {
+                cppFlags += "-std=c++17"
+                arguments +=
+                    listOf(
+                        "-DLLAMA_ANDROID=ON",
+                        "-DLLAMA_NATIVE=OFF", // no host-optimized SIMD (cross-compile)
+                        "-DCMAKE_BUILD_TYPE=Release",
+                    )
+            }
+        }
+        ndk {
+            abiFilters += listOf("arm64-v8a", "x86_64")
+        }
+    }
+
+    // Ma CMake build
+    externalNativeBuild {
+        cmake {
+            path = file("src/androidMain/cpp/CMakeLists.txt")
+            version = "3.22.1"
+        }
     }
 
     // Dynamic feature modules
