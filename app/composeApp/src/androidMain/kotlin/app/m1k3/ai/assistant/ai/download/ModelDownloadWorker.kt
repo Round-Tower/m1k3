@@ -55,6 +55,7 @@ class ModelDownloadWorker(
 
         var downloadFailed = false
         var failureReason = ""
+        var lastNotifiedPct = -1  // throttle to once per 1% — avoids ~8700 updates/file
 
         httpManager.download(model).collect { progress ->
             when (progress) {
@@ -63,13 +64,16 @@ class ModelDownloadWorker(
 
                 is DownloadProgress.InProgress -> {
                     val pct = progress.progressPercent
-                    setProgress(workDataOf(
-                        KEY_STATE to STATE_DOWNLOADING,
-                        KEY_PROGRESS_PERCENT to pct,
-                        KEY_DOWNLOADED_MB to (progress.bytesDownloaded / 1_000_000).toInt(),
-                        KEY_TOTAL_MB to (progress.totalBytes / 1_000_000).toInt()
-                    ))
-                    setForeground(buildForegroundInfo(model, pct))
+                    if (pct != lastNotifiedPct) {
+                        lastNotifiedPct = pct
+                        setProgress(workDataOf(
+                            KEY_STATE to STATE_DOWNLOADING,
+                            KEY_PROGRESS_PERCENT to pct,
+                            KEY_DOWNLOADED_MB to (progress.bytesDownloaded / 1_000_000).toInt(),
+                            KEY_TOTAL_MB to (progress.totalBytes / 1_000_000).toInt()
+                        ))
+                        setForeground(buildForegroundInfo(model, pct))
+                    }
                 }
 
                 is DownloadProgress.Complete ->
