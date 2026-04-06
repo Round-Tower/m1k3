@@ -31,6 +31,11 @@ val primaryNavItems = listOf(
         icon = Icons.Default.History
     ),
     NavItem(
+        screen = Screen.AvatarGallery,
+        label = "Avatar",
+        icon = Icons.Default.Face
+    ),
+    NavItem(
         screen = Screen.EcoStats,
         label = "Eco Stats",
         icon = Icons.Default.Eco

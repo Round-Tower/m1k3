@@ -372,9 +372,7 @@ actual val platformModule = module {
                 LlamaCppEngine(context, model, overrideModelPath = overridePath)
             },
             isModelDownloaded = { model ->
-                // Bundled models (minRamGB == 0) are always "downloaded"
-                if (model.minRamGB == 0) true
-                else get<ModelDownloadManager>().isModelAvailable(model.id)
+                get<ModelDownloadManager>().isModelAvailable(model.id)
             },
             downloadModel = { model, onProgress ->
                 val httpManager = get<ModelDownloadManager>() as HttpModelDownloadManager

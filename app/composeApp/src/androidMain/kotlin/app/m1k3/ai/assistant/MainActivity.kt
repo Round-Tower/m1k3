@@ -70,6 +70,7 @@ import app.m1k3.ai.assistant.embedding.EmbeddingEngine
 import app.m1k3.ai.assistant.navigation.Screen
 import app.m1k3.ai.assistant.navigation.navigateToBottomNav
 import app.m1k3.ai.assistant.ui.AboutScreen
+import app.m1k3.ai.assistant.ui.AvatarGalleryScreen
 import app.m1k3.ai.assistant.ui.ChatScreen
 import app.m1k3.ai.assistant.ui.EcoStatsScreen
 import app.m1k3.ai.assistant.ui.ExportScreen
@@ -444,6 +445,20 @@ private fun MaAppContent(
                                 // Settings Screen
                                 composable(Screen.Settings.route) {
                                     app.m1k3.ai.assistant.ui.SettingsScreen()
+                                }
+
+                                // Avatar Gallery
+                                composable(Screen.AvatarGallery.route) {
+                                    val prefs = org.koin.compose.koinInject<app.m1k3.ai.assistant.platform.PreferencesStoreInterface>()
+                                    AvatarGalleryScreen(
+                                        currentAvatarId = prefs.getString(
+                                            app.m1k3.ai.assistant.platform.PreferenceKeys.SELECTED_AVATAR,
+                                            null
+                                        ) ?: app.m1k3.ai.assistant.avatar.ModelRegistry.DEFAULT_MODEL_ID,
+                                        onAvatarSelected = { id: String ->
+                                            prefs.setString(app.m1k3.ai.assistant.platform.PreferenceKeys.SELECTED_AVATAR, id)
+                                        }
+                                    )
                                 }
 
                                 // Meta Screens (Drawer actions)
