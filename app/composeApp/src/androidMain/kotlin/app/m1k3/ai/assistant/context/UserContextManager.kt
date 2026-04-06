@@ -31,6 +31,7 @@ class UserContextManager(context: Context) : UserContextProvider {
     private val screenTimeProvider = ScreenTimeContextProvider(context)
     private val nameProvider = UserNameProvider(context)
     private val notificationProvider = NotificationContextProvider(context)
+    private val weatherProvider = WeatherContextProvider()
 
     override suspend fun getContext(): UserContext = coroutineScope {
         Log.d(TAG, "Fetching user context...")
@@ -47,13 +48,19 @@ class UserContextManager(context: Context) : UserContextProvider {
         val location = locationDeferred.await()
         val health = healthDeferred.await()
 
+        // Weather — fetch in parallel with location, uses location result
+        val weather = location?.let { loc ->
+            try { weatherProvider.getWeather(loc) } catch (_: Exception) { null }
+        }
+
         val ctx = UserContext(
             hourOfDay = LocalTime.now().hour,
             userName = userName,
             location = location,
             health = health,
             screenTime = screenTime,
-            notifications = notifications
+            notifications = notifications,
+            weather = weather
         )
 
         Log.d(TAG, buildDebugSummary(ctx))

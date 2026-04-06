@@ -35,6 +35,9 @@ import app.m1k3.ai.domain.status.ChatStatusBuilder
 import app.m1k3.ai.assistant.platform.PreferencesStoreInterface
 import app.m1k3.ai.assistant.rag.RAGManager
 import app.m1k3.ai.assistant.utils.Logger
+import app.m1k3.ai.domain.system.MaSystemPromptBuilder
+import app.m1k3.ai.domain.system.SystemPromptInput
+import app.m1k3.ai.domain.system.SystemPromptTier
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -155,6 +158,16 @@ class ChatScreenViewModel(
     /** Whether tool calling is enabled */
     val isToolCallingEnabled: Boolean
         get() = chatWithTools != null
+
+    /** System prompt builder — builds tiered M1K3 personality prompts */
+    private val systemPromptBuilder = MaSystemPromptBuilder()
+
+    /**
+     * Compact system prompt — built once after context is loaded, injected
+     * into every message. COMPACT tier to preserve context window budget.
+     * Null until UserContext is available.
+     */
+    private var compactSystemPrompt: String? = null
 
     // Track confirmed tools for re-execution
     private val confirmedToolIds = mutableSetOf<String>()
@@ -674,17 +687,27 @@ class ChatScreenViewModel(
         }
 
         try {
-            // Build context-aware welcome prompt — uses real UserContext when available
-            val welcomePrompt = if (userContext != null) {
-                app.m1k3.ai.domain.context.ContextAwareWelcomePromptBuilder().build(userContext)
-            } else {
-                val timeOfDay = when (currentHour) {
-                    in 5..11 -> "morning"
-                    in 12..17 -> "afternoon"
-                    else -> "evening"
-                }
-                "You are M1K3, a private AI assistant. Say a brief, warm, friendly greeting. It's $timeOfDay. 1-2 sentences, no markdown."
-            }
+            // Build tiered M1K3 system prompts from context
+            val dayOfWeek = dateTimeProvider?.getDayOfWeekName()
+            val promptInput = SystemPromptInput(
+                tier = SystemPromptTier.FULL,
+                userContext = userContext,
+                dayOfWeek = dayOfWeek,
+                deviceTierName = deviceTier.name.lowercase().replaceFirstChar { it.uppercase() },
+                contextWindowTokens = maxContextTokens,
+                availableTools = if (chatWithTools != null)
+                    toolRegistry?.getAllTools()?.map { it.id } ?: emptyList()
+                else emptyList()
+            )
+            val fullSystemPrompt = systemPromptBuilder.build(promptInput)
+            // Store compact for all subsequent messages
+            compactSystemPrompt = systemPromptBuilder.build(
+                promptInput.copy(tier = SystemPromptTier.COMPACT)
+            )
+
+            // Welcome uses the FULL system prompt — M1K3 introduces itself
+            val welcomePrompt = fullSystemPrompt +
+                "\n\nNow say hello. Be brief, warm, and personal. 1-2 sentences."
 
             // Use GenerationConfigBuilder for config
             val config = configBuilder.build(
@@ -810,7 +833,7 @@ class ChatScreenViewModel(
                 userPrompt = prompt,
                 context = context,
                 tools = emptyList(),  // Legacy path has no tools
-                systemPrompt = "",
+                systemPrompt = compactSystemPrompt ?: "",
                 deviceContext = deviceContext
             )
 

@@ -15,6 +15,7 @@ package app.m1k3.ai.domain.context
  * @param health            Steps, sleep, heart rate from Health Connect
  * @param screenTime        Today's screen time from UsageStats
  * @param notifications     Unread notification count (opt-in listener)
+ * @param weather           Current conditions at the user's location
  */
 data class UserContext(
     val hourOfDay: Int = 12,
@@ -22,11 +23,12 @@ data class UserContext(
     val location: LocationContext? = null,
     val health: HealthContext? = null,
     val screenTime: ScreenTimeContext? = null,
-    val notifications: NotificationContext? = null
+    val notifications: NotificationContext? = null,
+    val weather: WeatherContext? = null
 ) {
     val hasAnyContext: Boolean
         get() = userName != null || location != null || health != null ||
-                screenTime != null || notifications != null
+                screenTime != null || notifications != null || weather != null
 }
 
 /**
