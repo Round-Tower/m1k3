@@ -424,7 +424,9 @@ actual val platformModule = module {
                 val result = ttsEngine.synthesize(text, Voice.default)
                 when (result) {
                     is app.m1k3.ai.domain.tts.TtsResult.Success -> {
-                        audioPlayer.play(result.audio)
+                        val warmed = get<AudioEffectsProcessor>()
+                            .apply(result.audio, app.m1k3.ai.domain.tts.TtsEffect.Chain.M1K3_DEFAULT)
+                        audioPlayer.play(warmed)
                     }
                     is app.m1k3.ai.domain.tts.TtsResult.Error -> {
                         throw RuntimeException("TTS failed: ${result.message}")
