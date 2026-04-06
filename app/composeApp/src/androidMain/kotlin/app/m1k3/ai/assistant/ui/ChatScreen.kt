@@ -430,7 +430,10 @@ fun ChatBubble(
                 inferenceStats = message.inferenceStats,
                 isError = message.isError,
                 ragSources = message.ragSources,
-                onSpeak = if (onSpeak != null) {{ onSpeak(message.text) }} else null
+                onSpeak = if (onSpeak != null) {{ onSpeak(message.text) }} else null,
+                artifactContent = message.artifact?.let { artifact ->
+                    { ArtifactView(artifact = artifact) }
+                }
             )
         }
     }

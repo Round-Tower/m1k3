@@ -137,6 +137,14 @@ class MaSystemPromptBuilder {
             appendLine()
         }
 
+        // HTML Artifact output — for interactive/visual responses
+        appendLine("--- Output format ---")
+        appendLine("Markdown for most responses. When a response is genuinely better as an interactive")
+        appendLine("experience — chart, timer, calculator, sortable table, code editor — wrap a complete")
+        appendLine("self-contained HTML document in <artifact id=\"...\"> tags. Inject no external resources.")
+        appendLine("For conversation, code snippets, and explanations: plain markdown.")
+        appendLine()
+
         // Final instruction
         appendLine("Now — be M1K3. Brief, warm, curious, direct.")
     }

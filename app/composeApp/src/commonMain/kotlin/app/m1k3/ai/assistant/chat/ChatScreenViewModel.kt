@@ -1080,10 +1080,14 @@ class ChatScreenViewModel(
         _uiState.update { state ->
             val updatedMessages = state.messages.toMutableList()
             if (updatedMessages.isNotEmpty()) {
+                val finalText = accumulated.toString()
+                val parseResult = app.m1k3.ai.domain.chat.artifact.ArtifactParser.parse(finalText)
+                val artifact = parseResult.artifacts.firstOrNull()
                 updatedMessages[updatedMessages.lastIndex] = updatedMessages.last().copy(
-                    text = accumulated.toString(),
+                    text = finalText,
                     inferenceStats = stats.formatFull(),
-                    ragSources = context.ragSources
+                    ragSources = context.ragSources,
+                    artifact = artifact
                 )
             }
             state.copy(

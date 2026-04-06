@@ -130,6 +130,8 @@ fun MaChatBubbleAI(
     isError: Boolean = false,
     ragSources: String? = null,
     onSpeak: (() -> Unit)? = null,
+    /** Renders an artifact (e.g. ArtifactView) — null for plain text responses */
+    artifactContent: (@Composable () -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val bubbleShape = RoundedCornerShape(
@@ -167,10 +169,18 @@ fun MaChatBubbleAI(
                 Column(
                     verticalArrangement = Arrangement.spacedBy(MaSpacing.sm)
                 ) {
-                    MarkdownText(
-                        text = text,
-                        isError = isError
-                    )
+                    if (artifactContent != null) {
+                        // Artifact: show stripped text (without <artifact> tags) above, then render
+                        val strippedText = text.replace(
+                            Regex("<artifact[^>]*>[\\s\\S]*?</artifact>", RegexOption.IGNORE_CASE), ""
+                        ).trim()
+                        if (strippedText.isNotEmpty()) {
+                            MarkdownText(text = strippedText, isError = isError)
+                        }
+                        artifactContent()
+                    } else {
+                        MarkdownText(text = text, isError = isError)
+                    }
 
                     // Timestamp
                     Text(
