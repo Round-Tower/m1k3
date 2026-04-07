@@ -43,6 +43,7 @@ fun ChatMessageList(
     onRequestLocation: (() -> Unit)? = null,
     onRequestHealth: (() -> Unit)? = null,
     onRequestScreenTime: (() -> Unit)? = null,
+    generationState: app.m1k3.ai.assistant.chat.GenerationState = app.m1k3.ai.assistant.chat.GenerationState.Idle,
     modifier: Modifier = Modifier
 ) {
     LazyColumn(
@@ -58,13 +59,17 @@ fun ChatMessageList(
         ),
     ) {
         items(messages) { message ->
+            val isLastAiMessage = !message.isUser && message == messages.lastOrNull { !it.isUser }
+            val streamingState = generationState as? app.m1k3.ai.assistant.chat.GenerationState.Streaming
             ChatBubble(
                 message = message,
                 userContext = userContext,
                 onRequestLocation = onRequestLocation,
                 onRequestHealth = onRequestHealth,
                 onRequestScreenTime = onRequestScreenTime,
-                onSpeak = onSpeak
+                onSpeak = onSpeak,
+                isStreaming = isLastAiMessage && streamingState != null,
+                isThinking = isLastAiMessage && (streamingState?.isThinking == true)
             )
         }
 

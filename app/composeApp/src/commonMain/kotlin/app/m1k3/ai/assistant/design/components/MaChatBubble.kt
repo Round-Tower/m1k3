@@ -132,6 +132,9 @@ fun MaChatBubbleAI(
     onSpeak: (() -> Unit)? = null,
     /** Renders an artifact (e.g. ArtifactView) — null for plain text responses */
     artifactContent: (@Composable () -> Unit)? = null,
+    /** Renders the ThinkingPill above the bubble — passed as slot from androidMain ChatScreen */
+    thinkingPill: (@Composable () -> Unit)? = null,
+    isStreaming: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     val bubbleShape = RoundedCornerShape(
@@ -154,14 +157,20 @@ fun MaChatBubbleAI(
             modifier = Modifier
                 .widthIn(max = 340.dp)
                 .padding(horizontal = MaSpacing.sm, vertical = MaSpacing.xs)
-                .clip(bubbleShape)
-                .background(bgColor)
-                .border(
-                    width = 1.dp,
-                    color = borderColor,
-                    shape = bubbleShape
-                )
         ) {
+            // ThinkingPill slot — passed from ChatScreen (androidMain) so no platform crossing
+            thinkingPill?.invoke()
+
+            Column(
+                modifier = Modifier
+                    .clip(bubbleShape)
+                    .background(bgColor)
+                    .border(
+                        width = 1.dp,
+                        color = borderColor,
+                        shape = bubbleShape
+                    )
+            ) {
             Box(
                 modifier = Modifier
                     .padding(horizontal = MaSpacing.md, vertical = MaSpacing.md)
@@ -170,16 +179,33 @@ fun MaChatBubbleAI(
                     verticalArrangement = Arrangement.spacedBy(MaSpacing.sm)
                 ) {
                     if (artifactContent != null) {
-                        // Artifact: show stripped text (without <artifact> tags) above, then render
                         val strippedText = text.replace(
                             Regex("<artifact[^>]*>[\\s\\S]*?</artifact>", RegexOption.IGNORE_CASE), ""
                         ).trim()
                         if (strippedText.isNotEmpty()) {
-                            MarkdownText(text = strippedText, isError = isError)
+                            // During streaming: plain Text (no markdown parse overhead)
+                            // On complete: full MarkdownText
+                            if (isStreaming) {
+                                androidx.compose.material3.Text(
+                                    text = strippedText,
+                                    style = app.m1k3.ai.assistant.design.tokens.MaTypography.bodyLarge,
+                                    color = if (isError) MaColors.Error else MaColors.textPrimary()
+                                )
+                            } else {
+                                MarkdownText(text = strippedText, isError = isError)
+                            }
                         }
                         artifactContent()
                     } else {
-                        MarkdownText(text = text, isError = isError)
+                        if (isStreaming) {
+                            androidx.compose.material3.Text(
+                                text = text,
+                                style = app.m1k3.ai.assistant.design.tokens.MaTypography.bodyLarge,
+                                color = if (isError) MaColors.Error else MaColors.textPrimary()
+                            )
+                        } else {
+                            MarkdownText(text = text, isError = isError)
+                        }
                     }
 
                     // Timestamp
@@ -273,9 +299,10 @@ fun MaChatBubbleAI(
                     }
                 }
             }
-        }
-    }
-}
+        } // close inner Column (clip/background/border)
+    } // close outer Column (widthIn)
+    } // close Row
+} // close MaChatBubbleAI
 
 /**
  * Format Unix timestamp to "HH:MM" format

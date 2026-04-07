@@ -114,21 +114,49 @@ class ChatWithToolsUseCase(
             // 4. Generate response with streaming
             send(ChatEvent.Generating)
             val startTime = Clock.System.now().toEpochMilliseconds()
-            val accumulated = StringBuilder()
+            val accumulated = StringBuilder()       // visible response text
+            val thinkingAccumulated = StringBuilder() // <think> block content
             var tokenCount = 0
+            var isInThinkBlock = false
+            var thinkBlockStartMs = startTime
 
             val result = aiEngine.generateStreaming(
                 prompt = fullPrompt,
                 config = config,
                 onToken = { token ->
-                    if (token.isNotEmpty()) {
-                        accumulated.append(token)
-                        tokenCount++
-                        trySend(ChatEvent.Streaming(
-                            partialText = accumulated.toString(),
-                            tokenCount = tokenCount
-                        ))
+                    if (token.isEmpty()) return@generateStreaming
+
+                    // Detect <think> / </think> boundaries in the token stream
+                    val buffer = (if (isInThinkBlock) thinkingAccumulated else accumulated).toString() + token
+                    when {
+                        !isInThinkBlock && buffer.contains("<think>") -> {
+                            // Entering thinking mode — keep text before <think> as response
+                            val beforeThink = buffer.substringBefore("<think>")
+                            accumulated.clear()
+                            accumulated.append(beforeThink)
+                            isInThinkBlock = true
+                            thinkBlockStartMs = Clock.System.now().toEpochMilliseconds()
+                            thinkingAccumulated.clear()
+                        }
+                        isInThinkBlock && buffer.contains("</think>") -> {
+                            // Exiting thinking mode
+                            thinkingAccumulated.clear()
+                            thinkingAccumulated.append(buffer.substringBefore("</think>"))
+                            val afterThink = buffer.substringAfter("</think>")
+                            isInThinkBlock = false
+                            accumulated.append(afterThink)
+                        }
+                        isInThinkBlock -> thinkingAccumulated.append(token)
+                        else -> accumulated.append(token)
                     }
+
+                    tokenCount++
+                    trySend(ChatEvent.Streaming(
+                        partialText = accumulated.toString(),
+                        tokenCount = tokenCount,
+                        thinkingPartial = thinkingAccumulated.toString().ifEmpty { null },
+                        isThinking = isInThinkBlock
+                    ))
                 }
             )
 

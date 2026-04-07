@@ -139,7 +139,6 @@ class MaSystemPromptBuilder {
 
         // HTML Artifact output — for interactive/visual responses
         appendLine("--- Output format ---")
-        appendLine("/nothink")
         appendLine("Use markdown for all text responses: **bold**, *italic*, `code`, lists, headings.")
         appendLine("Never output raw HTML tags (<p>, <ul>, <li>, <strong> etc.) in plain text responses.")
         appendLine("Only use HTML inside <artifact id=\"...\"> tags for genuinely interactive content")

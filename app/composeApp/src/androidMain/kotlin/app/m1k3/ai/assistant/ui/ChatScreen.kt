@@ -73,6 +73,7 @@ import app.m1k3.ai.assistant.globe.TIER_HIGH
 import app.m1k3.ai.assistant.globe.TIER_MEDIUM
 import app.m1k3.ai.assistant.globe.TIER_LOW
 import app.m1k3.ai.assistant.platform.PreferenceKeys
+import app.m1k3.ai.assistant.design.components.ThinkingPill
 import org.koin.compose.koinInject
 import app.m1k3.ai.domain.stt.SttState
 import app.m1k3.ai.domain.stt.isListening
@@ -273,7 +274,8 @@ fun ChatScreen(
                 userContext = uiState.userContext,
                 onRequestLocation = permissionRequester.onRequestLocation,
                 onRequestHealth = permissionRequester.onRequestHealth,
-                onRequestScreenTime = permissionRequester.onRequestScreenTime
+                onRequestScreenTime = permissionRequester.onRequestScreenTime,
+                generationState = uiState.generationState
             )
 
             // Eco Indicator - Real-time environmental impact
@@ -422,7 +424,9 @@ fun ChatBubble(
     onRequestLocation: (() -> Unit)? = null,
     onRequestHealth: (() -> Unit)? = null,
     onRequestScreenTime: (() -> Unit)? = null,
-    onSpeak: ((String) -> Unit)? = null
+    onSpeak: ((String) -> Unit)? = null,
+    isStreaming: Boolean = false,
+    isThinking: Boolean = false
 ) {
     when {
         message.isStatusMessage -> {
@@ -465,7 +469,18 @@ fun ChatBubble(
                 onSpeak = if (onSpeak != null) {{ onSpeak(message.text) }} else null,
                 artifactContent = message.artifact?.let { artifact ->
                     { ArtifactView(artifact = artifact) }
-                }
+                },
+                thinkingPill = if (!message.thinkingContent.isNullOrEmpty() || isThinking) {
+                    {
+                        ThinkingPill(
+                            thinkingContent = message.thinkingContent,
+                            isThinking = isThinking,
+                            thinkingDurationMs = message.thinkingDurationMs,
+                            modifier = Modifier.padding(bottom = 4.dp)
+                        )
+                    }
+                } else null,
+                isStreaming = isStreaming
             )
         }
     }

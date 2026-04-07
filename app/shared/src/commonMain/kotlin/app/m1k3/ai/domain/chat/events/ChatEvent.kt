@@ -42,7 +42,9 @@ sealed class ChatEvent {
     /** Streaming token received (for real-time streaming) */
     data class Streaming(
         val partialText: String,
-        val tokenCount: Int
+        val tokenCount: Int,
+        val thinkingPartial: String? = null,
+        val isThinking: Boolean = false
     ) : ChatEvent()
 
     /** Tools were detected and executed */

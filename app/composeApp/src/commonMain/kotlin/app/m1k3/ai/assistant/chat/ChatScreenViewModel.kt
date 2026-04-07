@@ -942,14 +942,18 @@ class ChatScreenViewModel(
                             val updatedMessages = state.messages.toMutableList()
                             if (updatedMessages.isNotEmpty()) {
                                 updatedMessages[updatedMessages.lastIndex] = updatedMessages.last().copy(
-                                    text = event.partialText
+                                    text = event.partialText,
+                                    // Show live thinking content during streaming
+                                    thinkingContent = event.thinkingPartial
                                 )
                             }
                             state.copy(
                                 messages = updatedMessages,
                                 generationState = GenerationState.Streaming(
                                     partialText = event.partialText,
-                                    tokenCount = event.tokenCount
+                                    tokenCount = event.tokenCount,
+                                    thinkingPartial = event.thinkingPartial,
+                                    isThinking = event.isThinking
                                 )
                             )
                         }
@@ -1093,11 +1097,15 @@ class ChatScreenViewModel(
                 val finalText = accumulated.toString()
                 val parseResult = app.m1k3.ai.domain.chat.artifact.ArtifactParser.parse(finalText)
                 val artifact = parseResult.artifacts.firstOrNull()
+                // Preserve thinking content that was collected during streaming
+                val existingThinking = updatedMessages.last().thinkingContent
                 updatedMessages[updatedMessages.lastIndex] = updatedMessages.last().copy(
                     text = finalText,
                     inferenceStats = stats.formatFull(),
                     ragSources = context.ragSources,
-                    artifact = artifact
+                    artifact = artifact,
+                    thinkingContent = existingThinking?.ifEmpty { null },
+                    thinkingDurationMs = if (existingThinking != null) duration else null
                 )
             }
             state.copy(
