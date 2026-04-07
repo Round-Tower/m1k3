@@ -509,6 +509,7 @@ class ChatScreenViewModel(
                 currentConversationId = null
                 confirmedToolIds.clear()
                 initializeConversation()
+                generateWelcomeMessage()   // re-greet on new chat
 
                 logger.i { "Conversation cleared" }
             } catch (e: Exception) {
