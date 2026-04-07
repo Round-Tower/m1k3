@@ -154,12 +154,7 @@ fun ChatScreen(
         }
     }
 
-    // Register clear callback
-    LaunchedEffect(onClearConversationClick) {
-        if (onClearConversationClick != null) {
-            // This allows parent to trigger the dialog
-        }
-    }
+    // onClearConversationClick wired below — button placed in input row
 
     // Sync avatar with generation state + haptics on state transitions
     if (avatarVM != null) {
@@ -326,7 +321,10 @@ fun ChatScreen(
                             }
                         }
                     } else null,
-                    listeningPartialText = (sttState as? SttState.Listening)?.partialText ?: ""
+                    listeningPartialText = (sttState as? SttState.Listening)?.partialText ?: "",
+                    onNewChatClick = if (uiState.messages.isNotEmpty()) {
+                        { showClearDialog = true }
+                    } else null
                 )
             },
             modifier = Modifier.align(Alignment.BottomCenter)

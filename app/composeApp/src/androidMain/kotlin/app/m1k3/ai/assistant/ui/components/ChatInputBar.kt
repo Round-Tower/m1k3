@@ -16,8 +16,11 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.EditNote
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -68,6 +71,7 @@ fun ChatInputBar(
     isListening: Boolean = false,
     onMicClick: (() -> Unit)? = null,
     listeningPartialText: String = "",
+    onNewChatClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val interactionSource = remember { MutableInteractionSource() }
@@ -151,6 +155,23 @@ fun ChatInputBar(
                     .heightIn(min = 48.dp),
                 verticalAlignment = Alignment.Bottom
             ) {
+                // New chat — pencil/edit icon, shown when there are messages
+                if (onNewChatClick != null) {
+                    androidx.compose.material3.IconButton(
+                        onClick = onNewChatClick,
+                        modifier = Modifier
+                            .padding(start = MaSpacing.xs, bottom = MaSpacing.xs)
+                            .size(36.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.EditNote,
+                            contentDescription = "New chat",
+                            tint = MaColors.textMuted(),
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                }
+
                 // Voice toggle — small speaker icon
                 if (onAutoVoiceToggle != null) {
                     val voiceIconAlpha by animateFloatAsState(
