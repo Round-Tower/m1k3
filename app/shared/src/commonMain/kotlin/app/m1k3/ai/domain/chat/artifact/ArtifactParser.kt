@@ -57,11 +57,12 @@ object ArtifactParser {
         }
         textParts.add(text.substring(cursor))
 
-        // Strip any raw HTML tags that leaked outside <artifact> blocks.
-        // The model occasionally outputs <p>, <ul>, <li> etc. directly —
-        // strip them so they don't render as literal text in MarkdownText.
+        // Strip <think>...</think> blocks (Qwen3.5 extended thinking tokens)
+        // and raw HTML tags that leaked outside <artifact> blocks.
         val cleanedParts = textParts.map { part ->
-            part.replace(Regex("<[^>]{1,100}>"), "")
+            part
+                .replace(Regex("<think>[\\s\\S]*?</think>", RegexOption.IGNORE_CASE), "")
+                .replace(Regex("<[^>]{1,100}>"), "")
         }
 
         return ParseResult(cleanedParts, artifacts)
