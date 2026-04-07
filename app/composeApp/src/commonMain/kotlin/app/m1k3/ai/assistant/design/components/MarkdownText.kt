@@ -40,10 +40,10 @@ fun MarkdownText(
     isError: Boolean = false,
     modifier: Modifier = Modifier
 ) {
-    // Strip < *think *>...< */think *> blocks before rendering — safety net for any path
+    // Strip < *think *>...</ *think *> blocks before rendering — safety net for any path
     // that doesn't run through ArtifactParser (e.g. welcome message, legacy path)
     val cleanText = remember(text) {
-        text.replace(Regex("< *think *>[\\s\\S]*?< */think *>", RegexOption.IGNORE_CASE), "").trim()
+        text.replace(Regex("< *think *>[\\s\\S]*?</ *think *>", RegexOption.IGNORE_CASE), "").trim()
     }
     val parser = remember { MarkdownParser() }
     val nodes = remember(cleanText) { parser.parse(cleanText) }

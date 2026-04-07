@@ -129,7 +129,7 @@ class ChatWithToolsUseCase(
                     // Detect <think> / </think> in the token stream.
                     // Qwen3.5 may tokenise as "< think>" (with space) — use regex.
                     val THINK_OPEN = Regex("< *think *>", RegexOption.IGNORE_CASE)
-                    val THINK_CLOSE = Regex("< */think *>", RegexOption.IGNORE_CASE)
+                    val THINK_CLOSE = Regex("</ *think *>", RegexOption.IGNORE_CASE)
                     val buffer = (if (isInThinkBlock) thinkingAccumulated else accumulated).toString() + token
                     when {
                         !isInThinkBlock && THINK_OPEN.containsMatchIn(buffer) -> {

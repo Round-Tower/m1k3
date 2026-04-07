@@ -57,11 +57,11 @@ object ArtifactParser {
         }
         textParts.add(text.substring(cursor))
 
-        // Strip < *think *>...< */think *> blocks (Qwen3.5 extended thinking tokens)
+        // Strip < *think *>...</ *think *> blocks (Qwen3.5 extended thinking tokens)
         // and raw HTML tags that leaked outside <artifact> blocks.
         val cleanedParts = textParts.map { part ->
             part
-                .replace(Regex("< *think *>[\\s\\S]*?< */think *>", RegexOption.IGNORE_CASE), "")
+                .replace(Regex("< *think *>[\\s\\S]*?</ *think *>", RegexOption.IGNORE_CASE), "")
                 .replace(Regex("<[^>]{1,100}>"), "")
         }
 

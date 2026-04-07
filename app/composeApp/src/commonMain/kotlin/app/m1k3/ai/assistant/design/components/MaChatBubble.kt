@@ -199,7 +199,7 @@ fun MaChatBubbleAI(
                     } else {
                         // Strip any remaining < *think *> blocks before display
                         val displayText = text.replace(
-                            Regex("< *think *>[\\s\\S]*?< */think *>", RegexOption.IGNORE_CASE), ""
+                            Regex("< *think *>[\\s\\S]*?</ *think *>", RegexOption.IGNORE_CASE), ""
                         ).trim()
                         if (isStreaming) {
                             androidx.compose.material3.Text(

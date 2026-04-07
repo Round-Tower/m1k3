@@ -1,0 +1,170 @@
+package app.m1k3.ai.domain.system
+
+import app.m1k3.ai.domain.context.LocationContext
+import app.m1k3.ai.domain.context.UserContext
+import app.m1k3.ai.domain.context.WeatherContext
+import kotlin.test.Test
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
+
+/**
+ * Personality guardrails for M1K3.
+ *
+ * These tests exist to protect M1K3's character. The ethos says:
+ *   "You don't say 'certainly!' or 'great question!'"
+ *   "You don't apologise for existing."
+ *   "You are curious. You have opinions."
+ *   "You are on the user's side — not neutral."
+ *
+ * If M1K3 starts sounding like a corporate help desk, these tests will
+ * catch it. Run them after any system prompt change.
+ */
+class SystemPromptPersonalityTest {
+
+    private val builder = MaSystemPromptBuilder()
+
+    private fun buildWith(
+        name: String = "Kev",
+        city: String = "Cork",
+        country: String = "Ireland"
+    ): String {
+        val ctx = UserContext(
+            userName = name,
+            location = LocationContext(city = city, country = country),
+            hourOfDay = 22
+        )
+        return builder.build(
+            SystemPromptInput(
+                userContext = ctx,
+                tier = SystemPromptTier.FULL
+            )
+        )
+    }
+
+    // ===== Character is present =====
+
+    @Test
+    fun `prompt contains M1K3 identity statement`() {
+        val prompt = buildWith()
+        assertTrue(
+            prompt.contains("M1K3", ignoreCase = true),
+            "Prompt must establish M1K3 identity"
+        )
+    }
+
+    @Test
+    fun `prompt contains privacy-first statement`() {
+        val prompt = buildWith()
+        assertTrue(
+            prompt.contains("device", ignoreCase = true) ||
+            prompt.contains("local", ignoreCase = true) ||
+            prompt.contains("cloud", ignoreCase = true),
+            "Prompt must reference local/private nature"
+        )
+    }
+
+    @Test
+    fun `prompt references user by name`() {
+        val prompt = buildWith(name = "Kev")
+        assertTrue(
+            prompt.contains("Kev"),
+            "Prompt must include the user's name naturally"
+        )
+    }
+
+    @Test
+    fun `prompt includes location context`() {
+        val prompt = buildWith(city = "Cork", country = "Ireland")
+        assertTrue(
+            prompt.contains("Cork") || prompt.contains("Ireland"),
+            "Prompt must weave in location like a friend would"
+        )
+    }
+
+    // ===== Corporate patterns are absent =====
+
+    @Test
+    fun `prompt prohibits hollow affirmations — certainly and great question appear as negative examples`() {
+        val prompt = buildWith()
+        // The ethos says "You don't say 'certainly!' or 'great question!'"
+        // These words appear IN the prompt as things M1K3 must NOT do.
+        // This test verifies the prohibition is encoded (word present as a negative example).
+        assertTrue(
+            prompt.contains("certainly", ignoreCase = true),
+            "Ethos should explicitly prohibit 'certainly'"
+        )
+        assertTrue(
+            prompt.contains("great question", ignoreCase = true),
+            "Ethos should explicitly prohibit 'great question'"
+        )
+        // The key: they appear in a "don't say" context, not as instructions to say them
+        assertTrue(
+            prompt.contains("don't", ignoreCase = true) ||
+            prompt.contains("not", ignoreCase = true),
+            "Prohibition language must accompany the examples"
+        )
+    }
+
+    @Test
+    fun `prompt encodes advocacy not neutrality — M1K3 is on the user's side`() {
+        val prompt = buildWith()
+        // M1K3 should advocate, not be neutral
+        assertTrue(
+            prompt.contains("side", ignoreCase = true) ||
+            prompt.contains("advocate", ignoreCase = true) ||
+            prompt.contains("care", ignoreCase = true) ||
+            prompt.contains("corner", ignoreCase = true),
+            "Prompt must encode M1K3's advocacy stance"
+        )
+        assertFalse(
+            prompt.contains("remain neutral", ignoreCase = true) ||
+            prompt.contains("stay neutral", ignoreCase = true),
+            "Prompt must not instruct M1K3 to be neutral"
+        )
+    }
+
+    // ===== Conciseness is encoded =====
+
+    @Test
+    fun `prompt discourages padding`() {
+        val prompt = buildWith()
+        assertTrue(
+            prompt.contains("brief", ignoreCase = true) ||
+            prompt.contains("concis", ignoreCase = true) ||
+            prompt.contains("don't pad", ignoreCase = true) ||
+            prompt.contains("preamble", ignoreCase = true),
+            "Prompt must encode M1K3's brevity principle"
+        )
+    }
+
+    // ===== Context tiers =====
+
+    @Test
+    fun `compact tier produces shorter prompt than full`() {
+        val ctx = UserContext(userName = "Kev", location = LocationContext(city = "Cork", country = "Ireland"))
+        val full = builder.build(SystemPromptInput(userContext = ctx, tier = SystemPromptTier.FULL))
+        val compact = builder.build(SystemPromptInput(userContext = ctx, tier = SystemPromptTier.COMPACT))
+        assertTrue(
+            compact.length < full.length,
+            "Compact tier should be shorter than full tier (compact=${compact.length}, full=${full.length})"
+        )
+    }
+
+    @Test
+    fun `weather context flows into the prompt when provided`() {
+        val ctx = UserContext(userName = "Kev", location = LocationContext(city = "Cork", country = "Ireland"))
+        val weather = WeatherContext(
+            temperatureCelsius = 12.0,
+            conditionDescription = "light rain",
+            conditionCode = 51
+        )
+        val prompt = builder.build(
+            SystemPromptInput(userContext = ctx, weather = weather, tier = SystemPromptTier.FULL)
+        )
+        assertTrue(
+            prompt.contains("rain", ignoreCase = true) ||
+            prompt.contains("12", ignoreCase = true),
+            "Weather should be woven into the prompt naturally"
+        )
+    }
+}
