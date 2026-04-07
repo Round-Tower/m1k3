@@ -193,8 +193,18 @@ class ChatScreenViewModel(
      * Initialize the AI engine.
      * Call this from LaunchedEffect(Unit) in the composable.
      */
-    fun initializeEngine() {
-        if (_uiState.value.engineState is EngineState.Ready) {
+    /**
+     * Retry engine initialization — called from the "Re-download" / "Retry" button
+     * shown when EngineState.Failed. Resets state to Loading and re-runs init.
+     */
+    fun retryEngineInit() {
+        aiEngine.release()
+        _uiState.update { it.copy(engineState = EngineState.Loading, error = null) }
+        initializeEngine(force = true)
+    }
+
+    fun initializeEngine(force: Boolean = false) {
+        if (!force && _uiState.value.engineState is EngineState.Ready) {
             logger.d { "Engine already initialized" }
             return
         }

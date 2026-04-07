@@ -469,6 +469,43 @@ private fun VoiceSection(
                 if (checked) haptics.performHapticFeedback(HapticFeedbackType.LongPress)
             }
         )
+
+        HorizontalDivider(modifier = Modifier.padding(horizontal = MaSpacing.base), color = MaColors.BorderLight)
+
+        // Voice picker — Daniel, Bella, Emma
+        var selectedVoiceId by remember {
+            mutableStateOf(
+                prefs.getString(PreferenceKeys.SELECTED_VOICE, app.m1k3.ai.domain.tts.Voice.default.id)
+                    ?: app.m1k3.ai.domain.tts.Voice.default.id
+            )
+        }
+        val voices = app.m1k3.ai.domain.tts.Voice.all()
+
+        SettingsItem(
+            title = "Voice",
+            subtitle = voices.find { it.id == selectedVoiceId }?.displayName ?: "Daniel",
+            icon = Icons.Default.RecordVoiceOver,
+            onClick = {}
+        )
+        androidx.compose.foundation.layout.Row(
+            modifier = androidx.compose.ui.Modifier
+                .fillMaxWidth()
+                .padding(horizontal = MaSpacing.base, vertical = MaSpacing.sm),
+            horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(MaSpacing.sm)
+        ) {
+            voices.forEach { voice ->
+                val isSelected = voice.id == selectedVoiceId
+                androidx.compose.material3.FilterChip(
+                    selected = isSelected,
+                    onClick = {
+                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                        selectedVoiceId = voice.id
+                        prefs.setString(PreferenceKeys.SELECTED_VOICE, voice.id)
+                    },
+                    label = { androidx.compose.material3.Text(voice.displayName) }
+                )
+            }
+        }
     }
 }
 

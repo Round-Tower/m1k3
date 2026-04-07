@@ -20,9 +20,11 @@ interface MaInferenceBackend {
      * Load GGUF model and create inference context.
      *
      * @param modelPath Absolute path to the .gguf file
+     * @param nCtx Context window size — controls KV cache memory usage.
+     *   2048 is safe for all devices. 4096 recommended for Big M1K3 on 8GB+.
      * @return Opaque handle (non-zero) on success, 0 on failure
      */
-    fun init(modelPath: String): Long
+    fun init(modelPath: String, nCtx: Int = 2048): Long
 
     /**
      * Generate text from a formatted prompt.

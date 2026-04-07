@@ -31,7 +31,7 @@ class FakeMaInferenceBackend : MaInferenceBackend {
     var releaseCallCount = 0
     var lastReleaseHandle: Long = 0L
 
-    override fun init(modelPath: String): Long {
+    override fun init(modelPath: String, nCtx: Int): Long {
         initCalled = true
         initCallCount++
         lastInitPath = modelPath

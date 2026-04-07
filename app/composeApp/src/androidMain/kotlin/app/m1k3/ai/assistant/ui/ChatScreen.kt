@@ -53,6 +53,7 @@ import app.m1k3.ai.assistant.design.components.MaStatusCard
 import app.m1k3.ai.assistant.design.haptics.rememberHapticFeedback
 import app.m1k3.ai.assistant.design.theme.MaTheme
 import app.m1k3.ai.assistant.design.tokens.MaColors
+import app.m1k3.ai.assistant.design.tokens.MaTypography
 import app.m1k3.ai.assistant.ui.components.ChatInputBar
 import app.m1k3.ai.assistant.ui.components.ChatInputBarContainer
 import app.m1k3.ai.assistant.ui.components.ChatMessageList
@@ -191,6 +192,39 @@ fun ChatScreen(
                 else -> {}
             }
         }
+    }
+
+    // Engine failed overlay — shown when model is missing or corrupt
+    val engineState = uiState.engineState
+    if (engineState is app.m1k3.ai.assistant.chat.EngineState.Failed) {
+        androidx.compose.foundation.layout.Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center
+        ) {
+            androidx.compose.foundation.layout.Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+                modifier = Modifier.padding(32.dp)
+            ) {
+                androidx.compose.material3.Text(
+                    text = "M1K3 needs a model",
+                    style = MaTypography.headlineSmall,
+                    color = MaColors.textPrimary()
+                )
+                androidx.compose.material3.Text(
+                    text = engineState.error.toUserMessage(),
+                    style = MaTypography.bodyMedium,
+                    color = MaColors.textMuted(),
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                )
+                androidx.compose.material3.Button(
+                    onClick = { viewModel.retryEngineInit() }
+                ) {
+                    androidx.compose.material3.Text("Re-download model")
+                }
+            }
+        }
+        return@ChatScreen
     }
 
     // Initialize AI engine + consume shared text

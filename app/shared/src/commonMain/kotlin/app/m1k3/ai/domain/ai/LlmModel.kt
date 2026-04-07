@@ -28,7 +28,9 @@ sealed class LlmModel(
     val filename: String,
     val parameterCount: Long,
     val chatFormat: ChatFormat,
-    val minRamGB: Int = 0
+    val minRamGB: Int = 0,
+    /** Minimum valid file size in MB — guards against truncated/corrupt downloads */
+    val minFileSizeMb: Int = 50
 ) {
     /**
      * Qwen3.5 2B — Lil M1K3 (public, no HF gating)
@@ -43,7 +45,8 @@ sealed class LlmModel(
         filename = "Qwen_Qwen3.5-2B-Q4_K_M.gguf",
         parameterCount = 2_000_000_000L,
         chatFormat = ChatFormat.ChatML,
-        minRamGB = 2
+        minRamGB = 2,
+        minFileSizeMb = 1100
     )
 
     /**
@@ -71,7 +74,8 @@ sealed class LlmModel(
         displayName = "Qwen3.5 (0.8B)",
         filename = "Qwen_Qwen3.5-0.8B-Q4_K_M.gguf",
         parameterCount = 800_000_000L,
-        chatFormat = ChatFormat.ChatML
+        chatFormat = ChatFormat.ChatML,
+        minFileSizeMb = 450
     )
 
     /**
@@ -163,7 +167,8 @@ sealed class LlmModel(
         filename = "gemma-4-E2B-it-Q4_K_M.gguf",
         parameterCount = 2_300_000_000L,
         chatFormat = ChatFormat.Gemma4,
-        minRamGB = 6
+        minRamGB = 6,
+        minFileSizeMb = 2800
     )
 
     companion object {

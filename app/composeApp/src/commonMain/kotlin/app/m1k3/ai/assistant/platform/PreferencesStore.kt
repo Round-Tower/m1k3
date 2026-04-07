@@ -160,6 +160,9 @@ object PreferenceKeys {
     /** Whether the user has completed first-launch onboarding */
     const val ONBOARDING_COMPLETE = "onboarding_complete"
 
+    /** Selected Kokoro voice ID — matches Voice.id (e.g. "bm_daniel", "af_bella") */
+    const val SELECTED_VOICE = "selected_voice"
+
     /** The M1K3 tier the user selected during onboarding ("mini" / "lil" / "big") */
     const val SELECTED_M1K3_TIER = "selected_m1k3_tier"
 }

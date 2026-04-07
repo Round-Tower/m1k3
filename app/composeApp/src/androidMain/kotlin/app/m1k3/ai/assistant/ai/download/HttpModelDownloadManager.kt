@@ -30,7 +30,8 @@ class HttpModelDownloadManager(
     override fun isModelAvailable(modelId: String): Boolean {
         val model = LlmModel.findById(modelId) ?: return false
         val file = File(modelsDir, model.filename)
-        return file.exists() && file.length() > 0
+        val minBytes = model.minFileSizeMb.toLong() * 1024 * 1024
+        return file.exists() && file.length() >= minBytes
     }
 
     override fun getModelPath(modelId: String): String? {

@@ -117,7 +117,8 @@ class LlamaCppEngine(
                 val modelPath = resolveModelPath()
                 logger.i { "Loading model: $modelPath" }
 
-                val handle = backend.init(modelPath)
+                val nCtx = if (deviceRamGB >= 8) 4096 else 2048
+                val handle = backend.init(modelPath, nCtx)
                 if (handle == 0L) {
                     return@withLock Result.failure(
                         RuntimeException("Failed to load model '${model.displayName}'. File may be corrupt or incompatible.")

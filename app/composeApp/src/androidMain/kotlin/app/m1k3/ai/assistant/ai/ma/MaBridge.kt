@@ -36,7 +36,7 @@ object MaBridge : MaInferenceBackend {
      * @param modelPath Absolute path to the .gguf file
      * @return Opaque context handle (pointer cast to Long), or 0 on failure
      */
-    override external fun init(modelPath: String): Long
+    override external fun init(modelPath: String, nCtx: Int): Long
 
     /**
      * Generate text from a pre-formatted prompt.

@@ -420,8 +420,13 @@ actual val platformModule = module {
             },
             onSpeakText = { text ->
                 if (text.isBlank()) return@ChatScreenViewModel
-                if (!ttsEngine.isLoaded) ttsEngine.loadModel()  // suspend — awaited via suspend lambda
-                val result = ttsEngine.synthesize(text, Voice.default)
+                if (!ttsEngine.isLoaded) ttsEngine.loadModel()
+                val prefs = get<PreferencesStoreInterface>()
+                val voiceId = prefs.getString(
+                    app.m1k3.ai.assistant.platform.PreferenceKeys.SELECTED_VOICE, Voice.default.id
+                ) ?: Voice.default.id
+                val voice = Voice.findById(voiceId) ?: Voice.default
+                val result = ttsEngine.synthesize(text, voice)
                 when (result) {
                     is app.m1k3.ai.domain.tts.TtsResult.Success -> {
                         val warmed = get<AudioEffectsProcessor>()
