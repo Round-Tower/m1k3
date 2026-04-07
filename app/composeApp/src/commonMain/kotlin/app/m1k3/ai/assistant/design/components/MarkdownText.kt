@@ -40,8 +40,13 @@ fun MarkdownText(
     isError: Boolean = false,
     modifier: Modifier = Modifier
 ) {
+    // Strip <think>...</think> blocks before rendering — safety net for any path
+    // that doesn't run through ArtifactParser (e.g. welcome message, legacy path)
+    val cleanText = remember(text) {
+        text.replace(Regex("<think>[\\s\\S]*?</think>", RegexOption.IGNORE_CASE), "").trim()
+    }
     val parser = remember { MarkdownParser() }
-    val nodes = remember(text) { parser.parse(text) }
+    val nodes = remember(cleanText) { parser.parse(cleanText) }
     val textColor = if (isError) MaColors.Error else MaColors.textPrimary()
     val codeBlockBg = MaColors.bgHighElevated()
     val inlineCodeBg = MaColors.bgElevated()

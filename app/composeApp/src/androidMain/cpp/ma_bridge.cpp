@@ -212,7 +212,7 @@ Java_app_m1k3_ai_assistant_ai_ma_MaBridge_nativeGenerate(
         int n_piece = llama_token_to_piece(
                 vocab, token,
                 piece_buf, (int32_t)sizeof(piece_buf) - 1,
-                /*lstrip=*/1, /*special=*/true);
+                /*lstrip=*/0, /*special=*/true);
 
         if (n_piece <= 0) {
             // Still advance position even on empty piece

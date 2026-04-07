@@ -197,14 +197,18 @@ fun MaChatBubbleAI(
                         }
                         artifactContent()
                     } else {
+                        // Strip any remaining <think> blocks before display
+                        val displayText = text.replace(
+                            Regex("<think>[\\s\\S]*?</think>", RegexOption.IGNORE_CASE), ""
+                        ).trim()
                         if (isStreaming) {
                             androidx.compose.material3.Text(
-                                text = text,
+                                text = displayText,
                                 style = app.m1k3.ai.assistant.design.tokens.MaTypography.bodyLarge,
                                 color = if (isError) MaColors.Error else MaColors.textPrimary()
                             )
                         } else {
-                            MarkdownText(text = text, isError = isError)
+                            MarkdownText(text = displayText, isError = isError)
                         }
                     }
 
