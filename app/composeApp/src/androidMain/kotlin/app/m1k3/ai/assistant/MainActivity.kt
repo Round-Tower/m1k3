@@ -471,7 +471,9 @@ private fun MaAppContent(
 
                                 // Meta Screens (Drawer actions)
                                 composable(Screen.About.route) {
-                                    AboutScreen()
+                                    AboutScreen(
+                                        onLicensesClick = { navController.navigate(Screen.Licenses.route) }
+                                    )
                                 }
 
                                 composable(Screen.Licenses.route) {

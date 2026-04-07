@@ -420,7 +420,7 @@ actual val platformModule = module {
             },
             onSpeakText = { text ->
                 if (text.isBlank()) return@ChatScreenViewModel
-                if (!ttsEngine.isLoaded) ttsEngine.loadModel()
+                if (!ttsEngine.isLoaded) ttsEngine.loadModel()  // suspend — awaited via suspend lambda
                 val result = ttsEngine.synthesize(text, Voice.default)
                 when (result) {
                     is app.m1k3.ai.domain.tts.TtsResult.Success -> {

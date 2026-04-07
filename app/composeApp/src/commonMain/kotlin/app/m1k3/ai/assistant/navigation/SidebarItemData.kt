@@ -59,6 +59,11 @@ val sidebarItems = listOf(
         icon = Icons.Default.Info
     ),
     NavItem(
+        screen = Screen.Licenses,
+        label = "Licenses",
+        icon = Icons.Default.Code
+    ),
+    NavItem(
         screen = Screen.Help,
         label = "Help & Docs",
         icon = Icons.Default.Help

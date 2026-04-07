@@ -4,6 +4,7 @@ import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -25,9 +26,11 @@ import app.m1k3.ai.assistant.design.tokens.MaTypography
 
 /**
  * About M1K3 screen - App mission, privacy-first messaging, version info
+ *
+ * @param onLicensesClick Optional callback to navigate to the Open Source Licenses screen.
  */
 @Composable
-fun AboutScreen() {
+fun AboutScreen(onLicensesClick: (() -> Unit)? = null) {
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -90,6 +93,48 @@ fun AboutScreen() {
             style = MaTypography.bodySmall,
             color = MaColors.textSecondary()
         )
+
+        Spacer(modifier = Modifier.height(MaSpacing.base))
+
+        // Open Source Licenses link
+        val sectionShape = RoundedCornerShape(MaRadius.md)
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(sectionShape)
+                .background(MaColors.bgElevated())
+                .border(1.dp, MaColors.borderSubtle(), sectionShape)
+                .clickable { onLicensesClick?.invoke() }
+                .padding(MaSpacing.md),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = Icons.Default.Code,
+                contentDescription = null,
+                modifier = Modifier.size(24.dp),
+                tint = MaColors.Orange
+            )
+            Spacer(modifier = Modifier.width(MaSpacing.md))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    "Open Source Licenses",
+                    style = MaTypography.bodyMedium,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Text(
+                    "Libraries & assets that power M1K3",
+                    style = MaTypography.labelSmall,
+                    color = MaColors.textMuted()
+                )
+            }
+            Icon(
+                imageVector = Icons.Default.ChevronRight,
+                contentDescription = null,
+                tint = MaColors.textMuted()
+            )
+        }
+
+        Spacer(modifier = Modifier.height(MaSpacing.xl))
     }
 }
 
@@ -417,6 +462,7 @@ fun LicensesScreen() {
             entries = listOf(
                 LicenseEntry("Kotlin & KMP", "Apache 2.0", LicenseType.APACHE, "JetBrains", version = "2.2.20"),
                 LicenseEntry("Compose Multiplatform", "Apache 2.0", LicenseType.APACHE, "JetBrains", version = "1.9.2"),
+                LicenseEntry("Compose Google Fonts", "Apache 2.0", LicenseType.APACHE, "Google / JetBrains", version = "1.9.1", description = "Google Fonts integration for Compose"),
                 LicenseEntry("AndroidX Core", "Apache 2.0", LicenseType.APACHE, "Google", version = "1.17.0"),
                 LicenseEntry("AndroidX Lifecycle", "Apache 2.0", LicenseType.APACHE, "Google", version = "2.9.5"),
                 LicenseEntry("AndroidX Navigation", "Apache 2.0", LicenseType.APACHE, "Google", version = "2.9.1"),
@@ -434,7 +480,8 @@ fun LicensesScreen() {
                 LicenseEntry("ML Kit Vision", "Apache 2.0", LicenseType.APACHE, "Google", version = "17.0.2"),
                 LicenseEntry("ML Kit Text Recognition", "Apache 2.0", LicenseType.APACHE, "Google", version = "19.0.0"),
                 LicenseEntry("Play Services Location", "Apache 2.0", LicenseType.APACHE, "Google", version = "21.3.0"),
-                LicenseEntry("Health Connect", "Apache 2.0", LicenseType.APACHE, "Google", version = "1.1.0-rc01")
+                LicenseEntry("Health Connect", "Apache 2.0", LicenseType.APACHE, "Google", version = "1.1.0-rc01", description = "Health data access API"),
+                LicenseEntry("SceneView", "Apache 2.0", LicenseType.APACHE, "SceneView Community", version = "2.3.0", description = "3D/AR scene rendering for Android")
             )
         )
 
