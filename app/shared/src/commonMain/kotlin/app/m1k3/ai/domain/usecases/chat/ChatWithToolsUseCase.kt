@@ -126,25 +126,26 @@ class ChatWithToolsUseCase(
                 onToken = { token ->
                     if (token.isEmpty()) return@generateStreaming
 
-                    // Detect <think> / </think> boundaries in the token stream
+                    // Detect <think> / </think> in the token stream.
+                    // Qwen3.5 may tokenise as "< think>" (with space) — use regex.
+                    val THINK_OPEN = Regex("< *think *>", RegexOption.IGNORE_CASE)
+                    val THINK_CLOSE = Regex("< */think *>", RegexOption.IGNORE_CASE)
                     val buffer = (if (isInThinkBlock) thinkingAccumulated else accumulated).toString() + token
                     when {
-                        !isInThinkBlock && buffer.contains("<think>") -> {
-                            // Entering thinking mode — keep text before <think> as response
-                            val beforeThink = buffer.substringBefore("<think>")
+                        !isInThinkBlock && THINK_OPEN.containsMatchIn(buffer) -> {
+                            val beforeThink = THINK_OPEN.split(buffer).first()
                             accumulated.clear()
                             accumulated.append(beforeThink)
                             isInThinkBlock = true
                             thinkBlockStartMs = Clock.System.now().toEpochMilliseconds()
                             thinkingAccumulated.clear()
                         }
-                        isInThinkBlock && buffer.contains("</think>") -> {
-                            // Exiting thinking mode
+                        isInThinkBlock && THINK_CLOSE.containsMatchIn(buffer) -> {
+                            val parts = THINK_CLOSE.split(buffer)
                             thinkingAccumulated.clear()
-                            thinkingAccumulated.append(buffer.substringBefore("</think>"))
-                            val afterThink = buffer.substringAfter("</think>")
+                            thinkingAccumulated.append(parts.first())
                             isInThinkBlock = false
-                            accumulated.append(afterThink)
+                            accumulated.append(parts.drop(1).joinToString(""))
                         }
                         isInThinkBlock -> thinkingAccumulated.append(token)
                         else -> accumulated.append(token)
