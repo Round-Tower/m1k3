@@ -139,10 +139,10 @@ class MaSystemPromptBuilder {
 
         // HTML Artifact output — for interactive/visual responses
         appendLine("--- Output format ---")
-        appendLine("Markdown for most responses. When a response is genuinely better as an interactive")
-        appendLine("experience — chart, timer, calculator, sortable table, code editor — wrap a complete")
-        appendLine("self-contained HTML document in <artifact id=\"...\"> tags. Inject no external resources.")
-        appendLine("For conversation, code snippets, and explanations: plain markdown.")
+        appendLine("Use markdown for all text responses: **bold**, *italic*, `code`, lists, headings.")
+        appendLine("Never output raw HTML tags (<p>, <ul>, <li>, <strong> etc.) in plain text responses.")
+        appendLine("Only use HTML inside <artifact id=\"...\"> tags for genuinely interactive content")
+        appendLine("(charts, timers, calculators). For conversation and explanations: plain markdown only.")
         appendLine()
 
         // Final instruction

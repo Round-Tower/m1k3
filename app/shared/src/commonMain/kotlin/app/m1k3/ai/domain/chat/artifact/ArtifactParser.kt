@@ -57,7 +57,14 @@ object ArtifactParser {
         }
         textParts.add(text.substring(cursor))
 
-        return ParseResult(textParts, artifacts)
+        // Strip any raw HTML tags that leaked outside <artifact> blocks.
+        // The model occasionally outputs <p>, <ul>, <li> etc. directly —
+        // strip them so they don't render as literal text in MarkdownText.
+        val cleanedParts = textParts.map { part ->
+            part.replace(Regex("<[^>]{1,100}>"), "")
+        }
+
+        return ParseResult(cleanedParts, artifacts)
     }
 
     /** Quick check without full parse — use to gate rendering. */
