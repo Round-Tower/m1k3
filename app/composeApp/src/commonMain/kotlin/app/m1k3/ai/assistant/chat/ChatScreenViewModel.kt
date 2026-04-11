@@ -380,6 +380,8 @@ class ChatScreenViewModel(
                 result.onSuccess {
                     _uiState.update { it.copy(engineState = EngineState.Ready) }
                     logger.i { "Switched to ${model.displayName}" }
+                    // Clear and regenerate welcome with new model
+                    clearConversation()
                 }.onFailure { e ->
                     val error = ChatError.EngineInitError("Failed to load ${model.displayName}: ${e.message}")
                     _uiState.update { it.copy(engineState = EngineState.Failed(error), error = error) }
@@ -622,6 +624,12 @@ class ChatScreenViewModel(
     }
 
     private suspend fun generateWelcomeMessage() {
+        // Guard: don't attempt if engine isn't ready (race during model switch)
+        if (_uiState.value.engineState != EngineState.Ready) {
+            logger.w { "Skipping welcome — engine not ready (${_uiState.value.engineState})" }
+            return
+        }
+
         // Fetch user context in parallel with other setup
         val userContext = try {
             userContextProvider?.getContext()
