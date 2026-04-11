@@ -16,6 +16,10 @@ import app.m1k3.ai.assistant.tools.executors.SetAlarmExecutor
 import app.m1k3.ai.assistant.tools.executors.SetTimerExecutor
 import app.m1k3.ai.assistant.tools.executors.SetVolumeExecutor
 import app.m1k3.ai.assistant.tools.executors.ToggleFlashlightExecutor
+import app.m1k3.ai.assistant.tools.executors.GetNotificationsExecutor
+import app.m1k3.ai.assistant.tools.executors.GetHealthExecutor
+import app.m1k3.ai.assistant.tools.executors.GetScreenTimeExecutor
+import app.m1k3.ai.assistant.tools.executors.WebSearchExecutor
 
 /**
  * Android Tool Registry - Registers Android-specific tool implementations
@@ -27,6 +31,8 @@ import app.m1k3.ai.assistant.tools.executors.ToggleFlashlightExecutor
  * - Device Info: battery level, current time, volume
  * - System Controls: flashlight, set volume, set alarm, set timer
  * - App Launchers: camera, browser, settings, maps
+ * - Context Intelligence: notifications, health, screen time
+ * - Web: search (DuckDuckGo, no API key)
  *
  * @param context Android application context
  */
@@ -39,6 +45,8 @@ class AndroidToolRegistry(
         registerSystemTools()
         registerAppLaunchers()
         registerTimerAndAlarmTools()
+        registerContextTools()
+        registerWebTools()
     }
 
     private fun registerDeviceInfoTools() {
@@ -303,6 +311,65 @@ class AndroidToolRegistry(
                 category = ToolCategory.SYSTEM
             ),
             SetTimerExecutor(context)
+        )
+    }
+
+    private fun registerContextTools() {
+        // Get Notifications (content, not just count)
+        registerTool(
+            Tool(
+                id = "get_notifications",
+                name = "Get Notifications",
+                description = "Returns recent notification content — app name, title, and message text",
+                parameters = emptyList(),
+                category = ToolCategory.DEVICE_INFO
+            ),
+            GetNotificationsExecutor(context)
+        )
+
+        // Get Health
+        registerTool(
+            Tool(
+                id = "get_health",
+                name = "Get Health Data",
+                description = "Returns health data — steps today, sleep last night, heart rate, active calories",
+                parameters = emptyList(),
+                category = ToolCategory.DEVICE_INFO
+            ),
+            GetHealthExecutor(context)
+        )
+
+        // Get Screen Time
+        registerTool(
+            Tool(
+                id = "get_screen_time",
+                name = "Get Screen Time",
+                description = "Returns today's screen time total and top apps with usage",
+                parameters = emptyList(),
+                category = ToolCategory.DEVICE_INFO
+            ),
+            GetScreenTimeExecutor(context)
+        )
+    }
+
+    private fun registerWebTools() {
+        // Web Search (DuckDuckGo — no API key, no tracking)
+        registerTool(
+            Tool(
+                id = "web_search",
+                name = "Web Search",
+                description = "Searches the web using DuckDuckGo — no API key, no tracking. Returns instant answers and related topics.",
+                parameters = listOf(
+                    ToolParameter(
+                        name = "query",
+                        type = ParameterType.STRING,
+                        description = "Search query",
+                        required = true
+                    )
+                ),
+                category = ToolCategory.APPS
+            ),
+            WebSearchExecutor()
         )
     }
 }
