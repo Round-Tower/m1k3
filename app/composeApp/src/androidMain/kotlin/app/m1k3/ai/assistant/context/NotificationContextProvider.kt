@@ -1,20 +1,17 @@
 package app.m1k3.ai.assistant.context
 
-import android.content.ComponentName
 import android.content.Context
 import android.provider.Settings
 import android.util.Log
+import app.m1k3.ai.domain.context.NotificationContent
 import app.m1k3.ai.domain.context.NotificationContext
+import org.json.JSONArray
 
 /**
- * Provides notification context.
+ * Provides notification context including actual content.
  *
- * Notification access requires the user to grant it in:
- * Settings → Notifications → Notification access
- *
- * We check if access is granted; if not, return null gracefully.
- * Actual notification count is tracked by MaNotificationListenerService
- * which must be declared in AndroidManifest.
+ * Reads from SharedPreferences where MaNotificationListenerService
+ * persists notification data. Returns both counts AND content.
  */
 class NotificationContextProvider(private val context: Context) {
 
@@ -35,19 +32,47 @@ class NotificationContextProvider(private val context: Context) {
             Log.d(TAG, "No notification listener access")
             return null
         }
-        // Count is maintained by MaNotificationListenerService via SharedPreferences
         return try {
-            val prefs = context.getSharedPreferences("ma_notifications", Context.MODE_PRIVATE)
+            val prefs = context.getSharedPreferences(
+                MaNotificationListenerService.PREFS,
+                Context.MODE_PRIVATE
+            )
             val count = prefs.getInt("unread_count", 0)
             val hasUrgent = prefs.getBoolean("has_urgent", false)
-            NotificationContext(unreadCount = count, hasUrgent = hasUrgent)
+            val contentJson = prefs.getString("content_json", null)
+
+            val recentNotifications = contentJson?.let { parseNotificationContent(it) }
+                ?: emptyList()
+
+            NotificationContext(
+                unreadCount = count,
+                hasUrgent = hasUrgent,
+                recentNotifications = recentNotifications
+            )
         } catch (e: Exception) {
-            Log.w(TAG, "Notification count read failed: ${e.message}")
+            Log.w(TAG, "Notification read failed: ${e.message}")
             null
         }
     }
 
-    /** Deep-links to notification access settings */
+    private fun parseNotificationContent(json: String): List<NotificationContent> {
+        return try {
+            val array = JSONArray(json)
+            (0 until array.length()).map { i ->
+                val obj = array.getJSONObject(i)
+                NotificationContent(
+                    appName = obj.optString("app", "Unknown"),
+                    title = obj.optString("title").ifBlank { null },
+                    text = obj.optString("text").ifBlank { null },
+                    timestamp = obj.optLong("time", 0L)
+                )
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to parse notification content: ${e.message}")
+            emptyList()
+        }
+    }
+
     fun openNotificationAccessSettings(): android.content.Intent =
         android.content.Intent("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS")
 }

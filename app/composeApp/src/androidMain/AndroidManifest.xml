@@ -19,6 +19,8 @@
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.GET_ACCOUNTS" />
     <!-- PACKAGE_USAGE_STATS is a special permission — granted via Settings, not runtime -->
+    <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS"
+        tools:ignore="ProtectedPermissions" />
 
     <!-- Health Connect permissions (declared but not enforced — granted via Health Connect UI) -->
     <uses-permission android:name="android.permission.health.READ_STEPS" />

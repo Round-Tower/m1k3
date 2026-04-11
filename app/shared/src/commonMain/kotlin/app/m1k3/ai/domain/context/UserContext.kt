@@ -79,8 +79,42 @@ data class AppUsage(
 /**
  * Notification context from NotificationListenerService.
  * Requires user to grant notification access in Settings.
+ *
+ * Now captures actual content — M1K3 reads the letters, not just counts envelopes.
  */
 data class NotificationContext(
     val unreadCount: Int = 0,
-    val hasUrgent: Boolean = false
-)
+    val hasUrgent: Boolean = false,
+    val recentNotifications: List<NotificationContent> = emptyList()
+) {
+    /** Human-readable summary of notification content for embedding/prompts */
+    val contentSummary: String
+        get() = if (recentNotifications.isEmpty()) {
+            "$unreadCount notification${if (unreadCount != 1) "s" else ""}"
+        } else {
+            recentNotifications.joinToString("\n") { it.summary }
+        }
+}
+
+/**
+ * Individual notification content — the actual intelligence.
+ *
+ * @param appName Source app display name (e.g. "WhatsApp", "Gmail")
+ * @param title Notification title (e.g. sender name, subject)
+ * @param text Notification body text
+ * @param timestamp When the notification was posted (epoch ms)
+ */
+data class NotificationContent(
+    val appName: String,
+    val title: String? = null,
+    val text: String? = null,
+    val timestamp: Long = 0L
+) {
+    /** Embeddable summary: "[App] Title: Text" */
+    val summary: String
+        get() = buildString {
+            append("[$appName]")
+            title?.let { append(" $it") }
+            text?.let { append(": $it") }
+        }
+}
