@@ -27,7 +27,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -39,6 +41,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.m1k3.ai.assistant.design.tokens.MaColors
@@ -64,7 +68,17 @@ fun ThinkingPill(
 ) {
     if (thinkingContent.isNullOrEmpty() && !isThinking) return
 
+    val clipboardManager = LocalClipboardManager.current
     var expanded by remember { mutableStateOf(false) }
+    var showCopied by remember { mutableStateOf(false) }
+
+    // Reset "copied" indicator after 2s
+    if (showCopied) {
+        androidx.compose.runtime.LaunchedEffect(Unit) {
+            kotlinx.coroutines.delay(2000)
+            showCopied = false
+        }
+    }
 
     // Pulse animation for the "Thinking..." state
     val pulse = rememberInfiniteTransition(label = "think-pulse")
@@ -114,6 +128,22 @@ fun ThinkingPill(
                 modifier = Modifier.weight(1f)
             )
             if (!isThinking && !thinkingContent.isNullOrEmpty()) {
+                // Copy thinking content to clipboard
+                IconButton(
+                    onClick = {
+                        clipboardManager.setText(AnnotatedString(thinkingContent))
+                        showCopied = true
+                    },
+                    modifier = Modifier.size(24.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.ContentCopy,
+                        contentDescription = "Copy thinking",
+                        tint = if (showCopied) MaColors.Orange else MaColors.textDisabled(),
+                        modifier = Modifier.size(14.dp)
+                    )
+                }
+                Spacer(Modifier.width(4.dp))
                 Icon(
                     imageVector = if (expanded) Icons.Default.KeyboardArrowUp
                                   else Icons.Default.KeyboardArrowDown,

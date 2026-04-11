@@ -13,6 +13,7 @@ import app.m1k3.ai.assistant.chat.usecase.ContextRetrievalUseCase
 import app.m1k3.ai.domain.chat.ChatError
 import app.m1k3.ai.domain.chat.EnrichedContext
 import app.m1k3.ai.domain.chat.GenerationStats
+import app.m1k3.ai.domain.chat.StreamingThinkTagParser
 import app.m1k3.ai.assistant.database.MaDatabase
 import app.m1k3.ai.domain.tools.ToolResult
 import app.m1k3.ai.domain.tools.services.ToolRegistry
@@ -711,22 +712,24 @@ class ChatScreenViewModel(
                 else emptyList()
             )
             val fullSystemPrompt = systemPromptBuilder.build(promptInput)
-            // Store compact for all subsequent messages
+            // Store compact for all subsequent messages — also push to tool-calling path
             compactSystemPrompt = systemPromptBuilder.build(
                 promptInput.copy(tier = SystemPromptTier.COMPACT)
             )
+            chatWithTools?.systemPrompt = compactSystemPrompt ?: ""
 
             // Welcome uses the FULL system prompt — M1K3 introduces itself
+            // No artificial token cap — let the model think freely.
+            // StreamingThinkTagParser separates thinking from visible text.
             val welcomePrompt = fullSystemPrompt +
                 "\n\nNow say hello. Be brief, warm, and personal. 1-2 sentences."
 
-            // Use GenerationConfigBuilder for config
+            // Use device-adaptive config — no custom cap, trust the model
             val config = configBuilder.build(
-                queryType = QueryType.CONVERSATIONAL,
-                customMaxTokens = 100
+                queryType = QueryType.CONVERSATIONAL
             )
 
-            val accumulated = StringBuilder()
+            val thinkParser = StreamingThinkTagParser()
             var tokenCount = 0
             val startTime = Clock.System.now().toEpochMilliseconds()
 
@@ -734,23 +737,25 @@ class ChatScreenViewModel(
                 prompt = welcomePrompt,
                 config = config,
                 onToken = { token ->
-                    // Don't trim or add spaces - tokens include natural spacing
                     if (token.isNotEmpty()) {
-                        accumulated.append(token)
+                        thinkParser.feed(token)
                         tokenCount++
 
                         _uiState.update { state ->
                             val updatedMessages = state.messages.toMutableList()
                             if (updatedMessages.isNotEmpty()) {
                                 updatedMessages[updatedMessages.lastIndex] = updatedMessages.last().copy(
-                                    text = accumulated.toString()
+                                    text = thinkParser.visibleText,
+                                    thinkingContent = thinkParser.thinkingContent
                                 )
                             }
                             state.copy(
                                 messages = updatedMessages,
                                 generationState = GenerationState.Streaming(
-                                    partialText = accumulated.toString(),
-                                    tokenCount = tokenCount
+                                    partialText = thinkParser.visibleText,
+                                    tokenCount = tokenCount,
+                                    thinkingPartial = thinkParser.thinkingContent,
+                                    isThinking = thinkParser.isThinking
                                 )
                             )
                         }
@@ -770,23 +775,26 @@ class ChatScreenViewModel(
                     val updatedMessages = state.messages.toMutableList()
                     if (updatedMessages.isNotEmpty()) {
                         updatedMessages[updatedMessages.lastIndex] = updatedMessages.last().copy(
-                            text = accumulated.toString(),
-                            inferenceStats = stats.formatFull()
+                            text = thinkParser.visibleText,
+                            inferenceStats = stats.formatFull(),
+                            thinkingContent = thinkParser.thinkingContent,
+                            thinkingDurationMs = thinkParser.thinkingDurationMs
                         )
                     }
                     state.copy(
                         messages = updatedMessages,
                         generationState = GenerationState.Complete(
-                            finalText = accumulated.toString(),
+                            finalText = thinkParser.visibleText,
                             stats = stats
                         )
                     )
                 }
 
                 recordEcoMetrics(tokenCount)
-                recordMessage(accumulated.toString(), "assistant", tokenCount)
+                recordMessage(thinkParser.visibleText, "assistant", tokenCount)
 
                 logger.i { "Welcome message generated: $tokenCount tokens in ${duration}ms" }
+                logger.d { "Welcome visible='${thinkParser.visibleText}' thinking=${thinkParser.thinkingContent?.take(80)}" }
             }.onFailure { e ->
                 logger.e(e) { "Welcome generation failed" }
                 _uiState.update { it.copy(generationState = GenerationState.Idle) }
@@ -835,7 +843,7 @@ class ChatScreenViewModel(
                 )
             }
 
-            val accumulated = StringBuilder()
+            val thinkParser = StreamingThinkTagParser()
             var tokenCount = 0
             val startTime = Clock.System.now().toEpochMilliseconds()
 
@@ -852,23 +860,25 @@ class ChatScreenViewModel(
                 prompt = fullPrompt,
                 config = config,
                 onToken = { token ->
-                    // Don't trim or add spaces - tokens include natural spacing
                     if (token.isNotEmpty()) {
-                        accumulated.append(token)
+                        thinkParser.feed(token)
                         tokenCount++
 
                         _uiState.update { state ->
                             val updatedMessages = state.messages.toMutableList()
                             if (updatedMessages.isNotEmpty()) {
                                 updatedMessages[updatedMessages.lastIndex] = updatedMessages.last().copy(
-                                    text = accumulated.toString()
+                                    text = thinkParser.visibleText,
+                                    thinkingContent = thinkParser.thinkingContent
                                 )
                             }
                             state.copy(
                                 messages = updatedMessages,
                                 generationState = GenerationState.Streaming(
-                                    partialText = accumulated.toString(),
-                                    tokenCount = tokenCount
+                                    partialText = thinkParser.visibleText,
+                                    tokenCount = tokenCount,
+                                    thinkingPartial = thinkParser.thinkingContent,
+                                    isThinking = thinkParser.isThinking
                                 )
                             )
                         }
@@ -877,7 +887,7 @@ class ChatScreenViewModel(
             )
 
             result.onSuccess {
-                handleGenerationSuccess(accumulated, tokenCount, startTime, context)
+                handleGenerationSuccess(thinkParser, tokenCount, startTime, context)
             }.onFailure { e ->
                 handleGenerationFailure(e)
             }
@@ -1077,7 +1087,7 @@ class ChatScreenViewModel(
     }
 
     private fun handleGenerationSuccess(
-        accumulated: StringBuilder,
+        thinkParser: StreamingThinkTagParser,
         tokenCount: Int,
         startTime: Long,
         context: EnrichedContext
@@ -1092,27 +1102,26 @@ class ChatScreenViewModel(
             ragConfidence = context.ragConfidence
         )
 
+        val finalText = thinkParser.visibleText
+
         _uiState.update { state ->
             val updatedMessages = state.messages.toMutableList()
             if (updatedMessages.isNotEmpty()) {
-                val finalText = accumulated.toString()
                 val parseResult = app.m1k3.ai.domain.chat.artifact.ArtifactParser.parse(finalText)
                 val artifact = parseResult.artifacts.firstOrNull()
-                // Preserve thinking content that was collected during streaming
-                val existingThinking = updatedMessages.last().thinkingContent
                 updatedMessages[updatedMessages.lastIndex] = updatedMessages.last().copy(
                     text = finalText,
                     inferenceStats = stats.formatFull(),
                     ragSources = context.ragSources,
                     artifact = artifact,
-                    thinkingContent = existingThinking?.ifEmpty { null },
-                    thinkingDurationMs = if (existingThinking != null) duration else null
+                    thinkingContent = thinkParser.thinkingContent,
+                    thinkingDurationMs = if (thinkParser.thinkingContent != null) thinkParser.thinkingDurationMs else null
                 )
             }
             state.copy(
                 messages = updatedMessages,
                 generationState = GenerationState.Complete(
-                    finalText = accumulated.toString(),
+                    finalText = finalText,
                     stats = stats
                 ),
                 ragInfo = context.ragInfo
@@ -1121,7 +1130,7 @@ class ChatScreenViewModel(
 
         recordEcoMetrics(tokenCount)
         recordMessage(
-            content = accumulated.toString(),
+            content = finalText,
             role = "assistant",
             tokens = tokenCount,
             ragSources = context.ragSources,

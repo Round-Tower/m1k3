@@ -150,6 +150,52 @@ class SystemPromptPersonalityTest {
         )
     }
 
+    // ===== Villain persona =====
+
+    @Test
+    fun `prompt encodes theatrical villain identity`() {
+        val prompt = buildWith()
+        assertTrue(
+            prompt.contains("villain", ignoreCase = true) ||
+            prompt.contains("theatrical", ignoreCase = true) ||
+            prompt.contains("magnificent", ignoreCase = true),
+            "Prompt must encode M1K3's theatrical villain persona"
+        )
+    }
+
+    // ===== Thinking instruction =====
+
+    @Test
+    fun `full prompt instructs model to use think tags`() {
+        val prompt = buildWith()
+        assertTrue(
+            prompt.contains("<think>", ignoreCase = true),
+            "Full prompt should instruct models to use <think> tags"
+        )
+    }
+
+    @Test
+    fun `compact prompt instructs model to use think tags`() {
+        val ctx = app.m1k3.ai.domain.context.UserContext(userName = "Kev")
+        val compact = builder.build(SystemPromptInput(userContext = ctx, tier = SystemPromptTier.COMPACT))
+        assertTrue(
+            compact.contains("<think>", ignoreCase = true),
+            "Compact prompt should instruct models to use <think> tags"
+        )
+    }
+
+    @Test
+    fun `compact prompt contains artifact instructions`() {
+        val ctx = app.m1k3.ai.domain.context.UserContext(userName = "Kev")
+        val compact = builder.build(SystemPromptInput(userContext = ctx, tier = SystemPromptTier.COMPACT))
+        assertTrue(
+            compact.contains("artifact", ignoreCase = true),
+            "Compact prompt should contain artifact instructions"
+        )
+    }
+
+    // ===== Weather =====
+
     @Test
     fun `weather context flows into the prompt when provided`() {
         val ctx = UserContext(userName = "Kev", location = LocationContext(city = "Cork", country = "Ireland"))

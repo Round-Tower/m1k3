@@ -76,7 +76,9 @@ class ChatWithToolsUseCase(
     private val processLlmOutput: LlmOutputProcessor,
     private val toolRegistry: ToolRegistry,
     private val configBuilder: GenerationConfigBuilder? = null,
-    private val promptBuilder: UnifiedPromptBuilder? = null
+    private val promptBuilder: UnifiedPromptBuilder? = null,
+    /** M1K3 system prompt — injected so personality persists across tool-calling path */
+    var systemPrompt: String = ""
 ) {
     /**
      * Execute the chat flow with tool support.
@@ -193,12 +195,13 @@ class ChatWithToolsUseCase(
         // Saves 67-100% of tool token overhead for small models.
         val relevantTools = toolRegistry.getRelevantTools(userPrompt, maxTools = 3)
 
-        // Use unified builder if available
+        // Use unified builder if available — pass system prompt for M1K3 personality
         promptBuilder?.let { builder ->
             return builder.build(
                 userPrompt = userPrompt,
                 context = context,
                 tools = relevantTools,
+                systemPrompt = systemPrompt,
                 deviceContext = deviceContext
             )
         }
