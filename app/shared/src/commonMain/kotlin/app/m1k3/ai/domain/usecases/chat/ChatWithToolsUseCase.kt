@@ -6,6 +6,7 @@ import app.m1k3.ai.domain.chat.ChatError
 import app.m1k3.ai.domain.chat.EnrichedContext
 import app.m1k3.ai.domain.chat.GenerationStats
 import app.m1k3.ai.domain.chat.QueryType
+import app.m1k3.ai.domain.chat.StreamingThinkTagParser
 import app.m1k3.ai.domain.chat.events.ChatEvent
 import app.m1k3.ai.domain.chat.events.ChatResponse
 import app.m1k3.ai.domain.chat.services.ContextRetrieverInterface
@@ -114,11 +115,8 @@ class ChatWithToolsUseCase(
             // 4. Generate response with streaming
             send(ChatEvent.Generating)
             val startTime = Clock.System.now().toEpochMilliseconds()
-            val accumulated = StringBuilder()       // visible response text
-            val thinkingAccumulated = StringBuilder() // <think> block content
+            val thinkParser = StreamingThinkTagParser()
             var tokenCount = 0
-            var isInThinkBlock = false
-            var thinkBlockStartMs = startTime
 
             val result = aiEngine.generateStreaming(
                 prompt = fullPrompt,
@@ -126,44 +124,22 @@ class ChatWithToolsUseCase(
                 onToken = { token ->
                     if (token.isEmpty()) return@generateStreaming
 
-                    // Detect <think> / </think> in the token stream.
-                    // Qwen3.5 may tokenise as "< think>" (with space) — use regex.
-                    val THINK_OPEN = Regex("< *think *>", RegexOption.IGNORE_CASE)
-                    val THINK_CLOSE = Regex("</ *think *>", RegexOption.IGNORE_CASE)
-                    val buffer = (if (isInThinkBlock) thinkingAccumulated else accumulated).toString() + token
-                    when {
-                        !isInThinkBlock && THINK_OPEN.containsMatchIn(buffer) -> {
-                            val beforeThink = THINK_OPEN.split(buffer).first()
-                            accumulated.clear()
-                            accumulated.append(beforeThink)
-                            isInThinkBlock = true
-                            thinkBlockStartMs = Clock.System.now().toEpochMilliseconds()
-                            thinkingAccumulated.clear()
-                        }
-                        isInThinkBlock && THINK_CLOSE.containsMatchIn(buffer) -> {
-                            val parts = THINK_CLOSE.split(buffer)
-                            thinkingAccumulated.clear()
-                            thinkingAccumulated.append(parts.first())
-                            isInThinkBlock = false
-                            accumulated.append(parts.drop(1).joinToString(""))
-                        }
-                        isInThinkBlock -> thinkingAccumulated.append(token)
-                        else -> accumulated.append(token)
-                    }
-
+                    thinkParser.feed(token)
                     tokenCount++
                     trySend(ChatEvent.Streaming(
-                        partialText = accumulated.toString(),
+                        partialText = thinkParser.visibleText,
                         tokenCount = tokenCount,
-                        thinkingPartial = thinkingAccumulated.toString().ifEmpty { null },
-                        isThinking = isInThinkBlock
+                        thinkingPartial = thinkParser.thinkingContent,
+                        isThinking = thinkParser.isThinking
                     ))
                 }
             )
 
             result.onSuccess {
                 val duration = Clock.System.now().toEpochMilliseconds() - startTime
-                val rawResponse = accumulated.toString()
+                // Finalize parser — handles unclosed <think> tags
+                thinkParser.finalize()
+                val rawResponse = thinkParser.visibleText
 
                 // 5. Process for tool calls
                 val processed = processLlmOutput.execute(rawResponse, confirmedToolIds)

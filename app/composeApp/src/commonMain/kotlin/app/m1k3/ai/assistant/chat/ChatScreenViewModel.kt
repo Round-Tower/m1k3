@@ -771,6 +771,9 @@ class ChatScreenViewModel(
                     tokensPerSecond = if (duration > 0) tokenCount * 1000f / duration else 0f
                 )
 
+                // Finalize parser — handles unclosed <think> tags
+                thinkParser.finalize()
+
                 _uiState.update { state ->
                     val updatedMessages = state.messages.toMutableList()
                     if (updatedMessages.isNotEmpty()) {
@@ -1101,6 +1104,9 @@ class ChatScreenViewModel(
             ragSources = context.ragSources,
             ragConfidence = context.ragConfidence
         )
+
+        // Finalize parser — handles unclosed <think> tags
+        thinkParser.finalize()
 
         val finalText = thinkParser.visibleText
 
