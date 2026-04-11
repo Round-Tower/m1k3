@@ -77,78 +77,31 @@ fun AvatarView(
     // Bounce animation for active states
     val bounceOffset = rememberBounceAnimation(state.isAnimating)
 
-    MaCard(
+    // No card/box — 3D avatar floats freely, parent controls sizing.
+    // clipToBounds=false lets the 3D scene render beyond the container
+    // (prevents model heads from being cut off with overhead camera angles).
+    Box(
         modifier = modifier
-            .size(280.dp)
             .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
+            .graphicsLayer {
+                clip = false
+                scaleX = activityAnim.scale * entranceProgress
+                scaleY = activityAnim.scale * entranceProgress
+                rotationZ = activityAnim.rotation
+                translationX = activityAnim.offsetX
+                translationY = activityAnim.offsetY + bounceOffset
+            },
+        contentAlignment = Alignment.Center
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize(),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
-        ) {
-            // Avatar rendering (2D Canvas or 3D model)
-            Box(
-                modifier = Modifier
-                    .size(200.dp)
-                    .scale(activityAnim.scale * entranceProgress)
-                    .graphicsLayer {
-                        rotationZ = activityAnim.rotation
-                        translationX = activityAnim.offsetX
-                        translationY = activityAnim.offsetY + bounceOffset
-                    },
-                contentAlignment = Alignment.Center
-            ) {
-                if (use3D) {
-                    AvatarViewContent3D(state = animatedState)
-                } else {
-                    // 2D Canvas rendering (all platforms)
-                    Canvas(modifier = Modifier.fillMaxSize()) {
-                        drawRobotAvatar(
-                            state = animatedState,
-                            geometry = RobotGeometry(),
-                            animation = AvatarAnimation()
-                        )
-                    }
-                }
-            }
-
-            if (showInfo) {
-                Spacer(modifier = Modifier.height(MaSpacing.base))
-
-                // Emotion label
-                Text(
-                    text = "${state.emotion.emoji} ${state.emotion.displayName}",
-                    style = MaTypography.titleMedium,
-                    color = state.displayColor,
-                    fontWeight = FontWeight.Bold
-                )
-
-                // Activity label
-                if (state.activity != AvatarActivity.IDLE) {
-                    Text(
-                        text = state.activity.displayName,
-                        style = MaTypography.bodySmall,
-                        color = MaColors.textSecondary()
-                    )
-                }
-
-                // Status message
-                if (state.message != null) {
-                    Spacer(modifier = Modifier.height(MaSpacing.xs))
-                    Text(
-                        text = state.message,
-                        style = MaTypography.labelSmall,
-                        color = MaColors.textDisabled()
-                    )
-                }
-
-                // Intensity indicator
-                Text(
-                    text = "Intensity: ${(state.intensity * 100).toInt()}%",
-                    style = MaTypography.labelSmall,
-                    color = MaColors.textDisabled()
+        if (use3D) {
+            AvatarViewContent3D(state = animatedState)
+        } else {
+            // 2D Canvas rendering (all platforms)
+            Canvas(modifier = Modifier.fillMaxSize()) {
+                drawRobotAvatar(
+                    state = animatedState,
+                    geometry = RobotGeometry(),
+                    animation = AvatarAnimation()
                 )
             }
         }

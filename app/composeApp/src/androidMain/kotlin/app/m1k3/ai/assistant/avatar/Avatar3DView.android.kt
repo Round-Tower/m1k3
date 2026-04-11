@@ -96,8 +96,8 @@ fun Avatar3DView(
         }
     }
 
-    // Handle loading/error states
-    Box(modifier = modifier.size(200.dp)) {
+    // Handle loading/error states — no hardcoded size, parent controls layout
+    Box(modifier = modifier) {
         when {
             isLoading && showLoadingIndicator -> {
                 // Loading state
@@ -347,13 +347,19 @@ private fun RenderAnimatedModel(
     val engine = LocalSharedEngine.current!!
     val modelLoader = rememberModelLoader(engine)
 
-    // Calculate optimal camera (level with model center, focused on upper body/face, slight angle)
-    val optimalCamera = remember(metadata) {
+    // Calculate optimal camera using UNIT bounding box — scaleToUnits=1.0 normalizes all
+    // models to ~1m, so camera distance must be consistent regardless of native geometry.
+    // Without this, small-bbox models clip and large-bbox models appear tiny.
+    val normalizedMetadata = remember(metadata) {
+        metadata.copy(boundingBox = BoundingBox.UNIT)
+    }
+    val optimalCamera = remember(normalizedMetadata) {
         CameraAutoFit.calculate(
-            metadata = metadata,
-            cameraAngle = 0f,       // Level with model (not looking down)
-            focusOffset = 0.2f,     // Focus on upper 20% (face/head area)
-            horizontalAngle = -25f  // Rotate 25° to the left for 3/4 view
+            metadata = normalizedMetadata,
+            cameraAngle = 18f,      // Slightly overhead — "pet on desk" perspective
+            focusOffset = 0f,       // centerOrigin handles vertical placement
+            horizontalAngle = -20f, // Gentle 3/4 view
+            padding = 2.0f         // Extra room for animation limb extension
         )
     }
 
@@ -398,10 +404,27 @@ private fun RenderAnimatedModel(
         }
     }
 
-    // Randomize starting animation for testing
-    val randomStartingAnim = remember(metadata) {
-        metadata.animations.random().also {
-            logger.d { "Randomized starting animation: ${it.name} (index=${it.index})" }
+    // Subtle continuous Y rotation — lazy susan effect (8°/sec, ~45s per revolution)
+    // Captured from first frame to align clock source with Filament's frameTimeNanos
+    var rotationStartTime by remember { mutableLongStateOf(-1L) }
+
+    // Disposed guard — prevents onFrame from touching destroyed Filament entities
+    // during avatar model switches (render thread races compose thread).
+    // AtomicBoolean (not mutableStateOf) for cross-thread visibility:
+    // Compose thread writes in onDispose, Filament render thread reads in onFrame.
+    val isDisposed = remember { java.util.concurrent.atomic.AtomicBoolean(false) }
+    DisposableEffect(modelConfig) {
+        isDisposed.set(false)
+        onDispose { isDisposed.set(true) }
+    }
+
+    // Start with a calm, emotion-appropriate idle (not random — random felt aggressive)
+    val startingAnim = remember(metadata) {
+        AnimationStateManager.getEmotionAppropriateIdle(
+            emotion = state.emotion,
+            availableAnimations = metadata.animations
+        ).also {
+            logger.d { "Starting with idle animation: ${it.name} (index=${it.index})" }
         }
     }
 
@@ -410,44 +433,37 @@ private fun RenderAnimatedModel(
         add(
             ModelNode(
                 modelInstance = modelLoader.createModelInstance(modelConfig.path),
-                scaleToUnits = 1.0f  // Start at 1:1 scale (auto-fit handles sizing)
+                scaleToUnits = 1.0f,
+                // Center model bounding box at origin — fixes models with offset
+                // geometry (e.g. dinosaurs authored at non-zero positions).
+                centerOrigin = io.github.sceneview.math.Position(0f, 0f, 0f)
             ).apply {
-                // Position at metadata center (should be origin for most models)
                 position = io.github.sceneview.math.Position(0f, 0f, 0f)
 
-                // Play initial animation (randomized for testing)
+                // Play initial idle animation (emotion-appropriate)
+                // Clamp to actual model animation count — metadata may assume more
+                // animations than the GLB actually contains (e.g. Quaternius models)
+                val safeIndex = if (startingAnim.index < animationCount) {
+                    startingAnim.index
+                } else {
+                    0.coerceAtMost(animationCount - 1)
+                }
                 try {
-                    playAnimation(
-                        animationIndex = randomStartingAnim.index,
-                        loop = randomStartingAnim.isLoopable,
-                        speed = Avatar3DEngine.getAnimationSpeed(state.intensity)
-                    )
+                    if (animationCount > 0) {
+                        playAnimation(
+                            animationIndex = safeIndex,
+                            loop = true,
+                            speed = Avatar3DEngine.getAnimationSpeed(state.intensity)
+                        )
+                    }
                     playbackInfo = playbackInfo.copy(
-                        currentAnimIndex = randomStartingAnim.index,
-                        currentAnimName = randomStartingAnim.name,
+                        currentAnimIndex = safeIndex,
+                        currentAnimName = startingAnim.name,
                         startTime = System.nanoTime()
                     )
-                    logger.i { "Initial animation: ${randomStartingAnim.name} (index=${randomStartingAnim.index})" }
+                    logger.i { "Initial animation: ${startingAnim.name} (index=$safeIndex, actual count=$animationCount)" }
                 } catch (e: Exception) {
-                    logger.w(e) { "Failed to play animation '${randomStartingAnim.name}'" }
-                    // Fallback to first animation
-                    try {
-                        val fallback = metadata.animations.firstOrNull()
-                        if (fallback != null) {
-                            playAnimation(
-                                animationIndex = fallback.index,
-                                loop = fallback.isLoopable,
-                                speed = 1.0f
-                            )
-                            playbackInfo = playbackInfo.copy(
-                                currentAnimIndex = fallback.index,
-                                currentAnimName = fallback.name,
-                                startTime = System.nanoTime()
-                            )
-                        }
-                    } catch (fallbackError: Exception) {
-                        logger.e(fallbackError) { "Failed to play fallback animation" }
-                    }
+                    logger.w(e) { "Failed to play initial animation" }
                 }
             }
         )
@@ -556,47 +572,63 @@ private fun RenderAnimatedModel(
             childNodes = childNodes,
             isOpaque = false,
             onFrame = { frameTimeNanos ->
+                // Bail if model is being disposed (avatar switch race condition)
+                if (isDisposed.get()) return@Scene
+
                 // Update camera from controller state
                 cameraState.applyCameraNode(cameraNode)
 
-                // CRITICAL FIX: Update animation on every frame
-                val node = childNodes.firstOrNull() as? ModelNode
-                val animator = node?.modelInstance?.animator
+                // Try-catch: safety net for TOCTOU race between isDisposed check
+                // and Filament native calls. If model is destroyed between those
+                // two points, we absorb rather than SIGSEGV.
+                try {
+                    val node = childNodes.firstOrNull() as? ModelNode
 
-                if (animator != null && playbackInfo.startTime > 0L) {
-                    // Calculate elapsed time and apply global speed scale
-                    val realElapsedSeconds = playbackInfo.getElapsedSeconds(frameTimeNanos)
-                    val elapsedSeconds = realElapsedSeconds * Avatar3DEngine.ANIMATION_SPEED_SCALE
-
-                    // Get current animation metadata
-                    val currentAnim = metadata.animations.getOrNull(playbackInfo.currentAnimIndex)
-
-                    if (currentAnim != null) {
-                        // Check if non-loopable animation completed → trigger auto-return
-                        // Account for speed scale: slower animations take longer real time to complete
-                        val scaledDuration = currentAnim.duration / Avatar3DEngine.ANIMATION_SPEED_SCALE
-                        if (playbackInfo.playbackState == AnimationPlaybackState.USER_DIRECTED &&
-                            !currentAnim.isLoopable &&
-                            realElapsedSeconds >= scaledDuration) {
-                            playbackInfo = playbackInfo.copy(
-                                playbackState = AnimationPlaybackState.AUTO_IDLE
-                            )
-                            logger.d { "[COMPLETION] ${currentAnim.name} finished → AUTO_IDLE" }
-                        }
-
-                        // Calculate animation time with looping (using scaled time for smooth playback)
-                        val animTime = if (currentAnim.isLoopable && currentAnim.duration > 0f) {
-                            elapsedSeconds % currentAnim.duration
-                        } else {
-                            elapsedSeconds.coerceAtMost(currentAnim.duration)
-                        }
-
-                        // Apply animation
-                        animator.applyAnimation(playbackInfo.currentAnimIndex, animTime)
-
-                        // CRITICAL: Update bone matrices (makes animations actually render)
-                        animator.updateBoneMatrices()
+                    // Gentle ±15° Y oscillation — animal "looking around" effect
+                    // Sine wave: 15° amplitude, ~8 second full cycle (0.125 Hz)
+                    if (autoRotate && node != null) {
+                        if (rotationStartTime < 0L) rotationStartTime = frameTimeNanos
+                        val rotElapsed = (frameTimeNanos - rotationStartTime) / 1_000_000_000.0f
+                        val rotationY = 15f * kotlin.math.sin(rotElapsed * 0.125f * 2f * kotlin.math.PI.toFloat())
+                        node.rotation = io.github.sceneview.math.Rotation(0f, rotationY, 0f)
                     }
+
+                    val animator = node?.modelInstance?.animator
+                    val actualAnimCount = node?.animationCount ?: 0
+
+                    if (animator != null && playbackInfo.startTime > 0L) {
+                        val realElapsedSeconds = playbackInfo.getElapsedSeconds(frameTimeNanos)
+                        val elapsedSeconds = realElapsedSeconds * Avatar3DEngine.ANIMATION_SPEED_SCALE
+                        val currentAnim = metadata.animations.getOrNull(playbackInfo.currentAnimIndex)
+
+                        // Guard: metadata animation index must be within actual model's range
+                        if (currentAnim != null && playbackInfo.currentAnimIndex < actualAnimCount) {
+                            val scaledDuration = currentAnim.duration / Avatar3DEngine.ANIMATION_SPEED_SCALE
+                            if (playbackInfo.playbackState == AnimationPlaybackState.USER_DIRECTED &&
+                                !currentAnim.isLoopable &&
+                                realElapsedSeconds >= scaledDuration) {
+                                playbackInfo = playbackInfo.copy(
+                                    playbackState = AnimationPlaybackState.AUTO_IDLE
+                                )
+                                logger.d { "[COMPLETION] ${currentAnim.name} finished → AUTO_IDLE" }
+                            }
+
+                            val animTime = if (currentAnim.isLoopable && currentAnim.duration > 0f) {
+                                elapsedSeconds % currentAnim.duration
+                            } else {
+                                elapsedSeconds.coerceAtMost(currentAnim.duration)
+                            }
+
+                            animator.applyAnimation(playbackInfo.currentAnimIndex, animTime)
+                            animator.updateBoneMatrices()
+                        } else if (currentAnim != null && actualAnimCount > 0) {
+                            animator.applyAnimation(0, elapsedSeconds % 2.0f)
+                            animator.updateBoneMatrices()
+                        }
+                    }
+                } catch (_: Exception) {
+                    // Absorbed: Filament entity destroyed during avatar model switch.
+                    // Expected during the brief TOCTOU window — not a bug.
                 }
             }
         )
@@ -633,16 +665,28 @@ fun Avatar3DViewCompact(
  *
  * Renders the 3D model using SceneView with generic GLB loader.
  * Called from commonMain AvatarView when use3D=true.
+ * Reads the user's selected avatar from preferences.
  *
  * @param state Avatar state to render
  */
 @Composable
 actual fun AvatarViewContent3D(state: AvatarState) {
-    Avatar3DView(
-        state = state,
-        modifier = Modifier.fillMaxSize(),
-        modelConfig = ModelRegistry.getDefault(),
-        enableInteraction = false,
-        autoRotate = false
-    )
+    val modelId by LocalSelectedAvatarId.current
+    val modelConfig = ModelRegistry.getById(modelId) ?: ModelRegistry.getDefault()
+    android.util.Log.d("Avatar3D", "Rendering model: id=$modelId config=${modelConfig.id} path=${modelConfig.path}")
+
+    // Cel-shading + pixelation post-process (API 33+, no-op on older)
+    CelShaderEffect(
+        pixelSize = 4f,     // Subtle pixel grid (increase for chunkier retro feel)
+        colorLevels = 6f,   // 6 color bands per channel (lower = more cartoony)
+        modifier = Modifier.fillMaxSize()
+    ) {
+        Avatar3DView(
+            state = state,
+            modifier = Modifier.fillMaxSize(),
+            modelConfig = modelConfig,
+            enableInteraction = false,
+            autoRotate = true
+        )
+    }
 }

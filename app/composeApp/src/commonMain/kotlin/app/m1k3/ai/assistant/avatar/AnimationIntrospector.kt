@@ -48,7 +48,7 @@ object AnimationIntrospector {
         AvatarEmotion.ANGRY to listOf("attack", "angry", "hit", "spin"),
         AvatarEmotion.SURPRISED to listOf("hit", "surprised", "bounce", "clicked"),
         AvatarEmotion.LOVE to listOf("eat", "love", "sit", "idle_b"),
-        AvatarEmotion.THINKING to listOf("spin", "thinking", "idle_a", "walk"),
+        AvatarEmotion.THINKING to listOf("idle_a", "idle_c", "sit", "thinking"),
         AvatarEmotion.SLEEPY to listOf("sit", "idle_a", "sleepy", "death"),
         AvatarEmotion.EXCITED to listOf("bounce", "jump", "excited", "run", "fly"),
         AvatarEmotion.NEUTRAL to listOf("idle_c", "idle", "neutral")
@@ -58,10 +58,10 @@ object AnimationIntrospector {
      * Activity → animation keyword mapping
      */
     private val activityKeywords = mapOf(
-        AvatarActivity.LISTENING to listOf("idle_a", "idle", "sit"),
-        AvatarActivity.THINKING to listOf("spin", "thinking", "idle_a"),
-        AvatarActivity.GENERATING to listOf("run", "generating", "walk", "fly"),
-        AvatarActivity.SPEAKING to listOf("clicked", "speaking", "bounce", "idle_b"),
+        AvatarActivity.LISTENING to listOf("idle_c", "idle", "sit"),
+        AvatarActivity.THINKING to listOf("idle_a", "idle_c", "sit"),
+        AvatarActivity.GENERATING to listOf("walk", "run", "bounce"),
+        AvatarActivity.SPEAKING to listOf("bounce", "idle_b", "clicked"),
         AvatarActivity.ERROR to listOf("death", "error", "hit", "fear"),
         AvatarActivity.IDLE to listOf("idle")  // Use emotion-based mapping
     )

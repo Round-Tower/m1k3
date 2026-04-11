@@ -102,12 +102,12 @@ class ProceduralAnimator(
      */
     fun getScaleAmplitude(): Float {
         return when (state.activity) {
-            AvatarActivity.SPEAKING -> 0.15f    // 15% pulse - obvious speaking effect
-            AvatarActivity.GENERATING -> 0.12f  // 12% pulse - active thinking
-            AvatarActivity.THINKING -> 0.10f    // 10% pulse - concentration
-            AvatarActivity.LISTENING -> 0.08f   // 8% pulse - attentive
-            AvatarActivity.ERROR -> 0.18f       // 18% pulse - alert!
-            AvatarActivity.IDLE -> 0.10f        // 10% breathing - gentle resting
+            AvatarActivity.SPEAKING -> 0.08f    // 8% pulse - visible speech
+            AvatarActivity.GENERATING -> 0.05f  // 5% pulse - moderate progress
+            AvatarActivity.THINKING -> 0.03f    // 3% pulse - subtle breathing
+            AvatarActivity.LISTENING -> 0.03f   // 3% pulse - calm attention
+            AvatarActivity.ERROR -> 0.10f       // 10% pulse - alert
+            AvatarActivity.IDLE -> 0.02f        // 2% pulse - gentle resting
         }
     }
 

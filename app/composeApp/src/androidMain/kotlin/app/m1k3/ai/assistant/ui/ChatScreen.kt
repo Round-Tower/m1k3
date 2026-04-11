@@ -160,13 +160,24 @@ fun ChatScreen(
     // Sync avatar with generation state + haptics on state transitions
     if (avatarVM != null) {
         LaunchedEffect(uiState.generationState) {
-            when (uiState.generationState) {
+            when (val genState = uiState.generationState) {
                 is GenerationState.Thinking -> avatarVM.startThinking()
-                is GenerationState.Streaming -> avatarVM.startSpeaking()
+                is GenerationState.Streaming -> {
+                    if (avatarVM.currentActivity != app.m1k3.ai.assistant.avatar.AvatarActivity.SPEAKING) {
+                        avatarVM.startSpeaking()
+                    }
+                    // Real-time emotion detection from streaming text —
+                    // avatar reacts to what the model is saying as it generates.
+                    // Detect directly (not processMessage) to avoid polluting
+                    // conversation history with cumulative partial fragments.
+                    val detection = app.m1k3.ai.assistant.avatar.EmotionDetector.detectEmotion(genState.partialText)
+                    if (detection.confidence > 0.3f) {
+                        avatarVM.setEmotion(detection.emotion, detection.intensity)
+                    }
+                }
                 is GenerationState.Complete -> {
                     haptics.success()
-                    val complete = uiState.generationState as GenerationState.Complete
-                    avatarVM.processMessage(complete.finalText, isUserMessage = false)
+                    avatarVM.processMessage(genState.finalText, isUserMessage = false)
                     kotlinx.coroutines.delay(2000)
                     avatarVM.returnToIdle()
                 }
