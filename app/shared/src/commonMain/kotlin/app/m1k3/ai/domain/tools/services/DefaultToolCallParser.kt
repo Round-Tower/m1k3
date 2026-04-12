@@ -42,16 +42,20 @@ class DefaultToolCallParser : ToolCallParser {
     override fun parse(output: String): List<ToolCall> {
         if (output.isBlank()) return emptyList()
 
+        // Normalize tokenization artifacts: small models insert spaces around
+        // JSON structural chars. " tool " → "tool", " get _battery " → "get_battery"
+        val normalized = normalizeTokenSpaces(output)
+
         val calls = mutableListOf<ToolCall>()
 
         // First, try to find XML-style tool calls
-        XML_TOOL_PATTERN.findAll(output).forEach { match ->
+        XML_TOOL_PATTERN.findAll(normalized).forEach { match ->
             val innerJson = match.groupValues[1]
             parseJsonToolCall(innerJson)?.let { calls.add(it) }
         }
 
         // Then find standalone JSON tool calls (not inside XML tags)
-        val cleanedOutput = XML_TOOL_PATTERN.replace(output, "")
+        val cleanedOutput = XML_TOOL_PATTERN.replace(normalized, "")
         JSON_TOOL_PATTERN.findAll(cleanedOutput).forEach { match ->
             parseFromMatch(match)?.let { calls.add(it) }
         }
@@ -61,11 +65,11 @@ class DefaultToolCallParser : ToolCallParser {
 
     override fun hasToolCalls(output: String): Boolean {
         if (output.isBlank()) return false
+        val normalized = normalizeTokenSpaces(output)
 
         // Check for XML-style first
-        if (XML_TOOL_PATTERN.containsMatchIn(output)) {
-            // Verify it contains valid tool JSON inside
-            val match = XML_TOOL_PATTERN.find(output)
+        if (XML_TOOL_PATTERN.containsMatchIn(normalized)) {
+            val match = XML_TOOL_PATTERN.find(normalized)
             if (match != null) {
                 val inner = match.groupValues[1]
                 if (JSON_TOOL_PATTERN.containsMatchIn(inner)) return true
@@ -73,11 +77,11 @@ class DefaultToolCallParser : ToolCallParser {
         }
 
         // Check for standalone JSON
-        return JSON_TOOL_PATTERN.containsMatchIn(output)
+        return JSON_TOOL_PATTERN.containsMatchIn(normalized)
     }
 
     override fun extractPlainText(output: String): String {
-        var result = output
+        var result = normalizeTokenSpaces(output)
 
         // Remove XML-style tool calls
         result = XML_TOOL_PATTERN.replace(result, "")
@@ -91,6 +95,28 @@ class DefaultToolCallParser : ToolCallParser {
             .map { it.trim() }
             .filter { it.isNotBlank() }
             .joinToString("\n")
+    }
+
+    /**
+     * Normalize tokenization artifacts from small LLMs.
+     *
+     * Qwen and other small models tokenize with spaces around JSON chars:
+     *   " tool " → "tool"
+     *   " get _battery _level " → "get_battery_level"
+     *   {" tool ": " id "} → {"tool": "id"}
+     *
+     * This normalizes within JSON/tool_call regions only.
+     */
+    private fun normalizeTokenSpaces(output: String): String {
+        // Remove spaces around underscores: " get _battery _level " → "get_battery_level"
+        var result = output.replace(Regex("""\s*_\s*"""), "_")
+        // Remove spaces inside quoted strings adjacent to quotes: " tool " → "tool"
+        result = result.replace(Regex(""""\s+"""), "\"")
+        result = result.replace(Regex("""\s+""""), "\"")
+        // Remove space between < and tag names: < tool_call > → <tool_call>
+        result = result.replace(Regex("""<\s+"""), "<")
+        result = result.replace(Regex("""\s+>"""), ">")
+        return result
     }
 
     /**

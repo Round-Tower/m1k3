@@ -726,11 +726,22 @@ class ChatScreenViewModel(
             )
             chatWithTools?.systemPrompt = compactSystemPrompt ?: ""
 
-            // Welcome uses the FULL system prompt — M1K3 introduces itself
-            // No artificial token cap — let the model think freely.
-            // StreamingThinkTagParser separates thinking from visible text.
-            val welcomePrompt = fullSystemPrompt +
-                "\n\nNow say hello. Be brief, warm, and personal. 1-2 sentences."
+            // Welcome uses the FULL system prompt — M1K3 introduces himself.
+            // Built via the chat formatter so format tokens (BOS, turn markers)
+            // are correct for the active model (Gemma4, ChatML, etc.).
+            val welcomeUserMessage = "Say hello."
+            val formatter = DefaultChatFormatter(_uiState.value.currentModel.chatFormat)
+            val welcomePrompt = formatter.buildPrompt(
+                systemPrompt = fullSystemPrompt,
+                messages = listOf(
+                    app.m1k3.ai.domain.chat.services.ChatMessage(
+                        role = app.m1k3.ai.domain.chat.format.MessageRole.USER,
+                        content = welcomeUserMessage
+                    )
+                ),
+                tools = emptyList(),
+                toolResults = emptyList()
+            )
 
             // Use device-adaptive config — no custom cap, trust the model
             val config = configBuilder.build(

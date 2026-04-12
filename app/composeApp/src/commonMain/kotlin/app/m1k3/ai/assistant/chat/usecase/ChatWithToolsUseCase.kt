@@ -135,7 +135,10 @@ class ChatWithToolsUseCase(
                 logger.d { "Generated $tokenCount tokens in ${duration}ms" }
 
                 // 5. Process for tool calls
+                logger.d { "Raw LLM response (${rawResponse.length} chars): ${rawResponse.take(200)}" }
+
                 val processed = processLlmOutput.execute(rawResponse, confirmedToolIds)
+                logger.d { "Processed output type: ${processed::class.simpleName}" }
 
                 when (processed) {
                     is ProcessedOutput.TextOnly -> {
@@ -194,6 +197,9 @@ class ChatWithToolsUseCase(
         // Dynamic tool loading: only include tools relevant to the user's query.
         // Saves 67-100% of tool token overhead for small models.
         val relevantTools = toolRegistry.getRelevantTools(userPrompt, maxTools = 3)
+        logger.i { "TOOLS: ${relevantTools.size} relevant for '${userPrompt.take(40)}': ${relevantTools.map { it.id }}" }
+        logger.i { "SYSTEM: ${systemPrompt.take(80)}..." }
+        logger.i { "BUILDER: promptBuilder=${promptBuilder != null}" }
 
         // Use unified builder if available — pass system prompt for M1K3 personality
         promptBuilder?.let { builder ->

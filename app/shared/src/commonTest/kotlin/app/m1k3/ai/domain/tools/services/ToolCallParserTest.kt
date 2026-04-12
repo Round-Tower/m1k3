@@ -235,4 +235,34 @@ class ToolCallParserTest {
         assertEquals(1, calls.size)
         assertEquals("true", calls[0].arguments["enable"])
     }
+
+    // ===== Tokenization Artifact Tests (Small Model Quirks) =====
+
+    @Test
+    fun `handles spaced tokenization from Qwen models`() {
+        // Real output from Qwen3.5 on device — spaces around JSON chars
+        val output = """<tool_call> {" tool ": " get _battery _level ", " args ": {" }} </tool_call>"""
+
+        val calls = parser.parse(output)
+
+        assertEquals(1, calls.size, "Should parse spaced tool call, got: $calls")
+        assertEquals("get_battery_level", calls[0].toolId)
+    }
+
+    @Test
+    fun `handles spaced tool call with args`() {
+        val output = """<tool_call> {" tool ": " web _search ", " args ": {" query ": " weather Cork "}} </tool_call>"""
+
+        val calls = parser.parse(output)
+
+        assertEquals(1, calls.size, "Should parse spaced tool call with args")
+        assertEquals("web_search", calls[0].toolId)
+    }
+
+    @Test
+    fun `hasToolCalls detects spaced format`() {
+        val output = """< tool_call > {" tool ": " get _battery _level "} </ tool_call >"""
+
+        assertTrue(parser.hasToolCalls(output), "Should detect spaced tool call")
+    }
 }
