@@ -1079,7 +1079,8 @@ class ChatScreenViewModel(
                 updatedMessages[updatedMessages.lastIndex] = updatedMessages.last().copy(
                     text = displayText,
                     inferenceStats = stats.formatFull(),
-                    ragSources = stats.ragSources
+                    ragSources = stats.ragSources,
+                    toolResults = state.toolState.executedTools
                 )
             }
             state.copy(

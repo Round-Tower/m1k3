@@ -358,7 +358,7 @@ class AndroidToolRegistry(
             Tool(
                 id = "web_search",
                 name = "Web Search",
-                description = "Searches the web using DuckDuckGo — no API key, no tracking. Returns instant answers and related topics.",
+                description = "Search the web for weather, news, facts, answers, information, directions, and more using DuckDuckGo. No API key, no tracking.",
                 parameters = listOf(
                     ToolParameter(
                         name = "query",
@@ -367,7 +367,7 @@ class AndroidToolRegistry(
                         required = true
                     )
                 ),
-                category = ToolCategory.APPS
+                category = ToolCategory.KNOWLEDGE
             ),
             WebSearchExecutor()
         )

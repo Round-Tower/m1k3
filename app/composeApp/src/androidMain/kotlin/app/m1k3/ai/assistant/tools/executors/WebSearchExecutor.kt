@@ -101,6 +101,8 @@ class WebSearchExecutor : ToolExecutor {
                 executionTimeMs = System.currentTimeMillis() - startTime
             )
         } catch (e: Exception) {
+            println("DEBUG(WebSearch) FAILED: ${e::class.simpleName}: ${e.message}")
+            e.printStackTrace()
             ToolResult.Failure(
                 toolId = toolId,
                 error = ToolError.ExecutionFailed(e),

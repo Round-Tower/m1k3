@@ -124,7 +124,7 @@ class DefaultChatFormatter(
 
             // 2. Tool schema (if any) - simplified for small models
             if (tools.isNotEmpty() && format.supportsTools) {
-                appendLine("Available tools (respond with JSON to use):")
+                appendLine("You have tools. When a tool matches the request, you MUST call it.")
                 tools.forEach { tool ->
                     append("- ${tool.id}: ${tool.description}")
                     if (tool.parameters.isNotEmpty()) {
@@ -136,7 +136,7 @@ class DefaultChatFormatter(
                     }
                     appendLine()
                 }
-                appendLine("Format: {\"tool\": \"id\", \"args\": {...}}")
+                appendLine("Example: {\"tool\": \"${tools.first().id}\", \"args\": {}}")
                 appendLine()
             }
 

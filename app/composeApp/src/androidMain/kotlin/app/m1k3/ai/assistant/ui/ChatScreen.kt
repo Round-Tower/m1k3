@@ -74,6 +74,7 @@ import app.m1k3.ai.assistant.globe.TIER_MEDIUM
 import app.m1k3.ai.assistant.globe.TIER_LOW
 import app.m1k3.ai.assistant.platform.PreferenceKeys
 import app.m1k3.ai.assistant.design.components.ThinkingPill
+import app.m1k3.ai.assistant.design.components.ToolCallPill
 import org.koin.compose.koinInject
 import app.m1k3.ai.domain.stt.SttState
 import app.m1k3.ai.domain.stt.isListening
@@ -487,6 +488,15 @@ fun ChatBubble(
                             thinkingContent = message.thinkingContent,
                             isThinking = isThinking,
                             thinkingDurationMs = message.thinkingDurationMs,
+                            modifier = Modifier.padding(bottom = 4.dp)
+                        )
+                    }
+                } else null,
+                toolCallsPill = if (message.toolResults.isNotEmpty()) {
+                    {
+                        ToolCallPill(
+                            toolResults = message.toolResults,
+                            isExecuting = false,
                             modifier = Modifier.padding(bottom = 4.dp)
                         )
                     }

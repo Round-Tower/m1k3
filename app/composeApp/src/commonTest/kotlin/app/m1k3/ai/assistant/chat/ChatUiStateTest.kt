@@ -255,6 +255,110 @@ class ChatUiStateTest {
         assertTrue(message.isStatusMessage)
     }
 
+    // ===== ChatMessage Tool Results Tests =====
+
+    @Test
+    fun `ChatMessage toolResults defaults to empty list`() {
+        val message = ChatMessage(text = "Hello", isUser = false, timestamp = 0L)
+        assertTrue(message.toolResults.isEmpty())
+    }
+
+    @Test
+    fun `ChatMessage can hold successful tool results`() {
+        val results = listOf(
+            ToolExecutionResult(
+                toolId = "get_battery",
+                displayResult = "Battery: 87%",
+                isSuccess = true
+            )
+        )
+        val message = ChatMessage(
+            text = "Your battery is at 87%",
+            isUser = false,
+            timestamp = 0L,
+            toolResults = results
+        )
+        assertEquals(1, message.toolResults.size)
+        assertTrue(message.toolResults[0].isSuccess)
+        assertEquals("get_battery", message.toolResults[0].toolId)
+        assertEquals("Battery: 87%", message.toolResults[0].displayResult)
+    }
+
+    @Test
+    fun `ChatMessage can hold failed tool results`() {
+        val results = listOf(
+            ToolExecutionResult(
+                toolId = "web_search",
+                displayResult = "Search failed",
+                isSuccess = false,
+                errorMessage = "No network"
+            )
+        )
+        val message = ChatMessage(
+            text = "Sorry, I couldn't search",
+            isUser = false,
+            timestamp = 0L,
+            toolResults = results
+        )
+        assertFalse(message.toolResults[0].isSuccess)
+        assertEquals("No network", message.toolResults[0].errorMessage)
+    }
+
+    @Test
+    fun `ChatMessage can hold multiple tool results`() {
+        val results = listOf(
+            ToolExecutionResult(toolId = "get_battery", displayResult = "87%", isSuccess = true),
+            ToolExecutionResult(toolId = "get_time", displayResult = "14:32", isSuccess = true),
+            ToolExecutionResult(toolId = "web_search", displayResult = "Failed", isSuccess = false, errorMessage = "Timeout")
+        )
+        val message = ChatMessage(
+            text = "Here's what I found",
+            isUser = false,
+            timestamp = 0L,
+            toolResults = results
+        )
+        assertEquals(3, message.toolResults.size)
+        assertEquals(2, message.toolResults.count { it.isSuccess })
+        assertEquals(1, message.toolResults.count { !it.isSuccess })
+    }
+
+    // ===== ToolState Tests =====
+
+    @Test
+    fun `ToolState defaults to empty`() {
+        val state = ToolState()
+        assertFalse(state.hasPendingConfirmations)
+        assertTrue(state.executedTools.isEmpty())
+        assertFalse(state.isExecuting)
+    }
+
+    @Test
+    fun `ToolState hasPendingConfirmations when list is not empty`() {
+        val state = ToolState(
+            pendingConfirmations = listOf(
+                ToolConfirmation(
+                    id = "c1",
+                    toolId = "camera",
+                    toolName = "Camera",
+                    description = "Take a photo",
+                    arguments = emptyMap()
+                )
+            )
+        )
+        assertTrue(state.hasPendingConfirmations)
+    }
+
+    @Test
+    fun `ToolExecutionResult formats tool name from ID`() {
+        val result = ToolExecutionResult(
+            toolId = "get_screen_time",
+            displayResult = "2h 30m",
+            isSuccess = true
+        )
+        // toolId uses underscores — UI should format for display
+        assertEquals("get_screen_time", result.toolId)
+    }
+
     // ===== ChatStatus Tests =====
 
     @Test

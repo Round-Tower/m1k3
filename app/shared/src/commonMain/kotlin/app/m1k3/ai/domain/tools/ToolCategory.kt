@@ -44,5 +44,11 @@ enum class ToolCategory(val displayName: String) {
      * Communication: send message, make call
      * Future expansion - likely requires confirmation
      */
-    COMMUNICATION("Communication")
+    COMMUNICATION("Communication"),
+
+    /**
+     * Knowledge retrieval: web search, fact lookup, real-time information
+     * Tools that fetch information from external sources
+     */
+    KNOWLEDGE("Knowledge")
 }

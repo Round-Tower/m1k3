@@ -250,6 +250,9 @@ data class ChatMessage(
     /** How long the model spent thinking in milliseconds. Shown as "Thought for Xs". */
     val thinkingDurationMs: Long? = null,
 
+    /** Tool execution results for this message (shown in ToolCallPill) */
+    val toolResults: List<ToolExecutionResult> = emptyList(),
+
     /** True if this is a status message (displayed as card, not chat bubble) */
     val isStatusMessage: Boolean = false,
 

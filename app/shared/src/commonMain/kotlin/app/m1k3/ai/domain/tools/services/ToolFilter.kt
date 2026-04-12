@@ -64,6 +64,7 @@ class ToolFilter {
         private val APPS_TRIGGER_REGEX = Regex("\\b(open|launch|start)\\b")
         private val DEVICE_INFO_TRIGGER_REGEX = Regex("\\b(what|current|get|show|tell)\\b")
         private val SYSTEM_TRIGGER_REGEX = Regex("\\b(set|change|turn|toggle|enable|disable|don|dont)\\b")
+        private val KNOWLEDGE_TRIGGER_REGEX = Regex("\\b(search|find|look|lookup|weather|news|who|google|latest|forecast|recipe|directions|nearby)\\b")
     }
 
     /**
@@ -170,6 +171,9 @@ class ToolFilter {
             }
             ToolCategory.SYSTEM -> {
                 if (queryWords.any { it in listOf("set", "change", "turn", "toggle", "enable", "disable", "dont") }) 0.4f else 0.0f
+            }
+            ToolCategory.KNOWLEDGE -> {
+                if (queryWords.any { it in listOf("search", "find", "look", "lookup", "weather", "news", "who", "google", "latest", "forecast", "recipe", "directions", "nearby") }) 0.4f else 0.0f
             }
             else -> 0.0f
         }

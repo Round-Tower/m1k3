@@ -20,10 +20,10 @@ import app.m1k3.ai.domain.tools.ToolCall
 class DefaultToolCallParser : ToolCallParser {
 
     companion object {
-        // Matches JSON objects with "tool" key
-        // Captures the entire JSON object
+        // Matches JSON objects with "tool", "tool_id", or "name" key
+        // Small models are creative with key names — accept all common variants
         private val JSON_TOOL_PATTERN = Regex(
-            """\{\s*"tool"\s*:\s*"([^"]+)"(?:\s*,\s*"args"\s*:\s*(\{[^}]*\}))?\s*\}"""
+            """\{\s*"(?:tool|tool_id|name)"\s*:\s*"([^"]+)"(?:\s*,\s*"args"\s*:\s*(\{[^}]*\}))?\s*\}"""
         )
 
         // Matches <tool_call>...</tool_call> tags
@@ -116,8 +116,56 @@ class DefaultToolCallParser : ToolCallParser {
         // Remove space between < and tag names: < tool_call > → <tool_call>
         result = result.replace(Regex("""<\s+"""), "<")
         result = result.replace(Regex("""\s+>"""), ">")
+        // Fix dropped underscores in tool_call tags: <toolcall> → <tool_call>
+        result = result.replace(Regex("""</?toolcall>""", RegexOption.IGNORE_CASE)) { match ->
+            if (match.value.startsWith("</")) "</tool_call>" else "<tool_call>"
+        }
+        // Fix dropped underscores in known tool IDs within JSON strings
+        result = normalizeToolIds(result)
         return result
     }
+
+    /**
+     * Fix dropped underscores in known tool ID patterns.
+     *
+     * Gemma and other models sometimes drop underscores:
+     * "websearch" → "web_search", "getbattery" → "get_battery", etc.
+     *
+     * Uses a lookup map of known concatenated IDs to avoid false positives
+     * on normal English words like "setting" or "toggle".
+     */
+    private fun normalizeToolIds(output: String): String {
+        var result = output
+        KNOWN_COLLAPSED_IDS.forEach { (collapsed, correct) ->
+            result = result.replace("\"$collapsed\"", "\"$correct\"")
+        }
+        return result
+    }
+
+    /**
+     * Map of known tool IDs with underscores removed → correct form.
+     * Only exact matches inside quotes are replaced.
+     */
+    private val KNOWN_COLLAPSED_IDS = mapOf(
+        "websearch" to "web_search",
+        "getbattery" to "get_battery",
+        "getbatterylevel" to "get_battery_level",
+        "getcurrenttime" to "get_current_time",
+        "gettime" to "get_current_time",
+        "getvolume" to "get_volume",
+        "setvolume" to "set_volume",
+        "setalarm" to "set_alarm",
+        "settimer" to "set_timer",
+        "toggleflashlight" to "toggle_flashlight",
+        "opencamera" to "open_camera",
+        "openbrowser" to "open_browser",
+        "opensettings" to "open_settings",
+        "openmaps" to "open_maps",
+        "getnotifications" to "get_notifications",
+        "gethealth" to "get_health",
+        "getscreentime" to "get_screen_time",
+        "getscreenttime" to "get_screen_time"
+    )
 
     /**
      * Parse a JSON tool call from regex match

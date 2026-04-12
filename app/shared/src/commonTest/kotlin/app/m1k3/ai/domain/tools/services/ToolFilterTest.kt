@@ -560,6 +560,118 @@ class ToolFilterTest {
         }
     }
 
+    // ===== Web Search / KNOWLEDGE Category Tests =====
+
+    private fun createToolsWithWebSearch(): List<Tool> = createTestTools() + Tool(
+        id = "web_search",
+        name = "Web Search",
+        description = "Search the web for weather, news, facts, answers, information, directions, and more using DuckDuckGo. No API key, no tracking.",
+        parameters = listOf(
+            ToolParameter(
+                name = "query",
+                type = ParameterType.STRING,
+                description = "Search query",
+                required = true
+            )
+        ),
+        category = ToolCategory.KNOWLEDGE
+    )
+
+    @Test
+    fun `Weather query matches web_search`() {
+        val tools = createToolsWithWebSearch()
+        val results = filter.filterByRelevance("What's the weather like?", tools, maxTools = 3)
+
+        assertTrue(results.isNotEmpty(), "Weather query should match web_search")
+        assertEquals("web_search", results[0].first.id)
+        assertTrue(results[0].second >= 0.4f)
+    }
+
+    @Test
+    fun `Search query matches web_search`() {
+        val tools = createToolsWithWebSearch()
+        val results = filter.filterByRelevance("Search for pizza near me", tools, maxTools = 3)
+
+        assertTrue(results.isNotEmpty(), "Search query should match web_search")
+        assertEquals("web_search", results[0].first.id)
+        assertTrue(results[0].second >= 0.4f)
+    }
+
+    @Test
+    fun `Look up query matches web_search`() {
+        val tools = createToolsWithWebSearch()
+        val results = filter.filterByRelevance("Look up the latest news", tools, maxTools = 3)
+
+        assertTrue(results.isNotEmpty(), "Look up query should match web_search")
+        assertEquals("web_search", results[0].first.id)
+    }
+
+    @Test
+    fun `Who is query matches web_search`() {
+        val tools = createToolsWithWebSearch()
+        val results = filter.filterByRelevance("Who is the president of France?", tools, maxTools = 3)
+
+        assertTrue(results.isNotEmpty(), "Who is query should match web_search")
+        assertEquals("web_search", results[0].first.id)
+    }
+
+    @Test
+    fun `Find query matches web_search`() {
+        val tools = createToolsWithWebSearch()
+        val results = filter.filterByRelevance("Find me a recipe for pasta", tools, maxTools = 3)
+
+        assertTrue(results.isNotEmpty(), "Find query should match web_search")
+        assertEquals("web_search", results[0].first.id)
+    }
+
+    @Test
+    fun `Google query matches web_search`() {
+        val tools = createToolsWithWebSearch()
+        val results = filter.filterByRelevance("Google how to fix a flat tire", tools, maxTools = 3)
+
+        assertTrue(results.isNotEmpty(), "Google query should match web_search")
+        assertEquals("web_search", results[0].first.id)
+    }
+
+    @Test
+    fun `KNOWLEDGE category scores on search and weather triggers`() {
+        val tool = Tool(
+            id = "web_search",
+            name = "Web Search",
+            description = "Search the web",
+            parameters = emptyList(),
+            category = ToolCategory.KNOWLEDGE
+        )
+        val keywords = filter.extractToolKeywords(tool)
+
+        val searchQueries = listOf("search for", "find me", "look up", "weather today", "who is", "google it", "latest news")
+        searchQueries.forEach { query ->
+            val score = filter.scoreTool(query, tool, keywords)
+            assertTrue(score >= 0.4f, "Query '$query' should trigger KNOWLEDGE category (+0.4), got $score")
+        }
+    }
+
+    @Test
+    fun `web_search does not match pure device queries`() {
+        val tools = createToolsWithWebSearch()
+        val results = filter.filterByRelevance("What's my battery level?", tools, maxTools = 3)
+
+        assertTrue(results.isNotEmpty())
+        // Battery should still be first, not web_search
+        assertEquals("get_battery_level", results[0].first.id)
+    }
+
+    @Test
+    fun `web_search does not match educational queries with no search intent`() {
+        val tools = createToolsWithWebSearch()
+        val results = filter.filterByRelevance("Teach me about Ireland", tools, maxTools = 3)
+
+        // Should NOT include web_search for pure conversational queries
+        val webSearch = results.find { it.first.id == "web_search" }
+        assertTrue(webSearch == null || webSearch.second < 0.3f,
+            "Educational query without search intent should not match web_search")
+    }
+
     @Test
     fun `Minimum score threshold filters weak matches`() {
         val tool = Tool(

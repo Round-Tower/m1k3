@@ -9,6 +9,9 @@ import app.m1k3.ai.domain.chat.GenerationStats
 import app.m1k3.ai.domain.chat.services.UnifiedPromptBuilder
 import app.m1k3.ai.domain.platform.DeviceContext
 import app.m1k3.ai.domain.ai.GenerationConfig
+import app.m1k3.ai.domain.tools.Tool
+import app.m1k3.ai.domain.tools.ToolCall
+import app.m1k3.ai.domain.tools.ToolCategory
 import app.m1k3.ai.domain.tools.ToolResult
 import app.m1k3.ai.domain.tools.services.ToolRegistry
 import app.m1k3.ai.domain.usecases.chat.LlmOutputProcessor
@@ -16,8 +19,10 @@ import app.m1k3.ai.domain.usecases.chat.ProcessedOutput
 import app.m1k3.ai.domain.chat.events.ChatEvent
 import app.m1k3.ai.domain.chat.events.ChatResponse
 import app.m1k3.ai.assistant.utils.Logger
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.withContext
 import kotlinx.datetime.Clock
 
 private val logger = Logger.withTag("ChatWithToolsUseCase")
@@ -102,8 +107,10 @@ class ChatWithToolsUseCase(
             emit(ChatEvent.ContextRetrieved(context))
             logger.d { "Context: hasRAG=${context.hasRagContext}, hasMemory=${context.hasMemoryContext}" }
 
-            // 2. Build prompt with tool schemas and device context
-            val fullPrompt = buildPromptWithTools(prompt, context, deviceContext)
+            // 2. Get relevant tools and build prompt with tool schemas
+            val relevantTools = toolRegistry.getRelevantTools(prompt, maxTools = 3)
+            println("DEBUG(ChatWithTools) TOOLS: ${relevantTools.size} relevant for '${prompt.take(40)}': ${relevantTools.map { it.id }}")
+            val fullPrompt = buildPromptWithTools(prompt, context, deviceContext, relevantTools)
 
             // 3. Build generation config
             val queryType = QueryType.fromIntentCategory(context.intentCategory)
@@ -136,21 +143,52 @@ class ChatWithToolsUseCase(
 
                 // 5. Process for tool calls
                 logger.d { "Raw LLM response (${rawResponse.length} chars): ${rawResponse.take(200)}" }
+                println("DEBUG(ChatWithTools) Raw response (${rawResponse.length} chars): ${rawResponse.take(300)}")
 
                 val processed = processLlmOutput.execute(rawResponse, confirmedToolIds)
                 logger.d { "Processed output type: ${processed::class.simpleName}" }
+                println("DEBUG(ChatWithTools) Processed: ${processed::class.simpleName}")
 
                 when (processed) {
                     is ProcessedOutput.TextOnly -> {
-                        // No tools - just text response
-                        val stats = buildStats(tokenCount, duration, context)
-                        val response = ChatResponse(
-                            text = processed.text,
-                            stats = stats,
-                            context = context,
-                            toolResults = null
-                        )
-                        emit(ChatEvent.Complete(response))
+                        // Check if the filter selected KNOWLEDGE tools that the model ignored
+                        val knowledgeTools = relevantTools.filter { it.category == ToolCategory.KNOWLEDGE }
+                        if (knowledgeTools.isNotEmpty()) {
+                            // Force-execute: the model didn't call the tool, but we know it should
+                            println("DEBUG(ChatWithTools) Force-executing ${knowledgeTools.size} KNOWLEDGE tools the model ignored")
+                            val forceResults = forceExecuteTools(knowledgeTools, prompt)
+
+                            emit(ChatEvent.ToolsExecuted(
+                                results = forceResults,
+                                hasPendingConfirmations = false
+                            ))
+
+                            val stats = buildStats(tokenCount, duration, context)
+                            val response = ChatResponse(
+                                text = processed.text,
+                                stats = stats,
+                                context = context,
+                                toolResults = forceResults,
+                                toolResultsFormatted = forceResults.joinToString("\n") { r ->
+                                    when (r) {
+                                        is ToolResult.Success -> "${r.toolId}: ${r.output}"
+                                        is ToolResult.Failure -> "${r.toolId}: ${r.error.displayMessage}"
+                                        else -> ""
+                                    }
+                                }
+                            )
+                            emit(ChatEvent.Complete(response))
+                        } else {
+                            // No KNOWLEDGE tools — just text response
+                            val stats = buildStats(tokenCount, duration, context)
+                            val response = ChatResponse(
+                                text = processed.text,
+                                stats = stats,
+                                context = context,
+                                toolResults = null
+                            )
+                            emit(ChatEvent.Complete(response))
+                        }
                     }
 
                     is ProcessedOutput.WithTools -> {
@@ -184,20 +222,40 @@ class ChatWithToolsUseCase(
     }
 
     /**
-     * Build prompt with context and tool schemas.
+     * Force-execute KNOWLEDGE tools when the model ignores them.
      *
-     * Uses UnifiedPromptBuilder when available for consistent formatting,
-     * falls back to legacy inline building otherwise.
+     * Small models (Qwen 0.6B) often answer from memory instead of calling
+     * web_search. When the ToolFilter selected KNOWLEDGE tools but the model
+     * didn't call them, we execute them directly with the user's query.
      */
+    private suspend fun forceExecuteTools(
+        tools: List<Tool>,
+        userQuery: String
+    ): List<ToolResult> = withContext(Dispatchers.IO) {
+        tools.mapNotNull { tool ->
+            val executor = toolRegistry.getExecutor(tool.id) ?: return@mapNotNull null
+            val call = ToolCall(
+                toolId = tool.id,
+                arguments = mapOf("query" to userQuery),
+                rawText = "[force-injected by ToolFilter]"
+            )
+            try {
+                executor.execute(call)
+            } catch (e: Exception) {
+                logger.e(e) { "Force-execute ${tool.id} failed" }
+                null
+            }
+        }
+    }
+
     private suspend fun buildPromptWithTools(
         userPrompt: String,
         context: EnrichedContext,
-        deviceContext: DeviceContext? = null
+        deviceContext: DeviceContext? = null,
+        relevantTools: List<Tool>? = null
     ): String {
-        // Dynamic tool loading: only include tools relevant to the user's query.
-        // Saves 67-100% of tool token overhead for small models.
-        val relevantTools = toolRegistry.getRelevantTools(userPrompt, maxTools = 3)
-        logger.i { "TOOLS: ${relevantTools.size} relevant for '${userPrompt.take(40)}': ${relevantTools.map { it.id }}" }
+        val tools = relevantTools ?: toolRegistry.getRelevantTools(userPrompt, maxTools = 3)
+        logger.i { "TOOLS: ${tools.size} relevant for '${userPrompt.take(40)}': ${tools.map { it.id }}" }
         logger.i { "SYSTEM: ${systemPrompt.take(80)}..." }
         logger.i { "BUILDER: promptBuilder=${promptBuilder != null}" }
 
@@ -206,7 +264,7 @@ class ChatWithToolsUseCase(
             return builder.build(
                 userPrompt = userPrompt,
                 context = context,
-                tools = relevantTools,
+                tools = tools,
                 systemPrompt = systemPrompt,
                 deviceContext = deviceContext
             )
@@ -219,9 +277,9 @@ class ChatWithToolsUseCase(
                 appendLine()
             }
 
-            if (relevantTools.isNotEmpty()) {
+            if (tools.isNotEmpty()) {
                 appendLine("You have access to the following tools:")
-                relevantTools.forEach { tool ->
+                tools.forEach { tool ->
                     appendLine("- ${tool.id}: ${tool.description}")
                     if (tool.parameters.isNotEmpty()) {
                         tool.parameters.forEach { param ->

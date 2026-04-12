@@ -106,11 +106,12 @@ sealed class ChatFormat {
 
         override fun formatToolSchema(tools: List<Tool>): String = buildString {
             appendLine("<|im_start|>system")
-            appendLine("You have access to the following tools:")
+            appendLine("You have tools. When a tool matches the user's request, you MUST call it.")
+            appendLine("Do NOT answer from memory if a tool can help. Call the tool first.")
             appendLine()
             tools.forEach { append(it.toSchemaString()) }
             appendLine()
-            appendLine("To use a tool, respond with: <tool_call>{\"tool\": \"tool_id\", \"args\": {...}}</tool_call>")
+            appendLine("Example: <tool_call>{\"tool\": \"${tools.firstOrNull()?.id ?: "get_battery_level"}\", \"args\": {}}</tool_call>")
             appendLine("<|im_end|>")
         }
 

@@ -134,6 +134,8 @@ fun MaChatBubbleAI(
     artifactContent: (@Composable () -> Unit)? = null,
     /** Renders the ThinkingPill above the bubble — passed as slot from androidMain ChatScreen */
     thinkingPill: (@Composable () -> Unit)? = null,
+    /** Renders the ToolCallPill below thinking, above bubble — shows tool execution results */
+    toolCallsPill: (@Composable () -> Unit)? = null,
     isStreaming: Boolean = false,
     modifier: Modifier = Modifier
 ) {
@@ -160,6 +162,9 @@ fun MaChatBubbleAI(
         ) {
             // ThinkingPill slot — passed from ChatScreen (androidMain) so no platform crossing
             thinkingPill?.invoke()
+
+            // ToolCallPill slot — shows tool execution results
+            toolCallsPill?.invoke()
 
             Column(
                 modifier = Modifier
