@@ -88,15 +88,23 @@ Java_app_m1k3_ai_assistant_ai_ma_MaBridge_init(
         return 0L;
     }
 
-    const int n_threads = std::min(4, (int)std::thread::hardware_concurrency());
+    // Tensor G4: 1×X4 + 3×A720 (big) + 4×A520 (little) = 8 cores.
+    // Use up to 6 threads: all 4 big cores + 2 efficiency cores for parallelism.
+    // Batch processing (prompt prefill) benefits from more threads.
+    const int hw_threads = (int)std::thread::hardware_concurrency();
+    const int n_threads       = std::min(4, hw_threads);       // generation: big cores only
+    const int n_threads_batch = std::min(hw_threads, 6);       // prompt prefill: use more
 
     llama_context_params cparams = llama_context_default_params();
-    // nCtx passed from Kotlin: 2048 for ≤6GB RAM, 4096 for ≥8GB (flagship).
-    // Larger ctx = richer conversational memory but bigger KV cache.
+    // nCtx passed from Kotlin: 2048 default. Larger = richer history but bigger KV cache.
     cparams.n_ctx            = (uint32_t)nCtx;
     cparams.n_threads        = n_threads;
-    cparams.n_threads_batch  = n_threads;
+    cparams.n_threads_batch  = n_threads_batch;
     cparams.flash_attn_type  = LLAMA_FLASH_ATTN_TYPE_DISABLED; // CPU-only: no flash attn
+
+    // TODO: Q8_0 KV cache (type_k/type_v) for ~30-40% faster generation.
+    // Currently causes llama_new_context_with_model() to return nullptr.
+    // Investigate after llama.cpp upgrade.
 
     llama_context *ctx = llama_new_context_with_model(model, cparams);
     if (!ctx) {

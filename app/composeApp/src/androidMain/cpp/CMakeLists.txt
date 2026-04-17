@@ -24,6 +24,11 @@ set(GGML_CUDA             OFF CACHE BOOL "" FORCE)
 set(GGML_VULKAN           OFF CACHE BOOL "" FORCE)
 set(LLAMA_ANDROID         ON  CACHE BOOL "" FORCE)
 
+# ARM64 optimizations: enable dotprod + i8mm for Cortex-A720/X4 (Tensor G4+)
+# armv8.2-a+dotprod+i8mm enables SDOT/UDOT and MMLA instructions for
+# 4-8x faster int8/int4 matmul vs baseline NEON.
+set(GGML_CPU_ARM_ARCH "armv8.2-a+dotprod+i8mm" CACHE STRING "" FORCE)
+
 add_subdirectory(${LLAMA_DIR} llama_build)
 
 # ============================================================================

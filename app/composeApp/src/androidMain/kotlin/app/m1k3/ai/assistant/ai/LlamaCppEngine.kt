@@ -117,7 +117,13 @@ class LlamaCppEngine(
                 val modelPath = resolveModelPath()
                 logger.i { "Loading model: $modelPath" }
 
-                val nCtx = if (deviceRamGB >= 8) 4096 else 2048
+                // 2048 is optimal for sub-3B models. KV cache scales quadratically
+                // with context — 4096 doubles memory pressure for marginal benefit.
+                // Reserve 4096 for flagship devices running 4B+ models.
+                val nCtx = when {
+                    deviceRamGB >= 12 && model.parameterCount >= 4_000_000_000L -> 4096
+                    else -> 2048
+                }
                 val handle = backend.init(modelPath, nCtx)
                 if (handle == 0L) {
                     return@withLock Result.failure(
