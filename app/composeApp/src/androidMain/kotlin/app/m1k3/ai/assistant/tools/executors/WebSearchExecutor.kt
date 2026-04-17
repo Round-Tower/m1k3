@@ -4,6 +4,8 @@ import app.m1k3.ai.domain.tools.ToolCall
 import app.m1k3.ai.domain.tools.ToolError
 import app.m1k3.ai.domain.tools.ToolResult
 import app.m1k3.ai.domain.tools.services.ToolExecutor
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLEncoder
@@ -26,16 +28,16 @@ class WebSearchExecutor : ToolExecutor {
 
     override suspend fun isAvailable(): Boolean = true
 
-    override suspend fun execute(call: ToolCall): ToolResult {
+    override suspend fun execute(call: ToolCall): ToolResult = withContext(Dispatchers.IO) {
         val startTime = System.currentTimeMillis()
         val query = call.arguments["query"]
-            ?: return ToolResult.Failure(
+            ?: return@withContext ToolResult.Failure(
                 toolId = toolId,
                 error = ToolError.InvalidArguments("'query' parameter required"),
                 executionTimeMs = System.currentTimeMillis() - startTime
             )
 
-        return try {
+        try {
             val encoded = URLEncoder.encode(query, "UTF-8")
             val url = URL("https://api.duckduckgo.com/?q=$encoded&format=json&no_html=1&skip_disambig=1")
 
@@ -47,7 +49,7 @@ class WebSearchExecutor : ToolExecutor {
 
             val responseCode = connection.responseCode
             if (responseCode != 200) {
-                return ToolResult.Failure(
+                return@withContext ToolResult.Failure(
                     toolId = toolId,
                     error = ToolError.ExecutionFailed(Exception("HTTP $responseCode")),
                     executionTimeMs = System.currentTimeMillis() - startTime
