@@ -36,6 +36,7 @@ import app.m1k3.ai.domain.status.ChatStatusBuilder
 import app.m1k3.ai.assistant.platform.PreferencesStoreInterface
 import app.m1k3.ai.assistant.rag.RAGManager
 import app.m1k3.ai.assistant.utils.Logger
+import app.m1k3.ai.domain.context.ContextMemoryService
 import app.m1k3.ai.domain.system.MaSystemPromptBuilder
 import app.m1k3.ai.domain.system.SystemPromptInput
 import app.m1k3.ai.domain.system.SystemPromptTier
@@ -159,6 +160,9 @@ class ChatScreenViewModel(
     /** Whether tool calling is enabled */
     val isToolCallingEnabled: Boolean
         get() = chatWithTools != null
+
+    /** Context memory service — converts UserContext to storable chunks */
+    private val contextMemoryService = ContextMemoryService()
 
     /** System prompt builder — builds tiered M1K3 personality prompts */
     private val systemPromptBuilder = MaSystemPromptBuilder()
@@ -638,6 +642,7 @@ class ChatScreenViewModel(
         // Store in state so ChatScreen can render ContextualWelcomeCard
         if (userContext != null) {
             _uiState.update { it.copy(userContext = userContext) }
+            storeContextSnapshots(userContext)
         }
 
         // Build status card first
@@ -1179,6 +1184,43 @@ class ChatScreenViewModel(
                 generationState = GenerationState.Failed(chatError),
                 error = chatError
             )
+        }
+    }
+
+    /**
+     * Store user context as ContextSnapshot rows for trend analysis.
+     *
+     * Converts UserContext → ContextChunks via ContextMemoryService,
+     * then inserts each chunk as a time-series snapshot. TrendAnalyzer
+     * reads these to detect patterns like "sleep improving" or
+     * "screen time spiking."
+     */
+    private fun storeContextSnapshots(context: app.m1k3.ai.domain.context.UserContext) {
+        val now = Clock.System.now().toEpochMilliseconds()
+        val chunks = contextMemoryService.createContextChunks(context, now)
+        if (chunks.isEmpty()) return
+
+        try {
+            chunks.forEach { chunk ->
+                val id = "${chunk.category}_$now"
+                val value = when (chunk.category) {
+                    "health" -> context.health?.stepsToday?.toDouble() ?: 0.0
+                    "screen_time" -> context.screenTime?.todayMinutes?.toDouble() ?: 0.0
+                    "notification" -> 1.0  // each notification is one event
+                    else -> 0.0
+                }
+                database.contextSnapshotQueries.insertSnapshot(
+                    id = id,
+                    timestamp = chunk.timestamp,
+                    category = chunk.category,
+                    value_ = value,
+                    data_json = chunk.text,
+                    summary = chunk.text
+                )
+            }
+            logger.i { "Stored ${chunks.size} context snapshots (${chunks.map { it.category }.distinct().joinToString()})" }
+        } catch (e: Exception) {
+            logger.w { "Failed to store context snapshots: ${e.message}" }
         }
     }
 
