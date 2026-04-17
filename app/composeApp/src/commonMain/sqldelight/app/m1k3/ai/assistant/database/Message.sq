@@ -256,3 +256,70 @@ SELECT * FROM Message
 WHERE project_id = ? AND role = 'user'
 ORDER BY timestamp DESC
 LIMIT 1;
+
+-- ===== FTS5 Full-Text Search =====
+-- BM25-ranked search with tokenization, prefix matching, and relevance scoring.
+-- Replaces O(n) LIKE scans with O(1) inverted index lookups.
+
+CREATE VIRTUAL TABLE IF NOT EXISTS MessageFts USING fts5(content, tokenize='porter unicode61');
+
+-- Sync triggers: keep FTS index in lockstep with Message table
+CREATE TRIGGER IF NOT EXISTS message_fts_insert AFTER INSERT ON Message BEGIN
+    INSERT INTO MessageFts(rowid, content) VALUES (new.rowid, new.content);
+END;
+
+CREATE TRIGGER IF NOT EXISTS message_fts_delete AFTER DELETE ON Message BEGIN
+    INSERT INTO MessageFts(MessageFts, rowid, content) VALUES ('delete', old.rowid, old.content);
+END;
+
+CREATE TRIGGER IF NOT EXISTS message_fts_update AFTER UPDATE OF content ON Message BEGIN
+    INSERT INTO MessageFts(MessageFts, rowid, content) VALUES ('delete', old.rowid, old.content);
+    INSERT INTO MessageFts(rowid, content) VALUES (new.rowid, new.content);
+END;
+
+-- FTS5 search: all projects, BM25 ranked
+ftsSearchAllProjects:
+SELECT m.* FROM MessageFts f
+JOIN Message m ON m.rowid = f.rowid
+WHERE MessageFts MATCH ?
+ORDER BY bm25(MessageFts)
+LIMIT ?;
+
+-- FTS5 search: within a project
+ftsSearchInProject:
+SELECT m.* FROM MessageFts f
+JOIN Message m ON m.rowid = f.rowid
+WHERE MessageFts MATCH ?
+  AND m.project_id = ?
+ORDER BY bm25(MessageFts)
+LIMIT ?;
+
+-- FTS5 search: within a conversation
+ftsSearchInConversation:
+SELECT m.* FROM MessageFts f
+JOIN Message m ON m.rowid = f.rowid
+WHERE MessageFts MATCH ?
+  AND m.conversation_id = ?
+ORDER BY bm25(MessageFts)
+LIMIT ?;
+
+-- FTS5 search: with date range
+ftsSearchInDateRange:
+SELECT m.* FROM MessageFts f
+JOIN Message m ON m.rowid = f.rowid
+WHERE MessageFts MATCH ?
+  AND m.timestamp >= ?
+  AND m.timestamp <= ?
+ORDER BY bm25(MessageFts)
+LIMIT ?;
+
+-- FTS5 search: project + date range
+ftsSearchInProjectDateRange:
+SELECT m.* FROM MessageFts f
+JOIN Message m ON m.rowid = f.rowid
+WHERE MessageFts MATCH ?
+  AND m.project_id = ?
+  AND m.timestamp >= ?
+  AND m.timestamp <= ?
+ORDER BY bm25(MessageFts)
+LIMIT ?;

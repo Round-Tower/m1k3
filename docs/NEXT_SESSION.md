@@ -1,83 +1,91 @@
-# Next Session — 2026-04-05
+# Next Session — 2026-04-17
 
-## Completed
+## Completed This Session
 
-### Chat UX Redesign
-- **ChatInputBar**: Glassmorphic pill-shaped input with animated send button, gradient fade, model chip
-- **Drawer navigation**: Primary nav (Chat, History, Eco, Settings) moved from bottom bar to drawer
-- **Bottom nav removed**: Chat screen is now full-screen
-- **Fixed ecostats routing bug**: Drawer was using "ecostats" instead of "eco_stats" route
+### Priority 1: Notification ID Collision Fix
+- `ChatScreenViewModel:1204` — `forEach` → `forEachIndexed`, ID now `"${category}_${timestamp}_${index}"`
+- Prevents silent data loss when multiple context snapshots arrive in same millisecond
 
-### Bug Fixes
-- **ClearConversationDialogTest**: Fixed import `eco.SessionEcoStats` → `chat.SessionEcoStats`
-- **LlamaCppEngine null safety**: `stripStopTokens` now handles null JNI returns (was NPE crash)
-- **Empty response guard**: `generate()` and `generateStreaming()` return `Result.failure` for empty responses
+### Priority 2: Tool Execution History Table
+- **New `ToolExecution.sq`** — 10-column table (tool_id, query, result, success, execution_time_ms, timestamp, message_id, project_id)
+- **Migration `2.sqm`** (v2→v3) — creates table + 2 indexes for existing installs
+- **`ToolExecutionDataSource`** — 8 query methods (record, getByToolId, getToolUsageStats, etc.)
+- **8 tests** in `ToolExecutionDataSourceTest` — all passing
+- **Wired** from `ChatScreenViewModel.persistToolExecutions()` — every tool call now persisted
+- Uses UUID for IDs (no collision risk), runs on `Dispatchers.IO` (off main thread)
+- Registered as singleton in AppModule, injected via PlatformModule
 
-### Llamatik Upgrade
-- Upgraded from 0.13.0 → 0.18.2 (API backwards-compatible, no code changes needed)
-- Gets KV cache support, generation default fixes, JVM artifact completion
+### Priority 3: MemoryManager Wired into DI
+- `MemoryRanker` registered as singleton in AppModule
+- `MemoryManager` created inline in PlatformModule ViewModel factory (scoped to projectId)
+- Basic ops work: `getMemoryCount()`, `getRecentMemories()`, `pinMemory()`
+- `createMemoriesFromMessage()` needs embedding engine (now fixed in Priority 6)
 
-### Research & Architecture
-- **AICore**: Pixel 9a NOT on ML Kit Prompt API device list (only 9/Pro/XL/Fold)
-- **LiteRT-LM**: Evaluated — good Android perf (NPU), but proprietary format, no GGUF, no desktop
-- **llama.cpp Gemma 4**: Requires b8637+ (April 2, 2026). Active bugs being patched.
-- **ADR-0001**: "Build Our Own KMP Inference Library" — accepted, signed with MurphySig
-- **Decision doc**: `docs/MA_INFERENCE_LIBRARY_DECISION.md` — full options analysis
+### Priority 4: FTS5 Full-Text Search
+- **`MessageFts`** — FTS5 virtual table with porter stemmer + unicode61 tokenizer
+- **`TriviaFactFts`** — FTS5 for question + answer columns
+- **3 sync triggers each** — INSERT/DELETE/UPDATE keep FTS in lockstep with source tables
+- **Migration `3.sqm`** (v3→v4) — creates FTS tables, populates from existing data, installs triggers
+- **5 FTS5 queries** in Message.sq, **2 FTS5 queries** in TriviaFact.sq
+- **SearchRepository upgraded** — FTS5-first with LIKE fallback on error
+- `toFtsQuery()` sanitizes user input + quotes FTS5 reserved words (`AND`/`OR`/`NOT`/`NEAR`)
 
-## Pending Decision
+### Priority 5: Strip Gemma Format Tokens
+- `cleanStreamingToken()` existed in `StringUtils.kt` but was **never called**
+- Wired into `LlamaCppEngine.generateStreaming()` — strips `<start_of_turn>`, `<end_of_turn>`, ChatML tokens, etc.
+- Handles tokenizer-split fragments, leading whitespace at generation start
+- Single regex pass per token for performance
 
-**Ma (間) inference library** — build our own vs fork Llamatik. See `docs/MA_INFERENCE_LIBRARY_DECISION.md`.
+### Priority 6: Fix Embedding Engine Loading
+- **Root cause**: Two separate `EmbeddingEngine` instances — one in Koin (unloaded, held by SemanticRetrievalService), one in EmbeddingEngineManagerImpl (loaded by MainActivity, unused by others)
+- **Fix**: `EmbeddingEngineManagerImpl` now accepts `sharedEngine` parameter — PlatformModule passes the same Koin singleton
+- `initialize()` now calls `loadModel()` on the shared instance → SemanticRetrievalService automatically gets a loaded engine
+- **Unblocks**: RAG semantic search, MemoryManager create/retrieve (once embedding + vector repos wired)
 
-Kev is leaning toward owning the stack ("Ma") but wants to sit with it. The name Ma is liked.
+### Code Quality Fixes (from reviewer)
+- FTS5 keyword injection: `AND`/`OR`/`NOT`/`NEAR` quoted in `toFtsQuery()`
+- Main-thread DB write: `persistToolExecutions` wrapped in `Dispatchers.IO`
+- ID collision: Tool execution IDs use UUID instead of timestamp+index
 
-## Next Up
+### DB Schema Summary
+- **10 tables** (was 8): + ToolExecution + MessageFts + TriviaFactFts
+- **Schema v4** (was v2): 3 migrations total (1.sqm, 2.sqm, 3.sqm)
+- **6 triggers** for FTS sync (3 per FTS table)
 
-1. **Decide on Ma vs Fork** — review the decision doc, make the call
-2. **If Ma**: Set up module, NDK/CMake, JNI bridge (~3 days)
-3. **If Fork**: Clone Llamatik, bump llama.cpp submodule, fix JNI bridge (~4-5 days)
-4. **Commit today's work** — UI redesign + Llamatik upgrade + bug fixes (5 files changed)
-5. **Gemma 4 download polish** — cancel button, retry, storage check
-6. **Test drawer nav + chat input** on Pixel 9a (USB connected, app running)
+## Next Up — Remaining Gaps
+
+### Priority 7: WAL Mode + Aggregate Reconciliation
+- Enable `PRAGMA journal_mode=WAL` for concurrent read/write
+- Add `reconcileProjectStats()` query to fix drifted counters
+
+### Wire Embedding + Vector repos into MemoryManager
+- MemoryManager DI is wired but `embeddingRepository` and `vectorSearchRepository` are null
+- Need to register `AndroidEmbeddingEngine` as `EmbeddingRepository` adapter in PlatformModule
+- Need to register `AndroidVectorSearchEngine` as `VectorSearchRepository`
+- Then `createMemoriesFromMessage()` and `retrieveRelevantMemories()` will work
+
+### Future: Search UI
+- Surface FTS5 results in chat (e.g., "show me all web searches" → query ToolExecution table)
+- Tool usage analytics dashboard
+
+### Pre-existing Issues (not introduced by us)
+- SQLCipher: Schema comments promise AES-256 but driver is plain `AndroidSqliteDriver`
+- `println` debug statements in `ChatWithToolsUseCase.kt` (lines ~146, 150, 158)
+- `GlobalScope.launch` for model download in PlatformModule ViewModel factory
+- 13 pre-existing test failures in `GenerationConfigBuilderTest`/`GenerationConstantsTest`
 
 ## Gotchas & Blockers
 
-- **Pixel 9a USB**: Connected as `59021JEBF12282` — stable, use this over WiFi ADB
-- **Emulator**: `Pixel_9_Pro` AVD available, ~2GB RAM so model inference fails but UI testing works
-- **Gemma 4 GGUF on device**: Downloaded but won't load — Llamatik's llama.cpp (b7815) doesn't support Gemma 4 architecture
-- **Gemma 4 in llama.cpp**: Bleeding edge, active bugs (segfault #21336, tokenizer #21343). Wait ~2-4 weeks to stabilize.
-- **Pre-existing test failures**: 13 tests in GenerationConstantsTest etc. — pre-existing, not from our changes
-
-## Modified Files (This Session)
-
-### UI
-- `composeApp/src/androidMain/.../ui/components/ChatInputBar.kt` — Glassmorphic pill redesign
-- `composeApp/src/commonMain/.../navigation/SidebarItemData.kt` — Added primaryNavItems
-- `composeApp/src/commonMain/.../ui/drawer/DrawerContent.kt` — Two-section drawer layout
-- `composeApp/src/androidMain/.../MainActivity.kt` — Removed bottom bar, fixed drawer routing
-
-### Engine
-- `composeApp/src/androidMain/.../ai/LlamaCppEngine.kt` — Null-safe stripStopTokens, empty-response guards
-
-### Config
-- `composeApp/build.gradle.kts` — Llamatik 0.13.0 → 0.18.2
-
-### Tests
-- `composeApp/src/androidUnitTest/.../ClearConversationDialogTest.kt` — Fixed SessionEcoStats import
-
-### Docs
-- `docs/adr/0001-own-inference-library.md` — ADR + MurphySig
-- `docs/MA_INFERENCE_LIBRARY_DECISION.md` — Full decision analysis
+- **Two ChatWithToolsUseCase classes**: `app/composeApp/.../chat/usecase/` (active) vs `app/shared/.../domain/usecases/chat/` (domain). Edit the composeApp one.
+- **Qwen 0.6B tool limitations**: Ignores web_search. Force-execute handles this.
+- **Gemma drops underscores**: `<toolcall>` → `<tool_call>` handled by normalizer.
+- **Kermit Logger silent**: Use `println()` for debug.
+- **Pixel 9a**: USB `59021JEBF12282`
 
 ## Continuation Prompt
 
-> We're working on the 間 AI mobile app (KMP Compose, `/Users/kevinmurphy/Development/m1k3/app/`). Last session we redesigned the chat input (glassmorphic pill), migrated bottom nav to drawer, upgraded Llamatik to 0.18.2, fixed LlamaCppEngine null safety bugs, and deeply researched Gemma 4 inference options.
+> We're building M1K3 — a theatrical villain AI assistant running entirely on-device (Android, KMP). This session shipped 6 priorities: (1) notification ID collision fix, (2) ToolExecution history table with UUID IDs + IO dispatcher, (3) MemoryManager wired into Koin DI, (4) FTS5 full-text search with BM25 ranking + porter stemmer, (5) Gemma format token stripping via cleanStreamingToken() in LlamaCppEngine, (6) embedding engine loading fix — shared engine instance between Koin and EmbeddingEngineManagerImpl.
 >
-> **Pending decision**: Build "Ma" (our own KMP inference library wrapping llama.cpp) vs fork Llamatik. Decision doc at `docs/MA_INFERENCE_LIBRARY_DECISION.md`, ADR at `docs/adr/0001-own-inference-library.md`.
+> DB is 10 tables, schema v4, 3 migrations. SemanticRetrievalService now gets a loaded embedding engine. FTS5 has FTS-first + LIKE fallback with reserved keyword quoting. Tool execution persists to DB on IO thread.
 >
-> Key context:
-> - Pixel 9a connected via USB (`59021JEBF12282`)
-> - Llamatik 0.18.2 running, Gemma 3 270M works
-> - Gemma 4 GGUF on device but can't load (llama.cpp too old)
-> - AICore NOT viable on Pixel 9a
-> - Today's changes not yet committed
-> - Pre-existing 13 test failures in GenerationConstantsTest (not ours)
+> Remaining: WAL mode (Priority 7), wire embedding + vector repos into MemoryManager (for full semantic memory), pre-existing issues (SQLCipher not wired, println debug, GlobalScope download).

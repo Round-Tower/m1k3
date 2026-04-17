@@ -44,6 +44,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.datetime.Clock
 
@@ -93,7 +94,9 @@ class ChatScreenViewModel(
     // TTS callbacks (platform-injected, optional)
     private val onSpeakText: (suspend (String) -> Unit)? = null,
     // User context for personalised welcome (platform-injected, optional)
-    private val userContextProvider: app.m1k3.ai.domain.context.UserContextProvider? = null
+    private val userContextProvider: app.m1k3.ai.domain.context.UserContextProvider? = null,
+    // Tool execution history (optional — logs every tool call for analytics)
+    private val toolExecutionDataSource: app.m1k3.ai.assistant.tools.ToolExecutionDataSource? = null
 ) : ViewModel() {
     // ===== Use Cases (lazy initialization) =====
 
@@ -999,6 +1002,7 @@ class ChatScreenViewModel(
 
                     is ChatEvent.ToolsExecuted -> {
                         handleToolsExecuted(event)
+                        persistToolExecutions(event.results, prompt)
                     }
 
                     is ChatEvent.Complete -> {
@@ -1069,6 +1073,48 @@ class ChatScreenViewModel(
         }
 
         logger.i { "Tools executed: ${executedResults.size}, pending confirmations: ${pendingConfirmations.size}" }
+    }
+
+    @OptIn(kotlin.uuid.ExperimentalUuidApi::class)
+    private fun persistToolExecutions(results: List<app.m1k3.ai.domain.tools.ToolResult>, userQuery: String) {
+        val ds = toolExecutionDataSource ?: return
+        val now = Clock.System.now().toEpochMilliseconds()
+        viewModelScope.launch(Dispatchers.IO) {
+            results.forEach { result ->
+                try {
+                    val id = kotlin.uuid.Uuid.random().toString()
+                    when (result) {
+                        is app.m1k3.ai.domain.tools.ToolResult.Success -> ds.record(
+                            id = id,
+                            toolId = result.toolId,
+                            query = userQuery,
+                            result = result.output,
+                            success = true,
+                            errorMessage = null,
+                            executionTimeMs = result.executionTimeMs,
+                            timestamp = now,
+                            messageId = null,
+                            projectId = projectId
+                        )
+                        is app.m1k3.ai.domain.tools.ToolResult.Failure -> ds.record(
+                            id = id,
+                            toolId = result.toolId,
+                            query = userQuery,
+                            result = null,
+                            success = false,
+                            errorMessage = result.error.displayMessage,
+                            executionTimeMs = result.executionTimeMs,
+                            timestamp = now,
+                            messageId = null,
+                            projectId = projectId
+                        )
+                        is app.m1k3.ai.domain.tools.ToolResult.RequiresConfirmation -> { /* skip */ }
+                    }
+                } catch (e: Exception) {
+                    logger.w { "Failed to persist tool execution: ${e.message}" }
+                }
+            }
+        }
     }
 
     private fun handleToolsComplete(event: ChatEvent.Complete) {
@@ -1201,8 +1247,8 @@ class ChatScreenViewModel(
         if (chunks.isEmpty()) return
 
         try {
-            chunks.forEach { chunk ->
-                val id = "${chunk.category}_$now"
+            chunks.forEachIndexed { index, chunk ->
+                val id = "${chunk.category}_${now}_${index}"
                 val value = when (chunk.category) {
                     "health" -> context.health?.stepsToday?.toDouble() ?: 0.0
                     "screen_time" -> context.screenTime?.todayMinutes?.toDouble() ?: 0.0

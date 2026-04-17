@@ -12,6 +12,8 @@ import app.m1k3.ai.assistant.history.ConversationRepository
 import app.m1k3.ai.assistant.history.SearchRepository
 import app.m1k3.ai.assistant.history.ExportManager
 import app.m1k3.ai.assistant.memory.MemoryDataSource
+import app.m1k3.ai.assistant.memory.MemoryRanker
+import app.m1k3.ai.assistant.tools.ToolExecutionDataSource
 import app.m1k3.ai.assistant.platform.DeviceInfoProviderInterface
 import app.m1k3.ai.domain.ai.services.GenerationConfigService
 import app.m1k3.ai.domain.chat.services.ContextAssembler
@@ -81,6 +83,13 @@ val appModule = module {
     singleOf(::MemoryDataSource)
 
     /**
+     * Tool execution data source
+     *
+     * Persistent log of every tool call for analytics and debug history.
+     */
+    singleOf(::ToolExecutionDataSource)
+
+    /**
      * Pet metrics repository
      *
      * Tracks pixel pet stats (happiness, energy, health).
@@ -135,6 +144,14 @@ val appModule = module {
      * Calculates importance scores (0.0-1.0) for memory filtering.
      */
     single { ImportanceCalculator() }
+
+    /**
+     * Memory ranker
+     *
+     * Composite ranking for selecting optimal memories for AI context.
+     * Balances similarity, recency, importance, and access frequency.
+     */
+    single { MemoryRanker() }
 
     /**
      * Context assembler

@@ -61,14 +61,113 @@ class SearchRepository(private val database: MaDatabase) {
         endTimestamp: Long? = null,
         limit: Int = 50
     ): List<SearchResult> {
-        // Empty query returns empty results
-        if (query.isBlank()) {
-            return emptyList()
+        if (query.isBlank()) return emptyList()
+
+        // Try FTS5 first (BM25-ranked, tokenized, prefix matching)
+        val ftsQuery = toFtsQuery(query)
+        if (ftsQuery.isNotBlank()) {
+            try {
+                val ftsResults = searchWithFts5(ftsQuery, projectId, conversationId, startTimestamp, endTimestamp, limit)
+                if (ftsResults.isNotEmpty()) return ftsResults
+            } catch (_: Exception) {
+                // FTS5 failed (malformed query, missing table, etc.) — fall through to LIKE
+            }
         }
 
-        // Choose query based on filters
+        // Fallback: LIKE search (always works, O(n) scan)
+        return searchWithLike(query, projectId, conversationId, startTimestamp, endTimestamp, limit)
+    }
+
+    /**
+     * FTS5 search with BM25 ranking.
+     * Porter stemmer handles word variants: "running" matches "run".
+     * Prefix matching: "mach" matches "machine", "machining", etc.
+     */
+    private fun searchWithFts5(
+        ftsQuery: String,
+        projectId: String?,
+        conversationId: Long?,
+        startTimestamp: Long?,
+        endTimestamp: Long?,
+        limit: Int
+    ): List<SearchResult> {
         val messages = when {
-            // Conversation filter (most specific)
+            conversationId != null -> {
+                database.messageQueries.ftsSearchInConversation(
+                    MessageFts = ftsQuery,
+                    conversation_id = conversationId,
+                    value_ = limit.toLong()
+                ).executeAsList()
+            }
+            projectId != null && startTimestamp != null && endTimestamp != null -> {
+                database.messageQueries.ftsSearchInProjectDateRange(
+                    MessageFts = ftsQuery,
+                    project_id = projectId,
+                    timestamp = startTimestamp,
+                    timestamp_ = endTimestamp,
+                    value_ = limit.toLong()
+                ).executeAsList()
+            }
+            projectId != null -> {
+                database.messageQueries.ftsSearchInProject(
+                    MessageFts = ftsQuery,
+                    project_id = projectId,
+                    value_ = limit.toLong()
+                ).executeAsList()
+            }
+            startTimestamp != null && endTimestamp != null -> {
+                database.messageQueries.ftsSearchInDateRange(
+                    MessageFts = ftsQuery,
+                    timestamp = startTimestamp,
+                    timestamp_ = endTimestamp,
+                    value_ = limit.toLong()
+                ).executeAsList()
+            }
+            startTimestamp != null -> {
+                // FTS5 doesn't have a start-only variant — use date range with far-future end
+                database.messageQueries.ftsSearchInDateRange(
+                    MessageFts = ftsQuery,
+                    timestamp = startTimestamp,
+                    timestamp_ = Long.MAX_VALUE,
+                    value_ = limit.toLong()
+                ).executeAsList()
+            }
+            else -> {
+                database.messageQueries.ftsSearchAllProjects(
+                    MessageFts = ftsQuery,
+                    value_ = limit.toLong()
+                ).executeAsList()
+            }
+        }
+
+        // BM25 ranking from FTS5 — results already ordered by relevance
+        return messages.mapIndexed { index, message ->
+            SearchResult(
+                id = message.id,
+                projectId = message.project_id,
+                conversationId = message.conversation_id,
+                role = message.role,
+                content = message.content,
+                timestamp = message.timestamp,
+                tokens = message.tokens?.toInt(),
+                // FTS5 BM25 gives best ordering — assign descending scores
+                relevanceScore = 1.0f - (index.toFloat() / messages.size.coerceAtLeast(1))
+            )
+        }
+    }
+
+    /**
+     * Fallback LIKE search (original O(n) implementation).
+     */
+    private fun searchWithLike(
+        query: String,
+        projectId: String?,
+        conversationId: Long?,
+        startTimestamp: Long?,
+        endTimestamp: Long?,
+        limit: Int
+    ): List<SearchResult> {
+        val messages = when {
             conversationId != null -> {
                 database.messageQueries.searchMessagesInConversation(
                     conversation_id = conversationId,
@@ -76,8 +175,6 @@ class SearchRepository(private val database: MaDatabase) {
                     value__ = limit.toLong()
                 ).executeAsList()
             }
-
-            // Project + full date range
             projectId != null && startTimestamp != null && endTimestamp != null -> {
                 database.messageQueries.searchMessagesInProjectInDateRange(
                     project_id = projectId,
@@ -87,8 +184,6 @@ class SearchRepository(private val database: MaDatabase) {
                     value__ = limit.toLong()
                 ).executeAsList()
             }
-
-            // Project + start timestamp only
             projectId != null && startTimestamp != null -> {
                 database.messageQueries.searchMessagesInProjectAfterTimestamp(
                     project_id = projectId,
@@ -97,8 +192,6 @@ class SearchRepository(private val database: MaDatabase) {
                     value__ = limit.toLong()
                 ).executeAsList()
             }
-
-            // Project filter only
             projectId != null -> {
                 database.messageQueries.searchMessagesInProject(
                     project_id = projectId,
@@ -106,8 +199,6 @@ class SearchRepository(private val database: MaDatabase) {
                     value__ = limit.toLong()
                 ).executeAsList()
             }
-
-            // Full date range (all projects)
             startTimestamp != null && endTimestamp != null -> {
                 database.messageQueries.searchMessagesInDateRange(
                     value_ = query,
@@ -116,8 +207,6 @@ class SearchRepository(private val database: MaDatabase) {
                     value__ = limit.toLong()
                 ).executeAsList()
             }
-
-            // Start timestamp only (all projects)
             startTimestamp != null -> {
                 database.messageQueries.searchMessagesAfterTimestamp(
                     value_ = query,
@@ -125,8 +214,6 @@ class SearchRepository(private val database: MaDatabase) {
                     value__ = limit.toLong()
                 ).executeAsList()
             }
-
-            // No filters - search all projects
             else -> {
                 database.messageQueries.searchMessagesAllProjects(
                     value_ = query,
@@ -135,7 +222,6 @@ class SearchRepository(private val database: MaDatabase) {
             }
         }
 
-        // Convert to domain model with relevance scoring
         return messages.map { message ->
             SearchResult(
                 id = message.id,
@@ -148,8 +234,23 @@ class SearchRepository(private val database: MaDatabase) {
                 relevanceScore = calculateRelevanceScore(query, message.content)
             )
         }
-            .sortedByDescending { it.relevanceScore } // Sort by relevance
-            .take(limit) // Ensure we don't exceed limit after sorting
+            .sortedByDescending { it.relevanceScore }
+            .take(limit)
+    }
+
+    /**
+     * Convert user query to FTS5 syntax.
+     * Strips special chars, adds prefix matching for each word.
+     * "machine learning" -> "machine* OR learning*"
+     */
+    private fun toFtsQuery(query: String): String {
+        val sanitized = query.trim().replace(Regex("[\"*():<>{}\\[\\]^~!@#\$%&]"), "")
+        val words = sanitized.split(Regex("\\s+")).filter { it.isNotBlank() }
+        if (words.isEmpty()) return ""
+        val fts5Reserved = setOf("AND", "OR", "NOT", "NEAR")
+        return words.joinToString(" OR ") { word ->
+            if (word.uppercase() in fts5Reserved) "\"$word\"" else "$word*"
+        }
     }
 
     /**

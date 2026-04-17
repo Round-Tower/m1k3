@@ -1,0 +1,43 @@
+-- Migration from version 3 to 4: Add FTS5 full-text search indexes
+-- Replaces O(n) LIKE scans with O(1) inverted index lookups.
+-- Porter stemmer + unicode61 tokenizer for intelligent matching.
+
+-- Message FTS5 index
+CREATE VIRTUAL TABLE IF NOT EXISTS MessageFts USING fts5(content, tokenize='porter unicode61');
+
+-- Populate from existing messages
+INSERT INTO MessageFts(rowid, content) SELECT rowid, content FROM Message;
+
+-- Sync triggers
+CREATE TRIGGER IF NOT EXISTS message_fts_insert AFTER INSERT ON Message BEGIN
+    INSERT INTO MessageFts(rowid, content) VALUES (new.rowid, new.content);
+END;
+
+CREATE TRIGGER IF NOT EXISTS message_fts_delete AFTER DELETE ON Message BEGIN
+    INSERT INTO MessageFts(MessageFts, rowid, content) VALUES ('delete', old.rowid, old.content);
+END;
+
+CREATE TRIGGER IF NOT EXISTS message_fts_update AFTER UPDATE OF content ON Message BEGIN
+    INSERT INTO MessageFts(MessageFts, rowid, content) VALUES ('delete', old.rowid, old.content);
+    INSERT INTO MessageFts(rowid, content) VALUES (new.rowid, new.content);
+END;
+
+-- TriviaFact FTS5 index
+CREATE VIRTUAL TABLE IF NOT EXISTS TriviaFactFts USING fts5(question, answer, tokenize='porter unicode61');
+
+-- Populate from existing trivia facts
+INSERT INTO TriviaFactFts(rowid, question, answer) SELECT rowid, question, answer FROM TriviaFact;
+
+-- Sync triggers
+CREATE TRIGGER IF NOT EXISTS trivia_fts_insert AFTER INSERT ON TriviaFact BEGIN
+    INSERT INTO TriviaFactFts(rowid, question, answer) VALUES (new.rowid, new.question, new.answer);
+END;
+
+CREATE TRIGGER IF NOT EXISTS trivia_fts_delete AFTER DELETE ON TriviaFact BEGIN
+    INSERT INTO TriviaFactFts(TriviaFactFts, rowid, question, answer) VALUES ('delete', old.rowid, old.question, old.answer);
+END;
+
+CREATE TRIGGER IF NOT EXISTS trivia_fts_update AFTER UPDATE OF question, answer ON TriviaFact BEGIN
+    INSERT INTO TriviaFactFts(TriviaFactFts, rowid, question, answer) VALUES ('delete', old.rowid, old.question, old.answer);
+    INSERT INTO TriviaFactFts(rowid, question, answer) VALUES (new.rowid, new.question, new.answer);
+END;

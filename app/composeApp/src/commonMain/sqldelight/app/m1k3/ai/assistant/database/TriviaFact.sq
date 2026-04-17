@@ -289,6 +289,40 @@ UPDATE TriviaFact
 SET tier = ?
 WHERE source = ?;
 
+-- ===== FTS5 Full-Text Search =====
+
+CREATE VIRTUAL TABLE IF NOT EXISTS TriviaFactFts USING fts5(question, answer, tokenize='porter unicode61');
+
+CREATE TRIGGER IF NOT EXISTS trivia_fts_insert AFTER INSERT ON TriviaFact BEGIN
+    INSERT INTO TriviaFactFts(rowid, question, answer) VALUES (new.rowid, new.question, new.answer);
+END;
+
+CREATE TRIGGER IF NOT EXISTS trivia_fts_delete AFTER DELETE ON TriviaFact BEGIN
+    INSERT INTO TriviaFactFts(TriviaFactFts, rowid, question, answer) VALUES ('delete', old.rowid, old.question, old.answer);
+END;
+
+CREATE TRIGGER IF NOT EXISTS trivia_fts_update AFTER UPDATE OF question, answer ON TriviaFact BEGIN
+    INSERT INTO TriviaFactFts(TriviaFactFts, rowid, question, answer) VALUES ('delete', old.rowid, old.question, old.answer);
+    INSERT INTO TriviaFactFts(rowid, question, answer) VALUES (new.rowid, new.question, new.answer);
+END;
+
+-- FTS5 search across question and answer (replaces searchFactsFullText LIKE)
+ftsSearchFacts:
+SELECT t.* FROM TriviaFactFts f
+JOIN TriviaFact t ON t.rowid = f.rowid
+WHERE TriviaFactFts MATCH ?
+ORDER BY bm25(TriviaFactFts)
+LIMIT ?;
+
+-- FTS5 search filtered by category
+ftsSearchFactsByCategory:
+SELECT t.* FROM TriviaFactFts f
+JOIN TriviaFact t ON t.rowid = f.rowid
+WHERE TriviaFactFts MATCH ?
+  AND t.category = ?
+ORDER BY bm25(TriviaFactFts)
+LIMIT ?;
+
 -- Get tier statistics
 getTierStats:
 SELECT

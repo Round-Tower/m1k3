@@ -37,7 +37,13 @@ import kotlinx.coroutines.withContext
  * ```
  */
 class EmbeddingEngineManagerImpl(
-    private val context: Context
+    private val context: Context,
+    /**
+     * Shared engine instance — same object injected into SemanticRetrievalService via Koin.
+     * When initialize() calls loadModel() on this engine, all holders see it become loaded.
+     * Pass null to create a fresh engine (legacy/test path).
+     */
+    private val sharedEngine: EmbeddingEngine? = null
 ) : EmbeddingEngineManager {
 
     companion object {
@@ -103,8 +109,8 @@ class EmbeddingEngineManagerImpl(
 
                 val startTime = System.currentTimeMillis()
 
-                // Get engine from manager (automatically selects MiniLM or Gemma)
-                val engine = modelManager.getEmbeddingEngine()
+                // Use shared engine (same instance as Koin singleton) or create one
+                val engine = sharedEngine ?: modelManager.getEmbeddingEngine()
 
                 // Load ONNX model (this is the slow part: 2-5 seconds)
                 val loadResult = engine.loadModel()

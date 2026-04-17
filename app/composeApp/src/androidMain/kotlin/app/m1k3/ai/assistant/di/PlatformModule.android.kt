@@ -136,7 +136,7 @@ actual val platformModule = module {
      * Must call initialize() in MainActivity to load the ONNX model.
      */
     single<EmbeddingEngineManager> {
-        EmbeddingEngineManagerImpl(get<Context>())
+        EmbeddingEngineManagerImpl(get<Context>(), sharedEngine = get<EmbeddingEngine>())
     }
 
     /**
@@ -311,10 +311,9 @@ actual val platformModule = module {
         )
     }
 
-    // ===== MemoryManager (TODO: Not yet implemented) =====
-    // MemoryManager is not registered yet because it requires additional dependencies.
-    // ChatScreenViewModel uses getOrNull<MemoryManager>() which will return null.
-    // TODO: Implement MemoryRepository with projectId scoping, then register MemoryManager
+    // ===== MemoryManager =====
+    // MemoryManager is NOT registered as a singleton because it requires projectId scoping.
+    // It is created inline in the ChatScreenViewModel factory below.
 
     // ===== Initialization Layer =====
 
@@ -371,6 +370,17 @@ actual val platformModule = module {
         val ttsEngine = get<TtsEngine>()
         val audioPlayer = get<AudioPlayer>()
 
+        // MemoryManager is scoped per project — created here with projectId
+        val memoryManager = MemoryManager(
+            chunker = get<app.m1k3.ai.domain.memory.services.SemanticChunker>(),
+            repository = get<app.m1k3.ai.assistant.memory.MemoryDataSource>(),
+            importanceCalculator = get<app.m1k3.ai.domain.memory.ImportanceCalculator>(),
+            memoryRanker = get<app.m1k3.ai.assistant.memory.MemoryRanker>(),
+            projectId = projectId
+            // embeddingRepository and vectorSearchRepository left null for now —
+            // basic ops (stats, recent, pin) work; create/retrieve need embeddings (Priority 6)
+        )
+
         ChatScreenViewModel(
             aiEngine = get<BaseLlmEngine>(),
             conversationRepo = get<ConversationRepository>(),
@@ -379,7 +389,7 @@ actual val platformModule = module {
             deviceInfo = get<DeviceInfoProviderInterface>(),
             preferences = get<PreferencesStoreInterface>(),
             projectId = projectId,
-            memoryManager = getOrNull<MemoryManager>(),
+            memoryManager = memoryManager,
             ragManager = get<RAGManager>(),
             toolRegistry = get<ToolRegistry>(),
             processLlmOutput = get<LlmOutputProcessor>(),
@@ -438,7 +448,8 @@ actual val platformModule = module {
                     }
                 }
             },
-            userContextProvider = get<app.m1k3.ai.domain.context.UserContextProvider>()
+            userContextProvider = get<app.m1k3.ai.domain.context.UserContextProvider>(),
+            toolExecutionDataSource = get<app.m1k3.ai.assistant.tools.ToolExecutionDataSource>()
         )
     }
 

@@ -232,6 +232,7 @@ class LlamaCppEngine(
 
             logger.d { "generateStreaming -> ${resolvedPrompt.length}c maxTokens=$maxTokens" }
 
+            var isFirstToken = true
             val rawResponse = backend.generate(
                 handle = contextHandle,
                 prompt = resolvedPrompt,
@@ -240,7 +241,11 @@ class LlamaCppEngine(
                 topP = config.topP ?: 0.95f,
                 topK = config.topK ?: 64,
                 repeatPenalty = config.repetitionPenalty ?: 1.1f,
-                onToken = onToken  // true streaming: called per token from C++
+                onToken = { token ->
+                    val cleaned = app.m1k3.ai.assistant.utils.cleanStreamingToken(token, isFirstToken)
+                    isFirstToken = false
+                    if (cleaned.isNotEmpty()) onToken(cleaned)
+                }
             )
 
             val response = stripStopTokens(rawResponse)
