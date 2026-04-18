@@ -1,91 +1,91 @@
-# Next Session — 2026-04-17
+# Next Session — 2026-04-18
 
-## Completed This Session
+## Completed This Session (6 commits)
 
-### Priority 1: Notification ID Collision Fix
-- `ChatScreenViewModel:1204` — `forEach` → `forEachIndexed`, ID now `"${category}_${timestamp}_${index}"`
-- Prevents silent data loss when multiple context snapshots arrive in same millisecond
+### `af8e893f` feat(db): ToolExecution, FTS5, MemoryManager DI, embedding fix
+1. **Notification ID collision fix** — `forEachIndexed` + index suffix
+2. **ToolExecution table** — 10-column table, UUID IDs, IO dispatcher, 8 tests
+3. **MemoryManager wired** — Koin DI with projectId scoping
+4. **FTS5 full-text search** — added then removed (see next commit)
+5. **Gemma format token stripping** — `cleanStreamingToken()` wired into LlamaCppEngine
+6. **Embedding engine fix** — shared instance between Koin and EmbeddingEngineManagerImpl
 
-### Priority 2: Tool Execution History Table
-- **New `ToolExecution.sq`** — 10-column table (tool_id, query, result, success, execution_time_ms, timestamp, message_id, project_id)
-- **Migration `2.sqm`** (v2→v3) — creates table + 2 indexes for existing installs
-- **`ToolExecutionDataSource`** — 8 query methods (record, getByToolId, getToolUsageStats, etc.)
-- **8 tests** in `ToolExecutionDataSourceTest` — all passing
-- **Wired** from `ChatScreenViewModel.persistToolExecutions()` — every tool call now persisted
-- Uses UUID for IDs (no collision risk), runs on `Dispatchers.IO` (off main thread)
-- Registered as singleton in AppModule, injected via PlatformModule
+### `2e76db92` fix(db): Remove FTS5 + web search IO dispatcher
+- **FTS5 crash on Pixel 9a** — `no such module: fts5` — device SQLite lacks FTS5
+- Removed all FTS5 virtual tables, triggers, queries. Migration 3.sqm is no-op
+- **WebSearchExecutor** — wrapped in `withContext(Dispatchers.IO)` (was NetworkOnMainThreadException)
 
-### Priority 3: MemoryManager Wired into DI
-- `MemoryRanker` registered as singleton in AppModule
-- `MemoryManager` created inline in PlatformModule ViewModel factory (scoped to projectId)
-- Basic ops work: `getMemoryCount()`, `getRecentMemories()`, `pinMemory()`
-- `createMemoriesFromMessage()` needs embedding engine (now fixed in Priority 6)
+### `fc6b2e6f` perf(inference): ARM dotprod+i8mm, batch threads, context tuning
+- `GGML_CPU_ARM_ARCH=armv8.2-a+dotprod+i8mm` — 4-8x faster int8/int4 matmul
+- Batch threads 4→6 for prompt prefill
+- Context window 4096→2048 for sub-4B models
+- Q8_0 KV cache attempted but causes context creation failure — TODO
 
-### Priority 4: FTS5 Full-Text Search
-- **`MessageFts`** — FTS5 virtual table with porter stemmer + unicode61 tokenizer
-- **`TriviaFactFts`** — FTS5 for question + answer columns
-- **3 sync triggers each** — INSERT/DELETE/UPDATE keep FTS in lockstep with source tables
-- **Migration `3.sqm`** (v3→v4) — creates FTS tables, populates from existing data, installs triggers
-- **5 FTS5 queries** in Message.sq, **2 FTS5 queries** in TriviaFact.sq
-- **SearchRepository upgraded** — FTS5-first with LIKE fallback on error
-- `toFtsQuery()` sanitizes user input + quotes FTS5 reserved words (`AND`/`OR`/`NOT`/`NEAR`)
+### `55162717` fix(chat): Streaming in tool path + web search IO
+- **ChatWithToolsUseCase** — `flow` → `channelFlow` with `trySend(ChatEvent.Streaming)`
+- Removed `token.trim()` that was stripping natural whitespace
 
-### Priority 5: Strip Gemma Format Tokens
-- `cleanStreamingToken()` existed in `StringUtils.kt` but was **never called**
-- Wired into `LlamaCppEngine.generateStreaming()` — strips `<start_of_turn>`, `<end_of_turn>`, ChatML tokens, etc.
-- Handles tokenizer-split fragments, leading whitespace at generation start
-- Single regex pass per token for performance
+### `1bd0454b` fix(chat): Strip split format tokens + robust regex
+- `cleanFormatTokens()` on accumulated text at finalization (catches split tokens)
+- Regex handles mangled variants: `</ startofturn>`, `</start_of_turn>`, `<toolcall>`
+- Temporary: prompt dump to `files/debug_prompt.txt` for inspection
 
-### Priority 6: Fix Embedding Engine Loading
-- **Root cause**: Two separate `EmbeddingEngine` instances — one in Koin (unloaded, held by SemanticRetrievalService), one in EmbeddingEngineManagerImpl (loaded by MainActivity, unused by others)
-- **Fix**: `EmbeddingEngineManagerImpl` now accepts `sharedEngine` parameter — PlatformModule passes the same Koin singleton
-- `initialize()` now calls `loadModel()` on the shared instance → SemanticRetrievalService automatically gets a loaded engine
-- **Unblocks**: RAG semantic search, MemoryManager create/retrieve (once embedding + vector repos wired)
+### Key Metrics
+- DB: 9 tables, schema v4, 3 migrations
+- Tests: 812 pass, 13 pre-existing failures (GenerationConfig*)
+- Embedding engine loads in ~500ms on Pixel 9a
+- Inference: ~0.7 tok/s on Qwen 0.8B (needs investigation — see below)
 
-### Code Quality Fixes (from reviewer)
-- FTS5 keyword injection: `AND`/`OR`/`NOT`/`NEAR` quoted in `toFtsQuery()`
-- Main-thread DB write: `persistToolExecutions` wrapped in `Dispatchers.IO`
-- ID collision: Tool execution IDs use UUID instead of timestamp+index
+## Next Up
 
-### DB Schema Summary
-- **10 tables** (was 8): + ToolExecution + MessageFts + TriviaFactFts
-- **Schema v4** (was v2): 3 migrations total (1.sqm, 2.sqm, 3.sqm)
-- **6 triggers** for FTS sync (3 per FTS table)
+### Priority 1: ChatFormat output token abstraction (refactor)
+- Move format token stripping from universal regex → per-ChatFormat patterns
+- Add `outputStripPatterns: List<Regex>` to `ChatFormat` sealed class
+- `cleanStreamingToken()` uses active model's patterns instead of monster regex
+- ~30-45 min, prevents regex from growing with each new model
 
-## Next Up — Remaining Gaps
+### Priority 2: Investigate 0.7 tok/s on Qwen 0.8B
+- Pixel 9a (Tensor G4) should do 10-20 tok/s on a 0.8B Q4_K_M model
+- ARM dotprod+i8mm compiled in but may need native library clean rebuild
+- Check: `./gradlew clean` then rebuild to force native recompilation
+- Check: are threads landing on efficiency cores? Thread affinity might help
+- Q8_0 KV cache would help but causes `llama_new_context_with_model()` failure
 
-### Priority 7: WAL Mode + Aggregate Reconciliation
-- Enable `PRAGMA journal_mode=WAL` for concurrent read/write
-- Add `reconcileProjectStats()` query to fix drifted counters
+### Priority 3: WAL mode + aggregate reconciliation
+- `PRAGMA journal_mode=WAL` for concurrent read/write
+- `reconcileProjectStats()` query to fix drifted counters
 
-### Wire Embedding + Vector repos into MemoryManager
-- MemoryManager DI is wired but `embeddingRepository` and `vectorSearchRepository` are null
-- Need to register `AndroidEmbeddingEngine` as `EmbeddingRepository` adapter in PlatformModule
-- Need to register `AndroidVectorSearchEngine` as `VectorSearchRepository`
-- Then `createMemoriesFromMessage()` and `retrieveRelevantMemories()` will work
+### Priority 4: Wire embedding + vector repos into MemoryManager
+- `embeddingRepository` and `vectorSearchRepository` still null
+- Register `AndroidEmbeddingEngine` as `EmbeddingRepository` in PlatformModule
+- Register `AndroidVectorSearchEngine` as `VectorSearchRepository`
+- Unblocks `createMemoriesFromMessage()` and `retrieveRelevantMemories()`
 
-### Future: Search UI
-- Surface FTS5 results in chat (e.g., "show me all web searches" → query ToolExecution table)
-- Tool usage analytics dashboard
+### Priority 5: Prompt budget optimization
+- Welcome prompt is ~700 tokens (full M1K3 ethos + 15 tool names + format instructions)
+- That's 35% of the 2048 context window before the model thinks
+- Consider: shorter ethos, tool names only when relevant, drop format instructions
 
-### Pre-existing Issues (not introduced by us)
-- SQLCipher: Schema comments promise AES-256 but driver is plain `AndroidSqliteDriver`
-- `println` debug statements in `ChatWithToolsUseCase.kt` (lines ~146, 150, 158)
-- `GlobalScope.launch` for model download in PlatformModule ViewModel factory
-- 13 pre-existing test failures in `GenerationConfigBuilderTest`/`GenerationConstantsTest`
+### Cleanup
+- Remove `debug_prompt.txt` dump from LlamaCppEngine (temporary debug aid)
+- Remove `println` debug statements in ChatWithToolsUseCase (lines ~146, 150, 158)
+- Pre-existing: SQLCipher not wired (schema says AES-256, driver is plain), GlobalScope download
 
 ## Gotchas & Blockers
 
-- **Two ChatWithToolsUseCase classes**: `app/composeApp/.../chat/usecase/` (active) vs `app/shared/.../domain/usecases/chat/` (domain). Edit the composeApp one.
-- **Qwen 0.6B tool limitations**: Ignores web_search. Force-execute handles this.
-- **Gemma drops underscores**: `<toolcall>` → `<tool_call>` handled by normalizer.
-- **Kermit Logger silent**: Use `println()` for debug.
-- **Pixel 9a**: USB `59021JEBF12282`
+- **Two ChatWithToolsUseCase classes**: composeApp one is active (now uses `channelFlow`)
+- **Qwen 0.6B/0.8B tool limitations**: Ignores web_search. Force-execute handles this
+- **Gemma drops underscores**: `<toolcall>` → `<tool_call>` handled by normalizer
+- **Kermit Logger silent**: Use `println()` for debug
+- **Pixel 9a**: WiFi ADB as `adb-59021JEBF12282-mSpoqw`, USB as `59021JEBF12282`
+- **FTS5 not available**: Pixel 9a SQLite lacks FTS5 module. Don't re-add without runtime check
 
 ## Continuation Prompt
 
-> We're building M1K3 — a theatrical villain AI assistant running entirely on-device (Android, KMP). This session shipped 6 priorities: (1) notification ID collision fix, (2) ToolExecution history table with UUID IDs + IO dispatcher, (3) MemoryManager wired into Koin DI, (4) FTS5 full-text search with BM25 ranking + porter stemmer, (5) Gemma format token stripping via cleanStreamingToken() in LlamaCppEngine, (6) embedding engine loading fix — shared engine instance between Koin and EmbeddingEngineManagerImpl.
+> We're building M1K3 — a theatrical villain AI assistant running entirely on-device (Android, KMP). This session shipped 6 commits: ToolExecution history table, MemoryManager DI wiring, embedding engine shared-instance fix, ARM dotprod+i8mm optimizations, streaming in tool-calling path (channelFlow), and format token stripping (split-token reassembly via cleanFormatTokens).
 >
-> DB is 10 tables, schema v4, 3 migrations. SemanticRetrievalService now gets a loaded embedding engine. FTS5 has FTS-first + LIKE fallback with reserved keyword quoting. Tool execution persists to DB on IO thread.
+> FTS5 was added then removed — Pixel 9a's SQLite lacks the module. Web search fixed (Dispatchers.IO). Context window right-sized to 2048 for sub-4B models. DB is 9 tables, schema v4.
 >
-> Remaining: WAL mode (Priority 7), wire embedding + vector repos into MemoryManager (for full semantic memory), pre-existing issues (SQLCipher not wired, println debug, GlobalScope download).
+> Next priorities: (1) ChatFormat output token abstraction — move from universal regex to per-format patterns, (2) investigate 0.7 tok/s on Qwen 0.8B — should be 10-20x faster, (3) WAL mode, (4) wire embedding repos into MemoryManager for semantic memory, (5) prompt budget optimization (~700 token system prompt eating 35% of context).
+>
+> Key gotchas: FTS5 unavailable on device, two ChatWithToolsUseCase classes (composeApp uses channelFlow), debug_prompt.txt dump still in LlamaCppEngine (remove after inspection), Kermit logger silent (use println).
