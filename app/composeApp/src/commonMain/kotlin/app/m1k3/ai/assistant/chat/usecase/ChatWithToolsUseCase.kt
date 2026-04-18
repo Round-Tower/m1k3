@@ -6,6 +6,7 @@ import app.m1k3.ai.assistant.chat.GenerationConfigBuilder
 import app.m1k3.ai.domain.chat.ChatError
 import app.m1k3.ai.domain.chat.EnrichedContext
 import app.m1k3.ai.domain.chat.GenerationStats
+import app.m1k3.ai.domain.chat.StreamingThinkTagParser
 import app.m1k3.ai.domain.chat.services.UnifiedPromptBuilder
 import app.m1k3.ai.domain.platform.DeviceContext
 import app.m1k3.ai.domain.ai.GenerationConfig
@@ -20,8 +21,9 @@ import app.m1k3.ai.domain.chat.events.ChatEvent
 import app.m1k3.ai.domain.chat.events.ChatResponse
 import app.m1k3.ai.assistant.utils.Logger
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.withContext
 import kotlinx.datetime.Clock
 
@@ -96,15 +98,15 @@ class ChatWithToolsUseCase(
         prompt: String,
         confirmedToolIds: Set<String> = emptySet(),
         deviceContext: DeviceContext? = null
-    ): Flow<ChatEvent> = flow {
-        emit(ChatEvent.Started)
+    ): Flow<ChatEvent> = channelFlow {
+        send(ChatEvent.Started)
         logger.i { "Starting chat flow for: ${prompt.take(50)}..." }
 
         try {
             // 1. Retrieve context (RAG + memory + history)
-            emit(ChatEvent.RetrievingContext)
+            send(ChatEvent.RetrievingContext)
             val context = contextRetrieval.retrieveContext(prompt)
-            emit(ChatEvent.ContextRetrieved(context))
+            send(ChatEvent.ContextRetrieved(context))
             logger.d { "Context: hasRAG=${context.hasRagContext}, hasMemory=${context.hasMemoryContext}" }
 
             // 2. Get relevant tools and build prompt with tool schemas
@@ -117,20 +119,27 @@ class ChatWithToolsUseCase(
             val config = configBuilder?.build(queryType = queryType)
                 ?: GenerationConfig()
 
-            // 4. Generate response
-            emit(ChatEvent.Generating)
+            // 4. Generate response with streaming
+            send(ChatEvent.Generating)
             val startTime = Clock.System.now().toEpochMilliseconds()
             val accumulated = StringBuilder()
             var tokenCount = 0
+            val thinkParser = StreamingThinkTagParser()
 
             val result = aiEngine.generateStreaming(
                 prompt = fullPrompt,
                 config = config,
                 onToken = { token ->
-                    val cleanToken = token.trim()
-                    if (cleanToken.isNotEmpty()) {
-                        accumulated.append(cleanToken).append(" ")
+                    if (token.isNotEmpty()) {
+                        accumulated.append(token)
                         tokenCount++
+                        thinkParser.feed(token)
+                        trySend(ChatEvent.Streaming(
+                            partialText = thinkParser.visibleText,
+                            tokenCount = tokenCount,
+                            thinkingPartial = thinkParser.thinkingContent,
+                            isThinking = thinkParser.isThinking
+                        ))
                     }
                 }
             )
@@ -158,7 +167,7 @@ class ChatWithToolsUseCase(
                             println("DEBUG(ChatWithTools) Force-executing ${knowledgeTools.size} KNOWLEDGE tools the model ignored")
                             val forceResults = forceExecuteTools(knowledgeTools, prompt)
 
-                            emit(ChatEvent.ToolsExecuted(
+                            send(ChatEvent.ToolsExecuted(
                                 results = forceResults,
                                 hasPendingConfirmations = false
                             ))
@@ -177,7 +186,7 @@ class ChatWithToolsUseCase(
                                     }
                                 }
                             )
-                            emit(ChatEvent.Complete(response))
+                            send(ChatEvent.Complete(response))
                         } else {
                             // No KNOWLEDGE tools — just text response
                             val stats = buildStats(tokenCount, duration, context)
@@ -187,13 +196,13 @@ class ChatWithToolsUseCase(
                                 context = context,
                                 toolResults = null
                             )
-                            emit(ChatEvent.Complete(response))
+                            send(ChatEvent.Complete(response))
                         }
                     }
 
                     is ProcessedOutput.WithTools -> {
                         // Tools detected and executed
-                        emit(ChatEvent.ToolsExecuted(
+                        send(ChatEvent.ToolsExecuted(
                             results = processed.toolResults,
                             hasPendingConfirmations = processed.hasPendingConfirmations
                         ))
@@ -206,18 +215,18 @@ class ChatWithToolsUseCase(
                             toolResults = processed.toolResults,
                             toolResultsFormatted = processed.formatResultsForDisplay()
                         )
-                        emit(ChatEvent.Complete(response))
+                        send(ChatEvent.Complete(response))
                     }
                 }
 
             }.onFailure { e ->
                 logger.e(e) { "Generation failed" }
-                emit(ChatEvent.Failed(mapExceptionToError(e)))
+                send(ChatEvent.Failed(mapExceptionToError(e)))
             }
 
         } catch (e: Exception) {
             logger.e(e) { "Chat flow error" }
-            emit(ChatEvent.Failed(mapExceptionToError(e)))
+            send(ChatEvent.Failed(mapExceptionToError(e)))
         }
     }
 
