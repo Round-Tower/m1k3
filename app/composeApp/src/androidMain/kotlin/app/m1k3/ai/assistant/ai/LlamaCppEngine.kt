@@ -237,6 +237,9 @@ class LlamaCppEngine(
             val resolvedPrompt = resolvePrompt(prompt, config)
 
             logger.d { "generateStreaming -> ${resolvedPrompt.length}c maxTokens=$maxTokens" }
+            // Dump full prompt to app-internal file for inspection (temporary)
+            val debugFile = java.io.File(context.filesDir, "debug_prompt.txt")
+            debugFile.writeText(resolvedPrompt)
 
             var isFirstToken = true
             val rawResponse = backend.generate(

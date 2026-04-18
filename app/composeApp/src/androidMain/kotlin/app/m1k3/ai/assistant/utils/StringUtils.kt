@@ -24,14 +24,19 @@ package app.m1k3.ai.assistant.utils
  */
 val CHAT_TEMPLATE_TOKEN_REGEX = Regex(
     // Complete ChatML tokens
-    "<\\|im_start\\>|<\\|im_end\\>|<\\|endoftext\\>|" +
-    // Complete Gemma/Llama tokens
-    "<end_of_turn>|<start_of_turn>|<eos>|<bos>|" +
-    // Partial tokens (tokenizer may split them)
-    "<end_of_turn|end_of_turn>|end_of_turn|" +
-    "<start_of_turn|start_of_turn>|start_of_turn|" +
-    // Fragments
-    "<\\||\\|>"
+    "<\\|im_start\\|?>|<\\|im_end\\|?>|<\\|endoftext\\|?>|" +
+    // Gemma tokens — with optional spaces/underscores (tokenizer mangles these)
+    // Matches: <start_of_turn>, </ startofturn>, </start_of_turn>, < end_of_turn >, etc.
+    "</?\\s*(?:start|end)[_\\s]*(?:of)[_\\s]*(?:turn)\\s*>|" +
+    // Bare variants without angle brackets
+    "(?:start|end)[_\\s]+of[_\\s]+turn|" +
+    // Gemma role tokens that leak after turn markers
+    "<eos>|<bos>|" +
+    // Tool call tags (Qwen/Gemma output these as visible text)
+    "</?\\s*tool_?call\\s*>|" +
+    // Fragments from tokenizer splitting
+    "<\\||\\|>",
+    RegexOption.IGNORE_CASE
 )
 
 /**
@@ -68,4 +73,14 @@ fun cleanStreamingToken(token: String, isStartOfGeneration: Boolean): String {
 
     // Trim leading whitespace from first meaningful token
     return if (isStartOfGeneration) cleaned.trimStart() else cleaned
+}
+
+/**
+ * Clean format tokens from accumulated text (handles split-token reassembly).
+ *
+ * Use this on the FULL accumulated string — catches tokens that were split
+ * across multiple streaming callbacks (e.g., "</start_of" + "_turn>").
+ */
+fun cleanAccumulatedText(text: String): String {
+    return CHAT_TEMPLATE_TOKEN_REGEX.replace(text, "").trim()
 }

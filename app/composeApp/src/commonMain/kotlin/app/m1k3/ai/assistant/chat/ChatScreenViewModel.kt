@@ -800,12 +800,13 @@ class ChatScreenViewModel(
 
                 // Finalize parser — handles unclosed <think> tags
                 thinkParser.finalize()
+                val welcomeText = cleanFormatTokens(thinkParser.visibleText)
 
                 _uiState.update { state ->
                     val updatedMessages = state.messages.toMutableList()
                     if (updatedMessages.isNotEmpty()) {
                         updatedMessages[updatedMessages.lastIndex] = updatedMessages.last().copy(
-                            text = thinkParser.visibleText,
+                            text = welcomeText,
                             inferenceStats = stats.formatFull(),
                             thinkingContent = thinkParser.thinkingContent,
                             thinkingDurationMs = thinkParser.thinkingDurationMs
@@ -814,14 +815,14 @@ class ChatScreenViewModel(
                     state.copy(
                         messages = updatedMessages,
                         generationState = GenerationState.Complete(
-                            finalText = thinkParser.visibleText,
+                            finalText = welcomeText,
                             stats = stats
                         )
                     )
                 }
 
                 recordEcoMetrics(tokenCount)
-                recordMessage(thinkParser.visibleText, "assistant", tokenCount)
+                recordMessage(welcomeText, "assistant", tokenCount)
 
                 logger.i { "Welcome message generated: $tokenCount tokens in ${duration}ms" }
                 logger.d { "Welcome visible='${thinkParser.visibleText}' thinking=${thinkParser.thinkingContent?.take(80)}" }
@@ -1179,7 +1180,7 @@ class ChatScreenViewModel(
         // Finalize parser — handles unclosed <think> tags
         thinkParser.finalize()
 
-        val finalText = thinkParser.visibleText
+        val finalText = cleanFormatTokens(thinkParser.visibleText)
 
         _uiState.update { state ->
             val updatedMessages = state.messages.toMutableList()
@@ -1390,6 +1391,21 @@ class ChatScreenViewModel(
             message.contains("model", ignoreCase = true) -> ChatError.ModelError(message)
             else -> ChatError.Unknown(message)
         }
+    }
+
+    companion object {
+        /** Strip format tokens from accumulated text (handles split-token reassembly). */
+        private val FORMAT_TOKEN_REGEX = Regex(
+            "</?\\s*(?:start|end)[_\\s]*(?:of)[_\\s]*(?:turn)\\s*>|" +
+            "</?\\s*tool_?call\\s*>|" +
+            "<\\|im_(?:start|end)\\|?>|<\\|endoftext\\|?>|" +
+            "<eos>|<bos>|" +
+            "(?:start|end)[_\\s]+of[_\\s]+turn",
+            RegexOption.IGNORE_CASE
+        )
+
+        fun cleanFormatTokens(text: String): String =
+            FORMAT_TOKEN_REGEX.replace(text, "").trim()
     }
 }
 
