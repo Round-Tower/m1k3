@@ -32,11 +32,12 @@ import app.m1k3.ai.assistant.design.tokens.MaTypography
 @Composable
 fun AboutScreen(onLicensesClick: (() -> Unit)? = null) {
     Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(MaSpacing.base),
-        horizontalAlignment = Alignment.CenterHorizontally
+        modifier =
+            Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(MaSpacing.base),
+        horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Spacer(modifier = Modifier.height(MaSpacing.lg))
 
@@ -44,42 +45,45 @@ fun AboutScreen(onLicensesClick: (() -> Unit)? = null) {
             "M1K3",
             style = MaTypography.displayLarge,
             fontWeight = FontWeight.Bold,
-            color = MaColors.Orange
+            color = MaColors.Orange,
         )
 
         Text(
             "Call me Mike",
             style = MaTypography.bodyLarge,
-            color = MaColors.textSecondary()
+            color = MaColors.textSecondary(),
         )
 
         Spacer(modifier = Modifier.height(MaSpacing.xl))
 
         Card(
             modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(
-                containerColor = MaColors.BgSecondary
-            )
+            colors =
+                CardDefaults.cardColors(
+                    containerColor = MaColors.BgSecondary,
+                ),
         ) {
             Column(modifier = Modifier.padding(MaSpacing.base)) {
                 Text(
                     "Privacy-First AI Assistant",
                     style = MaTypography.titleLarge,
-                    fontWeight = FontWeight.Bold
+                    fontWeight = FontWeight.Bold,
                 )
 
                 Spacer(modifier = Modifier.height(MaSpacing.sm))
 
                 Text(
-                    "M1K3 is a 100% local, on-device AI assistant. Zero network permission. " +
-                    "Your conversations never leave your device.",
+                    "Your device is the cloud. 間 AI runs on your phone — chat inference " +
+                        "is 100% on-device and your conversations never leave. Network is a " +
+                        "tool you wield, not a default: model downloads and web search run " +
+                        "only when you ask.",
                     style = MaTypography.bodyMedium,
-                    color = MaColors.textSecondary()
+                    color = MaColors.textSecondary(),
                 )
 
                 Spacer(modifier = Modifier.height(MaSpacing.base))
 
-                MetaInfoRow(icon = Icons.Default.Security, label = "Zero Network", value = "100% Local")
+                MetaInfoRow(icon = Icons.Default.Security, label = "Chat", value = "100% On-Device")
                 MetaInfoRow(icon = Icons.Default.Eco, label = "Eco Impact", value = "Tracked")
                 MetaInfoRow(icon = Icons.Default.Smartphone, label = "On-Device AI", value = "SmolLM2-360M")
                 MetaInfoRow(icon = Icons.Default.Code, label = "Version", value = "1.0.0")
@@ -91,7 +95,7 @@ fun AboutScreen(onLicensesClick: (() -> Unit)? = null) {
         Text(
             "Built with ❤️ by developers who care about privacy",
             style = MaTypography.bodySmall,
-            color = MaColors.textSecondary()
+            color = MaColors.textSecondary(),
         )
 
         Spacer(modifier = Modifier.height(MaSpacing.base))
@@ -99,38 +103,39 @@ fun AboutScreen(onLicensesClick: (() -> Unit)? = null) {
         // Open Source Licenses link
         val sectionShape = RoundedCornerShape(MaRadius.md)
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(sectionShape)
-                .background(MaColors.bgElevated())
-                .border(1.dp, MaColors.borderSubtle(), sectionShape)
-                .clickable { onLicensesClick?.invoke() }
-                .padding(MaSpacing.md),
-            verticalAlignment = Alignment.CenterVertically
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .clip(sectionShape)
+                    .background(MaColors.bgElevated())
+                    .border(1.dp, MaColors.borderSubtle(), sectionShape)
+                    .clickable { onLicensesClick?.invoke() }
+                    .padding(MaSpacing.md),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
             Icon(
                 imageVector = Icons.Default.Code,
                 contentDescription = null,
                 modifier = Modifier.size(24.dp),
-                tint = MaColors.Orange
+                tint = MaColors.Orange,
             )
             Spacer(modifier = Modifier.width(MaSpacing.md))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     "Open Source Licenses",
                     style = MaTypography.bodyMedium,
-                    fontWeight = FontWeight.SemiBold
+                    fontWeight = FontWeight.SemiBold,
                 )
                 Text(
                     "Libraries & assets that power M1K3",
                     style = MaTypography.labelSmall,
-                    color = MaColors.textMuted()
+                    color = MaColors.textMuted(),
                 )
             }
             Icon(
                 imageVector = Icons.Default.ChevronRight,
                 contentDescription = null,
-                tint = MaColors.textMuted()
+                tint = MaColors.textMuted(),
             )
         }
 
@@ -144,44 +149,49 @@ fun AboutScreen(onLicensesClick: (() -> Unit)? = null) {
 @Composable
 fun HelpScreen() {
     Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(MaSpacing.base)
+        modifier =
+            Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(MaSpacing.base),
     ) {
         Text(
             "Help & Documentation",
             style = MaTypography.displayMedium,
-            fontWeight = FontWeight.Bold
+            fontWeight = FontWeight.Bold,
         )
 
         Spacer(modifier = Modifier.height(MaSpacing.base))
 
         HelpSection(
             title = "Getting Started",
-            items = listOf(
-                "Chat with M1K3 using natural language",
-                "Your conversations are 100% private and local",
-                "No internet connection required"
-            )
+            items =
+                listOf(
+                    "Chat with M1K3 using natural language",
+                    "Your conversations are 100% private and local",
+                    "No internet connection required",
+                ),
         )
 
         HelpSection(
             title = "Eco Stats",
-            items = listOf(
-                "Track water, energy, and CO2 saved vs cloud AI",
-                "Every message contributes to environmental savings",
-                "View detailed stats in the Eco Stats screen"
-            )
+            items =
+                listOf(
+                    "Track water, energy, and CO2 saved vs cloud AI",
+                    "Every message contributes to environmental savings",
+                    "View detailed stats in the Eco Stats screen",
+                ),
         )
 
         HelpSection(
             title = "Privacy",
-            items = listOf(
-                "M1K3 has ZERO network permission",
-                "All AI processing happens on your device",
-                "Your data never leaves your phone"
-            )
+            items =
+                listOf(
+                    "Chat inference runs 100% on your device",
+                    "Your conversations never leave your phone",
+                    "Network is user-initiated: model downloads and web search only when you ask",
+                    "No analytics, no telemetry, no tracking",
+                ),
         )
     }
 }
@@ -194,17 +204,18 @@ fun FeedbackScreen() {
     val context = LocalContext.current
 
     Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(MaSpacing.base),
+        modifier =
+            Modifier
+                .fillMaxSize()
+                .padding(MaSpacing.base),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
+        verticalArrangement = Arrangement.Center,
     ) {
         Icon(
             imageVector = Icons.Default.Feedback,
             contentDescription = "Feedback",
             modifier = Modifier.size(64.dp),
-            tint = MaColors.Orange
+            tint = MaColors.Orange,
         )
 
         Spacer(modifier = Modifier.height(MaSpacing.base))
@@ -212,7 +223,7 @@ fun FeedbackScreen() {
         Text(
             "Send Feedback",
             style = MaTypography.titleLarge,
-            fontWeight = FontWeight.Bold
+            fontWeight = FontWeight.Bold,
         )
 
         Spacer(modifier = Modifier.height(MaSpacing.sm))
@@ -220,7 +231,7 @@ fun FeedbackScreen() {
         Text(
             "Found a bug? Have a feature request?\nWe'd love to hear from you!",
             style = MaTypography.bodyMedium,
-            color = MaColors.textSecondary()
+            color = MaColors.textSecondary(),
         )
 
         Spacer(modifier = Modifier.height(MaSpacing.xl))
@@ -230,9 +241,10 @@ fun FeedbackScreen() {
                 val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/anthropics/m1k3/issues"))
                 context.startActivity(intent)
             },
-            colors = ButtonDefaults.buttonColors(
-                containerColor = MaColors.Orange
-            )
+            colors =
+                ButtonDefaults.buttonColors(
+                    containerColor = MaColors.Orange,
+                ),
         ) {
             Icon(Icons.Default.OpenInBrowser, contentDescription = null)
             Spacer(modifier = Modifier.width(8.dp))
@@ -247,47 +259,50 @@ fun FeedbackScreen() {
 @Composable
 fun PrivacyScreen() {
     Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(MaSpacing.base)
+        modifier =
+            Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(MaSpacing.base),
     ) {
         Text(
             "Privacy Policy",
             style = MaTypography.displayMedium,
-            fontWeight = FontWeight.Bold
+            fontWeight = FontWeight.Bold,
         )
 
         Spacer(modifier = Modifier.height(MaSpacing.base))
 
         Card(
             modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(
-                containerColor = MaColors.Success.copy(alpha = 0.1f)
-            )
+            colors =
+                CardDefaults.cardColors(
+                    containerColor = MaColors.Success.copy(alpha = 0.1f),
+                ),
         ) {
             Column(modifier = Modifier.padding(MaSpacing.base)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(
                         Icons.Default.Security,
                         contentDescription = null,
-                        tint = MaColors.Success
+                        tint = MaColors.Success,
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        "Zero Network Permission",
+                        "Your Device Is the Cloud",
                         style = MaTypography.titleMedium,
                         fontWeight = FontWeight.Bold,
-                        color = MaColors.Success
+                        color = MaColors.Success,
                     )
                 }
 
                 Spacer(modifier = Modifier.height(MaSpacing.sm))
 
                 Text(
-                    "M1K3 has ZERO network permission in its AndroidManifest.xml. " +
-                    "It is technically impossible for this app to send your data anywhere.",
-                    style = MaTypography.bodyMedium
+                    "Chat inference runs on your phone, not in someone else's data centre. " +
+                        "Your conversations never leave the device. Network is a tool you wield, " +
+                        "not a default — model downloads and web search only happen when you ask.",
+                    style = MaTypography.bodyMedium,
                 )
             }
         }
@@ -296,20 +311,23 @@ fun PrivacyScreen() {
 
         PrivacySection(
             title = "What We Don't Collect",
-            content = "We don't collect ANY data. Not your conversations, not your usage patterns, " +
-                    "not your device information. Nothing. All AI processing happens locally on your device."
+            content =
+                "We don't collect ANY data. Not your conversations, not your usage patterns, " +
+                    "not your device information. Nothing. All AI processing happens locally on your device.",
         )
 
         PrivacySection(
             title = "Data Storage",
-            content = "Your conversations are stored locally on your device in an encrypted SQLite database. " +
-                    "Only you have access to this data."
+            content =
+                "Your conversations are stored locally on your device in an encrypted SQLite database. " +
+                    "Only you have access to this data.",
         )
 
         PrivacySection(
             title = "Third-Party Services",
-            content = "M1K3 uses ZERO third-party services. No analytics, no crash reporting, no telemetry. " +
-                    "The app is completely self-contained."
+            content =
+                "M1K3 uses ZERO third-party services. No analytics, no crash reporting, no telemetry. " +
+                    "The app is completely self-contained.",
         )
     }
 }
@@ -320,17 +338,18 @@ fun PrivacyScreen() {
 @Composable
 fun ExportScreen() {
     Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(MaSpacing.base),
+        modifier =
+            Modifier
+                .fillMaxSize()
+                .padding(MaSpacing.base),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
+        verticalArrangement = Arrangement.Center,
     ) {
         Icon(
             imageVector = Icons.Default.Download,
             contentDescription = "Export",
             modifier = Modifier.size(64.dp),
-            tint = MaColors.Orange
+            tint = MaColors.Orange,
         )
 
         Spacer(modifier = Modifier.height(MaSpacing.base))
@@ -338,7 +357,7 @@ fun ExportScreen() {
         Text(
             "Export Your Data",
             style = MaTypography.titleLarge,
-            fontWeight = FontWeight.Bold
+            fontWeight = FontWeight.Bold,
         )
 
         Spacer(modifier = Modifier.height(MaSpacing.sm))
@@ -346,13 +365,13 @@ fun ExportScreen() {
         Text(
             "Export your conversations and eco stats",
             style = MaTypography.bodyMedium,
-            color = MaColors.textSecondary()
+            color = MaColors.textSecondary(),
         )
 
         Spacer(modifier = Modifier.height(MaSpacing.xl))
 
         OutlinedButton(
-            onClick = { /* TODO: Implement export */ }
+            onClick = { /* TODO: Implement export */ },
         ) {
             Icon(Icons.Default.FileDownload, contentDescription = null)
             Spacer(modifier = Modifier.width(8.dp))
@@ -362,7 +381,7 @@ fun ExportScreen() {
         Spacer(modifier = Modifier.height(MaSpacing.sm))
 
         OutlinedButton(
-            onClick = { /* TODO: Implement export */ }
+            onClick = { /* TODO: Implement export */ },
         ) {
             Icon(Icons.Default.Eco, contentDescription = null)
             Spacer(modifier = Modifier.width(8.dp))
@@ -374,7 +393,7 @@ fun ExportScreen() {
         Text(
             "Your data is always yours. Export it anytime.",
             style = MaTypography.bodySmall,
-            color = MaColors.textSecondary()
+            color = MaColors.textSecondary(),
         )
     }
 }
@@ -394,11 +413,12 @@ fun ExportScreen() {
 @Composable
 fun LicensesScreen() {
     Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(MaColors.bgPrimary())
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = MaSpacing.base)
+        modifier =
+            Modifier
+                .fillMaxSize()
+                .background(MaColors.bgPrimary())
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = MaSpacing.base),
     ) {
         Spacer(modifier = Modifier.windowInsetsTopHeight(WindowInsets.statusBars))
         Spacer(modifier = Modifier.height(MaSpacing.lg))
@@ -408,13 +428,13 @@ fun LicensesScreen() {
             text = "Open Source",
             style = MaTypography.displayMedium,
             fontWeight = FontWeight.Bold,
-            color = MaColors.Orange
+            color = MaColors.Orange,
         )
         Spacer(modifier = Modifier.height(MaSpacing.xs))
         Text(
             text = "Built on the shoulders of giants.",
             style = MaTypography.bodyMedium,
-            color = MaColors.textSecondary()
+            color = MaColors.textSecondary(),
         )
 
         Spacer(modifier = Modifier.height(MaSpacing.xl))
@@ -422,36 +442,37 @@ fun LicensesScreen() {
         // 3D Assets
         LicenseSection(
             title = "3D Assets",
-            entries = listOf(
-                LicenseEntry(
-                    name = "Omabuarts Quirky Series",
-                    license = "CC0 1.0",
-                    licenseType = LicenseType.CC0,
-                    author = "omabuarts.com",
-                    description = "Colobus, Sparrow, Gecko, Herring, Muskrat, Pudu, Taipan, Inkfish"
+            entries =
+                listOf(
+                    LicenseEntry(
+                        name = "Omabuarts Quirky Series",
+                        license = "CC0 1.0",
+                        licenseType = LicenseType.CC0,
+                        author = "omabuarts.com",
+                        description = "Colobus, Sparrow, Gecko, Herring, Muskrat, Pudu, Taipan, Inkfish",
+                    ),
+                    LicenseEntry(
+                        name = "Quaternius Animal/Dino/Fish Packs",
+                        license = "CC0 1.0",
+                        licenseType = LicenseType.CC0,
+                        author = "poly.pizza/u/Quaternius",
+                        description = "28 models: dinosaurs, animals, fish",
+                    ),
+                    LicenseEntry(
+                        name = "Khronos glTF Sample Models",
+                        license = "CC0 1.0",
+                        licenseType = LicenseType.CC0,
+                        author = "github.com/KhronosGroup/glTF-Sample-Models",
+                        description = "Fox, CesiumMan, BrainStem",
+                    ),
+                    LicenseEntry(
+                        name = "Mask (IzLoM39)",
+                        license = "CC-BY 4.0",
+                        licenseType = LicenseType.CCBY,
+                        author = "sketchfab.com",
+                        description = "Mask avatar model",
+                    ),
                 ),
-                LicenseEntry(
-                    name = "Quaternius Animal/Dino/Fish Packs",
-                    license = "CC0 1.0",
-                    licenseType = LicenseType.CC0,
-                    author = "poly.pizza/u/Quaternius",
-                    description = "28 models: dinosaurs, animals, fish"
-                ),
-                LicenseEntry(
-                    name = "Khronos glTF Sample Models",
-                    license = "CC0 1.0",
-                    licenseType = LicenseType.CC0,
-                    author = "github.com/KhronosGroup/glTF-Sample-Models",
-                    description = "Fox, CesiumMan, BrainStem"
-                ),
-                LicenseEntry(
-                    name = "Mask (IzLoM39)",
-                    license = "CC-BY 4.0",
-                    licenseType = LicenseType.CCBY,
-                    author = "sketchfab.com",
-                    description = "Mask avatar model"
-                )
-            )
         )
 
         Spacer(modifier = Modifier.height(MaSpacing.base))
@@ -459,30 +480,52 @@ fun LicensesScreen() {
         // Apache 2.0
         LicenseSection(
             title = "Apache License 2.0",
-            entries = listOf(
-                LicenseEntry("Kotlin & KMP", "Apache 2.0", LicenseType.APACHE, "JetBrains", version = "2.2.20"),
-                LicenseEntry("Compose Multiplatform", "Apache 2.0", LicenseType.APACHE, "JetBrains", version = "1.9.2"),
-                LicenseEntry("Compose Google Fonts", "Apache 2.0", LicenseType.APACHE, "Google / JetBrains", version = "1.9.1", description = "Google Fonts integration for Compose"),
-                LicenseEntry("AndroidX Core", "Apache 2.0", LicenseType.APACHE, "Google", version = "1.17.0"),
-                LicenseEntry("AndroidX Lifecycle", "Apache 2.0", LicenseType.APACHE, "Google", version = "2.9.5"),
-                LicenseEntry("AndroidX Navigation", "Apache 2.0", LicenseType.APACHE, "Google", version = "2.9.1"),
-                LicenseEntry("AndroidX WorkManager", "Apache 2.0", LicenseType.APACHE, "Google", version = "2.10.1"),
-                LicenseEntry("AndroidX CameraX", "Apache 2.0", LicenseType.APACHE, "Google", version = "1.4.0"),
-                LicenseEntry("AndroidX Security", "Apache 2.0", LicenseType.APACHE, "Google", version = "1.1.0-alpha06"),
-                LicenseEntry("Koin", "Apache 2.0", LicenseType.APACHE, "Insert-Koin.io", version = "4.1.0"),
-                LicenseEntry("SQLDelight", "Apache 2.0", LicenseType.APACHE, "CashApp", version = "2.0.2"),
-                LicenseEntry("ONNX Runtime", "Apache 2.0", LicenseType.APACHE, "Microsoft", version = "1.23.2"),
-                LicenseEntry("Ktor", "Apache 2.0", LicenseType.APACHE, "JetBrains", version = "3.3.1"),
-                LicenseEntry("kotlinx-serialization", "Apache 2.0", LicenseType.APACHE, "JetBrains", version = "1.7.3"),
-                LicenseEntry("kotlinx-coroutines", "Apache 2.0", LicenseType.APACHE, "JetBrains", version = "1.10.2"),
-                LicenseEntry("kotlinx-datetime", "Apache 2.0", LicenseType.APACHE, "JetBrains", version = "0.6.2"),
-                LicenseEntry("Logback Classic", "Apache 2.0", LicenseType.APACHE, "QOS.ch", version = "1.5.20"),
-                LicenseEntry("ML Kit Vision", "Apache 2.0", LicenseType.APACHE, "Google", version = "17.0.2"),
-                LicenseEntry("ML Kit Text Recognition", "Apache 2.0", LicenseType.APACHE, "Google", version = "19.0.0"),
-                LicenseEntry("Play Services Location", "Apache 2.0", LicenseType.APACHE, "Google", version = "21.3.0"),
-                LicenseEntry("Health Connect", "Apache 2.0", LicenseType.APACHE, "Google", version = "1.1.0-rc01", description = "Health data access API"),
-                LicenseEntry("SceneView", "Apache 2.0", LicenseType.APACHE, "SceneView Community", version = "2.3.0", description = "3D/AR scene rendering for Android")
-            )
+            entries =
+                listOf(
+                    LicenseEntry("Kotlin & KMP", "Apache 2.0", LicenseType.APACHE, "JetBrains", version = "2.2.20"),
+                    LicenseEntry("Compose Multiplatform", "Apache 2.0", LicenseType.APACHE, "JetBrains", version = "1.9.2"),
+                    LicenseEntry(
+                        "Compose Google Fonts",
+                        "Apache 2.0",
+                        LicenseType.APACHE,
+                        "Google / JetBrains",
+                        version = "1.9.1",
+                        description = "Google Fonts integration for Compose",
+                    ),
+                    LicenseEntry("AndroidX Core", "Apache 2.0", LicenseType.APACHE, "Google", version = "1.17.0"),
+                    LicenseEntry("AndroidX Lifecycle", "Apache 2.0", LicenseType.APACHE, "Google", version = "2.9.5"),
+                    LicenseEntry("AndroidX Navigation", "Apache 2.0", LicenseType.APACHE, "Google", version = "2.9.1"),
+                    LicenseEntry("AndroidX WorkManager", "Apache 2.0", LicenseType.APACHE, "Google", version = "2.10.1"),
+                    LicenseEntry("AndroidX CameraX", "Apache 2.0", LicenseType.APACHE, "Google", version = "1.4.0"),
+                    LicenseEntry("AndroidX Security", "Apache 2.0", LicenseType.APACHE, "Google", version = "1.1.0-alpha06"),
+                    LicenseEntry("Koin", "Apache 2.0", LicenseType.APACHE, "Insert-Koin.io", version = "4.1.0"),
+                    LicenseEntry("SQLDelight", "Apache 2.0", LicenseType.APACHE, "CashApp", version = "2.0.2"),
+                    LicenseEntry("ONNX Runtime", "Apache 2.0", LicenseType.APACHE, "Microsoft", version = "1.23.2"),
+                    LicenseEntry("Ktor", "Apache 2.0", LicenseType.APACHE, "JetBrains", version = "3.3.1"),
+                    LicenseEntry("kotlinx-serialization", "Apache 2.0", LicenseType.APACHE, "JetBrains", version = "1.7.3"),
+                    LicenseEntry("kotlinx-coroutines", "Apache 2.0", LicenseType.APACHE, "JetBrains", version = "1.10.2"),
+                    LicenseEntry("kotlinx-datetime", "Apache 2.0", LicenseType.APACHE, "JetBrains", version = "0.6.2"),
+                    LicenseEntry("Logback Classic", "Apache 2.0", LicenseType.APACHE, "QOS.ch", version = "1.5.20"),
+                    LicenseEntry("ML Kit Vision", "Apache 2.0", LicenseType.APACHE, "Google", version = "17.0.2"),
+                    LicenseEntry("ML Kit Text Recognition", "Apache 2.0", LicenseType.APACHE, "Google", version = "19.0.0"),
+                    LicenseEntry("Play Services Location", "Apache 2.0", LicenseType.APACHE, "Google", version = "21.3.0"),
+                    LicenseEntry(
+                        "Health Connect",
+                        "Apache 2.0",
+                        LicenseType.APACHE,
+                        "Google",
+                        version = "1.1.0-rc01",
+                        description = "Health data access API",
+                    ),
+                    LicenseEntry(
+                        "SceneView",
+                        "Apache 2.0",
+                        LicenseType.APACHE,
+                        "SceneView Community",
+                        version = "2.3.0",
+                        description = "3D/AR scene rendering for Android",
+                    ),
+                ),
         )
 
         Spacer(modifier = Modifier.height(MaSpacing.base))
@@ -490,10 +533,11 @@ fun LicensesScreen() {
         // MIT
         LicenseSection(
             title = "MIT License",
-            entries = listOf(
-                LicenseEntry("Kermit Logging", "MIT", LicenseType.MIT, "Touchlab", version = "2.0.4"),
-                LicenseEntry("Three.js", "MIT", LicenseType.MIT, "three.js.org", description = "3D WebGL renderer for web avatar")
-            )
+            entries =
+                listOf(
+                    LicenseEntry("Kermit Logging", "MIT", LicenseType.MIT, "Touchlab", version = "2.0.4"),
+                    LicenseEntry("Three.js", "MIT", LicenseType.MIT, "three.js.org", description = "3D WebGL renderer for web avatar"),
+                ),
         )
 
         Spacer(modifier = Modifier.height(MaSpacing.base))
@@ -501,16 +545,17 @@ fun LicensesScreen() {
         // BSD
         LicenseSection(
             title = "BSD License",
-            entries = listOf(
-                LicenseEntry(
-                    name = "SQLCipher",
-                    license = "BSD",
-                    licenseType = LicenseType.BSD,
-                    author = "Zetetic LLC",
-                    version = "4.5.4",
-                    description = "Encrypted SQLite for Android"
-                )
-            )
+            entries =
+                listOf(
+                    LicenseEntry(
+                        name = "SQLCipher",
+                        license = "BSD",
+                        licenseType = LicenseType.BSD,
+                        author = "Zetetic LLC",
+                        version = "4.5.4",
+                        description = "Encrypted SQLite for Android",
+                    ),
+                ),
         )
 
         Spacer(modifier = Modifier.height(48.dp))
@@ -529,7 +574,7 @@ private data class LicenseEntry(
     val licenseType: LicenseType,
     val author: String,
     val version: String? = null,
-    val description: String? = null
+    val description: String? = null,
 )
 
 // ─────────────────────────────────────────────────────────────
@@ -537,7 +582,10 @@ private data class LicenseEntry(
 // ─────────────────────────────────────────────────────────────
 
 @Composable
-private fun LicenseSection(title: String, entries: List<LicenseEntry>) {
+private fun LicenseSection(
+    title: String,
+    entries: List<LicenseEntry>,
+) {
     val sectionShape = RoundedCornerShape(MaRadius.md)
 
     Column(verticalArrangement = Arrangement.spacedBy(MaSpacing.sm)) {
@@ -546,22 +594,23 @@ private fun LicenseSection(title: String, entries: List<LicenseEntry>) {
             text = title.uppercase(),
             style = MaTypography.labelSmall,
             color = MaColors.Orange,
-            modifier = Modifier.padding(start = MaSpacing.xs, bottom = MaSpacing.xs)
+            modifier = Modifier.padding(start = MaSpacing.xs, bottom = MaSpacing.xs),
         )
 
         Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(sectionShape)
-                .background(MaColors.bgElevated())
-                .border(1.dp, MaColors.borderSubtle(), sectionShape)
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .clip(sectionShape)
+                    .background(MaColors.bgElevated())
+                    .border(1.dp, MaColors.borderSubtle(), sectionShape),
         ) {
             entries.forEachIndexed { index, entry ->
                 LicenseEntryRow(entry = entry)
                 if (index < entries.lastIndex) {
                     HorizontalDivider(
                         modifier = Modifier.padding(horizontal = MaSpacing.md),
-                        color = MaColors.borderSubtle()
+                        color = MaColors.borderSubtle(),
                     )
                 }
             }
@@ -572,34 +621,36 @@ private fun LicenseSection(title: String, entries: List<LicenseEntry>) {
 @Composable
 private fun LicenseEntryRow(entry: LicenseEntry) {
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(MaSpacing.md),
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(MaSpacing.md),
         horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.Top
+        verticalAlignment = Alignment.Top,
     ) {
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = entry.name,
                 style = MaTypography.bodyMedium,
                 fontWeight = FontWeight.SemiBold,
-                color = MaColors.textPrimary()
+                color = MaColors.textPrimary(),
             )
             Spacer(modifier = Modifier.height(2.dp))
             Text(
-                text = buildString {
-                    append(entry.author)
-                    entry.version?.let { append(" · $it") }
-                },
+                text =
+                    buildString {
+                        append(entry.author)
+                        entry.version?.let { append(" · $it") }
+                    },
                 style = MaTypography.labelSmall,
-                color = MaColors.textMuted()
+                color = MaColors.textMuted(),
             )
             entry.description?.let { desc ->
                 Spacer(modifier = Modifier.height(2.dp))
                 Text(
                     text = desc,
                     style = MaTypography.labelSmall,
-                    color = MaColors.textMuted()
+                    color = MaColors.textMuted(),
                 )
             }
         }
@@ -610,25 +661,30 @@ private fun LicenseEntryRow(entry: LicenseEntry) {
 }
 
 @Composable
-private fun LicenseBadge(label: String, type: LicenseType) {
-    val (bgColor, textColor) = when (type) {
-        LicenseType.CC0, LicenseType.MIT -> MaColors.Success.copy(alpha = 0.12f) to MaColors.Success
-        LicenseType.APACHE -> MaColors.Info.copy(alpha = 0.12f) to MaColors.Info
-        LicenseType.CCBY -> MaColors.Orange.copy(alpha = 0.12f) to MaColors.Orange
-        LicenseType.BSD -> MaColors.TextMuted.copy(alpha = 0.12f) to MaColors.TextMuted
-    }
+private fun LicenseBadge(
+    label: String,
+    type: LicenseType,
+) {
+    val (bgColor, textColor) =
+        when (type) {
+            LicenseType.CC0, LicenseType.MIT -> MaColors.Success.copy(alpha = 0.12f) to MaColors.Success
+            LicenseType.APACHE -> MaColors.Info.copy(alpha = 0.12f) to MaColors.Info
+            LicenseType.CCBY -> MaColors.Orange.copy(alpha = 0.12f) to MaColors.Orange
+            LicenseType.BSD -> MaColors.TextMuted.copy(alpha = 0.12f) to MaColors.TextMuted
+        }
 
     Box(
-        modifier = Modifier
-            .clip(RoundedCornerShape(MaRadius.sm))
-            .background(bgColor)
-            .padding(horizontal = 6.dp, vertical = 3.dp)
+        modifier =
+            Modifier
+                .clip(RoundedCornerShape(MaRadius.sm))
+                .background(bgColor)
+                .padding(horizontal = 6.dp, vertical = 3.dp),
     ) {
         Text(
             text = label,
             style = MaTypography.labelSmall,
             color = textColor,
-            fontWeight = FontWeight.Medium
+            fontWeight = FontWeight.Medium,
         )
     }
 }
@@ -636,43 +692,51 @@ private fun LicenseBadge(label: String, type: LicenseType) {
 // Helper composables
 
 @Composable
-private fun MetaInfoRow(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, value: String) {
+private fun MetaInfoRow(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    value: String,
+) {
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 4.dp),
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(vertical = 4.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
+        verticalAlignment = Alignment.CenterVertically,
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(
                 imageVector = icon,
                 contentDescription = null,
                 modifier = Modifier.size(20.dp),
-                tint = MaColors.Orange
+                tint = MaColors.Orange,
             )
             Spacer(modifier = Modifier.width(8.dp))
             Text(
                 label,
                 style = MaTypography.bodyMedium,
-                color = MaColors.textSecondary()
+                color = MaColors.textSecondary(),
             )
         }
         Text(
             value,
             style = MaTypography.bodyMedium,
-            fontWeight = FontWeight.Bold
+            fontWeight = FontWeight.Bold,
         )
     }
 }
 
 @Composable
-private fun HelpSection(title: String, items: List<String>) {
+private fun HelpSection(
+    title: String,
+    items: List<String>,
+) {
     Column(modifier = Modifier.fillMaxWidth()) {
         Text(
             title,
             style = MaTypography.titleMedium,
-            fontWeight = FontWeight.Bold
+            fontWeight = FontWeight.Bold,
         )
 
         Spacer(modifier = Modifier.height(MaSpacing.sm))
@@ -680,18 +744,18 @@ private fun HelpSection(title: String, items: List<String>) {
         items.forEach { item ->
             Row(
                 modifier = Modifier.padding(vertical = 4.dp),
-                verticalAlignment = Alignment.Top
+                verticalAlignment = Alignment.Top,
             ) {
                 Text(
                     "•",
                     style = MaTypography.bodyMedium,
                     color = MaColors.Orange,
-                    modifier = Modifier.padding(end = 8.dp)
+                    modifier = Modifier.padding(end = 8.dp),
                 )
                 Text(
                     item,
                     style = MaTypography.bodyMedium,
-                    color = MaColors.textSecondary()
+                    color = MaColors.textSecondary(),
                 )
             }
         }
@@ -701,12 +765,15 @@ private fun HelpSection(title: String, items: List<String>) {
 }
 
 @Composable
-private fun PrivacySection(title: String, content: String) {
+private fun PrivacySection(
+    title: String,
+    content: String,
+) {
     Column(modifier = Modifier.fillMaxWidth()) {
         Text(
             title,
             style = MaTypography.titleMedium,
-            fontWeight = FontWeight.Bold
+            fontWeight = FontWeight.Bold,
         )
 
         Spacer(modifier = Modifier.height(MaSpacing.sm))
@@ -714,7 +781,7 @@ private fun PrivacySection(title: String, content: String) {
         Text(
             content,
             style = MaTypography.bodyMedium,
-            color = MaColors.textSecondary()
+            color = MaColors.textSecondary(),
         )
 
         Spacer(modifier = Modifier.height(MaSpacing.base))

@@ -55,7 +55,7 @@ import org.koin.compose.koinInject
 fun SettingsScreen(
     onNavigateToAvatarGallery: (() -> Unit)? = null,
     onNavigateToLicenses: (() -> Unit)? = null,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     val haptics = LocalHapticFeedback.current
     val onDeviceAi: OnDeviceAi = koinInject()
@@ -65,26 +65,27 @@ fun SettingsScreen(
     val scope = rememberCoroutineScope()
 
     // Context permission requester — drives real Android permission flows
-    val permissionRequester = rememberContextPermissionRequester { newState ->
-        // Refresh context preview after grant
-    }
+    val permissionRequester =
+        rememberContextPermissionRequester { newState ->
+            // Refresh context preview after grant
+        }
 
     LaunchedEffect(Unit) { viewModel.checkMlKitAvailability() }
 
     LazyColumn(
-        modifier = modifier
-            .fillMaxSize()
-            .background(MaColors.bgPrimary())
-            .padding(MaSpacing.base),
-        verticalArrangement = Arrangement.spacedBy(MaSpacing.base)
+        modifier =
+            modifier
+                .fillMaxSize()
+                .background(MaColors.bgPrimary())
+                .padding(MaSpacing.base),
+        verticalArrangement = Arrangement.spacedBy(MaSpacing.base),
     ) {
-
         // ── 1. Personal ───────────────────────────────────────
         item {
             PersonalSection(
                 prefs = prefs,
                 haptics = haptics,
-                onNavigateToAvatarGallery = onNavigateToAvatarGallery
+                onNavigateToAvatarGallery = onNavigateToAvatarGallery,
             )
         }
 
@@ -93,7 +94,7 @@ fun SettingsScreen(
             LocalIntelligenceSection(
                 prefs = prefs,
                 haptics = haptics,
-                permissionRequester = permissionRequester
+                permissionRequester = permissionRequester,
             )
         }
 
@@ -118,7 +119,7 @@ fun SettingsScreen(
                     status = state.mlKitStatus,
                     testResult = state.testResult,
                     isTestRunning = state.isTestRunning,
-                    onTestClick = { viewModel.runTestGeneration() }
+                    onTestClick = { viewModel.runTestGeneration() },
                 )
             }
         }
@@ -126,7 +127,7 @@ fun SettingsScreen(
         item {
             AiCoreSection(
                 currentPreference = state.aiCorePreference,
-                onPreferenceChange = { viewModel.switchAiCorePreference(it) }
+                onPreferenceChange = { viewModel.switchAiCorePreference(it) },
             )
         }
 
@@ -135,7 +136,7 @@ fun SettingsScreen(
                 ragEnabled = state.ragEnabled,
                 onRagEnabledChange = { viewModel.setRagEnabled(it) },
                 onKnowledgeBaseClick = {},
-                onIntentClick = {}
+                onIntentClick = {},
             )
         }
 
@@ -148,7 +149,7 @@ fun SettingsScreen(
         item {
             PrivacySection(
                 onPrivacyDashboardClick = {},
-                onEncryptionClick = {}
+                onEncryptionClick = {},
             )
         }
 
@@ -156,7 +157,7 @@ fun SettingsScreen(
             AboutSection(
                 onVersionClick = {},
                 onLicensesClick = { onNavigateToLicenses?.invoke() },
-                onPrivacyPolicyClick = {}
+                onPrivacyPolicyClick = {},
             )
         }
 
@@ -172,7 +173,7 @@ fun SettingsScreen(
 private fun PersonalSection(
     prefs: PreferencesStoreInterface,
     haptics: androidx.compose.ui.hapticfeedback.HapticFeedback,
-    onNavigateToAvatarGallery: (() -> Unit)?
+    onNavigateToAvatarGallery: (() -> Unit)?,
 ) {
     var name by remember { mutableStateOf(prefs.getString(PreferenceKeys.USER_NAME, "") ?: "") }
     var isEditing by remember { mutableStateOf(false) }
@@ -184,9 +185,10 @@ private fun PersonalSection(
                 onValueChange = { name = it },
                 label = { Text("Your first name") },
                 singleLine = true,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = MaSpacing.base, vertical = MaSpacing.sm),
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = MaSpacing.base, vertical = MaSpacing.sm),
                 trailingIcon = {
                     IconButton(onClick = {
                         haptics.performHapticFeedback(HapticFeedbackType.LongPress)
@@ -196,11 +198,12 @@ private fun PersonalSection(
                         Icon(Icons.Default.Check, contentDescription = "Save", tint = MaColors.Orange)
                     }
                 },
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = MaColors.Orange,
-                    focusedLabelColor = MaColors.Orange,
-                    cursorColor = MaColors.Orange
-                )
+                colors =
+                    OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = MaColors.Orange,
+                        focusedLabelColor = MaColors.Orange,
+                        cursorColor = MaColors.Orange,
+                    ),
             )
         } else {
             SettingsItem(
@@ -210,7 +213,7 @@ private fun PersonalSection(
                 onClick = {
                     haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                     isEditing = true
-                }
+                },
             )
         }
 
@@ -224,7 +227,7 @@ private fun PersonalSection(
             onClick = {
                 haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                 onNavigateToAvatarGallery?.invoke()
-            }
+            },
         )
     }
 }
@@ -237,7 +240,7 @@ private fun PersonalSection(
 private fun LocalIntelligenceSection(
     prefs: PreferencesStoreInterface,
     haptics: androidx.compose.ui.hapticfeedback.HapticFeedback,
-    permissionRequester: ContextPermissionRequester
+    permissionRequester: ContextPermissionRequester,
 ) {
     val scope = rememberCoroutineScope()
     val contextProvider = koinInject<UserContextProvider>()
@@ -254,7 +257,7 @@ private fun LocalIntelligenceSection(
 
     SettingsSection(
         title = "Local Intelligence",
-        icon = Icons.Default.Psychology
+        icon = Icons.Default.Psychology,
     ) {
         // Permission status row
         val granted = permStatus?.grantedCount ?: 0
@@ -263,12 +266,13 @@ private fun LocalIntelligenceSection(
             title = "Context permissions",
             subtitle = "$granted / $total granted",
             icon = if (granted == total) Icons.Default.CheckCircle else Icons.Default.Circle,
-            iconTint = when {
-                granted == total -> MaColors.Success
-                granted > 0 -> MaColors.Orange
-                else -> MaColors.textMuted()
-            },
-            onClick = {}
+            iconTint =
+                when {
+                    granted == total -> MaColors.Success
+                    granted > 0 -> MaColors.Orange
+                    else -> MaColors.textMuted()
+                },
+            onClick = {},
         )
 
         HorizontalDivider(modifier = Modifier.padding(horizontal = MaSpacing.base), color = MaColors.BorderLight)
@@ -282,7 +286,7 @@ private fun LocalIntelligenceSection(
                 haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                 permissionRequester.onRequestLocation()
                 permStatus = userContextManager?.getPermissionStatus()
-            }
+            },
         )
 
         PermissionItem(
@@ -293,7 +297,7 @@ private fun LocalIntelligenceSection(
                 haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                 permissionRequester.onRequestHealth()
                 permStatus = userContextManager?.getPermissionStatus()
-            }
+            },
         )
 
         PermissionItem(
@@ -303,7 +307,7 @@ private fun LocalIntelligenceSection(
             onRequest = {
                 haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                 permissionRequester.onRequestScreenTime()
-            }
+            },
         )
 
         PermissionItem(
@@ -313,7 +317,7 @@ private fun LocalIntelligenceSection(
             onRequest = {
                 haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                 permissionRequester.onRequestNotifications()
-            }
+            },
         )
 
         HorizontalDivider(modifier = Modifier.padding(horizontal = MaSpacing.base), color = MaColors.BorderLight)
@@ -332,14 +336,14 @@ private fun LocalIntelligenceSection(
                     showContextPreview = true
                     permStatus = userContextManager?.getPermissionStatus()
                 }
-            }
+            },
         )
 
         // Live context preview card
         AnimatedVisibility(
             visible = showContextPreview && testContext != null,
             enter = expandVertically(),
-            exit = shrinkVertically()
+            exit = shrinkVertically(),
         ) {
             testContext?.let { ctx -> ContextPreviewCard(ctx) }
         }
@@ -351,20 +355,21 @@ private fun PermissionItem(
     title: String,
     subtitle: String,
     granted: Boolean,
-    onRequest: () -> Unit
+    onRequest: () -> Unit,
 ) {
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = MaSpacing.base, vertical = MaSpacing.sm),
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = MaSpacing.base, vertical = MaSpacing.sm),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(MaSpacing.md)
+        horizontalArrangement = Arrangement.spacedBy(MaSpacing.md),
     ) {
         Icon(
             imageVector = if (granted) Icons.Default.CheckCircle else Icons.Default.RadioButtonUnchecked,
             contentDescription = null,
             tint = if (granted) MaColors.Success else MaColors.textMuted(),
-            modifier = Modifier.size(20.dp)
+            modifier = Modifier.size(20.dp),
         )
         Column(modifier = Modifier.weight(1f)) {
             Text(title, style = MaTypography.bodyMedium, color = MaColors.textPrimary())
@@ -382,19 +387,20 @@ private fun PermissionItem(
 private fun ContextPreviewCard(context: UserContext) {
     val cardShape = RoundedCornerShape(MaRadius.md)
     Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = MaSpacing.base, vertical = MaSpacing.xs)
-            .clip(cardShape)
-            .background(MaColors.Orange.copy(alpha = 0.06f), cardShape)
-            .padding(MaSpacing.md),
-        verticalArrangement = Arrangement.spacedBy(MaSpacing.xs)
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = MaSpacing.base, vertical = MaSpacing.xs)
+                .clip(cardShape)
+                .background(MaColors.Orange.copy(alpha = 0.06f), cardShape)
+                .padding(MaSpacing.md),
+        verticalArrangement = Arrangement.spacedBy(MaSpacing.xs),
     ) {
         Text(
             "Context snapshot",
             style = MaTypography.labelSmall,
             color = MaColors.Orange,
-            fontWeight = FontWeight.Bold
+            fontWeight = FontWeight.Bold,
         )
         ContextRow("Hour", "${context.hourOfDay}:00")
         context.userName?.let { ContextRow("Name", it) }
@@ -410,17 +416,20 @@ private fun ContextPreviewCard(context: UserContext) {
             Text(
                 "No context available — grant permissions above",
                 style = MaTypography.labelSmall,
-                color = MaColors.textMuted()
+                color = MaColors.textMuted(),
             )
         }
     }
 }
 
 @Composable
-private fun ContextRow(label: String, value: String) {
+private fun ContextRow(
+    label: String,
+    value: String,
+) {
     Row(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween
+        horizontalArrangement = Arrangement.SpaceBetween,
     ) {
         Text(label, style = MaTypography.labelSmall, color = MaColors.textMuted())
         Text(value, style = MaTypography.labelSmall, color = MaColors.textSecondary(), fontWeight = FontWeight.Medium)
@@ -434,7 +443,7 @@ private fun ContextRow(label: String, value: String) {
 @Composable
 private fun VoiceSection(
     prefs: PreferencesStoreInterface,
-    haptics: androidx.compose.ui.hapticfeedback.HapticFeedback
+    haptics: androidx.compose.ui.hapticfeedback.HapticFeedback,
 ) {
     var autoVoiceReply by remember {
         mutableStateOf(prefs.getBoolean(PreferenceKeys.VOICE_AUTO_REPLY, false))
@@ -453,7 +462,7 @@ private fun VoiceSection(
                 haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                 autoVoiceReply = checked
                 prefs.setBoolean(PreferenceKeys.VOICE_AUTO_REPLY, checked)
-            }
+            },
         )
 
         HorizontalDivider(modifier = Modifier.padding(horizontal = MaSpacing.base), color = MaColors.BorderLight)
@@ -467,7 +476,7 @@ private fun VoiceSection(
                 hapticsEnabled = checked
                 prefs.setBoolean(PreferenceKeys.HAPTICS_ENABLED, checked)
                 if (checked) haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-            }
+            },
         )
 
         HorizontalDivider(modifier = Modifier.padding(horizontal = MaSpacing.base), color = MaColors.BorderLight)
@@ -476,22 +485,27 @@ private fun VoiceSection(
         var selectedVoiceId by remember {
             mutableStateOf(
                 prefs.getString(PreferenceKeys.SELECTED_VOICE, app.m1k3.ai.domain.tts.Voice.default.id)
-                    ?: app.m1k3.ai.domain.tts.Voice.default.id
+                    ?: app.m1k3.ai.domain.tts.Voice.default.id,
             )
         }
-        val voices = app.m1k3.ai.domain.tts.Voice.all()
+        val voices =
+            app.m1k3.ai.domain.tts.Voice
+                .all()
 
         SettingsItem(
             title = "Voice",
             subtitle = voices.find { it.id == selectedVoiceId }?.displayName ?: "Daniel",
             icon = Icons.Default.RecordVoiceOver,
-            onClick = {}
+            onClick = {},
         )
         androidx.compose.foundation.layout.Row(
-            modifier = androidx.compose.ui.Modifier
-                .fillMaxWidth()
-                .padding(horizontal = MaSpacing.base, vertical = MaSpacing.sm),
-            horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(MaSpacing.sm)
+            modifier =
+                androidx.compose.ui.Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = MaSpacing.base, vertical = MaSpacing.sm),
+            horizontalArrangement =
+                androidx.compose.foundation.layout.Arrangement
+                    .spacedBy(MaSpacing.sm),
         ) {
             voices.forEach { voice ->
                 val isSelected = voice.id == selectedVoiceId
@@ -502,7 +516,7 @@ private fun VoiceSection(
                         selectedVoiceId = voice.id
                         prefs.setString(PreferenceKeys.SELECTED_VOICE, voice.id)
                     },
-                    label = { androidx.compose.material3.Text(voice.displayName) }
+                    label = { androidx.compose.material3.Text(voice.displayName) },
                 )
             }
         }
@@ -516,7 +530,7 @@ private fun VoiceSection(
 @Composable
 private fun AppearanceSection(
     prefs: PreferencesStoreInterface,
-    haptics: androidx.compose.ui.hapticfeedback.HapticFeedback
+    haptics: androidx.compose.ui.hapticfeedback.HapticFeedback,
 ) {
     var globeMode by remember {
         mutableStateOf(prefs.getString(PreferenceKeys.GLOBE_MODE, "RUBIN") ?: "RUBIN")
@@ -525,29 +539,41 @@ private fun AppearanceSection(
     SettingsSection(title = "Appearance", icon = Icons.Default.Palette) {
         SettingsItem(
             title = "Globe background",
-            subtitle = when (globeMode) {
-                "MAPLIBRE" -> "MapLibre cartographic (bundled offline)"
-                "NONE" -> "Off"
-                else -> "Rubin dot-globe (offline)"
-            },
-            icon = when (globeMode) {
-                "NONE" -> Icons.Default.HideSource
-                else -> Icons.Default.Public
-            },
+            subtitle =
+                when (globeMode) {
+                    "MAPLIBRE" -> "MapLibre cartographic (bundled offline)"
+                    "NONE" -> "Off"
+                    else -> "Rubin dot-globe (offline)"
+                },
+            icon =
+                when (globeMode) {
+                    "NONE" -> Icons.Default.HideSource
+                    else -> Icons.Default.Public
+                },
             iconTint = if (globeMode == "NONE") MaColors.textMuted() else MaColors.Orange,
             trailingContent = {
                 Text(
-                    text = when (globeMode) { "RUBIN" -> "Rubin"; "MAPLIBRE" -> "MapLibre"; else -> "Off" },
+                    text =
+                        when (globeMode) {
+                            "RUBIN" -> "Rubin"
+                            "MAPLIBRE" -> "MapLibre"
+                            else -> "Off"
+                        },
                     style = MaTypography.labelSmall,
-                    color = MaColors.textSecondary()
+                    color = MaColors.textSecondary(),
                 )
             },
             onClick = {
                 haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                val next = when (globeMode) { "RUBIN" -> "MAPLIBRE"; "MAPLIBRE" -> "NONE"; else -> "RUBIN" }
+                val next =
+                    when (globeMode) {
+                        "RUBIN" -> "MAPLIBRE"
+                        "MAPLIBRE" -> "NONE"
+                        else -> "RUBIN"
+                    }
                 globeMode = next
                 prefs.setString(PreferenceKeys.GLOBE_MODE, next)
-            }
+            },
         )
     }
 }
@@ -563,7 +589,7 @@ private fun ModelSection(modelInfo: String) {
             title = "Current Model",
             subtitle = modelInfo,
             icon = Icons.Default.ModelTraining,
-            onClick = {}
+            onClick = {},
         )
     }
 }
@@ -573,7 +599,7 @@ private fun KnowledgeSection(
     ragEnabled: Boolean,
     onRagEnabledChange: (Boolean) -> Unit,
     onKnowledgeBaseClick: () -> Unit,
-    onIntentClick: () -> Unit
+    onIntentClick: () -> Unit,
 ) {
     SettingsSection(title = "Knowledge & RAG", icon = Icons.Default.MenuBook) {
         SettingsToggleItem(
@@ -581,20 +607,20 @@ private fun KnowledgeSection(
             subtitle = "Enhance responses with expert documents",
             icon = Icons.Default.AutoAwesome,
             checked = ragEnabled,
-            onCheckedChange = onRagEnabledChange
+            onCheckedChange = onRagEnabledChange,
         )
         HorizontalDivider(modifier = Modifier.padding(horizontal = MaSpacing.base), color = MaColors.BorderLight)
         SettingsItem(
             title = "Knowledge Base",
             subtitle = "1,401 documents · 24 categories",
             icon = Icons.Default.Book,
-            onClick = onKnowledgeBaseClick
+            onClick = onKnowledgeBaseClick,
         )
         SettingsItem(
             title = "Intent Classification",
             subtitle = "20 query types · Adaptive retrieval",
             icon = Icons.Default.Category,
-            onClick = onIntentClick
+            onClick = onIntentClick,
         )
     }
 }
@@ -602,21 +628,22 @@ private fun KnowledgeSection(
 @Composable
 private fun AiCoreSection(
     currentPreference: AiCoreModelPreference,
-    onPreferenceChange: (AiCoreModelPreference) -> Unit
+    onPreferenceChange: (AiCoreModelPreference) -> Unit,
 ) {
     SettingsSection(title = "AICore Model", icon = Icons.Default.AutoAwesome) {
         AiCoreModelPreference.entries.forEachIndexed { index, preference ->
             val isSelected = preference == currentPreference
             SettingsItem(
                 title = preference.displayName,
-                subtitle = when (preference) {
-                    AiCoreModelPreference.STABLE -> "Production model — stable, optimized"
-                    AiCoreModelPreference.PREVIEW_SPEED -> "Gemma 4 E2B — 3x faster (Preview)"
-                    AiCoreModelPreference.PREVIEW_FULL -> "Gemma 4 E4B — highest quality (Preview)"
-                },
+                subtitle =
+                    when (preference) {
+                        AiCoreModelPreference.STABLE -> "Production model — stable, optimized"
+                        AiCoreModelPreference.PREVIEW_SPEED -> "Gemma 4 E2B — 3x faster (Preview)"
+                        AiCoreModelPreference.PREVIEW_FULL -> "Gemma 4 E4B — highest quality (Preview)"
+                    },
                 icon = if (isSelected) Icons.Default.RadioButtonChecked else Icons.Default.RadioButtonUnchecked,
                 iconTint = if (isSelected) MaColors.Orange else MaColors.textMuted(),
-                onClick = { onPreferenceChange(preference) }
+                onClick = { onPreferenceChange(preference) },
             )
             if (index < AiCoreModelPreference.entries.lastIndex) {
                 HorizontalDivider(modifier = Modifier.padding(horizontal = MaSpacing.base), color = MaColors.BorderLight)
@@ -633,27 +660,27 @@ private fun AiCoreSection(
 private fun DataSection(
     onExportClick: () -> Unit,
     onImportClick: () -> Unit,
-    onClearClick: () -> Unit
+    onClearClick: () -> Unit,
 ) {
     SettingsSection(title = "Data", icon = Icons.Default.Storage) {
         SettingsItem(
             title = "Export conversations",
             subtitle = "Backup to JSON",
             icon = Icons.Default.Upload,
-            onClick = onExportClick
+            onClick = onExportClick,
         )
         SettingsItem(
             title = "Import conversations",
             subtitle = "Restore from backup",
             icon = Icons.Default.Download,
-            onClick = onImportClick
+            onClick = onImportClick,
         )
         SettingsItem(
             title = "Clear all data",
             subtitle = "Reset app to defaults",
             icon = Icons.Default.DeleteForever,
             onClick = onClearClick,
-            isDestructive = true
+            isDestructive = true,
         )
     }
 }
@@ -665,20 +692,20 @@ private fun DataSection(
 @Composable
 private fun PrivacySection(
     onPrivacyDashboardClick: () -> Unit,
-    onEncryptionClick: () -> Unit
+    onEncryptionClick: () -> Unit,
 ) {
     SettingsSection(title = "Privacy", icon = Icons.Default.Lock) {
         SettingsItem(
             title = "Privacy dashboard",
-            subtitle = "0 bytes transmitted — 100% local",
+            subtitle = "Chat on-device · network only when you ask",
             icon = Icons.Default.Security,
-            onClick = onPrivacyDashboardClick
+            onClick = onPrivacyDashboardClick,
         )
         SettingsItem(
             title = "Data encryption",
             subtitle = "AES-256 via SQLCipher",
             icon = Icons.Default.Shield,
-            onClick = onEncryptionClick
+            onClick = onEncryptionClick,
         )
     }
 }
@@ -687,26 +714,26 @@ private fun PrivacySection(
 private fun AboutSection(
     onVersionClick: () -> Unit,
     onLicensesClick: () -> Unit,
-    onPrivacyPolicyClick: () -> Unit
+    onPrivacyPolicyClick: () -> Unit,
 ) {
     SettingsSection(title = "About", icon = Icons.Default.Info) {
         SettingsItem(
             title = "Version",
             subtitle = "0.1.0 — Phase 2",
             icon = Icons.Default.AppShortcut,
-            onClick = onVersionClick
+            onClick = onVersionClick,
         )
         SettingsItem(
             title = "Open source licenses",
             subtitle = "Apache 2.0 · MIT",
             icon = Icons.Default.Code,
-            onClick = onLicensesClick
+            onClick = onLicensesClick,
         )
         SettingsItem(
             title = "Privacy policy",
-            subtitle = "No data collection · Zero network",
+            subtitle = "No analytics · no telemetry · no tracking",
             icon = Icons.Default.PrivacyTip,
-            onClick = onPrivacyPolicyClick
+            onClick = onPrivacyPolicyClick,
         )
     }
 }

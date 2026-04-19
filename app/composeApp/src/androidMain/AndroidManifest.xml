@@ -2,6 +2,13 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
+    <!--
+      Network — user-initiated only. Two callers:
+        - HttpModelDownloadManager: HuggingFace GGUF model downloads (user opts in).
+        - WebSearchExecutor: DuckDuckGo Instant Answer API (LLM tool).
+      Chat inference stays 100% on-device. No background network, no telemetry.
+      See docs/adr/0006-user-initiated-network.md.
+    -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />

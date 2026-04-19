@@ -9,7 +9,7 @@ This is the Kotlin Multiplatform (KMP) mobile application for 間 AI (pronounced
 - **Platform-native engines** - ML Kit GenAI (Android) + Apple Foundation Models (iOS, planned)
 - **RAG knowledge system** - 1,401 documents across 24 categories
 - **Semantic memory** - Embeddings + vector search for context-aware conversations
-- **Privacy-first** - Zero network permission, all processing local
+- **Privacy-first** - On-device chat inference; user-initiated network for model downloads and web search (ADR-0006)
 
 ## Project Structure
 

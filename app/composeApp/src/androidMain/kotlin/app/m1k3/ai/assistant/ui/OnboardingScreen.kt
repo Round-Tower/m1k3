@@ -27,10 +27,10 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.LinearProgressIndicator
@@ -67,14 +67,14 @@ import kotlinx.coroutines.launch
 import org.koin.androidx.compose.koinViewModel
 
 private val AwakeOrange = Color(0xFFD97706)
-private val DimOrange   = Color(0x40D97706)
-private val GlassBg     = Color(0x14FFFFFF)
-private val Border      = Color(0x28FFFFFF)
+private val DimOrange = Color(0x40D97706)
+private val GlassBg = Color(0x14FFFFFF)
+private val Border = Color(0x28FFFFFF)
 
 @Composable
 fun OnboardingScreen(
     onComplete: () -> Unit,
-    viewModel: OnboardingViewModel = koinViewModel()
+    viewModel: OnboardingViewModel = koinViewModel(),
 ) {
     val state by viewModel.uiState.collectAsState()
 
@@ -83,11 +83,12 @@ fun OnboardingScreen(
     }
 
     Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color.Black)
-            .statusBarsPadding()
-            .navigationBarsPadding()
+        modifier =
+            Modifier
+                .fillMaxSize()
+                .background(Color.Black)
+                .statusBarsPadding()
+                .navigationBarsPadding(),
     ) {
         AnimatedContent(
             targetState = state.step,
@@ -95,25 +96,28 @@ fun OnboardingScreen(
                 (fadeIn(tween(500)) + slideInVertically { it / 8 })
                     .togetherWith(fadeOut(tween(300)))
             },
-            label = "onboarding-step"
+            label = "onboarding-step",
         ) { step ->
             when (step) {
-                OnboardingStep.Welcome ->
+                OnboardingStep.Welcome -> {
                     WelcomeStep(onContinue = viewModel::onWelcomeContinue)
+                }
 
-                OnboardingStep.YourEngine ->
+                OnboardingStep.YourEngine -> {
                     YourEngineStep(
                         state = state,
                         onTierSelected = viewModel::onTierSelected,
-                        onInstall = viewModel::onInstallConfirmed
+                        onInstall = viewModel::onInstallConfirmed,
                     )
+                }
 
-                OnboardingStep.Awakening ->
+                OnboardingStep.Awakening -> {
                     AwakeningStep(
                         state = state,
                         onRetry = viewModel::retryDownload,
-                        onComplete = onComplete
+                        onComplete = onComplete,
                     )
+                }
             }
         }
     }
@@ -127,24 +131,26 @@ fun OnboardingScreen(
 private fun WelcomeStep(onContinue: () -> Unit) {
     val pulse = rememberInfiniteTransition(label = "pulse")
     val pulseAlpha by pulse.animateFloat(
-        initialValue = 0.4f, targetValue = 1f,
+        initialValue = 0.4f,
+        targetValue = 1f,
         animationSpec = infiniteRepeatable(tween(2000, easing = EaseInOut), RepeatMode.Reverse),
-        label = "pulse-alpha"
+        label = "pulse-alpha",
     )
 
     Column(
         modifier = Modifier.fillMaxSize().padding(horizontal = 32.dp),
         verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally
+        horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         // Glyph
         Box(
-            modifier = Modifier
-                .size(72.dp)
-                .clip(CircleShape)
-                .background(DimOrange)
-                .border(1.dp, AwakeOrange.copy(alpha = pulseAlpha), CircleShape),
-            contentAlignment = Alignment.Center
+            modifier =
+                Modifier
+                    .size(72.dp)
+                    .clip(CircleShape)
+                    .background(DimOrange)
+                    .border(1.dp, AwakeOrange.copy(alpha = pulseAlpha), CircleShape),
+            contentAlignment = Alignment.Center,
         ) {
             Text("M", color = AwakeOrange, fontSize = 32.sp, fontWeight = FontWeight.Black)
         }
@@ -153,12 +159,13 @@ private fun WelcomeStep(onContinue: () -> Unit) {
 
         Text(
             "M1K3",
-            style = MaTypography.displayLarge.copy(
-                fontSize = 52.sp,
-                fontWeight = FontWeight.Black,
-                letterSpacing = (-1).sp
-            ),
-            color = Color.White
+            style =
+                MaTypography.displayLarge.copy(
+                    fontSize = 52.sp,
+                    fontWeight = FontWeight.Black,
+                    letterSpacing = (-1).sp,
+                ),
+            color = Color.White,
         )
 
         Spacer(Modifier.height(12.dp))
@@ -167,7 +174,7 @@ private fun WelcomeStep(onContinue: () -> Unit) {
             "Your local intelligence machine.",
             style = MaTypography.headlineSmall,
             color = Color.White.copy(alpha = 0.7f),
-            textAlign = TextAlign.Center
+            textAlign = TextAlign.Center,
         )
 
         Spacer(Modifier.height(24.dp))
@@ -177,7 +184,7 @@ private fun WelcomeStep(onContinue: () -> Unit) {
             style = MaTypography.bodyMedium,
             color = Color.White.copy(alpha = 0.45f),
             textAlign = TextAlign.Center,
-            lineHeight = 22.sp
+            lineHeight = 22.sp,
         )
 
         Spacer(Modifier.height(72.dp))
@@ -194,13 +201,13 @@ private fun WelcomeStep(onContinue: () -> Unit) {
 private fun YourEngineStep(
     state: OnboardingUiState,
     onTierSelected: (M1K3Tier) -> Unit,
-    onInstall: () -> Unit
+    onInstall: () -> Unit,
 ) {
     val selected = state.selectedTier ?: state.recommendedTier
 
     Column(
         modifier = Modifier.fillMaxSize().padding(horizontal = 24.dp),
-        verticalArrangement = Arrangement.SpaceBetween
+        verticalArrangement = Arrangement.SpaceBetween,
     ) {
         Spacer(Modifier.height(16.dp))
 
@@ -209,29 +216,30 @@ private fun YourEngineStep(
                 "Your engine",
                 style = MaTypography.labelSmall,
                 color = AwakeOrange,
-                letterSpacing = 2.sp
+                letterSpacing = 2.sp,
             )
             Spacer(Modifier.height(8.dp))
             Text(
                 selected?.displayName ?: "Detecting…",
-                style = MaTypography.displayMedium.copy(
-                    fontWeight = FontWeight.Black,
-                    fontSize = 42.sp
-                ),
-                color = Color.White
+                style =
+                    MaTypography.displayMedium.copy(
+                        fontWeight = FontWeight.Black,
+                        fontSize = 42.sp,
+                    ),
+                color = Color.White,
             )
             Spacer(Modifier.height(8.dp))
             Text(
                 selected?.tagline ?: "",
                 style = MaTypography.bodyLarge,
-                color = Color.White.copy(alpha = 0.6f)
+                color = Color.White.copy(alpha = 0.6f),
             )
             Spacer(Modifier.height(20.dp))
             Text(
                 selected?.description ?: "",
                 style = MaTypography.bodyMedium,
                 color = Color.White.copy(alpha = 0.55f),
-                lineHeight = 22.sp
+                lineHeight = 22.sp,
             )
 
             selected?.let {
@@ -239,7 +247,7 @@ private fun YourEngineStep(
                 Text(
                     "~${it.downloadSizeMb}MB · one-time download",
                     style = MaTypography.labelSmall,
-                    color = DimOrange.copy(alpha = 0.9f)
+                    color = DimOrange.copy(alpha = 0.9f),
                 )
             }
         }
@@ -250,12 +258,12 @@ private fun YourEngineStep(
                 "Choose your tier",
                 style = MaTypography.labelSmall,
                 color = Color.White.copy(alpha = 0.35f),
-                letterSpacing = 1.sp
+                letterSpacing = 1.sp,
             )
             Spacer(Modifier.height(12.dp))
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 M1K3Tier.all().forEach { tier ->
                     TierChip(
@@ -263,7 +271,7 @@ private fun YourEngineStep(
                         isSelected = selected == tier,
                         isRecommended = tier == state.recommendedTier,
                         onClick = { onTierSelected(tier) },
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier.weight(1f),
                     )
                 }
             }
@@ -281,45 +289,50 @@ private fun TierChip(
     isSelected: Boolean,
     isRecommended: Boolean,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     val bgAlpha by animateFloatAsState(
         targetValue = if (isSelected) 0.18f else 0.06f,
         animationSpec = spring(stiffness = Spring.StiffnessLow),
-        label = "chip-bg"
+        label = "chip-bg",
     )
     val borderColor = if (isSelected) AwakeOrange else Border
 
     Column(
-        modifier = modifier
-            .clip(RoundedCornerShape(12.dp))
-            .background(Color.White.copy(alpha = bgAlpha))
-            .border(1.dp, borderColor, RoundedCornerShape(12.dp))
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null
-            ) { onClick() }
-            .padding(vertical = 14.dp, horizontal = 8.dp),
+        modifier =
+            modifier
+                .clip(RoundedCornerShape(12.dp))
+                .background(Color.White.copy(alpha = bgAlpha))
+                .border(1.dp, borderColor, RoundedCornerShape(12.dp))
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                ) { onClick() }
+                .padding(vertical = 14.dp, horizontal = 8.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(4.dp)
+        verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        val emoji = when (tier) {
-            M1K3Tier.Mini -> "🤏"
-            M1K3Tier.Lil  -> "⚡"
-            M1K3Tier.Big  -> "🧠"
-        }
+        val emoji =
+            when (tier) {
+                M1K3Tier.Mini -> "🤏"
+                M1K3Tier.Lil -> "⚡"
+                M1K3Tier.Big -> "🧠"
+            }
         Text(emoji, fontSize = 22.sp)
         Text(
-            tier.displayName.removePrefix("M1K3").trim().lowercase(),
+            tier.displayName
+                .removePrefix("M1K3")
+                .trim()
+                .lowercase(),
             style = MaTypography.labelSmall,
             color = if (isSelected) AwakeOrange else Color.White.copy(alpha = 0.55f),
-            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
         )
         if (isRecommended) {
             Text(
                 "recommended",
                 style = MaTypography.labelSmall.copy(fontSize = 9.sp),
-                color = AwakeOrange.copy(alpha = 0.7f)
+                color = AwakeOrange.copy(alpha = 0.7f),
             )
         }
     }
@@ -329,21 +342,23 @@ private fun TierChip(
 // Step 3 — Awakening
 // =============================================================================
 
-private val ethosFacts = listOf(
-    "M1K3 never sends your conversations anywhere.",
-    "Works fully offline once installed.",
-    "Your data stays on your device, always.",
-    "No account. No tracking. No compromise.",
-    "Your intelligence. Your hardware. Your rules."
-)
+private val ethosFacts =
+    listOf(
+        "Your conversations never leave your device.",
+        "Chat works offline. Downloads and web search — only when you ask.",
+        "Your data stays on your device, always.",
+        "No account. No tracking. No compromise.",
+        "Your intelligence. Your hardware. Your rules.",
+    )
 
 @Composable
 private fun AwakeningStep(
     state: OnboardingUiState,
     onRetry: () -> Unit,
-    onComplete: () -> Unit
+    onComplete: () -> Unit,
 ) {
-    val isDownloading = state.downloadState is OnboardingDownloadState.Downloading ||
+    val isDownloading =
+        state.downloadState is OnboardingDownloadState.Downloading ||
             state.downloadState is OnboardingDownloadState.Starting
     val isComplete = state.downloadState is OnboardingDownloadState.Complete
     val isFailed = state.downloadState is OnboardingDownloadState.Failed
@@ -363,83 +378,93 @@ private fun AwakeningStep(
     val avatarAlpha by animateFloatAsState(
         targetValue = if (isComplete) 1f else 0.35f,
         animationSpec = tween(1500),
-        label = "avatar-alpha"
+        label = "avatar-alpha",
     )
     val avatarScale by animateFloatAsState(
         targetValue = if (isComplete) 1f else 0.88f,
         animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy),
-        label = "avatar-scale"
+        label = "avatar-scale",
     )
 
     // Pulse animation for dormant state
     val pulse = rememberInfiniteTransition(label = "dormant-pulse")
     val dormantPulse by pulse.animateFloat(
-        initialValue = 0.25f, targetValue = 0.55f,
+        initialValue = 0.25f,
+        targetValue = 0.55f,
         animationSpec = infiniteRepeatable(tween(2400, easing = EaseInOut), RepeatMode.Reverse),
-        label = "dormant-pulse-float"
+        label = "dormant-pulse-float",
     )
 
     Column(
         modifier = Modifier.fillMaxSize().padding(horizontal = 32.dp),
         verticalArrangement = Arrangement.SpaceBetween,
-        horizontalAlignment = Alignment.CenterHorizontally
+        horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Spacer(Modifier.height(16.dp))
 
         // Avatar orb
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Box(
-                modifier = Modifier
-                    .size(120.dp)
-                    .scale(avatarScale)
-                    .alpha(avatarAlpha)
-                    .clip(CircleShape)
-                    .background(
-                        if (isComplete) AwakeOrange.copy(alpha = 0.15f)
-                        else Color.White.copy(alpha = 0.04f)
-                    )
-                    .border(
-                        width = 1.5.dp,
-                        color = if (isComplete) AwakeOrange
-                        else AwakeOrange.copy(alpha = dormantPulse),
-                        shape = CircleShape
-                    ),
-                contentAlignment = Alignment.Center
+                modifier =
+                    Modifier
+                        .size(120.dp)
+                        .scale(avatarScale)
+                        .alpha(avatarAlpha)
+                        .clip(CircleShape)
+                        .background(
+                            if (isComplete) {
+                                AwakeOrange.copy(alpha = 0.15f)
+                            } else {
+                                Color.White.copy(alpha = 0.04f)
+                            },
+                        ).border(
+                            width = 1.5.dp,
+                            color =
+                                if (isComplete) {
+                                    AwakeOrange
+                                } else {
+                                    AwakeOrange.copy(alpha = dormantPulse)
+                                },
+                            shape = CircleShape,
+                        ),
+                contentAlignment = Alignment.Center,
             ) {
                 Text(
                     if (isComplete) "M" else "·",
                     color = if (isComplete) AwakeOrange else AwakeOrange.copy(alpha = dormantPulse),
                     fontSize = if (isComplete) 52.sp else 24.sp,
-                    fontWeight = FontWeight.Black
+                    fontWeight = FontWeight.Black,
                 )
             }
 
             Spacer(Modifier.height(32.dp))
 
             AnimatedContent(
-                targetState = when {
-                    isComplete -> "awake"
-                    isFailed   -> "failed"
-                    else       -> "sleeping"
-                },
+                targetState =
+                    when {
+                        isComplete -> "awake"
+                        isFailed -> "failed"
+                        else -> "sleeping"
+                    },
                 transitionSpec = {
                     fadeIn(tween(600)) togetherWith fadeOut(tween(300))
                 },
-                label = "status-text"
+                label = "status-text",
             ) { status ->
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(
                         when (status) {
-                            "awake"   -> "M1K3 is ready."
-                            "failed"  -> "Something went wrong."
-                            else      -> "Waking up…"
+                            "awake" -> "M1K3 is ready."
+                            "failed" -> "Something went wrong."
+                            else -> "Waking up…"
                         },
                         style = MaTypography.headlineMedium.copy(fontWeight = FontWeight.Bold),
-                        color = when (status) {
-                            "awake"  -> Color.White
-                            "failed" -> Color(0xFFEF4444)
-                            else     -> Color.White.copy(alpha = 0.5f)
-                        }
+                        color =
+                            when (status) {
+                                "awake" -> Color.White
+                                "failed" -> Color(0xFFEF4444)
+                                else -> Color.White.copy(alpha = 0.5f)
+                            },
                     )
                     if (status == "sleeping") {
                         Spacer(Modifier.height(8.dp))
@@ -447,7 +472,7 @@ private fun AwakeningStep(
                             state.selectedTier?.displayName ?: "",
                             style = MaTypography.labelSmall,
                             color = AwakeOrange,
-                            letterSpacing = 1.sp
+                            letterSpacing = 1.sp,
                         )
                     }
                 }
@@ -457,35 +482,42 @@ private fun AwakeningStep(
         // Progress section
         Column(
             modifier = Modifier.fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(20.dp)
+            verticalArrangement = Arrangement.spacedBy(20.dp),
         ) {
             when (val dl = state.downloadState) {
                 is OnboardingDownloadState.Downloading -> {
                     ProgressSection(dl.progressPercent, dl.downloadedMb, dl.totalMb)
                     FactCarousel(factIndex)
                 }
+
                 is OnboardingDownloadState.Starting -> {
                     LinearProgressIndicator(
                         modifier = Modifier.fillMaxWidth().clip(CircleShape),
                         color = AwakeOrange,
                         trackColor = Color.White.copy(alpha = 0.08f),
-                        strokeCap = StrokeCap.Round
+                        strokeCap = StrokeCap.Round,
                     )
                     FactCarousel(factIndex)
                 }
+
                 is OnboardingDownloadState.Failed -> {
                     Text(
                         dl.error,
                         style = MaTypography.bodySmall,
                         color = Color(0xFFEF4444).copy(alpha = 0.8f),
-                        textAlign = TextAlign.Center
+                        textAlign = TextAlign.Center,
                     )
-                    PrimaryButton("Try again", onClick = onRetry,
-                        color = Color(0xFFEF4444))
+                    PrimaryButton(
+                        "Try again",
+                        onClick = onRetry,
+                        color = Color(0xFFEF4444),
+                    )
                 }
+
                 is OnboardingDownloadState.Complete -> {
                     PrimaryButton("Start talking →", onClick = onComplete)
                 }
+
                 else -> {
                     FactCarousel(factIndex)
                 }
@@ -496,22 +528,26 @@ private fun AwakeningStep(
 }
 
 @Composable
-private fun ProgressSection(progressPercent: Int, downloadedMb: Int, totalMb: Int) {
+private fun ProgressSection(
+    progressPercent: Int,
+    downloadedMb: Int,
+    totalMb: Int,
+) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween
+            horizontalArrangement = Arrangement.SpaceBetween,
         ) {
             Text(
                 "$progressPercent%",
                 style = MaTypography.labelSmall,
                 color = AwakeOrange,
-                fontWeight = FontWeight.Bold
+                fontWeight = FontWeight.Bold,
             )
             Text(
                 "${downloadedMb}MB / ${totalMb}MB",
                 style = MaTypography.labelSmall,
-                color = Color.White.copy(alpha = 0.35f)
+                color = Color.White.copy(alpha = 0.35f),
             )
         }
         LinearProgressIndicator(
@@ -519,7 +555,7 @@ private fun ProgressSection(progressPercent: Int, downloadedMb: Int, totalMb: In
             modifier = Modifier.fillMaxWidth().height(3.dp).clip(CircleShape),
             color = AwakeOrange,
             trackColor = Color.White.copy(alpha = 0.08f),
-            strokeCap = StrokeCap.Round
+            strokeCap = StrokeCap.Round,
         )
     }
 }
@@ -529,14 +565,14 @@ private fun FactCarousel(factIndex: Int) {
     AnimatedContent(
         targetState = factIndex,
         transitionSpec = { fadeIn(tween(500)) togetherWith fadeOut(tween(300)) },
-        label = "fact-carousel"
+        label = "fact-carousel",
     ) { idx ->
         Text(
             ethosFacts[idx],
             style = MaTypography.bodySmall,
             color = Color.White.copy(alpha = 0.35f),
             textAlign = TextAlign.Center,
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth(),
         )
     }
 }
@@ -550,26 +586,26 @@ private fun PrimaryButton(
     label: String,
     onClick: () -> Unit,
     color: Color = AwakeOrange,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     Box(
-        modifier = modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
-            .background(color.copy(alpha = 0.15f))
-            .border(1.dp, color, RoundedCornerShape(14.dp))
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                onClick = onClick
-            )
-            .padding(vertical = 16.dp),
-        contentAlignment = Alignment.Center
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(14.dp))
+                .background(color.copy(alpha = 0.15f))
+                .border(1.dp, color, RoundedCornerShape(14.dp))
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                    onClick = onClick,
+                ).padding(vertical = 16.dp),
+        contentAlignment = Alignment.Center,
     ) {
         Text(
             label,
             style = MaTypography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
-            color = color
+            color = color,
         )
     }
 }

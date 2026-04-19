@@ -12,8 +12,8 @@
 
 ### Key Features
 
-- **100% Local AI** - Gemma 3 270M runs entirely on-device via Llamatik 0.9.0
-- **Zero Network Permission** - Manifest-level privacy enforcement
+- **On-Device Chat** - Gemma 3 270M runs entirely on-device via llama.cpp
+- **Your device is the cloud** - Network is user-initiated (downloads + web search only). See `docs/adr/0006-user-initiated-network.md`.
 - **RAG System** - 1,401+ documents across 24 knowledge categories
 - **Semantic Memory** - HNSW vector search with importance scoring
 - **Eco Metrics** - Track environmental savings vs cloud AI

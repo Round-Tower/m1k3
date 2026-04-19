@@ -23,7 +23,6 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
-import org.jetbrains.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import app.m1k3.ai.assistant.design.components.MaButtonPrimary
 import app.m1k3.ai.assistant.design.effects.glassmorphicCard
@@ -32,6 +31,7 @@ import app.m1k3.ai.assistant.design.tokens.MaColors
 import app.m1k3.ai.assistant.design.tokens.MaRadius
 import app.m1k3.ai.assistant.design.tokens.MaSpacing
 import app.m1k3.ai.assistant.design.tokens.MaTypography
+import org.jetbrains.compose.ui.tooling.preview.Preview
 
 /**
  * 間 AI - Demo/Welcome Screen
@@ -39,7 +39,7 @@ import app.m1k3.ai.assistant.design.tokens.MaTypography
  * Introduction to 間 AI features and philosophy.
  *
  * **Features:**
- * - Privacy-first explanation (0 bytes transmitted)
+ * - Privacy-first explanation (on-device chat; user-initiated network only)
  * - On-device AI showcase (SmolLM2-360M)
  * - Feature highlights (RAG, multi-modal, memory)
  * - Quick start guide
@@ -51,25 +51,26 @@ import app.m1k3.ai.assistant.design.tokens.MaTypography
 @Composable
 fun DemoScreen(
     onGetStarted: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     val haptics = LocalHapticFeedback.current
     var currentSection by remember { mutableIntStateOf(0) }
 
     LazyColumn(
-        modifier = modifier
-            .fillMaxSize()
-            .background(MaColors.bgPrimary())
-            .padding(horizontal = MaSpacing.base),
+        modifier =
+            modifier
+                .fillMaxSize()
+                .background(MaColors.bgPrimary())
+                .padding(horizontal = MaSpacing.base),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(MaSpacing.base)
+        verticalArrangement = Arrangement.spacedBy(MaSpacing.base),
     ) {
         // Welcome Header
         item {
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(MaSpacing.md),
-                modifier = Modifier.padding(top = MaSpacing.xxl, bottom = MaSpacing.base)
+                modifier = Modifier.padding(top = MaSpacing.xxl, bottom = MaSpacing.base),
             ) {
                 // Animated Logo
                 PulsingCircle()
@@ -77,13 +78,13 @@ fun DemoScreen(
                 Text(
                     text = "間 AI",
                     style = MaTypography.displayMedium,
-                    color = MaColors.textPrimary()
+                    color = MaColors.textPrimary(),
                 )
 
                 Text(
                     text = "Privacy-First On-Device AI",
                     style = MaTypography.titleMedium,
-                    color = MaColors.textSecondary()
+                    color = MaColors.textSecondary(),
                 )
             }
         }
@@ -94,7 +95,7 @@ fun DemoScreen(
                 title = "100% Private",
                 description = "All AI runs on your device. Zero data leaves. No cloud. No compromise.",
                 icon = Icons.Default.Lock,
-                iconColor = MaColors.Orange
+                iconColor = MaColors.Orange,
             )
         }
 
@@ -105,7 +106,7 @@ fun DemoScreen(
                 style = MaTypography.labelMedium,
                 color = MaColors.Orange,
                 letterSpacing = MaTypography.labelMedium.letterSpacing * 2,
-                modifier = Modifier.padding(top = MaSpacing.md)
+                modifier = Modifier.padding(top = MaSpacing.md),
             )
         }
 
@@ -113,7 +114,7 @@ fun DemoScreen(
             FeatureCard(
                 title = "SmolLM2-360M",
                 description = "360M parameter model. Fast, capable, entirely on-device.",
-                icon = Icons.Default.Memory
+                icon = Icons.Default.Memory,
             )
         }
 
@@ -121,7 +122,7 @@ fun DemoScreen(
             FeatureCard(
                 title = "Semantic Memory",
                 description = "24K context with intelligent recall across conversations.",
-                icon = Icons.Default.Psychology
+                icon = Icons.Default.Psychology,
             )
         }
 
@@ -129,7 +130,7 @@ fun DemoScreen(
             FeatureCard(
                 title = "Knowledge Base",
                 description = "1,401 documents across 24 categories. Local RAG, no internet.",
-                icon = Icons.Default.MenuBook
+                icon = Icons.Default.MenuBook,
             )
         }
 
@@ -137,7 +138,7 @@ fun DemoScreen(
             FeatureCard(
                 title = "Multi-Modal Vision",
                 description = "CameraX + ML Kit. All vision processing stays on your device.",
-                icon = Icons.Default.CameraAlt
+                icon = Icons.Default.CameraAlt,
             )
         }
 
@@ -146,7 +147,7 @@ fun DemoScreen(
                 title = "Eco-Credentials",
                 description = "Every local inference saves ~3Wh and ~120ml water vs cloud AI.",
                 icon = Icons.Default.Eco,
-                iconColor = MaColors.Success
+                iconColor = MaColors.Success,
             )
         }
 
@@ -154,14 +155,14 @@ fun DemoScreen(
         item {
             Column(
                 verticalArrangement = Arrangement.spacedBy(MaSpacing.md),
-                modifier = Modifier.padding(vertical = MaSpacing.lg)
+                modifier = Modifier.padding(vertical = MaSpacing.lg),
             ) {
                 Text(
                     text = "間 (Ma)",
                     style = MaTypography.headlineSmall,
                     color = MaColors.Orange,
                     textAlign = TextAlign.Center,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
                 )
 
                 Text(
@@ -169,7 +170,7 @@ fun DemoScreen(
                     style = MaTypography.bodyMedium,
                     color = MaColors.textSecondary(),
                     textAlign = TextAlign.Center,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
                 )
             }
         }
@@ -182,9 +183,10 @@ fun DemoScreen(
                     onGetStarted()
                 },
                 text = "Get Started",
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = MaSpacing.lg)
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = MaSpacing.lg),
             )
         }
 
@@ -203,45 +205,47 @@ private fun FeatureCard(
     title: String,
     description: String,
     icon: ImageVector,
-    iconColor: androidx.compose.ui.graphics.Color = MaColors.textSecondary()
+    iconColor: androidx.compose.ui.graphics.Color = MaColors.textSecondary(),
 ) {
     val cardShape = RoundedCornerShape(MaRadius.md)
 
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .glassmorphicCard(shape = cardShape)
-            .padding(MaSpacing.md),
-        horizontalArrangement = Arrangement.spacedBy(MaSpacing.md)
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .glassmorphicCard(shape = cardShape)
+                .padding(MaSpacing.md),
+        horizontalArrangement = Arrangement.spacedBy(MaSpacing.md),
     ) {
         Box(
-            modifier = Modifier
-                .size(44.dp)
-                .clip(CircleShape)
-                .background(iconColor.copy(alpha = 0.15f)),
-            contentAlignment = Alignment.Center
+            modifier =
+                Modifier
+                    .size(44.dp)
+                    .clip(CircleShape)
+                    .background(iconColor.copy(alpha = 0.15f)),
+            contentAlignment = Alignment.Center,
         ) {
             Icon(
                 imageVector = icon,
                 contentDescription = null,
                 tint = iconColor,
-                modifier = Modifier.size(24.dp)
+                modifier = Modifier.size(24.dp),
             )
         }
 
         Column(
             modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(MaSpacing.xs)
+            verticalArrangement = Arrangement.spacedBy(MaSpacing.xs),
         ) {
             Text(
                 text = title,
                 style = MaTypography.titleMedium,
-                color = MaColors.textPrimary()
+                color = MaColors.textPrimary(),
             )
             Text(
                 text = description,
                 style = MaTypography.bodyMedium,
-                color = MaColors.textSecondary()
+                color = MaColors.textSecondary(),
             )
         }
     }
@@ -256,57 +260,61 @@ private fun PulsingCircle() {
     val outerScale by infiniteTransition.animateFloat(
         initialValue = 1f,
         targetValue = 1.15f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(2000, easing = EaseInOut),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "outerScale"
+        animationSpec =
+            infiniteRepeatable(
+                animation = tween(2000, easing = EaseInOut),
+                repeatMode = RepeatMode.Reverse,
+            ),
+        label = "outerScale",
     )
     val innerAlpha by infiniteTransition.animateFloat(
         initialValue = 0.4f,
         targetValue = 0.15f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(2000, easing = EaseInOut),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "innerAlpha"
+        animationSpec =
+            infiniteRepeatable(
+                animation = tween(2000, easing = EaseInOut),
+                repeatMode = RepeatMode.Reverse,
+            ),
+        label = "innerAlpha",
     )
 
     Box(
         modifier = Modifier.size(120.dp),
-        contentAlignment = Alignment.Center
+        contentAlignment = Alignment.Center,
     ) {
         // Outer pulsing ring
         Box(
-            modifier = Modifier
-                .size(120.dp)
-                .scale(outerScale)
-                .clip(CircleShape)
-                .border(
-                    width = 2.dp,
-                    color = MaColors.Orange.copy(alpha = innerAlpha),
-                    shape = CircleShape
-                )
+            modifier =
+                Modifier
+                    .size(120.dp)
+                    .scale(outerScale)
+                    .clip(CircleShape)
+                    .border(
+                        width = 2.dp,
+                        color = MaColors.Orange.copy(alpha = innerAlpha),
+                        shape = CircleShape,
+                    ),
         )
 
         // Middle ring
         Box(
-            modifier = Modifier
-                .size(80.dp)
-                .clip(CircleShape)
-                .background(MaColors.Orange.copy(alpha = 0.08f))
-                .border(
-                    width = 1.dp,
-                    color = MaColors.OrangeDim,
-                    shape = CircleShape
-                )
+            modifier =
+                Modifier
+                    .size(80.dp)
+                    .clip(CircleShape)
+                    .background(MaColors.Orange.copy(alpha = 0.08f))
+                    .border(
+                        width = 1.dp,
+                        color = MaColors.OrangeDim,
+                        shape = CircleShape,
+                    ),
         )
 
         // Center text mark
         Text(
             text = "間",
             style = MaTypography.displaySmall,
-            color = MaColors.Orange
+            color = MaColors.Orange,
         )
     }
 }

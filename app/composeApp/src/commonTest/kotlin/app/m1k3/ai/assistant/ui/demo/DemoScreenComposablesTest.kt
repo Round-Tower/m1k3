@@ -14,7 +14,6 @@ import kotlin.test.assertTrue
  * These tests verify data logic that can run in unit tests
  */
 class DemoScreenComposablesTest {
-
     @Test
     fun `getSystemStatus returns exactly 7 status items`() {
         // GREEN: Verify correct number of status items
@@ -61,12 +60,13 @@ class DemoScreenComposablesTest {
     @Test
     fun `StatusItem with success has appropriate icon`() {
         // GREEN: Verify status icon for success
-        val successItem = StatusItem(
-            name = "Test",
-            description = "Test description",
-            icon = "✅",
-            isSuccess = true
-        )
+        val successItem =
+            StatusItem(
+                name = "Test",
+                description = "Test description",
+                icon = "✅",
+                isSuccess = true,
+            )
 
         assertEquals("✅", successItem.icon)
         assertTrue(successItem.isSuccess)
@@ -75,12 +75,13 @@ class DemoScreenComposablesTest {
     @Test
     fun `StatusItem with failure has appropriate icon`() {
         // GREEN: Verify status icon for failure
-        val failItem = StatusItem(
-            name = "Test",
-            description = "Test description",
-            icon = "⚠️",
-            isSuccess = false
-        )
+        val failItem =
+            StatusItem(
+                name = "Test",
+                description = "Test description",
+                icon = "⚠️",
+                isSuccess = false,
+            )
 
         assertEquals("⚠️", failItem.icon)
         assertTrue(!failItem.isSuccess)
@@ -89,13 +90,14 @@ class DemoScreenComposablesTest {
     @Test
     fun `architecture layers data has correct structure`() {
         // GREEN: Verify architecture layer data
-        val layers = listOf(
-            "Kotlin Multiplatform 2.2.20" to "Cross-platform foundation",
-            "Compose Multiplatform 1.9.1" to "Modern UI framework",
-            "SQLDelight 2.0.2" to "Type-safe database",
-            "ONNX Runtime 1.23.1" to "Local AI inference",
-            "CameraX + ML Kit" to "Multi-modal vision"
-        )
+        val layers =
+            listOf(
+                "Kotlin Multiplatform 2.2.20" to "Cross-platform foundation",
+                "Compose Multiplatform 1.9.1" to "Modern UI framework",
+                "SQLDelight 2.0.2" to "Type-safe database",
+                "ONNX Runtime 1.23.1" to "Local AI inference",
+                "CameraX + ML Kit" to "Multi-modal vision",
+            )
 
         assertEquals(5, layers.size)
         assertEquals("Kotlin Multiplatform 2.2.20", layers[0].first)
@@ -113,7 +115,7 @@ data class StatusItem(
     val name: String,
     val description: String,
     val icon: String,
-    val isSuccess: Boolean
+    val isSuccess: Boolean,
 )
 
 // ============ Utility Functions ============
@@ -124,49 +126,48 @@ data class StatusItem(
  * @param knowledgeStatus Knowledge import status message (from DatabaseInitializer)
  * @return List of StatusItem for rendering
  */
-fun getSystemStatus(knowledgeStatus: String? = null): List<StatusItem> {
-    return listOf(
+fun getSystemStatus(knowledgeStatus: String? = null): List<StatusItem> =
+    listOf(
         StatusItem(
             name = "Privacy Protection",
-            description = "Zero network permission • 100% local",
+            description = "On-device chat • network only when you ask",
             icon = "🔒",
-            isSuccess = true
+            isSuccess = true,
         ),
         StatusItem(
             name = "Database Foundation",
             description = "SQLDelight with encryption ready",
             icon = "🗄️",
-            isSuccess = true
+            isSuccess = true,
         ),
         StatusItem(
             name = "Knowledge Base",
             description = knowledgeStatus ?: "Loading...",
             icon = "📚",
-            isSuccess = knowledgeStatus?.startsWith("✅") == true
+            isSuccess = knowledgeStatus?.startsWith("✅") == true,
         ),
         StatusItem(
             name = "Package Name",
             description = "app.m1k3.ai.assistant (ASO optimized)",
             icon = "📦",
-            isSuccess = true
+            isSuccess = true,
         ),
         StatusItem(
             name = "AI Engine",
             description = "SmolLM2-360M (Production Ready)",
             icon = "🤖",
-            isSuccess = true
+            isSuccess = true,
         ),
         StatusItem(
             name = "Design System",
             description = "AMOLED Black • Liquid Glass • Complete",
             icon = "🎨",
-            isSuccess = true
+            isSuccess = true,
         ),
         StatusItem(
             name = "Robot Avatar",
             description = "9 Emotions • 6 Activities • Canvas Rendering",
             icon = "🤖",
-            isSuccess = true
-        )
+            isSuccess = true,
+        ),
     )
-}

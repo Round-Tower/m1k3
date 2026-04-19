@@ -110,7 +110,7 @@ import co.touchlab.kermit.Logger as KermitLogger
  * M1K3 AI - MainActivity
  *
  * Minimalist demo showcasing:
- * - Privacy-first architecture (zero network)
+ * - Privacy-first architecture (on-device chat; user-initiated network only — see ADR-0006)
  * - Encrypted database foundation
  * - Beautiful Material 3 design
  * - "Negative space" philosophy

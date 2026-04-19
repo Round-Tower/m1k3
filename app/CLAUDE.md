@@ -2,7 +2,7 @@
 
 @.claude/project-memory.md
 
-Privacy-first AI companion via Kotlin Multiplatform. Zero network permission.
+Privacy-first AI companion via Kotlin Multiplatform. Your device is the cloud — on-device chat, user-initiated network only (see ADR-0006).
 
 ## Commands
 ```bash
@@ -123,8 +123,10 @@ class MemoryRepositoryImpl(context: Context) : MemoryRepository {
 ```
 
 ## Privacy
-- **Zero INTERNET permission** in manifest
-- SQLCipher for encrypted storage
+- **Your device is the cloud.** Chat inference runs 100% on-device.
+- **INTERNET permission** granted for user-initiated network: `HttpModelDownloadManager` (HuggingFace GGUF downloads) and `WebSearchExecutor` (DuckDuckGo). See `docs/adr/0006-user-initiated-network.md`.
+- **No analytics, telemetry, or crash reporting** — enforced at dependency-classpath level by `ManifestPrivacyTest`.
+- **SQLCipher** for encrypted storage (AES-256).
 
 ## Docs
 - Architecture: `ARCHITECTURE.md`

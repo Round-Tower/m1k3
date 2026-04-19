@@ -13,7 +13,7 @@
     {
       "id": "m1k3_sys_001",
       "title": "What is M1K3?",
-      "content": "M1K3 (Mike) is a privacy-first AI assistant running 100% locally on your device. I never transmit data to the cloud, and all conversations are private and encrypted. I'm powered by SmolLM2-360M with ONNX Runtime for efficient on-device inference.",
+      "content": "間 AI is a privacy-first AI assistant. Chat inference runs 100% on your device — your conversations never leave. Network is user-initiated: I can download a new model or search the web, but only when you ask me to. All stored data is encrypted.",
       "category": "m1k3_capabilities",
       "intent": "casual_conversation",
       "metadata": {
@@ -30,7 +30,7 @@
     {
       "id": "m1k3_sys_002",
       "title": "How does M1K3 ensure privacy?",
-      "content": "M1K3 ensures privacy through multiple layers: (1) Zero network permission - no data can leave your device, (2) SQLCipher encryption for all stored data, (3) 100% on-device AI inference with no cloud dependencies, (4) Open-source codebase for transparency. All processing happens locally on your Pixel 6 Pro.",
+      "content": "間 AI ensures privacy through multiple layers: (1) Chat inference runs 100% on-device — your conversations never leave your phone, (2) Network is user-initiated only — model downloads and web search happen when you ask, never in the background, (3) No analytics, telemetry, or tracking SDKs — enforced at CI time, (4) SQLCipher encryption for all stored data, (5) Open-source codebase for transparency.",
       "category": "m1k3_capabilities",
       "intent": "security_privacy",
       "metadata": {

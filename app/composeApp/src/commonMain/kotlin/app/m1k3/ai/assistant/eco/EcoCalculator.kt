@@ -11,7 +11,11 @@ import kotlin.math.abs
  * - Water: 120ml saved (data center cooling)
  * - Energy: 3 Wh saved (GPU + network transmission)
  * - CO2: 2g prevented (electricity generation)
- * - Privacy: 0 bytes transmitted (100% local)
+ *
+ * Note: `bytesSent = 0` is a chat-inference invariant (chat never uses the
+ * network), NOT an app-wide guarantee. Model downloads and web search do use
+ * the network — they're tracked separately. See ADR-0006. Follow-up task #16
+ * will surface real download/search bytes and a `cloudBytesAvoided` headline.
  *
  * **Philosophy:**
  * 間 AI embodies environmental consciousness and privacy transparency.
@@ -24,7 +28,6 @@ import kotlin.math.abs
  * - Electricity CO2: ~500g per kWh (global average)
  */
 object EcoCalculator {
-
     // ==================== Constants ====================
 
     /**
@@ -60,7 +63,7 @@ object EcoCalculator {
             waterSavedMl = (WATER_ML_PER_100_TOKENS * scaleFactor).toInt(),
             energySavedWh = (ENERGY_MWH_PER_100_TOKENS * scaleFactor).toInt(),
             co2PreventedG = (CO2_G_PER_100_TOKENS * scaleFactor).toInt(),
-            bytesSent = 0 // Always 0 - privacy enforcement
+            bytesSent = 0, // Always 0 - privacy enforcement
         )
     }
 
@@ -72,15 +75,17 @@ object EcoCalculator {
      * @param milliliters Water amount in milliliters
      * @return Formatted string (e.g., "120 ml" or "1.50 L")
      */
-    fun formatWater(milliliters: Int): String {
-        return when {
+    fun formatWater(milliliters: Int): String =
+        when {
             milliliters >= 1000 -> {
                 val liters = milliliters / 1000.0
                 "%.2f L".format(liters)
             }
-            else -> "$milliliters ml"
+
+            else -> {
+                "$milliliters ml"
+            }
         }
-    }
 
     /**
      * Format energy amount in human-readable units.
@@ -96,7 +101,10 @@ object EcoCalculator {
                 val kilowattHours = wattHours / 1000
                 "%.2f kWh".format(kilowattHours)
             }
-            else -> "%.2f Wh".format(wattHours)
+
+            else -> {
+                "%.2f Wh".format(wattHours)
+            }
         }
     }
 
@@ -106,15 +114,17 @@ object EcoCalculator {
      * @param grams CO2 amount in grams
      * @return Formatted string (e.g., "100 g" or "1.50 kg")
      */
-    fun formatCO2(grams: Int): String {
-        return when {
+    fun formatCO2(grams: Int): String =
+        when {
             grams >= 1000 -> {
                 val kilograms = grams / 1000.0
                 "%.2f kg".format(kilograms)
             }
-            else -> "$grams g"
+
+            else -> {
+                "$grams g"
+            }
         }
-    }
 
     // ==================== Achievements ====================
 
@@ -146,7 +156,7 @@ data class EcoSavings(
     val waterSavedMl: Int,
     val energySavedWh: Int, // Stored as milliwatt-hours (mWh)
     val co2PreventedG: Int,
-    val bytesSent: Int = 0 // Always 0 for privacy metric
+    val bytesSent: Int = 0, // Always 0 for privacy metric
 )
 
 /**
@@ -158,13 +168,14 @@ data class EcoSavings(
 enum class Achievement(
     val waterThresholdMl: Int,
     val title: String,
-    val emoji: String
+    val emoji: String,
 ) {
     WATER_BOTTLE(500, "Saved a water bottle", "💧"),
     BUCKET(5000, "Saved a bucket", "🪣"),
     BATHTUB(100000, "Saved a bathtub", "🛁"),
     POOL(1000000, "Saved a swimming pool", "🏊"),
-    OLYMPIC_POOL(2500000, "Saved an Olympic pool", "🏅");
+    OLYMPIC_POOL(2500000, "Saved an Olympic pool", "🏅"),
+    ;
 
     companion object {
         /**
