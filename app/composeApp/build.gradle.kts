@@ -1,5 +1,10 @@
+import com.android.build.api.artifact.SingleArtifact
 import org.jetbrains.compose.desktop.application.dsl.TargetFormat
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
+import java.util.zip.ZipEntry
+import java.util.zip.ZipFile
 
 plugins {
     alias(libs.plugins.kotlinMultiplatform)
@@ -253,6 +258,15 @@ android {
 }
 
 dependencies {
+    // Pin vision-internal-vkp to a 16KB-page-aligned release (libmlkitcommonpipeline.so).
+    // Transitive through image-labeling; <18.2.0 ships 4KB-aligned .so and trips the
+    // Android 15+ PageSizeMismatchDialog on install. Drift-guarded by verify16KbAlignment*.
+    constraints {
+        implementation(libs.mlkit.vision.internal.vkp) {
+            because("Android 15+ requires 16KB ELF page alignment; vision-internal-vkp <18.2.0 is 4KB-aligned")
+        }
+    }
+
     debugImplementation(compose.uiTooling)
 
     // LeakCanary for memory leak detection (debug only)
@@ -410,4 +424,144 @@ tasks.register("bundleWebAvatar") {
  */
 tasks.named("preBuild") {
     dependsOn("copyWebAvatarToAndroid")
+}
+
+// ============================================================================
+// 16KB Page-Size Alignment Guard (Android 15+)
+// ============================================================================
+// Google Play requires all apps targeting API 35+ to support 16KB memory pages.
+// Every native library must have 16KB-aligned ELF LOAD segments AND its zip
+// entry in the APK must be aligned to a 16KB boundary (because AGP 8.3+ ships
+// with extractNativeLibs=false — libs are mmap'd straight from the APK).
+//
+// zipalign -c -P 16 verifies both properties in one shot. This task wires the
+// check into every assemble{Debug,Release}, so a dependency that sneaks in a
+// 4KB-aligned .so fails the build instead of the install dialog.
+
+abstract class Verify16KbAlignmentTask : DefaultTask() {
+    @get:InputDirectory
+    abstract val apkDirectory: DirectoryProperty
+
+    init {
+        group = "verification"
+        description = "Fail the build if any native library is not 16KB-aligned (Android 15+ compliance)"
+    }
+
+    @TaskAction
+    fun verify() {
+        val apks =
+            apkDirectory
+                .get()
+                .asFile
+                .walkTopDown()
+                .filter { it.isFile && it.extension == "apk" }
+                .toList()
+
+        if (apks.isEmpty()) {
+            logger.lifecycle("No APKs in ${apkDirectory.get().asFile} — skipping 16KB check")
+            return
+        }
+
+        val failures = mutableListOf<String>()
+
+        apks.forEach { apk ->
+            logger.lifecycle("🔎 16KB alignment check: ${apk.name}")
+            ZipFile(apk).use { zip ->
+                val enumeration = zip.entries()
+                while (enumeration.hasMoreElements()) {
+                    val entry: ZipEntry = enumeration.nextElement()
+                    if (entry.isDirectory) continue
+                    if (!entry.name.startsWith("lib/") || !entry.name.endsWith(".so")) continue
+                    val align = readMaxLoadAlignment(zip, entry) ?: continue
+                    val hex = "0x" + align.toString(16)
+                    if (align < 0x4000L) {
+                        failures += "${entry.name} → $hex (need ≥ 0x4000)"
+                    } else {
+                        logger.info("   ok  ${entry.name} @ $hex")
+                    }
+                }
+            }
+        }
+
+        if (failures.isNotEmpty()) {
+            throw GradleException(
+                buildString {
+                    appendLine()
+                    appendLine("❌ 16KB page-alignment check FAILED — Android 15+ will refuse to install:")
+                    failures.forEach { appendLine("   • $it") }
+                    appendLine()
+                    appendLine("Fix options:")
+                    appendLine("  1. Upgrade the offending dependency to a 16KB-safe release.")
+                    appendLine("  2. Add a dependency constraint forcing the 16KB-aligned transitive")
+                    appendLine("     version (see mlkit-vision-internal-vkp in composeApp/build.gradle.kts).")
+                    appendLine("  3. If you own the native code, link with -Wl,-z,max-page-size=16384")
+                    appendLine("     (see androidMain/cpp/CMakeLists.txt:64).")
+                },
+            )
+        }
+    }
+
+    /**
+     * Parse the ELF program headers of a 64-bit little-endian ELF and return the max
+     * p_align across all PT_LOAD segments. Returns null if the entry isn't a 64-bit LE
+     * ELF (e.g. 32-bit — which we don't ship — or malformed).
+     */
+    private fun readMaxLoadAlignment(
+        zip: ZipFile,
+        entry: ZipEntry,
+    ): Long? {
+        val bytes =
+            zip.getInputStream(entry).use { input ->
+                // Program headers live near the start of the ELF; 8KB covers every
+                // realistic library (phoff is typically 64, phentsize=56, phnum<30).
+                val sz = minOf(entry.size, 8192L).toInt()
+                input.readNBytes(sz)
+            }
+        if (bytes.size < 64) return null
+        if (bytes[0] != 0x7F.toByte() || bytes[1] != 'E'.code.toByte() ||
+            bytes[2] != 'L'.code.toByte() || bytes[3] != 'F'.code.toByte()
+        ) {
+            return null
+        }
+        if (bytes[4].toInt() != 2) return null // 32-bit — unsupported (we ship 64-bit only)
+        if (bytes[5].toInt() != 1) return null // big-endian — not our target
+
+        val buf = ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN)
+        val phoff = buf.getLong(32)
+        val phentsize = buf.getShort(54).toInt() and 0xFFFF
+        val phnum = buf.getShort(56).toInt() and 0xFFFF
+
+        val headersEnd = phoff + phentsize.toLong() * phnum
+        if (headersEnd > bytes.size.toLong()) {
+            logger.warn("Program headers of ${entry.name} exceed 8KB buffer — skipping")
+            return null
+        }
+
+        var maxLoadAlign = 0L
+        for (i in 0 until phnum) {
+            val off = (phoff + i.toLong() * phentsize).toInt()
+            val pType = buf.getInt(off)
+            if (pType == 1) { // PT_LOAD
+                val pAlign = buf.getLong(off + 48)
+                if (pAlign > maxLoadAlign) maxLoadAlign = pAlign
+            }
+        }
+        return maxLoadAlign.takeIf { it > 0 }
+    }
+}
+
+androidComponents {
+    onVariants { variant ->
+        val capName = variant.name.replaceFirstChar { it.uppercase() }
+        val verifyTask =
+            tasks.register<Verify16KbAlignmentTask>("verify16KbAlignment$capName") {
+                apkDirectory.set(variant.artifacts.get(SingleArtifact.APK))
+            }
+        // AGP registers assemble<Variant> after onVariants fires — wire lazily.
+        afterEvaluate {
+            tasks.named("assemble$capName") {
+                dependsOn(verifyTask)
+            }
+        }
+    }
 }
