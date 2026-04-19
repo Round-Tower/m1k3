@@ -7,14 +7,15 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import app.m1k3.ai.assistant.design.tokens.MaColors
 import app.m1k3.ai.assistant.design.tokens.MaTypography
 import app.m1k3.ai.assistant.utils.Logger
 import io.github.sceneview.Scene
+import io.github.sceneview.model.ModelInstance
 import io.github.sceneview.node.ModelNode
 import io.github.sceneview.rememberCameraNode
-import io.github.sceneview.rememberModelLoader
 import io.github.sceneview.rememberNodes
 import kotlinx.coroutines.delay
 
@@ -73,11 +74,14 @@ fun Avatar3DView(
 ) {
     // Use shared engine from CompositionLocal (one engine for entire app)
     val engine = LocalSharedEngine.current!!
+    val context = LocalContext.current
 
     // Acquire engine reference (increment ref count, auto-release on dispose)
     AcquireEngine()
 
-    val modelLoader = rememberModelLoader(engine)
+    // Shared ModelLoader across every Avatar3D surface — prevents the
+    // libgltfio-jni.so tear-down race when hero + toolbar are both live.
+    val modelLoader = remember(engine) { SharedModelCache.getLoader(context, engine) }
 
     // Load model metadata
     var metadata by remember(modelConfig) { mutableStateOf<ModelMetadata?>(null) }
@@ -214,7 +218,15 @@ private fun RenderStaticModel(
 ) {
     // Use shared engine from CompositionLocal (one engine for entire app)
     val engine = LocalSharedEngine.current!!
-    val modelLoader = rememberModelLoader(engine)
+    val context = LocalContext.current
+    val modelLoader = remember(engine) { SharedModelCache.getLoader(context, engine) }
+
+    // Shared ModelInstance per surface (secondary FilamentInstance — shared
+    // GPU resources, independent animator state). Loaded once per GLB path.
+    val sharedInstance: ModelInstance? =
+        remember(engine, modelConfig.path) {
+            SharedModelCache.createInstance(context, engine, modelConfig.path)
+        }
 
     // Create procedural animator
     val animator =
@@ -271,20 +283,24 @@ private fun RenderStaticModel(
         }
     }
 
-    // Create model node
+    // Create model node from shared instance (bail if cache returned null)
     val childNodes =
         rememberNodes {
-            add(
-                ModelNode(
-                    modelInstance = modelLoader.createModelInstance(modelConfig.path),
-                    scaleToUnits = 1.0f,
-                ).apply {
-                    position =
-                        io.github.sceneview.math
-                            .Position(0f, 0f, 0f)
-                    logger.i { "Static model loaded: ${modelConfig.name}" }
-                },
-            )
+            if (sharedInstance != null) {
+                add(
+                    ModelNode(
+                        modelInstance = sharedInstance,
+                        scaleToUnits = 1.0f,
+                    ).apply {
+                        position =
+                            io.github.sceneview.math
+                                .Position(0f, 0f, 0f)
+                        logger.i { "Static model loaded from shared cache: ${modelConfig.name}" }
+                    },
+                )
+            } else {
+                logger.w { "Shared cache returned null instance for ${modelConfig.path}" }
+            }
         }
 
     Box(
@@ -358,7 +374,15 @@ private fun RenderAnimatedModel(
 ) {
     // Use shared engine from CompositionLocal (one engine for entire app)
     val engine = LocalSharedEngine.current!!
-    val modelLoader = rememberModelLoader(engine)
+    val context = LocalContext.current
+    val modelLoader = remember(engine) { SharedModelCache.getLoader(context, engine) }
+
+    // Shared ModelInstance per surface (secondary FilamentInstance — shared
+    // GPU resources, independent animator state). Loaded once per GLB path.
+    val sharedInstance: ModelInstance? =
+        remember(engine, modelConfig.path) {
+            SharedModelCache.createInstance(context, engine, modelConfig.path)
+        }
 
     // Calculate optimal camera using UNIT bounding box — scaleToUnits=1.0 normalizes all
     // models to ~1m, so camera distance must be consistent regardless of native geometry.
@@ -371,10 +395,10 @@ private fun RenderAnimatedModel(
         remember(normalizedMetadata) {
             CameraAutoFit.calculate(
                 metadata = normalizedMetadata,
-                cameraAngle = 18f, // Slightly overhead — "pet on desk" perspective
+                cameraAngle = 12f, // Softer overhead — 18° was clipping tall-head models in the hero
                 focusOffset = 0f, // centerOrigin handles vertical placement
                 horizontalAngle = -20f, // Gentle 3/4 view
-                padding = 2.0f, // Extra room for animation limb extension
+                padding = 2.6f, // Animation bones + tall heads (Taipan, Sparrow, dinosaurs) extend well past UNIT box
             )
         }
 
@@ -451,12 +475,16 @@ private fun RenderAnimatedModel(
                 }
         }
 
-    // Create model node
+    // Create model node from shared instance (bail if cache returned null)
     val childNodes =
         rememberNodes {
+            if (sharedInstance == null) {
+                logger.w { "Shared cache returned null instance for ${modelConfig.path}" }
+                return@rememberNodes
+            }
             add(
                 ModelNode(
-                    modelInstance = modelLoader.createModelInstance(modelConfig.path),
+                    modelInstance = sharedInstance,
                     scaleToUnits = 1.0f,
                     // Center model bounding box at origin — fixes models with offset
                     // geometry (e.g. dinosaurs authored at non-zero positions).

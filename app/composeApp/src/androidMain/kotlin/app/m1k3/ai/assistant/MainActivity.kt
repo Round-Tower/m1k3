@@ -224,6 +224,11 @@ class MainActivity : ComponentActivity() {
                         // Close AI engine (ONNX cleanup on IO thread)
                         aiEngine.close()
 
+                        // Order matters: loader holds engine-owned handles, so
+                        // destroy shared models before the engine itself.
+                        app.m1k3.ai.assistant.avatar.SharedModelCache
+                            .forceDestroy()
+
                         // Destroy Filament engine (CRITICAL: prevents memory leaks)
                         FilamentEngineManager.forceDestroy()
                     } catch (e: Exception) {
@@ -335,6 +340,12 @@ private fun MaAppContent(knowledgeStatus: String) {
                     )
                 }
 
+            // Controls whether the Toolbar renders its own 3D avatar. Hero
+            // splash flips this off while it owns the big 3D scene, then on
+            // again once the user starts chatting. Keeps us to one Filament
+            // scene at a time (two crashes libgltfio-jni.so).
+            val toolbarAvatarVisible = remember { mutableStateOf(true) }
+
             var drawerOpen by remember { mutableStateOf(false) }
 
             val drawerState = rememberDrawerState(DrawerValue.Closed)
@@ -411,6 +422,7 @@ private fun MaAppContent(knowledgeStatus: String) {
                     CompositionLocalProvider(
                         LocalSharedAvatarVM provides appAvatarVM,
                         app.m1k3.ai.assistant.avatar.LocalSelectedAvatarId provides selectedAvatarState,
+                        app.m1k3.ai.assistant.avatar.LocalShowToolbarAvatar provides toolbarAvatarVisible,
                     ) {
                         Scaffold(
                             topBar = {

@@ -295,6 +295,19 @@ fun ChatScreen(
         }
     }
 
+    // Hero owns the 3D avatar scene while the chat is pre-conversation —
+    // tell the Toolbar to hide its own avatar so we don't spin up two
+    // Filament scenes on the same GLB (libgltfio-jni.so SIGSEGV otherwise).
+    val toolbarAvatarVisibility =
+        app.m1k3.ai.assistant.avatar.LocalShowToolbarAvatar.current as? androidx.compose.runtime.MutableState<Boolean>
+    val preConversation = uiState.messages.none { it.isUser }
+    LaunchedEffect(preConversation) {
+        toolbarAvatarVisibility?.value = !preConversation
+    }
+    androidx.compose.runtime.DisposableEffect(Unit) {
+        onDispose { toolbarAvatarVisibility?.value = true }
+    }
+
     Box(
         modifier =
             Modifier

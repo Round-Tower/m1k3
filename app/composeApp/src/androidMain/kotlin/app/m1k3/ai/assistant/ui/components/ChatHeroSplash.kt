@@ -79,6 +79,10 @@ fun ChatHeroSplash(
             contentAlignment = Alignment.Center,
         ) {
             if (avatarState != null) {
+                // 3D restored — SharedModelCache gives hero + toolbar
+                // their own ModelInstance backed by a single shared
+                // ModelLoader/AssetLoader, eliminating the gltfio
+                // tear-down race that was null-deref'ing at 0x2a8.
                 AvatarView(
                     state = avatarState,
                     modifier = Modifier.fillMaxWidth().height(220.dp),

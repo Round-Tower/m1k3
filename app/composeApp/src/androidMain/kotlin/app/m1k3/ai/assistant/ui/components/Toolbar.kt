@@ -26,12 +26,12 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import org.jetbrains.compose.ui.tooling.preview.Preview
-import app.m1k3.ai.assistant.avatar.AvatarState
 import app.m1k3.ai.assistant.avatar.AvatarEmotion
+import app.m1k3.ai.assistant.avatar.AvatarState
 import app.m1k3.ai.assistant.avatar.AvatarView
 import app.m1k3.ai.assistant.design.theme.MaTheme
 import app.m1k3.ai.assistant.design.tokens.*
+import org.jetbrains.compose.ui.tooling.preview.Preview
 
 /**
  * Unified persistent toolbar for all screens.
@@ -57,38 +57,40 @@ fun Toolbar(
     avatarState: AvatarState,
     onMenuClick: () -> Unit = {},
     onClearClick: (() -> Unit)? = null,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     var showOverflowMenu by remember { mutableStateOf(false) }
     Box(
-        modifier = modifier
-            .fillMaxWidth()
+        modifier =
+            modifier
+                .fillMaxWidth(),
     ) {
         // Toolbar content
         Surface(
             modifier = Modifier.fillMaxWidth(),
         ) {
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = MaSpacing.md, vertical = 16.dp),
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = MaSpacing.md, vertical = 16.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 // Left side: Menu button + Title and status
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     // Hamburger menu button
                     IconButton(
                         onClick = onMenuClick,
-                        modifier = Modifier.size(40.dp)
+                        modifier = Modifier.size(40.dp),
                     ) {
                         Icon(
                             imageVector = Icons.Sharp.Menu,
                             contentDescription = "Menu",
-                            tint = MaColors.textPrimary()
+                            tint = MaColors.textPrimary(),
                         )
                     }
 
@@ -109,7 +111,6 @@ fun Toolbar(
                                     fontSize = 24.sp,
                                     lineHeight = 16.sp,
                                     letterSpacing = 0.25.sp,
-
                                 ),
                             color = if (engineInitialized) MaColors.Orange else MaColors.textSecondary(),
                         )
@@ -121,40 +122,47 @@ fun Toolbar(
                     Box {
                         IconButton(
                             onClick = { showOverflowMenu = true },
-                            modifier = Modifier.size(40.dp)
+                            modifier = Modifier.size(40.dp),
                         ) {
                             Icon(
                                 imageVector = Icons.Default.MoreVert,
                                 contentDescription = "More options",
-                                tint = MaColors.textPrimary()
+                                tint = MaColors.textPrimary(),
                             )
                         }
 
                         DropdownMenu(
                             expanded = showOverflowMenu,
-                            onDismissRequest = { showOverflowMenu = false }
+                            onDismissRequest = { showOverflowMenu = false },
                         ) {
                             DropdownMenuItem(
                                 text = { Text("Clear Conversation") },
                                 onClick = {
                                     showOverflowMenu = false
                                     onClearClick()
-                                }
+                                },
                             )
                         }
                     }
                 }
 
-                // Right side: Avatar
-                AvatarView(
-                    state = avatarState,
-                    use3D = true,
-                    showInfo = true,
-                    modifier = Modifier
-                        .testTag("avatar_unified")
-                        .size(140.dp)
-                        .statusBarsPadding()
-                )
+                // Right side: Avatar — hidden while the chat hero owns the 3D scene.
+                val showAvatar by app.m1k3.ai.assistant.avatar.LocalShowToolbarAvatar.current
+                if (showAvatar) {
+                    AvatarView(
+                        state = avatarState,
+                        use3D = true,
+                        showInfo = true,
+                        modifier =
+                            Modifier
+                                .testTag("avatar_unified")
+                                .size(140.dp)
+                                .statusBarsPadding(),
+                    )
+                } else {
+                    androidx.compose.foundation.layout
+                        .Spacer(modifier = Modifier.size(140.dp))
+                }
             }
         }
     }
@@ -172,7 +180,7 @@ private fun UnifiedToolbarChatReadyPreview() {
             screenName = "Chat",
             engineInitialized = true,
             avatarState = AvatarState(emotion = AvatarEmotion.HAPPY),
-            onMenuClick = {}
+            onMenuClick = {},
         )
     }
 }
@@ -184,7 +192,7 @@ private fun ToolbarHistoryLoadingPreview() {
         Toolbar(
             screenName = "History",
             engineInitialized = false,
-            avatarState = AvatarState(emotion = AvatarEmotion.THINKING)
+            avatarState = AvatarState(emotion = AvatarEmotion.THINKING),
         )
     }
 }
@@ -196,7 +204,7 @@ private fun ToolbarEcoGeneratingPreview() {
         Toolbar(
             screenName = "Environmental Impact",
             engineInitialized = true,
-            avatarState = AvatarState(emotion = AvatarEmotion.EXCITED)
+            avatarState = AvatarState(emotion = AvatarEmotion.EXCITED),
         )
     }
 }
@@ -208,7 +216,7 @@ private fun ToolbarSettingsPreview() {
         Toolbar(
             screenName = "Settings",
             engineInitialized = true,
-            avatarState = AvatarState(emotion = AvatarEmotion.NEUTRAL)
+            avatarState = AvatarState(emotion = AvatarEmotion.NEUTRAL),
         )
     }
 }

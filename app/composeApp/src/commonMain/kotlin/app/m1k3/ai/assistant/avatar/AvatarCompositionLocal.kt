@@ -75,3 +75,17 @@ val LocalSelectedAvatarId =
     staticCompositionLocalOf<androidx.compose.runtime.State<String>> {
         androidx.compose.runtime.mutableStateOf(ModelRegistry.DEFAULT_MODEL_ID)
     }
+
+/**
+ * When the hero splash is on screen the 3D avatar lives THERE; the
+ * toolbar hides its own 3D render to avoid two Filament scenes loading
+ * the same GLB (that pairing crashes libgltfio-jni.so with a null-ptr
+ * deref). Flipped back to true as soon as the user types their first
+ * message — toolbar takes ownership of the small avatar from then on.
+ *
+ * MurphySig: kev+claude / confidence 0.8 / 2026-04-19
+ */
+val LocalShowToolbarAvatar =
+    staticCompositionLocalOf<androidx.compose.runtime.State<Boolean>> {
+        androidx.compose.runtime.mutableStateOf(true)
+    }
