@@ -44,23 +44,29 @@ object MaColors {
     // Creates depth through subtle transparency
     // ============================================
 
-    /** Primary background - Pure AMOLED black */
-    val BgPrimary = Black
+    /**
+     * Primary background - soft charcoal.
+     *
+     * Was pure AMOLED Black, but #000000 feels clinical at hero scale.
+     * #0E0E10 reads as "dark" but gives a tiny warmth so the avatar,
+     * cards, and glass surfaces have something to lift off.
+     */
+    val BgPrimary = Color(0xFF0E0E10)
 
     /** Secondary background - 2% white transparency */
-    val BgSecondary = Color(0x15FFFFFF)  // rgba(255,255,255,0.02)
+    val BgSecondary = Color(0x15FFFFFF) // rgba(255,255,255,0.02)
 
     /** Tertiary background - 4% white transparency */
-    val BgTertiary = Color(0x0AFFFFFF)   // rgba(255,255,255,0.04)
+    val BgTertiary = Color(0x0AFFFFFF) // rgba(255,255,255,0.04)
 
     /** Elevated surface - 8% white transparency */
-    val BgElevated = Color(0x14FFFFFF)   // rgba(255,255,255,0.08)
+    val BgElevated = Color(0x14FFFFFF) // rgba(255,255,255,0.08)
 
     /** Glassmorphic surface - 3% white transparency (for blur effects) */
-    val BgGlass = Color(0x08FFFFFF)      // rgba(255,255,255,0.03)
+    val BgGlass = Color(0x08FFFFFF) // rgba(255,255,255,0.03)
 
     /** Highly elevated surface - 12% white transparency */
-    val BgHighElevated = Color(0x1FFFFFFF)  // rgba(255,255,255,0.12)
+    val BgHighElevated = Color(0x1FFFFFFF) // rgba(255,255,255,0.12)
 
     // ============================================
     // Background Layers - Light Mode
@@ -71,83 +77,83 @@ object MaColors {
     val BgPrimaryLight = Color(0xFFF9F9FA)
 
     /** Light mode secondary background - Very subtle dark (1% black) */
-    val BgSecondaryLight = Color(0x03000000)  // rgba(0,0,0,0.01)
+    val BgSecondaryLight = Color(0x03000000) // rgba(0,0,0,0.01)
 
     /** Light mode tertiary background - 2% black transparency */
-    val BgTertiaryLight = Color(0x05000000)   // rgba(0,0,0,0.02)
+    val BgTertiaryLight = Color(0x05000000) // rgba(0,0,0,0.02)
 
     /** Light mode elevated surface - 4% black transparency */
-    val BgElevatedLight = Color(0x0A000000)   // rgba(0,0,0,0.04)
+    val BgElevatedLight = Color(0x0A000000) // rgba(0,0,0,0.04)
 
     /** Light mode glassmorphic surface - 2% black transparency */
-    val BgGlassLight = Color(0x05000000)      // rgba(0,0,0,0.02)
+    val BgGlassLight = Color(0x05000000) // rgba(0,0,0,0.02)
 
     /** Light mode highly elevated surface - 8% black transparency */
-    val BgHighElevatedLight = Color(0x14000000)  // rgba(0,0,0,0.08)
+    val BgHighElevatedLight = Color(0x14000000) // rgba(0,0,0,0.08)
 
     // ============================================
     // Text Hierarchy
     // ============================================
 
     /** Primary text - 98% white (nearly pure but softer) */
-    val TextPrimary = Color(0xFAFFFFFF)    // rgba(255,255,255,0.98)
+    val TextPrimary = Color(0xFAFFFFFF) // rgba(255,255,255,0.98)
 
     /** Secondary text - 75% white (for less important content) */
-    val TextSecondary = Color(0xBFFFFFFF)  // rgba(255,255,255,0.75)
+    val TextSecondary = Color(0xBFFFFFFF) // rgba(255,255,255,0.75)
 
     /** Muted text - 45% white (for hints, placeholders) */
-    val TextMuted = Color(0x73FFFFFF)      // rgba(255,255,255,0.45)
+    val TextMuted = Color(0x73FFFFFF) // rgba(255,255,255,0.45)
 
     /** Disabled text - 30% white (for inactive elements) */
-    val TextDisabled = Color(0x4DFFFFFF)   // rgba(255,255,255,0.30)
+    val TextDisabled = Color(0x4DFFFFFF) // rgba(255,255,255,0.30)
 
     // ============================================
     // Text Hierarchy - Light Mode
     // ============================================
 
     /** Light mode primary text - 95% black (near-black for readability) */
-    val TextPrimaryLight = Color(0xF2000000)    // rgba(0,0,0,0.95)
+    val TextPrimaryLight = Color(0xF2000000) // rgba(0,0,0,0.95)
 
     /** Light mode secondary text - 60% black (for less important content) */
-    val TextSecondaryLight = Color(0x99000000)  // rgba(0,0,0,0.60)
+    val TextSecondaryLight = Color(0x99000000) // rgba(0,0,0,0.60)
 
     /** Light mode muted text - 40% black (for hints, placeholders) */
-    val TextMutedLight = Color(0x66000000)      // rgba(0,0,0,0.40)
+    val TextMutedLight = Color(0x66000000) // rgba(0,0,0,0.40)
 
     /** Light mode disabled text - 25% black (for inactive elements) */
-    val TextDisabledLight = Color(0x40000000)   // rgba(0,0,0,0.25)
+    val TextDisabledLight = Color(0x40000000) // rgba(0,0,0,0.25)
 
     // ============================================
     // Border Colors - Dark Mode
     // ============================================
 
     /** Subtle border - 6% white (barely visible separation) */
-    val BorderSubtle = Color(0x0FFFFFFF)   // rgba(255,255,255,0.06)
+    val BorderSubtle = Color(0x0FFFFFFF) // rgba(255,255,255,0.06)
 
     /** Light border - 10% white (standard dividers) */
-    val BorderLight = Color(0x1AFFFFFF)    // rgba(255,255,255,0.10)
+    val BorderLight = Color(0x1AFFFFFF) // rgba(255,255,255,0.10)
 
     /** Medium border - 15% white (emphasized dividers) */
-    val BorderMedium = Color(0x26FFFFFF)   // rgba(255,255,255,0.15)
+    val BorderMedium = Color(0x26FFFFFF) // rgba(255,255,255,0.15)
 
     /** Strong border - 25% white (strong visual separation) */
-    val BorderStrong = Color(0x40FFFFFF)   // rgba(255,255,255,0.25)
+    val BorderStrong = Color(0x40FFFFFF) // rgba(255,255,255,0.25)
 
     // ============================================
     // Border Colors - Light Mode
     // ============================================
 
     /** Light mode subtle border - 5% black (barely visible separation) */
-    val BorderSubtleLight = Color(0x0D000000)   // rgba(0,0,0,0.05)
+    val BorderSubtleLight = Color(0x0D000000) // rgba(0,0,0,0.05)
 
     /** Light mode light border - 8% black (standard dividers) */
-    val BorderLightLight = Color(0x14000000)    // rgba(0,0,0,0.08)
+    val BorderLightLight = Color(0x14000000) // rgba(0,0,0,0.08)
 
     /** Light mode medium border - 12% black (emphasized dividers) */
-    val BorderMediumLight = Color(0x1F000000)   // rgba(0,0,0,0.12)
+    val BorderMediumLight = Color(0x1F000000) // rgba(0,0,0,0.12)
 
     /** Light mode strong border - 20% black (strong visual separation) */
-    val BorderStrongLight = Color(0x33000000)   // rgba(0,0,0,0.20)
+    val BorderStrongLight = Color(0x33000000) // rgba(0,0,0,0.20)
 
     // ============================================
     // Status Colors

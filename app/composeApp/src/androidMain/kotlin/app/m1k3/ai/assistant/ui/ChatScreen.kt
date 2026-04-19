@@ -8,20 +8,21 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Snackbar
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -33,12 +34,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
+import app.m1k3.ai.assistant.MainActivity
 import app.m1k3.ai.assistant.app.InitializationViewModel
 import app.m1k3.ai.assistant.avatar.LocalSharedAvatarVM
 import app.m1k3.ai.assistant.chat.ChatMessage
-import app.m1k3.ai.assistant.chat.toEmoji
-import app.m1k3.ai.assistant.chat.toUserMessage
-import app.m1k3.ai.domain.chat.ChatError
 import app.m1k3.ai.assistant.chat.ChatScreenViewModel
 import app.m1k3.ai.assistant.chat.ContextWindowState
 import app.m1k3.ai.assistant.chat.GenerationState
@@ -47,13 +46,25 @@ import app.m1k3.ai.assistant.chat.SessionEcoStats
 import app.m1k3.ai.assistant.chat.collectAsState
 import app.m1k3.ai.assistant.chat.isGenerating
 import app.m1k3.ai.assistant.chat.isInputEnabled
+import app.m1k3.ai.assistant.chat.toEmoji
+import app.m1k3.ai.assistant.chat.toUserMessage
+import app.m1k3.ai.assistant.context.rememberContextPermissionRequester
 import app.m1k3.ai.assistant.design.components.MaChatBubbleAI
 import app.m1k3.ai.assistant.design.components.MaChatBubbleUser
 import app.m1k3.ai.assistant.design.components.MaStatusCard
+import app.m1k3.ai.assistant.design.components.ThinkingPill
+import app.m1k3.ai.assistant.design.components.ToolCallPill
 import app.m1k3.ai.assistant.design.haptics.rememberHapticFeedback
 import app.m1k3.ai.assistant.design.theme.MaTheme
 import app.m1k3.ai.assistant.design.tokens.MaColors
 import app.m1k3.ai.assistant.design.tokens.MaTypography
+import app.m1k3.ai.assistant.globe.GlobeBackground
+import app.m1k3.ai.assistant.globe.GlobeMode
+import app.m1k3.ai.assistant.globe.TIER_HIGH
+import app.m1k3.ai.assistant.globe.TIER_LOW
+import app.m1k3.ai.assistant.globe.TIER_MEDIUM
+import app.m1k3.ai.assistant.platform.PreferenceKeys
+import app.m1k3.ai.assistant.stt.AndroidSttEngine
 import app.m1k3.ai.assistant.ui.components.ChatInputBar
 import app.m1k3.ai.assistant.ui.components.ChatInputBarContainer
 import app.m1k3.ai.assistant.ui.components.ChatMessageList
@@ -61,25 +72,14 @@ import app.m1k3.ai.assistant.ui.components.ClearConversationDialog
 import app.m1k3.ai.assistant.ui.components.ContextWindowIndicator
 import app.m1k3.ai.assistant.ui.components.EcoIndicator
 import app.m1k3.ai.assistant.ui.components.EcoIndicatorVariant
-import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.collectAsState as collectFlowAsState
-import org.jetbrains.compose.ui.tooling.preview.Preview
-import app.m1k3.ai.assistant.MainActivity
-import app.m1k3.ai.assistant.stt.AndroidSttEngine
-import app.m1k3.ai.assistant.globe.GlobeBackground
-import app.m1k3.ai.assistant.globe.GlobeMode
-import app.m1k3.ai.assistant.context.rememberContextPermissionRequester
-import app.m1k3.ai.assistant.globe.TIER_HIGH
-import app.m1k3.ai.assistant.globe.TIER_MEDIUM
-import app.m1k3.ai.assistant.globe.TIER_LOW
-import app.m1k3.ai.assistant.platform.PreferenceKeys
-import app.m1k3.ai.assistant.design.components.ThinkingPill
-import app.m1k3.ai.assistant.design.components.ToolCallPill
-import org.koin.compose.koinInject
+import app.m1k3.ai.domain.chat.ChatError
 import app.m1k3.ai.domain.stt.SttState
 import app.m1k3.ai.domain.stt.isListening
+import org.jetbrains.compose.ui.tooling.preview.Preview
 import org.koin.androidx.compose.koinViewModel
+import org.koin.compose.koinInject
 import org.koin.core.parameter.parametersOf
+import androidx.compose.runtime.collectAsState as collectFlowAsState
 
 /**
  * M1K3 AI - Chat Screen
@@ -102,14 +102,15 @@ import org.koin.core.parameter.parametersOf
 fun ChatScreen(
     onEcoStatsClick: () -> Unit = {},
     onClearConversationClick: (() -> Unit)? = null,
-    projectId: String = "default"
+    projectId: String = "default",
 ) {
     rememberCoroutineScope()
     val listState = rememberLazyListState()
     val context = LocalContext.current
-    val viewModel = koinViewModel<ChatScreenViewModel> {
-        parametersOf(projectId)
-    }
+    val viewModel =
+        koinViewModel<ChatScreenViewModel> {
+            parametersOf(projectId)
+        }
 
     // Avatar state management - use shared app-level ViewModel from CompositionLocal
     val avatarVM = LocalSharedAvatarVM.current
@@ -119,19 +120,21 @@ fun ChatScreen(
     val haptics = rememberHapticFeedback()
 
     // Permission requester for context providers
-    val permissionRequester = rememberContextPermissionRequester { _ ->
-        // Permission state changed — ViewModel will pick up new context on next load
-    }
+    val permissionRequester =
+        rememberContextPermissionRequester { _ ->
+            // Permission state changed — ViewModel will pick up new context on next load
+        }
 
     // Globe mode from preferences (user-configurable in Settings)
     val prefs = koinInject<app.m1k3.ai.assistant.platform.PreferencesStoreInterface>()
-    val globeMode = remember {
-        when (prefs.getString(PreferenceKeys.GLOBE_MODE, "RUBIN")) {
-            "MAPLIBRE" -> GlobeMode.MAPLIBRE
-            "NONE" -> GlobeMode.NONE
-            else -> GlobeMode.RUBIN
+    val globeMode =
+        remember {
+            when (prefs.getString(PreferenceKeys.GLOBE_MODE, "RUBIN")) {
+                "MAPLIBRE" -> GlobeMode.MAPLIBRE
+                "NONE" -> GlobeMode.NONE
+                else -> GlobeMode.RUBIN
+            }
         }
-    }
 
     // Speech-to-Text engine
     val sttEngine = remember { AndroidSttEngine(context) }
@@ -149,9 +152,11 @@ fun ChatScreen(
                 haptics.success()
                 viewModel.updateInputText(state.text)
             }
+
             is SttState.Error -> {
                 haptics.error()
             }
+
             else -> {}
         }
     }
@@ -162,7 +167,10 @@ fun ChatScreen(
     if (avatarVM != null) {
         LaunchedEffect(uiState.generationState) {
             when (val genState = uiState.generationState) {
-                is GenerationState.Thinking -> avatarVM.startThinking()
+                is GenerationState.Thinking -> {
+                    avatarVM.startThinking()
+                }
+
                 is GenerationState.Streaming -> {
                     if (avatarVM.currentActivity != app.m1k3.ai.assistant.avatar.AvatarActivity.SPEAKING) {
                         avatarVM.startSpeaking()
@@ -171,23 +179,28 @@ fun ChatScreen(
                     // avatar reacts to what the model is saying as it generates.
                     // Detect directly (not processMessage) to avoid polluting
                     // conversation history with cumulative partial fragments.
-                    val detection = app.m1k3.ai.assistant.avatar.EmotionDetector.detectEmotion(genState.partialText)
+                    val detection =
+                        app.m1k3.ai.assistant.avatar.EmotionDetector
+                            .detectEmotion(genState.partialText)
                     if (detection.confidence > 0.3f) {
                         avatarVM.setEmotion(detection.emotion, detection.intensity)
                     }
                 }
+
                 is GenerationState.Complete -> {
                     haptics.success()
                     avatarVM.processMessage(genState.finalText, isUserMessage = false)
                     kotlinx.coroutines.delay(2000)
                     avatarVM.returnToIdle()
                 }
+
                 is GenerationState.Failed -> {
                     haptics.error()
                     avatarVM.showError("Generation failed")
                     kotlinx.coroutines.delay(2000)
                     avatarVM.returnToIdle()
                 }
+
                 else -> {}
             }
         }
@@ -195,10 +208,35 @@ fun ChatScreen(
         // No avatar VM — still fire haptics on generation events
         LaunchedEffect(uiState.generationState) {
             when (uiState.generationState) {
-                is GenerationState.Complete -> haptics.success()
-                is GenerationState.Failed -> haptics.error()
+                is GenerationState.Complete -> {
+                    haptics.success()
+                }
+
+                is GenerationState.Failed -> {
+                    haptics.error()
+                }
+
                 else -> {}
             }
+        }
+    }
+
+    // Tool-driven avatar emotion — the avatar reacts when a tool fires.
+    // Runs AFTER the Complete handler's returnToIdle delay so the emotion
+    // lingers long enough for the user to see it.
+    if (avatarVM != null) {
+        val executedCount = uiState.toolState.executedTools.size
+        LaunchedEffect(executedCount) {
+            if (executedCount == 0) return@LaunchedEffect
+            val latest = uiState.toolState.executedTools.lastOrNull() ?: return@LaunchedEffect
+            kotlinx.coroutines.delay(2200) // let the Complete handler's returnToIdle settle
+            val emotion =
+                app.m1k3.ai.assistant.avatar.ToolEmotionMap.emotionFor(
+                    toolId = latest.toolId,
+                    category = null,
+                    success = latest.isSuccess,
+                )
+            avatarVM.setEmotion(emotion, intensity = 0.9f)
         }
     }
 
@@ -207,26 +245,26 @@ fun ChatScreen(
     if (engineState is app.m1k3.ai.assistant.chat.EngineState.Failed) {
         androidx.compose.foundation.layout.Box(
             modifier = Modifier.fillMaxSize(),
-            contentAlignment = Alignment.Center
+            contentAlignment = Alignment.Center,
         ) {
             androidx.compose.foundation.layout.Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(16.dp),
-                modifier = Modifier.padding(32.dp)
+                modifier = Modifier.padding(32.dp),
             ) {
                 androidx.compose.material3.Text(
                     text = "M1K3 needs a model",
                     style = MaTypography.headlineSmall,
-                    color = MaColors.textPrimary()
+                    color = MaColors.textPrimary(),
                 )
                 androidx.compose.material3.Text(
                     text = engineState.error.toUserMessage(),
                     style = MaTypography.bodyMedium,
                     color = MaColors.textMuted(),
-                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                 )
                 androidx.compose.material3.Button(
-                    onClick = { viewModel.retryEngineInit() }
+                    onClick = { viewModel.retryEngineInit() },
                 ) {
                     androidx.compose.material3.Text("Re-download model")
                 }
@@ -258,22 +296,23 @@ fun ChatScreen(
     }
 
     Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .animateContentSize()
+        modifier =
+            Modifier
+                .fillMaxSize()
+                .animateContentSize(),
     ) {
         // Layer 0: Globe background — mode user-configurable in Settings
         GlobeBackground(
             mode = globeMode,
             dimmed = uiState.generationState.isGenerating,
-            modifier = Modifier.fillMaxSize()
+            modifier = Modifier.fillMaxSize(),
         )
 
         // Layer 1: Messages list (behind overlays)
         Column(modifier = Modifier.fillMaxSize()) {
             // Context Window Indicator - Shows conversation history usage
             ContextWindowIndicator(
-                state = uiState.contextWindow
+                state = uiState.contextWindow,
             )
 
             // Messages list
@@ -287,13 +326,13 @@ fun ChatScreen(
                 onRequestLocation = permissionRequester.onRequestLocation,
                 onRequestHealth = permissionRequester.onRequestHealth,
                 onRequestScreenTime = permissionRequester.onRequestScreenTime,
-                generationState = uiState.generationState
+                generationState = uiState.generationState,
             )
 
             // Eco Indicator - Real-time environmental impact
             EcoIndicatorSection(
                 stats = uiState.sessionEcoStats,
-                onEcoStatsClick = onEcoStatsClick
+                onEcoStatsClick = onEcoStatsClick,
             )
         }
 
@@ -301,8 +340,10 @@ fun ChatScreen(
         uiState.modelDownload?.let { downloadState ->
             ModelDownloadOverlay(
                 state = downloadState,
-                modifier = Modifier.align(Alignment.BottomCenter)
-                    .padding(bottom = 120.dp)
+                modifier =
+                    Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(bottom = 120.dp),
             )
         }
 
@@ -326,22 +367,28 @@ fun ChatScreen(
                         viewModel.toggleAutoVoiceReply()
                     },
                     isListening = sttState.isListening,
-                    onMicClick = if (sttEngine.isAvailable()) {
-                        {
-                            if (sttState.isListening) {
-                                sttEngine.stopListening()
-                            } else {
-                                sttEngine.startListening()
+                    onMicClick =
+                        if (sttEngine.isAvailable()) {
+                            {
+                                if (sttState.isListening) {
+                                    sttEngine.stopListening()
+                                } else {
+                                    sttEngine.startListening()
+                                }
                             }
-                        }
-                    } else null,
+                        } else {
+                            null
+                        },
                     listeningPartialText = (sttState as? SttState.Listening)?.partialText ?: "",
-                    onNewChatClick = if (uiState.messages.isNotEmpty()) {
-                        { showClearDialog = true }
-                    } else null
+                    onNewChatClick =
+                        if (uiState.messages.isNotEmpty()) {
+                            { showClearDialog = true }
+                        } else {
+                            null
+                        },
                 )
             },
-            modifier = Modifier.align(Alignment.BottomCenter)
+            modifier = Modifier.align(Alignment.BottomCenter),
         )
 
         // Error dialog — haptic on appear
@@ -354,7 +401,7 @@ fun ChatScreen(
                 onDismiss = {
                     haptics.light()
                     viewModel.clearError()
-                }
+                },
             )
         }
 
@@ -370,7 +417,7 @@ fun ChatScreen(
                 onDismiss = {
                     haptics.light()
                     showClearDialog = false
-                }
+                },
             )
         }
     }
@@ -387,19 +434,20 @@ fun ChatScreen(
 @Composable
 private fun EcoIndicatorSection(
     stats: SessionEcoStats,
-    onEcoStatsClick: () -> Unit
+    onEcoStatsClick: () -> Unit,
 ) {
     Box(
-        modifier = Modifier
-            .testTag("eco_indicator")
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp),
-        contentAlignment = Alignment.Center
+        modifier =
+            Modifier
+                .testTag("eco_indicator")
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+        contentAlignment = Alignment.Center,
     ) {
         EcoIndicator(
             stats = stats,
             onClick = onEcoStatsClick,
-            variant = EcoIndicatorVariant.COMPACT
+            variant = EcoIndicatorVariant.COMPACT,
         )
     }
 }
@@ -410,7 +458,7 @@ private fun EcoIndicatorSection(
 @Composable
 private fun ErrorSnackbar(
     error: ChatError,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
 ) {
     Snackbar(
         modifier = Modifier.padding(16.dp),
@@ -420,7 +468,7 @@ private fun ErrorSnackbar(
             }
         },
         containerColor = MaColors.Error,
-        contentColor = MaColors.White
+        contentColor = MaColors.White,
     ) {
         Text("${error.toEmoji()} ${error.toUserMessage()}")
     }
@@ -438,7 +486,7 @@ fun ChatBubble(
     onRequestScreenTime: (() -> Unit)? = null,
     onSpeak: ((String) -> Unit)? = null,
     isStreaming: Boolean = false,
-    isThinking: Boolean = false
+    isThinking: Boolean = false,
 ) {
     when {
         message.isStatusMessage -> {
@@ -448,7 +496,7 @@ fun ChatBubble(
                     context = userContext,
                     onRequestLocation = onRequestLocation,
                     onRequestHealth = onRequestHealth,
-                    onRequestScreenTime = onRequestScreenTime
+                    onRequestScreenTime = onRequestScreenTime,
                 )
             } else {
                 // Fallback — classic status card (no context available)
@@ -461,16 +509,18 @@ fun ChatBubble(
                     deviceTierName = message.statusDeviceTier ?: "Unknown",
                     lastSessionWaterMl = message.statusLastWaterMl,
                     lastSessionEnergyWh = message.statusLastEnergyWh,
-                    lastSessionCo2G = message.statusLastCo2G
+                    lastSessionCo2G = message.statusLastCo2G,
                 )
             }
         }
+
         message.isUser -> {
             MaChatBubbleUser(
                 text = message.text,
-                timestamp = message.timestamp
+                timestamp = message.timestamp,
             )
         }
+
         else -> {
             MaChatBubbleAI(
                 text = message.text,
@@ -478,30 +528,42 @@ fun ChatBubble(
                 inferenceStats = message.inferenceStats,
                 isError = message.isError,
                 ragSources = message.ragSources,
-                onSpeak = if (onSpeak != null) {{ onSpeak(message.text) }} else null,
-                artifactContent = message.artifact?.let { artifact ->
-                    { ArtifactView(artifact = artifact) }
-                },
-                thinkingPill = if (!message.thinkingContent.isNullOrEmpty() || isThinking) {
-                    {
-                        ThinkingPill(
-                            thinkingContent = message.thinkingContent,
-                            isThinking = isThinking,
-                            thinkingDurationMs = message.thinkingDurationMs,
-                            modifier = Modifier.padding(bottom = 4.dp)
-                        )
-                    }
-                } else null,
-                toolCallsPill = if (message.toolResults.isNotEmpty()) {
-                    {
-                        ToolCallPill(
-                            toolResults = message.toolResults,
-                            isExecuting = false,
-                            modifier = Modifier.padding(bottom = 4.dp)
-                        )
-                    }
-                } else null,
-                isStreaming = isStreaming
+                onSpeak =
+                    if (onSpeak != null) {
+                        { onSpeak(message.text) }
+                    } else {
+                        null
+                    },
+                artifactContent =
+                    message.artifact?.let { artifact ->
+                        { ArtifactView(artifact = artifact) }
+                    },
+                thinkingPill =
+                    if (!message.thinkingContent.isNullOrEmpty() || isThinking) {
+                        {
+                            ThinkingPill(
+                                thinkingContent = message.thinkingContent,
+                                isThinking = isThinking,
+                                thinkingDurationMs = message.thinkingDurationMs,
+                                modifier = Modifier.padding(bottom = 4.dp),
+                            )
+                        }
+                    } else {
+                        null
+                    },
+                toolCallsPill =
+                    if (message.toolResults.isNotEmpty()) {
+                        {
+                            ToolCallPill(
+                                toolResults = message.toolResults,
+                                isExecuting = false,
+                                modifier = Modifier.padding(bottom = 4.dp),
+                            )
+                        }
+                    } else {
+                        null
+                    },
+                isStreaming = isStreaming,
             )
         }
     }
@@ -513,75 +575,73 @@ fun ChatBubble(
 @Composable
 private fun ModelDownloadOverlay(
     state: ModelDownloadState,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp)
-            .background(
-                color = MaColors.bgElevated(),
-                shape = RoundedCornerShape(12.dp)
-            )
-            .border(
-                width = 1.dp,
-                color = MaColors.OrangeDim,
-                shape = RoundedCornerShape(12.dp)
-            )
-            .padding(16.dp),
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp)
+                .background(
+                    color = MaColors.bgElevated(),
+                    shape = RoundedCornerShape(12.dp),
+                ).border(
+                    width = 1.dp,
+                    color = MaColors.OrangeDim,
+                    shape = RoundedCornerShape(12.dp),
+                ).padding(16.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         when (state) {
             is ModelDownloadState.Starting -> {
                 CircularProgressIndicator(
                     modifier = Modifier.size(24.dp),
                     color = MaColors.Orange,
-                    strokeWidth = 2.dp
+                    strokeWidth = 2.dp,
                 )
                 Text(
                     "Preparing ${state.modelName}...",
                     style = app.m1k3.ai.assistant.design.tokens.MaTypography.bodyMedium,
-
-                    color = MaColors.textPrimary()
+                    color = MaColors.textPrimary(),
                 )
             }
+
             is ModelDownloadState.InProgress -> {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
                         "Downloading ${state.modelName}",
                         style = app.m1k3.ai.assistant.design.tokens.MaTypography.bodyMedium,
-
-                        color = MaColors.textPrimary()
+                        color = MaColors.textPrimary(),
                     )
                     Spacer(Modifier.size(4.dp))
                     LinearProgressIndicator(
                         progress = { state.progressPercent / 100f },
                         modifier = Modifier.fillMaxWidth(),
                         color = MaColors.Orange,
-                        trackColor = MaColors.bgSecondary()
+                        trackColor = MaColors.bgSecondary(),
                     )
                     Text(
                         "${state.downloadedMB}MB / ${state.totalMB}MB (${state.progressPercent}%)",
                         style = app.m1k3.ai.assistant.design.tokens.MaTypography.labelSmall,
-                        color = MaColors.textMuted()
+                        color = MaColors.textMuted(),
                     )
                 }
             }
+
             is ModelDownloadState.Complete -> {
                 Text(
                     "${state.modelName} ready!",
                     style = app.m1k3.ai.assistant.design.tokens.MaTypography.bodyMedium,
-
-                    color = MaColors.Success
+                    color = MaColors.Success,
                 )
             }
+
             is ModelDownloadState.Failed -> {
                 Text(
                     "Download failed: ${state.error}",
                     style = app.m1k3.ai.assistant.design.tokens.MaTypography.bodyMedium,
-
-                    color = MaColors.Error
+                    color = MaColors.Error,
                 )
             }
         }
@@ -597,16 +657,17 @@ private fun ModelDownloadOverlay(
 private fun ChatScreenEmptyPreview() {
     MaTheme {
         Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(MaColors.BgPrimary)
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .background(MaColors.BgPrimary),
         ) {
             Column(modifier = Modifier.fillMaxSize()) {
                 ChatMessageList(
                     messages = emptyList(),
                     isGenerating = false,
                     listState = rememberLazyListState(),
-                    showEcoIndicator = false
+                    showEcoIndicator = false,
                 )
             }
 
@@ -616,10 +677,10 @@ private fun ChatScreenEmptyPreview() {
                         text = "",
                         onTextChange = {},
                         onSend = {},
-                        enabled = true
+                        enabled = true,
                     )
                 },
-                modifier = Modifier.align(Alignment.BottomCenter)
+                modifier = Modifier.align(Alignment.BottomCenter),
             )
         }
     }
@@ -630,28 +691,30 @@ private fun ChatScreenEmptyPreview() {
 private fun ChatScreenWithMessagesPreview() {
     MaTheme {
         Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(MaColors.BgPrimary)
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .background(MaColors.BgPrimary),
         ) {
             Column(modifier = Modifier.fillMaxSize()) {
                 ChatMessageList(
-                    messages = listOf(
-                        ChatMessage(
-                            text = "What is machine learning?",
-                            isUser = true,
-                            timestamp = System.currentTimeMillis()
+                    messages =
+                        listOf(
+                            ChatMessage(
+                                text = "What is machine learning?",
+                                isUser = true,
+                                timestamp = System.currentTimeMillis(),
+                            ),
+                            ChatMessage(
+                                text = "Machine learning is a subset of artificial intelligence that enables systems to learn and improve from experience without being explicitly programmed.",
+                                isUser = false,
+                                timestamp = System.currentTimeMillis(),
+                                inferenceStats = "⚡ 42 tokens in 2.3s",
+                            ),
                         ),
-                        ChatMessage(
-                            text = "Machine learning is a subset of artificial intelligence that enables systems to learn and improve from experience without being explicitly programmed.",
-                            isUser = false,
-                            timestamp = System.currentTimeMillis(),
-                            inferenceStats = "⚡ 42 tokens in 2.3s"
-                        )
-                    ),
                     isGenerating = false,
                     listState = rememberLazyListState(),
-                    showEcoIndicator = true
+                    showEcoIndicator = true,
                 )
             }
 
@@ -661,10 +724,10 @@ private fun ChatScreenWithMessagesPreview() {
                         text = "",
                         onTextChange = {},
                         onSend = {},
-                        enabled = true
+                        enabled = true,
                     )
                 },
-                modifier = Modifier.align(Alignment.BottomCenter)
+                modifier = Modifier.align(Alignment.BottomCenter),
             )
         }
     }
@@ -675,31 +738,34 @@ private fun ChatScreenWithMessagesPreview() {
 private fun ChatScreenGeneratingPreview() {
     MaTheme {
         Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(MaColors.BgPrimary)
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .background(MaColors.BgPrimary),
         ) {
             Column(modifier = Modifier.fillMaxSize()) {
                 ContextWindowIndicator(
-                    state = ContextWindowState(
-                        historyMessageCount = 5,
-                        historyTokens = 500,
-                        maxContextTokens = 4096,
-                        deviceTier = "High-end"
-                    )
+                    state =
+                        ContextWindowState(
+                            historyMessageCount = 5,
+                            historyTokens = 500,
+                            maxContextTokens = 4096,
+                            deviceTier = "High-end",
+                        ),
                 )
 
                 ChatMessageList(
-                    messages = listOf(
-                        ChatMessage(
-                            text = "Explain quantum computing",
-                            isUser = true,
-                            timestamp = System.currentTimeMillis()
-                        )
-                    ),
+                    messages =
+                        listOf(
+                            ChatMessage(
+                                text = "Explain quantum computing",
+                                isUser = true,
+                                timestamp = System.currentTimeMillis(),
+                            ),
+                        ),
                     isGenerating = true,
                     listState = rememberLazyListState(),
-                    showEcoIndicator = false
+                    showEcoIndicator = false,
                 )
             }
 
@@ -709,10 +775,10 @@ private fun ChatScreenGeneratingPreview() {
                         text = "",
                         onTextChange = {},
                         onSend = {},
-                        enabled = false
+                        enabled = false,
                     )
                 },
-                modifier = Modifier.align(Alignment.BottomCenter)
+                modifier = Modifier.align(Alignment.BottomCenter),
             )
         }
     }
