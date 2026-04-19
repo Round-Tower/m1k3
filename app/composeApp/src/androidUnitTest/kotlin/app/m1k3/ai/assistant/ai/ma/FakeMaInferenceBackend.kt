@@ -7,7 +7,6 @@ package app.m1k3.ai.assistant.ai.ma
  * without requiring native llama.cpp code or a real model file.
  */
 class FakeMaInferenceBackend : MaInferenceBackend {
-
     // === init() controls ===
     var initHandle: Long = 1L
     var initCalled = false
@@ -22,6 +21,7 @@ class FakeMaInferenceBackend : MaInferenceBackend {
     var lastGeneratePrompt: String? = null
     var lastGenerateMaxTokens: Int = 0
     var lastGenerateTemperature: Float = 0f
+    var lastGenerateGrammar: String? = null
 
     /** Tokens emitted one-by-one when onToken callback is provided (streaming). */
     var streamingTokens: List<String> = emptyList()
@@ -31,7 +31,10 @@ class FakeMaInferenceBackend : MaInferenceBackend {
     var releaseCallCount = 0
     var lastReleaseHandle: Long = 0L
 
-    override fun init(modelPath: String, nCtx: Int): Long {
+    override fun init(
+        modelPath: String,
+        nCtx: Int,
+    ): Long {
         initCalled = true
         initCallCount++
         lastInitPath = modelPath
@@ -46,7 +49,8 @@ class FakeMaInferenceBackend : MaInferenceBackend {
         topP: Float,
         topK: Int,
         repeatPenalty: Float,
-        onToken: ((String) -> Unit)?
+        onToken: ((String) -> Unit)?,
+        grammar: String?,
     ): String {
         generateCalled = true
         generateCallCount++
@@ -54,12 +58,42 @@ class FakeMaInferenceBackend : MaInferenceBackend {
         lastGeneratePrompt = prompt
         lastGenerateMaxTokens = maxTokens
         lastGenerateTemperature = temperature
+        lastGenerateGrammar = grammar
 
         if (onToken != null) {
             streamingTokens.forEach { onToken(it) }
         }
 
         return generateResponse
+    }
+
+    // === generateChat() controls ===
+
+    /** JSON string returned from generateChat. Tests can override. */
+    var generateChatResponse: String = """{"content":"test","tool_calls":[],"reasoning_content":""}"""
+    var generateChatCalled = false
+    var generateChatCallCount = 0
+    var lastGenerateChatMessagesJson: String? = null
+    var lastGenerateChatToolsJson: String? = null
+
+    override fun generateChat(
+        handle: Long,
+        messagesJson: String,
+        toolsJson: String,
+        maxTokens: Int,
+        temperature: Float,
+        topP: Float,
+        topK: Int,
+        repeatPenalty: Float,
+        enableThinking: Boolean,
+        onToken: ((String) -> Unit)?,
+    ): String {
+        generateChatCalled = true
+        generateChatCallCount++
+        lastGenerateChatMessagesJson = messagesJson
+        lastGenerateChatToolsJson = toolsJson
+        if (onToken != null) streamingTokens.forEach { onToken(it) }
+        return generateChatResponse
     }
 
     override fun release(handle: Long) {
@@ -77,6 +111,7 @@ class FakeMaInferenceBackend : MaInferenceBackend {
         generateCallCount = 0
         lastGenerateHandle = 0L
         lastGeneratePrompt = null
+        lastGenerateGrammar = null
         releaseCalled = false
         releaseCallCount = 0
         lastReleaseHandle = 0L

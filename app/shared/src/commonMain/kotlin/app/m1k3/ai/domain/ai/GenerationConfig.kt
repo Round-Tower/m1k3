@@ -23,6 +23,9 @@ package app.m1k3.ai.domain.ai
  * @param topK Top-K sampling (null = engine doesn't support or use default 40)
  * @param minP Minimum probability threshold (null = engine doesn't support or use default 0.05)
  * @param repetitionPenalty Penalty for repeated tokens (null = engine doesn't support or use default 1.1)
+ * @param grammar GBNF grammar string for constrained sampling (null = unconstrained).
+ *                When supplied, the engine installs a lazy grammar sampler triggered by
+ *                `<tool_call>`. Only llama.cpp-backed engines act on this; others ignore.
  */
 data class GenerationConfig(
     val maxTokens: Int? = null,
@@ -33,5 +36,6 @@ data class GenerationConfig(
     val topP: Float? = 0.95f,
     val topK: Int? = 64,
     val minP: Float? = 0.0f,
-    val repetitionPenalty: Float? = 1.1f
+    val repetitionPenalty: Float? = 1.1f,
+    val grammar: String? = null
 )

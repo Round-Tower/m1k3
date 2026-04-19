@@ -18,6 +18,13 @@ set(LLAMA_DIR ${CMAKE_SOURCE_DIR}/llama.cpp)
 set(LLAMA_BUILD_TESTS     OFF CACHE BOOL "" FORCE)
 set(LLAMA_BUILD_EXAMPLES  OFF CACHE BOOL "" FORCE)
 set(LLAMA_BUILD_SERVER    OFF CACHE BOOL "" FORCE)
+set(LLAMA_BUILD_TOOLS     OFF CACHE BOOL "" FORCE)
+# Build common/ so we can use native chat templates (common_chat_templates_apply)
+# and the per-model tool-call parser (common_chat_parse). This lets any GGUF with
+# a chat template — Qwen3/3.5, Llama 3.x, Mistral, Phi, DeepSeek — render its
+# tools and parse its tool-call output in the format the model was trained on.
+# cpp-httplib comes along for the ride but we never invoke it.
+set(LLAMA_BUILD_COMMON    ON  CACHE BOOL "" FORCE)
 set(LLAMA_CURL            OFF CACHE BOOL "" FORCE)
 set(GGML_METAL            OFF CACHE BOOL "" FORCE)
 set(GGML_CUDA             OFF CACHE BOOL "" FORCE)
@@ -44,6 +51,7 @@ target_include_directories(ma PRIVATE
 )
 
 target_link_libraries(ma
+    common
     llama
     android
     log

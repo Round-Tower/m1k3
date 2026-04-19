@@ -8,9 +8,7 @@ import app.m1k3.ai.domain.tools.ToolResult
 import app.m1k3.ai.domain.tools.services.ToolExecutor
 
 /**
- * Get Health Executor — reads Health Connect data.
- *
- * Steps, sleep, heart rate, calories — the villain knows your vitals.
+ * Get Health Executor — reads Health Connect data (steps, sleep, heart rate, calories).
  */
 class GetHealthExecutor(
     private val context: Context

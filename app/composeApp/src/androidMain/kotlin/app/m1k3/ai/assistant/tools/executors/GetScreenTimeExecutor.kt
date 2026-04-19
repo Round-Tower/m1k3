@@ -8,9 +8,7 @@ import app.m1k3.ai.domain.tools.ToolResult
 import app.m1k3.ai.domain.tools.services.ToolExecutor
 
 /**
- * Get Screen Time Executor — reads UsageStats.
- *
- * Total screen time + top apps. The villain monitors your habits.
+ * Get Screen Time Executor — reads UsageStats (total + top apps).
  */
 class GetScreenTimeExecutor(
     private val context: Context

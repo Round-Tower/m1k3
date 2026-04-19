@@ -150,16 +150,45 @@ class SystemPromptPersonalityTest {
         )
     }
 
-    // ===== Villain persona =====
+    // ===== Dry persona (not theatrical villain) =====
 
     @Test
-    fun `prompt encodes theatrical villain identity`() {
+    fun `prompt avoids theatrical villain language`() {
+        val prompt = buildWith()
+        // The villain persona was retired — dry beats theatrical.
+        // These words must NOT appear (except "villain" may remain in tests, not the prompt).
+        assertFalse(
+            prompt.contains("theatrical", ignoreCase = true),
+            "Prompt must not instruct M1K3 to be theatrical"
+        )
+        assertFalse(
+            prompt.contains("magnificent", ignoreCase = true),
+            "Prompt must not instruct M1K3 to be magnificent"
+        )
+        assertFalse(
+            prompt.contains("villain", ignoreCase = true),
+            "Prompt must not cast M1K3 as a villain"
+        )
+    }
+
+    @Test
+    fun `prompt encodes dry sharp tone`() {
         val prompt = buildWith()
         assertTrue(
-            prompt.contains("villain", ignoreCase = true) ||
-            prompt.contains("theatrical", ignoreCase = true) ||
-            prompt.contains("magnificent", ignoreCase = true),
-            "Prompt must encode M1K3's theatrical villain persona"
+            prompt.contains("dry", ignoreCase = true) ||
+            prompt.contains("sharp", ignoreCase = true),
+            "Prompt must encode M1K3's sharp, dry tone"
+        )
+    }
+
+    @Test
+    fun `prompt rejects corporate filler framing`() {
+        val prompt = buildWith()
+        assertTrue(
+            prompt.contains("corporate", ignoreCase = true) ||
+            prompt.contains("filler", ignoreCase = true) ||
+            prompt.contains("pleasantries", ignoreCase = true),
+            "Prompt must explicitly push back against corporate-assistant framing"
         )
     }
 

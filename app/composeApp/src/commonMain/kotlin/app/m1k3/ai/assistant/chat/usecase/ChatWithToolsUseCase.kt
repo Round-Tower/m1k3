@@ -1,25 +1,27 @@
 package app.m1k3.ai.assistant.chat.usecase
 
 import app.m1k3.ai.assistant.ai.BaseLlmEngine
-import app.m1k3.ai.assistant.chat.QueryType
+import app.m1k3.ai.assistant.ai.NativeChatCapable
 import app.m1k3.ai.assistant.chat.GenerationConfigBuilder
+import app.m1k3.ai.assistant.chat.QueryType
+import app.m1k3.ai.assistant.utils.Logger
+import app.m1k3.ai.domain.ai.GenerationConfig
 import app.m1k3.ai.domain.chat.ChatError
 import app.m1k3.ai.domain.chat.EnrichedContext
 import app.m1k3.ai.domain.chat.GenerationStats
 import app.m1k3.ai.domain.chat.StreamingThinkTagParser
+import app.m1k3.ai.domain.chat.events.ChatEvent
+import app.m1k3.ai.domain.chat.events.ChatResponse
 import app.m1k3.ai.domain.chat.services.UnifiedPromptBuilder
 import app.m1k3.ai.domain.platform.DeviceContext
-import app.m1k3.ai.domain.ai.GenerationConfig
 import app.m1k3.ai.domain.tools.Tool
 import app.m1k3.ai.domain.tools.ToolCall
 import app.m1k3.ai.domain.tools.ToolCategory
 import app.m1k3.ai.domain.tools.ToolResult
+import app.m1k3.ai.domain.tools.services.ToolCallGrammarBuilder
 import app.m1k3.ai.domain.tools.services.ToolRegistry
 import app.m1k3.ai.domain.usecases.chat.LlmOutputProcessor
 import app.m1k3.ai.domain.usecases.chat.ProcessedOutput
-import app.m1k3.ai.domain.chat.events.ChatEvent
-import app.m1k3.ai.domain.chat.events.ChatResponse
-import app.m1k3.ai.assistant.utils.Logger
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
@@ -84,8 +86,9 @@ class ChatWithToolsUseCase(
     private val toolRegistry: ToolRegistry,
     private val configBuilder: GenerationConfigBuilder? = null,
     private val promptBuilder: UnifiedPromptBuilder? = null,
+    private val grammarBuilder: ToolCallGrammarBuilder = ToolCallGrammarBuilder(),
     /** M1K3 system prompt — injected so personality persists across tool-calling path */
-    var systemPrompt: String = ""
+    var systemPrompt: String = "",
 ) {
     /**
      * Execute the chat flow with tool support.
@@ -97,136 +100,349 @@ class ChatWithToolsUseCase(
     fun execute(
         prompt: String,
         confirmedToolIds: Set<String> = emptySet(),
-        deviceContext: DeviceContext? = null
-    ): Flow<ChatEvent> = channelFlow {
-        send(ChatEvent.Started)
-        logger.i { "Starting chat flow for: ${prompt.take(50)}..." }
+        deviceContext: DeviceContext? = null,
+    ): Flow<ChatEvent> =
+        channelFlow {
+            send(ChatEvent.Started)
+            logger.i { "Starting chat flow for: ${prompt.take(50)}..." }
 
-        try {
-            // 1. Retrieve context (RAG + memory + history)
-            send(ChatEvent.RetrievingContext)
-            val context = contextRetrieval.retrieveContext(prompt)
-            send(ChatEvent.ContextRetrieved(context))
-            logger.d { "Context: hasRAG=${context.hasRagContext}, hasMemory=${context.hasMemoryContext}" }
+            try {
+                // 1. Retrieve context (RAG + memory + history)
+                send(ChatEvent.RetrievingContext)
+                val context = contextRetrieval.retrieveContext(prompt)
+                send(ChatEvent.ContextRetrieved(context))
+                logger.d { "Context: hasRAG=${context.hasRagContext}, hasMemory=${context.hasMemoryContext}" }
 
-            // 2. Get relevant tools and build prompt with tool schemas
-            val relevantTools = toolRegistry.getRelevantTools(prompt, maxTools = 3)
-            println("DEBUG(ChatWithTools) TOOLS: ${relevantTools.size} relevant for '${prompt.take(40)}': ${relevantTools.map { it.id }}")
-            val fullPrompt = buildPromptWithTools(prompt, context, deviceContext, relevantTools)
+                // 2. Get relevant tools and build prompt with tool schemas
+                val relevantTools = toolRegistry.getRelevantTools(prompt, maxTools = 3)
+                println(
+                    "DEBUG(ChatWithTools) TOOLS: ${relevantTools.size} relevant for '${prompt.take(40)}': ${relevantTools.map { it.id }}",
+                )
 
-            // 3. Build generation config
-            val queryType = QueryType.fromIntentCategory(context.intentCategory)
-            val config = configBuilder?.build(queryType = queryType)
-                ?: GenerationConfig()
+                // 2a. NATIVE CHAT path — when the engine supports chat templates
+                // and we have tools, let llama.cpp's common_chat_templates_apply do
+                // the heavy lifting: model-native prompt shape + grammar + parser.
+                val nativeEngine = aiEngine as? NativeChatCapable
+                if (nativeEngine != null && relevantTools.isNotEmpty()) {
+                    val startTime = Clock.System.now().toEpochMilliseconds()
+                    val handled =
+                        runNativeChatPath(
+                            nativeEngine = nativeEngine,
+                            prompt = prompt,
+                            context = context,
+                            relevantTools = relevantTools,
+                            confirmedToolIds = confirmedToolIds,
+                            startTime = startTime,
+                            scope = this,
+                        )
+                    if (handled) return@channelFlow
+                    logger.w { "Native chat path did not complete; falling through to legacy path" }
+                }
 
-            // 4. Generate response with streaming
-            send(ChatEvent.Generating)
-            val startTime = Clock.System.now().toEpochMilliseconds()
-            val accumulated = StringBuilder()
-            var tokenCount = 0
-            val thinkParser = StreamingThinkTagParser()
+                val fullPrompt = buildPromptWithTools(prompt, context, deviceContext, relevantTools)
 
-            val result = aiEngine.generateStreaming(
-                prompt = fullPrompt,
+                // 3. Build generation config
+                // When tools are in play, attach a GBNF grammar so the llama.cpp sampler
+                // cannot emit malformed tool-call JSON. Engines that don't understand
+                // grammar (ML Kit GenAI etc.) ignore this field.
+                val queryType = QueryType.fromIntentCategory(context.intentCategory)
+                val toolGrammar =
+                    if (relevantTools.isNotEmpty()) {
+                        grammarBuilder.build(relevantTools).takeIf { it.isNotBlank() }
+                    } else {
+                        null
+                    }
+                val config =
+                    (configBuilder?.build(queryType = queryType) ?: GenerationConfig())
+                        .copy(grammar = toolGrammar)
+
+                // 4. Generate response with streaming
+                send(ChatEvent.Generating)
+                val startTime = Clock.System.now().toEpochMilliseconds()
+                val accumulated = StringBuilder()
+                var tokenCount = 0
+                val thinkParser = StreamingThinkTagParser()
+
+                val result =
+                    aiEngine.generateStreaming(
+                        prompt = fullPrompt,
+                        config = config,
+                        onToken = { token ->
+                            if (token.isNotEmpty()) {
+                                accumulated.append(token)
+                                tokenCount++
+                                thinkParser.feed(token)
+                                trySend(
+                                    ChatEvent.Streaming(
+                                        partialText = thinkParser.visibleText,
+                                        tokenCount = tokenCount,
+                                        thinkingPartial = thinkParser.thinkingContent,
+                                        isThinking = thinkParser.isThinking,
+                                    ),
+                                )
+                            }
+                        },
+                    )
+
+                result
+                    .onSuccess {
+                        val duration = Clock.System.now().toEpochMilliseconds() - startTime
+                        val rawResponse = accumulated.toString().trim()
+
+                        logger.d { "Generated $tokenCount tokens in ${duration}ms" }
+
+                        // 5. Process for tool calls
+                        logger.d { "Raw LLM response (${rawResponse.length} chars): ${rawResponse.take(200)}" }
+                        println("DEBUG(ChatWithTools) Raw response (${rawResponse.length} chars): ${rawResponse.take(300)}")
+
+                        val processed = processLlmOutput.execute(rawResponse, confirmedToolIds)
+                        logger.d { "Processed output type: ${processed::class.simpleName}" }
+                        println("DEBUG(ChatWithTools) Processed: ${processed::class.simpleName}")
+
+                        when (processed) {
+                            is ProcessedOutput.TextOnly -> {
+                                // Check if the filter selected KNOWLEDGE tools that the model ignored
+                                val knowledgeTools = relevantTools.filter { it.category == ToolCategory.KNOWLEDGE }
+                                if (knowledgeTools.isNotEmpty()) {
+                                    // Force-execute: the model didn't call the tool, but we know it should
+                                    println("DEBUG(ChatWithTools) Force-executing ${knowledgeTools.size} KNOWLEDGE tools the model ignored")
+                                    val forceResults = forceExecuteTools(knowledgeTools, prompt)
+
+                                    send(
+                                        ChatEvent.ToolsExecuted(
+                                            results = forceResults,
+                                            hasPendingConfirmations = false,
+                                        ),
+                                    )
+
+                                    val stats = buildStats(tokenCount, duration, context)
+                                    val response =
+                                        ChatResponse(
+                                            text = processed.text,
+                                            stats = stats,
+                                            context = context,
+                                            toolResults = forceResults,
+                                            toolResultsFormatted =
+                                                forceResults.joinToString("\n") { r ->
+                                                    when (r) {
+                                                        is ToolResult.Success -> "${r.toolId}: ${r.output}"
+                                                        is ToolResult.Failure -> "${r.toolId}: ${r.error.displayMessage}"
+                                                        else -> ""
+                                                    }
+                                                },
+                                        )
+                                    send(ChatEvent.Complete(response))
+                                } else {
+                                    // No KNOWLEDGE tools — just text response
+                                    val stats = buildStats(tokenCount, duration, context)
+                                    val response =
+                                        ChatResponse(
+                                            text = processed.text,
+                                            stats = stats,
+                                            context = context,
+                                            toolResults = null,
+                                        )
+                                    send(ChatEvent.Complete(response))
+                                }
+                            }
+
+                            is ProcessedOutput.WithTools -> {
+                                // Tools detected and executed
+                                send(
+                                    ChatEvent.ToolsExecuted(
+                                        results = processed.toolResults,
+                                        hasPendingConfirmations = processed.hasPendingConfirmations,
+                                    ),
+                                )
+
+                                val stats = buildStats(tokenCount, duration, context)
+                                val response =
+                                    ChatResponse(
+                                        text = processed.plainText,
+                                        stats = stats,
+                                        context = context,
+                                        toolResults = processed.toolResults,
+                                        toolResultsFormatted = processed.formatResultsForDisplay(),
+                                    )
+                                send(ChatEvent.Complete(response))
+                            }
+                        }
+                    }.onFailure { e ->
+                        logger.e(e) { "Generation failed" }
+                        send(ChatEvent.Failed(mapExceptionToError(e)))
+                    }
+            } catch (e: Exception) {
+                logger.e(e) { "Chat flow error" }
+                send(ChatEvent.Failed(mapExceptionToError(e)))
+            }
+        }
+
+    /**
+     * NATIVE CHAT PATH — render via the model's own Jinja template,
+     * parse output with its trained tool-call shape.
+     *
+     * Returns true when the path handled the turn end-to-end (Complete sent);
+     * false means the caller should fall through to the prompt-engineered path.
+     */
+    private suspend fun runNativeChatPath(
+        nativeEngine: NativeChatCapable,
+        prompt: String,
+        context: EnrichedContext,
+        relevantTools: List<Tool>,
+        confirmedToolIds: Set<String>,
+        startTime: Long,
+        scope: kotlinx.coroutines.channels.ProducerScope<ChatEvent>,
+    ): Boolean {
+        val userContent =
+            if (context.hasContext) {
+                "${context.context}\n\n$prompt"
+            } else {
+                prompt
+            }
+
+        val messagesJson = OaiChatSerializer.messagesJson(systemPrompt.takeIf { it.isNotBlank() }, userContent)
+        val toolsJson = OaiChatSerializer.toolsJson(relevantTools)
+
+        logger.i { "Native chat: ${relevantTools.size} tools, ${messagesJson.length}c msgs, ${toolsJson.length}c tools" }
+        println("DEBUG(ChatWithTools) NATIVE path: tools=${relevantTools.map { it.id }}")
+
+        scope.send(ChatEvent.Generating)
+
+        var tokenCount = 0
+        val thinkParser = StreamingThinkTagParser()
+        val config =
+            (configBuilder?.build(queryType = QueryType.fromIntentCategory(context.intentCategory)) ?: GenerationConfig())
+                .copy(grammar = null) // native path generates its own grammar
+
+        val result =
+            nativeEngine.generateChatNative(
+                messagesJson = messagesJson,
+                toolsJson = toolsJson,
                 config = config,
                 onToken = { token ->
                     if (token.isNotEmpty()) {
-                        accumulated.append(token)
                         tokenCount++
                         thinkParser.feed(token)
-                        trySend(ChatEvent.Streaming(
-                            partialText = thinkParser.visibleText,
-                            tokenCount = tokenCount,
-                            thinkingPartial = thinkParser.thinkingContent,
-                            isThinking = thinkParser.isThinking
-                        ))
+                        scope.trySend(
+                            ChatEvent.Streaming(
+                                partialText = thinkParser.visibleText,
+                                tokenCount = tokenCount,
+                                thinkingPartial = thinkParser.thinkingContent,
+                                isThinking = thinkParser.isThinking,
+                            ),
+                        )
                     }
-                }
+                },
             )
 
-            result.onSuccess {
+        return result.fold(
+            onSuccess = { output ->
                 val duration = Clock.System.now().toEpochMilliseconds() - startTime
-                val rawResponse = accumulated.toString().trim()
-
-                logger.d { "Generated $tokenCount tokens in ${duration}ms" }
-
-                // 5. Process for tool calls
-                logger.d { "Raw LLM response (${rawResponse.length} chars): ${rawResponse.take(200)}" }
-                println("DEBUG(ChatWithTools) Raw response (${rawResponse.length} chars): ${rawResponse.take(300)}")
-
-                val processed = processLlmOutput.execute(rawResponse, confirmedToolIds)
-                logger.d { "Processed output type: ${processed::class.simpleName}" }
-                println("DEBUG(ChatWithTools) Processed: ${processed::class.simpleName}")
-
-                when (processed) {
-                    is ProcessedOutput.TextOnly -> {
-                        // Check if the filter selected KNOWLEDGE tools that the model ignored
-                        val knowledgeTools = relevantTools.filter { it.category == ToolCategory.KNOWLEDGE }
-                        if (knowledgeTools.isNotEmpty()) {
-                            // Force-execute: the model didn't call the tool, but we know it should
-                            println("DEBUG(ChatWithTools) Force-executing ${knowledgeTools.size} KNOWLEDGE tools the model ignored")
-                            val forceResults = forceExecuteTools(knowledgeTools, prompt)
-
-                            send(ChatEvent.ToolsExecuted(
-                                results = forceResults,
-                                hasPendingConfirmations = false
-                            ))
-
-                            val stats = buildStats(tokenCount, duration, context)
-                            val response = ChatResponse(
-                                text = processed.text,
-                                stats = stats,
-                                context = context,
-                                toolResults = forceResults,
-                                toolResultsFormatted = forceResults.joinToString("\n") { r ->
-                                    when (r) {
-                                        is ToolResult.Success -> "${r.toolId}: ${r.output}"
-                                        is ToolResult.Failure -> "${r.toolId}: ${r.error.displayMessage}"
-                                        else -> ""
-                                    }
-                                }
-                            )
-                            send(ChatEvent.Complete(response))
-                        } else {
-                            // No KNOWLEDGE tools — just text response
-                            val stats = buildStats(tokenCount, duration, context)
-                            val response = ChatResponse(
-                                text = processed.text,
-                                stats = stats,
-                                context = context,
-                                toolResults = null
-                            )
-                            send(ChatEvent.Complete(response))
-                        }
-                    }
-
-                    is ProcessedOutput.WithTools -> {
-                        // Tools detected and executed
-                        send(ChatEvent.ToolsExecuted(
-                            results = processed.toolResults,
-                            hasPendingConfirmations = processed.hasPendingConfirmations
-                        ))
-
-                        val stats = buildStats(tokenCount, duration, context)
-                        val response = ChatResponse(
-                            text = processed.plainText,
-                            stats = stats,
-                            context = context,
-                            toolResults = processed.toolResults,
-                            toolResultsFormatted = processed.formatResultsForDisplay()
-                        )
-                        send(ChatEvent.Complete(response))
-                    }
+                logger.i {
+                    "Native chat done: ${output.content.length}c content, " +
+                        "${output.toolCalls.size} tool calls, ${duration}ms"
                 }
+                println("DEBUG(ChatWithTools) NATIVE result: tools=${output.toolCalls.map { it.name }}")
 
-            }.onFailure { e ->
-                logger.e(e) { "Generation failed" }
-                send(ChatEvent.Failed(mapExceptionToError(e)))
+                if (output.toolCalls.isEmpty()) {
+                    // Model answered without tools — hand to the ignored-KNOWLEDGE fallback.
+                    val knowledgeTools = relevantTools.filter { it.category == ToolCategory.KNOWLEDGE }
+                    val results =
+                        if (knowledgeTools.isNotEmpty()) {
+                            forceExecuteTools(knowledgeTools, prompt).also { r ->
+                                scope.send(ChatEvent.ToolsExecuted(results = r, hasPendingConfirmations = false))
+                            }
+                        } else {
+                            null
+                        }
+                    val stats = buildStats(tokenCount, duration, context)
+                    scope.send(
+                        ChatEvent.Complete(
+                            ChatResponse(
+                                text = output.content,
+                                stats = stats,
+                                context = context,
+                                toolResults = results,
+                                toolResultsFormatted =
+                                    results?.joinToString("\n") { r ->
+                                        when (r) {
+                                            is ToolResult.Success -> "${r.toolId}: ${r.output}"
+                                            is ToolResult.Failure -> "${r.toolId}: ${r.error.displayMessage}"
+                                            else -> ""
+                                        }
+                                    },
+                            ),
+                        ),
+                    )
+                    true
+                } else {
+                    // Execute each native tool call
+                    val toolResults = executeNativeToolCalls(output.toolCalls)
+                    scope.send(ChatEvent.ToolsExecuted(results = toolResults, hasPendingConfirmations = false))
+                    val stats = buildStats(tokenCount, duration, context)
+                    scope.send(
+                        ChatEvent.Complete(
+                            ChatResponse(
+                                text = output.content,
+                                stats = stats,
+                                context = context,
+                                toolResults = toolResults,
+                                toolResultsFormatted =
+                                    toolResults.joinToString("\n") { r ->
+                                        when (r) {
+                                            is ToolResult.Success -> "${r.toolId}: ${r.output}"
+                                            is ToolResult.Failure -> "${r.toolId}: ${r.error.displayMessage}"
+                                            else -> ""
+                                        }
+                                    },
+                            ),
+                        ),
+                    )
+                    true
+                }
+            },
+            onFailure = { e ->
+                logger.e(e) { "Native chat path failed" }
+                false // caller falls through
+            },
+        )
+    }
+
+    /**
+     * Run each tool emitted by the native parser. Arguments come as JSON strings
+     * (from common_chat_parse) and are converted to `Map<String, String>` for
+     * the executor interface, which assumes stringified values.
+     */
+    private suspend fun executeNativeToolCalls(calls: List<app.m1k3.ai.assistant.ai.NativeToolCall>): List<ToolResult> =
+        withContext(Dispatchers.IO) {
+            calls.mapNotNull { call ->
+                val executor = toolRegistry.getExecutor(call.name) ?: return@mapNotNull null
+                val args = parseArgumentsToMap(call.arguments)
+                val toolCall = ToolCall(toolId = call.name, arguments = args, rawText = call.arguments)
+                try {
+                    executor.execute(toolCall)
+                } catch (e: Exception) {
+                    logger.e(e) { "Native tool '${call.name}' failed" }
+                    null
+                }
             }
+        }
 
-        } catch (e: Exception) {
-            logger.e(e) { "Chat flow error" }
-            send(ChatEvent.Failed(mapExceptionToError(e)))
+    private fun parseArgumentsToMap(argsJson: String): Map<String, String> {
+        if (argsJson.isBlank()) return emptyMap()
+        return try {
+            val parsed =
+                kotlinx.serialization.json.Json
+                    .parseToJsonElement(argsJson)
+            if (parsed !is kotlinx.serialization.json.JsonObject) return emptyMap()
+            parsed.mapValues { (_, v) ->
+                when (v) {
+                    is kotlinx.serialization.json.JsonPrimitive -> v.content
+                    else -> v.toString()
+                }
+            }
+        } catch (_: Exception) {
+            emptyMap()
         }
     }
 
@@ -239,29 +455,31 @@ class ChatWithToolsUseCase(
      */
     private suspend fun forceExecuteTools(
         tools: List<Tool>,
-        userQuery: String
-    ): List<ToolResult> = withContext(Dispatchers.IO) {
-        tools.mapNotNull { tool ->
-            val executor = toolRegistry.getExecutor(tool.id) ?: return@mapNotNull null
-            val call = ToolCall(
-                toolId = tool.id,
-                arguments = mapOf("query" to userQuery),
-                rawText = "[force-injected by ToolFilter]"
-            )
-            try {
-                executor.execute(call)
-            } catch (e: Exception) {
-                logger.e(e) { "Force-execute ${tool.id} failed" }
-                null
+        userQuery: String,
+    ): List<ToolResult> =
+        withContext(Dispatchers.IO) {
+            tools.mapNotNull { tool ->
+                val executor = toolRegistry.getExecutor(tool.id) ?: return@mapNotNull null
+                val call =
+                    ToolCall(
+                        toolId = tool.id,
+                        arguments = mapOf("query" to userQuery),
+                        rawText = "[force-injected by ToolFilter]",
+                    )
+                try {
+                    executor.execute(call)
+                } catch (e: Exception) {
+                    logger.e(e) { "Force-execute ${tool.id} failed" }
+                    null
+                }
             }
         }
-    }
 
     private suspend fun buildPromptWithTools(
         userPrompt: String,
         context: EnrichedContext,
         deviceContext: DeviceContext? = null,
-        relevantTools: List<Tool>? = null
+        relevantTools: List<Tool>? = null,
     ): String {
         val tools = relevantTools ?: toolRegistry.getRelevantTools(userPrompt, maxTools = 3)
         logger.i { "TOOLS: ${tools.size} relevant for '${userPrompt.take(40)}': ${tools.map { it.id }}" }
@@ -275,7 +493,7 @@ class ChatWithToolsUseCase(
                 context = context,
                 tools = tools,
                 systemPrompt = systemPrompt,
-                deviceContext = deviceContext
+                deviceContext = deviceContext,
             )
         }
 
@@ -309,7 +527,7 @@ class ChatWithToolsUseCase(
     private fun buildStats(
         tokenCount: Int,
         durationMs: Long,
-        context: EnrichedContext
+        context: EnrichedContext,
     ): GenerationStats {
         val tokensPerSecond = if (durationMs > 0) tokenCount * 1000f / durationMs else 0f
         return GenerationStats(
@@ -318,7 +536,7 @@ class ChatWithToolsUseCase(
             tokensPerSecond = tokensPerSecond,
             ragInfo = context.ragInfo,
             ragSources = context.ragSources,
-            ragConfidence = context.ragConfidence
+            ragConfidence = context.ragConfidence,
         )
     }
 

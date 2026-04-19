@@ -236,121 +236,14 @@ class ToolCallParserTest {
         assertEquals("true", calls[0].arguments["enable"])
     }
 
-    // ===== Tokenization Artifact Tests (Small Model Quirks) =====
-
-    @Test
-    fun `handles spaced tokenization from Qwen models`() {
-        // Real output from Qwen3.5 on device — spaces around JSON chars
-        val output = """<tool_call> {" tool ": " get _battery _level ", " args ": {" }} </tool_call>"""
-
-        val calls = parser.parse(output)
-
-        assertEquals(1, calls.size, "Should parse spaced tool call, got: $calls")
-        assertEquals("get_battery_level", calls[0].toolId)
-    }
-
-    @Test
-    fun `handles spaced tool call with args`() {
-        val output = """<tool_call> {" tool ": " web _search ", " args ": {" query ": " weather Cork "}} </tool_call>"""
-
-        val calls = parser.parse(output)
-
-        assertEquals(1, calls.size, "Should parse spaced tool call with args")
-        assertEquals("web_search", calls[0].toolId)
-    }
-
-    @Test
-    fun `hasToolCalls detects spaced format`() {
-        val output = """< tool_call > {" tool ": " get _battery _level "} </ tool_call >"""
-
-        assertTrue(parser.hasToolCalls(output), "Should detect spaced tool call")
-    }
-
-    // ===== Alternative Key Name Tests (Small Model Creativity) =====
-
-    @Test
-    fun `parses tool_id key as alternative to tool`() {
-        val output = """<tool_call>{"tool_id": "get_screen_time", "args": {"format": "12h"}}</tool_call>"""
-
-        val calls = parser.parse(output)
-
-        assertEquals(1, calls.size, "Should parse tool_id key")
-        assertEquals("get_screen_time", calls[0].toolId)
-        assertEquals("12h", calls[0].arguments["format"])
-    }
-
-    @Test
-    fun `parses name key as alternative to tool`() {
-        val output = """{"name": "get_battery_level", "args": {}}"""
-
-        val calls = parser.parse(output)
-
-        assertEquals(1, calls.size, "Should parse name key")
-        assertEquals("get_battery_level", calls[0].toolId)
-    }
-
-    @Test
-    fun `parses spaced tool_id from Qwen output`() {
-        // Real output from Qwen 0.6B on Pixel 9a
-        val output = """<tool_call> {" tool_id ": " get_screen_time ", " args ": {" format ": " 1 2 h "}} </tool_call>"""
-
-        val calls = parser.parse(output)
-
-        assertEquals(1, calls.size, "Should parse spaced tool_id, got: $calls")
-        assertEquals("get_screen_time", calls[0].toolId)
-    }
-
-    @Test
-    fun `hasToolCalls detects tool_id key`() {
-        val output = """{"tool_id": "web_search", "args": {"query": "weather"}}"""
-
-        assertTrue(parser.hasToolCalls(output), "Should detect tool_id key")
-    }
-
-    // ===== Dropped Underscore Tests (Gemma Quirks) =====
-
-    @Test
-    fun `parses toolcall tag without underscore`() {
-        // Real Gemma 4 output — drops underscore from tag
-        val output = """<toolcall>{"tool": "web_search", "args": {"query": "best pint Cork"}}</toolcall>"""
-
-        val calls = parser.parse(output)
-
-        assertEquals(1, calls.size, "Should parse <toolcall> without underscore")
-        assertEquals("web_search", calls[0].toolId)
-        assertEquals("best pint Cork", calls[0].arguments["query"])
-    }
-
-    @Test
-    fun `parses websearch without underscore in tool ID`() {
-        // Gemma drops underscores from tool names too
-        val output = """<toolcall>{"tool":"websearch","args":{"query":"best pint pub in Cork city"}}</toolcall>"""
-
-        val calls = parser.parse(output)
-
-        assertEquals(1, calls.size, "Should parse websearch → web_search")
-        assertEquals("web_search", calls[0].toolId)
-    }
-
-    @Test
-    fun `parses getbattery without underscore`() {
-        val output = """{"tool": "getbattery"}"""
-
-        val calls = parser.parse(output)
-
-        assertEquals(1, calls.size)
-        assertEquals("get_battery", calls[0].toolId)
-    }
-
-    @Test
-    fun `parses real Gemma output with dropped underscores`() {
-        // Exact pattern from Pixel 9a Gemma 4 2.3B
-        val output = """</think> <toolcall>{"tool":"websearch","args":{"query":"best pint pub in Cork city"}}</toolcall>"""
-
-        val calls = parser.parse(output)
-
-        assertEquals(1, calls.size, "Should handle Gemma's exact output format")
-        assertEquals("web_search", calls[0].toolId)
-        assertEquals("best pint pub in Cork city", calls[0].arguments["query"])
-    }
+    // ===== Grammar-constrained input contract =====
+    //
+    // As of 2026-04-18 the llama.cpp lazy grammar sampler constrains
+    // tool-call output at the token level. The parser therefore only needs
+    // to handle canonical JSON; the earlier quirk tests (spaced tokens,
+    // dropped underscores, alternative key names) were deleted because
+    // those outputs are no longer reachable on the wire.
+    //
+    // If a small-model regression resurfaces, the fix is in the grammar
+    // builder, not in parser normalization. See ToolCallGrammarBuilder.
 }

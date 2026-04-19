@@ -13,10 +13,7 @@ import java.net.URLEncoder
 /**
  * Web Search Executor — DuckDuckGo Instant Answer API.
  *
- * No API key. No tracking. No surveillance capitalism.
- * The villain searches the web on HIS terms.
- *
- * Uses DuckDuckGo's Instant Answer API (JSON, free, no auth):
+ * No API key, no tracking. JSON, free, no auth:
  * https://api.duckduckgo.com/?q=query&format=json&no_html=1
  *
  * Returns: abstract, answer, related topics.

@@ -9,13 +9,26 @@ import app.m1k3.ai.domain.ai.LlmModel
 import app.m1k3.ai.domain.chat.format.MessageRole
 import app.m1k3.ai.domain.chat.services.ChatFormatter
 import app.m1k3.ai.domain.chat.services.DefaultChatFormatter
+import app.m1k3.ai.domain.tools.services.QwenXmlToolCallExtractor
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import java.io.File
 
 private val logger = Logger.withTag("LlamaCppEngine")
+
+/** JSON parser for the result returned by MaBridge.generateChat. */
+private val nativeChatJson =
+    Json {
+        ignoreUnknownKeys = true
+        isLenient = true
+    }
 
 /**
  * LlamaCppEngine - llama.cpp inference engine via Ma JNI bridge
@@ -38,9 +51,9 @@ class LlamaCppEngine(
     private val chatFormatter: ChatFormatter = DefaultChatFormatter(model.chatFormat),
     private val overrideModelPath: String? = null,
     private val backend: MaInferenceBackend = MaBridge,
-    private val deviceRamGbOverride: Int = -1
-) : BaseLlmEngine {
-
+    private val deviceRamGbOverride: Int = -1,
+) : BaseLlmEngine,
+    NativeChatCapable {
     @Volatile
     private var isInitialized = false
     private val initMutex = Mutex()
@@ -97,7 +110,7 @@ class LlamaCppEngine(
             // No assets fallback — model must be downloaded first
             throw NoModelAvailableException(
                 model = model,
-                cause = e
+                cause = e,
             )
         }
     }
@@ -105,113 +118,121 @@ class LlamaCppEngine(
     /**
      * Initialize the engine by loading the GGUF model via [MaBridge].
      */
-    override suspend fun initialize(): Result<Unit> = withContext(Dispatchers.IO) {
-        if (isInitialized) return@withContext Result.success(Unit)
+    override suspend fun initialize(): Result<Unit> =
+        withContext(Dispatchers.IO) {
+            if (isInitialized) return@withContext Result.success(Unit)
 
-        initMutex.withLock {
-            if (isInitialized) return@withLock Result.success(Unit)
+            initMutex.withLock {
+                if (isInitialized) return@withLock Result.success(Unit)
 
-            try {
-                logger.i { "Initializing -> model=${model.displayName}, RAM: ${deviceRamGB}GB" }
+                try {
+                    logger.i { "Initializing -> model=${model.displayName}, RAM: ${deviceRamGB}GB" }
 
-                val modelPath = resolveModelPath()
-                logger.i { "Loading model: $modelPath" }
+                    val modelPath = resolveModelPath()
+                    logger.i { "Loading model: $modelPath" }
 
-                // 2048 is optimal for sub-3B models. KV cache scales quadratically
-                // with context — 4096 doubles memory pressure for marginal benefit.
-                // Reserve 4096 for flagship devices running 4B+ models.
-                val nCtx = when {
-                    deviceRamGB >= 12 && model.parameterCount >= 4_000_000_000L -> 4096
-                    else -> 2048
+                    // 2048 is optimal for sub-3B models. KV cache scales quadratically
+                    // with context — 4096 doubles memory pressure for marginal benefit.
+                    // Reserve 4096 for flagship devices running 4B+ models.
+                    val nCtx =
+                        when {
+                            deviceRamGB >= 12 && model.parameterCount >= 4_000_000_000L -> 4096
+                            else -> 2048
+                        }
+                    val handle = backend.init(modelPath, nCtx)
+                    if (handle == 0L) {
+                        return@withLock Result.failure(
+                            RuntimeException("Failed to load model '${model.displayName}'. File may be corrupt or incompatible."),
+                        )
+                    }
+
+                    contextHandle = handle
+                    isInitialized = true
+                    logger.i { "Initialization complete (handle=$handle)" }
+
+                    Result.success(Unit)
+                } catch (e: NoModelAvailableException) {
+                    logger.w { "No model available: ${e.message}" }
+                    Result.failure(e)
+                } catch (e: Exception) {
+                    logger.e(e) { "Initialization failed" }
+                    isInitialized = false
+                    contextHandle = 0L
+                    Result.failure(RuntimeException("Failed to initialize LlamaCppEngine", e))
                 }
-                val handle = backend.init(modelPath, nCtx)
-                if (handle == 0L) {
-                    return@withLock Result.failure(
-                        RuntimeException("Failed to load model '${model.displayName}'. File may be corrupt or incompatible.")
-                    )
-                }
-
-                contextHandle = handle
-                isInitialized = true
-                logger.i { "Initialization complete (handle=$handle)" }
-
-                Result.success(Unit)
-            } catch (e: NoModelAvailableException) {
-                logger.w { "No model available: ${e.message}" }
-                Result.failure(e)
-            } catch (e: Exception) {
-                logger.e(e) { "Initialization failed" }
-                isInitialized = false
-                contextHandle = 0L
-                Result.failure(RuntimeException("Failed to initialize LlamaCppEngine", e))
             }
         }
-    }
 
     /**
      * Generate a single response (non-streaming).
      */
     override suspend fun generate(
         prompt: String,
-        config: GenerationConfig
-    ): Result<GenerationResult> = withContext(Dispatchers.IO) {
-        if (!isInitialized) {
-            return@withContext Result.failure(
-                IllegalStateException("Engine not initialized. Call initialize() first.")
-            )
-        }
-
-        val startTime = System.currentTimeMillis()
-        val maxTokens = config.maxTokens?.takeIf { it > 0 } ?: getOptimalMaxTokens()
-
-        try {
-            val resolvedPrompt = resolvePrompt(prompt, config)
-
-            logger.d { "generate -> ${resolvedPrompt.length}c maxTokens=$maxTokens" }
-
-            val rawResponse = backend.generate(
-                handle = contextHandle,
-                prompt = resolvedPrompt,
-                maxTokens = maxTokens,
-                temperature = config.temperature ?: 0.7f,
-                topP = config.topP ?: 0.95f,
-                topK = config.topK ?: 64,
-                repeatPenalty = config.repetitionPenalty ?: 1.1f
-            )
-
-            val response = stripStopTokens(rawResponse)
-
-            if (response.isEmpty()) {
-                logger.w { "Backend returned empty response" }
+        config: GenerationConfig,
+    ): Result<GenerationResult> =
+        withContext(Dispatchers.IO) {
+            if (!isInitialized) {
                 return@withContext Result.failure(
-                    RuntimeException("Model returned empty response. The native context may have been lost.")
+                    IllegalStateException("Engine not initialized. Call initialize() first."),
                 )
             }
 
-            val inferenceTimeMs = System.currentTimeMillis() - startTime
-            val estimatedTokens = (response.length / 4).coerceAtLeast(1)
-            val tokensPerSecond = if (inferenceTimeMs > 0) {
-                (estimatedTokens * 1000f) / inferenceTimeMs
-            } else 0f
+            val startTime = System.currentTimeMillis()
+            val maxTokens = config.maxTokens?.takeIf { it > 0 } ?: getOptimalMaxTokens()
 
-            logger.i {
-                "Generation complete (${response.length} chars, ~$estimatedTokens tokens, " +
+            try {
+                val resolvedPrompt = resolvePrompt(prompt, config)
+
+                logger.d { "generate -> ${resolvedPrompt.length}c maxTokens=$maxTokens" }
+
+                val rawResponse =
+                    backend.generate(
+                        handle = contextHandle,
+                        prompt = resolvedPrompt,
+                        maxTokens = maxTokens,
+                        temperature = config.temperature ?: 0.7f,
+                        topP = config.topP ?: 0.95f,
+                        topK = config.topK ?: 64,
+                        repeatPenalty = config.repetitionPenalty ?: 1.1f,
+                        grammar = config.grammar,
+                    )
+
+                val response = stripStopTokens(rawResponse)
+
+                if (response.isEmpty()) {
+                    logger.w { "Backend returned empty response" }
+                    return@withContext Result.failure(
+                        RuntimeException("Model returned empty response. The native context may have been lost."),
+                    )
+                }
+
+                val inferenceTimeMs = System.currentTimeMillis() - startTime
+                val estimatedTokens = (response.length / 4).coerceAtLeast(1)
+                val tokensPerSecond =
+                    if (inferenceTimeMs > 0) {
+                        (estimatedTokens * 1000f) / inferenceTimeMs
+                    } else {
+                        0f
+                    }
+
+                logger.i {
+                    "Generation complete (${response.length} chars, ~$estimatedTokens tokens, " +
                         "${inferenceTimeMs}ms, ${"%.1f".format(tokensPerSecond)} tok/s)"
-            }
+                }
 
-            Result.success(
-                GenerationResult(
-                    text = response,
-                    tokensGenerated = estimatedTokens,
-                    inferenceTimeMs = inferenceTimeMs,
-                    tokensPerSecond = tokensPerSecond
+                Result.success(
+                    GenerationResult(
+                        text = response,
+                        tokensGenerated = estimatedTokens,
+                        inferenceTimeMs = inferenceTimeMs,
+                        tokensPerSecond = tokensPerSecond,
+                    ),
                 )
-            )
-        } catch (e: Exception) {
-            logger.e(e) { "Generation failed" }
-            Result.failure(RuntimeException("Generation failed", e))
+            } catch (e: Exception) {
+                logger.e(e) { "Generation failed" }
+                Result.failure(RuntimeException("Generation failed", e))
+            }
         }
-    }
 
     /**
      * Generate response with true token streaming via Ma JNI callbacks.
@@ -223,64 +244,186 @@ class LlamaCppEngine(
     override suspend fun generateStreaming(
         prompt: String,
         config: GenerationConfig,
-        onToken: (String) -> Unit
-    ): Result<Unit> = withContext(Dispatchers.IO) {
-        if (!isInitialized) {
-            return@withContext Result.failure(
-                IllegalStateException("Engine not initialized. Call initialize() first.")
-            )
-        }
-
-        val maxTokens = config.maxTokens?.takeIf { it > 0 } ?: getOptimalMaxTokens()
-
-        try {
-            val resolvedPrompt = resolvePrompt(prompt, config)
-
-            logger.d { "generateStreaming -> ${resolvedPrompt.length}c maxTokens=$maxTokens" }
-            // Dump full prompt to app-internal file for inspection (temporary)
-            val debugFile = java.io.File(context.filesDir, "debug_prompt.txt")
-            debugFile.writeText(resolvedPrompt)
-
-            var isFirstToken = true
-            val rawResponse = backend.generate(
-                handle = contextHandle,
-                prompt = resolvedPrompt,
-                maxTokens = maxTokens,
-                temperature = config.temperature ?: 0.7f,
-                topP = config.topP ?: 0.95f,
-                topK = config.topK ?: 64,
-                repeatPenalty = config.repetitionPenalty ?: 1.1f,
-                onToken = { token ->
-                    val cleaned = app.m1k3.ai.assistant.utils.cleanStreamingToken(token, isFirstToken)
-                    isFirstToken = false
-                    if (cleaned.isNotEmpty()) onToken(cleaned)
-                }
-            )
-
-            val response = stripStopTokens(rawResponse)
-
-            if (response.isEmpty()) {
-                logger.w { "Backend returned empty response during streaming" }
+        onToken: (String) -> Unit,
+    ): Result<Unit> =
+        withContext(Dispatchers.IO) {
+            if (!isInitialized) {
                 return@withContext Result.failure(
-                    RuntimeException("Model returned empty response. The native context may have been lost.")
+                    IllegalStateException("Engine not initialized. Call initialize() first."),
                 )
             }
 
-            logger.i { "Streaming complete (${response.length} chars)" }
-            Result.success(Unit)
-        } catch (e: Exception) {
-            logger.e(e) { "Streaming failed" }
-            Result.failure(RuntimeException("Streaming failed", e))
-        }
-    }
+            val maxTokens = config.maxTokens?.takeIf { it > 0 } ?: getOptimalMaxTokens()
 
-    override fun getOptimalMaxTokens(): Int = when {
-        deviceRamGB >= 12 -> 4096
-        deviceRamGB >= 8 -> 3072
-        deviceRamGB >= 6 -> 2048
-        deviceRamGB >= 4 -> 1536
-        else -> 1024
-    }
+            try {
+                val resolvedPrompt = resolvePrompt(prompt, config)
+
+                logger.d { "generateStreaming -> ${resolvedPrompt.length}c maxTokens=$maxTokens" }
+                // Dump full prompt to app-internal file for inspection (temporary)
+                val debugFile = java.io.File(context.filesDir, "debug_prompt.txt")
+                debugFile.writeText(resolvedPrompt)
+
+                var isFirstToken = true
+                val rawResponse =
+                    backend.generate(
+                        handle = contextHandle,
+                        prompt = resolvedPrompt,
+                        maxTokens = maxTokens,
+                        temperature = config.temperature ?: 0.7f,
+                        topP = config.topP ?: 0.95f,
+                        topK = config.topK ?: 64,
+                        repeatPenalty = config.repetitionPenalty ?: 1.1f,
+                        onToken = { token ->
+                            val cleaned =
+                                app.m1k3.ai.assistant.utils
+                                    .cleanStreamingToken(token, isFirstToken)
+                            isFirstToken = false
+                            if (cleaned.isNotEmpty()) onToken(cleaned)
+                        },
+                        grammar = config.grammar,
+                    )
+
+                val response = stripStopTokens(rawResponse)
+
+                if (response.isEmpty()) {
+                    logger.w { "Backend returned empty response during streaming" }
+                    return@withContext Result.failure(
+                        RuntimeException("Model returned empty response. The native context may have been lost."),
+                    )
+                }
+
+                logger.i { "Streaming complete (${response.length} chars)" }
+                Result.success(Unit)
+            } catch (e: Exception) {
+                logger.e(e) { "Streaming failed" }
+                Result.failure(RuntimeException("Streaming failed", e))
+            }
+        }
+
+    override fun getOptimalMaxTokens(): Int =
+        when {
+            deviceRamGB >= 12 -> 4096
+            deviceRamGB >= 8 -> 3072
+            deviceRamGB >= 6 -> 2048
+            deviceRamGB >= 4 -> 1536
+            else -> 1024
+        }
+
+    // ============================================================
+    // NativeChatCapable — llama.cpp common_chat_templates_apply path
+    // ============================================================
+
+    override suspend fun generateChatNative(
+        messagesJson: String,
+        toolsJson: String,
+        config: GenerationConfig,
+        onToken: (String) -> Unit,
+        enableThinking: Boolean,
+    ): Result<NativeChatOutput> =
+        withContext(Dispatchers.IO) {
+            if (!isInitialized) {
+                return@withContext Result.failure(
+                    IllegalStateException("Engine not initialized"),
+                )
+            }
+            val maxTokens = config.maxTokens?.takeIf { it > 0 } ?: getOptimalMaxTokens()
+
+            try {
+                var isFirstToken = true
+                val resultJson =
+                    backend.generateChat(
+                        handle = contextHandle,
+                        messagesJson = messagesJson,
+                        toolsJson = toolsJson,
+                        maxTokens = maxTokens,
+                        temperature = config.temperature ?: 0.7f,
+                        topP = config.topP ?: 0.95f,
+                        topK = config.topK ?: 64,
+                        repeatPenalty = config.repetitionPenalty ?: 1.1f,
+                        enableThinking = enableThinking,
+                        onToken = { token ->
+                            val cleaned =
+                                app.m1k3.ai.assistant.utils
+                                    .cleanStreamingToken(token, isFirstToken)
+                            isFirstToken = false
+                            if (cleaned.isNotEmpty()) onToken(cleaned)
+                        },
+                    )
+
+                val parsed = nativeChatJson.parseToJsonElement(resultJson).jsonObject
+                parsed["error"]?.let { err ->
+                    return@withContext Result.failure(
+                        RuntimeException("Native chat path error: $err"),
+                    )
+                }
+
+                val content = parsed["content"]?.jsonPrimitive?.contentOrNull.orEmpty()
+                val reasoning = parsed["reasoning_content"]?.jsonPrimitive?.contentOrNull.orEmpty()
+                val raw = parsed["raw"]?.jsonPrimitive?.contentOrNull.orEmpty()
+                val parserToolCalls =
+                    parsed["tool_calls"]?.jsonArray.orEmpty().map { el ->
+                        val obj = el.jsonObject
+                        NativeToolCall(
+                            name = obj["name"]?.jsonPrimitive?.contentOrNull.orEmpty(),
+                            arguments = obj["arguments"]?.jsonPrimitive?.contentOrNull.orEmpty(),
+                            id = obj["id"]?.jsonPrimitive?.contentOrNull.orEmpty(),
+                        )
+                    }
+
+                // Fallback: llama.cpp's PEG parser under LENIENT mode sometimes
+                // eats the tool_call block as content. Extract directly from raw.
+                val toolCalls =
+                    if (parserToolCalls.isEmpty() && raw.contains("<tool_call>")) {
+                        QwenXmlToolCallExtractor
+                            .extract(raw)
+                            .map { ex ->
+                                NativeToolCall(
+                                    name = ex.name,
+                                    arguments =
+                                        nativeChatJson.encodeToString(
+                                            kotlinx.serialization.json.JsonObject
+                                                .serializer(),
+                                            kotlinx.serialization.json.JsonObject(
+                                                ex.arguments.mapValues {
+                                                    kotlinx.serialization.json.JsonPrimitive(it.value)
+                                                },
+                                            ),
+                                        ),
+                                )
+                            }.also {
+                                if (it.isNotEmpty()) {
+                                    logger.i { "Native chat: fallback XML extractor found ${it.size} tool call(s)" }
+                                }
+                            }
+                    } else {
+                        parserToolCalls
+                    }
+
+                // When fallback extracted the call the raw tool_call block is still in content — strip it.
+                val displayContent =
+                    if (parserToolCalls.isEmpty() && toolCalls.isNotEmpty()) {
+                        content.replace(
+                            Regex("<tool_call>.*?</tool_call>", RegexOption.DOT_MATCHES_ALL),
+                            "",
+                        )
+                    } else {
+                        content
+                    }
+
+                logger.i { "Native chat: ${displayContent.length}c content, ${toolCalls.size} tool calls" }
+                Result.success(
+                    NativeChatOutput(
+                        content = stripStopTokens(displayContent),
+                        reasoningContent = reasoning,
+                        toolCalls = toolCalls,
+                        raw = raw,
+                    ),
+                )
+            } catch (e: Exception) {
+                logger.e(e) { "Native chat generation failed" }
+                Result.failure(RuntimeException("Native chat failed", e))
+            }
+        }
 
     override fun release() {
         val handle = contextHandle
@@ -305,7 +448,10 @@ class LlamaCppEngine(
      * (e.g., from UnifiedPromptBuilder), pass it through. Otherwise,
      * build a formatted prompt using the model's [ChatFormat].
      */
-    private fun resolvePrompt(prompt: String, config: GenerationConfig): String =
+    private fun resolvePrompt(
+        prompt: String,
+        config: GenerationConfig,
+    ): String =
         if (isAlreadyFormatted(prompt)) {
             prompt
         } else {
@@ -317,7 +463,10 @@ class LlamaCppEngine(
      *
      * Assembles: BOS prefix + system (if supported) + user turn + model prefix.
      */
-    private fun buildFormattedPrompt(config: GenerationConfig, userMessage: String): String {
+    private fun buildFormattedPrompt(
+        config: GenerationConfig,
+        userMessage: String,
+    ): String {
         val format = model.chatFormat
         val systemPrompt = buildCleanSystemPrompt(config)
         val contextBlock = buildContextString(config)
@@ -327,17 +476,21 @@ class LlamaCppEngine(
 
             if (format.supportsSystemRole && systemPrompt.isNotEmpty()) {
                 append(format.formatMessage(MessageRole.SYSTEM, systemPrompt))
-                val userContent = if (contextBlock.isNotEmpty()) {
-                    "$contextBlock\n\n$userMessage"
-                } else userMessage
+                val userContent =
+                    if (contextBlock.isNotEmpty()) {
+                        "$contextBlock\n\n$userMessage"
+                    } else {
+                        userMessage
+                    }
                 append(format.formatMessage(MessageRole.USER, userContent))
             } else {
                 // No system role (Gemma3): prepend system + context into user turn
-                val userContent = buildString {
-                    if (systemPrompt.isNotEmpty()) append("$systemPrompt\n\n")
-                    if (contextBlock.isNotEmpty()) append("$contextBlock\n\n")
-                    append(userMessage)
-                }
+                val userContent =
+                    buildString {
+                        if (systemPrompt.isNotEmpty()) append("$systemPrompt\n\n")
+                        if (contextBlock.isNotEmpty()) append("$contextBlock\n\n")
+                        append(userMessage)
+                    }
                 append(format.formatMessage(MessageRole.USER, userContent))
             }
 
@@ -351,15 +504,21 @@ class LlamaCppEngine(
         val userName = config.userContext?.get("name") ?: "Human"
         val identity = "You are M1K3 (Mike), $userName's local AI assistant running on $deviceInfo."
         val temperature = config.temperature
-        val behavior = when {
-            temperature != null && temperature < 0.4f ->
-                " Be concise, factual, and direct. Avoid speculation. No repetition."
-            temperature != null && temperature > 0.8f ->
-                " Be creative and imaginative. Vary your phrasing."
-            else ->
-                " Be helpful and accurate. Use only provided facts. If unsure, say so." +
+        val behavior =
+            when {
+                temperature != null && temperature < 0.4f -> {
+                    " Be concise, factual, and direct. Avoid speculation. No repetition."
+                }
+
+                temperature != null && temperature > 0.8f -> {
+                    " Be creative and imaginative. Vary your phrasing."
+                }
+
+                else -> {
+                    " Be helpful and accurate. Use only provided facts. If unsure, say so." +
                         " Avoid repetition. Each sentence must provide new information."
-        }
+                }
+            }
         return config.systemPrompt ?: (identity + behavior)
     }
 
@@ -371,12 +530,12 @@ class LlamaCppEngine(
 
     private fun isAlreadyFormatted(prompt: String): Boolean =
         prompt.contains("<start_of_turn>") ||
-                prompt.contains("<end_of_turn>") ||
-                prompt.contains("<|im_start|>") ||
-                prompt.contains("[INST]") ||
-                prompt.contains("<|start_header_id|>") ||
-                prompt.startsWith("<bos>") ||
-                prompt.startsWith("<|begin_of_text|>")
+            prompt.contains("<end_of_turn>") ||
+            prompt.contains("<|im_start|>") ||
+            prompt.contains("[INST]") ||
+            prompt.contains("<|start_header_id|>") ||
+            prompt.startsWith("<bos>") ||
+            prompt.startsWith("<|begin_of_text|>")
 
     private fun stripStopTokens(response: String?): String {
         val nonNull = response ?: return ""

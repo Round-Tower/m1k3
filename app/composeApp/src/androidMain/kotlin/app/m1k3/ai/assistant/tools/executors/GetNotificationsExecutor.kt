@@ -8,10 +8,8 @@ import app.m1k3.ai.domain.tools.ToolResult
 import app.m1k3.ai.domain.tools.services.ToolExecutor
 
 /**
- * Get Notifications Executor — reads actual notification content.
- *
- * The villain reads EVERY letter. Not just counts — titles, text, app names.
- * "What notifications did I miss?" now has a real answer.
+ * Get Notifications Executor — reads notification titles, text, and app names
+ * (not just unread counts).
  */
 class GetNotificationsExecutor(
     private val context: Context

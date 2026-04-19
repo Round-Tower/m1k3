@@ -25,7 +25,6 @@ package app.m1k3.ai.assistant.ai.ma
  * ```
  */
 object MaBridge : MaInferenceBackend {
-
     init {
         System.loadLibrary("ma")
     }
@@ -36,7 +35,10 @@ object MaBridge : MaInferenceBackend {
      * @param modelPath Absolute path to the .gguf file
      * @return Opaque context handle (pointer cast to Long), or 0 on failure
      */
-    override external fun init(modelPath: String, nCtx: Int): Long
+    external override fun init(
+        modelPath: String,
+        nCtx: Int,
+    ): Long
 
     /**
      * Generate text from a pre-formatted prompt.
@@ -56,17 +58,59 @@ object MaBridge : MaInferenceBackend {
         topP: Float,
         topK: Int,
         repeatPenalty: Float,
-        onToken: ((String) -> Unit)?
+        onToken: ((String) -> Unit)?,
+        grammar: String?,
     ): String {
         val callback = onToken?.let { MaTokenCallback(it) }
-        return nativeGenerate(handle, prompt, maxTokens, temperature, topP, topK, repeatPenalty, callback)
+        return nativeGenerate(
+            handle,
+            prompt,
+            maxTokens,
+            temperature,
+            topP,
+            topK,
+            repeatPenalty,
+            callback,
+            grammar,
+        )
+    }
+
+    /**
+     * Generate via the GGUF's own chat template (common_chat_templates_apply).
+     * See [MaInferenceBackend.generateChat] — returns parsed JSON string.
+     */
+    override fun generateChat(
+        handle: Long,
+        messagesJson: String,
+        toolsJson: String,
+        maxTokens: Int,
+        temperature: Float,
+        topP: Float,
+        topK: Int,
+        repeatPenalty: Float,
+        enableThinking: Boolean,
+        onToken: ((String) -> Unit)?,
+    ): String {
+        val callback = onToken?.let { MaTokenCallback(it) }
+        return nativeGenerateChat(
+            handle,
+            messagesJson,
+            toolsJson,
+            maxTokens,
+            temperature,
+            topP,
+            topK,
+            repeatPenalty,
+            enableThinking,
+            callback,
+        )
     }
 
     /**
      * Release native resources for this context handle.
      * After calling release(), [handle] must not be used.
      */
-    override external fun release(handle: Long)
+    external override fun release(handle: Long)
 
     // --- Private JNI ---
 
@@ -75,6 +119,9 @@ object MaBridge : MaInferenceBackend {
      *
      * [callback] is a [MaTokenCallback] instance called once per token piece,
      * or null for non-streaming generation.
+     *
+     * [grammar] is a GBNF grammar string. When non-null, the native bridge installs
+     * a lazy grammar sampler using `<tool_call>` as the trigger pattern.
      */
     private external fun nativeGenerate(
         handle: Long,
@@ -84,6 +131,27 @@ object MaBridge : MaInferenceBackend {
         topP: Float,
         topK: Int,
         repeatPenalty: Float,
-        callback: MaTokenCallback?
+        callback: MaTokenCallback?,
+        grammar: String?,
+    ): String
+
+    /**
+     * JNI entry point for native chat-template generation.
+     *
+     * [messagesJson]: OAI-style messages JSON array.
+     * [toolsJson]: OAI-style tools JSON array; "" or "[]" when no tools.
+     * Returns parsed output as JSON — see [MaInferenceBackend.generateChat].
+     */
+    private external fun nativeGenerateChat(
+        handle: Long,
+        messagesJson: String,
+        toolsJson: String,
+        maxTokens: Int,
+        temperature: Float,
+        topP: Float,
+        topK: Int,
+        repeatPenalty: Float,
+        enableThinking: Boolean,
+        callback: MaTokenCallback?,
     ): String
 }
