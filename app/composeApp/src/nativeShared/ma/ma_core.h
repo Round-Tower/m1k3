@@ -1,0 +1,134 @@
+/*
+ * ma_core.h — portable C API for the Ma inference library.
+ *
+ * Wraps llama.cpp's stable C API behind a plain-C facade so both Android (JNI)
+ * and iOS (Kotlin/Native cinterop) can bind to the same implementation.
+ *
+ * No JNI types, no C++ types, no Swift types. Just uint/int/float/char*.
+ * Streaming uses a C function pointer + user_data (host-side trampolines).
+ *
+ * Callers:
+ *   - Android: ma_bridge.cpp wraps these in JNI (JNIEnv/jstring/jobject → C).
+ *   - iOS    : Kotlin/Native cinterop binds this header directly.
+ */
+
+#ifndef MA_CORE_H
+#define MA_CORE_H
+
+#include <stdint.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+/** Opaque handle to a loaded model + context. Zero means invalid / failure. */
+typedef uint64_t ma_handle;
+
+/** Streaming-token callback.
+ *  `piece` is a NUL-terminated UTF-8 string valid only during this call;
+ *  copy it if you need to retain it. `user_data` is passed through unchanged. */
+typedef void (*ma_token_cb)(const char *piece, void *user_data);
+
+/** Result of ma_core_init. On failure, handle == 0 and the other fields
+ *  describe what was attempted (used for diagnostics on the host side). */
+typedef struct {
+    ma_handle handle;          /* 0 = failure */
+    int       fell_back;       /* 1 = retry-on-null fallback kicked in */
+    int       effective_fa;    /* final flash-attn setting: 0 = off, 1 = auto */
+    int       effective_kv;    /* final KV type: 0 = F16, 1 = Q8_0 */
+    int       n_threads_gen;   /* final gen thread count (what llama.cpp got) */
+    int       n_threads_batch; /* final prefill thread count */
+} ma_init_result;
+
+/**
+ * Load a GGUF model and create an inference context.
+ *
+ * Tuning knobs (nCtx/nBatch/nUbatch/threads/FA/KV/mlock) come from the domain
+ * `InferenceTuning.resolve` matrix on the host side; this function applies them
+ * verbatim with a retry-on-null safety net: if the aggressive config fails to
+ * instantiate a context (some ARM kernel variants reject FA+Q8_0), it retries
+ * once with F16 + FA disabled. The caller can detect this via `fell_back`.
+ *
+ * Returns 0 in handle on hard failure (model load failed, or fallback also failed).
+ */
+ma_init_result ma_core_init(
+    const char *model_path,
+    int         n_ctx,
+    int         n_batch,
+    int         n_ubatch,
+    int         threads_gen,      /* 0 = hw-derived */
+    int         threads_batch,    /* 0 = hw-derived */
+    int         use_flash_attn,   /* bool-like: nonzero = on */
+    int         kv_quant_ordinal, /* 0 = F16, 1 = Q8_0 */
+    int         use_mlock         /* bool-like */
+);
+
+/**
+ * Generate text from a pre-formatted prompt.
+ *
+ * Streaming: when `cb` is non-NULL, fires on every complete UTF-8 boundary.
+ * Non-streaming: pass NULL for `cb`; only the full string is returned.
+ *
+ * `grammar` may be NULL. When non-NULL, installs a lazy grammar sampler
+ * triggered by the literal `<tool_call>` pattern (matches the Kotlin-side
+ * tool-call convention).
+ *
+ * Return value is a heap-allocated NUL-terminated UTF-8 string. Caller MUST
+ * free it via ma_core_free_string. Returns an empty non-NULL string on
+ * non-fatal errors (e.g. tokenize failure) so callers can always free.
+ * Returns NULL only on catastrophic allocation failure.
+ */
+char *ma_core_generate(
+    ma_handle   handle,
+    const char *prompt,
+    int         max_tokens,
+    float       temperature,
+    float       top_p,
+    int         top_k,
+    float       repeat_penalty,
+    float       min_p,
+    ma_token_cb cb,
+    void       *cb_user_data,
+    const char *grammar
+);
+
+/**
+ * Generate via the model's own chat template (common_chat_templates_apply).
+ *
+ * `messages_json` : OpenAI-style messages JSON array.
+ * `tools_json`    : OpenAI-style tools JSON array ("" or "[]" = no tools).
+ *
+ * Returns a JSON string of shape:
+ *   {"content":"...","reasoning_content":"...",
+ *    "tool_calls":[{"name":"...","arguments":"...","id":"..."}],
+ *    "raw":"..."}
+ * or
+ *   {"error":"..."}
+ * on failure. Caller MUST free via ma_core_free_string.
+ */
+char *ma_core_generate_chat(
+    ma_handle   handle,
+    const char *messages_json,
+    const char *tools_json,
+    int         max_tokens,
+    float       temperature,
+    float       top_p,
+    int         top_k,
+    float       repeat_penalty,
+    float       min_p,
+    int         enable_thinking, /* bool-like */
+    ma_token_cb cb,
+    void       *cb_user_data
+);
+
+/** Free a string returned by ma_core_generate / ma_core_generate_chat. */
+void ma_core_free_string(char *s);
+
+/** Release a context. After this call the handle is invalid. */
+void ma_core_release(ma_handle handle);
+
+#ifdef __cplusplus
+} /* extern "C" */
+#endif
+
+#endif /* MA_CORE_H */

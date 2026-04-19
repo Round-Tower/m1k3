@@ -12,7 +12,8 @@ project(ma VERSION 1.0 LANGUAGES C CXX)
 # Pinned at b8637+ for Gemma 4 support (Llamatik was stuck at b7815, Jan 2025)
 # ============================================================================
 
-set(LLAMA_DIR ${CMAKE_SOURCE_DIR}/llama.cpp)
+set(LLAMA_DIR   ${CMAKE_SOURCE_DIR}/llama.cpp)
+set(MA_CORE_DIR ${CMAKE_SOURCE_DIR}/../../nativeShared/ma)
 
 # Android-optimised llama.cpp build (CPU only, no GPU, no tools)
 set(LLAMA_BUILD_TESTS     OFF CACHE BOOL "" FORCE)
@@ -39,20 +40,51 @@ set(GGML_CPU_ARM_ARCH "armv8.2-a+dotprod+i8mm" CACHE STRING "" FORCE)
 add_subdirectory(${LLAMA_DIR} llama_build)
 
 # ============================================================================
-# Ma JNI bridge
+# ma_core - portable llama.cpp wrapper (no JNI, no Swift)
+# ============================================================================
+# Lives in composeApp/src/nativeShared/ma/ so iOS Kotlin/Native cinterop can
+# bind to the same implementation via ma_core.h. Built as a STATIC library
+# on Android; linked into libma.so below. iOS will build this as libma_core.a
+# via a separate CMake invocation (Phase 0 iOS, see PLAN_IOS.md).
+
+add_library(ma_core STATIC
+    ${MA_CORE_DIR}/ma_core.cpp
+)
+
+target_include_directories(ma_core PUBLIC
+    ${MA_CORE_DIR}
+    ${LLAMA_DIR}
+    ${LLAMA_DIR}/include
+    ${LLAMA_DIR}/ggml/include
+    ${LLAMA_DIR}/common
+    ${LLAMA_DIR}/common/vendor
+)
+
+target_link_libraries(ma_core PUBLIC
+    common
+    llama
+)
+
+target_compile_features(ma_core PRIVATE cxx_std_17)
+
+# Match libma's Release-only flags on the static lib too. Same skip list
+# (no -ffast-math, no -flto) for the same reasons documented below.
+target_compile_options(ma_core PRIVATE
+    $<$<CONFIG:Release>:-O3 -fno-math-errno -fvisibility=hidden>
+)
+
+# ============================================================================
+# Ma JNI bridge — the only file that knows about JNIEnv
 # ============================================================================
 
 add_library(ma SHARED ma_bridge.cpp)
 
 target_include_directories(ma PRIVATE
-    ${LLAMA_DIR}
-    ${LLAMA_DIR}/include
-    ${LLAMA_DIR}/ggml/include
+    ${MA_CORE_DIR}
 )
 
 target_link_libraries(ma
-    common
-    llama
+    ma_core
     android
     log
 )

@@ -1,5 +1,7 @@
 package app.m1k3.ai.assistant.ai.ma
 
+import app.m1k3.ai.domain.ai.MaInferenceBackend
+
 /**
  * MaBridge - JNI bridge to the Ma native inference library.
  *

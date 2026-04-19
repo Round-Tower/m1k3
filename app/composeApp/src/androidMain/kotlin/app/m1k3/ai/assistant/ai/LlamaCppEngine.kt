@@ -2,11 +2,11 @@ package app.m1k3.ai.assistant.ai
 
 import android.content.Context
 import app.m1k3.ai.assistant.ai.ma.MaBridge
-import app.m1k3.ai.assistant.ai.ma.MaInferenceBackend
 import app.m1k3.ai.assistant.utils.Logger
 import app.m1k3.ai.domain.ai.GenerationConfig
 import app.m1k3.ai.domain.ai.InferenceTuning
 import app.m1k3.ai.domain.ai.LlmModel
+import app.m1k3.ai.domain.ai.MaInferenceBackend
 import app.m1k3.ai.domain.chat.format.MessageRole
 import app.m1k3.ai.domain.chat.services.ChatFormatter
 import app.m1k3.ai.domain.chat.services.DefaultChatFormatter
