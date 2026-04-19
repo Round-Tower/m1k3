@@ -46,6 +46,14 @@ SELECT * FROM Passage
 WHERE content LIKE '%' || :query || '%'
 LIMIT :max;
 
+-- Batch fetch by id list. Used after VectorIndex.search returns the top-K
+-- passage IDs — we pull only the matching rows instead of scanning the whole
+-- table. Caller reorders the result back into similarity-rank order in Kotlin;
+-- SQLite doesn't preserve the IN-list order.
+getPassagesByIds:
+SELECT * FROM Passage
+WHERE id IN ?;
+
 deletePassagesBySource:
 DELETE FROM Passage
 WHERE source_id = ?;

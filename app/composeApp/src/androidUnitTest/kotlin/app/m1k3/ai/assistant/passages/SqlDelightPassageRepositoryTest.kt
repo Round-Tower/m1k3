@@ -4,6 +4,7 @@ import app.m1k3.ai.assistant.test.TestDatabaseFactory
 import app.m1k3.ai.domain.passages.Passage
 import app.m1k3.ai.domain.passages.Source
 import app.m1k3.ai.domain.passages.SourceKind
+import app.m1k3.ai.domain.passages.services.LinearScanVectorIndex
 import app.m1k3.ai.domain.passages.services.PassageEmbedder
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.test.runTest
@@ -332,5 +333,141 @@ class SqlDelightPassageRepositoryTest {
             // Keyword LIKE still finds the string, so we get one hit — just not ranked by cosine.
             assertEquals(1, results.size)
             assertEquals("p0", results[0].id)
+        }
+
+    // ========================================================================
+    // VectorIndex-backed search path
+    // ========================================================================
+
+    @Test
+    fun `index-backed search ranks identically to linear scan`() =
+        runTest {
+            // Same fixture as `save with embedder ranks semantic search`, but
+            // with a VectorIndex wired. Ranking must be identical.
+            val vectors =
+                mapOf(
+                    "apple banana" to floatArrayOf(1f, 0f, 0f),
+                    "grass leaves" to floatArrayOf(0f, 1f, 0f),
+                    "fruit bowl" to floatArrayOf(0.9f, 0.1f, 0f),
+                )
+            val db = TestDatabaseFactory.createInMemoryDatabase()
+            val repo =
+                SqlDelightPassageRepository(
+                    database = db,
+                    embedder = StubEmbedder(vectors = vectors),
+                    vectorIndex = LinearScanVectorIndex(),
+                    ioDispatcher = Dispatchers.Unconfined,
+                )
+
+            repo.saveSource(
+                source(id = "src-idx", chunkCount = 3),
+                listOf(
+                    passage("p0", "src-idx", 0, "apple banana", 3),
+                    passage("p1", "src-idx", 1, "grass leaves", 3),
+                    passage("p2", "src-idx", 2, "fruit bowl", 3),
+                ),
+            )
+
+            val results = repo.searchPassages("fruit bowl", 3)
+
+            assertEquals(3, results.size)
+            assertEquals("p2", results[0].id, "Exact match ranks first")
+            assertEquals("p0", results[1].id, "Closer neighbour second")
+            assertEquals("p1", results[2].id, "Distant vector last")
+        }
+
+    @Test
+    fun `index-backed search respects top-K limit`() =
+        runTest {
+            val vectors =
+                (0 until 5).associate { i ->
+                    "doc $i" to floatArrayOf(1f - i * 0.1f, i * 0.1f, 0f)
+                }
+            val db = TestDatabaseFactory.createInMemoryDatabase()
+            val repo =
+                SqlDelightPassageRepository(
+                    database = db,
+                    embedder = StubEmbedder(vectors = vectors),
+                    vectorIndex = LinearScanVectorIndex(),
+                    ioDispatcher = Dispatchers.Unconfined,
+                )
+            repo.saveSource(
+                source(id = "src-k", chunkCount = 5),
+                (0 until 5).map { i -> passage("p$i", "src-k", i, "doc $i", 5) },
+            )
+
+            val results = repo.searchPassages("doc 0", 2)
+
+            assertEquals(2, results.size)
+            assertEquals("p0", results[0].id)
+        }
+
+    @Test
+    fun `index warmup loads existing embeddings on first search`() =
+        runTest {
+            val db = TestDatabaseFactory.createInMemoryDatabase()
+            val vectors =
+                mapOf(
+                    "hello there" to floatArrayOf(1f, 0f, 0f),
+                    "goodbye" to floatArrayOf(0.9f, 0.1f, 0f),
+                )
+
+            // Save via repo-A (no index), so rows exist with embeddings but no
+            // index was populated at write time.
+            val repoA =
+                SqlDelightPassageRepository(
+                    database = db,
+                    embedder = StubEmbedder(vectors = vectors),
+                    ioDispatcher = Dispatchers.Unconfined,
+                )
+            repoA.saveSource(
+                source(id = "src-warm", chunkCount = 2),
+                listOf(
+                    passage("p0", "src-warm", 0, "hello there", 2),
+                    passage("p1", "src-warm", 1, "goodbye", 2),
+                ),
+            )
+
+            // Open repo-B with a fresh index. First search must warm the index
+            // from existing rows and return correctly-ranked results.
+            val index = LinearScanVectorIndex()
+            val repoB =
+                SqlDelightPassageRepository(
+                    database = db,
+                    embedder = StubEmbedder(vectors = vectors),
+                    vectorIndex = index,
+                    ioDispatcher = Dispatchers.Unconfined,
+                )
+
+            val results = repoB.searchPassages("hello there", 2)
+
+            assertEquals(2, results.size)
+            assertEquals("p0", results[0].id)
+            assertEquals(2, index.size(), "Index warmup loaded both passages")
+        }
+
+    @Test
+    fun `deleteSource evicts passages from the vector index`() =
+        runTest {
+            val vectors = mapOf("alpha" to floatArrayOf(1f, 0f, 0f))
+            val db = TestDatabaseFactory.createInMemoryDatabase()
+            val index = LinearScanVectorIndex()
+            val repo =
+                SqlDelightPassageRepository(
+                    database = db,
+                    embedder = StubEmbedder(vectors = vectors),
+                    vectorIndex = index,
+                    ioDispatcher = Dispatchers.Unconfined,
+                )
+
+            repo.saveSource(
+                source(id = "src-del", chunkCount = 1),
+                listOf(passage("p0", "src-del", 0, "alpha", 1)),
+            )
+            assertEquals(1, index.size())
+
+            repo.deleteSource("src-del")
+
+            assertEquals(0, index.size(), "Deleted passages evicted from index")
         }
 }
