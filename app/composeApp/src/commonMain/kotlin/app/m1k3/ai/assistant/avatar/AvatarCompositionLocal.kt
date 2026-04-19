@@ -77,15 +77,21 @@ val LocalSelectedAvatarId =
     }
 
 /**
- * When the hero splash is on screen the 3D avatar lives THERE; the
- * toolbar hides its own 3D render to avoid two Filament scenes loading
- * the same GLB (that pairing crashes libgltfio-jni.so with a null-ptr
- * deref). Flipped back to true as soon as the user types their first
- * message — toolbar takes ownership of the small avatar from then on.
+ * Opt-in gate for the toolbar's 3D avatar. Defaults to FALSE so nothing
+ * speculatively mounts a Filament scene before the current screen decides.
  *
- * MurphySig: kev+claude / confidence 0.8 / 2026-04-19
+ * Why false-by-default: the previous default-true raced with ChatScreen's
+ * LaunchedEffect(preConversation) — for the first composition frame of an
+ * empty chat we had hero + header + toolbar all alive (refCount=3), and
+ * the aggregate Vulkan image-memory demand crashed the GPU allocator with
+ * VK_ERROR_OUT_OF_HOST_MEMORY, cascading into a system-wide OOM wave
+ * (Pixel 9a, 2026-04-19 21:16). Flipping the default to false means the
+ * toolbar only mounts its 3D surface after ChatScreen explicitly opts in
+ * once the chat has progressed past pre-conversation.
+ *
+ * MurphySig: kev+claude / confidence 0.85 / 2026-04-19
  */
 val LocalShowToolbarAvatar =
     staticCompositionLocalOf<androidx.compose.runtime.State<Boolean>> {
-        androidx.compose.runtime.mutableStateOf(true)
+        androidx.compose.runtime.mutableStateOf(false)
     }
