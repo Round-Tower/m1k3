@@ -9,6 +9,7 @@ import app.m1k3.ai.domain.ai.GenerationConfig
 import app.m1k3.ai.domain.chat.ChatError
 import app.m1k3.ai.domain.chat.EnrichedContext
 import app.m1k3.ai.domain.chat.GenerationStats
+import app.m1k3.ai.domain.chat.LlmOutputSanitizer
 import app.m1k3.ai.domain.chat.StreamingThinkTagParser
 import app.m1k3.ai.domain.chat.events.ChatEvent
 import app.m1k3.ai.domain.chat.events.ChatResponse
@@ -223,7 +224,7 @@ class ChatWithToolsUseCase(
                                     val stats = buildStats(tokenCount, duration, context)
                                     val response =
                                         ChatResponse(
-                                            text = processed.text,
+                                            text = LlmOutputSanitizer.strip(processed.text),
                                             stats = stats,
                                             context = context,
                                             toolResults = forceResults,
@@ -242,7 +243,7 @@ class ChatWithToolsUseCase(
                                     val stats = buildStats(tokenCount, duration, context)
                                     val response =
                                         ChatResponse(
-                                            text = processed.text,
+                                            text = LlmOutputSanitizer.strip(processed.text),
                                             stats = stats,
                                             context = context,
                                             toolResults = null,
@@ -263,7 +264,7 @@ class ChatWithToolsUseCase(
                                 val stats = buildStats(tokenCount, duration, context)
                                 val response =
                                     ChatResponse(
-                                        text = processed.plainText,
+                                        text = LlmOutputSanitizer.strip(processed.plainText),
                                         stats = stats,
                                         context = context,
                                         toolResults = processed.toolResults,
@@ -364,10 +365,13 @@ class ChatWithToolsUseCase(
                             null
                         }
                     val stats = buildStats(tokenCount, duration, context)
+                    // Strip any leftover <think>/<tool_call> tags — common_chat_parse
+                    // occasionally reports 0 tool calls while the raw stream still
+                    // contains the XML scaffolding the model tried to emit.
                     scope.send(
                         ChatEvent.Complete(
                             ChatResponse(
-                                text = output.content,
+                                text = LlmOutputSanitizer.strip(output.content),
                                 stats = stats,
                                 context = context,
                                 toolResults = results,
@@ -391,7 +395,7 @@ class ChatWithToolsUseCase(
                     scope.send(
                         ChatEvent.Complete(
                             ChatResponse(
-                                text = output.content,
+                                text = LlmOutputSanitizer.strip(output.content),
                                 stats = stats,
                                 context = context,
                                 toolResults = toolResults,
