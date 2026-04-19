@@ -6,8 +6,8 @@ import app.m1k3.ai.domain.platform.DeviceTier
  * KV cache precision.
  *
  * Upstream llama.cpp couples V-cache quantization with flash attention — V must
- * stay F16 when flash_attn is disabled. Phase 1 keeps everything on F16; Phase 2
- * enables Q8_0 together with [InferenceTuning.useFlashAttn] on HIGH_END+.
+ * stay F16 when flash_attn is disabled. [InferenceTuning.resolve] enforces the
+ * pairing: Q8_0 is only returned alongside `useFlashAttn = true` (HIGH_END+).
  */
 enum class KvCacheType {
     F16,
@@ -23,9 +23,8 @@ enum class KvCacheType {
  * @param nCtx Context window in tokens (sets `llama_context_params.n_ctx`).
  * @param nBatch Logical batch size for prompt prefill (sets `n_batch`).
  * @param nUbatch Physical micro-batch size; must be <= nBatch (sets `n_ubatch`).
- * @param useFlashAttn When true the bridge asks for LLAMA_FLASH_ATTN_TYPE_AUTO;
- *   Phase 1 always requests false so we keep decode behaviour identical until
- *   the retry-on-null safety net from Phase 2 is in place.
+ * @param useFlashAttn When true the bridge asks for LLAMA_FLASH_ATTN_TYPE_AUTO.
+ *   HIGH_END + FLAGSHIP enable it; MID_RANGE and below keep it disabled.
  * @param kvQuant KV cache precision. F16 is safe everywhere; Q8_0 halves KV
  *   memory but upstream requires flash attention — must be paired with useFlashAttn.
  * @param useMlock Pin model weights into RAM on flagship devices.
