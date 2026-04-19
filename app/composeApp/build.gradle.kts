@@ -316,17 +316,26 @@ sqldelight {
  */
 /**
  * Install npm dependencies for web-avatar
+ *
+ * Config-cache safe: captures paths at configuration time (not Project
+ * references) and declares inputs/outputs so Gradle handles incremental
+ * execution without an onlyIf closure.
  */
 tasks.register<Exec>("installWebAvatarDeps") {
     group = "web-avatar"
     description = "Install npm dependencies for web-avatar"
 
-    workingDir(file("../../src/web-avatar"))
+    val webAvatarDir = layout.projectDirectory.dir("../../src/web-avatar")
+    val nodeModulesDir = webAvatarDir.dir("node_modules")
+    val packageJson = webAvatarDir.file("package.json")
+    val packageLockJson = webAvatarDir.file("package-lock.json")
+
+    workingDir = webAvatarDir.asFile
     commandLine("npm", "install")
 
-    onlyIf {
-        !File(file("../../src/web-avatar"), "node_modules").exists()
-    }
+    inputs.file(packageJson).withPropertyName("packageJson")
+    inputs.file(packageLockJson).withPropertyName("packageLockJson").optional()
+    outputs.dir(nodeModulesDir).withPropertyName("nodeModules")
 }
 
 /**
@@ -338,16 +347,17 @@ tasks.register<Exec>("buildWebAvatar") {
 
     dependsOn("installWebAvatarDeps")
 
-    workingDir(file("../../src/web-avatar"))
+    val webAvatarDir = layout.projectDirectory.dir("../../src/web-avatar")
+    val distAppDir = webAvatarDir.dir("dist-app")
+
+    workingDir = webAvatarDir.asFile
     commandLine("npm", "run", "build:app")
 
-    inputs.files(
-        fileTree("../../src/web-avatar/src"),
-        file("../../src/web-avatar/index.html"),
-        file("../../src/web-avatar/package.json"),
-        file("../../src/web-avatar/vite.config.app.ts"),
-    )
-    outputs.dir("../../src/web-avatar/dist-app")
+    inputs.dir(webAvatarDir.dir("src")).withPropertyName("webAvatarSrc")
+    inputs.file(webAvatarDir.file("index.html")).withPropertyName("indexHtml")
+    inputs.file(webAvatarDir.file("package.json")).withPropertyName("packageJson")
+    inputs.file(webAvatarDir.file("vite.config.app.ts")).withPropertyName("viteConfig")
+    outputs.dir(distAppDir).withPropertyName("distApp")
 }
 
 /**
