@@ -6,24 +6,25 @@ import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
 import app.cash.sqldelight.db.SqlDriver
 import app.cash.sqldelight.driver.android.AndroidSqliteDriver
+import net.zetetic.database.sqlcipher.SupportOpenHelperFactory
 import java.security.SecureRandom
 
 /**
- * Android Database Factory Implementation.
+ * Android Database Factory — SQLCipher-backed encrypted DB at rest.
  *
- * **Current state (2026-04-19):** the SQLite DB file is NOT encrypted at rest.
- * The passphrase plumbing below (Keystore → MasterKey → EncryptedSharedPreferences)
- * is wired up and ready, but the driver is plain `AndroidSqliteDriver` — no
- * SQLCipher. UI copy, `.sq` headers, and the system-knowledge JSON that the LLM
- * reads all still say "SQLCipher AES-256"; that's aspirational, not shipped.
+ * The SQLite DB is opened via SQLCipher's [SupportOpenHelperFactory], which
+ * encrypts every page on disk using AES-256. The passphrase is a 256-bit
+ * random value generated once on first launch and stored in
+ * [EncryptedSharedPreferences], which wraps it with a Keystore-backed
+ * [MasterKey]. The raw DB file is never readable off-device (e.g. via `adb
+ * run-as` or device backup) — a stolen encrypted prefs blob without the
+ * device's Keystore is useless.
  *
- * Privacy still rests on:
- *   - Android app-private storage (every other app sandboxed out by default).
- *   - Device full-disk encryption (mandatory on API 23+; we target 27+).
- *
- * To actually ship SQLCipher: add `implementation(libs.sqlcipher)` in
- * composeApp/build.gradle.kts, then swap `AndroidSqliteDriver` for a
- * `SupportOpenHelperFactory`-based driver using `getOrCreatePassphrase()` below.
+ * Layer cake:
+ *   - DB pages  : AES-256 via SQLCipher (this class).
+ *   - Passphrase: EncryptedSharedPreferences (AES-256-GCM values, SIV keys).
+ *   - Master key: Android Keystore (hardware-backed where available).
+ *   - Fallback  : Android app-private storage sandbox + device FDE.
  */
 @Suppress("DEPRECATION")
 class AndroidDatabaseFactory(
@@ -46,13 +47,26 @@ class AndroidDatabaseFactory(
         )
     }
 
+    /**
+     * Build an encrypted SqlDriver using the stored passphrase, generating
+     * one on first launch if needed. This is the convenience Koin calls.
+     */
+    fun buildEncryptedDriver(): SqlDriver = createDriver(getDatabasePassphrase())
+
     override fun createDriver(passphrase: String): SqlDriver {
-        // Create standard SQLite driver
-        // TODO: Integrate SQLCipher once we resolve gradle dependencies
+        // sqlcipher-android 4.x does not auto-load its native lib on class-load
+        // (unlike the older android-database-sqlcipher artifact). The caller
+        // must loadLibrary before opening any connection. System.loadLibrary
+        // is idempotent — the JVM caches the successful load, so this is a
+        // per-process one-liner, not per-call work.
+        System.loadLibrary("sqlcipher")
+
+        val factory = SupportOpenHelperFactory(passphrase.toByteArray())
         return AndroidSqliteDriver(
             schema = MaDatabase.Schema,
             context = context,
             name = DatabaseConfig.DATABASE_NAME,
+            factory = factory,
         )
     }
 

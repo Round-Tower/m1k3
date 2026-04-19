@@ -39,7 +39,7 @@ import java.io.InputStreamReader
  */
 class KnowledgeImportManager(
     private val context: Context,
-    private val database: MaDatabase
+    private val database: MaDatabase,
 ) {
     private val logger = Logger.withTag("KnowledgeImportManager")
     private val prefs: SharedPreferences = context.getSharedPreferences("m1k3_kb", Context.MODE_PRIVATE)
@@ -49,15 +49,19 @@ class KnowledgeImportManager(
          * Current knowledge base version.
          * Increment when KB content changes.
          *
-         * Current: 2.0.0 (curated knowledge only - fresh start)
+         * Current: 2.1.0 (SQLCipher cutover — re-import into encrypted DB)
+         * - 2.0.0: curated-only knowledge (fresh start, removed 1,391 synthetic docs)
+         * - 2.1.0: re-run import after SQLCipher took over DB-at-rest.
+         *   DB file wiped at startup in PlatformModule.android.kt; version bump
+         *   here triggers the re-import logging path + future-proofs against
+         *   the KB being loaded into a plaintext DB by a stale install.
+         *
+         * Contents (~45-50 docs):
          * - 10 M1K3 system documents (CURATED)
          * - ~25 AI/ML curated documents (CURATED)
          * - ~10 conversational enhancement documents (CURATED)
-         * - Total: ~45-50 high-quality curated documents
-         *
-         * Removed comprehensive_knowledge_base.json (1,391 synthetic docs)
          */
-        const val CURRENT_KB_VERSION = "2.0.0"
+        const val CURRENT_KB_VERSION = "2.1.0"
 
         private const val SYSTEM_KB_PATH = "composeResources/m1k3.composeapp.generated.resources/files/m1k3_system_knowledge.json"
         private const val AI_ML_KB_PATH = "composeResources/m1k3.composeapp.generated.resources/files/ai_ml_knowledge.json"
@@ -78,7 +82,7 @@ class KnowledgeImportManager(
         data class Success(
             val totalDocs: Int,
             val curatedDocs: Int,
-            val version: String
+            val version: String,
         ) : ImportResult()
 
         /**
@@ -89,7 +93,7 @@ class KnowledgeImportManager(
          */
         data class AlreadyImported(
             val existingDocs: Long,
-            val version: String
+            val version: String,
         ) : ImportResult()
 
         /**
@@ -100,7 +104,7 @@ class KnowledgeImportManager(
          */
         data class Error(
             val error: Exception,
-            val message: String
+            val message: String,
         ) : ImportResult()
     }
 
@@ -144,31 +148,34 @@ class KnowledgeImportManager(
             // 1. Load M1K3 system knowledge base (10 docs) - CURATED tier
             // System knowledge is hand-crafted, high-quality content
             val systemJson = loadAssetFile(SYSTEM_KB_PATH)
-            val systemResult = importer.importKnowledgeBase(
-                jsonContent = systemJson,
-                tierOverride = "CURATED",
-                sourceOverride = "m1k3_system_kb"
-            )
+            val systemResult =
+                importer.importKnowledgeBase(
+                    jsonContent = systemJson,
+                    tierOverride = "CURATED",
+                    sourceOverride = "m1k3_system_kb",
+                )
             logger.i { "M1K3 System KB: ${systemResult.imported} documents imported (CURATED)" }
 
             // 2. Load AI/ML curated knowledge base (~25 docs) - CURATED tier
             // Expert-crafted AI/ML educational content
             val aiMlJson = loadAssetFile(AI_ML_KB_PATH)
-            val aiMlResult = importer.importCuratedKnowledgeBase(
-                jsonContent = aiMlJson,
-                tier = "CURATED",
-                source = "ai_ml_curated"
-            )
+            val aiMlResult =
+                importer.importCuratedKnowledgeBase(
+                    jsonContent = aiMlJson,
+                    tier = "CURATED",
+                    source = "ai_ml_curated",
+                )
             logger.i { "AI/ML KB: ${aiMlResult.imported} documents imported (CURATED)" }
 
             // 3. Load conversational enhancement knowledge base (~50 docs) - CURATED tier
             // Conversational patterns and engagement strategies
             val conversationalJson = loadAssetFile(CONVERSATIONAL_KB_PATH)
-            val conversationalResult = importer.importCuratedKnowledgeBase(
-                jsonContent = conversationalJson,
-                tier = "CURATED",
-                source = "conversational_kb"
-            )
+            val conversationalResult =
+                importer.importCuratedKnowledgeBase(
+                    jsonContent = conversationalJson,
+                    tier = "CURATED",
+                    source = "conversational_kb",
+                )
             logger.i { "Conversational KB: ${conversationalResult.imported} documents imported (CURATED)" }
 
             // Verify combined import
@@ -190,9 +197,8 @@ class KnowledgeImportManager(
             ImportResult.Success(
                 totalDocs = totalImported,
                 curatedDocs = totalImported, // All curated now
-                version = CURRENT_KB_VERSION
+                version = CURRENT_KB_VERSION,
             )
-
         } catch (e: Exception) {
             logger.e(e) { "Knowledge import failed" }
             ImportResult.Error(e, "Failed to import knowledge base: ${e.message}")

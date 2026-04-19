@@ -1,7 +1,6 @@
 package app.m1k3.ai.assistant.di
 
 import android.content.Context
-import app.cash.sqldelight.driver.android.AndroidSqliteDriver
 import app.m1k3.ai.assistant.ai.BaseLlmEngine
 import app.m1k3.ai.assistant.ai.LlamaCppEngine
 import app.m1k3.ai.assistant.ai.download.HttpModelDownloadManager
@@ -19,6 +18,8 @@ import app.m1k3.ai.assistant.app.InitializationViewModel
 import app.m1k3.ai.assistant.app.LoggerAdapter
 import app.m1k3.ai.assistant.chat.ChatScreenViewModel
 import app.m1k3.ai.assistant.coding.CodeGenerationViewModel
+import app.m1k3.ai.assistant.database.AndroidDatabaseFactory
+import app.m1k3.ai.assistant.database.DatabaseConfig
 import app.m1k3.ai.assistant.database.DatabaseFactory
 import app.m1k3.ai.assistant.database.MaDatabase
 import app.m1k3.ai.assistant.eco.EcoMetricsRepository
@@ -71,19 +72,17 @@ import org.koin.dsl.module
 actual val platformModule =
     module {
         /**
-         * DatabaseFactory for Android
+         * DatabaseFactory for Android — SQLCipher-backed encrypted DB.
          *
-         * Uses AndroidSqliteDriver with application context.
+         * First cold-start after shipping SQLCipher runs a one-shot wipe of the
+         * legacy plaintext DB so SupportOpenHelperFactory doesn't try to open
+         * unencrypted bytes. In active development with no prod users; the
+         * wipe is idempotent and gated on a SharedPreferences marker.
          */
+        single { AndroidDatabaseFactory(get<Context>()) }
         single {
-            DatabaseFactory(
-                driver =
-                    AndroidSqliteDriver(
-                        schema = MaDatabase.Schema,
-                        context = get<Context>(),
-                        name = "ma_ai.db",
-                    ),
-            )
+            wipeLegacyPlaintextDbIfNeeded(get<Context>())
+            DatabaseFactory(driver = get<AndroidDatabaseFactory>().buildEncryptedDriver())
         }
 
         // ===== User Context (singleton — shared across ViewModels) =====
@@ -548,3 +547,20 @@ actual val platformModule =
             )
         }
     }
+
+/**
+ * One-shot migration: delete the pre-SQLCipher plaintext `ma_ai.db` on first
+ * cold-start after the SQLCipher cutover, so [SupportOpenHelperFactory]
+ * doesn't fail opening plaintext bytes with an encrypted driver.
+ *
+ * Idempotent via a SharedPreferences marker; re-runs are no-ops. Safe at
+ * current phase: active development, no prod users. The knowledge-base
+ * re-import path in `KnowledgeImportManager` handles repopulating curated
+ * data on the next empty-DB open.
+ */
+private fun wipeLegacyPlaintextDbIfNeeded(context: Context) {
+    val prefs = context.getSharedPreferences("ma_db_meta", Context.MODE_PRIVATE)
+    if (prefs.getBoolean("sqlcipher_initialized", false)) return
+    context.deleteDatabase(DatabaseConfig.DATABASE_NAME)
+    prefs.edit().putBoolean("sqlcipher_initialized", true).apply()
+}

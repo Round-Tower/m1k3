@@ -53,12 +53,11 @@ kotlin {
 
             // M1K3 AI - Android-specific dependencies
             implementation(libs.sqldelight.driver.android)
-            // SQLCipher: DB stays unencrypted on disk for now. Docs/UI still
-            // reference "AES-256" — that's aspirational, not shipped. To wire
-            // this up: uncomment below, then override SqlDriver in
-            // DatabaseFactory.android.kt to open via SupportOpenHelperFactory
-            // with a passphrase sourced from androidx.security.crypto.
-            // implementation(libs.sqlcipher)
+            // SQLCipher for encrypted DB-at-rest. Passphrase is a 256-bit random
+            // value stored in EncryptedSharedPreferences (Keystore-backed master
+            // key) — see AndroidDatabaseFactory. Wired via SupportOpenHelperFactory
+            // in PlatformModule.android.kt.
+            implementation(libs.sqlcipher)
             implementation(libs.androidx.security.crypto)
 
             // ONNX Runtime — used by MiniLmEmbeddingEngine, GemmaEmbeddingEngine,
