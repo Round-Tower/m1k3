@@ -1,14 +1,32 @@
 # M1K3 AI Architecture
 **Project Codename: M1K3 Vision (Ma Vision)**
 
-*Architecture as of April 2026*
-
-> **Model Selection Update (Apr 2026):** References to "Gemma 3 270M/4B" throughout
-> this document reflect the original November 2025 design. The current tier model is:
-> Mini → Qwen3.5-0.8B (557MB), Lil → Qwen3.5-2B (1.33GB), Big → Gemma 4 E2B (3.1GB).
-> All Gemma 3 bartowski repos return HTTP 401 without HF auth — see ADR-0003.
-> iOS adds a System tier (Apple Foundation Models, zero download).
-> The Ma inference library (llama.cpp JNI) replaced Llamatik — see ADR-0001.
+> ## ⚠️ Historical Design Doc — Read With Care
+>
+> This document was written in Nov 2025 as a forward-looking design doc and
+> has drifted significantly from the shipped implementation. It is retained
+> for context and rationale on deep architectural choices (privacy model,
+> RAG structure, eco metrics), but **do not trust specifics**.
+>
+> **For current truth, prefer in order:**
+> 1. `.claude/project-memory.md` — session-by-session log of what actually changed.
+> 2. `git log` and the code itself (especially `composeApp/src/androidMain/kotlin/app/m1k3/ai/assistant/ai/`).
+> 3. `docs/adr/` — the ADRs are kept current.
+>
+> **Known drift (as of 2026-04-19):**
+> - **Models**: "Gemma 3 270M / 4B" below is superseded. Current tiers are
+>   Qwen3 0.6B (Mini) / 1.7B (Lil), Qwen3.5 0.8B / 2B (variants), Gemma 4 E2B
+>   (Big). iOS adds System tier via Apple Foundation Models.
+> - **Inference**: Llamatik was removed. We ship our own `Ma` JNI bridge to
+>   llama.cpp (submodule at `composeApp/src/androidMain/cpp/llama.cpp`).
+>   See ADR-0001.
+> - **Privacy narrative**: "No INTERNET permission" is false. INTERNET is
+>   granted for user-initiated network (model downloads + web-search tool).
+>   See ADR-0006 ("Your device is the cloud").
+> - **Tool calling**: Native GBNF grammar-constrained decoding shipped after
+>   this doc was written — see commits around April 2026.
+> - **Persona**: Theatrical villain + witty bartender personas retired
+>   April 2026. Current ethos is dry/sharp — see `MaSystemPromptBuilder.kt`.
 
 ## Philosophical Foundation
 
@@ -17,8 +35,18 @@
 
 ### Core Principles
 
-**1. System-Enforced Privacy**
-Privacy is not a policy promise—it's an architectural guarantee. By removing internet permissions at the manifest level, we make data exfiltration technically impossible. This is privacy through constraint, not compliance.
+**1. Your Device Is the Cloud**
+Privacy is architectural, not a policy promise. All **chat inference stays on
+the device** — the model, the conversation, the memory. Network is granted
+only for two narrow, user-initiated paths: HuggingFace model downloads and
+the web-search tool (DuckDuckGo Instant Answer). `ManifestPrivacyTest`
+enforces this at build time: no analytics SDKs, no Firebase, only the
+allow-listed network callers. See ADR-0006 for the full contract.
+
+> *(The original Nov-2025 formulation here was "no INTERNET permission at
+> all"; that was retired April 2026 when user-initiated network was needed
+> for model downloads. The privacy guarantee tightened — it's now enforced
+> by tests, not just by absence.)*
 
 **2. Environmental Sustainability**
 Every architectural decision considers energy consumption. On-device processing eliminates:
@@ -75,13 +103,13 @@ Users own their AI. No subscriptions to remote services that can disappear, chan
 ├─────────────────────────────────────────────────────────────┤
 │                                                             │
 │  ┌─────────────┐  ┌──────────────┐  ┌──────────────────┐  │
-│  │   Gemma 3   │  │    Vector    │  │   SQLDelight     │  │
-│  │  270M/4B    │  │   Database   │  │   (Metadata)     │  │
+│  │  Ma (JNI)   │  │    Vector    │  │   SQLDelight     │  │
+│  │  llama.cpp  │  │   Database   │  │   (Metadata)     │  │
 │  │             │  │              │  │                  │  │
-│  │ • Vision    │  │ • HNSW Index │  │ • Projects       │  │
-│  │ • Language  │  │ • 384-dim    │  │ • Messages       │  │
-│  │ • ONNX      │  │ • Embeddings │  │ • Memory Meta    │  │
-│  │   Runtime   │  │ • Cosine Sim │  │ • Settings       │  │
+│  │ • Qwen3     │  │ • Linear     │  │ • Projects       │  │
+│  │ • Gemma 4   │  │   search     │  │ • Messages       │  │
+│  │ • GBNF tool │  │ • 384-dim    │  │ • Memory Meta    │  │
+│  │   calling   │  │ • MiniLM-L6  │  │ • Tool History   │  │
 │  └─────────────┘  └──────────────┘  └──────────────────┘  │
 │                                                             │
 │  ┌─────────────┐  ┌──────────────┐  ┌──────────────────┐  │

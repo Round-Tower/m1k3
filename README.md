@@ -1,19 +1,31 @@
-# M1K3 - Local AI Assistant with Voice Synthesis & Avatar Dashboard
+# M1K3 — Local AI Assistant (Desktop CLI + 間 AI Mobile)
 
-<!-- CI/CD Status Badges -->
-![M1K3 Tests](https://img.shields.io/github/actions/workflow/status/m1k3-team/m1k3/unified-tests.yml?style=for-the-badge&label=M1K3%20Tests&logo=github)
-![Quick Tests](https://img.shields.io/github/actions/workflow/status/m1k3-team/m1k3/quick-tests.yml?style=for-the-badge&label=Quick%20Tests&logo=checkmarx)
-![Test Coverage](https://img.shields.io/badge/Test%20Coverage-75%25-brightgreen?style=for-the-badge&logo=codecov)
-![Test Count](https://img.shields.io/badge/Tests-166-blue?style=for-the-badge&logo=testinglibrary)
-![Security Audit](https://img.shields.io/badge/Security-Audited-green?style=for-the-badge&logo=security)
+> ## ⚠️ README staleness — read this first
+>
+> **Active focus is the KMP mobile app** — see [`app/README.md`](./app/README.md)
+> (間 AI, Android via Kotlin Multiplatform, iOS next). For the current shipped
+> state of anything, prefer `.claude/project-memory.md` and `git log` over this
+> file.
+>
+> **What you'll find below is the Python desktop CLI + MCP server stack.**
+> That surface still exists and still runs, but the model/backend specifics
+> (SmolLM2-135M primary, Ollama, KittenTTS personas) are from an earlier era.
+> The current Python CLI uses MLX-LM on Apple Silicon first — see
+> [`docs/MLX_SETUP.md`](./docs/MLX_SETUP.md) and the memory file above.
+>
+> Personas (villain / bartender / narrator) are **retired** across the whole
+> project. Current ethos is dry/sharp — see `MaSystemPromptBuilder.kt` in the
+> mobile app.
 
 <a href="./diagram.svg">
   <img src="./diagram.svg" alt="Repo visualization diagram" />
 </a>
 
-🤖 **Optimized privacy-focused local AI assistant** with SmolLM2 & KittenTTS integration, real-time avatar visualization, and 90% smaller repository size. Built with efficient multi-backend AI system that works on any architecture.
+🤖 **Privacy-focused local AI** — on-device inference, voice synthesis, 3D
+avatar, MCP integration. Two surfaces: a Python desktop CLI/MCP server
+(this repo root) and a Kotlin Multiplatform mobile app (`app/`).
 
-## ✅ Current Status (2025-08-25) - PRODUCTION READY & OPTIMIZED
+## Historical Status Snapshot (2025-08-25)
 
 ### 🌟 Core Features
 - **🎯 SmolLM2-135M AI Engine** - Ultra-efficient 135M parameter model with adaptive prompting
@@ -315,9 +327,9 @@ avatar test                       # Test all avatar emotions
 ```bash
 voice                            # Toggle voice synthesis on/off
 character m1k3                   # Default M1K3 voice
-character hero                   # Confident protagonist voice
-character narrator               # Classic game narrator
-character villain                # Deep antagonist voice
+# Note: hero / narrator / villain character presets shown in earlier
+# revisions were retired April 2026 along with the theatrical-persona
+# system prompts. Current surface is a single voice.
 retro                           # PlayStation 1 retro effects
 classic                         # Clean system TTS
 ```

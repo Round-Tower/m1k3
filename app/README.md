@@ -12,26 +12,30 @@
 
 ### Key Features
 
-- **On-Device Chat** - Gemma 3 270M runs entirely on-device via llama.cpp
-- **Your device is the cloud** - Network is user-initiated (downloads + web search only). See `docs/adr/0006-user-initiated-network.md`.
-- **RAG System** - 1,401+ documents across 24 knowledge categories
-- **Semantic Memory** - HNSW vector search with importance scoring
-- **Eco Metrics** - Track environmental savings vs cloud AI
-- **Pixel Art Avatar** - Activity-aware emotional feedback
+- **On-Device Chat** — llama.cpp via our own Ma JNI bridge. Three model tiers:
+  Qwen3 0.6B (Mini), Qwen3 1.7B (Lil), Gemma 4 E2B (Big).
+- **Your device is the cloud** — network is user-initiated only (model
+  downloads + web-search tool). See `docs/adr/0006-user-initiated-network.md`.
+- **Native Tool Calling** — GBNF grammar-constrained decoding for reliable
+  JSON tool calls across any GGUF with a chat template.
+- **Semantic Memory + RAG** — embedding-based vector search with importance
+  scoring. Knowledge base import on first launch.
+- **Eco Metrics** — tracks `cloudBytesAvoided` vs what a cloud LLM round-trip
+  would have cost, plus real network bytes for the two user-initiated paths.
+- **3D Avatar** — Filament-based SceneView with per-surface instances,
+  emotion-driven animations.
 
 ## Current Status
 
-**Phase:** Gemma 3 Integration Complete
-**Tests:** 341+ passing
-**Model:** Gemma 3 270M IQ3_XXS (176MB GGUF, 10+ tok/s)
+**Active development** — see `.claude/project-memory.md` for the current
+session log. Some rough coordinates:
 
-### Recent Milestones
-
-- **2025-12-23** - Gemma 3 270M working with Llamatik raw template fix
-- **2025-12-22** - ML Kit GenAI integration, OnDeviceAi abstraction
-- **2025-12-22** - Project cleanup, 11GB recovered, 341 tests passing
-- **2025-11-08** - RAG quality improvements, word boundary matching
-- **2025-11-07** - Pixel art avatar with activity-based sprites
+- **Models**: Mini (Qwen3-0.6B Q4_K_M, ~484MB), Lil (Qwen3-1.7B Q4_K_M,
+  ~1.28GB), Big (Gemma 4 E2B GGUF, ~2.4GB) — all downloaded on first launch
+  from HuggingFace.
+- **Inference**: Ma (our JNI bridge to llama.cpp), with native tool calling
+  via GBNF grammar samplers.
+- **Device**: Primary target Pixel 9a (Tensor G4, arm64-v8a + i8mm).
 
 ## Quick Start
 
@@ -77,15 +81,19 @@ app/
 
 ### Tech Stack
 
+Current versions live in `gradle/libs.versions.toml` — treat that as canonical.
+At time of writing:
+
 | Layer | Technology |
 |-------|------------|
-| **UI** | Compose Multiplatform 1.9.1 |
-| **AI Engine** | Llamatik 0.9.0 (llama.cpp binding) |
-| **Model** | Gemma 3 270M IQ3_XXS (176MB) |
-| **Database** | SQLDelight 2.0.0 |
+| **UI** | Compose Multiplatform 1.9.2 |
+| **AI Engine** | Ma — our JNI bridge to llama.cpp (submodule, `composeApp/src/androidMain/cpp/llama.cpp`) |
+| **Models** | Qwen3 0.6B / 1.7B + Gemma 4 E2B (GGUF, Q4_K_M) |
+| **Database** | SQLDelight 2.0.2 (+ SQLCipher parked — see SQLCipher TODO) |
 | **Embeddings** | MiniLM-L6 (384-dim, ONNX) |
-| **Vector Search** | JVector HNSW |
-| **Build** | Gradle 8.14.3, Kotlin 2.2.20 |
+| **Vector Search** | Linear fallback (JVector HNSW gated on Maven Central availability) |
+| **Native tool calling** | GBNF grammar-constrained decoding |
+| **Build** | AGP 9.0.1, Kotlin 2.2.20, NDK 28.2.13676358 (pinned) |
 
 ## Features
 
@@ -100,9 +108,10 @@ app/
 - Semantic search < 100ms @ 1,401 documents
 
 ### Privacy Dashboard
-- Zero bytes transmitted verification
-- Local-only processing confirmation
-- No network permission in manifest
+- Chat inference stays 100% on-device.
+- Network is user-initiated only: model downloads + web-search tool (see ADR-0006).
+- `ManifestPrivacyTest` enforces: no analytics SDKs, no Firebase, network callers
+  constrained to a small allow-list.
 
 ### Eco Metrics
 - Carbon savings vs cloud AI
@@ -132,7 +141,7 @@ composeApp/src/commonMain/kotlin/app/m1k3/ai/assistant/
 | `IntentClassifier.kt` | RAG query classification (20 intents) |
 | `SemanticChunker.kt` | Token-based text chunking with overlap |
 | `ImportanceCalculator.kt` | Memory importance scoring |
-| `LlamaCppEngine.kt` | Llamatik wrapper for inference |
+| `LlamaCppEngine.kt` | Ma (our llama.cpp JNI bridge) wrapper for inference |
 | `EcoCalculator.kt` | Environmental impact calculations |
 
 ## Testing
@@ -179,11 +188,11 @@ Increment version when updating KB content - the app auto-reimports on mismatch.
 
 ### Core Principles
 
-1. **Wabi-Sabi** - Beauty in imperfection
-2. **Computational Sufficiency** - Gemma 3 270M is enough
-3. **Privacy First** - No network permission
-4. **Mindful Design** - Negative space in UI
-5. **Local Everything** - AI, memory, analytics on-device
+1. **Wabi-Sabi** — beauty in imperfection.
+2. **Computational Sufficiency** — a 0.6B–2B model on your phone is enough.
+3. **Your Device Is the Cloud** — network is user-initiated only.
+4. **Mindful Design** — negative space in UI.
+5. **Local Everything** — AI, memory, analytics on-device.
 
 ## Related Documentation
 
@@ -198,4 +207,5 @@ Part of the M1K3 project. See root LICENSE file.
 
 ---
 
-**Last Updated:** 2025-12-23
+**Last meaningful refresh:** 2026-04-19. For current state, prefer
+`.claude/project-memory.md` and `git log` over this file.
