@@ -12,6 +12,14 @@ class FakeMaInferenceBackend : MaInferenceBackend {
     var initCalled = false
     var initCallCount = 0
     var lastInitPath: String? = null
+    var lastInitNCtx: Int = 0
+    var lastInitNBatch: Int = 0
+    var lastInitNUbatch: Int = 0
+    var lastInitThreadsGen: Int = 0
+    var lastInitThreadsBatch: Int = 0
+    var lastInitUseFlashAttn: Boolean = false
+    var lastInitKvQuantOrdinal: Int = 0
+    var lastInitUseMlock: Boolean = false
 
     // === generate() controls ===
     var generateResponse: String = "Test response from fake backend"
@@ -21,6 +29,7 @@ class FakeMaInferenceBackend : MaInferenceBackend {
     var lastGeneratePrompt: String? = null
     var lastGenerateMaxTokens: Int = 0
     var lastGenerateTemperature: Float = 0f
+    var lastGenerateMinP: Float = 0f
     var lastGenerateGrammar: String? = null
 
     /** Tokens emitted one-by-one when onToken callback is provided (streaming). */
@@ -34,10 +43,25 @@ class FakeMaInferenceBackend : MaInferenceBackend {
     override fun init(
         modelPath: String,
         nCtx: Int,
+        nBatch: Int,
+        nUbatch: Int,
+        threadsGen: Int,
+        threadsBatch: Int,
+        useFlashAttn: Boolean,
+        kvQuantOrdinal: Int,
+        useMlock: Boolean,
     ): Long {
         initCalled = true
         initCallCount++
         lastInitPath = modelPath
+        lastInitNCtx = nCtx
+        lastInitNBatch = nBatch
+        lastInitNUbatch = nUbatch
+        lastInitThreadsGen = threadsGen
+        lastInitThreadsBatch = threadsBatch
+        lastInitUseFlashAttn = useFlashAttn
+        lastInitKvQuantOrdinal = kvQuantOrdinal
+        lastInitUseMlock = useMlock
         return initHandle
     }
 
@@ -49,6 +73,7 @@ class FakeMaInferenceBackend : MaInferenceBackend {
         topP: Float,
         topK: Int,
         repeatPenalty: Float,
+        minP: Float,
         onToken: ((String) -> Unit)?,
         grammar: String?,
     ): String {
@@ -58,6 +83,7 @@ class FakeMaInferenceBackend : MaInferenceBackend {
         lastGeneratePrompt = prompt
         lastGenerateMaxTokens = maxTokens
         lastGenerateTemperature = temperature
+        lastGenerateMinP = minP
         lastGenerateGrammar = grammar
 
         if (onToken != null) {
@@ -85,6 +111,7 @@ class FakeMaInferenceBackend : MaInferenceBackend {
         topP: Float,
         topK: Int,
         repeatPenalty: Float,
+        minP: Float,
         enableThinking: Boolean,
         onToken: ((String) -> Unit)?,
     ): String {

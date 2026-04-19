@@ -32,13 +32,34 @@ object MaBridge : MaInferenceBackend {
     /**
      * Load a GGUF model from the given path.
      *
-     * @param modelPath Absolute path to the .gguf file
+     * Tuning parameters map directly onto `llama_context_params` fields:
+     * `n_ctx`, `n_batch`, `n_ubatch`, `n_threads`, `n_threads_batch`,
+     * `flash_attn_type`, `type_k`/`type_v`. See InferenceTuning.resolve().
+     *
      * @return Opaque context handle (pointer cast to Long), or 0 on failure
      */
-    external override fun init(
+    override fun init(
         modelPath: String,
         nCtx: Int,
-    ): Long
+        nBatch: Int,
+        nUbatch: Int,
+        threadsGen: Int,
+        threadsBatch: Int,
+        useFlashAttn: Boolean,
+        kvQuantOrdinal: Int,
+        useMlock: Boolean,
+    ): Long =
+        nativeInit(
+            modelPath,
+            nCtx,
+            nBatch,
+            nUbatch,
+            threadsGen,
+            threadsBatch,
+            useFlashAttn,
+            kvQuantOrdinal,
+            useMlock,
+        )
 
     /**
      * Generate text from a pre-formatted prompt.
@@ -58,6 +79,7 @@ object MaBridge : MaInferenceBackend {
         topP: Float,
         topK: Int,
         repeatPenalty: Float,
+        minP: Float,
         onToken: ((String) -> Unit)?,
         grammar: String?,
     ): String {
@@ -69,6 +91,7 @@ object MaBridge : MaInferenceBackend {
             temperature,
             topP,
             topK,
+            minP,
             repeatPenalty,
             callback,
             grammar,
@@ -88,6 +111,7 @@ object MaBridge : MaInferenceBackend {
         topP: Float,
         topK: Int,
         repeatPenalty: Float,
+        minP: Float,
         enableThinking: Boolean,
         onToken: ((String) -> Unit)?,
     ): String {
@@ -100,6 +124,7 @@ object MaBridge : MaInferenceBackend {
             temperature,
             topP,
             topK,
+            minP,
             repeatPenalty,
             enableThinking,
             callback,
@@ -113,6 +138,22 @@ object MaBridge : MaInferenceBackend {
     external override fun release(handle: Long)
 
     // --- Private JNI ---
+
+    /**
+     * JNI entry point for model initialization.
+     * All tuning fields map to llama_context_params / llama_model_params.
+     */
+    private external fun nativeInit(
+        modelPath: String,
+        nCtx: Int,
+        nBatch: Int,
+        nUbatch: Int,
+        threadsGen: Int,
+        threadsBatch: Int,
+        useFlashAttn: Boolean,
+        kvQuantOrdinal: Int,
+        useMlock: Boolean,
+    ): Long
 
     /**
      * JNI entry point for generation.
@@ -130,6 +171,7 @@ object MaBridge : MaInferenceBackend {
         temperature: Float,
         topP: Float,
         topK: Int,
+        minP: Float,
         repeatPenalty: Float,
         callback: MaTokenCallback?,
         grammar: String?,
@@ -150,6 +192,7 @@ object MaBridge : MaInferenceBackend {
         temperature: Float,
         topP: Float,
         topK: Int,
+        minP: Float,
         repeatPenalty: Float,
         enableThinking: Boolean,
         callback: MaTokenCallback?,

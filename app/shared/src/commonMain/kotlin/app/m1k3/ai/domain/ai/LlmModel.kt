@@ -30,7 +30,13 @@ sealed class LlmModel(
     val chatFormat: ChatFormat,
     val minRamGB: Int = 0,
     /** Minimum valid file size in MB — guards against truncated/corrupt downloads */
-    val minFileSizeMb: Int = 50
+    val minFileSizeMb: Int = 50,
+    /**
+     * Upper bound on context window this model can meaningfully exploit on-device,
+     * capped by KV-cache memory cost. InferenceTuning applies the device-tier ceiling
+     * on top of this, so a Flagship still honours the per-model limit.
+     */
+    val maxContextTokens: Int = 4096,
 ) {
     /**
      * Qwen3.5 2B — Lil M1K3 (public, no HF gating)
@@ -46,7 +52,7 @@ sealed class LlmModel(
         parameterCount = 2_000_000_000L,
         chatFormat = ChatFormat.ChatML,
         minRamGB = 2,
-        minFileSizeMb = 1100
+        minFileSizeMb = 1100,
     )
 
     /**
@@ -59,7 +65,7 @@ sealed class LlmModel(
         filename = "Qwen_Qwen3-1.7B-Q4_K_M.gguf",
         parameterCount = 1_700_000_000L,
         chatFormat = ChatFormat.ChatML,
-        minRamGB = 2
+        minRamGB = 2,
     )
 
     /**
@@ -75,7 +81,9 @@ sealed class LlmModel(
         filename = "Qwen_Qwen3.5-0.8B-Q4_K_M.gguf",
         parameterCount = 800_000_000L,
         chatFormat = ChatFormat.ChatML,
-        minFileSizeMb = 450
+        minFileSizeMb = 450,
+        // Tiny KV per-token cost lets Mini exploit a longer window when RAM allows.
+        maxContextTokens = 8192,
     )
 
     /**
@@ -87,7 +95,7 @@ sealed class LlmModel(
         displayName = "Qwen3 (0.6B)",
         filename = "Qwen_Qwen3-0.6B-Q4_K_M.gguf",
         parameterCount = 600_000_000L,
-        chatFormat = ChatFormat.ChatML
+        chatFormat = ChatFormat.ChatML,
     )
 
     /**
@@ -100,7 +108,7 @@ sealed class LlmModel(
         filename = "Qwen2.5-1.5B-Instruct-Q4_K_M.gguf",
         parameterCount = 1_500_000_000L,
         chatFormat = ChatFormat.ChatML,
-        minRamGB = 2
+        minRamGB = 2,
     )
 
     /**
@@ -112,7 +120,7 @@ sealed class LlmModel(
         displayName = "SmolLM2 (360M)",
         filename = "SmolLM2-360M-Instruct-Q4_K_M.gguf",
         parameterCount = 360_000_000L,
-        chatFormat = ChatFormat.ChatML
+        chatFormat = ChatFormat.ChatML,
     )
 
     /**
@@ -125,7 +133,7 @@ sealed class LlmModel(
         filename = "gemma-3-1b-it-Q4_K_M.gguf",
         parameterCount = 1_000_000_000L,
         chatFormat = ChatFormat.Gemma3,
-        minRamGB = 2
+        minRamGB = 2,
     )
 
     /**
@@ -137,7 +145,7 @@ sealed class LlmModel(
         displayName = "Gemma 3 (270M)",
         filename = "gemma-3-270m-it-UD-IQ3_XXS.gguf",
         parameterCount = 270_000_000L,
-        chatFormat = ChatFormat.Gemma3
+        chatFormat = ChatFormat.Gemma3,
     )
 
     /**
@@ -151,7 +159,7 @@ sealed class LlmModel(
         displayName = "Falcon-H1 (90M)",
         filename = "Falcon-H1-Tiny-90M-Instruct-Q8_0.gguf",
         parameterCount = 90_000_000L,
-        chatFormat = ChatFormat.FalconH1
+        chatFormat = ChatFormat.FalconH1,
     )
 
     /**
@@ -168,7 +176,7 @@ sealed class LlmModel(
         parameterCount = 2_300_000_000L,
         chatFormat = ChatFormat.Gemma4,
         minRamGB = 6,
-        minFileSizeMb = 2800
+        minFileSizeMb = 2800,
     )
 
     companion object {
@@ -181,12 +189,13 @@ sealed class LlmModel(
         /**
          * Get all active models (excludes gated Gemma variants and superseded models)
          */
-        fun all(): List<LlmModel> = listOf(
-            Qwen35_2B,
-            Qwen35_0B8,
-            FalconH1_90M,
-            Gemma4_E2B
-        )
+        fun all(): List<LlmModel> =
+            listOf(
+                Qwen35_2B,
+                Qwen35_0B8,
+                FalconH1_90M,
+                Gemma4_E2B,
+            )
 
         /**
          * Find model by ID
@@ -200,8 +209,7 @@ sealed class LlmModel(
          *
          * @return Model if found, null otherwise
          */
-        fun findByFilename(filename: String): LlmModel? =
-            all().find { it.filename == filename }
+        fun findByFilename(filename: String): LlmModel? = all().find { it.filename == filename }
 
         /**
          * Get models available for a given device RAM
@@ -211,7 +219,6 @@ sealed class LlmModel(
          * @param deviceRamGB Device RAM in gigabytes
          * @return List of models that can run on this device
          */
-        fun availableFor(deviceRamGB: Int): List<LlmModel> =
-            all().filter { it.minRamGB <= deviceRamGB }
+        fun availableFor(deviceRamGB: Int): List<LlmModel> = all().filter { it.minRamGB <= deviceRamGB }
     }
 }

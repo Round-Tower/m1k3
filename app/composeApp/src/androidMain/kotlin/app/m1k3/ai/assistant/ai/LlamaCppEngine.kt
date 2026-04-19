@@ -5,10 +5,12 @@ import app.m1k3.ai.assistant.ai.ma.MaBridge
 import app.m1k3.ai.assistant.ai.ma.MaInferenceBackend
 import app.m1k3.ai.assistant.utils.Logger
 import app.m1k3.ai.domain.ai.GenerationConfig
+import app.m1k3.ai.domain.ai.InferenceTuning
 import app.m1k3.ai.domain.ai.LlmModel
 import app.m1k3.ai.domain.chat.format.MessageRole
 import app.m1k3.ai.domain.chat.services.ChatFormatter
 import app.m1k3.ai.domain.chat.services.DefaultChatFormatter
+import app.m1k3.ai.domain.platform.DeviceTier
 import app.m1k3.ai.domain.tools.services.ExtractedToolCall
 import app.m1k3.ai.domain.tools.services.Gemma4ToolCallExtractor
 import app.m1k3.ai.domain.tools.services.QwenXmlToolCallExtractor
@@ -73,6 +75,14 @@ class LlamaCppEngine(
         (memInfo.totalMem / (1024 * 1024 * 1024)).toInt()
     }
 
+    /**
+     * Device-and-model-aware llama.cpp runtime configuration. Resolved once per
+     * engine instance from the tier matrix — see InferenceTuning.resolve().
+     */
+    private val tuning: InferenceTuning by lazy {
+        InferenceTuning.resolve(DeviceTier.fromRamGB(deviceRamGB), model)
+    }
+
     private val modelFilename = model.filename
     private val defaultConfig = GenerationConfig()
 
@@ -128,20 +138,29 @@ class LlamaCppEngine(
                 if (isInitialized) return@withLock Result.success(Unit)
 
                 try {
-                    logger.i { "Initializing -> model=${model.displayName}, RAM: ${deviceRamGB}GB" }
+                    val tier = DeviceTier.fromRamGB(deviceRamGB)
+                    logger.i {
+                        "Initializing -> model=${model.displayName}, RAM=${deviceRamGB}GB, " +
+                            "tier=$tier, n_ctx=${tuning.nCtx}, n_batch=${tuning.nBatch}, " +
+                            "threads=${tuning.threadsGen}/${tuning.threadsBatch}, " +
+                            "fa=${tuning.useFlashAttn}, kv=${tuning.kvQuant}"
+                    }
 
                     val modelPath = resolveModelPath()
                     logger.i { "Loading model: $modelPath" }
 
-                    // 2048 is optimal for sub-3B models. KV cache scales quadratically
-                    // with context — 4096 doubles memory pressure for marginal benefit.
-                    // Reserve 4096 for flagship devices running 4B+ models.
-                    val nCtx =
-                        when {
-                            deviceRamGB >= 12 && model.parameterCount >= 4_000_000_000L -> 4096
-                            else -> 2048
-                        }
-                    val handle = backend.init(modelPath, nCtx)
+                    val handle =
+                        backend.init(
+                            modelPath = modelPath,
+                            nCtx = tuning.nCtx,
+                            nBatch = tuning.nBatch,
+                            nUbatch = tuning.nUbatch,
+                            threadsGen = tuning.threadsGen,
+                            threadsBatch = tuning.threadsBatch,
+                            useFlashAttn = tuning.useFlashAttn,
+                            kvQuantOrdinal = tuning.kvQuant.ordinal,
+                            useMlock = tuning.useMlock,
+                        )
                     if (handle == 0L) {
                         return@withLock Result.failure(
                             RuntimeException("Failed to load model '${model.displayName}'. File may be corrupt or incompatible."),
@@ -196,6 +215,7 @@ class LlamaCppEngine(
                         topP = config.topP ?: 0.95f,
                         topK = config.topK ?: 64,
                         repeatPenalty = config.repetitionPenalty ?: 1.1f,
+                        minP = config.minP ?: 0.0f,
                         grammar = config.grammar,
                     )
 
@@ -272,6 +292,7 @@ class LlamaCppEngine(
                         topP = config.topP ?: 0.95f,
                         topK = config.topK ?: 64,
                         repeatPenalty = config.repetitionPenalty ?: 1.1f,
+                        minP = config.minP ?: 0.0f,
                         onToken = { token ->
                             val cleaned =
                                 app.m1k3.ai.assistant.utils
@@ -299,14 +320,7 @@ class LlamaCppEngine(
             }
         }
 
-    override fun getOptimalMaxTokens(): Int =
-        when {
-            deviceRamGB >= 12 -> 4096
-            deviceRamGB >= 8 -> 3072
-            deviceRamGB >= 6 -> 2048
-            deviceRamGB >= 4 -> 1536
-            else -> 1024
-        }
+    override fun getOptimalMaxTokens(): Int = tuning.maxTokens
 
     // ============================================================
     // NativeChatCapable — llama.cpp common_chat_templates_apply path
@@ -339,6 +353,7 @@ class LlamaCppEngine(
                         topP = config.topP ?: 0.95f,
                         topK = config.topK ?: 64,
                         repeatPenalty = config.repetitionPenalty ?: 1.1f,
+                        minP = config.minP ?: 0.0f,
                         enableThinking = enableThinking,
                         onToken = { token ->
                             val cleaned =

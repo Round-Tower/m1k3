@@ -3,9 +3,9 @@ package app.m1k3.ai.domain.ai
 import app.m1k3.ai.domain.chat.format.ChatFormat
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertTrue
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
+import kotlin.test.assertTrue
 
 /**
  * TDD Tests for LlmModel sealed class
@@ -14,7 +14,6 @@ import kotlin.test.assertIs
  * configuration (filename, chat format, size).
  */
 class LlmModelTest {
-
     // ===== Gemma3 Tests =====
 
     @Test
@@ -220,5 +219,37 @@ class LlmModelTest {
         val filename = LlmModel.Gemma3_1B.filename.lowercase()
         assertTrue(filename.contains("gemma"))
         assertTrue(filename.contains("1b") || filename.contains("1B"))
+    }
+
+    // ===== maxContextTokens Tests =====
+
+    @Test
+    fun `Qwen35_0B8 has 8192 maxContextTokens`() {
+        assertEquals(8192, LlmModel.Qwen35_0B8.maxContextTokens)
+    }
+
+    @Test
+    fun `Qwen35_2B has 4096 maxContextTokens`() {
+        assertEquals(4096, LlmModel.Qwen35_2B.maxContextTokens)
+    }
+
+    @Test
+    fun `Gemma4_E2B has 4096 maxContextTokens`() {
+        assertEquals(4096, LlmModel.Gemma4_E2B.maxContextTokens)
+    }
+
+    @Test
+    fun `FalconH1_90M defaults to 4096 maxContextTokens`() {
+        assertEquals(4096, LlmModel.FalconH1_90M.maxContextTokens)
+    }
+
+    @Test
+    fun `all models expose a positive maxContextTokens`() {
+        LlmModel.all().forEach { model ->
+            assertTrue(
+                model.maxContextTokens > 0,
+                "${model.id} maxContextTokens must be positive",
+            )
+        }
     }
 }

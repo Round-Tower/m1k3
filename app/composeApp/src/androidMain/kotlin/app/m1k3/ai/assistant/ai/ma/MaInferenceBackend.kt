@@ -20,12 +20,28 @@ interface MaInferenceBackend {
      *
      * @param modelPath Absolute path to the .gguf file
      * @param nCtx Context window size — controls KV cache memory usage.
-     *   2048 is safe for all devices. 4096 recommended for Big M1K3 on 8GB+.
+     * @param nBatch Logical batch size for prompt prefill (llama_context_params.n_batch).
+     * @param nUbatch Physical micro-batch size; must be <= [nBatch] (n_ubatch).
+     * @param threadsGen Thread count for generation (decode). 0 = native hw-derived default.
+     * @param threadsBatch Thread count for prefill (prompt encode). 0 = native default.
+     * @param useFlashAttn When true the bridge asks for LLAMA_FLASH_ATTN_TYPE_AUTO.
+     *   Phase 1 keeps this false everywhere; Phase 2 flips it on for HIGH_END+ paired
+     *   with [kvQuantOrdinal] ≠ F16 (upstream couples them: V-cache quant requires FA).
+     * @param kvQuantOrdinal Ordinal of [app.m1k3.ai.domain.ai.KvCacheType]: 0=F16, 1=Q8_0.
+     *   Any non-F16 value requires [useFlashAttn] = true.
+     * @param useMlock When true asks llama.cpp to mlock model weights into RAM.
      * @return Opaque handle (non-zero) on success, 0 on failure
      */
     fun init(
         modelPath: String,
         nCtx: Int = 2048,
+        nBatch: Int = 512,
+        nUbatch: Int = 128,
+        threadsGen: Int = 0,
+        threadsBatch: Int = 0,
+        useFlashAttn: Boolean = false,
+        kvQuantOrdinal: Int = 0,
+        useMlock: Boolean = false,
     ): Long
 
     /**
@@ -45,6 +61,8 @@ interface MaInferenceBackend {
      * @param temperature Sampling temperature (0.0–2.0)
      * @param topP Nucleus sampling threshold
      * @param topK Top-K sampling cutoff
+     * @param minP Minimum probability floor relative to the most likely token (0.0 = disabled).
+     *   min_p is inserted between top_p and temperature in the sampler chain when > 0.
      * @param repeatPenalty Repetition penalty (1.0 = none)
      * @param onToken Called for each generated token piece (nullable = non-streaming)
      * @param grammar Optional GBNF grammar string. When non-null, installs a lazy grammar
@@ -60,6 +78,7 @@ interface MaInferenceBackend {
         topP: Float,
         topK: Int,
         repeatPenalty: Float,
+        minP: Float = 0.0f,
         onToken: ((String) -> Unit)? = null,
         grammar: String? = null,
     ): String
@@ -97,6 +116,7 @@ interface MaInferenceBackend {
         topP: Float,
         topK: Int,
         repeatPenalty: Float,
+        minP: Float = 0.0f,
         enableThinking: Boolean = true,
         onToken: ((String) -> Unit)? = null,
     ): String

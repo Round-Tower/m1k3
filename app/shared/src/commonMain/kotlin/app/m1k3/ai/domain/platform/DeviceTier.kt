@@ -22,5 +22,21 @@ enum class DeviceTier {
     BUDGET,
 
     /** <4GB RAM - Minimal features */
-    LOW_END
+    LOW_END,
+    ;
+
+    companion object {
+        /**
+         * Classify a device by its total RAM in gigabytes.
+         * Anything under 4GB (including negative inputs) falls to [LOW_END].
+         */
+        fun fromRamGB(gb: Int): DeviceTier =
+            when {
+                gb >= 12 -> FLAGSHIP
+                gb >= 8 -> HIGH_END
+                gb >= 6 -> MID_RANGE
+                gb >= 4 -> BUDGET
+                else -> LOW_END
+            }
+    }
 }

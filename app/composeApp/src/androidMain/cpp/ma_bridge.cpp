@@ -70,18 +70,28 @@ static bool is_complete_utf8(const char* data, size_t len) {
 }
 
 // ---------------------------------------------------------------------------
-// JNI: init
+// JNI: nativeInit
 // ---------------------------------------------------------------------------
 
 extern "C" JNIEXPORT jlong JNICALL
-Java_app_m1k3_ai_assistant_ai_ma_MaBridge_init(
-        JNIEnv *env, jobject /*thiz*/, jstring jModelPath, jint nCtx) {
+Java_app_m1k3_ai_assistant_ai_ma_MaBridge_nativeInit(
+        JNIEnv *env, jobject /*thiz*/,
+        jstring jModelPath,
+        jint    jNCtx,
+        jint    jNBatch,
+        jint    jNUbatch,
+        jint    jThreadsGen,
+        jint    jThreadsBatch,
+        jboolean jUseFlashAttn,
+        jint    jKvQuantOrdinal,
+        jboolean jUseMlock) {
 
     const char *modelPath = env->GetStringUTFChars(jModelPath, nullptr);
     LOGI("init: loading %s", modelPath);
 
     llama_model_params mparams = llama_model_default_params();
     mparams.n_gpu_layers = 0; // CPU-only on Android
+    mparams.use_mlock    = jUseMlock == JNI_TRUE;
 
     llama_model *model = llama_model_load_from_file(modelPath, mparams);
     env->ReleaseStringUTFChars(jModelPath, modelPath);
@@ -91,25 +101,47 @@ Java_app_m1k3_ai_assistant_ai_ma_MaBridge_init(
         return 0L;
     }
 
-    // Tensor G4: 1×X4 + 3×A720 (big) + 4×A520 (little) = 8 cores.
-    // Use up to 6 threads: all 4 big cores + 2 efficiency cores for parallelism.
-    // Batch processing (prompt prefill) benefits from more threads.
-    const int hw_threads = (int)std::thread::hardware_concurrency();
-    const int n_threads       = std::min(4, hw_threads);       // generation: big cores only
-    const int n_threads_batch = std::min(hw_threads, 6);       // prompt prefill: use more
+    // Thread selection: Kotlin side sends tier-aware counts (4 gen / 6 batch on
+    // flagships, 2/3 on low-end). Fall back to hw-derived defaults when 0.
+    const int hw_threads      = (int)std::thread::hardware_concurrency();
+    const int n_threads       = jThreadsGen   > 0 ? (int)jThreadsGen   : std::min(4, hw_threads);
+    const int n_threads_batch = jThreadsBatch > 0 ? (int)jThreadsBatch : std::min(hw_threads, 6);
 
     llama_context_params cparams = llama_context_default_params();
-    // nCtx passed from Kotlin: 2048 default. Larger = richer history but bigger KV cache.
-    cparams.n_ctx            = (uint32_t)nCtx;
+    cparams.n_ctx            = (uint32_t)jNCtx;
+    cparams.n_batch          = (uint32_t)jNBatch;
+    cparams.n_ubatch         = (uint32_t)jNUbatch;
     cparams.n_threads        = n_threads;
     cparams.n_threads_batch  = n_threads_batch;
-    cparams.flash_attn_type  = LLAMA_FLASH_ATTN_TYPE_DISABLED; // CPU-only: no flash attn
 
-    // TODO: Q8_0 KV cache (type_k/type_v) for ~30-40% faster generation.
-    // Currently causes llama_new_context_with_model() to return nullptr.
-    // Investigate after llama.cpp upgrade.
+    // Phase 2: HIGH_END+ send useFlashAttn=true and kvQuantOrdinal=1 (Q8_0).
+    // Upstream couples them (llama-context.cpp rejects quantized V without FA),
+    // so we only apply Q8_0 when FA is also requested.
+    const bool wantFlashAttn = jUseFlashAttn == JNI_TRUE;
+    const bool wantQ8KV      = jKvQuantOrdinal == 1 && wantFlashAttn;
 
+    cparams.flash_attn_type = wantFlashAttn
+                                  ? LLAMA_FLASH_ATTN_TYPE_AUTO
+                                  : LLAMA_FLASH_ATTN_TYPE_DISABLED;
+    if (wantQ8KV) {
+        cparams.type_k = GGML_TYPE_Q8_0;
+        cparams.type_v = GGML_TYPE_Q8_0;
+    }
+
+    // Retry-on-null safety net: if the aggressive config (FA / Q8_0) fails on
+    // this device's kernel variant, reset to F16 + FA disabled and retry once.
+    // Never fail init over a tuning choice.
     llama_context *ctx = llama_new_context_with_model(model, cparams);
+    bool fellBack = false;
+    if (!ctx && (wantFlashAttn || wantQ8KV)) {
+        LOGE("init: aggressive context (fa=%d kv=%d) failed; retrying with F16 + FA disabled",
+             wantFlashAttn ? 1 : 0, wantQ8KV ? 1 : 0);
+        cparams.flash_attn_type = LLAMA_FLASH_ATTN_TYPE_DISABLED;
+        cparams.type_k = GGML_TYPE_F16;
+        cparams.type_v = GGML_TYPE_F16;
+        ctx = llama_new_context_with_model(model, cparams);
+        fellBack = true;
+    }
     if (!ctx) {
         LOGE("init: failed to create context");
         llama_model_free(model);
@@ -131,7 +163,15 @@ Java_app_m1k3_ai_assistant_ai_ma_MaBridge_init(
         LOGE("init: common_chat_templates_init threw: %s — native chat path disabled", e.what());
     }
 
-    LOGI("init: success (handle=%p, threads=%d, n_ctx=%d)", ma, n_threads, cparams.n_ctx);
+    const int effectiveFa = (cparams.flash_attn_type == LLAMA_FLASH_ATTN_TYPE_AUTO) ? 1 : 0;
+    const int effectiveKv = (cparams.type_k == GGML_TYPE_Q8_0) ? 1 : 0;
+    LOGI("init: success (handle=%p, n_ctx=%d, n_batch=%d, n_ubatch=%d, threads=%d/%d, fa=%d, kv=%d, mlock=%d%s)",
+         ma, cparams.n_ctx, cparams.n_batch, cparams.n_ubatch,
+         n_threads, n_threads_batch,
+         effectiveFa,
+         effectiveKv,
+         jUseMlock == JNI_TRUE ? 1 : 0,
+         fellBack ? " FALLBACK" : "");
     return static_cast<jlong>(reinterpret_cast<uintptr_t>(ma));
 }
 
@@ -148,6 +188,7 @@ Java_app_m1k3_ai_assistant_ai_ma_MaBridge_nativeGenerate(
         jfloat  temperature,
         jfloat  topP,
         jint    topK,
+        jfloat  minP,
         jfloat  repeatPenalty,
         jobject callback,
         jstring jGrammar) {
@@ -236,6 +277,11 @@ Java_app_m1k3_ai_assistant_ai_ma_MaBridge_nativeGenerate(
 
     llama_sampler_chain_add(smpl, llama_sampler_init_top_k(topK));
     llama_sampler_chain_add(smpl, llama_sampler_init_top_p(topP, /*min_keep=*/1));
+    // min_p between top_p and temp — filters low-probability tails more cleanly
+    // than top_p alone on small models. Disabled when minP <= 0.
+    if (minP > 0.0f) {
+        llama_sampler_chain_add(smpl, llama_sampler_init_min_p(minP, /*min_keep=*/1));
+    }
     llama_sampler_chain_add(smpl, llama_sampler_init_temp(temperature));
     llama_sampler_chain_add(smpl, llama_sampler_init_penalties(
             /*penalty_last_n=*/64,
@@ -409,6 +455,7 @@ Java_app_m1k3_ai_assistant_ai_ma_MaBridge_nativeGenerateChat(
         jfloat   temperature,
         jfloat   topP,
         jint     topK,
+        jfloat   minP,
         jfloat   repeatPenalty,
         jboolean enableThinking,
         jobject  callback) {
@@ -529,6 +576,9 @@ Java_app_m1k3_ai_assistant_ai_ma_MaBridge_nativeGenerateChat(
 
     llama_sampler_chain_add(smpl, llama_sampler_init_top_k(topK));
     llama_sampler_chain_add(smpl, llama_sampler_init_top_p(topP, /*min_keep=*/1));
+    if (minP > 0.0f) {
+        llama_sampler_chain_add(smpl, llama_sampler_init_min_p(minP, /*min_keep=*/1));
+    }
     llama_sampler_chain_add(smpl, llama_sampler_init_temp(temperature));
     llama_sampler_chain_add(smpl, llama_sampler_init_penalties(
             /*penalty_last_n=*/64,
