@@ -37,9 +37,10 @@ import androidx.compose.runtime.staticCompositionLocalOf
  * Scope: App-level (MainActivity), persists across screen transitions.
  * Lifecycle: Bound to MainActivity's lifecycle, not individual screen lifecycle.
  */
-val LocalSharedAvatarVM = staticCompositionLocalOf<AvatarViewModel?> {
-    null
-}
+val LocalSharedAvatarVM =
+    staticCompositionLocalOf<AvatarViewModel?> {
+        null
+    }
 
 /**
  * Provides the current AvatarState for UI rendering.
@@ -55,6 +56,22 @@ val LocalSharedAvatarVM = staticCompositionLocalOf<AvatarViewModel?> {
  * AvatarView(state = avatarState, modifier = Modifier.size(100.dp))
  * ```
  */
-val LocalSharedAvatarState = staticCompositionLocalOf<AvatarState?> {
-    null
-}
+val LocalSharedAvatarState =
+    staticCompositionLocalOf<AvatarState?> {
+        null
+    }
+
+/**
+ * Provides the currently selected avatar model ID.
+ *
+ * Wrapped in [androidx.compose.runtime.State] so that Avatar3D renderers
+ * recompose when the user picks a new avatar in the gallery.
+ *
+ * MurphySig: kev+claude / confidence 0.85 / 2026-04-19
+ * Rationale: picker writes to prefs AND to this state so any open
+ * avatar view swaps models live without a process restart.
+ */
+val LocalSelectedAvatarId =
+    staticCompositionLocalOf<androidx.compose.runtime.State<String>> {
+        androidx.compose.runtime.mutableStateOf(ModelRegistry.DEFAULT_MODEL_ID)
+    }

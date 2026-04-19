@@ -13,9 +13,9 @@ import app.m1k3.ai.assistant.design.tokens.MaTypography
 import app.m1k3.ai.assistant.utils.Logger
 import io.github.sceneview.Scene
 import io.github.sceneview.node.ModelNode
+import io.github.sceneview.rememberCameraNode
 import io.github.sceneview.rememberModelLoader
 import io.github.sceneview.rememberNodes
-import io.github.sceneview.rememberCameraNode
 import kotlinx.coroutines.delay
 
 // Logger instance for Avatar3D
@@ -69,7 +69,7 @@ fun Avatar3DView(
     modelConfig: ModelConfig = ModelRegistry.getDefault(),
     enableInteraction: Boolean = false,
     autoRotate: Boolean = false,
-    showLoadingIndicator: Boolean = true
+    showLoadingIndicator: Boolean = true,
 ) {
     // Use shared engine from CompositionLocal (one engine for entire app)
     val engine = LocalSharedEngine.current!!
@@ -104,17 +104,17 @@ fun Avatar3DView(
                 Column(
                     modifier = Modifier.fillMaxSize(),
                     horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center
+                    verticalArrangement = Arrangement.Center,
                 ) {
                     CircularProgressIndicator(
                         modifier = Modifier.size(48.dp),
-                        color = MaColors.Orange
+                        color = MaColors.Orange,
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
                         text = "Loading ${modelConfig.name}...",
                         style = MaTypography.labelSmall,
-                        color = MaColors.textSecondary()
+                        color = MaColors.textSecondary(),
                     )
                 }
             }
@@ -124,18 +124,18 @@ fun Avatar3DView(
                 Column(
                     modifier = Modifier.fillMaxSize(),
                     horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center
+                    verticalArrangement = Arrangement.Center,
                 ) {
                     Text(
                         text = "Error",
                         style = MaTypography.titleMedium,
-                        color = MaColors.Error
+                        color = MaColors.Error,
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
                         text = error!!,
                         style = MaTypography.labelSmall,
-                        color = MaColors.textSecondary()
+                        color = MaColors.textSecondary(),
                     )
                 }
             }
@@ -148,7 +148,7 @@ fun Avatar3DView(
                     modelConfig = modelConfig,
                     enableInteraction = enableInteraction,
                     autoRotate = autoRotate,
-                    modifier = Modifier.fillMaxSize()
+                    modifier = Modifier.fillMaxSize(),
                 )
             }
         }
@@ -168,7 +168,7 @@ private fun Avatar3DViewContent(
     modelConfig: ModelConfig,
     enableInteraction: Boolean,
     autoRotate: Boolean,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     // Detect model type
     val isStaticModel = modelConfig.modelType == ModelType.STATIC || metadata.animations.isEmpty()
@@ -180,7 +180,7 @@ private fun Avatar3DViewContent(
             metadata = metadata,
             modelConfig = modelConfig,
             enableInteraction = enableInteraction,
-            modifier = modifier
+            modifier = modifier,
         )
     } else {
         // Render animated model with skeleton animations (animals)
@@ -190,7 +190,7 @@ private fun Avatar3DViewContent(
             modelConfig = modelConfig,
             enableInteraction = enableInteraction,
             autoRotate = autoRotate,
-            modifier = modifier
+            modifier = modifier,
         )
     }
 }
@@ -210,29 +210,32 @@ private fun RenderStaticModel(
     metadata: ModelMetadata,
     modelConfig: ModelConfig,
     enableInteraction: Boolean,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     // Use shared engine from CompositionLocal (one engine for entire app)
     val engine = LocalSharedEngine.current!!
     val modelLoader = rememberModelLoader(engine)
 
     // Create procedural animator
-    val animator = remember(state.emotion, state.activity) {
-        ProceduralAnimator(state)
-    }
+    val animator =
+        remember(state.emotion, state.activity) {
+            ProceduralAnimator(state)
+        }
 
     // Calculate optimal camera
-    val optimalCamera = remember(metadata) {
-        CameraAutoFit.calculate(
-            metadata = metadata,
-            cameraAngle = 15f
-        )
-    }
+    val optimalCamera =
+        remember(metadata) {
+            CameraAutoFit.calculate(
+                metadata = metadata,
+                cameraAngle = 15f,
+            )
+        }
 
     val cameraState = rememberCameraControllerState(optimalCamera)
-    val cameraNode = rememberCameraNode(engine).apply {
-        cameraState.applyCameraNode(this)
-    }
+    val cameraNode =
+        rememberCameraNode(engine).apply {
+            cameraState.applyCameraNode(this)
+        }
 
     // Track animation start time
     var startTime by remember { mutableLongStateOf(System.nanoTime()) }
@@ -261,7 +264,7 @@ private fun RenderStaticModel(
             animate(
                 initialValue = 0f,
                 targetValue = 1f,
-                animationSpec = tween(durationMillis = 500, easing = FastOutSlowInEasing)
+                animationSpec = tween(durationMillis = 500, easing = FastOutSlowInEasing),
             ) { value, _ ->
                 rotationAnimProgress = value
             }
@@ -269,28 +272,34 @@ private fun RenderStaticModel(
     }
 
     // Create model node
-    val childNodes = rememberNodes {
-        add(
-            ModelNode(
-                modelInstance = modelLoader.createModelInstance(modelConfig.path),
-                scaleToUnits = 1.0f
-            ).apply {
-                position = io.github.sceneview.math.Position(0f, 0f, 0f)
-                logger.i { "Static model loaded: ${modelConfig.name}" }
-            }
-        )
-    }
+    val childNodes =
+        rememberNodes {
+            add(
+                ModelNode(
+                    modelInstance = modelLoader.createModelInstance(modelConfig.path),
+                    scaleToUnits = 1.0f,
+                ).apply {
+                    position =
+                        io.github.sceneview.math
+                            .Position(0f, 0f, 0f)
+                    logger.i { "Static model loaded: ${modelConfig.name}" }
+                },
+            )
+        }
 
     Box(
-        modifier = modifier
-            .then(
-                if (enableInteraction) {
-                    Modifier.interactiveCamera(
-                        state = cameraState,
-                        enabled = true
-                    )
-                } else Modifier
-            )
+        modifier =
+            modifier
+                .then(
+                    if (enableInteraction) {
+                        Modifier.interactiveCamera(
+                            state = cameraState,
+                            enabled = true,
+                        )
+                    } else {
+                        Modifier
+                    },
+                ),
     ) {
         Scene(
             modifier = Modifier.fillMaxSize(),
@@ -313,17 +322,21 @@ private fun RenderStaticModel(
                         val startAngle = currentRotation
                         currentRotation = startAngle + (targetRotation - startAngle) * rotationAnimProgress
                     }
-                    node.rotation = io.github.sceneview.math.Rotation(0f, currentRotation, 0f)
+                    node.rotation =
+                        io.github.sceneview.math
+                            .Rotation(0f, currentRotation, 0f)
 
                     // Scale pulse (activity-based breathing)
                     val scale = animator.getScale(elapsedSeconds)
-                    node.scale = io.github.sceneview.math.Scale(scale, scale, scale)
+                    node.scale =
+                        io.github.sceneview.math
+                            .Scale(scale, scale, scale)
 
                     // TODO: Color tint (if material API available)
                     // val colorTint = animator.getColorTintWithActivity()
                     // node.materialInstance?.setParameter("baseColorTint", colorTint)
                 }
-            }
+            },
         )
     }
 }
@@ -341,7 +354,7 @@ private fun RenderAnimatedModel(
     modelConfig: ModelConfig,
     enableInteraction: Boolean,
     autoRotate: Boolean,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     // Use shared engine from CompositionLocal (one engine for entire app)
     val engine = LocalSharedEngine.current!!
@@ -350,36 +363,40 @@ private fun RenderAnimatedModel(
     // Calculate optimal camera using UNIT bounding box — scaleToUnits=1.0 normalizes all
     // models to ~1m, so camera distance must be consistent regardless of native geometry.
     // Without this, small-bbox models clip and large-bbox models appear tiny.
-    val normalizedMetadata = remember(metadata) {
-        metadata.copy(boundingBox = BoundingBox.UNIT)
-    }
-    val optimalCamera = remember(normalizedMetadata) {
-        CameraAutoFit.calculate(
-            metadata = normalizedMetadata,
-            cameraAngle = 18f,      // Slightly overhead — "pet on desk" perspective
-            focusOffset = 0f,       // centerOrigin handles vertical placement
-            horizontalAngle = -20f, // Gentle 3/4 view
-            padding = 2.0f         // Extra room for animation limb extension
-        )
-    }
+    val normalizedMetadata =
+        remember(metadata) {
+            metadata.copy(boundingBox = BoundingBox.UNIT)
+        }
+    val optimalCamera =
+        remember(normalizedMetadata) {
+            CameraAutoFit.calculate(
+                metadata = normalizedMetadata,
+                cameraAngle = 18f, // Slightly overhead — "pet on desk" perspective
+                focusOffset = 0f, // centerOrigin handles vertical placement
+                horizontalAngle = -20f, // Gentle 3/4 view
+                padding = 2.0f, // Extra room for animation limb extension
+            )
+        }
 
     // Camera controller state
     val cameraState = rememberCameraControllerState(optimalCamera)
 
     // Create camera node
-    val cameraNode = rememberCameraNode(engine).apply {
-        // Apply initial camera position
-        cameraState.applyCameraNode(this)
-    }
+    val cameraNode =
+        rememberCameraNode(engine).apply {
+            // Apply initial camera position
+            cameraState.applyCameraNode(this)
+        }
 
     // Get target animation when state changes
     // FIXED: Use remember with keys instead of derivedStateOf
     // derivedStateOf only tracks Compose State objects, but 'state' is a regular parameter
-    val targetAnimation = remember(state.emotion, state.activity, metadata.animations) {
-        val anim = Avatar3DEngine.getAnimation(state, metadata.animations)
-        logger.v { "Target animation computed: ${anim.name} (emotion=${state.emotion}, activity=${state.activity})" }
-        anim
-    }
+    val targetAnimation =
+        remember(state.emotion, state.activity, metadata.animations) {
+            val anim = Avatar3DEngine.getAnimation(state, metadata.animations)
+            logger.v { "Target animation computed: ${anim.name} (emotion=${state.emotion}, activity=${state.activity})" }
+            anim
+        }
 
     // Track animation playback with state machine
     var playbackInfo by remember {
@@ -389,8 +406,8 @@ private fun RenderAnimatedModel(
                 currentAnimName = targetAnimation.name,
                 playbackState = AnimationPlaybackState.USER_DIRECTED,
                 startTime = System.nanoTime(),
-                trigger = AnimationTrigger.INIT
-            )
+                trigger = AnimationTrigger.INIT,
+            ),
         )
     }
     var timeInState by remember { mutableFloatStateOf(0f) }
@@ -399,7 +416,7 @@ private fun RenderAnimatedModel(
     LaunchedEffect(state) {
         timeInState = 0f
         while (true) {
-            delay(100)  // Update every 100ms
+            delay(100) // Update every 100ms
             timeInState += 0.1f
         }
     }
@@ -412,77 +429,93 @@ private fun RenderAnimatedModel(
     // during avatar model switches (render thread races compose thread).
     // AtomicBoolean (not mutableStateOf) for cross-thread visibility:
     // Compose thread writes in onDispose, Filament render thread reads in onFrame.
-    val isDisposed = remember { java.util.concurrent.atomic.AtomicBoolean(false) }
+    val isDisposed =
+        remember {
+            java.util.concurrent.atomic
+                .AtomicBoolean(false)
+        }
     DisposableEffect(modelConfig) {
         isDisposed.set(false)
         onDispose { isDisposed.set(true) }
     }
 
     // Start with a calm, emotion-appropriate idle (not random — random felt aggressive)
-    val startingAnim = remember(metadata) {
-        AnimationStateManager.getEmotionAppropriateIdle(
-            emotion = state.emotion,
-            availableAnimations = metadata.animations
-        ).also {
-            logger.d { "Starting with idle animation: ${it.name} (index=${it.index})" }
+    val startingAnim =
+        remember(metadata) {
+            AnimationStateManager
+                .getEmotionAppropriateIdle(
+                    emotion = state.emotion,
+                    availableAnimations = metadata.animations,
+                ).also {
+                    logger.d { "Starting with idle animation: ${it.name} (index=${it.index})" }
+                }
         }
-    }
 
     // Create model node
-    val childNodes = rememberNodes {
-        add(
-            ModelNode(
-                modelInstance = modelLoader.createModelInstance(modelConfig.path),
-                scaleToUnits = 1.0f,
-                // Center model bounding box at origin — fixes models with offset
-                // geometry (e.g. dinosaurs authored at non-zero positions).
-                centerOrigin = io.github.sceneview.math.Position(0f, 0f, 0f)
-            ).apply {
-                position = io.github.sceneview.math.Position(0f, 0f, 0f)
+    val childNodes =
+        rememberNodes {
+            add(
+                ModelNode(
+                    modelInstance = modelLoader.createModelInstance(modelConfig.path),
+                    scaleToUnits = 1.0f,
+                    // Center model bounding box at origin — fixes models with offset
+                    // geometry (e.g. dinosaurs authored at non-zero positions).
+                    centerOrigin =
+                        io.github.sceneview.math
+                            .Position(0f, 0f, 0f),
+                ).apply {
+                    position =
+                        io.github.sceneview.math
+                            .Position(0f, 0f, 0f)
 
-                // Play initial idle animation (emotion-appropriate)
-                // Clamp to actual model animation count — metadata may assume more
-                // animations than the GLB actually contains (e.g. Quaternius models)
-                val safeIndex = if (startingAnim.index < animationCount) {
-                    startingAnim.index
-                } else {
-                    0.coerceAtMost(animationCount - 1)
-                }
-                try {
-                    if (animationCount > 0) {
-                        playAnimation(
-                            animationIndex = safeIndex,
-                            loop = true,
-                            speed = Avatar3DEngine.getAnimationSpeed(state.intensity)
-                        )
+                    // Play initial idle animation (emotion-appropriate)
+                    // Clamp to actual model animation count — metadata may assume more
+                    // animations than the GLB actually contains (e.g. Quaternius models)
+                    val safeIndex =
+                        if (startingAnim.index < animationCount) {
+                            startingAnim.index
+                        } else {
+                            0.coerceAtMost(animationCount - 1)
+                        }
+                    try {
+                        if (animationCount > 0) {
+                            playAnimation(
+                                animationIndex = safeIndex,
+                                loop = true,
+                                speed = Avatar3DEngine.getAnimationSpeed(state.intensity),
+                            )
+                        }
+                        playbackInfo =
+                            playbackInfo.copy(
+                                currentAnimIndex = safeIndex,
+                                currentAnimName = startingAnim.name,
+                                startTime = System.nanoTime(),
+                            )
+                        logger.i { "Initial animation: ${startingAnim.name} (index=$safeIndex, actual count=$animationCount)" }
+                    } catch (e: Exception) {
+                        logger.w(e) { "Failed to play initial animation" }
                     }
-                    playbackInfo = playbackInfo.copy(
-                        currentAnimIndex = safeIndex,
-                        currentAnimName = startingAnim.name,
-                        startTime = System.nanoTime()
-                    )
-                    logger.i { "Initial animation: ${startingAnim.name} (index=$safeIndex, actual count=$animationCount)" }
-                } catch (e: Exception) {
-                    logger.w(e) { "Failed to play initial animation" }
-                }
-            }
-        )
-    }
+                },
+            )
+        }
 
     // Handle user-directed animation changes
     // User tapping emotions/activities triggers immediate animation switch
     LaunchedEffect(targetAnimation) {
         if (playbackInfo.currentAnimName != targetAnimation.name) {
-            logger.d { "[USER_ACTION] ${playbackInfo.currentAnimName} → ${targetAnimation.name} (emotion=${state.emotion}, activity=${state.activity})" }
+            logger.d {
+                "[USER_ACTION] ${playbackInfo.currentAnimName} → ${targetAnimation.name} (emotion=${state.emotion}, activity=${state.activity})"
+            }
 
-            playbackInfo = AnimationPlaybackInfo(
-                currentAnimIndex = targetAnimation.index,
-                currentAnimName = targetAnimation.name,
-                playbackState = AnimationPlaybackState.USER_DIRECTED,
-                startTime = System.nanoTime(),
-                trigger = AnimationTrigger.USER_ACTION,
-                previousAnimName = playbackInfo.currentAnimName
-            )
+            playbackInfo =
+                AnimationPlaybackInfo(
+                    currentAnimIndex = targetAnimation.index,
+                    currentAnimName = targetAnimation.name,
+                    playbackState = AnimationPlaybackState.USER_DIRECTED,
+                    startTime = System.nanoTime(),
+                    trigger = AnimationTrigger.USER_ACTION,
+                    previousAnimName = playbackInfo.currentAnimName,
+                )
         }
     }
 
@@ -491,23 +524,25 @@ private fun RenderAnimatedModel(
     LaunchedEffect(playbackInfo.playbackState) {
         if (playbackInfo.playbackState == AnimationPlaybackState.AUTO_IDLE) {
             // Select emotion-appropriate idle animation
-            val idleAnimation = AnimationStateManager.getEmotionAppropriateIdle(
-                emotion = state.emotion,
-                availableAnimations = metadata.animations
-            )
+            val idleAnimation =
+                AnimationStateManager.getEmotionAppropriateIdle(
+                    emotion = state.emotion,
+                    availableAnimations = metadata.animations,
+                )
 
             // Only transition if we're not already playing this idle
             if (playbackInfo.currentAnimName != idleAnimation.name) {
                 logger.d { "[AUTO_IDLE] Returning to ${idleAnimation.name} (emotion=${state.emotion})" }
 
-                playbackInfo = AnimationPlaybackInfo(
-                    currentAnimIndex = idleAnimation.index,
-                    currentAnimName = idleAnimation.name,
-                    playbackState = AnimationPlaybackState.AUTO_IDLE,
-                    startTime = System.nanoTime(),
-                    trigger = AnimationTrigger.COMPLETION,
-                    previousAnimName = playbackInfo.currentAnimName
-                )
+                playbackInfo =
+                    AnimationPlaybackInfo(
+                        currentAnimIndex = idleAnimation.index,
+                        currentAnimName = idleAnimation.name,
+                        playbackState = AnimationPlaybackState.AUTO_IDLE,
+                        startTime = System.nanoTime(),
+                        trigger = AnimationTrigger.COMPLETION,
+                        previousAnimName = playbackInfo.currentAnimName,
+                    )
             }
         }
     }
@@ -522,30 +557,33 @@ private fun RenderAnimatedModel(
 
             // Still in AUTO_IDLE? Trigger idle variation
             if (playbackInfo.playbackState == AnimationPlaybackState.AUTO_IDLE) {
-                val idleVariant = AnimationStateManager.getRandomIdleVariant(
-                    currentAnimName = playbackInfo.currentAnimName,
-                    availableAnimations = metadata.animations
-                )
+                val idleVariant =
+                    AnimationStateManager.getRandomIdleVariant(
+                        currentAnimName = playbackInfo.currentAnimName,
+                        availableAnimations = metadata.animations,
+                    )
 
                 if (idleVariant != null) {
                     logger.d { "[IDLE_VARIANT] Switching to ${idleVariant.name} for liveliness" }
 
-                    playbackInfo = AnimationPlaybackInfo(
-                        currentAnimIndex = idleVariant.index,
-                        currentAnimName = idleVariant.name,
-                        playbackState = AnimationPlaybackState.IDLE_VARIANT,
-                        startTime = System.nanoTime(),
-                        trigger = AnimationTrigger.IDLE_TIMEOUT,
-                        previousAnimName = playbackInfo.currentAnimName
-                    )
+                    playbackInfo =
+                        AnimationPlaybackInfo(
+                            currentAnimIndex = idleVariant.index,
+                            currentAnimName = idleVariant.name,
+                            playbackState = AnimationPlaybackState.IDLE_VARIANT,
+                            startTime = System.nanoTime(),
+                            trigger = AnimationTrigger.IDLE_TIMEOUT,
+                            previousAnimName = playbackInfo.currentAnimName,
+                        )
 
                     // Play variant for 2 seconds, then return to AUTO_IDLE
                     delay(2000)
                     if (playbackInfo.playbackState == AnimationPlaybackState.IDLE_VARIANT) {
-                        playbackInfo = playbackInfo.copy(
-                            playbackState = AnimationPlaybackState.AUTO_IDLE,
-                            startTime = System.nanoTime()
-                        )
+                        playbackInfo =
+                            playbackInfo.copy(
+                                playbackState = AnimationPlaybackState.AUTO_IDLE,
+                                startTime = System.nanoTime(),
+                            )
                         logger.d { "[IDLE_VARIANT] Returning to AUTO_IDLE" }
                     }
                 }
@@ -554,15 +592,18 @@ private fun RenderAnimatedModel(
     }
 
     Box(
-        modifier = modifier
-            .then(
-                if (enableInteraction) {
-                    Modifier.interactiveCamera(
-                        state = cameraState,
-                        enabled = true
-                    )
-                } else Modifier
-            )
+        modifier =
+            modifier
+                .then(
+                    if (enableInteraction) {
+                        Modifier.interactiveCamera(
+                            state = cameraState,
+                            enabled = true,
+                        )
+                    } else {
+                        Modifier
+                    },
+                ),
     ) {
         Scene(
             modifier = Modifier.fillMaxSize(),
@@ -590,7 +631,9 @@ private fun RenderAnimatedModel(
                         if (rotationStartTime < 0L) rotationStartTime = frameTimeNanos
                         val rotElapsed = (frameTimeNanos - rotationStartTime) / 1_000_000_000.0f
                         val rotationY = 15f * kotlin.math.sin(rotElapsed * 0.125f * 2f * kotlin.math.PI.toFloat())
-                        node.rotation = io.github.sceneview.math.Rotation(0f, rotationY, 0f)
+                        node.rotation =
+                            io.github.sceneview.math
+                                .Rotation(0f, rotationY, 0f)
                     }
 
                     val animator = node?.modelInstance?.animator
@@ -606,18 +649,21 @@ private fun RenderAnimatedModel(
                             val scaledDuration = currentAnim.duration / Avatar3DEngine.ANIMATION_SPEED_SCALE
                             if (playbackInfo.playbackState == AnimationPlaybackState.USER_DIRECTED &&
                                 !currentAnim.isLoopable &&
-                                realElapsedSeconds >= scaledDuration) {
-                                playbackInfo = playbackInfo.copy(
-                                    playbackState = AnimationPlaybackState.AUTO_IDLE
-                                )
+                                realElapsedSeconds >= scaledDuration
+                            ) {
+                                playbackInfo =
+                                    playbackInfo.copy(
+                                        playbackState = AnimationPlaybackState.AUTO_IDLE,
+                                    )
                                 logger.d { "[COMPLETION] ${currentAnim.name} finished → AUTO_IDLE" }
                             }
 
-                            val animTime = if (currentAnim.isLoopable && currentAnim.duration > 0f) {
-                                elapsedSeconds % currentAnim.duration
-                            } else {
-                                elapsedSeconds.coerceAtMost(currentAnim.duration)
-                            }
+                            val animTime =
+                                if (currentAnim.isLoopable && currentAnim.duration > 0f) {
+                                    elapsedSeconds % currentAnim.duration
+                                } else {
+                                    elapsedSeconds.coerceAtMost(currentAnim.duration)
+                                }
 
                             animator.applyAnimation(playbackInfo.currentAnimIndex, animTime)
                             animator.updateBoneMatrices()
@@ -630,7 +676,7 @@ private fun RenderAnimatedModel(
                     // Absorbed: Filament entity destroyed during avatar model switch.
                     // Expected during the brief TOCTOU window — not a bug.
                 }
-            }
+            },
         )
     }
 }
@@ -648,7 +694,7 @@ private fun RenderAnimatedModel(
 fun Avatar3DViewCompact(
     state: AvatarState,
     modifier: Modifier = Modifier,
-    modelConfig: ModelConfig = ModelRegistry.getDefault()
+    modelConfig: ModelConfig = ModelRegistry.getDefault(),
 ) {
     Avatar3DView(
         state = state,
@@ -656,7 +702,7 @@ fun Avatar3DViewCompact(
         modelConfig = modelConfig,
         enableInteraction = false,
         autoRotate = false,
-        showLoadingIndicator = false
+        showLoadingIndicator = false,
     )
 }
 
@@ -673,20 +719,19 @@ fun Avatar3DViewCompact(
 actual fun AvatarViewContent3D(state: AvatarState) {
     val modelId by LocalSelectedAvatarId.current
     val modelConfig = ModelRegistry.getById(modelId) ?: ModelRegistry.getDefault()
-    android.util.Log.d("Avatar3D", "Rendering model: id=$modelId config=${modelConfig.id} path=${modelConfig.path}")
 
     // Cel-shading + pixelation post-process (API 33+, no-op on older)
     CelShaderEffect(
-        pixelSize = 4f,     // Subtle pixel grid (increase for chunkier retro feel)
-        colorLevels = 6f,   // 6 color bands per channel (lower = more cartoony)
-        modifier = Modifier.fillMaxSize()
+        pixelSize = 4f, // Subtle pixel grid (increase for chunkier retro feel)
+        colorLevels = 6f, // 6 color bands per channel (lower = more cartoony)
+        modifier = Modifier.fillMaxSize(),
     ) {
         Avatar3DView(
             state = state,
             modifier = Modifier.fillMaxSize(),
             modelConfig = modelConfig,
             enableInteraction = false,
-            autoRotate = true
+            autoRotate = true,
         )
     }
 }
