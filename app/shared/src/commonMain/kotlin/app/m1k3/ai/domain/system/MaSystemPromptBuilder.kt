@@ -28,7 +28,7 @@ data class SystemPromptInput(
     val deviceTierName: String? = null,
     val contextWindowTokens: Int? = null,
     val lifetimeCo2SavedG: Long? = null,
-    val availableTools: List<String> = emptyList()
+    val availableTools: List<String> = emptyList(),
 )
 
 /**
@@ -42,117 +42,128 @@ data class SystemPromptInput(
  * the injection logic.
  */
 class MaSystemPromptBuilder {
-
-    fun build(input: SystemPromptInput): String = when (input.tier) {
-        SystemPromptTier.FULL -> buildFull(input)
-        SystemPromptTier.COMPACT -> buildCompact(input)
-    }
+    fun build(input: SystemPromptInput): String =
+        when (input.tier) {
+            SystemPromptTier.FULL -> buildFull(input)
+            SystemPromptTier.COMPACT -> buildCompact(input)
+        }
 
     // ── FULL ──────────────────────────────────────────────────
 
-    private fun buildFull(input: SystemPromptInput): String = buildString {
-        // Soul first
-        appendLine(M1K3_ETHOS)
-        appendLine()
-
-        // Who the user is
-        val ctx = input.userContext
-        if (ctx != null && ctx.hasAnyContext) {
-            appendLine("--- What you know about this person right now ---")
-            ctx.userName?.let { appendLine("Name: $it") }
-            ctx.location?.let {
-                val loc = buildString {
-                    it.city?.let { c -> append(c) }
-                    it.country?.let { c -> append(", $c") }
-                }
-                if (loc.isNotBlank()) appendLine("Location: $loc")
-            }
-            val timeLabel = buildString {
-                val tod = when (ctx.hourOfDay) {
-                    in 5..11 -> "morning"
-                    in 12..17 -> "afternoon"
-                    in 18..21 -> "evening"
-                    else -> "night"
-                }
-                input.dayOfWeek?.let { append("$it ") }
-                append(tod)
-            }
-            appendLine("Time: $timeLabel")
-
-            // Weather
-            val weather = input.weather ?: ctx.weather
-            weather?.let { appendLine("Weather: ${it.summary}") }
-
-            // Health
-            ctx.health?.let { h ->
-                val parts = mutableListOf<String>()
-                h.sleepLastNightMinutes?.let {
-                    parts += "${it / 60}h${if (it % 60 > 0) " ${it % 60}m" else ""} sleep"
-                }
-                h.stepsToday?.let { parts += "${formatSteps(it)} steps" }
-                h.heartRateLatestBpm?.let { parts += "${it}bpm" }
-                if (parts.isNotEmpty()) appendLine("Health: ${parts.joinToString(" · ")}")
-            }
-
-            // Screen time
-            ctx.screenTime?.let {
-                if (it.todayMinutes > 0) {
-                    val h = it.todayMinutes / 60; val m = it.todayMinutes % 60
-                    val label = if (h > 0) "${h}h${if (m > 0) " ${m}m" else ""}" else "${m}m"
-                    appendLine("Screen time: $label today")
-                }
-            }
-
-            // Notifications
-            ctx.notifications?.let {
-                if (it.unreadCount > 0)
-                    appendLine("Notifications: ${it.unreadCount} unread")
-            }
-
+    private fun buildFull(input: SystemPromptInput): String =
+        buildString {
+            // Soul first
+            appendLine(M1K3_ETHOS)
             appendLine()
-        }
 
-        // Device context
-        if (input.deviceTierName != null || input.contextWindowTokens != null) {
-            appendLine("--- Device ---")
-            input.deviceTierName?.let { appendLine("Tier: $it") }
-            input.contextWindowTokens?.let { appendLine("Context window: $it tokens") }
-            appendLine()
-        }
+            // Who the user is
+            val ctx = input.userContext
+            if (ctx != null && ctx.hasAnyContext) {
+                appendLine("--- What you know about this person right now ---")
+                ctx.userName?.let { appendLine("Name: $it") }
+                ctx.location?.let {
+                    val loc =
+                        buildString {
+                            it.city?.let { c -> append(c) }
+                            it.country?.let { c -> append(", $c") }
+                        }
+                    if (loc.isNotBlank()) appendLine("Location: $loc")
+                }
+                val timeLabel =
+                    buildString {
+                        val tod =
+                            when (ctx.hourOfDay) {
+                                in 5..11 -> "morning"
+                                in 12..17 -> "afternoon"
+                                in 18..21 -> "evening"
+                                else -> "night"
+                            }
+                        input.dayOfWeek?.let { append("$it ") }
+                        append(tod)
+                    }
+                appendLine("Time: $timeLabel")
 
-        // Eco context — M1K3's quiet pride
-        input.lifetimeCo2SavedG?.let {
-            if (it > 0) {
-                val display = if (it >= 1000) "${it / 1000.0}kg" else "${it}g"
-                appendLine("Lifetime CO₂ saved by running locally: $display")
+                // Weather
+                val weather = input.weather ?: ctx.weather
+                weather?.let { appendLine("Weather: ${it.summary}") }
+
+                // Health
+                ctx.health?.let { h ->
+                    val parts = mutableListOf<String>()
+                    h.sleepLastNightMinutes?.let {
+                        parts += "${it / 60}h${if (it % 60 > 0) " ${it % 60}m" else ""} sleep"
+                    }
+                    h.stepsToday?.let { parts += "${formatSteps(it)} steps" }
+                    h.heartRateLatestBpm?.let { parts += "${it}bpm" }
+                    if (parts.isNotEmpty()) appendLine("Health: ${parts.joinToString(" · ")}")
+                }
+
+                // Screen time
+                ctx.screenTime?.let {
+                    if (it.todayMinutes > 0) {
+                        val h = it.todayMinutes / 60
+                        val m = it.todayMinutes % 60
+                        val label = if (h > 0) "${h}h${if (m > 0) " ${m}m" else ""}" else "${m}m"
+                        appendLine("Screen time: $label today")
+                    }
+                }
+
+                // Notifications
+                ctx.notifications?.let {
+                    if (it.unreadCount > 0) {
+                        appendLine("Notifications: ${it.unreadCount} unread")
+                    }
+                }
+
                 appendLine()
             }
-        }
 
-        // Tool calling — reserved slot
-        if (input.availableTools.isNotEmpty()) {
-            appendLine("--- Available tools ---")
-            input.availableTools.forEach { appendLine("- $it") }
-            appendLine("Use tools when they would genuinely help. Don't over-use them.")
+            // Device context
+            if (input.deviceTierName != null || input.contextWindowTokens != null) {
+                appendLine("--- Device ---")
+                input.deviceTierName?.let { appendLine("Tier: $it") }
+                input.contextWindowTokens?.let { appendLine("Context window: $it tokens") }
+                appendLine()
+            }
+
+            // Eco context — M1K3's quiet pride
+            input.lifetimeCo2SavedG?.let {
+                if (it > 0) {
+                    val display = if (it >= 1000) "${it / 1000.0}kg" else "${it}g"
+                    appendLine("Lifetime CO₂ saved by running locally: $display")
+                    appendLine()
+                }
+            }
+
+            // Tool calling — imperative for small models. Qwen3 0.6B-class
+            // models under-trigger the tool-call token when the prompt hedges
+            // ("use them when genuinely helpful"). Firm imperatives + a
+            // no-guessing rule raise the trigger rate materially. See task #10.
+            if (input.availableTools.isNotEmpty()) {
+                appendLine("--- Available tools ---")
+                input.availableTools.forEach { appendLine("- $it") }
+                appendLine("When any listed tool can answer the question, you MUST call it.")
+                appendLine("Call the tool FIRST — do not answer from memory when a tool is available.")
+                appendLine("Emit the tool call in your model's native shape (no commentary before it).")
+                appendLine()
+            }
+
+            // HTML Artifact output — for interactive/visual responses
+            appendLine("--- Output format ---")
+            appendLine("Use markdown for all text responses: **bold**, *italic*, `code`, lists, headings.")
+            appendLine("Never output raw HTML tags (<p>, <ul>, <li>, <strong> etc.) in plain text responses.")
+            appendLine("Only use HTML inside <artifact id=\"...\"> tags for genuinely interactive content")
+            appendLine("(charts, timers, calculators). For conversation and explanations: plain markdown only.")
             appendLine()
+
+            // Thinking instruction — coax all models into using think tags
+            appendLine("--- Thinking ---")
+            appendLine("Before responding, reason inside <think>...</think> tags. The user won't see this — it's your private stage.")
+            appendLine()
+
+            // Final instruction
+            appendLine("Now — be M1K3. Sharp. Dry. Useful. Go.")
         }
-
-        // HTML Artifact output — for interactive/visual responses
-        appendLine("--- Output format ---")
-        appendLine("Use markdown for all text responses: **bold**, *italic*, `code`, lists, headings.")
-        appendLine("Never output raw HTML tags (<p>, <ul>, <li>, <strong> etc.) in plain text responses.")
-        appendLine("Only use HTML inside <artifact id=\"...\"> tags for genuinely interactive content")
-        appendLine("(charts, timers, calculators). For conversation and explanations: plain markdown only.")
-        appendLine()
-
-        // Thinking instruction — coax all models into using think tags
-        appendLine("--- Thinking ---")
-        appendLine("Before responding, reason inside <think>...</think> tags. The user won't see this — it's your private stage.")
-        appendLine()
-
-        // Final instruction
-        appendLine("Now — be M1K3. Sharp. Dry. Useful. Go.")
-    }
 
     // ── COMPACT ───────────────────────────────────────────────
 
@@ -162,30 +173,38 @@ class MaSystemPromptBuilder {
 
         val location = ctx?.location?.city?.let { "$it · " } ?: ""
 
-        val weather = (input.weather ?: ctx?.weather)?.let {
-            "${it.conditionDescription.lowercase()} ${it.displayTemperature} · "
-        } ?: ""
+        val weather =
+            (input.weather ?: ctx?.weather)?.let {
+                "${it.conditionDescription.lowercase()} ${it.displayTemperature} · "
+            } ?: ""
 
-        val timeLabel = ctx?.let {
-            val tod = when (it.hourOfDay) {
-                in 5..11 -> "morning"
-                in 12..17 -> "afternoon"
-                in 18..21 -> "evening"
-                else -> "night"
-            }
-            "${input.dayOfWeek?.let { d -> "$d " } ?: ""}$tod"
-        } ?: ""
+        val timeLabel =
+            ctx?.let {
+                val tod =
+                    when (it.hourOfDay) {
+                        in 5..11 -> "morning"
+                        in 12..17 -> "afternoon"
+                        in 18..21 -> "evening"
+                        else -> "night"
+                    }
+                "${input.dayOfWeek?.let { d -> "$d " } ?: ""}$tod"
+            } ?: ""
 
-        val sleep = ctx?.health?.sleepLastNightMinutes?.let {
-            " · ${it / 60}h sleep"
-        } ?: ""
+        val sleep =
+            ctx?.health?.sleepLastNightMinutes?.let {
+                " · ${it / 60}h sleep"
+            } ?: ""
 
-        val contextLine = "${name}${location}${weather}${timeLabel}${sleep}".trimEnd(' ', '·').trim()
+        val contextLine = "${name}${location}${weather}${timeLabel}$sleep".trimEnd(' ', '·').trim()
 
         return buildString {
-            append("You are M1K3 — on-device only, sharp, dry. Short when short works. No corporate filler — never \"certainly\" or \"great question.\" Think before you speak — wrap reasoning in <think>...</think> tags.")
+            append(
+                "You are M1K3 — on-device only, sharp, dry. Short when short works. No corporate filler — never \"certainly\" or \"great question.\" Think before you speak — wrap reasoning in <think>...</think> tags.",
+            )
             appendLine()
-            append("Use markdown. For interactive content (charts, timers, calculators), wrap in <artifact id=\"...\" type=\"html\">...</artifact> tags.")
+            append(
+                "Use markdown. For interactive content (charts, timers, calculators), wrap in <artifact id=\"...\" type=\"html\">...</artifact> tags.",
+            )
             if (contextLine.isNotBlank()) {
                 appendLine()
                 append("Context: $contextLine")
@@ -194,8 +213,11 @@ class MaSystemPromptBuilder {
     }
 
     private fun formatSteps(steps: Long): String =
-        if (steps >= 1000) "${steps / 1000},${(steps % 1000).toString().padStart(3, '0')}"
-        else "$steps"
+        if (steps >= 1000) {
+            "${steps / 1000},${(steps % 1000).toString().padStart(3, '0')}"
+        } else {
+            "$steps"
+        }
 }
 
 // ─────────────────────────────────────────────────────────────

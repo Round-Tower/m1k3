@@ -1,10 +1,10 @@
 package app.m1k3.ai.assistant.chat
 
-import app.m1k3.ai.domain.ai.GenerationConfig
 import app.m1k3.ai.assistant.config.GenerationConstants
 import app.m1k3.ai.assistant.platform.DeviceInfoProviderInterface
 import app.m1k3.ai.assistant.platform.DeviceTier
 import app.m1k3.ai.assistant.platform.getDeviceTier
+import app.m1k3.ai.domain.ai.GenerationConfig
 import app.m1k3.ai.domain.chat.QueryType as DomainQueryType
 
 /**
@@ -38,7 +38,7 @@ import app.m1k3.ai.domain.chat.QueryType as DomainQueryType
  * - Device-adaptive: Automatically adjusts to device capabilities
  */
 class GenerationConfigBuilder(
-    private val deviceInfo: DeviceInfoProviderInterface
+    private val deviceInfo: DeviceInfoProviderInterface,
 ) {
     /**
      * Build a GenerationConfig for the given query type.
@@ -51,7 +51,7 @@ class GenerationConfigBuilder(
     fun build(
         queryType: QueryType = QueryType.CONVERSATIONAL,
         temperature: Float? = null,
-        customMaxTokens: Int? = null
+        customMaxTokens: Int? = null,
     ): GenerationConfig {
         val deviceRamGB = deviceInfo.getDeviceRamGB()
         val maxTokens = customMaxTokens ?: calculateMaxTokens(queryType, deviceRamGB)
@@ -59,7 +59,36 @@ class GenerationConfigBuilder(
 
         return GenerationConfig(
             maxTokens = maxTokens,
-            temperature = temp
+            temperature = temp,
+        )
+    }
+
+    /**
+     * Build a GenerationConfig for a tool-invocation turn.
+     *
+     * Small models (≤1B) under-trigger the `<tool_call>` token under the
+     * default sampling — high temperature + wide topK + minP=0 mean the
+     * trigger can get lost in the tail, and the model defaults to
+     * free-form natural-language reasoning. This variant:
+     *
+     *   - Forces FOCUSED temperature (0.3) regardless of query type so the
+     *     model's decision to invoke a tool is near-deterministic.
+     *   - Tightens topK to 20 so the chosen token is from the strong head
+     *     of the distribution, not the tail.
+     *   - Raises minP to 0.05 so the `<tool_call>` trigger token is kept
+     *     in the sample pool even when the model briefly ranks it low.
+     *
+     * MurphySig: kev+claude / confidence 0.75 / 2026-04-19
+     */
+    fun buildForToolInvocation(
+        queryType: QueryType = QueryType.CONVERSATIONAL,
+        customMaxTokens: Int? = null,
+    ): GenerationConfig {
+        val base = build(queryType = queryType, customMaxTokens = customMaxTokens)
+        return base.copy(
+            temperature = GenerationConstants.Temperature.FOCUSED,
+            topK = 20,
+            minP = 0.05f,
         )
     }
 
@@ -74,7 +103,7 @@ class GenerationConfigBuilder(
     fun buildFromIntent(
         intentCategory: String,
         temperature: Float? = null,
-        customMaxTokens: Int? = null
+        customMaxTokens: Int? = null,
     ): GenerationConfig {
         val queryType = QueryType.fromIntentCategory(intentCategory)
         return build(queryType, temperature, customMaxTokens)
@@ -97,15 +126,17 @@ class GenerationConfigBuilder(
      * @param deviceRamGB Device RAM in GB
      * @return Maximum tokens for generation
      */
-    fun calculateMaxTokens(queryType: QueryType, deviceRamGB: Int): Int {
-        return when (queryType) {
+    fun calculateMaxTokens(
+        queryType: QueryType,
+        deviceRamGB: Int,
+    ): Int =
+        when (queryType) {
             QueryType.EDUCATIONAL -> calculateEducationalTokens(deviceRamGB)
             QueryType.TECHNICAL -> calculateTechnicalTokens(deviceRamGB)
             QueryType.FACTUAL -> calculateFactualTokens(deviceRamGB)
             QueryType.CONVERSATIONAL -> calculateConversationalTokens(deviceRamGB)
             QueryType.CREATIVE -> calculateEducationalTokens(deviceRamGB) // Same as educational
         }
-    }
 
     /**
      * Get the default temperature for a query type.
@@ -113,15 +144,14 @@ class GenerationConfigBuilder(
      * Educational/Technical queries use lower temperature for accuracy.
      * Conversational queries use higher temperature for creativity.
      */
-    fun getDefaultTemperature(queryType: QueryType): Float {
-        return when (queryType) {
+    fun getDefaultTemperature(queryType: QueryType): Float =
+        when (queryType) {
             QueryType.EDUCATIONAL -> GenerationConstants.Temperature.FOCUSED
             QueryType.TECHNICAL -> GenerationConstants.Temperature.FOCUSED
             QueryType.FACTUAL -> GenerationConstants.Temperature.DEFAULT
             QueryType.CONVERSATIONAL -> GenerationConstants.Temperature.CREATIVE
             QueryType.CREATIVE -> 0.9f // Highest creativity
         }
-    }
 
     // ===== Private Token Calculations =====
     // All return 0 to use engine's getOptimalMaxTokens() for device-adaptive limits

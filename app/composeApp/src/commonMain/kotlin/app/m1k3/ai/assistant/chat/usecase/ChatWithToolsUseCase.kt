@@ -152,9 +152,14 @@ class ChatWithToolsUseCase(
                     } else {
                         null
                     }
+                // Tool turns: FOCUSED temp + tighter topK + minP>0 — see
+                // GenerationConfigBuilder.buildForToolInvocation + task #10.
                 val config =
-                    (configBuilder?.build(queryType = queryType) ?: GenerationConfig())
-                        .copy(grammar = toolGrammar)
+                    if (relevantTools.isNotEmpty() && configBuilder != null) {
+                        configBuilder.buildForToolInvocation(queryType)
+                    } else {
+                        configBuilder?.build(queryType = queryType) ?: GenerationConfig()
+                    }.copy(grammar = toolGrammar)
 
                 // 4. Generate response with streaming
                 send(ChatEvent.Generating)
@@ -310,8 +315,11 @@ class ChatWithToolsUseCase(
 
         var tokenCount = 0
         val thinkParser = StreamingThinkTagParser()
+        // Native path ALWAYS has tools here (caller gates on relevantTools.isNotEmpty()).
+        // Use the tool-focused config so small models actually trigger <tool_call>.
+        val queryType = QueryType.fromIntentCategory(context.intentCategory)
         val config =
-            (configBuilder?.build(queryType = QueryType.fromIntentCategory(context.intentCategory)) ?: GenerationConfig())
+            (configBuilder?.buildForToolInvocation(queryType) ?: GenerationConfig())
                 .copy(grammar = null) // native path generates its own grammar
 
         val result =

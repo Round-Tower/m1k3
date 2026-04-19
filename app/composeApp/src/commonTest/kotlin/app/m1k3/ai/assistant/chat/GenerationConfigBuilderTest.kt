@@ -13,7 +13,6 @@ import kotlin.test.assertTrue
  * Validates device-adaptive generation config creation with 100% coverage.
  */
 class GenerationConfigBuilderTest {
-
     // ===== QueryType Mapping Tests =====
 
     @Test
@@ -262,11 +261,12 @@ class GenerationConfigBuilderTest {
     @Test
     fun `build respects all custom parameters`() {
         val builder = GenerationConfigBuilder(MockDeviceInfoProvider.midRange())
-        val config = builder.build(
-            queryType = QueryType.TECHNICAL,
-            temperature = 0.1f,
-            customMaxTokens = 500
-        )
+        val config =
+            builder.build(
+                queryType = QueryType.TECHNICAL,
+                temperature = 0.1f,
+                customMaxTokens = 500,
+            )
 
         assertEquals(500, config.maxTokens)
         assertEquals(0.1f, config.temperature)
@@ -364,15 +364,15 @@ class GenerationConfigBuilderTest {
 
         assertTrue(
             flagshipBuilder.calculateMaxTokens(QueryType.TECHNICAL, 12) >
-                    highEndBuilder.calculateMaxTokens(QueryType.TECHNICAL, 8)
+                highEndBuilder.calculateMaxTokens(QueryType.TECHNICAL, 8),
         )
         assertTrue(
             highEndBuilder.calculateMaxTokens(QueryType.TECHNICAL, 8) >
-                    midRangeBuilder.calculateMaxTokens(QueryType.TECHNICAL, 6)
+                midRangeBuilder.calculateMaxTokens(QueryType.TECHNICAL, 6),
         )
         assertTrue(
             midRangeBuilder.calculateMaxTokens(QueryType.TECHNICAL, 6) >
-                    budgetBuilder.calculateMaxTokens(QueryType.TECHNICAL, 4)
+                budgetBuilder.calculateMaxTokens(QueryType.TECHNICAL, 4),
         )
     }
 
@@ -385,15 +385,15 @@ class GenerationConfigBuilderTest {
 
         assertTrue(
             flagshipBuilder.calculateMaxTokens(QueryType.FACTUAL, 12) >
-                    highEndBuilder.calculateMaxTokens(QueryType.FACTUAL, 8)
+                highEndBuilder.calculateMaxTokens(QueryType.FACTUAL, 8),
         )
         assertTrue(
             highEndBuilder.calculateMaxTokens(QueryType.FACTUAL, 8) >
-                    midRangeBuilder.calculateMaxTokens(QueryType.FACTUAL, 6)
+                midRangeBuilder.calculateMaxTokens(QueryType.FACTUAL, 6),
         )
         assertTrue(
             midRangeBuilder.calculateMaxTokens(QueryType.FACTUAL, 6) >
-                    budgetBuilder.calculateMaxTokens(QueryType.FACTUAL, 4)
+                budgetBuilder.calculateMaxTokens(QueryType.FACTUAL, 4),
         )
     }
 
@@ -406,15 +406,15 @@ class GenerationConfigBuilderTest {
 
         assertTrue(
             flagshipBuilder.calculateMaxTokens(QueryType.CONVERSATIONAL, 12) >
-                    highEndBuilder.calculateMaxTokens(QueryType.CONVERSATIONAL, 8)
+                highEndBuilder.calculateMaxTokens(QueryType.CONVERSATIONAL, 8),
         )
         assertTrue(
             highEndBuilder.calculateMaxTokens(QueryType.CONVERSATIONAL, 8) >
-                    midRangeBuilder.calculateMaxTokens(QueryType.CONVERSATIONAL, 6)
+                midRangeBuilder.calculateMaxTokens(QueryType.CONVERSATIONAL, 6),
         )
         assertTrue(
             midRangeBuilder.calculateMaxTokens(QueryType.CONVERSATIONAL, 6) >
-                    budgetBuilder.calculateMaxTokens(QueryType.CONVERSATIONAL, 4)
+                budgetBuilder.calculateMaxTokens(QueryType.CONVERSATIONAL, 4),
         )
     }
 
@@ -428,7 +428,7 @@ class GenerationConfigBuilderTest {
         // 2GB should be treated as budget tier
         assertEquals(
             GenerationConstants.TokenLimits.Educational.BUDGET,
-            builder.calculateMaxTokens(QueryType.EDUCATIONAL, 2)
+            builder.calculateMaxTokens(QueryType.EDUCATIONAL, 2),
         )
     }
 
@@ -440,7 +440,7 @@ class GenerationConfigBuilderTest {
         // 24GB should be treated as flagship tier
         assertEquals(
             GenerationConstants.TokenLimits.Educational.FLAGSHIP,
-            builder.calculateMaxTokens(QueryType.EDUCATIONAL, 24)
+            builder.calculateMaxTokens(QueryType.EDUCATIONAL, 24),
         )
     }
 
@@ -453,5 +453,37 @@ class GenerationConfigBuilderTest {
         assertTrue(values.contains(QueryType.FACTUAL))
         assertTrue(values.contains(QueryType.CONVERSATIONAL))
         assertTrue(values.contains(QueryType.CREATIVE))
+    }
+
+    // ===== Tool-focused config (task #10) =====
+
+    @Test
+    fun `buildForToolInvocation uses FOCUSED temperature regardless of query type`() {
+        val builder = GenerationConfigBuilder(MockDeviceInfoProvider(ramGB = 8))
+
+        // CONVERSATIONAL usually defaults to CREATIVE (0.7f) — for tools we force FOCUSED.
+        val config = builder.buildForToolInvocation(QueryType.CONVERSATIONAL)
+
+        assertEquals(GenerationConstants.Temperature.FOCUSED, config.temperature)
+    }
+
+    @Test
+    fun `buildForToolInvocation tightens topK for deterministic tool-trigger sampling`() {
+        val builder = GenerationConfigBuilder(MockDeviceInfoProvider(ramGB = 8))
+
+        val config = builder.buildForToolInvocation(QueryType.CONVERSATIONAL)
+
+        assertEquals(20, config.topK, "Tighter topK so <tool_call> isn't lost in the tail")
+    }
+
+    @Test
+    fun `buildForToolInvocation sets minP above zero to preserve low-prob tokens`() {
+        val builder = GenerationConfigBuilder(MockDeviceInfoProvider(ramGB = 8))
+
+        val config = builder.buildForToolInvocation(QueryType.CONVERSATIONAL)
+
+        // minP=0.0 filters by top-K alone. Small models can shave `<tool_call>`
+        // below the cutoff; 0.05 keeps the trigger token in the sample pool.
+        assertEquals(0.05f, config.minP)
     }
 }

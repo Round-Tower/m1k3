@@ -18,7 +18,6 @@ import kotlin.test.assertTrue
  * their token budgets. FULL ≤ 500 words. COMPACT ≤ 50 words.
  */
 class SystemPromptBuilderTest {
-
     private val builder = MaSystemPromptBuilder()
 
     // ── Identity / Ethos ──────────────────────────────────────
@@ -32,8 +31,8 @@ class SystemPromptBuilderTest {
         val prompt = builder.build(fullInput())
         assertTrue(
             prompt.contains("device", ignoreCase = true) ||
-            prompt.contains("local", ignoreCase = true) ||
-            prompt.contains("phone", ignoreCase = true)
+                prompt.contains("local", ignoreCase = true) ||
+                prompt.contains("phone", ignoreCase = true),
         )
     }
 
@@ -41,8 +40,8 @@ class SystemPromptBuilderTest {
         val prompt = builder.build(fullInput())
         assertTrue(
             prompt.contains("curious", ignoreCase = true) ||
-            prompt.contains("side", ignoreCase = true) ||
-            prompt.contains("advocate", ignoreCase = true)
+                prompt.contains("side", ignoreCase = true) ||
+                prompt.contains("advocate", ignoreCase = true),
         )
     }
 
@@ -67,8 +66,8 @@ class SystemPromptBuilderTest {
         val prompt = builder.build(fullInput())
         assertTrue(
             prompt.contains("12", ignoreCase = true) ||
-            prompt.contains("overcast", ignoreCase = true) ||
-            prompt.contains("cloud", ignoreCase = true)
+                prompt.contains("overcast", ignoreCase = true) ||
+                prompt.contains("cloud", ignoreCase = true),
         )
     }
 
@@ -91,9 +90,9 @@ class SystemPromptBuilderTest {
         val prompt = builder.build(fullInput())
         assertTrue(
             prompt.contains("CO2", ignoreCase = true) ||
-            prompt.contains("eco", ignoreCase = true) ||
-            prompt.contains("local", ignoreCase = true) ||
-            prompt.contains("energy", ignoreCase = true)
+                prompt.contains("eco", ignoreCase = true) ||
+                prompt.contains("local", ignoreCase = true) ||
+                prompt.contains("energy", ignoreCase = true),
         )
     }
 
@@ -101,13 +100,25 @@ class SystemPromptBuilderTest {
         val prompt = builder.build(fullInput(tools = listOf("search_web", "open_settings")))
         assertTrue(
             prompt.contains("search_web") ||
-            prompt.contains("tools", ignoreCase = true)
+                prompt.contains("tools", ignoreCase = true),
         )
     }
 
     @Test fun `FULL does not mention tools when none available`() {
         val prompt = builder.build(fullInput(tools = emptyList()))
         assertFalse(prompt.contains("search_web"))
+    }
+
+    @Test fun `FULL tool section uses imperative language for small models`() {
+        // Task #10: Qwen3 0.6B under-triggers <tool_call> when prompt is
+        // gentle ("use tools when they would genuinely help"). Small models
+        // need firm imperatives.
+        val prompt = builder.build(fullInput(tools = listOf("get_battery_level")))
+        assertTrue(
+            prompt.contains("MUST", ignoreCase = false) ||
+                prompt.contains("Call the tool", ignoreCase = false),
+            "Tool section should use an imperative phrasing for small models. Got: $prompt",
+        )
     }
 
     // ── COMPACT context injection ─────────────────────────────
@@ -126,7 +137,7 @@ class SystemPromptBuilderTest {
         val prompt = builder.build(compactInput())
         assertTrue(
             prompt.contains("12") ||
-            prompt.contains("overcast", ignoreCase = true)
+                prompt.contains("overcast", ignoreCase = true),
         )
     }
 
@@ -147,19 +158,25 @@ class SystemPromptBuilderTest {
     // ── Graceful degradation ──────────────────────────────────
 
     @Test fun `FULL works with empty context`() {
-        val prompt = builder.build(SystemPromptInput(
-            tier = SystemPromptTier.FULL,
-            userContext = UserContext()
-        ))
+        val prompt =
+            builder.build(
+                SystemPromptInput(
+                    tier = SystemPromptTier.FULL,
+                    userContext = UserContext(),
+                ),
+            )
         assertTrue(prompt.isNotBlank())
         assertFalse(prompt.contains("null"))
     }
 
     @Test fun `COMPACT works with empty context`() {
-        val prompt = builder.build(SystemPromptInput(
-            tier = SystemPromptTier.COMPACT,
-            userContext = UserContext()
-        ))
+        val prompt =
+            builder.build(
+                SystemPromptInput(
+                    tier = SystemPromptTier.COMPACT,
+                    userContext = UserContext(),
+                ),
+            )
         assertTrue(prompt.isNotBlank())
         assertFalse(prompt.contains("null"))
     }
@@ -169,41 +186,46 @@ class SystemPromptBuilderTest {
     private fun fullInput(
         name: String = "Kev",
         dayOfWeek: String = "Thursday",
-        tools: List<String> = emptyList()
+        tools: List<String> = emptyList(),
     ) = SystemPromptInput(
         tier = SystemPromptTier.FULL,
-        userContext = UserContext(
-            hourOfDay = 8,
-            userName = name,
-            location = LocationContext(city = "Dublin", country = "Ireland"),
-            health = HealthContext(stepsToday = 5000, sleepLastNightMinutes = 420),
-            screenTime = ScreenTimeContext(todayMinutes = 90),
-            notifications = NotificationContext(unreadCount = 3)
-        ),
-        weather = WeatherContext(
-            temperatureCelsius = 12.0,
-            conditionDescription = "Overcast",
-            conditionCode = 3
-        ),
+        userContext =
+            UserContext(
+                hourOfDay = 8,
+                userName = name,
+                location = LocationContext(city = "Dublin", country = "Ireland"),
+                health = HealthContext(stepsToday = 5000, sleepLastNightMinutes = 420),
+                screenTime = ScreenTimeContext(todayMinutes = 90),
+                notifications = NotificationContext(unreadCount = 3),
+            ),
+        weather =
+            WeatherContext(
+                temperatureCelsius = 12.0,
+                conditionDescription = "Overcast",
+                conditionCode = 3,
+            ),
         dayOfWeek = dayOfWeek,
         deviceTierName = "Flagship",
         contextWindowTokens = 4096,
-        availableTools = tools
+        availableTools = tools,
     )
 
-    private fun compactInput(name: String = "Kev") = SystemPromptInput(
-        tier = SystemPromptTier.COMPACT,
-        userContext = UserContext(
-            hourOfDay = 14,
-            userName = name,
-            location = LocationContext(city = "Dublin", country = "Ireland"),
-            health = HealthContext(sleepLastNightMinutes = 420)
-        ),
-        weather = WeatherContext(
-            temperatureCelsius = 12.0,
-            conditionDescription = "Overcast",
-            conditionCode = 3
-        ),
-        dayOfWeek = "Thursday"
-    )
+    private fun compactInput(name: String = "Kev") =
+        SystemPromptInput(
+            tier = SystemPromptTier.COMPACT,
+            userContext =
+                UserContext(
+                    hourOfDay = 14,
+                    userName = name,
+                    location = LocationContext(city = "Dublin", country = "Ireland"),
+                    health = HealthContext(sleepLastNightMinutes = 420),
+                ),
+            weather =
+                WeatherContext(
+                    temperatureCelsius = 12.0,
+                    conditionDescription = "Overcast",
+                    conditionCode = 3,
+                ),
+            dayOfWeek = "Thursday",
+        )
 }
