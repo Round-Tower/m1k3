@@ -1,23 +1,19 @@
 package app.m1k3.ai.assistant.config
 
 /**
- * Generation Constants - Centralized configuration for AI generation parameters.
+ * Generation Constants — centralized configuration for AI generation parameters.
  *
- * This object consolidates all magic numbers from ChatScreen.kt into testable,
- * documented constants. All values are tuned for device-adaptive generation
- * with SmolLM2-360M and Gemma 3 models.
- *
- * **Architecture Notes:**
- * - Device tiers based on RAM thresholds (12GB flagship → 4GB budget)
- * - Token limits scale by query type and device capability
- * - Memory retrieval limits prevent context overflow on lower-end devices
- * - Similarity thresholds determine RAG quality indicators
+ * Token limits per query-type-per-device-tier lived here historically. That
+ * scaffolding was retired in favor of the engine's own `getOptimalMaxTokens()`
+ * method (llama.cpp backend picks based on context window + free RAM), so
+ * callers now pass `maxTokens = 0` to mean "let the engine decide." Only the
+ * things still meaningful at the domain layer live here: memory topK, similarity
+ * thresholds, RAG budget, temperature defaults, etc.
  */
 object GenerationConstants {
-
     /**
      * Device RAM thresholds in GB.
-     * Used for adaptive token limits and memory retrieval scaling.
+     * Used for adaptive memory retrieval scaling.
      */
     object DeviceRam {
         /** Flagship devices (Pixel 8 Pro, Galaxy S24 Ultra) */
@@ -31,56 +27,6 @@ object GenerationConstants {
 
         /** Budget devices (minimum supported) */
         const val BUDGET = 4
-    }
-
-    /**
-     * Token limits by query type and device tier.
-     *
-     * ALL SET TO 0 = Use engine's getOptimalMaxTokens() for device-adaptive limits.
-     * This unleashes model intelligence by allowing:
-     * - 2GB devices: 1024 tokens (~768 words)
-     * - 6GB devices: 2048 tokens (~1536 words)
-     * - 12GB+ devices: 4096 tokens (~3000 words)
-     *
-     * Model will naturally stop at <end_of_turn> token before hitting limits.
-     */
-    object TokenLimits {
-
-        /** Educational: Teach me, explain, how does X work */
-        object Educational {
-            const val FLAGSHIP = 0       // Use engine's getOptimalMaxTokens()
-            const val HIGH_END = 0       // Use engine's getOptimalMaxTokens()
-            const val MID_RANGE = 0      // Use engine's getOptimalMaxTokens()
-            const val BUDGET = 0         // Use engine's getOptimalMaxTokens()
-            const val MINIMUM = 0        // Use engine's getOptimalMaxTokens()
-        }
-
-        /** Technical: Code, debugging, technical problems */
-        object Technical {
-            const val FLAGSHIP = 0       // Use engine's getOptimalMaxTokens()
-            const val HIGH_END = 0       // Use engine's getOptimalMaxTokens()
-            const val MID_RANGE = 0      // Use engine's getOptimalMaxTokens()
-            const val BUDGET = 0         // Use engine's getOptimalMaxTokens()
-            const val MINIMUM = 0        // Use engine's getOptimalMaxTokens()
-        }
-
-        /** Factual: Who/what/when/where factual questions */
-        object Factual {
-            const val FLAGSHIP = 0       // Use engine's getOptimalMaxTokens()
-            const val HIGH_END = 0       // Use engine's getOptimalMaxTokens()
-            const val MID_RANGE = 0      // Use engine's getOptimalMaxTokens()
-            const val BUDGET = 0         // Use engine's getOptimalMaxTokens()
-            const val MINIMUM = 0        // Use engine's getOptimalMaxTokens()
-        }
-
-        /** Conversational: Casual chat, greetings, general discussion */
-        object Conversational {
-            const val FLAGSHIP = 0       // Use engine's getOptimalMaxTokens()
-            const val HIGH_END = 0       // Use engine's getOptimalMaxTokens()
-            const val MID_RANGE = 0      // Use engine's getOptimalMaxTokens()
-            const val BUDGET = 0         // Use engine's getOptimalMaxTokens()
-            const val MINIMUM = 0        // Use engine's getOptimalMaxTokens()
-        }
     }
 
     /**

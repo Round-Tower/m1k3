@@ -53,8 +53,9 @@ class GenerationConfigBuilder(
         temperature: Float? = null,
         customMaxTokens: Int? = null,
     ): GenerationConfig {
-        val deviceRamGB = deviceInfo.getDeviceRamGB()
-        val maxTokens = customMaxTokens ?: calculateMaxTokens(queryType, deviceRamGB)
+        // maxTokens = 0 means "let the engine's getOptimalMaxTokens() pick based
+        // on context window + free RAM." Callers can override via customMaxTokens.
+        val maxTokens = customMaxTokens ?: 0
         val temp = temperature ?: getDefaultTemperature(queryType)
 
         return GenerationConfig(
@@ -120,25 +121,6 @@ class GenerationConfigBuilder(
     fun getDeviceRamGB(): Int = deviceInfo.getDeviceRamGB()
 
     /**
-     * Calculate appropriate max tokens for a query type and device.
-     *
-     * @param queryType The type of query
-     * @param deviceRamGB Device RAM in GB
-     * @return Maximum tokens for generation
-     */
-    fun calculateMaxTokens(
-        queryType: QueryType,
-        deviceRamGB: Int,
-    ): Int =
-        when (queryType) {
-            QueryType.EDUCATIONAL -> calculateEducationalTokens(deviceRamGB)
-            QueryType.TECHNICAL -> calculateTechnicalTokens(deviceRamGB)
-            QueryType.FACTUAL -> calculateFactualTokens(deviceRamGB)
-            QueryType.CONVERSATIONAL -> calculateConversationalTokens(deviceRamGB)
-            QueryType.CREATIVE -> calculateEducationalTokens(deviceRamGB) // Same as educational
-        }
-
-    /**
      * Get the default temperature for a query type.
      *
      * Educational/Technical queries use lower temperature for accuracy.
@@ -152,17 +134,6 @@ class GenerationConfigBuilder(
             QueryType.CONVERSATIONAL -> GenerationConstants.Temperature.CREATIVE
             QueryType.CREATIVE -> 0.9f // Highest creativity
         }
-
-    // ===== Private Token Calculations =====
-    // All return 0 to use engine's getOptimalMaxTokens() for device-adaptive limits
-
-    private fun calculateEducationalTokens(deviceRamGB: Int): Int = 0
-
-    private fun calculateTechnicalTokens(deviceRamGB: Int): Int = 0
-
-    private fun calculateFactualTokens(deviceRamGB: Int): Int = 0
-
-    private fun calculateConversationalTokens(deviceRamGB: Int): Int = 0
 }
 
 /**

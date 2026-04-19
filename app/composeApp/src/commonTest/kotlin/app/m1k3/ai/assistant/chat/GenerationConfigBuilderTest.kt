@@ -153,57 +153,6 @@ class GenerationConfigBuilderTest {
         assertEquals(QueryType.TECHNICAL, QueryType.fromIntentCategory("  MATH  "))
     }
 
-    // ===== GenerationConfigBuilder Token Calculation Tests =====
-
-    @Test
-    fun `calculateMaxTokens returns FLAGSHIP tokens for flagship device with EDUCATIONAL`() {
-        val builder = GenerationConfigBuilder(MockDeviceInfoProvider.flagship())
-        val tokens = builder.calculateMaxTokens(QueryType.EDUCATIONAL, 12)
-        assertEquals(GenerationConstants.TokenLimits.Educational.FLAGSHIP, tokens)
-    }
-
-    @Test
-    fun `calculateMaxTokens returns HIGH_END tokens for high-end device with EDUCATIONAL`() {
-        val builder = GenerationConfigBuilder(MockDeviceInfoProvider.highEnd())
-        val tokens = builder.calculateMaxTokens(QueryType.EDUCATIONAL, 8)
-        assertEquals(GenerationConstants.TokenLimits.Educational.HIGH_END, tokens)
-    }
-
-    @Test
-    fun `calculateMaxTokens returns MID_RANGE tokens for mid-range device with EDUCATIONAL`() {
-        val builder = GenerationConfigBuilder(MockDeviceInfoProvider.midRange())
-        val tokens = builder.calculateMaxTokens(QueryType.EDUCATIONAL, 6)
-        assertEquals(GenerationConstants.TokenLimits.Educational.MID_RANGE, tokens)
-    }
-
-    @Test
-    fun `calculateMaxTokens returns BUDGET tokens for budget device with EDUCATIONAL`() {
-        val builder = GenerationConfigBuilder(MockDeviceInfoProvider.budget())
-        val tokens = builder.calculateMaxTokens(QueryType.EDUCATIONAL, 4)
-        assertEquals(GenerationConstants.TokenLimits.Educational.BUDGET, tokens)
-    }
-
-    @Test
-    fun `calculateMaxTokens returns correct tokens for TECHNICAL queries`() {
-        val builder = GenerationConfigBuilder(MockDeviceInfoProvider.flagship())
-        val tokens = builder.calculateMaxTokens(QueryType.TECHNICAL, 12)
-        assertEquals(GenerationConstants.TokenLimits.Technical.FLAGSHIP, tokens)
-    }
-
-    @Test
-    fun `calculateMaxTokens returns correct tokens for FACTUAL queries`() {
-        val builder = GenerationConfigBuilder(MockDeviceInfoProvider.flagship())
-        val tokens = builder.calculateMaxTokens(QueryType.FACTUAL, 12)
-        assertEquals(GenerationConstants.TokenLimits.Factual.FLAGSHIP, tokens)
-    }
-
-    @Test
-    fun `calculateMaxTokens returns correct tokens for CONVERSATIONAL queries`() {
-        val builder = GenerationConfigBuilder(MockDeviceInfoProvider.flagship())
-        val tokens = builder.calculateMaxTokens(QueryType.CONVERSATIONAL, 12)
-        assertEquals(GenerationConstants.TokenLimits.Conversational.FLAGSHIP, tokens)
-    }
-
     // ===== Temperature Tests =====
 
     @Test
@@ -237,8 +186,8 @@ class GenerationConfigBuilderTest {
         val builder = GenerationConfigBuilder(MockDeviceInfoProvider.midRange())
         val config = builder.build()
 
-        // Default is CONVERSATIONAL
-        assertEquals(GenerationConstants.TokenLimits.Conversational.MID_RANGE, config.maxTokens)
+        // Default is CONVERSATIONAL. maxTokens=0 means "engine picks optimal."
+        assertEquals(0, config.maxTokens)
         assertEquals(GenerationConstants.Temperature.CREATIVE, config.temperature)
     }
 
@@ -279,8 +228,9 @@ class GenerationConfigBuilderTest {
         val builder = GenerationConfigBuilder(MockDeviceInfoProvider.highEnd())
         val config = builder.buildFromIntent("SCIENCE")
 
-        // SCIENCE maps to EDUCATIONAL
-        assertEquals(GenerationConstants.TokenLimits.Educational.HIGH_END, config.maxTokens)
+        // SCIENCE maps to EDUCATIONAL → FOCUSED temperature.
+        // maxTokens=0 means "engine picks optimal."
+        assertEquals(0, config.maxTokens)
         assertEquals(GenerationConstants.Temperature.FOCUSED, config.temperature)
     }
 
@@ -289,8 +239,8 @@ class GenerationConfigBuilderTest {
         val builder = GenerationConfigBuilder(MockDeviceInfoProvider.flagship())
         val config = builder.buildFromIntent("CODE_DEBUG")
 
-        // CODE_DEBUG maps to TECHNICAL
-        assertEquals(GenerationConstants.TokenLimits.Technical.FLAGSHIP, config.maxTokens)
+        // CODE_DEBUG maps to TECHNICAL → FOCUSED temperature.
+        assertEquals(0, config.maxTokens)
         assertEquals(GenerationConstants.Temperature.FOCUSED, config.temperature)
     }
 
@@ -299,8 +249,8 @@ class GenerationConfigBuilderTest {
         val builder = GenerationConfigBuilder(MockDeviceInfoProvider.midRange())
         val config = builder.buildFromIntent("SECURITY")
 
-        // SECURITY maps to FACTUAL
-        assertEquals(GenerationConstants.TokenLimits.Factual.MID_RANGE, config.maxTokens)
+        // SECURITY maps to FACTUAL → DEFAULT temperature.
+        assertEquals(0, config.maxTokens)
         assertEquals(GenerationConstants.Temperature.DEFAULT, config.temperature)
     }
 
@@ -351,97 +301,6 @@ class GenerationConfigBuilderTest {
         val mock = MockDeviceInfoProvider(ramGB = 10)
         val builder = GenerationConfigBuilder(mock)
         assertEquals(10, builder.getDeviceRamGB())
-    }
-
-    // ===== Token Limit Tier Tests (All Query Types x All Device Tiers) =====
-
-    @Test
-    fun `TECHNICAL tokens scale correctly by device tier`() {
-        val flagshipBuilder = GenerationConfigBuilder(MockDeviceInfoProvider.flagship())
-        val highEndBuilder = GenerationConfigBuilder(MockDeviceInfoProvider.highEnd())
-        val midRangeBuilder = GenerationConfigBuilder(MockDeviceInfoProvider.midRange())
-        val budgetBuilder = GenerationConfigBuilder(MockDeviceInfoProvider.budget())
-
-        assertTrue(
-            flagshipBuilder.calculateMaxTokens(QueryType.TECHNICAL, 12) >
-                highEndBuilder.calculateMaxTokens(QueryType.TECHNICAL, 8),
-        )
-        assertTrue(
-            highEndBuilder.calculateMaxTokens(QueryType.TECHNICAL, 8) >
-                midRangeBuilder.calculateMaxTokens(QueryType.TECHNICAL, 6),
-        )
-        assertTrue(
-            midRangeBuilder.calculateMaxTokens(QueryType.TECHNICAL, 6) >
-                budgetBuilder.calculateMaxTokens(QueryType.TECHNICAL, 4),
-        )
-    }
-
-    @Test
-    fun `FACTUAL tokens scale correctly by device tier`() {
-        val flagshipBuilder = GenerationConfigBuilder(MockDeviceInfoProvider.flagship())
-        val highEndBuilder = GenerationConfigBuilder(MockDeviceInfoProvider.highEnd())
-        val midRangeBuilder = GenerationConfigBuilder(MockDeviceInfoProvider.midRange())
-        val budgetBuilder = GenerationConfigBuilder(MockDeviceInfoProvider.budget())
-
-        assertTrue(
-            flagshipBuilder.calculateMaxTokens(QueryType.FACTUAL, 12) >
-                highEndBuilder.calculateMaxTokens(QueryType.FACTUAL, 8),
-        )
-        assertTrue(
-            highEndBuilder.calculateMaxTokens(QueryType.FACTUAL, 8) >
-                midRangeBuilder.calculateMaxTokens(QueryType.FACTUAL, 6),
-        )
-        assertTrue(
-            midRangeBuilder.calculateMaxTokens(QueryType.FACTUAL, 6) >
-                budgetBuilder.calculateMaxTokens(QueryType.FACTUAL, 4),
-        )
-    }
-
-    @Test
-    fun `CONVERSATIONAL tokens scale correctly by device tier`() {
-        val flagshipBuilder = GenerationConfigBuilder(MockDeviceInfoProvider.flagship())
-        val highEndBuilder = GenerationConfigBuilder(MockDeviceInfoProvider.highEnd())
-        val midRangeBuilder = GenerationConfigBuilder(MockDeviceInfoProvider.midRange())
-        val budgetBuilder = GenerationConfigBuilder(MockDeviceInfoProvider.budget())
-
-        assertTrue(
-            flagshipBuilder.calculateMaxTokens(QueryType.CONVERSATIONAL, 12) >
-                highEndBuilder.calculateMaxTokens(QueryType.CONVERSATIONAL, 8),
-        )
-        assertTrue(
-            highEndBuilder.calculateMaxTokens(QueryType.CONVERSATIONAL, 8) >
-                midRangeBuilder.calculateMaxTokens(QueryType.CONVERSATIONAL, 6),
-        )
-        assertTrue(
-            midRangeBuilder.calculateMaxTokens(QueryType.CONVERSATIONAL, 6) >
-                budgetBuilder.calculateMaxTokens(QueryType.CONVERSATIONAL, 4),
-        )
-    }
-
-    // ===== Edge Cases =====
-
-    @Test
-    fun `calculateMaxTokens handles very low RAM as budget tier`() {
-        val mock = MockDeviceInfoProvider(ramGB = 2)
-        val builder = GenerationConfigBuilder(mock)
-
-        // 2GB should be treated as budget tier
-        assertEquals(
-            GenerationConstants.TokenLimits.Educational.BUDGET,
-            builder.calculateMaxTokens(QueryType.EDUCATIONAL, 2),
-        )
-    }
-
-    @Test
-    fun `calculateMaxTokens handles very high RAM as flagship tier`() {
-        val mock = MockDeviceInfoProvider(ramGB = 24)
-        val builder = GenerationConfigBuilder(mock)
-
-        // 24GB should be treated as flagship tier
-        assertEquals(
-            GenerationConstants.TokenLimits.Educational.FLAGSHIP,
-            builder.calculateMaxTokens(QueryType.EDUCATIONAL, 24),
-        )
     }
 
     @Test
