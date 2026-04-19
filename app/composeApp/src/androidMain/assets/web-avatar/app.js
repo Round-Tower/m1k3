@@ -26573,6 +26573,354 @@ void main() {
       supportsEmotions: true,
       defaultForNewUsers: false,
       attribution: "CC0 - sokobot-3d project"
+    },
+    // ============================================================
+    // Quaternius Animated Animal Pack (CC0)
+    // poly.pizza/bundle/Animated-Animal-Pack-ILAPXeUYiS
+    // ============================================================
+    COW: {
+      id: "cow",
+      name: "Cow",
+      path: "models/Cow.glb",
+      description: "Farmyard cow with walk, run, attack, and idle animations",
+      category: "mammal",
+      modelType: "ANIMATED",
+      hasAnimations: true,
+      supportsEmotions: true,
+      defaultForNewUsers: false,
+      attribution: "CC0 - Quaternius via Poly Pizza"
+    },
+    DONKEY: {
+      id: "donkey",
+      name: "Donkey",
+      path: "models/Donkey.glb",
+      description: "Stubborn donkey with kick, gallop, and idle animations",
+      category: "mammal",
+      modelType: "ANIMATED",
+      hasAnimations: true,
+      supportsEmotions: true,
+      defaultForNewUsers: false,
+      attribution: "CC0 - Quaternius via Poly Pizza"
+    },
+    DEER: {
+      id: "deer",
+      name: "Deer",
+      path: "models/Deer.glb",
+      description: "Graceful deer with walk, run, jump, and idle animations",
+      category: "mammal",
+      modelType: "ANIMATED",
+      hasAnimations: true,
+      supportsEmotions: true,
+      defaultForNewUsers: false,
+      attribution: "CC0 - Quaternius via Poly Pizza"
+    },
+    ALPACA: {
+      id: "alpaca",
+      name: "Alpaca",
+      path: "models/Alpaca.glb",
+      description: "Fluffy alpaca with walk, spit, and idle animations",
+      category: "mammal",
+      modelType: "ANIMATED",
+      hasAnimations: true,
+      supportsEmotions: true,
+      defaultForNewUsers: false,
+      attribution: "CC0 - Quaternius via Poly Pizza"
+    },
+    BULL: {
+      id: "bull",
+      name: "Bull",
+      path: "models/Bull.glb",
+      description: "Powerful bull with charge, stomp, and idle animations",
+      category: "mammal",
+      modelType: "ANIMATED",
+      hasAnimations: true,
+      supportsEmotions: true,
+      defaultForNewUsers: false,
+      attribution: "CC0 - Quaternius via Poly Pizza"
+    },
+    QFOX: {
+      id: "qfox",
+      name: "Quaternius Fox",
+      path: "models/QFox.glb",
+      description: "Low-poly fox with walk, run, attack, and idle animations",
+      category: "mammal",
+      modelType: "ANIMATED",
+      hasAnimations: true,
+      supportsEmotions: true,
+      defaultForNewUsers: false,
+      attribution: "CC0 - Quaternius via Poly Pizza"
+    },
+    SHIBA_INU: {
+      id: "shiba-inu",
+      name: "Shiba Inu",
+      path: "models/ShibaInu.glb",
+      description: "Iconic Shiba Inu dog with sit, bark, and run animations",
+      category: "mammal",
+      modelType: "ANIMATED",
+      hasAnimations: true,
+      supportsEmotions: true,
+      defaultForNewUsers: false,
+      attribution: "CC0 - Quaternius via Poly Pizza"
+    },
+    STAG: {
+      id: "stag",
+      name: "Stag",
+      path: "models/Stag.glb",
+      description: "Antlered stag with walk, gallop, and roar animations",
+      category: "mammal",
+      modelType: "ANIMATED",
+      hasAnimations: true,
+      supportsEmotions: true,
+      defaultForNewUsers: false,
+      attribution: "CC0 - Quaternius via Poly Pizza"
+    },
+    HUSKY: {
+      id: "husky",
+      name: "Husky",
+      path: "models/Husky.glb",
+      description: "Arctic Husky dog with run, howl, and idle animations",
+      category: "mammal",
+      modelType: "ANIMATED",
+      hasAnimations: true,
+      supportsEmotions: true,
+      defaultForNewUsers: false,
+      attribution: "CC0 - Quaternius via Poly Pizza"
+    },
+    WOLF: {
+      id: "wolf",
+      name: "Wolf",
+      path: "models/Wolf.glb",
+      description: "Wild wolf with prowl, howl, and attack animations",
+      category: "mammal",
+      modelType: "ANIMATED",
+      hasAnimations: true,
+      supportsEmotions: true,
+      defaultForNewUsers: false,
+      attribution: "CC0 - Quaternius via Poly Pizza"
+    },
+    WHITE_HORSE: {
+      id: "white-horse",
+      name: "White Horse",
+      path: "models/WhiteHorse.glb",
+      description: "White horse with gallop, rear, and idle animations",
+      category: "mammal",
+      modelType: "ANIMATED",
+      hasAnimations: true,
+      supportsEmotions: true,
+      defaultForNewUsers: false,
+      attribution: "CC0 - Quaternius via Poly Pizza"
+    },
+    HORSE: {
+      id: "horse",
+      name: "Horse",
+      path: "models/Horse.glb",
+      description: "Brown horse with gallop, rear, and idle animations",
+      category: "mammal",
+      modelType: "ANIMATED",
+      hasAnimations: true,
+      supportsEmotions: true,
+      defaultForNewUsers: false,
+      attribution: "CC0 - Quaternius via Poly Pizza"
+    },
+    // ============================================================
+    // Quaternius Animated Dinosaur Pack (CC0)
+    // poly.pizza/bundle/Animated-Dinosaur-Bundle-SmoLdBLO2K
+    // ============================================================
+    TREX: {
+      id: "trex",
+      name: "T-Rex",
+      path: "models/TRex.glb",
+      description: "Tyrannosaurus Rex with roar, stomp, and attack animations",
+      category: "dinosaur",
+      modelType: "ANIMATED",
+      hasAnimations: true,
+      supportsEmotions: true,
+      defaultForNewUsers: false,
+      attribution: "CC0 - Quaternius via Poly Pizza"
+    },
+    PARASAUROLOPHUS: {
+      id: "parasaurolophus",
+      name: "Parasaurolophus",
+      path: "models/Parasaurolophus.glb",
+      description: "Crested hadrosaur with walk, run, and idle animations",
+      category: "dinosaur",
+      modelType: "ANIMATED",
+      hasAnimations: true,
+      supportsEmotions: true,
+      defaultForNewUsers: false,
+      attribution: "CC0 - Quaternius via Poly Pizza"
+    },
+    VELOCIRAPTOR: {
+      id: "velociraptor",
+      name: "Velociraptor",
+      path: "models/Velociraptor.glb",
+      description: "Fast feathered raptor with sprint, slash, and idle animations",
+      category: "dinosaur",
+      modelType: "ANIMATED",
+      hasAnimations: true,
+      supportsEmotions: true,
+      defaultForNewUsers: false,
+      attribution: "CC0 - Quaternius via Poly Pizza"
+    },
+    TRICERATOPS: {
+      id: "triceratops",
+      name: "Triceratops",
+      path: "models/Triceratops.glb",
+      description: "Three-horned dinosaur with charge, stomp, and idle animations",
+      category: "dinosaur",
+      modelType: "ANIMATED",
+      hasAnimations: true,
+      supportsEmotions: true,
+      defaultForNewUsers: false,
+      attribution: "CC0 - Quaternius via Poly Pizza"
+    },
+    STEGOSAURUS: {
+      id: "stegosaurus",
+      name: "Stegosaurus",
+      path: "models/Stegosaurus.glb",
+      description: "Plated stegosaur with walk, tail-swing, and idle animations",
+      category: "dinosaur",
+      modelType: "ANIMATED",
+      hasAnimations: true,
+      supportsEmotions: true,
+      defaultForNewUsers: false,
+      attribution: "CC0 - Quaternius via Poly Pizza"
+    },
+    APATOSAURUS: {
+      id: "apatosaurus",
+      name: "Apatosaurus",
+      path: "models/Apatosaurus.glb",
+      description: "Long-necked sauropod with lumbering walk and idle animations",
+      category: "dinosaur",
+      modelType: "ANIMATED",
+      hasAnimations: true,
+      supportsEmotions: true,
+      defaultForNewUsers: false,
+      attribution: "CC0 - Quaternius via Poly Pizza"
+    },
+    // ============================================================
+    // Quaternius Animated Fish Pack (CC0)
+    // poly.pizza/bundle/Animated-Fish-Bundle-44zhHN1UbT
+    // ============================================================
+    ANGLERFISH: {
+      id: "anglerfish",
+      name: "Anglerfish",
+      path: "models/Anglerfish.glb",
+      description: "Deep-sea anglerfish with swim and lure-glow animations",
+      category: "fish",
+      modelType: "ANIMATED",
+      hasAnimations: true,
+      supportsEmotions: true,
+      defaultForNewUsers: false,
+      attribution: "CC0 - Quaternius via Poly Pizza"
+    },
+    SHARK: {
+      id: "shark",
+      name: "Shark",
+      path: "models/Shark.glb",
+      description: "Ocean shark with patrol, dash, and idle swim animations",
+      category: "fish",
+      modelType: "ANIMATED",
+      hasAnimations: true,
+      supportsEmotions: true,
+      defaultForNewUsers: false,
+      attribution: "CC0 - Quaternius via Poly Pizza"
+    },
+    BLOBFISH: {
+      id: "blobfish",
+      name: "Blobfish",
+      path: "models/Blobfish.glb",
+      description: "Sad-faced deep-sea blobfish with float and idle animations",
+      category: "fish",
+      modelType: "ANIMATED",
+      hasAnimations: true,
+      supportsEmotions: true,
+      defaultForNewUsers: false,
+      attribution: "CC0 - Quaternius via Poly Pizza"
+    },
+    PUFFERFISH: {
+      id: "pufferfish",
+      name: "Pufferfish",
+      path: "models/Pufferfish.glb",
+      description: "Spiky pufferfish with inflate, deflate, and swim animations",
+      category: "fish",
+      modelType: "ANIMATED",
+      hasAnimations: true,
+      supportsEmotions: true,
+      defaultForNewUsers: false,
+      attribution: "CC0 - Quaternius via Poly Pizza"
+    },
+    PIRANHA: {
+      id: "piranha",
+      name: "Piranha",
+      path: "models/Piranha.glb",
+      description: "Ferocious piranha with bite, frenzy, and patrol animations",
+      category: "fish",
+      modelType: "ANIMATED",
+      hasAnimations: true,
+      supportsEmotions: true,
+      defaultForNewUsers: false,
+      attribution: "CC0 - Quaternius via Poly Pizza"
+    },
+    KOI: {
+      id: "koi",
+      name: "Koi",
+      path: "models/Koi.glb",
+      description: "Elegant Japanese koi with graceful swim and surface animations",
+      category: "fish",
+      modelType: "ANIMATED",
+      hasAnimations: true,
+      supportsEmotions: true,
+      defaultForNewUsers: false,
+      attribution: "CC0 - Quaternius via Poly Pizza"
+    },
+    CLOWNFISH: {
+      id: "clownfish",
+      name: "Clownfish",
+      path: "models/Clownfish.glb",
+      description: "Bright orange clownfish with swim and dart animations",
+      category: "fish",
+      modelType: "ANIMATED",
+      hasAnimations: true,
+      supportsEmotions: true,
+      defaultForNewUsers: false,
+      attribution: "CC0 - Quaternius via Poly Pizza"
+    },
+    SWORDFISH: {
+      id: "swordfish",
+      name: "Swordfish",
+      path: "models/Swordfish.glb",
+      description: "Speedy swordfish with sprint and leap animations",
+      category: "fish",
+      modelType: "ANIMATED",
+      hasAnimations: true,
+      supportsEmotions: true,
+      defaultForNewUsers: false,
+      attribution: "CC0 - Quaternius via Poly Pizza"
+    },
+    BETTA: {
+      id: "betta",
+      name: "Betta",
+      path: "models/Betta.glb",
+      description: "Vivid betta fish with fin-flare and swim animations",
+      category: "fish",
+      modelType: "ANIMATED",
+      hasAnimations: true,
+      supportsEmotions: true,
+      defaultForNewUsers: false,
+      attribution: "CC0 - Quaternius via Poly Pizza"
+    },
+    GOBLIN_SHARK: {
+      id: "goblin-shark",
+      name: "Goblin Shark",
+      path: "models/GoblinShark.glb",
+      description: "Prehistoric goblin shark with jaw-extend and swim animations",
+      category: "fish",
+      modelType: "ANIMATED",
+      hasAnimations: true,
+      supportsEmotions: true,
+      defaultForNewUsers: false,
+      attribution: "CC0 - Quaternius via Poly Pizza"
     }
   };
   const DEFAULT_MODEL_ID = "colobus";
