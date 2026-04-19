@@ -6,45 +6,44 @@ import androidx.compose.runtime.collectAsState
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.m1k3.ai.assistant.ai.BaseLlmEngine
-import app.m1k3.ai.domain.ai.LlmModel
-import app.m1k3.ai.domain.chat.events.ChatEvent
 import app.m1k3.ai.assistant.chat.usecase.ChatWithToolsUseCase
 import app.m1k3.ai.assistant.chat.usecase.ContextRetrievalUseCase
-import app.m1k3.ai.domain.chat.ChatError
-import app.m1k3.ai.domain.chat.EnrichedContext
-import app.m1k3.ai.domain.chat.GenerationStats
-import app.m1k3.ai.domain.chat.StreamingThinkTagParser
 import app.m1k3.ai.assistant.database.MaDatabase
-import app.m1k3.ai.domain.tools.ToolResult
-import app.m1k3.ai.domain.tools.services.ToolRegistry
-import app.m1k3.ai.domain.usecases.chat.LlmOutputProcessor
-import app.m1k3.ai.domain.chat.services.UnifiedPromptBuilder
-import app.m1k3.ai.domain.chat.services.DefaultChatFormatter
-import app.m1k3.ai.domain.chat.services.ContextAssembler
-import app.m1k3.ai.domain.chat.format.ChatFormat
 import app.m1k3.ai.assistant.eco.EcoCalculator
 import app.m1k3.ai.assistant.eco.EcoMetricsRepository
 import app.m1k3.ai.assistant.history.ConversationRepository
 import app.m1k3.ai.assistant.memory.MemoryManager
 import app.m1k3.ai.assistant.platform.DeviceInfoProviderInterface
-import app.m1k3.ai.assistant.platform.getDeviceTier
 import app.m1k3.ai.assistant.platform.PreferenceKeys
+import app.m1k3.ai.assistant.platform.PreferencesStoreInterface
+import app.m1k3.ai.assistant.platform.getDeviceTier
+import app.m1k3.ai.assistant.utils.Logger
+import app.m1k3.ai.domain.ai.LlmModel
+import app.m1k3.ai.domain.chat.ChatError
+import app.m1k3.ai.domain.chat.EnrichedContext
+import app.m1k3.ai.domain.chat.GenerationStats
+import app.m1k3.ai.domain.chat.StreamingThinkTagParser
+import app.m1k3.ai.domain.chat.events.ChatEvent
+import app.m1k3.ai.domain.chat.format.ChatFormat
+import app.m1k3.ai.domain.chat.services.ContextAssembler
+import app.m1k3.ai.domain.chat.services.DefaultChatFormatter
+import app.m1k3.ai.domain.chat.services.DeviceContextFormatter
+import app.m1k3.ai.domain.chat.services.UnifiedPromptBuilder
+import app.m1k3.ai.domain.context.ContextMemoryService
 import app.m1k3.ai.domain.platform.DateTimeProviderInterface
 import app.m1k3.ai.domain.platform.DeviceContext
-import app.m1k3.ai.domain.chat.services.DeviceContextFormatter
 import app.m1k3.ai.domain.status.ChatStatusBuilder
-import app.m1k3.ai.assistant.platform.PreferencesStoreInterface
-import app.m1k3.ai.assistant.rag.RAGManager
-import app.m1k3.ai.assistant.utils.Logger
-import app.m1k3.ai.domain.context.ContextMemoryService
 import app.m1k3.ai.domain.system.MaSystemPromptBuilder
 import app.m1k3.ai.domain.system.SystemPromptInput
 import app.m1k3.ai.domain.system.SystemPromptTier
+import app.m1k3.ai.domain.tools.ToolResult
+import app.m1k3.ai.domain.tools.services.ToolRegistry
+import app.m1k3.ai.domain.usecases.chat.LlmOutputProcessor
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.datetime.Clock
 
@@ -79,7 +78,7 @@ class ChatScreenViewModel(
     private val preferences: PreferencesStoreInterface,
     private val projectId: String = "",
     private val memoryManager: MemoryManager? = null,
-    private val ragManager: RAGManager? = null,
+    private val passageRetriever: app.m1k3.ai.domain.passages.usecases.RetrievePassagesUseCase? = null,
     // Tool calling support (optional - when provided, enables agentic capabilities)
     private val toolRegistry: ToolRegistry? = null,
     private val processLlmOutput: LlmOutputProcessor? = null,
@@ -96,7 +95,7 @@ class ChatScreenViewModel(
     // User context for personalised welcome (platform-injected, optional)
     private val userContextProvider: app.m1k3.ai.domain.context.UserContextProvider? = null,
     // Tool execution history (optional — logs every tool call for analytics)
-    private val toolExecutionDataSource: app.m1k3.ai.assistant.tools.ToolExecutionDataSource? = null
+    private val toolExecutionDataSource: app.m1k3.ai.assistant.tools.ToolExecutionDataSource? = null,
 ) : ViewModel() {
     // ===== Use Cases (lazy initialization) =====
 
@@ -106,8 +105,8 @@ class ChatScreenViewModel(
             preferences = preferences,
             database = database,
             projectId = projectId,
-            ragEnricher = ragManager,  // RAGManager implements RAGEnricherInterface
-            memoryManager = memoryManager
+            memoryManager = memoryManager,
+            passageRetriever = passageRetriever,
         )
     }
 
@@ -153,7 +152,7 @@ class ChatScreenViewModel(
                 processLlmOutput = processLlmOutput,
                 toolRegistry = toolRegistry,
                 configBuilder = configBuilder,
-                promptBuilder = promptBuilder
+                promptBuilder = promptBuilder,
             )
         } else {
             null
@@ -201,6 +200,7 @@ class ChatScreenViewModel(
      * Initialize the AI engine.
      * Call this from LaunchedEffect(Unit) in the composable.
      */
+
     /**
      * Retry engine initialization — called from the "Re-download" / "Retry" button
      * shown when EngineState.Failed. Resets state to Loading and re-runs init.
@@ -224,18 +224,19 @@ class ChatScreenViewModel(
 
                 val result = aiEngine.initialize()
 
-                result.onSuccess {
-                    _uiState.update { it.copy(engineState = EngineState.Ready) }
-                    logger.i { "AI engine ready" }
+                result
+                    .onSuccess {
+                        _uiState.update { it.copy(engineState = EngineState.Ready) }
+                        logger.i { "AI engine ready" }
 
-                    if (_uiState.value.messages.isEmpty()) {
-                        generateWelcomeMessage()
+                        if (_uiState.value.messages.isEmpty()) {
+                            generateWelcomeMessage()
+                        }
+                    }.onFailure { e ->
+                        val error = ChatError.EngineInitError(e.message ?: "Initialization failed")
+                        _uiState.update { it.copy(engineState = EngineState.Failed(error)) }
+                        logger.e(e) { "Engine initialization failed" }
                     }
-                }.onFailure { e ->
-                    val error = ChatError.EngineInitError(e.message ?: "Initialization failed")
-                    _uiState.update { it.copy(engineState = EngineState.Failed(error)) }
-                    logger.e(e) { "Engine initialization failed" }
-                }
             } catch (e: Exception) {
                 logger.e(e) { "Failed to initialize AI engine" }
                 val error = mapExceptionToError(e)
@@ -262,18 +263,19 @@ class ChatScreenViewModel(
         viewModelScope.launch {
             try {
                 // Clear input and add user message
-                val userMessage = ChatMessage(
-                    text = inputText,
-                    isUser = true,
-                    timestamp = Clock.System.now().toEpochMilliseconds()
-                )
+                val userMessage =
+                    ChatMessage(
+                        text = inputText,
+                        isUser = true,
+                        timestamp = Clock.System.now().toEpochMilliseconds(),
+                    )
 
                 _uiState.update {
                     it.copy(
                         inputText = "",
                         messages = it.messages + userMessage,
                         generationState = GenerationState.Thinking,
-                        error = null
+                        error = null,
                     )
                 }
 
@@ -282,14 +284,13 @@ class ChatScreenViewModel(
 
                 // Generate AI response
                 generateResponse(inputText)
-
             } catch (e: Exception) {
                 logger.e(e) { "Failed to send message" }
                 val error = mapExceptionToError(e)
                 _uiState.update {
                     it.copy(
                         generationState = GenerationState.Failed(error),
-                        error = error
+                        error = error,
                     )
                 }
             }
@@ -310,10 +311,11 @@ class ChatScreenViewModel(
      * and re-initializes. Disables input during the switch.
      */
     fun switchModel(model: LlmModel) {
-        val factory = engineFactory ?: run {
-            logger.w { "No engine factory, cannot switch models" }
-            return
-        }
+        val factory =
+            engineFactory ?: run {
+                logger.w { "No engine factory, cannot switch models" }
+                return
+            }
 
         if (model == _uiState.value.currentModel) return
         if (_uiState.value.generationState.isGenerating) return
@@ -331,11 +333,15 @@ class ChatScreenViewModel(
     /**
      * Start downloading a model, then switch to it on completion.
      */
-    private fun startModelDownload(model: LlmModel, factory: (LlmModel) -> BaseLlmEngine) {
-        val download = downloadModel ?: run {
-            logger.w { "No download function, cannot download ${model.displayName}" }
-            return
-        }
+    private fun startModelDownload(
+        model: LlmModel,
+        factory: (LlmModel) -> BaseLlmEngine,
+    ) {
+        val download =
+            downloadModel ?: run {
+                logger.w { "No download function, cannot download ${model.displayName}" }
+                return
+            }
 
         _uiState.update {
             it.copy(modelDownload = ModelDownloadState.Starting(model.displayName))
@@ -361,14 +367,17 @@ class ChatScreenViewModel(
     /**
      * Perform the actual model switch (release old, create new, init).
      */
-    private fun performModelSwitch(model: LlmModel, factory: (LlmModel) -> BaseLlmEngine) {
+    private fun performModelSwitch(
+        model: LlmModel,
+        factory: (LlmModel) -> BaseLlmEngine,
+    ) {
         viewModelScope.launch {
             try {
                 logger.i { "Switching model to ${model.displayName}" }
                 _uiState.update {
                     it.copy(
                         currentModel = model,
-                        engineState = EngineState.Loading
+                        engineState = EngineState.Loading,
                     )
                 }
 
@@ -384,22 +393,23 @@ class ChatScreenViewModel(
 
                 val result = aiEngine.initialize()
 
-                result.onSuccess {
-                    _uiState.update { it.copy(engineState = EngineState.Ready) }
-                    logger.i { "Switched to ${model.displayName}" }
-                    // Clear and regenerate welcome with new model
-                    clearConversation()
-                }.onFailure { e ->
-                    val error = ChatError.EngineInitError("Failed to load ${model.displayName}: ${e.message}")
-                    _uiState.update { it.copy(engineState = EngineState.Failed(error), error = error) }
-                    logger.e(e) { "Model switch failed" }
-                }
+                result
+                    .onSuccess {
+                        _uiState.update { it.copy(engineState = EngineState.Ready) }
+                        logger.i { "Switched to ${model.displayName}" }
+                        // Clear and regenerate welcome with new model
+                        clearConversation()
+                    }.onFailure { e ->
+                        val error = ChatError.EngineInitError("Failed to load ${model.displayName}: ${e.message}")
+                        _uiState.update { it.copy(engineState = EngineState.Failed(error), error = error) }
+                        logger.e(e) { "Model switch failed" }
+                    }
             } catch (e: Exception) {
                 logger.e(e) { "Model switch error" }
                 _uiState.update {
                     it.copy(
                         engineState = EngineState.Failed(mapExceptionToError(e)),
-                        error = mapExceptionToError(e)
+                        error = mapExceptionToError(e),
                     )
                 }
             }
@@ -417,17 +427,18 @@ class ChatScreenViewModel(
         if (_uiState.value.generationState.isGenerating) return
 
         viewModelScope.launch {
-            val userMessage = ChatMessage(
-                text = trimmed,
-                isUser = true,
-                timestamp = Clock.System.now().toEpochMilliseconds()
-            )
+            val userMessage =
+                ChatMessage(
+                    text = trimmed,
+                    isUser = true,
+                    timestamp = Clock.System.now().toEpochMilliseconds(),
+                )
 
             _uiState.update {
                 it.copy(
                     messages = it.messages + userMessage,
                     generationState = GenerationState.Thinking,
-                    error = null
+                    error = null,
                 )
             }
 
@@ -442,10 +453,11 @@ class ChatScreenViewModel(
      * Uses the platform-injected TTS callback.
      */
     fun speakMessage(text: String) {
-        val speak = onSpeakText ?: run {
-            logger.w { "TTS not available" }
-            return
-        }
+        val speak =
+            onSpeakText ?: run {
+                logger.w { "TTS not available" }
+                return
+            }
 
         viewModelScope.launch {
             try {
@@ -512,14 +524,14 @@ class ChatScreenViewModel(
                         messages = emptyList(),
                         sessionEcoStats = SessionEcoStats(),
                         error = null,
-                        toolState = ToolState()
+                        toolState = ToolState(),
                     )
                 }
 
                 currentConversationId = null
                 confirmedToolIds.clear()
                 initializeConversation()
-                generateWelcomeMessage()   // re-greet on new chat
+                generateWelcomeMessage() // re-greet on new chat
 
                 logger.i { "Conversation cleared" }
             } catch (e: Exception) {
@@ -537,7 +549,9 @@ class ChatScreenViewModel(
      * @param confirmationId The ID of the confirmation to approve
      */
     fun confirmTool(confirmationId: String) {
-        val confirmation = _uiState.value.toolState.pendingConfirmations.find { it.id == confirmationId }
+        val confirmation =
+            _uiState.value.toolState.pendingConfirmations
+                .find { it.id == confirmationId }
         if (confirmation == null) {
             logger.w { "Confirmation not found: $confirmationId" }
             return
@@ -549,9 +563,10 @@ class ChatScreenViewModel(
         // Remove from pending and re-execute
         _uiState.update { state ->
             state.copy(
-                toolState = state.toolState.copy(
-                    pendingConfirmations = state.toolState.pendingConfirmations.filter { it.id != confirmationId }
-                )
+                toolState =
+                    state.toolState.copy(
+                        pendingConfirmations = state.toolState.pendingConfirmations.filter { it.id != confirmationId },
+                    ),
             )
         }
 
@@ -570,7 +585,9 @@ class ChatScreenViewModel(
      * @param confirmationId The ID of the confirmation to deny
      */
     fun denyTool(confirmationId: String) {
-        val confirmation = _uiState.value.toolState.pendingConfirmations.find { it.id == confirmationId }
+        val confirmation =
+            _uiState.value.toolState.pendingConfirmations
+                .find { it.id == confirmationId }
         if (confirmation == null) {
             logger.w { "Confirmation not found: $confirmationId" }
             return
@@ -581,10 +598,11 @@ class ChatScreenViewModel(
         // Remove from pending
         _uiState.update { state ->
             state.copy(
-                toolState = state.toolState.copy(
-                    pendingConfirmations = state.toolState.pendingConfirmations.filter { it.id != confirmationId }
-                ),
-                generationState = GenerationState.Idle
+                toolState =
+                    state.toolState.copy(
+                        pendingConfirmations = state.toolState.pendingConfirmations.filter { it.id != confirmationId },
+                    ),
+                generationState = GenerationState.Idle,
             )
         }
     }
@@ -594,20 +612,22 @@ class ChatScreenViewModel(
     private fun loadMessages() {
         viewModelScope.launch {
             try {
-                val dbMessages = database.messageQueries
-                    .getMessagesForProject(projectId)
-                    .executeAsList()
+                val dbMessages =
+                    database.messageQueries
+                        .getMessagesForProject(projectId)
+                        .executeAsList()
 
-                val chatMessages = dbMessages.map { msg ->
-                    ChatMessage(
-                        text = msg.content,
-                        isUser = msg.role == "user",
-                        timestamp = msg.timestamp,
-                        isError = false,
-                        inferenceStats = msg.tokens?.let { "⚡ $it tokens" },
-                        ragSources = msg.rag_sources
-                    )
-                }
+                val chatMessages =
+                    dbMessages.map { msg ->
+                        ChatMessage(
+                            text = msg.content,
+                            isUser = msg.role == "user",
+                            timestamp = msg.timestamp,
+                            isError = false,
+                            inferenceStats = msg.tokens?.let { "⚡ $it tokens" },
+                            ragSources = msg.rag_sources,
+                        )
+                    }
 
                 _uiState.update { it.copy(messages = chatMessages) }
                 logger.i { "Loaded ${chatMessages.size} messages" }
@@ -620,10 +640,11 @@ class ChatScreenViewModel(
     private fun initializeConversation() {
         viewModelScope.launch {
             try {
-                currentConversationId = conversationRepo.createConversation(
-                    projectId = projectId,
-                    title = "Chat Session"
-                )
+                currentConversationId =
+                    conversationRepo.createConversation(
+                        projectId = projectId,
+                        title = "Chat Session",
+                    )
             } catch (e: Exception) {
                 logger.e(e) { "Failed to create conversation" }
             }
@@ -638,9 +659,12 @@ class ChatScreenViewModel(
         }
 
         // Fetch user context in parallel with other setup
-        val userContext = try {
-            userContextProvider?.getContext()
-        } catch (_: Exception) { null }
+        val userContext =
+            try {
+                userContextProvider?.getContext()
+            } catch (_: Exception) {
+                null
+            }
 
         // Store in state so ChatScreen can render ContextualWelcomeCard
         if (userContext != null) {
@@ -651,87 +675,100 @@ class ChatScreenViewModel(
         // Build status card first
         val currentHour = userContext?.hourOfDay ?: dateTimeProvider?.getCurrentHour() ?: 12
         val memoryCount = memoryManager?.getMemoryCount() ?: 0L
-        val knowledgeCount = try {
-            database.triviaFactQueries.getTotalFactCount().executeAsOne()
-        } catch (_: Exception) {
-            0L
-        }
+        val knowledgeCount =
+            try {
+                database.triviaFactQueries.getTotalFactCount().executeAsOne()
+            } catch (_: Exception) {
+                0L
+            }
         val deviceTier = deviceInfo.getDeviceTier()
         // Context window scales with device tier
-        val maxContextTokens = when (deviceTier) {
-            app.m1k3.ai.domain.platform.DeviceTier.FLAGSHIP -> 8192
-            app.m1k3.ai.domain.platform.DeviceTier.HIGH_END -> 6144
-            app.m1k3.ai.domain.platform.DeviceTier.MID_RANGE -> 4096
-            else -> 2048
-        }
+        val maxContextTokens =
+            when (deviceTier) {
+                app.m1k3.ai.domain.platform.DeviceTier.FLAGSHIP -> 8192
+                app.m1k3.ai.domain.platform.DeviceTier.HIGH_END -> 6144
+                app.m1k3.ai.domain.platform.DeviceTier.MID_RANGE -> 4096
+                else -> 2048
+            }
 
         // Get last session eco stats (if any)
-        val lastSession = try {
-            ecoMetricsRepo.getSessionStats().firstOrNull()
-        } catch (_: Exception) {
-            null
-        }
+        val lastSession =
+            try {
+                ecoMetricsRepo.getSessionStats().firstOrNull()
+            } catch (_: Exception) {
+                null
+            }
 
-        val chatStatus = chatStatusBuilder.build(
-            hour = currentHour,
-            engineReady = true,
-            memoryCount = memoryCount,
-            knowledgeCount = knowledgeCount,
-            maxContextTokens = maxContextTokens,
-            deviceTierName = deviceTier.name.lowercase().replaceFirstChar { it.uppercase() },
-            lastSessionTokens = lastSession?.tokens,
-            lastSessionWaterMl = lastSession?.waterMl,
-            lastSessionEnergyWh = lastSession?.energyWh,
-            lastSessionCo2G = lastSession?.co2G
-        )
+        val chatStatus =
+            chatStatusBuilder.build(
+                hour = currentHour,
+                engineReady = true,
+                memoryCount = memoryCount,
+                knowledgeCount = knowledgeCount,
+                maxContextTokens = maxContextTokens,
+                deviceTierName = deviceTier.name.lowercase().replaceFirstChar { it.uppercase() },
+                lastSessionTokens = lastSession?.tokens,
+                lastSessionWaterMl = lastSession?.waterMl,
+                lastSessionEnergyWh = lastSession?.energyWh,
+                lastSessionCo2G = lastSession?.co2G,
+            )
 
         // Add status message to UI
-        val statusMessage = ChatMessage(
-            text = chatStatus.greeting,
-            isUser = false,
-            timestamp = Clock.System.now().toEpochMilliseconds(),
-            isStatusMessage = true,
-            statusMemoryCount = memoryCount,
-            statusKnowledgeCount = knowledgeCount,
-            statusMaxTokens = maxContextTokens,
-            statusDeviceTier = deviceTier.name.lowercase().replaceFirstChar { it.uppercase() },
-            statusLastWaterMl = lastSession?.waterMl,
-            statusLastEnergyWh = lastSession?.energyWh,
-            statusLastCo2G = lastSession?.co2G
-        )
+        val statusMessage =
+            ChatMessage(
+                text = chatStatus.greeting,
+                isUser = false,
+                timestamp = Clock.System.now().toEpochMilliseconds(),
+                isStatusMessage = true,
+                statusMemoryCount = memoryCount,
+                statusKnowledgeCount = knowledgeCount,
+                statusMaxTokens = maxContextTokens,
+                statusDeviceTier = deviceTier.name.lowercase().replaceFirstChar { it.uppercase() },
+                statusLastWaterMl = lastSession?.waterMl,
+                statusLastEnergyWh = lastSession?.energyWh,
+                statusLastCo2G = lastSession?.co2G,
+            )
 
-        val placeholderMessage = ChatMessage(
-            text = "",
-            isUser = false,
-            timestamp = Clock.System.now().toEpochMilliseconds()
-        )
+        val placeholderMessage =
+            ChatMessage(
+                text = "",
+                isUser = false,
+                timestamp = Clock.System.now().toEpochMilliseconds(),
+            )
 
         _uiState.update {
             it.copy(
                 messages = listOf(statusMessage, placeholderMessage),
                 generationState = GenerationState.Thinking,
-                chatStatus = chatStatus
+                chatStatus = chatStatus,
             )
         }
 
         try {
             // Build tiered M1K3 system prompts from context
             val dayOfWeek = dateTimeProvider?.getDayOfWeekName()
-            val promptInput = SystemPromptInput(
-                tier = SystemPromptTier.FULL,
-                userContext = userContext,
-                dayOfWeek = dayOfWeek,
-                deviceTierName = deviceTier.name.lowercase().replaceFirstChar { it.uppercase() },
-                contextWindowTokens = maxContextTokens,
-                availableTools = if (chatWithTools != null)
-                    toolRegistry?.getAllTools()?.map { it.id } ?: emptyList()
-                else emptyList()
-            )
+            val currentDate = dateTimeProvider?.getFormattedDate()
+            val promptInput =
+                SystemPromptInput(
+                    tier = SystemPromptTier.FULL,
+                    userContext = userContext,
+                    dayOfWeek = dayOfWeek,
+                    currentDate = currentDate,
+                    deviceTierName = deviceTier.name.lowercase().replaceFirstChar { it.uppercase() },
+                    contextWindowTokens = maxContextTokens,
+                    availableTools =
+                        if (chatWithTools != null) {
+                            toolRegistry?.getAllTools()?.map { it.id } ?: emptyList()
+                        } else {
+                            emptyList()
+                        },
+                )
             val fullSystemPrompt = systemPromptBuilder.build(promptInput)
             // Store compact for all subsequent messages — also push to tool-calling path
-            compactSystemPrompt = systemPromptBuilder.build(
-                promptInput.copy(tier = SystemPromptTier.COMPACT)
-            )
+            compactSystemPrompt =
+                systemPromptBuilder.build(
+                    promptInput.copy(tier = SystemPromptTier.COMPACT),
+                )
             chatWithTools?.systemPrompt = compactSystemPrompt ?: ""
 
             // Welcome uses the FULL system prompt — M1K3 introduces himself.
@@ -739,97 +776,107 @@ class ChatScreenViewModel(
             // are correct for the active model (Gemma4, ChatML, etc.).
             val welcomeUserMessage = "Say hello."
             val formatter = DefaultChatFormatter(_uiState.value.currentModel.chatFormat)
-            val welcomePrompt = formatter.buildPrompt(
-                systemPrompt = fullSystemPrompt,
-                messages = listOf(
-                    app.m1k3.ai.domain.chat.services.ChatMessage(
-                        role = app.m1k3.ai.domain.chat.format.MessageRole.USER,
-                        content = welcomeUserMessage
-                    )
-                ),
-                tools = emptyList(),
-                toolResults = emptyList()
-            )
+            val welcomePrompt =
+                formatter.buildPrompt(
+                    systemPrompt = fullSystemPrompt,
+                    messages =
+                        listOf(
+                            app.m1k3.ai.domain.chat.services.ChatMessage(
+                                role = app.m1k3.ai.domain.chat.format.MessageRole.USER,
+                                content = welcomeUserMessage,
+                            ),
+                        ),
+                    tools = emptyList(),
+                    toolResults = emptyList(),
+                )
 
             // Use device-adaptive config — no custom cap, trust the model
-            val config = configBuilder.build(
-                queryType = QueryType.CONVERSATIONAL
-            )
+            val config =
+                configBuilder.build(
+                    queryType = QueryType.CONVERSATIONAL,
+                )
 
             val thinkParser = StreamingThinkTagParser()
             var tokenCount = 0
             val startTime = Clock.System.now().toEpochMilliseconds()
 
-            val result = aiEngine.generateStreaming(
-                prompt = welcomePrompt,
-                config = config,
-                onToken = { token ->
-                    if (token.isNotEmpty()) {
-                        thinkParser.feed(token)
-                        tokenCount++
+            val result =
+                aiEngine.generateStreaming(
+                    prompt = welcomePrompt,
+                    config = config,
+                    onToken = { token ->
+                        if (token.isNotEmpty()) {
+                            thinkParser.feed(token)
+                            tokenCount++
 
-                        _uiState.update { state ->
-                            val updatedMessages = state.messages.toMutableList()
-                            if (updatedMessages.isNotEmpty()) {
-                                updatedMessages[updatedMessages.lastIndex] = updatedMessages.last().copy(
-                                    text = thinkParser.visibleText,
-                                    thinkingContent = thinkParser.thinkingContent
+                            _uiState.update { state ->
+                                val updatedMessages = state.messages.toMutableList()
+                                if (updatedMessages.isNotEmpty()) {
+                                    updatedMessages[updatedMessages.lastIndex] =
+                                        updatedMessages.last().copy(
+                                            text = thinkParser.visibleText,
+                                            thinkingContent = thinkParser.thinkingContent,
+                                        )
+                                }
+                                state.copy(
+                                    messages = updatedMessages,
+                                    generationState =
+                                        GenerationState.Streaming(
+                                            partialText = thinkParser.visibleText,
+                                            tokenCount = tokenCount,
+                                            thinkingPartial = thinkParser.thinkingContent,
+                                            isThinking = thinkParser.isThinking,
+                                        ),
                                 )
                             }
-                            state.copy(
-                                messages = updatedMessages,
-                                generationState = GenerationState.Streaming(
-                                    partialText = thinkParser.visibleText,
-                                    tokenCount = tokenCount,
-                                    thinkingPartial = thinkParser.thinkingContent,
-                                    isThinking = thinkParser.isThinking
-                                )
-                            )
                         }
-                    }
-                }
-            )
-
-            result.onSuccess {
-                val duration = Clock.System.now().toEpochMilliseconds() - startTime
-                val stats = GenerationStats(
-                    tokenCount = tokenCount,
-                    durationMs = duration,
-                    tokensPerSecond = if (duration > 0) tokenCount * 1000f / duration else 0f
+                    },
                 )
 
-                // Finalize parser — handles unclosed <think> tags
-                thinkParser.finalize()
-                val welcomeText = cleanFormatTokens(thinkParser.visibleText)
+            result
+                .onSuccess {
+                    val duration = Clock.System.now().toEpochMilliseconds() - startTime
+                    val stats =
+                        GenerationStats(
+                            tokenCount = tokenCount,
+                            durationMs = duration,
+                            tokensPerSecond = if (duration > 0) tokenCount * 1000f / duration else 0f,
+                        )
 
-                _uiState.update { state ->
-                    val updatedMessages = state.messages.toMutableList()
-                    if (updatedMessages.isNotEmpty()) {
-                        updatedMessages[updatedMessages.lastIndex] = updatedMessages.last().copy(
-                            text = welcomeText,
-                            inferenceStats = stats.formatFull(),
-                            thinkingContent = thinkParser.thinkingContent,
-                            thinkingDurationMs = thinkParser.thinkingDurationMs
+                    // Finalize parser — handles unclosed <think> tags
+                    thinkParser.finalize()
+                    val welcomeText = cleanFormatTokens(thinkParser.visibleText)
+
+                    _uiState.update { state ->
+                        val updatedMessages = state.messages.toMutableList()
+                        if (updatedMessages.isNotEmpty()) {
+                            updatedMessages[updatedMessages.lastIndex] =
+                                updatedMessages.last().copy(
+                                    text = welcomeText,
+                                    inferenceStats = stats.formatFull(),
+                                    thinkingContent = thinkParser.thinkingContent,
+                                    thinkingDurationMs = thinkParser.thinkingDurationMs,
+                                )
+                        }
+                        state.copy(
+                            messages = updatedMessages,
+                            generationState =
+                                GenerationState.Complete(
+                                    finalText = welcomeText,
+                                    stats = stats,
+                                ),
                         )
                     }
-                    state.copy(
-                        messages = updatedMessages,
-                        generationState = GenerationState.Complete(
-                            finalText = welcomeText,
-                            stats = stats
-                        )
-                    )
+
+                    recordEcoMetrics(tokenCount)
+                    recordMessage(welcomeText, "assistant", tokenCount)
+
+                    logger.i { "Welcome message generated: $tokenCount tokens in ${duration}ms" }
+                    logger.d { "Welcome visible='${thinkParser.visibleText}' thinking=${thinkParser.thinkingContent?.take(80)}" }
+                }.onFailure { e ->
+                    logger.e(e) { "Welcome generation failed" }
+                    _uiState.update { it.copy(generationState = GenerationState.Idle) }
                 }
-
-                recordEcoMetrics(tokenCount)
-                recordMessage(welcomeText, "assistant", tokenCount)
-
-                logger.i { "Welcome message generated: $tokenCount tokens in ${duration}ms" }
-                logger.d { "Welcome visible='${thinkParser.visibleText}' thinking=${thinkParser.thinkingContent?.take(80)}" }
-            }.onFailure { e ->
-                logger.e(e) { "Welcome generation failed" }
-                _uiState.update { it.copy(generationState = GenerationState.Idle) }
-            }
         } catch (e: Exception) {
             logger.e(e) { "Welcome generation error" }
             _uiState.update { it.copy(generationState = GenerationState.Idle) }
@@ -844,11 +891,12 @@ class ChatScreenViewModel(
         }
 
         // Legacy path: direct AI generation without tool support
-        val placeholderMessage = ChatMessage(
-            text = "",
-            isUser = false,
-            timestamp = Clock.System.now().toEpochMilliseconds()
-        )
+        val placeholderMessage =
+            ChatMessage(
+                text = "",
+                isUser = false,
+                timestamp = Clock.System.now().toEpochMilliseconds(),
+            )
 
         _uiState.update {
             it.copy(messages = it.messages + placeholderMessage)
@@ -866,62 +914,68 @@ class ChatScreenViewModel(
 
             // Build device context for context-aware prompts
             val deviceTier = deviceInfo.getDeviceTier()
-            val deviceContext = dateTimeProvider?.let { dtProvider ->
-                DeviceContext.from(
-                    dateTimeProvider = dtProvider,
-                    deviceInfoProvider = deviceInfo,
-                    deviceTier = deviceTier
-                )
-            }
+            val deviceContext =
+                dateTimeProvider?.let { dtProvider ->
+                    DeviceContext.from(
+                        dateTimeProvider = dtProvider,
+                        deviceInfoProvider = deviceInfo,
+                        deviceTier = deviceTier,
+                    )
+                }
 
             val thinkParser = StreamingThinkTagParser()
             var tokenCount = 0
             val startTime = Clock.System.now().toEpochMilliseconds()
 
             // Build full prompt with context using UnifiedPromptBuilder
-            val fullPrompt = promptBuilder.build(
-                userPrompt = prompt,
-                context = context,
-                tools = emptyList(),  // Legacy path has no tools
-                systemPrompt = compactSystemPrompt ?: "",
-                deviceContext = deviceContext
-            )
+            val fullPrompt =
+                promptBuilder.build(
+                    userPrompt = prompt,
+                    context = context,
+                    tools = emptyList(), // Legacy path has no tools
+                    systemPrompt = compactSystemPrompt ?: "",
+                    deviceContext = deviceContext,
+                )
 
-            val result = aiEngine.generateStreaming(
-                prompt = fullPrompt,
-                config = config,
-                onToken = { token ->
-                    if (token.isNotEmpty()) {
-                        thinkParser.feed(token)
-                        tokenCount++
+            val result =
+                aiEngine.generateStreaming(
+                    prompt = fullPrompt,
+                    config = config,
+                    onToken = { token ->
+                        if (token.isNotEmpty()) {
+                            thinkParser.feed(token)
+                            tokenCount++
 
-                        _uiState.update { state ->
-                            val updatedMessages = state.messages.toMutableList()
-                            if (updatedMessages.isNotEmpty()) {
-                                updatedMessages[updatedMessages.lastIndex] = updatedMessages.last().copy(
-                                    text = thinkParser.visibleText,
-                                    thinkingContent = thinkParser.thinkingContent
+                            _uiState.update { state ->
+                                val updatedMessages = state.messages.toMutableList()
+                                if (updatedMessages.isNotEmpty()) {
+                                    updatedMessages[updatedMessages.lastIndex] =
+                                        updatedMessages.last().copy(
+                                            text = thinkParser.visibleText,
+                                            thinkingContent = thinkParser.thinkingContent,
+                                        )
+                                }
+                                state.copy(
+                                    messages = updatedMessages,
+                                    generationState =
+                                        GenerationState.Streaming(
+                                            partialText = thinkParser.visibleText,
+                                            tokenCount = tokenCount,
+                                            thinkingPartial = thinkParser.thinkingContent,
+                                            isThinking = thinkParser.isThinking,
+                                        ),
                                 )
                             }
-                            state.copy(
-                                messages = updatedMessages,
-                                generationState = GenerationState.Streaming(
-                                    partialText = thinkParser.visibleText,
-                                    tokenCount = tokenCount,
-                                    thinkingPartial = thinkParser.thinkingContent,
-                                    isThinking = thinkParser.isThinking
-                                )
-                            )
                         }
-                    }
-                }
-            )
+                    },
+                )
 
-            result.onSuccess {
-                handleGenerationSuccess(thinkParser, tokenCount, startTime, context)
-            }.onFailure { e ->
-                handleGenerationFailure(e)
-            }
+            result
+                .onSuccess {
+                    handleGenerationSuccess(thinkParser, tokenCount, startTime, context)
+                }.onFailure { e ->
+                    handleGenerationFailure(e)
+                }
         } catch (e: Exception) {
             handleGenerationFailure(e)
         }
@@ -932,31 +986,34 @@ class ChatScreenViewModel(
      * Handles tool execution, confirmations, and result display.
      */
     private suspend fun generateResponseWithTools(prompt: String) {
-        val useCase = chatWithTools ?: run {
-            logger.w { "ChatWithToolsUseCase not available, falling back to legacy path" }
-            return
-        }
+        val useCase =
+            chatWithTools ?: run {
+                logger.w { "ChatWithToolsUseCase not available, falling back to legacy path" }
+                return
+            }
 
         // Build device context for context-aware prompts
         val deviceTier = deviceInfo.getDeviceTier()
-        val deviceContext = dateTimeProvider?.let { dtProvider ->
-            DeviceContext.from(
-                dateTimeProvider = dtProvider,
-                deviceInfoProvider = deviceInfo,
-                deviceTier = deviceTier
-            )
-        }
+        val deviceContext =
+            dateTimeProvider?.let { dtProvider ->
+                DeviceContext.from(
+                    dateTimeProvider = dtProvider,
+                    deviceInfoProvider = deviceInfo,
+                    deviceTier = deviceTier,
+                )
+            }
 
-        val placeholderMessage = ChatMessage(
-            text = "",
-            isUser = false,
-            timestamp = Clock.System.now().toEpochMilliseconds()
-        )
+        val placeholderMessage =
+            ChatMessage(
+                text = "",
+                isUser = false,
+                timestamp = Clock.System.now().toEpochMilliseconds(),
+            )
 
         _uiState.update {
             it.copy(
                 messages = it.messages + placeholderMessage,
-                toolState = it.toolState.copy(isExecuting = false)
+                toolState = it.toolState.copy(isExecuting = false),
             )
         }
 
@@ -983,20 +1040,22 @@ class ChatScreenViewModel(
                         _uiState.update { state ->
                             val updatedMessages = state.messages.toMutableList()
                             if (updatedMessages.isNotEmpty()) {
-                                updatedMessages[updatedMessages.lastIndex] = updatedMessages.last().copy(
-                                    text = event.partialText,
-                                    // Show live thinking content during streaming
-                                    thinkingContent = event.thinkingPartial
-                                )
+                                updatedMessages[updatedMessages.lastIndex] =
+                                    updatedMessages.last().copy(
+                                        text = event.partialText,
+                                        // Show live thinking content during streaming
+                                        thinkingContent = event.thinkingPartial,
+                                    )
                             }
                             state.copy(
                                 messages = updatedMessages,
-                                generationState = GenerationState.Streaming(
-                                    partialText = event.partialText,
-                                    tokenCount = event.tokenCount,
-                                    thinkingPartial = event.thinkingPartial,
-                                    isThinking = event.isThinking
-                                )
+                                generationState =
+                                    GenerationState.Streaming(
+                                        partialText = event.partialText,
+                                        tokenCount = event.tokenCount,
+                                        thinkingPartial = event.thinkingPartial,
+                                        isThinking = event.isThinking,
+                                    ),
                             )
                         }
                     }
@@ -1018,7 +1077,7 @@ class ChatScreenViewModel(
                                 messages = updatedMessages,
                                 generationState = GenerationState.Failed(chatError),
                                 error = chatError,
-                                toolState = state.toolState.copy(isExecuting = false)
+                                toolState = state.toolState.copy(isExecuting = false),
                             )
                         }
                     }
@@ -1030,46 +1089,57 @@ class ChatScreenViewModel(
     }
 
     private fun handleToolsExecuted(event: ChatEvent.ToolsExecuted) {
-        val executedResults = event.results.map { result ->
-            when (result) {
-                is ToolResult.Success -> ToolExecutionResult(
-                    toolId = result.toolId,
-                    displayResult = result.output,
-                    isSuccess = true
-                )
-                is ToolResult.Failure -> ToolExecutionResult(
-                    toolId = result.toolId,
-                    displayResult = result.error.displayMessage,
-                    isSuccess = false,
-                    errorMessage = result.error.displayMessage
-                )
-                is ToolResult.RequiresConfirmation -> ToolExecutionResult(
-                    toolId = result.toolId,
-                    displayResult = "Awaiting confirmation",
-                    isSuccess = false
-                )
-            }
-        }
+        val executedResults =
+            event.results.map { result ->
+                when (result) {
+                    is ToolResult.Success -> {
+                        ToolExecutionResult(
+                            toolId = result.toolId,
+                            displayResult = result.output,
+                            isSuccess = true,
+                        )
+                    }
 
-        val pendingConfirmations = event.results
-            .filterIsInstance<ToolResult.RequiresConfirmation>()
-            .map { result ->
-                ToolConfirmation(
-                    id = "confirm_${result.toolId}_${Clock.System.now().toEpochMilliseconds()}",
-                    toolId = result.toolId,
-                    toolName = result.toolId.replace("_", " ").replaceFirstChar { it.uppercase() },
-                    description = result.confirmationPrompt,
-                    arguments = result.pendingCall.arguments
-                )
+                    is ToolResult.Failure -> {
+                        ToolExecutionResult(
+                            toolId = result.toolId,
+                            displayResult = result.error.displayMessage,
+                            isSuccess = false,
+                            errorMessage = result.error.displayMessage,
+                        )
+                    }
+
+                    is ToolResult.RequiresConfirmation -> {
+                        ToolExecutionResult(
+                            toolId = result.toolId,
+                            displayResult = "Awaiting confirmation",
+                            isSuccess = false,
+                        )
+                    }
+                }
             }
+
+        val pendingConfirmations =
+            event.results
+                .filterIsInstance<ToolResult.RequiresConfirmation>()
+                .map { result ->
+                    ToolConfirmation(
+                        id = "confirm_${result.toolId}_${Clock.System.now().toEpochMilliseconds()}",
+                        toolId = result.toolId,
+                        toolName = result.toolId.replace("_", " ").replaceFirstChar { it.uppercase() },
+                        description = result.confirmationPrompt,
+                        arguments = result.pendingCall.arguments,
+                    )
+                }
 
         _uiState.update { state ->
             state.copy(
-                toolState = ToolState(
-                    pendingConfirmations = pendingConfirmations,
-                    executedTools = executedResults,
-                    isExecuting = false
-                )
+                toolState =
+                    ToolState(
+                        pendingConfirmations = pendingConfirmations,
+                        executedTools = executedResults,
+                        isExecuting = false,
+                    ),
             )
         }
 
@@ -1077,38 +1147,50 @@ class ChatScreenViewModel(
     }
 
     @OptIn(kotlin.uuid.ExperimentalUuidApi::class)
-    private fun persistToolExecutions(results: List<app.m1k3.ai.domain.tools.ToolResult>, userQuery: String) {
+    private fun persistToolExecutions(
+        results: List<app.m1k3.ai.domain.tools.ToolResult>,
+        userQuery: String,
+    ) {
         val ds = toolExecutionDataSource ?: return
         val now = Clock.System.now().toEpochMilliseconds()
         viewModelScope.launch(Dispatchers.IO) {
             results.forEach { result ->
                 try {
-                    val id = kotlin.uuid.Uuid.random().toString()
+                    val id =
+                        kotlin.uuid.Uuid
+                            .random()
+                            .toString()
                     when (result) {
-                        is app.m1k3.ai.domain.tools.ToolResult.Success -> ds.record(
-                            id = id,
-                            toolId = result.toolId,
-                            query = userQuery,
-                            result = result.output,
-                            success = true,
-                            errorMessage = null,
-                            executionTimeMs = result.executionTimeMs,
-                            timestamp = now,
-                            messageId = null,
-                            projectId = projectId
-                        )
-                        is app.m1k3.ai.domain.tools.ToolResult.Failure -> ds.record(
-                            id = id,
-                            toolId = result.toolId,
-                            query = userQuery,
-                            result = null,
-                            success = false,
-                            errorMessage = result.error.displayMessage,
-                            executionTimeMs = result.executionTimeMs,
-                            timestamp = now,
-                            messageId = null,
-                            projectId = projectId
-                        )
+                        is app.m1k3.ai.domain.tools.ToolResult.Success -> {
+                            ds.record(
+                                id = id,
+                                toolId = result.toolId,
+                                query = userQuery,
+                                result = result.output,
+                                success = true,
+                                errorMessage = null,
+                                executionTimeMs = result.executionTimeMs,
+                                timestamp = now,
+                                messageId = null,
+                                projectId = projectId,
+                            )
+                        }
+
+                        is app.m1k3.ai.domain.tools.ToolResult.Failure -> {
+                            ds.record(
+                                id = id,
+                                toolId = result.toolId,
+                                query = userQuery,
+                                result = null,
+                                success = false,
+                                errorMessage = result.error.displayMessage,
+                                executionTimeMs = result.executionTimeMs,
+                                timestamp = now,
+                                messageId = null,
+                                projectId = projectId,
+                            )
+                        }
+
                         is app.m1k3.ai.domain.tools.ToolResult.RequiresConfirmation -> { /* skip */ }
                     }
                 } catch (e: Exception) {
@@ -1128,21 +1210,23 @@ class ChatScreenViewModel(
         _uiState.update { state ->
             val updatedMessages = state.messages.toMutableList()
             if (updatedMessages.isNotEmpty()) {
-                updatedMessages[updatedMessages.lastIndex] = updatedMessages.last().copy(
-                    text = displayText,
-                    inferenceStats = stats.formatFull(),
-                    ragSources = stats.ragSources,
-                    toolResults = state.toolState.executedTools
-                )
+                updatedMessages[updatedMessages.lastIndex] =
+                    updatedMessages.last().copy(
+                        text = displayText,
+                        inferenceStats = stats.formatFull(),
+                        ragSources = stats.ragSources,
+                        toolResults = state.toolState.executedTools,
+                    )
             }
             state.copy(
                 messages = updatedMessages,
-                generationState = GenerationState.Complete(
-                    finalText = displayText,
-                    stats = stats
-                ),
+                generationState =
+                    GenerationState.Complete(
+                        finalText = displayText,
+                        stats = stats,
+                    ),
                 ragInfo = stats.ragInfo,
-                toolState = state.toolState.copy(isExecuting = false)
+                toolState = state.toolState.copy(isExecuting = false),
             )
         }
 
@@ -1152,7 +1236,7 @@ class ChatScreenViewModel(
             role = "assistant",
             tokens = stats.tokenCount,
             ragSources = stats.ragSources,
-            ragConfidence = stats.ragConfidence
+            ragConfidence = stats.ragConfidence,
         )
 
         logger.i { "Response with tools: ${stats.tokenCount} tokens in ${stats.durationMs}ms" }
@@ -1165,17 +1249,18 @@ class ChatScreenViewModel(
         thinkParser: StreamingThinkTagParser,
         tokenCount: Int,
         startTime: Long,
-        context: EnrichedContext
+        context: EnrichedContext,
     ) {
         val duration = Clock.System.now().toEpochMilliseconds() - startTime
-        val stats = GenerationStats(
-            tokenCount = tokenCount,
-            durationMs = duration,
-            tokensPerSecond = if (duration > 0) tokenCount * 1000f / duration else 0f,
-            ragInfo = context.ragInfo,
-            ragSources = context.ragSources,
-            ragConfidence = context.ragConfidence
-        )
+        val stats =
+            GenerationStats(
+                tokenCount = tokenCount,
+                durationMs = duration,
+                tokensPerSecond = if (duration > 0) tokenCount * 1000f / duration else 0f,
+                ragInfo = context.ragInfo,
+                ragSources = context.ragSources,
+                ragConfidence = context.ragConfidence,
+            )
 
         // Finalize parser — handles unclosed <think> tags
         thinkParser.finalize()
@@ -1185,24 +1270,28 @@ class ChatScreenViewModel(
         _uiState.update { state ->
             val updatedMessages = state.messages.toMutableList()
             if (updatedMessages.isNotEmpty()) {
-                val parseResult = app.m1k3.ai.domain.chat.artifact.ArtifactParser.parse(finalText)
+                val parseResult =
+                    app.m1k3.ai.domain.chat.artifact.ArtifactParser
+                        .parse(finalText)
                 val artifact = parseResult.artifacts.firstOrNull()
-                updatedMessages[updatedMessages.lastIndex] = updatedMessages.last().copy(
-                    text = finalText,
-                    inferenceStats = stats.formatFull(),
-                    ragSources = context.ragSources,
-                    artifact = artifact,
-                    thinkingContent = thinkParser.thinkingContent,
-                    thinkingDurationMs = if (thinkParser.thinkingContent != null) thinkParser.thinkingDurationMs else null
-                )
+                updatedMessages[updatedMessages.lastIndex] =
+                    updatedMessages.last().copy(
+                        text = finalText,
+                        inferenceStats = stats.formatFull(),
+                        ragSources = context.ragSources,
+                        artifact = artifact,
+                        thinkingContent = thinkParser.thinkingContent,
+                        thinkingDurationMs = if (thinkParser.thinkingContent != null) thinkParser.thinkingDurationMs else null,
+                    )
             }
             state.copy(
                 messages = updatedMessages,
-                generationState = GenerationState.Complete(
-                    finalText = finalText,
-                    stats = stats
-                ),
-                ragInfo = context.ragInfo
+                generationState =
+                    GenerationState.Complete(
+                        finalText = finalText,
+                        stats = stats,
+                    ),
+                ragInfo = context.ragInfo,
             )
         }
 
@@ -1212,7 +1301,7 @@ class ChatScreenViewModel(
             role = "assistant",
             tokens = tokenCount,
             ragSources = context.ragSources,
-            ragConfidence = context.ragConfidence
+            ragConfidence = context.ragConfidence,
         )
 
         logger.i { "Response generated: $tokenCount tokens in ${duration}ms (${stats.formatSpeed()})" }
@@ -1229,7 +1318,7 @@ class ChatScreenViewModel(
             state.copy(
                 messages = updatedMessages,
                 generationState = GenerationState.Failed(chatError),
-                error = chatError
+                error = chatError,
             )
         }
     }
@@ -1249,20 +1338,25 @@ class ChatScreenViewModel(
 
         try {
             chunks.forEachIndexed { index, chunk ->
-                val id = "${chunk.category}_${now}_${index}"
-                val value = when (chunk.category) {
-                    "health" -> context.health?.stepsToday?.toDouble() ?: 0.0
-                    "screen_time" -> context.screenTime?.todayMinutes?.toDouble() ?: 0.0
-                    "notification" -> 1.0  // each notification is one event
-                    else -> 0.0
-                }
+                val id = "${chunk.category}_${now}_$index"
+                val value =
+                    when (chunk.category) {
+                        "health" -> context.health?.stepsToday?.toDouble() ?: 0.0
+
+                        "screen_time" -> context.screenTime?.todayMinutes?.toDouble() ?: 0.0
+
+                        "notification" -> 1.0
+
+                        // each notification is one event
+                        else -> 0.0
+                    }
                 database.contextSnapshotQueries.insertSnapshot(
                     id = id,
                     timestamp = chunk.timestamp,
                     category = chunk.category,
                     value_ = value,
                     data_json = chunk.text,
-                    summary = chunk.text
+                    summary = chunk.text,
                 )
             }
             logger.i { "Stored ${chunks.size} context snapshots (${chunks.map { it.category }.distinct().joinToString()})" }
@@ -1281,18 +1375,19 @@ class ChatScreenViewModel(
                 ecoMetricsRepo.recordMetrics(
                     savings = savings,
                     sessionId = sessionId,
-                    projectId = projectId
+                    projectId = projectId,
                 )
 
                 _uiState.update { state ->
                     state.copy(
-                        sessionEcoStats = SessionEcoStats(
-                            totalTokens = state.sessionEcoStats.totalTokens + tokenCount,
-                            waterMl = state.sessionEcoStats.waterMl + savings.waterSavedMl,
-                            energyWh = state.sessionEcoStats.energyWh + savings.energySavedWh,
-                            co2G = state.sessionEcoStats.co2G + savings.co2PreventedG,
-                            messageCount = state.sessionEcoStats.messageCount + 1
-                        )
+                        sessionEcoStats =
+                            SessionEcoStats(
+                                totalTokens = state.sessionEcoStats.totalTokens + tokenCount,
+                                waterMl = state.sessionEcoStats.waterMl + savings.waterSavedMl,
+                                energyWh = state.sessionEcoStats.energyWh + savings.energySavedWh,
+                                co2G = state.sessionEcoStats.co2G + savings.co2PreventedG,
+                                messageCount = state.sessionEcoStats.messageCount + 1,
+                            ),
                     )
                 }
             } catch (e: Exception) {
@@ -1306,7 +1401,7 @@ class ChatScreenViewModel(
         role: String,
         tokens: Int,
         ragSources: String? = null,
-        ragConfidence: Double? = null
+        ragConfidence: Double? = null,
     ) {
         viewModelScope.launch {
             try {
@@ -1328,7 +1423,7 @@ class ChatScreenViewModel(
                     sentiment_emotion = null,
                     sentiment_intensity = null,
                     rag_sources = ragSources,
-                    rag_confidence = ragConfidence
+                    rag_confidence = ragConfidence,
                 )
 
                 if (role == "user") {
@@ -1356,29 +1451,32 @@ class ChatScreenViewModel(
 
         // Get device tier info
         val ramGb = deviceInfo.getDeviceRamGB()
-        val deviceTier = when {
-            ramGb >= 12 -> "Flagship"
-            ramGb >= 8 -> "High-End"
-            ramGb >= 6 -> "Mid-Range"
-            else -> "Budget"
-        }
+        val deviceTier =
+            when {
+                ramGb >= 12 -> "Flagship"
+                ramGb >= 8 -> "High-End"
+                ramGb >= 6 -> "Mid-Range"
+                else -> "Budget"
+            }
 
         // Max context based on device tier (rough approximation)
-        val maxContext = when {
-            ramGb >= 12 -> 8192
-            ramGb >= 8 -> 6144
-            ramGb >= 6 -> 4096
-            else -> 2048
-        }
+        val maxContext =
+            when {
+                ramGb >= 12 -> 8192
+                ramGb >= 8 -> 6144
+                ramGb >= 6 -> 4096
+                else -> 2048
+            }
 
         _uiState.update { state ->
             state.copy(
-                contextWindow = ContextWindowState(
-                    historyMessageCount = historyMessageCount,
-                    historyTokens = estimatedTokens,
-                    maxContextTokens = maxContext,
-                    deviceTier = deviceTier
-                )
+                contextWindow =
+                    ContextWindowState(
+                        historyMessageCount = historyMessageCount,
+                        historyTokens = estimatedTokens,
+                        maxContextTokens = maxContext,
+                        deviceTier = deviceTier,
+                    ),
             )
         }
     }
@@ -1395,17 +1493,17 @@ class ChatScreenViewModel(
 
     companion object {
         /** Strip format tokens from accumulated text (handles split-token reassembly). */
-        private val FORMAT_TOKEN_REGEX = Regex(
-            "</?\\s*(?:start|end)[_\\s]*(?:of)[_\\s]*(?:turn)\\s*>|" +
-            "</?\\s*tool_?call\\s*>|" +
-            "<\\|im_(?:start|end)\\|?>|<\\|endoftext\\|?>|" +
-            "<eos>|<bos>|" +
-            "(?:start|end)[_\\s]+of[_\\s]+turn",
-            RegexOption.IGNORE_CASE
-        )
+        private val FORMAT_TOKEN_REGEX =
+            Regex(
+                "</?\\s*(?:start|end)[_\\s]*(?:of)[_\\s]*(?:turn)\\s*>|" +
+                    "</?\\s*tool_?call\\s*>|" +
+                    "<\\|im_(?:start|end)\\|?>|<\\|endoftext\\|?>|" +
+                    "<eos>|<bos>|" +
+                    "(?:start|end)[_\\s]+of[_\\s]+turn",
+                RegexOption.IGNORE_CASE,
+            )
 
-        fun cleanFormatTokens(text: String): String =
-            FORMAT_TOKEN_REGEX.replace(text, "").trim()
+        fun cleanFormatTokens(text: String): String = FORMAT_TOKEN_REGEX.replace(text, "").trim()
     }
 }
 
@@ -1413,6 +1511,4 @@ class ChatScreenViewModel(
  * Collect ChatScreenViewModel state as Compose State.
  */
 @Composable
-fun ChatScreenViewModel.collectAsState(): State<ChatUiState> {
-    return uiState.collectAsState()
-}
+fun ChatScreenViewModel.collectAsState(): State<ChatUiState> = uiState.collectAsState()

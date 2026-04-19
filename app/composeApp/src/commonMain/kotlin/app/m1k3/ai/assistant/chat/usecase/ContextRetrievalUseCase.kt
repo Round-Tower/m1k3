@@ -11,11 +11,9 @@ import app.m1k3.ai.assistant.utils.Logger
 import app.m1k3.ai.domain.chat.EnrichedContext
 import app.m1k3.ai.domain.chat.services.ContextAssembler
 import app.m1k3.ai.domain.chat.services.ContextRetrieverInterface
-import app.m1k3.ai.domain.rag.services.ContextBudgetManager
+import app.m1k3.ai.domain.passages.Passage
+import app.m1k3.ai.domain.passages.usecases.RetrievePassagesUseCase
 import app.m1k3.ai.domain.rag.services.IntentClassifier
-import app.m1k3.ai.domain.rag.services.RAGEnricherInterface
-import app.m1k3.ai.domain.rag.services.calculateRAGConfidence
-import app.m1k3.ai.domain.rag.services.formatRAGSources
 
 private val logger = Logger.withTag("ContextRetrievalUseCase")
 
@@ -54,11 +52,10 @@ class ContextRetrievalUseCase(
     private val preferences: PreferencesStoreInterface,
     private val database: MaDatabase? = null,
     private val projectId: String? = null,
-    private val ragEnricher: RAGEnricherInterface? = null,
     private val memoryManager: MemoryManager? = null,
+    private val passageRetriever: RetrievePassagesUseCase? = null,
     private val contextAssembler: ContextAssembler = ContextAssembler(),
     private val intentClassifier: IntentClassifier = IntentClassifier(),
-    private val contextBudgetManager: ContextBudgetManager = ContextBudgetManager(),
 ) : ContextRetrieverInterface {
     /**
      * Retrieve context for a given prompt.
@@ -67,6 +64,7 @@ class ContextRetrievalUseCase(
      * @return EnrichedContext containing all retrieved context
      */
     override suspend fun retrieveContext(prompt: String): EnrichedContext {
+        val retrievalErrors = mutableListOf<String>()
         var conversationHistory = ""
         var ragContext = ""
         var intentCategory = "GENERAL"
@@ -77,7 +75,7 @@ class ContextRetrievalUseCase(
 
         // 1. Conversation history retrieval (for multi-turn context)
         if (database != null && projectId != null) {
-            conversationHistory = retrieveConversationHistory()
+            conversationHistory = retrieveConversationHistory(retrievalErrors)
         }
 
         // 2. Early intent check - skip RAG for conversational queries
@@ -85,27 +83,26 @@ class ContextRetrievalUseCase(
         intentCategory = intent.category
         val shouldRetrieveKnowledge = intentClassifier.requiresKnowledgeRetrieval(intent)
 
-        // 3. RAG retrieval (if enabled AND needed based on intent)
-        if (isRagEnabled() && ragEnricher != null && shouldRetrieveKnowledge) {
-            val ragResult = retrieveRagContext(prompt, conversationHistory.length)
-            ragContext = ragResult.context
-            ragInfo = ragResult.ragInfo
-            ragSources = ragResult.ragSources
-            ragConfidence = ragResult.ragConfidence
+        // 3. Knowledge retrieval via personal-knowledge Passage path.
+        if (isRagEnabled() && shouldRetrieveKnowledge) {
+            if (passageRetriever != null) {
+                val ragResult = retrievePassagesContext(prompt, retrievalErrors)
+                ragContext = ragResult.context
+                ragInfo = ragResult.ragInfo
+                ragSources = ragResult.ragSources
+                ragConfidence = ragResult.ragConfidence
+            } else {
+                logger.w { "Retrieval skipped: passageRetriever not injected" }
+            }
         } else {
-            // Log why RAG was skipped for debugging
             when {
                 !isRagEnabled() -> {
-                    logger.d { "RAG disabled in preferences" }
-                }
-
-                ragEnricher == null -> {
-                    logger.w { "RAG skipped: ragEnricher is null (embeddingEngine not provided?)" }
+                    logger.d { "Retrieval disabled in preferences" }
                 }
 
                 !shouldRetrieveKnowledge -> {
                     logger.d {
-                        "Skipping RAG for ${intent.category} query (confidence: ${(intentConfidence * 100).toInt()}%)"
+                        "Skipping retrieval for ${intent.category} query (confidence: ${(intentConfidence * 100).toInt()}%)"
                     }
                 }
             }
@@ -113,7 +110,7 @@ class ContextRetrievalUseCase(
 
         // 4. Semantic memory retrieval (if available)
         if (memoryManager != null) {
-            memoryContext = retrieveMemoryContext(prompt)
+            memoryContext = retrieveMemoryContext(prompt, retrievalErrors)
         }
 
         // 5. Combine contexts using domain service
@@ -129,13 +126,14 @@ class ContextRetrievalUseCase(
             hasConversationHistory = conversationHistory.isNotEmpty(),
             hasRagContext = ragContext.isNotEmpty(),
             hasMemoryContext = memoryContext.isNotEmpty(),
+            retrievalErrors = retrievalErrors.toList(),
         )
     }
 
     /**
      * Check if RAG is enabled in preferences.
      */
-    override fun isRagEnabled(): Boolean = preferences.getBoolean(PreferenceKeys.RAG_ENABLED, true)
+    override fun isRagEnabled(): Boolean = preferences.getBoolean(PreferenceKeys.RAG_ENABLED, false)
 
     /**
      * Get the memory topK value based on device tier.
@@ -175,7 +173,7 @@ class ContextRetrievalUseCase(
      * gives a bad/refusing response, that gets fed back as context and the model
      * continues the refusal pattern. User topics are sufficient for follow-ups.
      */
-    private fun retrieveConversationHistory(): String {
+    private fun retrieveConversationHistory(errors: MutableList<String>): String {
         return try {
             val limit = getConversationHistoryLimit()
             val messages =
@@ -217,88 +215,49 @@ class ContextRetrievalUseCase(
             history
         } catch (e: Exception) {
             logger.w(e) { "Conversation history retrieval failed" }
+            errors += "history: ${e.message ?: e::class.simpleName}"
             ""
         }
     }
 
-    private suspend fun retrieveRagContext(
+    /**
+     * Personal-knowledge retrieval path — queries the [RetrievePassagesUseCase]
+     * for passages relevant to the user's prompt and formats them as inline context.
+     *
+     * Returns an empty [RagResult] when no passages match or on any failure —
+     * keeps the chat flow resilient to storage/embedding hiccups.
+     */
+    private suspend fun retrievePassagesContext(
         prompt: String,
-        conversationHistoryChars: Int,
+        errors: MutableList<String>,
     ): RagResult =
         try {
-            val result =
-                ragEnricher!!.enrichPrompt(
-                    userQuery = prompt,
-                    systemPrompt = "",
-                    enableRAG = true,
-                )
-
-            if (result.ragApplied && result.retrievedFacts.isNotEmpty()) {
-                // Calculate available budget for RAG facts
-                // Reserve space for memory context (retrieved after RAG)
-                // Estimate: topK memories × max content length per memory
-                val estimatedMemoryChars =
-                    deviceInfo.getMemoryTopK() *
-                        (GenerationConstants.MemoryPreview.MAX_CONTENT_LENGTH + 10) // +10 for "Memory: " prefix
-                val ragBudget =
-                    contextBudgetManager.calculateRagBudget(
-                        historyChars = conversationHistoryChars,
-                        memoryChars = estimatedMemoryChars,
-                    )
-
-                // Select facts within budget (already sorted by similarity)
-                val selectedFacts =
-                    contextBudgetManager.selectFactsWithinBudget(
-                        result.retrievedFacts,
-                        ragBudget,
-                    )
-
-                // Format as inline string: "Facts: x. y. z."
-                val factsContext = contextBudgetManager.formatFacts(selectedFacts)
-
-                // Build RAG info display string for UI
-                val avgSimilarity =
-                    result.retrievedFacts
-                        .map { it.similarity }
-                        .average()
-                        .toFloat()
-                val qualityEmoji =
-                    when {
-                        avgSimilarity >= GenerationConstants.Similarity.HIGH_QUALITY -> "✅"
-                        avgSimilarity >= GenerationConstants.Similarity.MEDIUM_QUALITY -> "⚠️"
-                        else -> "❓"
-                    }
-                val usedCount = selectedFacts.size
-                val totalCount = result.retrievedFacts.size
-                val ragInfo = "$qualityEmoji ${result.intent.category} (${(result.confidence * 100).toInt()}%) • $usedCount/$totalCount facts"
-
-                logger.d { "RAG budget: $ragBudget chars, selected $usedCount/$totalCount facts" }
-
-                RagResult(
-                    context = factsContext, // Inline format, budget-aware
-                    ragInfo = ragInfo,
-                    ragSources = result.retrievedFacts.formatRAGSources(), // Domain extension
-                    ragConfidence = result.retrievedFacts.calculateRAGConfidence(), // Domain extension
-                )
+            val topK = 3
+            val passages = passageRetriever!!.execute(prompt, topK)
+            if (passages.isEmpty()) {
+                RagResult(context = "", ragInfo = null, ragSources = null, ragConfidence = null)
             } else {
+                val ctx = formatPassages(passages)
+                val info = "📖 ${passages.size} passage${if (passages.size == 1) "" else "s"}"
                 RagResult(
-                    context = "",
-                    ragInfo = null,
-                    ragSources = null,
+                    context = ctx,
+                    ragInfo = info,
+                    ragSources = passages.map(Passage::sourceId).distinct().joinToString("; "),
                     ragConfidence = null,
                 )
             }
         } catch (e: Exception) {
-            logger.w(e) { "RAG enrichment failed" }
-            RagResult(
-                context = "",
-                ragInfo = null,
-                ragSources = null,
-                ragConfidence = null,
-            )
+            logger.w(e) { "Passage retrieval failed" }
+            errors += "passages: ${e.message ?: e::class.simpleName}"
+            RagResult(context = "", ragInfo = null, ragSources = null, ragConfidence = null)
         }
 
-    private suspend fun retrieveMemoryContext(prompt: String): String =
+    private fun formatPassages(passages: List<Passage>): String = passages.joinToString(" ") { it.content.trim() }.let { "Context: $it" }
+
+    private suspend fun retrieveMemoryContext(
+        prompt: String,
+        errors: MutableList<String>,
+    ): String =
         try {
             val topK = deviceInfo.getMemoryTopK()
             val result = memoryManager!!.retrieveRelevantMemories(prompt, topK)
@@ -320,6 +279,7 @@ class ContextRetrievalUseCase(
             } ?: ""
         } catch (e: Exception) {
             logger.w(e) { "Memory retrieval failed" }
+            errors += "memory: ${e.message ?: e::class.simpleName}"
             ""
         }
 

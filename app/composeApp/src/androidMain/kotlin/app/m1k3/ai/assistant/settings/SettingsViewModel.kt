@@ -6,11 +6,11 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.platform.LocalContext
-import app.m1k3.ai.domain.ai.AiCoreModelPreference
-import app.m1k3.ai.domain.ai.GenerationConfig
 import app.m1k3.ai.assistant.ai.ondevice.AiAvailability
 import app.m1k3.ai.assistant.ai.ondevice.AndroidOnDeviceAi
 import app.m1k3.ai.assistant.ai.ondevice.OnDeviceAi
+import app.m1k3.ai.domain.ai.AiCoreModelPreference
+import app.m1k3.ai.domain.ai.GenerationConfig
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -39,7 +39,7 @@ import kotlinx.coroutines.launch
 class SettingsViewModel(
     private val onDeviceAi: OnDeviceAi,
     private val context: Context,
-    private val scope: CoroutineScope
+    private val scope: CoroutineScope,
 ) {
     private val prefs = context.getSharedPreferences("ma_ai_prefs", Context.MODE_PRIVATE)
 
@@ -56,10 +56,11 @@ class SettingsViewModel(
             val availability = onDeviceAi.checkAvailability()
             val modelInfo = onDeviceAi.getModelInfo()
 
-            _state.value = _state.value.copy(
-                mlKitStatus = MlKitStatus.Loaded(availability),
-                modelInfo = modelInfo
-            )
+            _state.value =
+                _state.value.copy(
+                    mlKitStatus = MlKitStatus.Loaded(availability),
+                    modelInfo = modelInfo,
+                )
         }
     }
 
@@ -74,9 +75,7 @@ class SettingsViewModel(
     /**
      * Get current RAG enabled state.
      */
-    fun isRagEnabled(): Boolean {
-        return prefs.getBoolean("rag_enabled", true)
-    }
+    fun isRagEnabled(): Boolean = prefs.getBoolean("rag_enabled", false)
 
     /**
      * Run a test generation.
@@ -84,10 +83,11 @@ class SettingsViewModel(
     fun runTestGeneration() {
         if (_state.value.isTestRunning) return
 
-        _state.value = _state.value.copy(
-            isTestRunning = true,
-            testResult = "Initializing..."
-        )
+        _state.value =
+            _state.value.copy(
+                isTestRunning = true,
+                testResult = "Initializing...",
+            )
 
         scope.launch {
             try {
@@ -101,31 +101,35 @@ class SettingsViewModel(
                         val result = onDeviceAi.generate("Hello, what is 2+2?", config)
                         result.fold(
                             onSuccess = { response ->
-                                _state.value = _state.value.copy(
-                                    testResult = "Success: $response",
-                                    isTestRunning = false
-                                )
+                                _state.value =
+                                    _state.value.copy(
+                                        testResult = "Success: $response",
+                                        isTestRunning = false,
+                                    )
                             },
                             onError = { code, message ->
-                                _state.value = _state.value.copy(
-                                    testResult = "Generation Error [$code]: $message",
-                                    isTestRunning = false
-                                )
-                            }
+                                _state.value =
+                                    _state.value.copy(
+                                        testResult = "Generation Error [$code]: $message",
+                                        isTestRunning = false,
+                                    )
+                            },
                         )
                     },
                     onError = { code, message ->
-                        _state.value = _state.value.copy(
-                            testResult = "Init Error [$code]: $message",
-                            isTestRunning = false
-                        )
-                    }
+                        _state.value =
+                            _state.value.copy(
+                                testResult = "Init Error [$code]: $message",
+                                isTestRunning = false,
+                            )
+                    },
                 )
             } catch (e: Exception) {
-                _state.value = _state.value.copy(
-                    testResult = "Exception: ${e.message}",
-                    isTestRunning = false
-                )
+                _state.value =
+                    _state.value.copy(
+                        testResult = "Exception: ${e.message}",
+                        isTestRunning = false,
+                    )
             }
         }
     }
@@ -164,14 +168,20 @@ class SettingsViewModel(
      */
     fun initializeFromPreferences() {
         val savedPreference = prefs.getString("aicore_preference", null)
-        val aiCorePreference = savedPreference?.let {
-            try { AiCoreModelPreference.valueOf(it) } catch (_: Exception) { null }
-        } ?: AiCoreModelPreference.STABLE
+        val aiCorePreference =
+            savedPreference?.let {
+                try {
+                    AiCoreModelPreference.valueOf(it)
+                } catch (_: Exception) {
+                    null
+                }
+            } ?: AiCoreModelPreference.STABLE
 
-        _state.value = _state.value.copy(
-            ragEnabled = prefs.getBoolean("rag_enabled", true),
-            aiCorePreference = aiCorePreference
-        )
+        _state.value =
+            _state.value.copy(
+                ragEnabled = prefs.getBoolean("rag_enabled", false),
+                aiCorePreference = aiCorePreference,
+            )
     }
 }
 
@@ -181,10 +191,10 @@ class SettingsViewModel(
 data class SettingsState(
     val mlKitStatus: MlKitStatus = MlKitStatus.Checking,
     val modelInfo: String = "Loading...",
-    val ragEnabled: Boolean = true,
+    val ragEnabled: Boolean = false,
     val isTestRunning: Boolean = false,
     val testResult: String? = null,
-    val aiCorePreference: AiCoreModelPreference = AiCoreModelPreference.STABLE
+    val aiCorePreference: AiCoreModelPreference = AiCoreModelPreference.STABLE,
 )
 
 /**
@@ -192,7 +202,10 @@ data class SettingsState(
  */
 sealed class MlKitStatus {
     data object Checking : MlKitStatus()
-    data class Loaded(val availability: AiAvailability) : MlKitStatus()
+
+    data class Loaded(
+        val availability: AiAvailability,
+    ) : MlKitStatus()
 }
 
 /**
@@ -210,7 +223,7 @@ fun rememberSettingsViewModel(onDeviceAi: OnDeviceAi): SettingsViewModel {
         SettingsViewModel(
             onDeviceAi = onDeviceAi,
             context = context,
-            scope = scope
+            scope = scope,
         ).also {
             it.initializeFromPreferences()
         }
@@ -221,6 +234,4 @@ fun rememberSettingsViewModel(onDeviceAi: OnDeviceAi): SettingsViewModel {
  * Collect settings state as Compose State.
  */
 @Composable
-fun SettingsViewModel.collectAsState(): androidx.compose.runtime.State<SettingsState> {
-    return state.collectAsState()
-}
+fun SettingsViewModel.collectAsState(): androidx.compose.runtime.State<SettingsState> = state.collectAsState()

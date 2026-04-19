@@ -8,6 +8,7 @@ import app.m1k3.ai.assistant.mocks.MockDeviceInfoProvider
 import app.m1k3.ai.assistant.mocks.TestPreferencesStore
 import app.m1k3.ai.assistant.platform.PreferenceKeys
 import app.m1k3.ai.assistant.test.TestDatabaseFactory
+import app.m1k3.ai.domain.ai.LlmModel
 import app.m1k3.ai.domain.tools.Tool
 import app.m1k3.ai.domain.tools.ToolCall
 import app.m1k3.ai.domain.tools.ToolCategory
@@ -16,7 +17,6 @@ import app.m1k3.ai.domain.tools.services.ToolExecutor
 import app.m1k3.ai.domain.tools.services.ToolRegistry
 import app.m1k3.ai.domain.usecases.chat.LlmOutputProcessor
 import app.m1k3.ai.domain.usecases.chat.ProcessedOutput
-import app.m1k3.ai.domain.ai.LlmModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -42,7 +42,6 @@ import kotlin.test.assertTrue
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class ChatScreenViewModelToolsTest {
-
     private val testDispatcher = StandardTestDispatcher()
     private val testScope = TestScope()
 
@@ -63,11 +62,12 @@ class ChatScreenViewModelToolsTest {
         val prefs = TestPreferencesStore()
         prefs.setBoolean(PreferenceKeys.TOOLS_ENABLED, false)
 
-        val viewModel = createViewModel(
-            preferences = prefs,
-            toolRegistry = FakeToolRegistry(),
-            processLlmOutput = FakeLlmOutputProcessor()
-        )
+        val viewModel =
+            createViewModel(
+                preferences = prefs,
+                toolRegistry = FakeToolRegistry(),
+                processLlmOutput = FakeLlmOutputProcessor(),
+            )
 
         assertFalse(viewModel.isToolCallingEnabled)
     }
@@ -77,11 +77,12 @@ class ChatScreenViewModelToolsTest {
         val prefs = TestPreferencesStore()
         prefs.setBoolean(PreferenceKeys.TOOLS_ENABLED, true)
 
-        val viewModel = createViewModel(
-            preferences = prefs,
-            toolRegistry = FakeToolRegistry(),
-            processLlmOutput = FakeLlmOutputProcessor()
-        )
+        val viewModel =
+            createViewModel(
+                preferences = prefs,
+                toolRegistry = FakeToolRegistry(),
+                processLlmOutput = FakeLlmOutputProcessor(),
+            )
 
         assertTrue(viewModel.isToolCallingEnabled)
     }
@@ -91,11 +92,12 @@ class ChatScreenViewModelToolsTest {
         // Default should be true (opt-out model)
         val prefs = TestPreferencesStore()
 
-        val viewModel = createViewModel(
-            preferences = prefs,
-            toolRegistry = FakeToolRegistry(),
-            processLlmOutput = FakeLlmOutputProcessor()
-        )
+        val viewModel =
+            createViewModel(
+                preferences = prefs,
+                toolRegistry = FakeToolRegistry(),
+                processLlmOutput = FakeLlmOutputProcessor(),
+            )
 
         assertTrue(viewModel.isToolCallingEnabled)
     }
@@ -105,11 +107,12 @@ class ChatScreenViewModelToolsTest {
         val prefs = TestPreferencesStore()
         prefs.setBoolean(PreferenceKeys.TOOLS_ENABLED, true)
 
-        val viewModel = createViewModel(
-            preferences = prefs,
-            toolRegistry = null,
-            processLlmOutput = FakeLlmOutputProcessor()
-        )
+        val viewModel =
+            createViewModel(
+                preferences = prefs,
+                toolRegistry = null,
+                processLlmOutput = FakeLlmOutputProcessor(),
+            )
 
         assertFalse(viewModel.isToolCallingEnabled)
     }
@@ -119,11 +122,12 @@ class ChatScreenViewModelToolsTest {
         val prefs = TestPreferencesStore()
         prefs.setBoolean(PreferenceKeys.TOOLS_ENABLED, true)
 
-        val viewModel = createViewModel(
-            preferences = prefs,
-            toolRegistry = FakeToolRegistry(),
-            processLlmOutput = null
-        )
+        val viewModel =
+            createViewModel(
+                preferences = prefs,
+                toolRegistry = FakeToolRegistry(),
+                processLlmOutput = null,
+            )
 
         assertFalse(viewModel.isToolCallingEnabled)
     }
@@ -131,106 +135,118 @@ class ChatScreenViewModelToolsTest {
     // ===== Model Switch Tests =====
 
     @Test
-    fun `switchModel updates currentModel in state`() = runTest {
-        val viewModel = createViewModel(
-            preferences = TestPreferencesStore(),
-            engineFactory = { MockBaseLlmEngine() }
-        )
-        viewModel.initializeEngine()
-        advanceUntilIdle()
+    fun `switchModel updates currentModel in state`() =
+        runTest {
+            val viewModel =
+                createViewModel(
+                    preferences = TestPreferencesStore(),
+                    engineFactory = { MockBaseLlmEngine() },
+                )
+            viewModel.initializeEngine()
+            advanceUntilIdle()
 
-        assertEquals(LlmModel.default, viewModel.uiState.value.currentModel)
+            assertEquals(LlmModel.default, viewModel.uiState.value.currentModel)
 
-        viewModel.switchModel(LlmModel.FalconH1_90M)
-        advanceUntilIdle()
+            viewModel.switchModel(LlmModel.FalconH1_90M)
+            advanceUntilIdle()
 
-        assertEquals(LlmModel.FalconH1_90M, viewModel.uiState.value.currentModel)
-    }
-
-    @Test
-    fun `switchModel sets engine to Ready on success`() = runTest {
-        val viewModel = createViewModel(
-            preferences = TestPreferencesStore(),
-            engineFactory = { MockBaseLlmEngine() }
-        )
-        viewModel.initializeEngine()
-        advanceUntilIdle()
-
-        viewModel.switchModel(LlmModel.FalconH1_90M)
-        advanceUntilIdle()
-
-        assertTrue(viewModel.uiState.value.engineState is EngineState.Ready)
-    }
+            assertEquals(LlmModel.FalconH1_90M, viewModel.uiState.value.currentModel)
+        }
 
     @Test
-    fun `switchModel sets engine to Failed when factory engine fails init`() = runTest {
-        val viewModel = createViewModel(
-            preferences = TestPreferencesStore(),
-            engineFactory = {
-                MockBaseLlmEngine().apply {
-                    setInitializeError(RuntimeException("Unsupported GGUF architecture"))
-                }
-            }
-        )
-        viewModel.initializeEngine()
-        advanceUntilIdle()
+    fun `switchModel sets engine to Ready on success`() =
+        runTest {
+            val viewModel =
+                createViewModel(
+                    preferences = TestPreferencesStore(),
+                    engineFactory = { MockBaseLlmEngine() },
+                )
+            viewModel.initializeEngine()
+            advanceUntilIdle()
 
-        viewModel.switchModel(LlmModel.FalconH1_90M)
-        advanceUntilIdle()
+            viewModel.switchModel(LlmModel.FalconH1_90M)
+            advanceUntilIdle()
 
-        assertTrue(viewModel.uiState.value.engineState is EngineState.Failed)
-    }
+            assertTrue(viewModel.uiState.value.engineState is EngineState.Ready)
+        }
 
     @Test
-    fun `switchModel releases old engine`() = runTest {
-        val originalEngine = MockBaseLlmEngine()
-        val viewModel = createViewModel(
-            preferences = TestPreferencesStore(),
-            aiEngine = originalEngine,
-            engineFactory = { MockBaseLlmEngine() }
-        )
-        viewModel.initializeEngine()
-        advanceUntilIdle()
+    fun `switchModel sets engine to Failed when factory engine fails init`() =
+        runTest {
+            val viewModel =
+                createViewModel(
+                    preferences = TestPreferencesStore(),
+                    engineFactory = {
+                        MockBaseLlmEngine().apply {
+                            setInitializeError(RuntimeException("Unsupported GGUF architecture"))
+                        }
+                    },
+                )
+            viewModel.initializeEngine()
+            advanceUntilIdle()
 
-        viewModel.switchModel(LlmModel.FalconH1_90M)
-        advanceUntilIdle()
+            viewModel.switchModel(LlmModel.FalconH1_90M)
+            advanceUntilIdle()
 
-        assertEquals(1, originalEngine.releaseCallCount)
-    }
+            assertTrue(viewModel.uiState.value.engineState is EngineState.Failed)
+        }
+
+    @Test
+    fun `switchModel releases old engine`() =
+        runTest {
+            val originalEngine = MockBaseLlmEngine()
+            val viewModel =
+                createViewModel(
+                    preferences = TestPreferencesStore(),
+                    aiEngine = originalEngine,
+                    engineFactory = { MockBaseLlmEngine() },
+                )
+            viewModel.initializeEngine()
+            advanceUntilIdle()
+
+            viewModel.switchModel(LlmModel.FalconH1_90M)
+            advanceUntilIdle()
+
+            assertEquals(1, originalEngine.releaseCallCount)
+        }
 
     // ===== TTS Loading State Tests =====
 
     @Test
-    fun `speakMessage sets isLoadingTts before synthesis`() = runTest {
-        var capturedLoadingState = false
-        // Use a lateinit pattern to capture loading state inside callback
-        lateinit var vm: ChatScreenViewModel
-        vm = createViewModel(
-            preferences = TestPreferencesStore(),
-            onSpeakText = { _ ->
-                capturedLoadingState = vm.uiState.value.isLoadingTts
-            }
-        )
+    fun `speakMessage sets isLoadingTts before synthesis`() =
+        runTest {
+            var capturedLoadingState = false
+            // Use a lateinit pattern to capture loading state inside callback
+            lateinit var vm: ChatScreenViewModel
+            vm =
+                createViewModel(
+                    preferences = TestPreferencesStore(),
+                    onSpeakText = { _ ->
+                        capturedLoadingState = vm.uiState.value.isLoadingTts
+                    },
+                )
 
-        vm.speakMessage("Hello")
-        advanceUntilIdle()
+            vm.speakMessage("Hello")
+            advanceUntilIdle()
 
-        // During speak, isLoadingTts should have been true
-        assertTrue(capturedLoadingState)
-    }
+            // During speak, isLoadingTts should have been true
+            assertTrue(capturedLoadingState)
+        }
 
     @Test
-    fun `speakMessage clears isLoadingTts after synthesis`() = runTest {
-        val viewModel = createViewModel(
-            preferences = TestPreferencesStore(),
-            onSpeakText = { /* no-op, completes instantly */ }
-        )
+    fun `speakMessage clears isLoadingTts after synthesis`() =
+        runTest {
+            val viewModel =
+                createViewModel(
+                    preferences = TestPreferencesStore(),
+                    onSpeakText = { /* no-op, completes instantly */ },
+                )
 
-        viewModel.speakMessage("Hello")
-        advanceUntilIdle()
+            viewModel.speakMessage("Hello")
+            advanceUntilIdle()
 
-        assertFalse(viewModel.uiState.value.isLoadingTts)
-    }
+            assertFalse(viewModel.uiState.value.isLoadingTts)
+        }
 
     // ===== Helper Methods =====
 
@@ -240,7 +256,7 @@ class ChatScreenViewModelToolsTest {
         processLlmOutput: LlmOutputProcessor? = null,
         aiEngine: MockBaseLlmEngine = MockBaseLlmEngine(),
         engineFactory: ((LlmModel) -> BaseLlmEngine)? = null,
-        onSpeakText: (suspend (String) -> Unit)? = null
+        onSpeakText: (suspend (String) -> Unit)? = null,
     ): ChatScreenViewModel {
         val database = TestDatabaseFactory.createInMemoryDatabase()
         return ChatScreenViewModel(
@@ -252,11 +268,10 @@ class ChatScreenViewModelToolsTest {
             preferences = preferences,
             projectId = "test_project",
             memoryManager = null,
-            ragManager = null,
             toolRegistry = toolRegistry,
             processLlmOutput = processLlmOutput,
             engineFactory = engineFactory,
-            onSpeakText = onSpeakText
+            onSpeakText = onSpeakText,
         )
     }
 
@@ -264,19 +279,33 @@ class ChatScreenViewModelToolsTest {
 
     private class FakeToolRegistry : ToolRegistry {
         override fun getAllTools(): List<Tool> = emptyList()
+
         override fun getToolsByCategory(category: ToolCategory): List<Tool> = emptyList()
+
         override suspend fun getAvailableTools(): List<Tool> = emptyList()
-        override suspend fun getRelevantTools(query: String, maxTools: Int): List<Tool> = emptyList()
+
+        override suspend fun getRelevantTools(
+            query: String,
+            maxTools: Int,
+        ): List<Tool> = emptyList()
+
         override fun findTool(toolId: String): Tool? = null
+
         override suspend fun isToolAvailable(toolId: String): Boolean = false
-        override fun registerTool(tool: Tool, executor: ToolExecutor) {}
+
+        override fun registerTool(
+            tool: Tool,
+            executor: ToolExecutor,
+        ) {}
+
         override fun getExecutor(toolId: String): ToolExecutor? = null
     }
 
     private class FakeLlmOutputProcessor : LlmOutputProcessor {
-        override suspend fun execute(llmOutput: String, confirmedToolIds: Set<String>): ProcessedOutput {
-            return ProcessedOutput.TextOnly(llmOutput)
-        }
+        override suspend fun execute(
+            llmOutput: String,
+            confirmedToolIds: Set<String>,
+        ): ProcessedOutput = ProcessedOutput.TextOnly(llmOutput)
 
         override fun hasToolCalls(llmOutput: String): Boolean = false
 

@@ -24,244 +24,262 @@ import kotlin.test.assertTrue
  * Tests message flow orchestration with mocked dependencies.
  */
 class SendMessageUseCaseTest {
-
     // ===== Helper Functions =====
 
-    private fun createUseCase(
-        mockEngine: MockBaseLlmEngine = MockBaseLlmEngine.withGreeting()
-    ): SendMessageUseCase {
+    private fun createUseCase(mockEngine: MockBaseLlmEngine = MockBaseLlmEngine.withGreeting()): SendMessageUseCase {
         val deviceInfo = MockDeviceInfoProvider.midRange()
         val preferences = TestPreferencesStore()
-        val contextRetrieval = ContextRetrievalUseCase(
-            deviceInfo = deviceInfo,
-            preferences = preferences,
-            ragEnricher = null,
-            memoryManager = null
-        )
+        val contextRetrieval =
+            ContextRetrievalUseCase(
+                deviceInfo = deviceInfo,
+                preferences = preferences,
+                memoryManager = null,
+            )
         val configBuilder = GenerationConfigBuilder(deviceInfo)
 
         return SendMessageUseCase(
             aiEngine = mockEngine,
             contextRetrieval = contextRetrieval,
-            configBuilder = configBuilder
+            configBuilder = configBuilder,
         )
     }
 
     // ===== Basic Flow Tests =====
 
     @Test
-    fun `execute emits Started event first`() = runTest {
-        val useCase = createUseCase()
-        val events = useCase.execute("Hello").toList()
+    fun `execute emits Started event first`() =
+        runTest {
+            val useCase = createUseCase()
+            val events = useCase.execute("Hello").toList()
 
-        assertIs<MessageEvent.Started>(events.first())
-    }
-
-    @Test
-    fun `execute emits RetrievingContext event`() = runTest {
-        val useCase = createUseCase()
-        val events = useCase.execute("Hello").toList()
-
-        assertTrue(events.any { it is MessageEvent.RetrievingContext })
-    }
+            assertIs<MessageEvent.Started>(events.first())
+        }
 
     @Test
-    fun `execute emits ContextRetrieved event`() = runTest {
-        val useCase = createUseCase()
-        val events = useCase.execute("Hello").toList()
+    fun `execute emits RetrievingContext event`() =
+        runTest {
+            val useCase = createUseCase()
+            val events = useCase.execute("Hello").toList()
 
-        assertTrue(events.any { it is MessageEvent.ContextRetrieved })
-    }
-
-    @Test
-    fun `execute emits Complete event on success`() = runTest {
-        val useCase = createUseCase()
-        val events = useCase.execute("Hello").toList()
-
-        assertTrue(events.any { it is MessageEvent.Complete })
-    }
+            assertTrue(events.any { it is MessageEvent.RetrievingContext })
+        }
 
     @Test
-    fun `execute events are in correct order`() = runTest {
-        val useCase = createUseCase()
-        val events = useCase.execute("Hello").toList()
+    fun `execute emits ContextRetrieved event`() =
+        runTest {
+            val useCase = createUseCase()
+            val events = useCase.execute("Hello").toList()
 
-        assertEquals(4, events.size)
-        assertIs<MessageEvent.Started>(events[0])
-        assertIs<MessageEvent.RetrievingContext>(events[1])
-        assertIs<MessageEvent.ContextRetrieved>(events[2])
-        assertIs<MessageEvent.Complete>(events[3])
-    }
+            assertTrue(events.any { it is MessageEvent.ContextRetrieved })
+        }
+
+    @Test
+    fun `execute emits Complete event on success`() =
+        runTest {
+            val useCase = createUseCase()
+            val events = useCase.execute("Hello").toList()
+
+            assertTrue(events.any { it is MessageEvent.Complete })
+        }
+
+    @Test
+    fun `execute events are in correct order`() =
+        runTest {
+            val useCase = createUseCase()
+            val events = useCase.execute("Hello").toList()
+
+            assertEquals(4, events.size)
+            assertIs<MessageEvent.Started>(events[0])
+            assertIs<MessageEvent.RetrievingContext>(events[1])
+            assertIs<MessageEvent.ContextRetrieved>(events[2])
+            assertIs<MessageEvent.Complete>(events[3])
+        }
 
     // ===== Complete Response Tests =====
 
     @Test
-    fun `execute Complete event contains generated text`() = runTest {
-        val mockEngine = MockBaseLlmEngine()
-        mockEngine.setResponse("Hello world!")
-        val useCase = createUseCase(mockEngine)
+    fun `execute Complete event contains generated text`() =
+        runTest {
+            val mockEngine = MockBaseLlmEngine()
+            mockEngine.setResponse("Hello world!")
+            val useCase = createUseCase(mockEngine)
 
-        val events = useCase.execute("Test").toList()
-        val complete = events.filterIsInstance<MessageEvent.Complete>().first()
+            val events = useCase.execute("Test").toList()
+            val complete = events.filterIsInstance<MessageEvent.Complete>().first()
 
-        assertEquals("Hello world!", complete.response.text)
-    }
-
-    @Test
-    fun `execute Complete event contains generation stats`() = runTest {
-        val useCase = createUseCase()
-        val events = useCase.execute("Test").toList()
-        val complete = events.filterIsInstance<MessageEvent.Complete>().first()
-
-        assertTrue(complete.response.stats.tokenCount > 0)
-        assertTrue(complete.response.stats.durationMs >= 0)
-    }
+            assertEquals("Hello world!", complete.response.text)
+        }
 
     @Test
-    fun `execute Complete response indicates no RAG used when disabled`() = runTest {
-        val useCase = createUseCase()
-        val events = useCase.execute("Test").toList()
-        val complete = events.filterIsInstance<MessageEvent.Complete>().first()
+    fun `execute Complete event contains generation stats`() =
+        runTest {
+            val useCase = createUseCase()
+            val events = useCase.execute("Test").toList()
+            val complete = events.filterIsInstance<MessageEvent.Complete>().first()
 
-        assertFalse(complete.response.usedRag)
-        assertFalse(complete.response.usedMemory)
-    }
+            assertTrue(complete.response.stats.tokenCount > 0)
+            assertTrue(complete.response.stats.durationMs >= 0)
+        }
+
+    @Test
+    fun `execute Complete response indicates no RAG used when disabled`() =
+        runTest {
+            val useCase = createUseCase()
+            val events = useCase.execute("Test").toList()
+            val complete = events.filterIsInstance<MessageEvent.Complete>().first()
+
+            assertFalse(complete.response.usedRag)
+            assertFalse(complete.response.usedMemory)
+        }
 
     // ===== Error Handling Tests =====
 
     @Test
-    fun `execute emits Failed event on streaming error`() = runTest {
-        val mockEngine = MockBaseLlmEngine.withStreamingError()
-        val useCase = createUseCase(mockEngine)
+    fun `execute emits Failed event on streaming error`() =
+        runTest {
+            val mockEngine = MockBaseLlmEngine.withStreamingError()
+            val useCase = createUseCase(mockEngine)
 
-        val events = useCase.execute("Test").toList()
+            val events = useCase.execute("Test").toList()
 
-        assertTrue(events.any { it is MessageEvent.Failed })
-    }
-
-    @Test
-    fun `execute Failed event contains ChatError`() = runTest {
-        val mockEngine = MockBaseLlmEngine()
-        mockEngine.setStreamingError(RuntimeException("Something went wrong"))
-        val useCase = createUseCase(mockEngine)
-
-        val events = useCase.execute("Test").toList()
-        val failed = events.filterIsInstance<MessageEvent.Failed>().first()
-
-        assertIs<ChatError.Unknown>(failed.error)
-    }
+            assertTrue(events.any { it is MessageEvent.Failed })
+        }
 
     @Test
-    fun `execute maps OutOfMemory error correctly`() = runTest {
-        val mockEngine = MockBaseLlmEngine()
-        mockEngine.setStreamingError(RuntimeException("OutOfMemory in native code"))
-        val useCase = createUseCase(mockEngine)
+    fun `execute Failed event contains ChatError`() =
+        runTest {
+            val mockEngine = MockBaseLlmEngine()
+            mockEngine.setStreamingError(RuntimeException("Something went wrong"))
+            val useCase = createUseCase(mockEngine)
 
-        val events = useCase.execute("Test").toList()
-        val failed = events.filterIsInstance<MessageEvent.Failed>().first()
+            val events = useCase.execute("Test").toList()
+            val failed = events.filterIsInstance<MessageEvent.Failed>().first()
 
-        assertIs<ChatError.OutOfMemory>(failed.error)
-    }
-
-    @Test
-    fun `execute maps Timeout error correctly`() = runTest {
-        val mockEngine = MockBaseLlmEngine()
-        mockEngine.setStreamingError(RuntimeException("Request timeout exceeded"))
-        val useCase = createUseCase(mockEngine)
-
-        val events = useCase.execute("Test").toList()
-        val failed = events.filterIsInstance<MessageEvent.Failed>().first()
-
-        assertIs<ChatError.Timeout>(failed.error)
-    }
+            assertIs<ChatError.Unknown>(failed.error)
+        }
 
     @Test
-    fun `execute maps Model error correctly`() = runTest {
-        val mockEngine = MockBaseLlmEngine()
-        mockEngine.setStreamingError(RuntimeException("Model inference failed"))
-        val useCase = createUseCase(mockEngine)
+    fun `execute maps OutOfMemory error correctly`() =
+        runTest {
+            val mockEngine = MockBaseLlmEngine()
+            mockEngine.setStreamingError(RuntimeException("OutOfMemory in native code"))
+            val useCase = createUseCase(mockEngine)
 
-        val events = useCase.execute("Test").toList()
-        val failed = events.filterIsInstance<MessageEvent.Failed>().first()
+            val events = useCase.execute("Test").toList()
+            val failed = events.filterIsInstance<MessageEvent.Failed>().first()
 
-        assertIs<ChatError.ModelError>(failed.error)
-    }
+            assertIs<ChatError.OutOfMemory>(failed.error)
+        }
+
+    @Test
+    fun `execute maps Timeout error correctly`() =
+        runTest {
+            val mockEngine = MockBaseLlmEngine()
+            mockEngine.setStreamingError(RuntimeException("Request timeout exceeded"))
+            val useCase = createUseCase(mockEngine)
+
+            val events = useCase.execute("Test").toList()
+            val failed = events.filterIsInstance<MessageEvent.Failed>().first()
+
+            assertIs<ChatError.Timeout>(failed.error)
+        }
+
+    @Test
+    fun `execute maps Model error correctly`() =
+        runTest {
+            val mockEngine = MockBaseLlmEngine()
+            mockEngine.setStreamingError(RuntimeException("Model inference failed"))
+            val useCase = createUseCase(mockEngine)
+
+            val events = useCase.execute("Test").toList()
+            val failed = events.filterIsInstance<MessageEvent.Failed>().first()
+
+            assertIs<ChatError.ModelError>(failed.error)
+        }
 
     // ===== ExecuteSimple Tests =====
 
     @Test
-    fun `executeSimple emits Started event`() = runTest {
-        val useCase = createUseCase()
-        val events = useCase.executeSimple("Say hello").toList()
+    fun `executeSimple emits Started event`() =
+        runTest {
+            val useCase = createUseCase()
+            val events = useCase.executeSimple("Say hello").toList()
 
-        assertIs<MessageEvent.Started>(events.first())
-    }
-
-    @Test
-    fun `executeSimple emits Complete event on success`() = runTest {
-        val useCase = createUseCase()
-        val events = useCase.executeSimple("Say hello").toList()
-
-        assertTrue(events.any { it is MessageEvent.Complete })
-    }
+            assertIs<MessageEvent.Started>(events.first())
+        }
 
     @Test
-    fun `executeSimple does not retrieve context`() = runTest {
-        val useCase = createUseCase()
-        val events = useCase.executeSimple("Say hello").toList()
+    fun `executeSimple emits Complete event on success`() =
+        runTest {
+            val useCase = createUseCase()
+            val events = useCase.executeSimple("Say hello").toList()
 
-        // Should not have RetrievingContext event
-        assertFalse(events.any { it is MessageEvent.RetrievingContext })
-        assertFalse(events.any { it is MessageEvent.ContextRetrieved })
-    }
-
-    @Test
-    fun `executeSimple respects maxTokens parameter`() = runTest {
-        val mockEngine = MockBaseLlmEngine()
-        val useCase = createUseCase(mockEngine)
-
-        useCase.executeSimple("Test", maxTokens = 50).toList()
-
-        assertEquals(50, mockEngine.lastConfig?.maxTokens)
-    }
+            assertTrue(events.any { it is MessageEvent.Complete })
+        }
 
     @Test
-    fun `executeSimple defaults to 100 maxTokens`() = runTest {
-        val mockEngine = MockBaseLlmEngine()
-        val useCase = createUseCase(mockEngine)
+    fun `executeSimple does not retrieve context`() =
+        runTest {
+            val useCase = createUseCase()
+            val events = useCase.executeSimple("Say hello").toList()
 
-        useCase.executeSimple("Test").toList()
-
-        assertEquals(100, mockEngine.lastConfig?.maxTokens)
-    }
+            // Should not have RetrievingContext event
+            assertFalse(events.any { it is MessageEvent.RetrievingContext })
+            assertFalse(events.any { it is MessageEvent.ContextRetrieved })
+        }
 
     @Test
-    fun `executeSimple response has null context`() = runTest {
-        val useCase = createUseCase()
-        val events = useCase.executeSimple("Test").toList()
-        val complete = events.filterIsInstance<MessageEvent.Complete>().first()
+    fun `executeSimple respects maxTokens parameter`() =
+        runTest {
+            val mockEngine = MockBaseLlmEngine()
+            val useCase = createUseCase(mockEngine)
 
-        assertNull(complete.response.context)
-    }
+            useCase.executeSimple("Test", maxTokens = 50).toList()
+
+            assertEquals(50, mockEngine.lastConfig?.maxTokens)
+        }
+
+    @Test
+    fun `executeSimple defaults to 100 maxTokens`() =
+        runTest {
+            val mockEngine = MockBaseLlmEngine()
+            val useCase = createUseCase(mockEngine)
+
+            useCase.executeSimple("Test").toList()
+
+            assertEquals(100, mockEngine.lastConfig?.maxTokens)
+        }
+
+    @Test
+    fun `executeSimple response has null context`() =
+        runTest {
+            val useCase = createUseCase()
+            val events = useCase.executeSimple("Test").toList()
+            val complete = events.filterIsInstance<MessageEvent.Complete>().first()
+
+            assertNull(complete.response.context)
+        }
 
     // ===== GenerationResponse Tests =====
 
     @Test
     fun `GenerationResponse usedRag returns true when context has RAG`() {
-        val context = EnrichedContext(
-            context = "test",
-            intentCategory = "SCIENCE",
-            ragInfo = null,
-            ragSources = null,
-            ragConfidence = null,
-            hasRagContext = true,
-            hasMemoryContext = false
-        )
-        val response = GenerationResponse(
-            text = "response",
-            stats = GenerationStats(10, 100, 10f),
-            context = context
-        )
+        val context =
+            EnrichedContext(
+                context = "test",
+                intentCategory = "SCIENCE",
+                ragInfo = null,
+                ragSources = null,
+                ragConfidence = null,
+                hasRagContext = true,
+                hasMemoryContext = false,
+            )
+        val response =
+            GenerationResponse(
+                text = "response",
+                stats = GenerationStats(10, 100, 10f),
+                context = context,
+            )
 
         assertTrue(response.usedRag)
         assertFalse(response.usedMemory)
@@ -269,20 +287,22 @@ class SendMessageUseCaseTest {
 
     @Test
     fun `GenerationResponse usedMemory returns true when context has memory`() {
-        val context = EnrichedContext(
-            context = "test",
-            intentCategory = "GENERAL",
-            ragInfo = null,
-            ragSources = null,
-            ragConfidence = null,
-            hasRagContext = false,
-            hasMemoryContext = true
-        )
-        val response = GenerationResponse(
-            text = "response",
-            stats = GenerationStats(10, 100, 10f),
-            context = context
-        )
+        val context =
+            EnrichedContext(
+                context = "test",
+                intentCategory = "GENERAL",
+                ragInfo = null,
+                ragSources = null,
+                ragConfidence = null,
+                hasRagContext = false,
+                hasMemoryContext = true,
+            )
+        val response =
+            GenerationResponse(
+                text = "response",
+                stats = GenerationStats(10, 100, 10f),
+                context = context,
+            )
 
         assertFalse(response.usedRag)
         assertTrue(response.usedMemory)
@@ -290,11 +310,12 @@ class SendMessageUseCaseTest {
 
     @Test
     fun `GenerationResponse with null context returns false for usedRag and usedMemory`() {
-        val response = GenerationResponse(
-            text = "response",
-            stats = GenerationStats(10, 100, 10f),
-            context = null
-        )
+        val response =
+            GenerationResponse(
+                text = "response",
+                stats = GenerationStats(10, 100, 10f),
+                context = null,
+            )
 
         assertFalse(response.usedRag)
         assertFalse(response.usedMemory)
@@ -303,34 +324,37 @@ class SendMessageUseCaseTest {
     // ===== Engine Interaction Tests =====
 
     @Test
-    fun `execute calls engine generateStreaming`() = runTest {
-        val mockEngine = MockBaseLlmEngine()
-        val useCase = createUseCase(mockEngine)
+    fun `execute calls engine generateStreaming`() =
+        runTest {
+            val mockEngine = MockBaseLlmEngine()
+            val useCase = createUseCase(mockEngine)
 
-        useCase.execute("Test prompt").toList()
+            useCase.execute("Test prompt").toList()
 
-        assertEquals(1, mockEngine.streamingCallCount)
-    }
-
-    @Test
-    fun `execute passes prompt to engine`() = runTest {
-        val mockEngine = MockBaseLlmEngine()
-        val useCase = createUseCase(mockEngine)
-
-        useCase.execute("My test prompt").toList()
-
-        assertTrue(mockEngine.lastPrompt?.contains("My test prompt") == true)
-    }
+            assertEquals(1, mockEngine.streamingCallCount)
+        }
 
     @Test
-    fun `executeSimple calls engine generateStreaming`() = runTest {
-        val mockEngine = MockBaseLlmEngine()
-        val useCase = createUseCase(mockEngine)
+    fun `execute passes prompt to engine`() =
+        runTest {
+            val mockEngine = MockBaseLlmEngine()
+            val useCase = createUseCase(mockEngine)
 
-        useCase.executeSimple("Test").toList()
+            useCase.execute("My test prompt").toList()
 
-        assertEquals(1, mockEngine.streamingCallCount)
-    }
+            assertTrue(mockEngine.lastPrompt?.contains("My test prompt") == true)
+        }
+
+    @Test
+    fun `executeSimple calls engine generateStreaming`() =
+        runTest {
+            val mockEngine = MockBaseLlmEngine()
+            val useCase = createUseCase(mockEngine)
+
+            useCase.executeSimple("Test").toList()
+
+            assertEquals(1, mockEngine.streamingCallCount)
+        }
 
     // ===== MessageEvent Type Tests =====
 
@@ -350,10 +374,11 @@ class SendMessageUseCaseTest {
 
     @Test
     fun `MessageEvent Streaming stores partial text and token count`() {
-        val event = MessageEvent.Streaming(
-            partialText = "Hello world",
-            tokenCount = 2
-        )
+        val event =
+            MessageEvent.Streaming(
+                partialText = "Hello world",
+                tokenCount = 2,
+            )
         assertEquals("Hello world", event.partialText)
         assertEquals(2, event.tokenCount)
     }

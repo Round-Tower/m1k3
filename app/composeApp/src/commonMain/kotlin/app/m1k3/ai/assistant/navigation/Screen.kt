@@ -17,7 +17,9 @@ package app.m1k3.ai.assistant.navigation
  * - Settings: App configuration and preferences
  * - Demo: Welcome/demo screen for new users
  */
-sealed class Screen(val route: String) {
+sealed class Screen(
+    val route: String,
+) {
     /**
      * Home/Demo screen - Welcome and feature showcase
      */
@@ -52,6 +54,11 @@ sealed class Screen(val route: String) {
      * Avatar Gallery screen - Full-screen avatar selection with 3D previews
      */
     data object AvatarGallery : Screen("avatar_gallery")
+
+    /**
+     * Documents screen — list + manage personal-knowledge sources the user imported.
+     */
+    data object Documents : Screen("documents")
 
     /**
      * About M1K3 screen - App mission, privacy-first messaging, version info
@@ -98,7 +105,9 @@ sealed class Screen(val route: String) {
      * Route: "conversation/{conversationId}"
      * Args: conversationId (Long)
      */
-    data class ConversationDetail(val conversationId: Long) : Screen("conversation/$conversationId") {
+    data class ConversationDetail(
+        val conversationId: Long,
+    ) : Screen("conversation/$conversationId") {
         companion object {
             const val route = "conversation/{conversationId}"
             const val argConversationId = "conversationId"
@@ -109,13 +118,14 @@ sealed class Screen(val route: String) {
         /**
          * Get all bottom nav destinations
          */
-        val bottomNavScreens = listOf(
-            Chat,
-            History,
-            EcoStats,
-            Settings,
-            Demo
-        )
+        val bottomNavScreens =
+            listOf(
+                Chat,
+                History,
+                EcoStats,
+                Settings,
+                Demo,
+            )
 
         /**
          * Get route from Screen instance
@@ -125,8 +135,6 @@ sealed class Screen(val route: String) {
         /**
          * Check if route is a bottom nav destination
          */
-        fun isBottomNavDestination(route: String?): Boolean {
-            return bottomNavScreens.any { it.route == route }
-        }
+        fun isBottomNavDestination(route: String?): Boolean = bottomNavScreens.any { it.route == route }
     }
 }

@@ -56,6 +56,7 @@ import org.koin.compose.koinInject
 fun SettingsScreen(
     onNavigateToAvatarGallery: (() -> Unit)? = null,
     onNavigateToLicenses: (() -> Unit)? = null,
+    onNavigateToDocuments: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     val haptics = LocalHapticFeedback.current
@@ -136,7 +137,7 @@ fun SettingsScreen(
             KnowledgeSection(
                 ragEnabled = state.ragEnabled,
                 onRagEnabledChange = { viewModel.setRagEnabled(it) },
-                onKnowledgeBaseClick = {},
+                onKnowledgeBaseClick = { onNavigateToDocuments?.invoke() },
                 onIntentClick = {},
             )
         }
@@ -602,18 +603,18 @@ private fun KnowledgeSection(
     onKnowledgeBaseClick: () -> Unit,
     onIntentClick: () -> Unit,
 ) {
-    SettingsSection(title = "Knowledge & RAG", icon = Icons.Default.MenuBook) {
+    SettingsSection(title = "Personal Knowledge", icon = Icons.Default.MenuBook) {
         SettingsToggleItem(
-            title = "RAG (Retrieval-Augmented Generation)",
-            subtitle = "Enhance responses with expert documents",
+            title = "Use personal knowledge",
+            subtitle = "Ground replies in your imported notes and docs",
             icon = Icons.Default.AutoAwesome,
             checked = ragEnabled,
             onCheckedChange = onRagEnabledChange,
         )
         HorizontalDivider(modifier = Modifier.padding(horizontal = MaSpacing.base), color = MaColors.BorderLight)
         SettingsItem(
-            title = "Knowledge Base",
-            subtitle = "1,401 documents · 24 categories",
+            title = "Documents",
+            subtitle = "None imported yet",
             icon = Icons.Default.Book,
             onClick = onKnowledgeBaseClick,
         )

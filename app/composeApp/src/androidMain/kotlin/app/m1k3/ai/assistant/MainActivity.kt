@@ -340,11 +340,12 @@ private fun MaAppContent(knowledgeStatus: String) {
                     )
                 }
 
-            // Controls whether the Toolbar renders its own 3D avatar. Hero
-            // splash flips this off while it owns the big 3D scene, then on
-            // again once the user starts chatting. Keeps us to one Filament
-            // scene at a time (two crashes libgltfio-jni.so).
-            val toolbarAvatarVisible = remember { mutableStateOf(true) }
+            // Controls whether the Toolbar renders its own 3D avatar.
+            // Starts FALSE so no speculative Filament surface mounts at cold
+            // launch — ChatScreen's LaunchedEffect(preConversation) flips
+            // it to true once chatting begins. See AvatarCompositionLocal
+            // for the full rationale (Vulkan OOM cascade, 2026-04-19).
+            val toolbarAvatarVisible = remember { mutableStateOf(false) }
 
             var drawerOpen by remember { mutableStateOf(false) }
 
@@ -501,6 +502,16 @@ private fun MaAppContent(knowledgeStatus: String) {
                                         onNavigateToLicenses = {
                                             navController.navigate(Screen.Licenses.route)
                                         },
+                                        onNavigateToDocuments = {
+                                            navController.navigate(Screen.Documents.route)
+                                        },
+                                    )
+                                }
+
+                                // Documents (personal knowledge)
+                                composable(Screen.Documents.route) {
+                                    app.m1k3.ai.assistant.ui.DocumentsScreen(
+                                        onBack = { navController.navigateUp() },
                                     )
                                 }
 

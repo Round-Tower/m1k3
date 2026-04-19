@@ -40,7 +40,6 @@ import app.m1k3.ai.assistant.platform.DeviceInfoProvider
 import app.m1k3.ai.assistant.platform.DeviceInfoProviderInterface
 import app.m1k3.ai.assistant.platform.PreferencesStore
 import app.m1k3.ai.assistant.platform.PreferencesStoreInterface
-import app.m1k3.ai.assistant.rag.RAGManager
 import app.m1k3.ai.assistant.tools.AndroidToolRegistry
 import app.m1k3.ai.assistant.tts.AudioEffectsProcessor
 import app.m1k3.ai.assistant.tts.AudioPlayer
@@ -306,18 +305,63 @@ actual val platformModule =
             )
         }
 
-        // ===== RAG & Memory Layer =====
+        // ===== Personal Knowledge (Passages) =====
 
         /**
-         * RAGManager
-         *
-         * Provides RAG (Retrieval-Augmented Generation) capabilities.
-         * Uses EmbeddingEngine for semantic search over knowledge base.
+         * PassageRepository — SQLCipher-backed storage for user-imported notes + docs.
+         * Day-one retrieval is keyword LIKE; embedding-backed search lands with the
+         * embedding pipeline wiring.
          */
-        single<RAGManager> {
-            RAGManager(
+        /**
+         * PassageEmbedder — semantic vectors for passage save + search.
+         * Null-tolerant: if the engine fails to load, repo degrades to keyword LIKE.
+         */
+        single<app.m1k3.ai.domain.passages.services.PassageEmbedder> {
+            app.m1k3.ai.assistant.passages.EngineBackedPassageEmbedder(
+                engine = get<EmbeddingEngine>(),
+            )
+        }
+
+        single<app.m1k3.ai.domain.passages.repositories.PassageRepository> {
+            app.m1k3.ai.assistant.passages.SqlDelightPassageRepository(
                 database = get<MaDatabase>(),
-                embeddingEngine = get<EmbeddingEngine>(),
+                embedder = get<app.m1k3.ai.domain.passages.services.PassageEmbedder>(),
+            )
+        }
+
+        /**
+         * RetrievePassagesUseCase — thin domain wrapper called from ContextRetrievalUseCase.
+         * Guards against blank queries / non-positive limits before hitting storage.
+         */
+        single {
+            app.m1k3.ai.domain.passages.usecases.RetrievePassagesUseCase(
+                repository = get(),
+            )
+        }
+
+        /**
+         * PassageChunker — paragraph-aware greedy chunker for personal-doc ingestion.
+         * Stateless, safe to share.
+         */
+        single {
+            app.m1k3.ai.domain.passages.services
+                .PassageChunker()
+        }
+
+        /**
+         * ImportTextUseCase — orchestrates chunk + persist for user-imported text.
+         * UUID ids and `System.currentTimeMillis()` clock are Android-native fine.
+         */
+        single {
+            app.m1k3.ai.domain.passages.usecases.ImportTextUseCase(
+                chunker = get(),
+                repository = get(),
+                idProvider = {
+                    java.util.UUID
+                        .randomUUID()
+                        .toString()
+                },
+                clock = { System.currentTimeMillis() },
             )
         }
 
@@ -401,7 +445,7 @@ actual val platformModule =
                 preferences = get<PreferencesStoreInterface>(),
                 projectId = projectId,
                 memoryManager = memoryManager,
-                ragManager = get<RAGManager>(),
+                passageRetriever = get<app.m1k3.ai.domain.passages.usecases.RetrievePassagesUseCase>(),
                 toolRegistry = get<ToolRegistry>(),
                 processLlmOutput = get<LlmOutputProcessor>(),
                 dateTimeProvider = get<DateTimeProviderInterface>(),
