@@ -59,6 +59,18 @@ target_link_libraries(ma
 
 target_compile_features(ma PRIVATE cxx_std_17)
 
+# Release-only compiler flags (bridge only — llama.cpp submodule has its own):
+#   -O3                : aggressive optimization. AGP defaults to -O2 for Release.
+#   -fno-math-errno    : don't set errno from libm — inference never reads it.
+#   -fvisibility=hidden: non-exported symbols get internal linkage, shrinks .so
+#                        and lets the linker inline more aggressively.
+# Skipped on purpose:
+#   -ffast-math : breaks grammar/penalty NaN handling in the sampler chain.
+#   -flto       : build-time cost vs unclear runtime win at this size.
+target_compile_options(ma PRIVATE
+    $<$<CONFIG:Release>:-O3 -fno-math-errno -fvisibility=hidden>
+)
+
 # Android 15+ requires 16KB page-aligned libraries.
 # Without this the system shows PageSizeMismatchDialog on first launch.
 target_link_options(ma PRIVATE "-Wl,-z,max-page-size=16384")
