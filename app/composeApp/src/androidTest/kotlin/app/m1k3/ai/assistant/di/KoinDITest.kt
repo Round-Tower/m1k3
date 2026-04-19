@@ -59,19 +59,19 @@ class KoinDITest : KoinTest {
     // ===== Critical Dependencies =====
 
     @Test
-    fun `Android Context is available`() {
+    fun AndroidContextIsAvailable() {
         val context = getKoin().get<Context>()
         assertNotNull(context, "Android Context should be registered")
     }
 
     @Test
-    fun `MaDatabase is available`() {
+    fun MaDatabaseIsAvailable() {
         val database = getKoin().get<MaDatabase>()
         assertNotNull(database, "MaDatabase should be registered")
     }
 
     @Test
-    fun `DeviceInfoProvider is available`() {
+    fun DeviceInfoProviderIsAvailable() {
         val deviceInfo = getKoin().get<DeviceInfoProviderInterface>()
         assertNotNull(deviceInfo, "DeviceInfoProvider should be registered")
 
@@ -81,7 +81,7 @@ class KoinDITest : KoinTest {
     }
 
     @Test
-    fun `BaseLlmEngine is available`() {
+    fun BaseLlmEngineIsAvailable() {
         val engine = getKoin().get<BaseLlmEngine>()
         assertNotNull(engine, "BaseLlmEngine should be registered")
     }
@@ -89,7 +89,7 @@ class KoinDITest : KoinTest {
     // ===== Embedding Engine (Critical Fix) =====
 
     @Test
-    fun `EmbeddingEngine is registered`() {
+    fun EmbeddingEngineIsRegistered() {
         // Regression test: This was missing before our fix
         // Location: PlatformModule.android.kt:118
         val engine = getKoin().get<EmbeddingEngine>()
@@ -97,7 +97,7 @@ class KoinDITest : KoinTest {
     }
 
     @Test
-    fun `EmbeddingEngine is properly configured`() {
+    fun EmbeddingEngineIsProperlyConfigured() {
         val engine = getKoin().get<EmbeddingEngine>()
         // Just verify it exists - properties may not be accessible
         assertNotNull(engine, "EmbeddingEngine should have valid configuration")
@@ -106,7 +106,7 @@ class KoinDITest : KoinTest {
     // ===== RAGManager (Critical Fix) =====
 
     @Test
-    fun `RAGManager is registered`() {
+    fun RAGManagerIsRegistered() {
         // Regression test: This was getOrNull before our fix
         // Location: PlatformModule.android.kt:209
         val ragManager = getKoin().get<RAGManager>()
@@ -114,7 +114,7 @@ class KoinDITest : KoinTest {
     }
 
     @Test
-    fun `RAGManager has EmbeddingEngine dependency satisfied`() {
+    fun RAGManagerHasEmbeddingengineDependencySatisfied() {
         // This validates the dependency chain:
         // RAGManager -> EmbeddingEngine
         val ragManager = getKoin().get<RAGManager>()
@@ -122,7 +122,7 @@ class KoinDITest : KoinTest {
     }
 
     @Test
-    fun `SemanticRetrievalService can be instantiated`() {
+    fun SemanticRetrievalServiceCanBeInstantiated() {
         // Regression test: This was failing at AppModule:110
         // SemanticRetrievalService -> EmbeddingEngine
         val service = getKoin().get<app.m1k3.ai.assistant.knowledge.SemanticRetrievalService>()
@@ -132,14 +132,14 @@ class KoinDITest : KoinTest {
     // ===== Tool Calling Infrastructure =====
 
     @Test
-    fun `ToolRegistry is registered`() {
+    fun ToolRegistryIsRegistered() {
         // Regression test: This was getOrNull before our fix
         val registry = getKoin().get<ToolRegistry>()
         assertNotNull(registry, "ToolRegistry should be registered")
     }
 
     @Test
-    fun `LlmOutputProcessor is registered`() {
+    fun LlmOutputProcessorIsRegistered() {
         // Regression test: This was getOrNull before our fix
         val processor = getKoin().get<LlmOutputProcessor>()
         assertNotNull(processor, "LlmOutputProcessor should be registered")
@@ -148,7 +148,7 @@ class KoinDITest : KoinTest {
     // ===== ViewModels =====
 
     @Test
-    fun `ChatScreenViewModel can be created`() {
+    fun ChatScreenViewModelCanBeCreated() {
         // Regression test: All dependencies should be non-null
         // - ragManager: RAGManager (not nullable)
         // - toolRegistry: ToolRegistry (not nullable)
@@ -158,7 +158,7 @@ class KoinDITest : KoinTest {
     }
 
     @Test
-    fun `ChatScreenViewModel can be created with custom projectId`() {
+    fun ChatScreenViewModelCanBeCreatedWithCustomProjectid() {
         val viewModel = getKoin().get<ChatScreenViewModel>() {
             org.koin.core.parameter.parametersOf("test-project")
         }
@@ -166,7 +166,7 @@ class KoinDITest : KoinTest {
     }
 
     @Test
-    fun `all ViewModels can be instantiated`() {
+    fun allViewmodelsCanBeInstantiated() {
         // Smoke test: Try to create all ViewModels
         val viewModels = listOf(
             getKoin().get<app.m1k3.ai.assistant.app.InitializationViewModel>(),
@@ -184,7 +184,7 @@ class KoinDITest : KoinTest {
     // ===== Dependency Chain Validation =====
 
     @Test
-    fun `full dependency graph resolves without errors`() {
+    fun fullDependencyGraphResolvesWithoutErrors() {
         // This test validates the entire dependency graph by trying to
         // resolve all major dependencies. If any dependency is missing,
         // this will throw NoDefinitionFoundException
@@ -206,7 +206,7 @@ class KoinDITest : KoinTest {
     }
 
     @Test
-    fun `no circular dependencies exist`() {
+    fun noCircularDependenciesExist() {
         // If circular dependencies exist, this will cause StackOverflowError
         // Koin doesn't detect them at module load, only at resolution
         var success = true
@@ -225,7 +225,7 @@ class KoinDITest : KoinTest {
     // ===== Performance Tests =====
 
     @Test
-    fun `Koin startup is fast`() {
+    fun KoinStartupIsFast() {
         // Koin should start quickly (already started in @Before)
         // If this is slow, we have too many eager singletons
         val startTime = System.currentTimeMillis()
@@ -243,7 +243,7 @@ class KoinDITest : KoinTest {
     }
 
     @Test
-    fun `singletons are cached`() {
+    fun singletonsAreCached() {
         // Singletons should return same instance
         val database1 = getKoin().get<MaDatabase>()
         val database2 = getKoin().get<MaDatabase>()

@@ -536,6 +536,129 @@ fun calculateProgress(
     maxValue: Double,
 ): Float = (value / maxValue).coerceIn(0.0, 1.0).toFloat()
 
+/**
+ * CloudBytesAvoidedHero — headline stat. Chat inference never left the
+ * device, so this many bytes of cloud-LLM round-trip never happened.
+ * Estimate, not audit-grade (see EcoCalculator.cloudBytesAvoided).
+ */
+@Composable
+fun CloudBytesAvoidedHero(
+    bytesAvoided: Long,
+    modifier: Modifier = Modifier,
+) {
+    MaCard(modifier = modifier) {
+        Column(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(MaSpacing.md),
+            verticalArrangement = Arrangement.spacedBy(MaSpacing.xs),
+        ) {
+            Text(
+                text = "Your device is the cloud",
+                style = MaTypography.labelMedium,
+                color = MaColors.textSecondary(),
+            )
+            Text(
+                text = formatBytes(bytesAvoided),
+                style = MaTypography.headlineLarge,
+                fontWeight = FontWeight.Bold,
+                color = MaColors.Orange,
+            )
+            Text(
+                text = "of cloud API traffic avoided — every token answered on-device",
+                style = MaTypography.bodySmall,
+                color = MaColors.textMuted(),
+            )
+        }
+    }
+}
+
+/**
+ * NetworkUsageCard — honest accounting of real network bytes.
+ * Downloads + web searches. Small numbers are the point: chat itself
+ * stays on-device, so the bar stays low.
+ */
+@Composable
+fun NetworkUsageCard(
+    bytesSent: Long,
+    bytesReceived: Long,
+    modifier: Modifier = Modifier,
+) {
+    MaCard(modifier = modifier) {
+        Column(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(MaSpacing.md),
+            verticalArrangement = Arrangement.spacedBy(MaSpacing.sm),
+        ) {
+            Text(
+                text = "Network Usage",
+                style = MaTypography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaColors.textPrimary(),
+            )
+            Text(
+                text = "Real bytes from model downloads and web searches. User-initiated only — no background network.",
+                style = MaTypography.bodySmall,
+                color = MaColors.textMuted(),
+            )
+
+            HorizontalDivider(color = MaColors.BorderLight)
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(MaSpacing.md),
+            ) {
+                NetworkBytesStat(
+                    label = "Sent",
+                    value = formatBytes(bytesSent),
+                    modifier = Modifier.weight(1f),
+                )
+                NetworkBytesStat(
+                    label = "Received",
+                    value = formatBytes(bytesReceived),
+                    modifier = Modifier.weight(1f),
+                )
+            }
+        }
+    }
+}
+
+/** Small vertical label/value pair, inline inside the NetworkUsageCard row. */
+@Composable
+private fun NetworkBytesStat(
+    label: String,
+    value: String,
+    modifier: Modifier = Modifier,
+) {
+    Column(modifier = modifier) {
+        Text(
+            text = value,
+            style = MaTypography.titleMedium,
+            fontWeight = FontWeight.SemiBold,
+            color = MaColors.textPrimary(),
+        )
+        Text(
+            text = label,
+            style = MaTypography.labelSmall,
+            color = MaColors.textMuted(),
+        )
+    }
+}
+
+/** Format a byte count for display (KB / MB / GB). Used by eco UI. */
+fun formatBytes(bytes: Long): String {
+    val safe = if (bytes < 0L) 0L else bytes
+    return when {
+        safe >= 1_000_000_000L -> String.format("%.2f GB", safe / 1_000_000_000.0)
+        safe >= 1_000_000L -> String.format("%.1f MB", safe / 1_000_000.0)
+        safe >= 1_000L -> String.format("%.1f KB", safe / 1_000.0)
+        else -> "$safe B"
+    }
+}
+
 // ============================================================
 // Previews
 // ============================================================

@@ -43,7 +43,7 @@ import kotlinx.coroutines.launch
  * ```
  */
 class EcoStatsViewModel(
-    private val repository: EcoMetricsRepository
+    private val repository: EcoMetricsRepository,
 ) : ViewModel() {
     // State flows
     private val _state = MutableStateFlow(EcoStatsState())
@@ -70,28 +70,33 @@ class EcoStatsViewModel(
                 val projectMetrics = allProjectStats.find { it.projectId == projectId }
 
                 // Calculate cloud AI baseline for comparison (100x multiplier)
-                val cloudComparison = if (projectMetrics != null) {
-                    EcoComparison(
-                        localEnergyWh = projectMetrics.energyWh.toDouble(),
-                        localWaterMl = projectMetrics.waterMl.toDouble(),
-                        localCo2G = projectMetrics.co2G.toDouble(),
-                        cloudEnergyWh = projectMetrics.energyWh.toDouble() * 100.0,
-                        cloudWaterMl = projectMetrics.waterMl.toDouble() * 100.0,
-                        cloudCo2G = projectMetrics.co2G.toDouble() * 100.0
-                    )
-                } else null
+                val cloudComparison =
+                    if (projectMetrics != null) {
+                        EcoComparison(
+                            localEnergyWh = projectMetrics.energyWh.toDouble(),
+                            localWaterMl = projectMetrics.waterMl.toDouble(),
+                            localCo2G = projectMetrics.co2G.toDouble(),
+                            cloudEnergyWh = projectMetrics.energyWh.toDouble() * 100.0,
+                            cloudWaterMl = projectMetrics.waterMl.toDouble() * 100.0,
+                            cloudCo2G = projectMetrics.co2G.toDouble() * 100.0,
+                        )
+                    } else {
+                        null
+                    }
 
-                _state.value = _state.value.copy(
-                    projectMetrics = projectMetrics,
-                    cloudComparison = cloudComparison,
-                    isLoading = false,
-                    error = null
-                )
+                _state.value =
+                    _state.value.copy(
+                        projectMetrics = projectMetrics,
+                        cloudComparison = cloudComparison,
+                        isLoading = false,
+                        error = null,
+                    )
             } catch (e: Exception) {
-                _state.value = _state.value.copy(
-                    isLoading = false,
-                    error = "Failed to load eco metrics: ${e.message}"
-                )
+                _state.value =
+                    _state.value.copy(
+                        isLoading = false,
+                        error = "Failed to load eco metrics: ${e.message}",
+                    )
             }
         }
     }
@@ -105,30 +110,42 @@ class EcoStatsViewModel(
         viewModelScope.launch {
             try {
                 val lifetimeStats = repository.getLifetimeStats()
+                val networkBytes = repository.getTotalNetworkBytes()
+                val cloudBytesAvoided =
+                    lifetimeStats?.let {
+                        EcoCalculator.cloudBytesAvoided(it.totalTokens)
+                    } ?: 0L
 
                 // Calculate cloud AI baseline for comparison (100x multiplier)
-                val cloudComparison = if (lifetimeStats != null) {
-                    EcoComparison(
-                        localEnergyWh = lifetimeStats.totalEnergyWh.toDouble(),
-                        localWaterMl = lifetimeStats.totalWaterMl.toDouble(),
-                        localCo2G = lifetimeStats.totalCo2G.toDouble(),
-                        cloudEnergyWh = lifetimeStats.totalEnergyWh.toDouble() * 100.0,
-                        cloudWaterMl = lifetimeStats.totalWaterMl.toDouble() * 100.0,
-                        cloudCo2G = lifetimeStats.totalCo2G.toDouble() * 100.0
-                    )
-                } else null
+                val cloudComparison =
+                    if (lifetimeStats != null) {
+                        EcoComparison(
+                            localEnergyWh = lifetimeStats.totalEnergyWh.toDouble(),
+                            localWaterMl = lifetimeStats.totalWaterMl.toDouble(),
+                            localCo2G = lifetimeStats.totalCo2G.toDouble(),
+                            cloudEnergyWh = lifetimeStats.totalEnergyWh.toDouble() * 100.0,
+                            cloudWaterMl = lifetimeStats.totalWaterMl.toDouble() * 100.0,
+                            cloudCo2G = lifetimeStats.totalCo2G.toDouble() * 100.0,
+                        )
+                    } else {
+                        null
+                    }
 
-                _state.value = _state.value.copy(
-                    lifetimeStats = lifetimeStats,
-                    cloudComparison = cloudComparison,
-                    isLoading = false,
-                    error = null
-                )
+                _state.value =
+                    _state.value.copy(
+                        lifetimeStats = lifetimeStats,
+                        cloudComparison = cloudComparison,
+                        networkBytes = networkBytes,
+                        cloudBytesAvoided = cloudBytesAvoided,
+                        isLoading = false,
+                        error = null,
+                    )
             } catch (e: Exception) {
-                _state.value = _state.value.copy(
-                    isLoading = false,
-                    error = "Failed to load lifetime stats: ${e.message}"
-                )
+                _state.value =
+                    _state.value.copy(
+                        isLoading = false,
+                        error = "Failed to load lifetime stats: ${e.message}",
+                    )
             }
         }
     }
@@ -165,12 +182,11 @@ class EcoStatsViewModel(
      * @param energyWh Energy in watt-hours
      * @return Formatted string (e.g., "1.2 kWh" or "500 Wh")
      */
-    fun formatEnergy(energyWh: Double): String {
-        return when {
+    fun formatEnergy(energyWh: Double): String =
+        when {
             energyWh >= 1000.0 -> String.format("%.2f kWh", energyWh / 1000.0)
             else -> String.format("%.1f Wh", energyWh)
         }
-    }
 
     /**
      * Format water for display (with appropriate unit).
@@ -178,12 +194,11 @@ class EcoStatsViewModel(
      * @param waterMl Water in milliliters
      * @return Formatted string (e.g., "2.5 L" or "500 ml")
      */
-    fun formatWater(waterMl: Double): String {
-        return when {
+    fun formatWater(waterMl: Double): String =
+        when {
             waterMl >= 1000.0 -> String.format("%.2f L", waterMl / 1000.0)
             else -> String.format("%.0f ml", waterMl)
         }
-    }
 
     /**
      * Format CO2 for display (with appropriate unit).
@@ -191,10 +206,23 @@ class EcoStatsViewModel(
      * @param co2Grams CO2 in grams
      * @return Formatted string (e.g., "1.5 kg" or "800 g")
      */
-    fun formatCO2(co2Grams: Double): String {
-        return when {
+    fun formatCO2(co2Grams: Double): String =
+        when {
             co2Grams >= 1000.0 -> String.format("%.2f kg", co2Grams / 1000.0)
             else -> String.format("%.0f g", co2Grams)
+        }
+
+    /**
+     * Format a byte count for display (KB / MB / GB). Used for both the
+     * "cloud bytes avoided" headline and real download / search totals.
+     */
+    fun formatBytes(bytes: Long): String {
+        val absBytes = if (bytes < 0L) 0L else bytes
+        return when {
+            absBytes >= 1_000_000_000L -> String.format("%.2f GB", absBytes / 1_000_000_000.0)
+            absBytes >= 1_000_000L -> String.format("%.1f MB", absBytes / 1_000_000.0)
+            absBytes >= 1_000L -> String.format("%.1f KB", absBytes / 1_000.0)
+            else -> "$absBytes B"
         }
     }
 }
@@ -206,8 +234,10 @@ data class EcoStatsState(
     val lifetimeStats: LifetimeStats? = null,
     val projectMetrics: ProjectStats? = null,
     val cloudComparison: EcoComparison? = null,
+    val networkBytes: NetworkBytes? = null,
+    val cloudBytesAvoided: Long = 0L,
     val isLoading: Boolean = false,
-    val error: String? = null
+    val error: String? = null,
 )
 
 /**
@@ -219,7 +249,7 @@ data class EcoComparison(
     val localCo2G: Double,
     val cloudEnergyWh: Double,
     val cloudWaterMl: Double,
-    val cloudCo2G: Double
+    val cloudCo2G: Double,
 ) {
     /**
      * Calculate savings percentages.
@@ -240,6 +270,4 @@ data class EcoComparison(
  * @return Current eco stats state
  */
 @Composable
-fun EcoStatsViewModel.collectAsState(): State<EcoStatsState> {
-    return state.collectAsState()
-}
+fun EcoStatsViewModel.collectAsState(): State<EcoStatsState> = state.collectAsState()

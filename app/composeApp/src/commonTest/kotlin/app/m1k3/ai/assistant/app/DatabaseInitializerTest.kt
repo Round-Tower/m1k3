@@ -24,14 +24,14 @@ class DatabaseInitializerTest {
         val mockDbFactory: MockAndroidDatabaseFactory,
         val mockKnowMgr: MockKnowledgeImportManager,
         val mockLogger: MockLoggerForDb,
-        val initializer: DatabaseInitializer
+        val initializer: TestDatabaseInitializerImpl
     )
 
     private fun setupTest(): TestSetup {
         val mockDatabaseFactory = MockAndroidDatabaseFactory()
         val mockKnowledgeManager = MockKnowledgeImportManager()
         val mockLogger = MockLoggerForDb()
-        val initializer = DatabaseInitializer(
+        val initializer = TestDatabaseInitializerImpl(
             mockDatabaseFactory,
             mockKnowledgeManager,
             mockLogger
@@ -48,8 +48,8 @@ class DatabaseInitializerTest {
 
         val result = setup.initializer.initializeDatabase()
 
-        assertIs<DatabaseInitResult.Success>(result)
-        val successResult = result as DatabaseInitResult.Success
+        assertIs<TestDatabaseInitResult.Success>(result)
+        val successResult = result as TestDatabaseInitResult.Success
         assertTrue(successResult.database != null)
         assertTrue(setup.mockLogger.debugMessages.any { it.contains("Database") })
     }
@@ -62,8 +62,8 @@ class DatabaseInitializerTest {
 
         val result = setup.initializer.initializeDatabase()
 
-        assertIs<DatabaseInitResult.Error>(result)
-        val failResult = result as DatabaseInitResult.Error
+        assertIs<TestDatabaseInitResult.Error>(result)
+        val failResult = result as TestDatabaseInitResult.Error
         assertTrue(failResult.message.contains("Database"))
         assertTrue(failResult.error != null)
         assertTrue(setup.mockLogger.errorMessages.isNotEmpty())
@@ -91,8 +91,8 @@ class DatabaseInitializerTest {
 
         val result = setup.initializer.importKnowledge(database)
 
-        assertIs<KnowledgeImportResult.Success>(result)
-        val successResult = result as KnowledgeImportResult.Success
+        assertIs<TestKnowledgeImportResult.Success>(result)
+        val successResult = result as TestKnowledgeImportResult.Success
         assertTrue(successResult.totalDocs > 0)
         assertTrue(successResult.comprehensiveDocs >= 0)
         assertTrue(successResult.systemDocs >= 0)
@@ -107,8 +107,8 @@ class DatabaseInitializerTest {
 
         val result = setup.initializer.importKnowledge(database)
 
-        assertIs<KnowledgeImportResult.AlreadyImported>(result)
-        val alreadyResult = result as KnowledgeImportResult.AlreadyImported
+        assertIs<TestKnowledgeImportResult.AlreadyImported>(result)
+        val alreadyResult = result as TestKnowledgeImportResult.AlreadyImported
         assertTrue(alreadyResult.existingDocs > 0)
     }
 
@@ -121,8 +121,8 @@ class DatabaseInitializerTest {
 
         val result = setup.initializer.importKnowledge(database)
 
-        assertIs<KnowledgeImportResult.Error>(result)
-        val failResult = result as KnowledgeImportResult.Error
+        assertIs<TestKnowledgeImportResult.Error>(result)
+        val failResult = result as TestKnowledgeImportResult.Error
         assertTrue(failResult.message.contains("Knowledge"))
     }
 
@@ -146,13 +146,13 @@ class DatabaseInitializerTest {
         val setup = setupTest()
 
         val dbResult = setup.initializer.initializeDatabase()
-        assertIs<DatabaseInitResult.Success>(dbResult)
+        assertIs<TestDatabaseInitResult.Success>(dbResult)
 
-        val database = (dbResult as DatabaseInitResult.Success).database
+        val database = (dbResult as TestDatabaseInitResult.Success).database
         val knowledgeResult = setup.initializer.importKnowledge(database)
-        assertIs<KnowledgeImportResult.Success>(knowledgeResult)
+        assertIs<TestKnowledgeImportResult.Success>(knowledgeResult)
 
-        val knowledgeSuccess = knowledgeResult as KnowledgeImportResult.Success
+        val knowledgeSuccess = knowledgeResult as TestKnowledgeImportResult.Success
         assertTrue(knowledgeSuccess.totalDocs > 0)
     }
 
@@ -163,11 +163,11 @@ class DatabaseInitializerTest {
         setup.mockKnowMgr.simulateFailure = true
 
         val dbResult = setup.initializer.initializeDatabase()
-        assertIs<DatabaseInitResult.Success>(dbResult)
+        assertIs<TestDatabaseInitResult.Success>(dbResult)
 
-        val database = (dbResult as DatabaseInitResult.Success).database
+        val database = (dbResult as TestDatabaseInitResult.Success).database
         val knowledgeResult = setup.initializer.importKnowledge(database)
-        assertIs<KnowledgeImportResult.Error>(knowledgeResult)
+        assertIs<TestKnowledgeImportResult.Error>(knowledgeResult)
 
         // Database should still be usable
         assertTrue(database != null)
@@ -209,9 +209,9 @@ class MockKnowledgeImportManager {
         }
 
         return if (alreadyImported) {
-            KnowledgeImportResult.AlreadyImported(existingDocs = 345)
+            TestKnowledgeImportResult.AlreadyImported(existingDocs = 345)
         } else {
-            KnowledgeImportResult.Success(
+            TestKnowledgeImportResult.Success(
                 totalDocs = 345,
                 comprehensiveDocs = 200,
                 systemDocs = 145
@@ -241,23 +241,23 @@ class MockLoggerForDb {
 /**
  * Sealed class representing database initialization result
  */
-sealed class DatabaseInitResult {
-    data class Success(val database: Any) : DatabaseInitResult() // Replace Any with MaDatabase
-    data class Error(val message: String, val error: Exception?) : DatabaseInitResult()
+sealed class TestDatabaseInitResult {
+    data class Success(val database: Any) : TestDatabaseInitResult() // Replace Any with MaDatabase
+    data class Error(val message: String, val error: Exception?) : TestDatabaseInitResult()
 }
 
 /**
  * Sealed class representing knowledge import result
  */
-sealed class KnowledgeImportResult {
+sealed class TestKnowledgeImportResult {
     data class Success(
         val totalDocs: Int,
         val comprehensiveDocs: Int,
         val systemDocs: Int
-    ) : KnowledgeImportResult()
+    ) : TestKnowledgeImportResult()
 
-    data class AlreadyImported(val existingDocs: Int) : KnowledgeImportResult()
-    data class Error(val message: String) : KnowledgeImportResult()
+    data class AlreadyImported(val existingDocs: Int) : TestKnowledgeImportResult()
+    data class Error(val message: String) : TestKnowledgeImportResult()
 }
 
 // ============ DatabaseInitializer Implementation ============
@@ -277,7 +277,7 @@ sealed class KnowledgeImportResult {
  * **Error Handling:**
  * - Catches database creation exceptions
  * - Catches knowledge import exceptions
- * - Returns sealed failure types (DatabaseInitResult.Error, KnowledgeImportResult.Error)
+ * - Returns sealed failure types (TestDatabaseInitResult.Error, TestKnowledgeImportResult.Error)
  * - Logs errors for debugging
  *
  * **Dependencies (Injected for testability):**
@@ -290,7 +290,7 @@ sealed class KnowledgeImportResult {
  * - Pure logic, no static methods
  * - Testable without Android context
  */
-class DatabaseInitializer(
+class TestDatabaseInitializerImpl(
     private val databaseFactory: MockAndroidDatabaseFactory,
     private val knowledgeManager: MockKnowledgeImportManager,
     private val logger: MockLoggerForDb
@@ -301,9 +301,9 @@ class DatabaseInitializer(
      *
      * Creates database driver and initializes MaDatabase
      *
-     * @return DatabaseInitResult.Success or DatabaseInitResult.Error
+     * @return TestDatabaseInitResult.Success or TestDatabaseInitResult.Error
      */
-    suspend fun initializeDatabase(): DatabaseInitResult {
+    suspend fun initializeDatabase(): TestDatabaseInitResult {
         return try {
             logger.d("Initializing database...")
 
@@ -312,10 +312,10 @@ class DatabaseInitializer(
                 ?: throw Exception("Database driver is null")
 
             logger.d("Database initialized successfully")
-            DatabaseInitResult.Success(driver)
+            TestDatabaseInitResult.Success(driver)
         } catch (e: Exception) {
             logger.e("Failed to initialize database: ${e.message}")
-            DatabaseInitResult.Error("Database initialization failed", e)
+            TestDatabaseInitResult.Error("Database initialization failed", e)
         }
     }
 
@@ -325,32 +325,32 @@ class DatabaseInitializer(
      * Handles both first-time import and already-imported cases
      *
      * @param database MaDatabase instance for storing knowledge
-     * @return KnowledgeImportResult (Success, AlreadyImported, or Error)
+     * @return TestKnowledgeImportResult (Success, AlreadyImported, or Error)
      */
-    suspend fun importKnowledge(database: Any): KnowledgeImportResult {
+    suspend fun importKnowledge(database: Any): TestKnowledgeImportResult {
         return try {
             logger.d("Importing knowledge base...")
 
             val result = knowledgeManager.importIfNeeded()
 
             when (result) {
-                is KnowledgeImportResult.Success -> {
+                is TestKnowledgeImportResult.Success -> {
                     logger.d("Knowledge import successful: ${result.totalDocs} documents")
                     result
                 }
-                is KnowledgeImportResult.AlreadyImported -> {
+                is TestKnowledgeImportResult.AlreadyImported -> {
                     logger.d("Knowledge already imported: ${result.existingDocs} documents")
                     result
                 }
-                is KnowledgeImportResult.Error -> {
+                is TestKnowledgeImportResult.Error -> {
                     logger.e("Knowledge import error: ${result.message}")
                     result
                 }
-                else -> KnowledgeImportResult.Error("Unknown import result")
+                else -> TestKnowledgeImportResult.Error("Unknown import result")
             }
         } catch (e: Exception) {
             logger.e("Knowledge import failed: ${e.message}")
-            KnowledgeImportResult.Error("Knowledge import exception: ${e.message}")
+            TestKnowledgeImportResult.Error("Knowledge import exception: ${e.message}")
         }
     }
 }

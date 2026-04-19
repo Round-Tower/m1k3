@@ -12,22 +12,22 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.dp
-import org.jetbrains.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.sp
 import app.m1k3.ai.assistant.database.MaDatabase
 import app.m1k3.ai.assistant.design.haptics.HapticFeedbackType
 import app.m1k3.ai.assistant.design.haptics.rememberHapticFeedback
+import app.m1k3.ai.assistant.design.theme.MaTheme
 import app.m1k3.ai.assistant.design.tokens.MaColors
 import app.m1k3.ai.assistant.design.tokens.MaFontFamilyCaption
 import app.m1k3.ai.assistant.design.tokens.MaSpacing
 import app.m1k3.ai.assistant.design.tokens.MaTypography
-import app.m1k3.ai.assistant.design.theme.MaTheme
 import app.m1k3.ai.assistant.eco.EcoStatsState
 import app.m1k3.ai.assistant.eco.EcoStatsViewModel
 import app.m1k3.ai.assistant.eco.collectAsState
 import app.m1k3.ai.assistant.ui.components.*
 import kotlinx.coroutines.launch
+import org.jetbrains.compose.ui.tooling.preview.Preview
 import org.koin.androidx.compose.koinViewModel
 
 /**
@@ -51,7 +51,7 @@ import org.koin.androidx.compose.koinViewModel
 fun EcoStatsScreen(
     database: MaDatabase,
     projectId: String? = null,
-    onBackClick: () -> Unit = {}
+    onBackClick: () -> Unit = {},
 ) {
     val haptics = rememberHapticFeedback()
 
@@ -66,13 +66,13 @@ fun EcoStatsScreen(
     }
 
     Box(
-        modifier = Modifier.fillMaxSize()
+        modifier = Modifier.fillMaxSize(),
     ) {
         if (state.isLoading) {
             // Loading indicator
             Box(
                 modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center
+                contentAlignment = Alignment.Center,
             ) {
                 CircularProgressIndicator(color = MaColors.Orange)
             }
@@ -80,7 +80,7 @@ fun EcoStatsScreen(
             EcoStatsContent(
                 state = state,
                 projectId = projectId,
-                onClearError = { viewModel.clearError() }
+                onClearError = { viewModel.clearError() },
             )
         }
 
@@ -91,10 +91,11 @@ fun EcoStatsScreen(
                 viewModel.loadLifetimeStats()
                 projectId?.let { viewModel.loadProjectStats(it) }
             },
-            modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .padding(16.dp),
-            containerColor = MaColors.Orange
+            modifier =
+                Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(16.dp),
+            containerColor = MaColors.Orange,
         ) {
             Icon(Icons.Filled.Refresh, contentDescription = "Refresh stats")
         }
@@ -108,7 +109,7 @@ fun EcoStatsScreen(
 @Composable
 private fun EcoStatsTopBar(
     onBackClick: () -> Unit,
-    onRefreshClick: () -> Unit
+    onRefreshClick: () -> Unit,
 ) {
     TopAppBar(
         title = {
@@ -117,18 +118,19 @@ private fun EcoStatsTopBar(
                     "Environmental Impact",
                     style = MaTypography.titleLarge,
                     fontWeight = FontWeight.Bold,
-                    color = MaColors.textPrimary()
+                    color = MaColors.textPrimary(),
                 )
                 Text(
                     "100% local AI inference",
-                    style = TextStyle(
-                        fontFamily = MaFontFamilyCaption,
-                        fontWeight = FontWeight.Normal,
-                        fontSize = 12.sp,
-                        lineHeight = 16.sp,
-                        letterSpacing = 0.25.sp
-                    ),
-                    color = MaColors.textSecondary()
+                    style =
+                        TextStyle(
+                            fontFamily = MaFontFamilyCaption,
+                            fontWeight = FontWeight.Normal,
+                            fontSize = 12.sp,
+                            lineHeight = 16.sp,
+                            letterSpacing = 0.25.sp,
+                        ),
+                    color = MaColors.textSecondary(),
                 )
             }
         },
@@ -137,7 +139,7 @@ private fun EcoStatsTopBar(
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                     contentDescription = "Back",
-                    tint = MaColors.textPrimary()
+                    tint = MaColors.textPrimary(),
                 )
             }
         },
@@ -146,13 +148,14 @@ private fun EcoStatsTopBar(
                 Icon(
                     imageVector = Icons.Default.Refresh,
                     contentDescription = "Refresh",
-                    tint = MaColors.textPrimary()
+                    tint = MaColors.textPrimary(),
                 )
             }
         },
-        colors = TopAppBarDefaults.topAppBarColors(
-            containerColor = MaterialTheme.colorScheme.background
-        )
+        colors =
+            TopAppBarDefaults.topAppBarColors(
+                containerColor = MaterialTheme.colorScheme.background,
+            ),
     )
 }
 
@@ -163,21 +166,27 @@ private fun EcoStatsTopBar(
 private fun EcoStatsContent(
     state: EcoStatsState,
     projectId: String?,
-    onClearError: () -> Unit
+    onClearError: () -> Unit,
 ) {
     Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(MaSpacing.md),
-        verticalArrangement = Arrangement.spacedBy(MaSpacing.md)
+        modifier =
+            Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(MaSpacing.md),
+        verticalArrangement = Arrangement.spacedBy(MaSpacing.md),
     ) {
         // Error display
         state.error?.let { error ->
             EcoErrorCard(
                 message = error,
-                onDismiss = onClearError
+                onDismiss = onClearError,
             )
+        }
+
+        // Headline: cloud bytes avoided — only meaningful once there are tokens.
+        if (state.cloudBytesAvoided > 0L) {
+            CloudBytesAvoidedHero(bytesAvoided = state.cloudBytesAvoided)
         }
 
         // Hero section — big animated numbers
@@ -190,7 +199,7 @@ private fun EcoStatsContent(
             SavingsRingsRow(
                 waterPercent = comparison.waterSavingsPercent,
                 energyPercent = comparison.energySavingsPercent,
-                co2Percent = comparison.co2SavingsPercent
+                co2Percent = comparison.co2SavingsPercent,
             )
         }
 
@@ -204,12 +213,20 @@ private fun EcoStatsContent(
             CloudComparisonCard(comparison = comparison)
         }
 
+        // Real network usage — honest accounting of downloads + web search.
+        state.networkBytes?.let { bytes ->
+            NetworkUsageCard(
+                bytesSent = bytes.bytesSent,
+                bytesReceived = bytes.bytesReceived,
+            )
+        }
+
         // Project-specific stats
         if (projectId != null) {
             state.projectMetrics?.let { metrics ->
                 ProjectMetricsCard(
                     projectId = projectId,
-                    metrics = metrics
+                    metrics = metrics,
                 )
             }
         }
@@ -236,15 +253,16 @@ private fun EcoStatsScreenLoadingPreview() {
             topBar = {
                 EcoStatsTopBar(
                     onBackClick = {},
-                    onRefreshClick = {}
+                    onRefreshClick = {},
                 )
-            }
+            },
         ) { paddingValues ->
             Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(paddingValues),
-                contentAlignment = Alignment.Center
+                modifier =
+                    Modifier
+                        .fillMaxSize()
+                        .padding(paddingValues),
+                contentAlignment = Alignment.Center,
             ) {
                 CircularProgressIndicator(color = MaColors.Orange)
             }
@@ -260,30 +278,31 @@ private fun EcoStatsScreenEmptyPreview() {
             topBar = {
                 EcoStatsTopBar(
                     onBackClick = {},
-                    onRefreshClick = {}
+                    onRefreshClick = {},
                 )
-            }
+            },
         ) { paddingValues ->
             Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(paddingValues),
-                contentAlignment = Alignment.Center
+                modifier =
+                    Modifier
+                        .fillMaxSize()
+                        .padding(paddingValues),
+                contentAlignment = Alignment.Center,
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(
                         "🌱",
-                        style = MaterialTheme.typography.displayLarge
+                        style = MaterialTheme.typography.displayLarge,
                     )
                     Spacer(modifier = Modifier.height(16.dp))
                     Text(
                         "No data yet",
-                        style = MaterialTheme.typography.titleMedium
+                        style = MaterialTheme.typography.titleMedium,
                     )
                     Text(
                         "Your environmental impact will appear here",
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
             }
@@ -299,41 +318,43 @@ private fun EcoStatsScreenWithStatsPreview() {
             topBar = {
                 EcoStatsTopBar(
                     onBackClick = {},
-                    onRefreshClick = {}
+                    onRefreshClick = {},
                 )
-            }
+            },
         ) { paddingValues ->
             Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(paddingValues)
+                modifier =
+                    Modifier
+                        .fillMaxSize()
+                        .padding(paddingValues),
             ) {
                 Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .verticalScroll(rememberScrollState())
-                        .padding(MaSpacing.md),
-                    verticalArrangement = Arrangement.spacedBy(MaSpacing.md)
+                    modifier =
+                        Modifier
+                            .fillMaxSize()
+                            .verticalScroll(rememberScrollState())
+                            .padding(MaSpacing.md),
+                    verticalArrangement = Arrangement.spacedBy(MaSpacing.md),
                 ) {
                     Text(
                         "Environmental Stats",
                         style = MaterialTheme.typography.titleMedium,
-                        modifier = Modifier.padding(bottom = MaSpacing.sm)
+                        modifier = Modifier.padding(bottom = MaSpacing.sm),
                     )
 
                     Text(
                         "💧 Water Saved: 15.2 L",
-                        style = MaterialTheme.typography.bodyMedium
+                        style = MaterialTheme.typography.bodyMedium,
                     )
 
                     Text(
                         "⚡ Energy Saved: 28 kWh",
-                        style = MaterialTheme.typography.bodyMedium
+                        style = MaterialTheme.typography.bodyMedium,
                     )
 
                     Text(
                         "🌱 CO₂ Prevented: 8.5 kg",
-                        style = MaterialTheme.typography.bodyMedium
+                        style = MaterialTheme.typography.bodyMedium,
                     )
                 }
             }
