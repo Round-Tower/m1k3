@@ -17,10 +17,19 @@ composeMultiplatform = "1.9.2"
 junit = "4.13.2"
 kotlin = "2.2.20"
 kotlinx-coroutines = "1.10.2"
-ktor = "3.3.1"
-logback = "1.5.20"
+
+# NDK pin — reproducible native builds (llama.cpp submodule).
+# Bump this file to bump CI/local. Matches installed ~/Library/Android/sdk/ndk/.
+ndk = "28.2.13676358"
 
 androidx-work = "2.10.1"
+
+# Legacy Play Core — split-install APIs for the (currently parked)
+# dynamic feature modules. Modern replacement is feature-delivery:2.1.0
+# when/if :codingModule and :gemmaEmbedding come back online.
+play-core = "1.10.3"
+play-core-ktx = "1.8.1"
+compose-webview-multiplatform = "2.0.3"
 
 # M1K3 AI Dependencies
 sqldelight = "2.0.2"
@@ -37,7 +46,7 @@ kotlinx-serialization = "1.7.3"
 kotlinx-datetime = "0.6.2"
 sqlcipher = "4.5.4"
 androidx-security = "1.1.0-alpha06"
-compose-ui-text-googlefonts = "1.9.1"
+compose-ui-text-googlefonts = "1.9.5"
 sceneview = "2.3.0"
 kermit = "2.0.4"
 koin-core = "4.1.0"
@@ -63,10 +72,6 @@ androidx-lifecycle-runtimeCompose = { module = "org.jetbrains.androidx.lifecycle
 androidx-navigation-compose = { module = "org.jetbrains.androidx.navigation:navigation-compose", version.ref = "androidx-navigation" }
 kotlinx-coroutinesSwing = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-swing", version.ref = "kotlinx-coroutines" }
 kotlinx-coroutinesTest = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-test", version.ref = "kotlinx-coroutines" }
-logback = { module = "ch.qos.logback:logback-classic", version.ref = "logback" }
-ktor-serverCore = { module = "io.ktor:ktor-server-core-jvm", version.ref = "ktor" }
-ktor-serverNetty = { module = "io.ktor:ktor-server-netty-jvm", version.ref = "ktor" }
-ktor-serverTestHost = { module = "io.ktor:ktor-server-test-host-jvm", version.ref = "ktor" }
 
 # M1K3 AI Libraries
 sqldelight-driver-android = { module = "app.cash.sqldelight:android-driver", version.ref = "sqldelight" }
@@ -97,6 +102,12 @@ kotlinx-datetime = { module = "org.jetbrains.kotlinx:kotlinx-datetime", version.
 
 compose-ui-text-googlefonts = { module = "androidx.compose.ui:ui-text-google-fonts", version.ref = "compose-ui-text-googlefonts" }
 
+compose-webview-multiplatform = { module = "io.github.kevinnzou:compose-webview-multiplatform", version.ref = "compose-webview-multiplatform" }
+
+# Legacy Play Core (split-install for dynamic features, currently parked).
+play-core = { module = "com.google.android.play:core", version.ref = "play-core" }
+play-core-ktx = { module = "com.google.android.play:core-ktx", version.ref = "play-core-ktx" }
+
 sceneview = { module = "io.github.sceneview:sceneview", version.ref = "sceneview" }
 
 kermit = { module = "co.touchlab:kermit", version.ref = "kermit" }
@@ -117,7 +128,6 @@ composeHotReload = { id = "org.jetbrains.compose.hot-reload", version.ref = "com
 composeMultiplatform = { id = "org.jetbrains.compose", version.ref = "composeMultiplatform" }
 composeCompiler = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 kotlinJvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
-ktor = { id = "io.ktor.plugin", version.ref = "ktor" }
 kotlinMultiplatform = { id = "org.jetbrains.kotlin.multiplatform", version.ref = "kotlin" }
 
 # M1K3 AI Plugins

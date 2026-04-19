@@ -82,12 +82,10 @@ kotlin {
             // SceneView for 3D avatar rendering
             implementation(libs.sceneview)
 
-            // Coding module for code generation
-//            implementation(project(":codingModule"))
-
-            // Play Core for dynamic feature delivery
-            implementation("com.google.android.play:core:1.10.3")
-            implementation("com.google.android.play:core-ktx:1.8.1")
+            // Play Core for dynamic feature delivery (split-install).
+            // Parked: no dynamic-feature modules currently wired.
+            implementation(libs.play.core)
+            implementation(libs.play.core.ktx)
 
             // User context — local intelligence ("never leaves your phone")
             implementation(libs.health.connect)
@@ -126,7 +124,7 @@ kotlin {
             // Built via NDK/CMake, no Gradle dependency needed (libma.so is compiled locally)
 
             // WebView for Three.js 3D avatar rendering
-            implementation("io.github.kevinnzou:compose-webview-multiplatform:2.0.3")
+            implementation(libs.compose.webview.multiplatform)
 
             // Kermit - Multiplatform logging
             implementation(libs.kermit)
@@ -173,6 +171,9 @@ android {
             .get()
             .toInt()
 
+    // Pin NDK to keep llama.cpp submodule build reproducible across machines.
+    ndkVersion = libs.versions.ndk.get()
+
     defaultConfig {
         applicationId = "app.m1k3.ai.assistant"
         minSdk =
@@ -213,9 +214,6 @@ android {
             version = "3.22.1"
         }
     }
-
-    // Dynamic feature modules
-//    dynamicFeatures += setOf(":gemmaEmbedding")
 
     packaging {
         resources {

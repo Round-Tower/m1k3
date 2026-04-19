@@ -8,7 +8,6 @@ plugins {
     alias(libs.plugins.composeCompiler) apply false
     alias(libs.plugins.kotlinJvm) apply false
     alias(libs.plugins.kotlinMultiplatform) apply false
-    alias(libs.plugins.ktor) apply false
 
     // M1K3 AI Plugins
     alias(libs.plugins.sqldelight) apply false

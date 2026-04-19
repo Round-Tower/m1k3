@@ -36,6 +36,3 @@ plugins {
 
 include(":composeApp")
 include(":shared")
-//include(":codingModule")
-//include(":gemmaEmbedding")
-// Removed: include(":server") - unused Ktor boilerplate
