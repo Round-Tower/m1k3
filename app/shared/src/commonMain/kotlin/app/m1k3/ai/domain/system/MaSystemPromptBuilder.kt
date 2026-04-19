@@ -25,6 +25,12 @@ data class SystemPromptInput(
     val userContext: UserContext? = null,
     val weather: WeatherContext? = null,
     val dayOfWeek: String? = null,
+    /**
+     * Human-readable date (e.g. "April 19, 2026"). Injected so the model
+     * doesn't default to its training-cutoff year when generating queries
+     * like "latest news 2024".
+     */
+    val currentDate: String? = null,
     val deviceTierName: String? = null,
     val contextWindowTokens: Int? = null,
     val lifetimeCo2SavedG: Long? = null,
@@ -55,6 +61,13 @@ class MaSystemPromptBuilder {
             // Soul first
             appendLine(M1K3_ETHOS)
             appendLine()
+
+            // Anchor the model in current time — stops Qwen defaulting to
+            // its training-cutoff year when generating search queries.
+            input.currentDate?.let {
+                appendLine("Today is $it.")
+                appendLine()
+            }
 
             // Who the user is
             val ctx = input.userContext
@@ -205,6 +218,10 @@ class MaSystemPromptBuilder {
             append(
                 "Use markdown. For interactive content (charts, timers, calculators), wrap in <artifact id=\"...\" type=\"html\">...</artifact> tags.",
             )
+            input.currentDate?.let {
+                appendLine()
+                append("Today is $it.")
+            }
             if (contextLine.isNotBlank()) {
                 appendLine()
                 append("Context: $contextLine")
