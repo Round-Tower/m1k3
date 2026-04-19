@@ -9,6 +9,8 @@ import app.m1k3.ai.domain.ai.LlmModel
 import app.m1k3.ai.domain.chat.format.MessageRole
 import app.m1k3.ai.domain.chat.services.ChatFormatter
 import app.m1k3.ai.domain.chat.services.DefaultChatFormatter
+import app.m1k3.ai.domain.tools.services.ExtractedToolCall
+import app.m1k3.ai.domain.tools.services.Gemma4ToolCallExtractor
 import app.m1k3.ai.domain.tools.services.QwenXmlToolCallExtractor
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
@@ -371,44 +373,51 @@ class LlamaCppEngine(
                     }
 
                 // Fallback: llama.cpp's PEG parser under LENIENT mode sometimes
-                // eats the tool_call block as content. Extract directly from raw.
+                // eats the tool_call block as content. Extract directly from raw
+                // using the family-specific regex.
+                val fallbackCalls: List<ExtractedToolCall> =
+                    if (parserToolCalls.isEmpty()) {
+                        when {
+                            raw.contains("<|tool_call") -> Gemma4ToolCallExtractor.extract(raw)
+                            raw.contains("<tool_call>") -> QwenXmlToolCallExtractor.extract(raw)
+                            else -> emptyList()
+                        }
+                    } else {
+                        emptyList()
+                    }
+
                 val toolCalls =
-                    if (parserToolCalls.isEmpty() && raw.contains("<tool_call>")) {
-                        QwenXmlToolCallExtractor
-                            .extract(raw)
-                            .map { ex ->
-                                NativeToolCall(
-                                    name = ex.name,
-                                    arguments =
-                                        nativeChatJson.encodeToString(
-                                            kotlinx.serialization.json.JsonObject
-                                                .serializer(),
-                                            kotlinx.serialization.json.JsonObject(
-                                                ex.arguments.mapValues {
-                                                    kotlinx.serialization.json.JsonPrimitive(it.value)
-                                                },
-                                            ),
+                    if (fallbackCalls.isNotEmpty()) {
+                        logger.i { "Native chat: fallback extractor found ${fallbackCalls.size} tool call(s)" }
+                        fallbackCalls.map { ex ->
+                            NativeToolCall(
+                                name = ex.name,
+                                arguments =
+                                    nativeChatJson.encodeToString(
+                                        kotlinx.serialization.json.JsonObject
+                                            .serializer(),
+                                        kotlinx.serialization.json.JsonObject(
+                                            ex.arguments.mapValues {
+                                                kotlinx.serialization.json.JsonPrimitive(it.value)
+                                            },
                                         ),
-                                )
-                            }.also {
-                                if (it.isNotEmpty()) {
-                                    logger.i { "Native chat: fallback XML extractor found ${it.size} tool call(s)" }
-                                }
-                            }
+                                    ),
+                            )
+                        }
                     } else {
                         parserToolCalls
                     }
 
                 // Strip generation-prompt leakage and the raw tool_call block from content.
                 // common_chat_parse prepends `params.generation_prompt` (e.g. "<|im_start|>assistant\n<think>\n")
-                // to the parsed content; when the fallback fires we also still carry the tool_call XML.
+                // to the parsed content; when the fallback fires we also still carry the tool_call block.
                 var displayContent = content
                 if (parserToolCalls.isEmpty() && toolCalls.isNotEmpty()) {
                     displayContent =
-                        displayContent.replace(
-                            Regex("<tool_call>.*?</tool_call>", RegexOption.DOT_MATCHES_ALL),
-                            "",
-                        )
+                        displayContent
+                            .replace(Regex("<tool_call>.*?</tool_call>", RegexOption.DOT_MATCHES_ALL), "")
+                            .replace(Regex("<\\|tool_call\\|?>.*?<\\|?tool_call\\|?>", RegexOption.DOT_MATCHES_ALL), "")
+                            .replace(Regex("<\\|channel\\|?>.*?<channel\\|>", RegexOption.DOT_MATCHES_ALL), "")
                 }
                 displayContent = stripNativeTemplatePrefix(displayContent)
 
@@ -555,6 +564,7 @@ class LlamaCppEngine(
             .replace(Regex("^\\s*<\\|im_start\\|>assistant\\s*"), "")
             .replace(Regex("^\\s*<start_of_turn>model\\s*"), "")
             .replace(Regex("^\\s*<\\|start_header_id\\|>assistant<\\|end_header_id\\|>\\s*"), "")
+            .replace(Regex("^\\s*<\\|turn\\|?>model\\s*"), "") // Gemma 4 turn marker
             .replace(Regex("^\\s*<think>\\s*"), "")
 
     companion object {
