@@ -2,8 +2,8 @@ package app.m1k3.ai.assistant.memory
 
 import app.m1k3.ai.assistant.database.MemoryMetadata
 import app.m1k3.ai.domain.repositories.VectorSearchResult
-import kotlin.math.exp
 import kotlinx.datetime.Clock
+import kotlin.math.exp
 
 /**
  * 間 AI - Memory Ranker
@@ -59,9 +59,8 @@ class MemoryRanker(
     private val similarityWeight: Float = 0.40f,
     private val recencyWeight: Float = 0.20f,
     private val importanceWeight: Float = 0.30f,
-    private val accessWeight: Float = 0.10f
+    private val accessWeight: Float = 0.10f,
 ) {
-
     /**
      * Rank and select memories from search results
      *
@@ -73,14 +72,14 @@ class MemoryRanker(
     fun rankAndSelect(
         searchResults: List<VectorSearchResult>,
         memories: List<MemoryMetadata>,
-        currentTimestamp: Long = Clock.System.now().toEpochMilliseconds()
+        currentTimestamp: Long = Clock.System.now().toEpochMilliseconds(),
     ): MemoryRankingResult {
         if (searchResults.isEmpty() || memories.isEmpty()) {
             return MemoryRankingResult(
                 selectedMemories = emptyList(),
                 totalTokens = 0,
                 droppedCount = 0,
-                rankingScores = emptyMap()
+                rankingScores = emptyMap(),
             )
         }
 
@@ -88,15 +87,17 @@ class MemoryRanker(
         val memoryMap = memories.associateBy { it.embedding_id }
 
         // Join search results with metadata and calculate composite scores
-        val scoredMemories = searchResults.mapNotNull { result ->
-            val memory = memoryMap[result.id] ?: return@mapNotNull null
-            val score = calculateCompositeScore(
-                similarity = result.similarity,
-                memory = memory,
-                currentTimestamp = currentTimestamp
-            )
-            ScoredMemory(memory, score)
-        }
+        val scoredMemories =
+            searchResults.mapNotNull { result ->
+                val memory = memoryMap[result.id] ?: return@mapNotNull null
+                val score =
+                    calculateCompositeScore(
+                        similarity = result.similarity,
+                        memory = memory,
+                        currentTimestamp = currentTimestamp,
+                    )
+                ScoredMemory(memory, score)
+            }
 
         // Sort by composite score (highest first)
         val rankedMemories = scoredMemories.sortedByDescending { it.score }
@@ -111,7 +112,7 @@ class MemoryRanker(
             selectedMemories = selected.map { it.memory },
             totalTokens = selected.sumOf { it.memory.chunk_tokens ?: 0 }.toInt(),
             droppedCount = rankedMemories.size - selected.size,
-            rankingScores = scoreMap
+            rankingScores = scoreMap,
         )
     }
 
@@ -127,16 +128,16 @@ class MemoryRanker(
     private fun calculateCompositeScore(
         similarity: Float,
         memory: MemoryMetadata,
-        currentTimestamp: Long
+        currentTimestamp: Long,
     ): Float {
         val recencyScore = calculateRecencyScore(memory.created_at, currentTimestamp)
         val importanceScore = memory.importance.toFloat()
         val accessScore = calculateAccessScore(memory.access_count.toInt())
 
         return (similarityWeight * similarity) +
-               (recencyWeight * recencyScore) +
-               (importanceWeight * importanceScore) +
-               (accessWeight * accessScore)
+            (recencyWeight * recencyScore) +
+            (importanceWeight * importanceScore) +
+            (accessWeight * accessScore)
     }
 
     /**
@@ -149,9 +150,12 @@ class MemoryRanker(
      * @param currentTime Current timestamp (milliseconds)
      * @return Recency score 0.0 to 1.0
      */
-    private fun calculateRecencyScore(createdAt: Long, currentTime: Long): Float {
+    private fun calculateRecencyScore(
+        createdAt: Long,
+        currentTime: Long,
+    ): Float {
         val ageMillis = currentTime - createdAt
-        if (ageMillis < 0) return 1.0f  // Future timestamp (shouldn't happen)
+        if (ageMillis < 0) return 1.0f // Future timestamp (shouldn't happen)
 
         // Convert to days
         val ageDays = ageMillis / (1000 * 60 * 60 * 24).toFloat()
@@ -227,7 +231,7 @@ class MemoryRanker(
     @Suppress("unused")
     private fun calculateDiversityBonus(
         memory: MemoryMetadata,
-        selectedMemories: List<MemoryMetadata>
+        selectedMemories: List<MemoryMetadata>,
     ): Float {
         // TODO: Implement diversity scoring
         // - Compare embedding similarity to already-selected memories
@@ -242,7 +246,7 @@ class MemoryRanker(
  */
 private data class ScoredMemory(
     val memory: MemoryMetadata,
-    val score: Float
+    val score: Float,
 )
 
 /**
@@ -252,28 +256,26 @@ data class MemoryRankingResult(
     val selectedMemories: List<MemoryMetadata>,
     val totalTokens: Int,
     val droppedCount: Int,
-    val rankingScores: Map<String, Float>
+    val rankingScores: Map<String, Float>,
 ) {
     /**
      * Get memories ordered by original chunk index for coherent reading
      */
-    fun getOrderedByChunks(): List<MemoryMetadata> {
-        return selectedMemories.sortedWith(
+    fun getOrderedByChunks(): List<MemoryMetadata> =
+        selectedMemories.sortedWith(
             compareBy(
                 { it.message_id },
-                { it.chunk_index }
-            )
+                { it.chunk_index },
+            ),
         )
-    }
 
     /**
      * Get context as formatted text for AI prompt
      */
-    fun formatAsContext(): String {
-        return getOrderedByChunks().joinToString("\n\n") { memory ->
+    fun formatAsContext(): String =
+        getOrderedByChunks().joinToString("\n\n") { memory ->
             "### Memory (importance: ${String.format("%.2f", memory.importance)})\n${memory.content}"
         }
-    }
 
     /**
      * Check if context is empty
@@ -284,14 +286,16 @@ data class MemoryRankingResult(
      * Get context statistics for debugging
      */
     fun getStats(): String {
+        val avgImportance = if (selectedMemories.isEmpty()) 0.0 else selectedMemories.map { it.importance }.average()
+        val avgScore = if (rankingScores.isEmpty()) 0.0 else rankingScores.values.average().toDouble()
         return """
             |Memory Ranking Statistics:
             |  Selected: ${selectedMemories.size} memories
             |  Total Tokens: $totalTokens
             |  Dropped: $droppedCount memories (budget exceeded)
-            |  Avg Importance: ${selectedMemories.map { it.importance }.average().let { "%.2f".format(it) }}
-            |  Avg Score: ${rankingScores.values.average().let { "%.2f".format(it) }}
-        """.trimMargin()
+            |  Avg Importance: ${"%.2f".format(avgImportance)}
+            |  Avg Score: ${"%.2f".format(avgScore)}
+            """.trimMargin()
     }
 }
 

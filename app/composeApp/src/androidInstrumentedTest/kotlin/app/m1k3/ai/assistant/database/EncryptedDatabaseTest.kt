@@ -6,10 +6,10 @@ import org.junit.After
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
+import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
-import kotlin.test.assertFalse
-import kotlin.test.assertEquals
 
 /**
  * PHASE0-003: Encrypted Database Tests
@@ -23,7 +23,6 @@ import kotlin.test.assertEquals
  */
 @RunWith(AndroidJUnit4::class)
 class EncryptedDatabaseTest {
-
     private lateinit var context: android.content.Context
     private lateinit var databaseFactory: AndroidDatabaseFactory
 
@@ -52,7 +51,7 @@ class EncryptedDatabaseTest {
         assertNotNull(passphrase, "Passphrase should be generated")
         assertTrue(
             passphrase.length >= 32,
-            "Passphrase should be at least 32 characters (256 bits encoded)"
+            "Passphrase should be at least 32 characters (256 bits encoded)",
         )
     }
 
@@ -67,7 +66,7 @@ class EncryptedDatabaseTest {
         assertEquals(
             originalPassphrase,
             retrievedPassphrase,
-            "Retrieved passphrase should match original"
+            "Retrieved passphrase should match original",
         )
     }
 
@@ -78,42 +77,9 @@ class EncryptedDatabaseTest {
     fun databaseFactory_createsEncryptedDatabase() {
         val passphrase = databaseFactory.generateAndStorePassphrase()
 
-        // Note: This test will pass even without actual schema defined
-        // Once we add tables in PHASE0-009+, the driver will create real tables
-        try {
-            val driver = databaseFactory.createDriver(passphrase)
-            assertNotNull(driver, "Encrypted driver should be created")
-            driver.close()
-        } catch (e: Exception) {
-            // Expected: MaDatabase.Schema doesn't exist yet
-            // This will be fixed in PHASE0-009 when we create table schemas
-            assertTrue(
-                e.message?.contains("MaDatabase") == true,
-                "Expected MaDatabase schema error until PHASE0-009+"
-            )
-        }
-    }
-
-    /**
-     * AC4: Database encryption can be verified
-     */
-    @Test
-    fun databaseFactory_verifiesEncryption() {
-        val passphrase = databaseFactory.generateAndStorePassphrase()
-
-        try {
-            val driver = databaseFactory.createDriver(passphrase)
-            // TODO: Implement verifyEncryption method
-            // databaseFactory.verifyEncryption(driver)
-            driver.close()
-        } catch (e: Exception) {
-            // Expected: Schema doesn't exist yet
-            assertTrue(
-                e.message?.contains("MaDatabase") == true ||
-                        e.message?.contains("Schema") == true,
-                "Expected schema error until PHASE0-009+: ${e.message}"
-            )
-        }
+        val driver = databaseFactory.createDriver(passphrase)
+        assertNotNull(driver, "Encrypted driver should be created")
+        driver.close()
     }
 
     /**
@@ -125,7 +91,8 @@ class EncryptedDatabaseTest {
 
         // Create new factory to simulate fresh install
         context.deleteDatabase(DatabaseConfig.DATABASE_NAME)
-        context.getSharedPreferences("ma_secure_prefs", android.content.Context.MODE_PRIVATE)
+        context
+            .getSharedPreferences("ma_secure_prefs", android.content.Context.MODE_PRIVATE)
             .edit()
             .clear()
             .apply()
@@ -135,7 +102,7 @@ class EncryptedDatabaseTest {
 
         assertFalse(
             passphrase1 == passphrase2,
-            "Each generated passphrase should be unique"
+            "Each generated passphrase should be unique",
         )
     }
 
@@ -147,10 +114,11 @@ class EncryptedDatabaseTest {
         val passphrase = databaseFactory.generateAndStorePassphrase()
 
         // Verify passphrase is NOT in plaintext SharedPreferences
-        val plainPrefs = context.getSharedPreferences(
-            "ma_secure_prefs",
-            android.content.Context.MODE_PRIVATE
-        )
+        val plainPrefs =
+            context.getSharedPreferences(
+                "ma_secure_prefs",
+                android.content.Context.MODE_PRIVATE,
+            )
 
         val plainValue = plainPrefs.getString(DatabaseConfig.PASSPHRASE_KEY, null)
 
@@ -158,7 +126,7 @@ class EncryptedDatabaseTest {
         // The encrypted value should NOT match the original passphrase
         assertFalse(
             plainValue == passphrase,
-            "Passphrase should be encrypted in SharedPreferences, not plaintext"
+            "Passphrase should be encrypted in SharedPreferences, not plaintext",
         )
 
         // But it should be retrievable via EncryptedSharedPreferences
@@ -166,7 +134,7 @@ class EncryptedDatabaseTest {
         assertEquals(
             passphrase,
             retrievedPassphrase,
-            "Passphrase should be decryptable via DatabaseFactory"
+            "Passphrase should be decryptable via DatabaseFactory",
         )
     }
 }

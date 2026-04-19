@@ -35,6 +35,7 @@ import app.m1k3.ai.assistant.ui.components.*
 import app.m1k3.ai.domain.ai.AiCoreModelPreference
 import app.m1k3.ai.domain.context.UserContext
 import app.m1k3.ai.domain.context.UserContextProvider
+import app.m1k3.ai.domain.rag.Intent
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.ui.tooling.preview.Preview
 import org.koin.compose.koinInject
@@ -618,7 +619,7 @@ private fun KnowledgeSection(
         )
         SettingsItem(
             title = "Intent Classification",
-            subtitle = "20 query types · Adaptive retrieval",
+            subtitle = "${Intent.entries.size} query types · Adaptive retrieval",
             icon = Icons.Default.Category,
             onClick = onIntentClick,
         )

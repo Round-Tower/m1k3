@@ -3,8 +3,8 @@ package app.m1k3.ai.domain.tools.services
 import app.m1k3.ai.domain.tools.ToolCall
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertTrue
 import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 
 /**
  * Tests for ToolCallParser interface and DefaultToolCallParser implementation
@@ -12,7 +12,6 @@ import kotlin.test.assertFalse
  * TDD: These tests define the contract for parsing tool calls from LLM output.
  */
 class ToolCallParserTest {
-
     private val parser: ToolCallParser = DefaultToolCallParser()
 
     // ===== JSON Format Tests =====
@@ -234,6 +233,28 @@ class ToolCallParserTest {
 
         assertEquals(1, calls.size)
         assertEquals("true", calls[0].arguments["enable"])
+    }
+
+    @Test
+    fun `preserves negative numeric args`() {
+        // Grammar allows "-"? prefix on numbers; parser must preserve it.
+        val output = """{"tool": "adjust_volume", "args": {"delta": -5}}"""
+
+        val calls = parser.parse(output)
+
+        assertEquals(1, calls.size)
+        assertEquals("-5", calls[0].arguments["delta"])
+    }
+
+    @Test
+    fun `preserves decimal numeric args`() {
+        // Grammar allows ("." [0-9]+)? fractional part; parser must preserve it.
+        val output = """{"tool": "set_factor", "args": {"factor": 3.14}}"""
+
+        val calls = parser.parse(output)
+
+        assertEquals(1, calls.size)
+        assertEquals("3.14", calls[0].arguments["factor"])
     }
 
     // ===== Grammar-constrained input contract =====

@@ -20,6 +20,11 @@ package app.m1k3.ai.domain.chat
  * @property hasConversationHistory Whether conversation history was retrieved
  * @property hasRagContext Whether RAG context was retrieved
  * @property hasMemoryContext Whether memory context was retrieved
+ * @property retrievalErrors Failures encountered while gathering context. Empty
+ *                           on the happy path. Each entry is a short diagnostic
+ *                           string (source + reason) — retrieval catches the
+ *                           exception so generation can still proceed, but we
+ *                           keep the signal instead of swallowing it.
  */
 data class EnrichedContext(
     val context: String,
@@ -30,8 +35,16 @@ data class EnrichedContext(
     val ragConfidence: Double? = null,
     val hasConversationHistory: Boolean = false,
     val hasRagContext: Boolean,
-    val hasMemoryContext: Boolean
+    val hasMemoryContext: Boolean,
+    val retrievalErrors: List<String> = emptyList(),
 ) {
+    /**
+     * Whether any retrieval source failed. Generation may still succeed —
+     * callers use this to warn in debug builds rather than block.
+     */
+    val hasRetrievalErrors: Boolean
+        get() = retrievalErrors.isNotEmpty()
+
     /**
      * Check if any context was retrieved.
      */
@@ -54,30 +67,30 @@ data class EnrichedContext(
      * Summary of what context sources were used.
      */
     val contextSummary: String
-        get() = buildString {
-            val sources = mutableListOf<String>()
-            if (hasConversationHistory) sources.add("history")
-            if (hasRagContext) sources.add("RAG")
-            if (hasMemoryContext) sources.add("memory")
+        get() =
+            buildString {
+                val sources = mutableListOf<String>()
+                if (hasConversationHistory) sources.add("history")
+                if (hasRagContext) sources.add("RAG")
+                if (hasMemoryContext) sources.add("memory")
 
-            if (sources.isEmpty()) {
-                append("No context")
-            } else {
-                append(sources.joinToString(", "))
+                if (sources.isEmpty()) {
+                    append("No context")
+                } else {
+                    append(sources.joinToString(", "))
+                }
             }
-        }
 
     companion object {
         /**
          * Create an empty context with a default intent.
          */
-        fun empty(intentCategory: String = "CONVERSATIONAL"): EnrichedContext {
-            return EnrichedContext(
+        fun empty(intentCategory: String = "CONVERSATIONAL"): EnrichedContext =
+            EnrichedContext(
                 context = "",
                 intentCategory = intentCategory,
                 hasRagContext = false,
-                hasMemoryContext = false
+                hasMemoryContext = false,
             )
-        }
     }
 }

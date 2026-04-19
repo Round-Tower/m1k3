@@ -2,20 +2,20 @@ package app.m1k3.ai.assistant.chat.usecase
 
 import app.m1k3.ai.assistant.config.GenerationConstants
 import app.m1k3.ai.assistant.database.MaDatabase
-import app.m1k3.ai.domain.chat.EnrichedContext
-import app.m1k3.ai.domain.chat.services.ContextAssembler
 import app.m1k3.ai.assistant.memory.MemoryManager
 import app.m1k3.ai.assistant.platform.DeviceInfoProviderInterface
-import app.m1k3.ai.assistant.platform.PreferencesStoreInterface
 import app.m1k3.ai.assistant.platform.PreferenceKeys
+import app.m1k3.ai.assistant.platform.PreferencesStoreInterface
 import app.m1k3.ai.assistant.platform.getMemoryTopK
+import app.m1k3.ai.assistant.utils.Logger
+import app.m1k3.ai.domain.chat.EnrichedContext
+import app.m1k3.ai.domain.chat.services.ContextAssembler
 import app.m1k3.ai.domain.chat.services.ContextRetrieverInterface
+import app.m1k3.ai.domain.rag.services.ContextBudgetManager
+import app.m1k3.ai.domain.rag.services.IntentClassifier
 import app.m1k3.ai.domain.rag.services.RAGEnricherInterface
 import app.m1k3.ai.domain.rag.services.calculateRAGConfidence
 import app.m1k3.ai.domain.rag.services.formatRAGSources
-import app.m1k3.ai.domain.rag.services.IntentClassifier
-import app.m1k3.ai.domain.rag.services.ContextBudgetManager
-import app.m1k3.ai.assistant.utils.Logger
 
 private val logger = Logger.withTag("ContextRetrievalUseCase")
 
@@ -58,7 +58,7 @@ class ContextRetrievalUseCase(
     private val memoryManager: MemoryManager? = null,
     private val contextAssembler: ContextAssembler = ContextAssembler(),
     private val intentClassifier: IntentClassifier = IntentClassifier(),
-    private val contextBudgetManager: ContextBudgetManager = ContextBudgetManager()
+    private val contextBudgetManager: ContextBudgetManager = ContextBudgetManager(),
 ) : ContextRetrieverInterface {
     /**
      * Retrieve context for a given prompt.
@@ -95,9 +95,19 @@ class ContextRetrievalUseCase(
         } else {
             // Log why RAG was skipped for debugging
             when {
-                !isRagEnabled() -> logger.d { "RAG disabled in preferences" }
-                ragEnricher == null -> logger.w { "RAG skipped: ragEnricher is null (embeddingEngine not provided?)" }
-                !shouldRetrieveKnowledge -> logger.d { "Skipping RAG for ${intent.category} query (confidence: ${(intentConfidence * 100).toInt()}%)" }
+                !isRagEnabled() -> {
+                    logger.d { "RAG disabled in preferences" }
+                }
+
+                ragEnricher == null -> {
+                    logger.w { "RAG skipped: ragEnricher is null (embeddingEngine not provided?)" }
+                }
+
+                !shouldRetrieveKnowledge -> {
+                    logger.d {
+                        "Skipping RAG for ${intent.category} query (confidence: ${(intentConfidence * 100).toInt()}%)"
+                    }
+                }
             }
         }
 
@@ -118,23 +128,19 @@ class ContextRetrievalUseCase(
             ragConfidence = ragConfidence,
             hasConversationHistory = conversationHistory.isNotEmpty(),
             hasRagContext = ragContext.isNotEmpty(),
-            hasMemoryContext = memoryContext.isNotEmpty()
+            hasMemoryContext = memoryContext.isNotEmpty(),
         )
     }
 
     /**
      * Check if RAG is enabled in preferences.
      */
-    override fun isRagEnabled(): Boolean {
-        return preferences.getBoolean(PreferenceKeys.RAG_ENABLED, true)
-    }
+    override fun isRagEnabled(): Boolean = preferences.getBoolean(PreferenceKeys.RAG_ENABLED, true)
 
     /**
      * Get the memory topK value based on device tier.
      */
-    fun getMemoryTopK(): Int {
-        return deviceInfo.getMemoryTopK()
-    }
+    fun getMemoryTopK(): Int = deviceInfo.getMemoryTopK()
 
     /**
      * Get the number of conversation history messages to include based on device tier.
@@ -143,10 +149,16 @@ class ContextRetrievalUseCase(
     fun getConversationHistoryLimit(): Int {
         val ramGb = deviceInfo.getDeviceRamGB()
         return when {
-            ramGb >= 12 -> 10  // Flagship: last 10 messages (5 turns)
-            ramGb >= 8 -> 8    // High-end: last 8 messages (4 turns)
-            ramGb >= 6 -> 6    // Mid-range: last 6 messages (3 turns)
-            else -> 4          // Budget: last 4 messages (2 turns)
+            ramGb >= 12 -> 10
+
+            // Flagship: last 10 messages (5 turns)
+            ramGb >= 8 -> 8
+
+            // High-end: last 8 messages (4 turns)
+            ramGb >= 6 -> 6
+
+            // Mid-range: last 6 messages (3 turns)
+            else -> 4 // Budget: last 4 messages (2 turns)
         }
     }
 
@@ -166,10 +178,12 @@ class ContextRetrievalUseCase(
     private fun retrieveConversationHistory(): String {
         return try {
             val limit = getConversationHistoryLimit()
-            val messages = database!!.messageQueries
-                .getRecentMessagesForProject(projectId!!, limit.toLong())
-                .executeAsList()
-                .reversed() // Reverse to get chronological order (oldest first)
+            val messages =
+                database!!
+                    .messageQueries
+                    .getRecentMessagesForProject(projectId!!, limit.toLong())
+                    .executeAsList()
+                    .reversed() // Reverse to get chronological order (oldest first)
 
             if (messages.isEmpty()) {
                 return ""
@@ -183,12 +197,16 @@ class ContextRetrievalUseCase(
             }
 
             // Get meaningful topics (skip greetings)
-            val topics = userMessages.mapNotNull { msg ->
-                val content = msg.content.trim()
-                if (content.length > 10 && !content.lowercase().matches(Regex("^(hi|hey|hello|what's up|sup).*"))) {
-                    content.take(100)
-                } else null
-            }.takeLast(3) // Last 3 meaningful queries
+            val topics =
+                userMessages
+                    .mapNotNull { msg ->
+                        val content = msg.content.trim()
+                        if (content.length > 10 && !content.lowercase().matches(Regex("^(hi|hey|hello|what's up|sup)\\b.*"))) {
+                            content.take(100)
+                        } else {
+                            null
+                        }
+                    }.takeLast(3) // Last 3 meaningful queries
 
             if (topics.isEmpty()) {
                 return ""
@@ -205,42 +223,51 @@ class ContextRetrievalUseCase(
 
     private suspend fun retrieveRagContext(
         prompt: String,
-        conversationHistoryChars: Int
-    ): RagResult {
-        return try {
-            val result = ragEnricher!!.enrichPrompt(
-                userQuery = prompt,
-                systemPrompt = "",
-                enableRAG = true
-            )
+        conversationHistoryChars: Int,
+    ): RagResult =
+        try {
+            val result =
+                ragEnricher!!.enrichPrompt(
+                    userQuery = prompt,
+                    systemPrompt = "",
+                    enableRAG = true,
+                )
 
             if (result.ragApplied && result.retrievedFacts.isNotEmpty()) {
                 // Calculate available budget for RAG facts
                 // Reserve space for memory context (retrieved after RAG)
                 // Estimate: topK memories × max content length per memory
-                val estimatedMemoryChars = deviceInfo.getMemoryTopK() *
-                    (GenerationConstants.MemoryPreview.MAX_CONTENT_LENGTH + 10) // +10 for "Memory: " prefix
-                val ragBudget = contextBudgetManager.calculateRagBudget(
-                    historyChars = conversationHistoryChars,
-                    memoryChars = estimatedMemoryChars
-                )
+                val estimatedMemoryChars =
+                    deviceInfo.getMemoryTopK() *
+                        (GenerationConstants.MemoryPreview.MAX_CONTENT_LENGTH + 10) // +10 for "Memory: " prefix
+                val ragBudget =
+                    contextBudgetManager.calculateRagBudget(
+                        historyChars = conversationHistoryChars,
+                        memoryChars = estimatedMemoryChars,
+                    )
 
                 // Select facts within budget (already sorted by similarity)
-                val selectedFacts = contextBudgetManager.selectFactsWithinBudget(
-                    result.retrievedFacts,
-                    ragBudget
-                )
+                val selectedFacts =
+                    contextBudgetManager.selectFactsWithinBudget(
+                        result.retrievedFacts,
+                        ragBudget,
+                    )
 
                 // Format as inline string: "Facts: x. y. z."
                 val factsContext = contextBudgetManager.formatFacts(selectedFacts)
 
                 // Build RAG info display string for UI
-                val avgSimilarity = result.retrievedFacts.map { it.similarity }.average().toFloat()
-                val qualityEmoji = when {
-                    avgSimilarity >= GenerationConstants.Similarity.HIGH_QUALITY -> "✅"
-                    avgSimilarity >= GenerationConstants.Similarity.MEDIUM_QUALITY -> "⚠️"
-                    else -> "❓"
-                }
+                val avgSimilarity =
+                    result.retrievedFacts
+                        .map { it.similarity }
+                        .average()
+                        .toFloat()
+                val qualityEmoji =
+                    when {
+                        avgSimilarity >= GenerationConstants.Similarity.HIGH_QUALITY -> "✅"
+                        avgSimilarity >= GenerationConstants.Similarity.MEDIUM_QUALITY -> "⚠️"
+                        else -> "❓"
+                    }
                 val usedCount = selectedFacts.size
                 val totalCount = result.retrievedFacts.size
                 val ragInfo = "$qualityEmoji ${result.intent.category} (${(result.confidence * 100).toInt()}%) • $usedCount/$totalCount facts"
@@ -248,17 +275,17 @@ class ContextRetrievalUseCase(
                 logger.d { "RAG budget: $ragBudget chars, selected $usedCount/$totalCount facts" }
 
                 RagResult(
-                    context = factsContext,  // Inline format, budget-aware
+                    context = factsContext, // Inline format, budget-aware
                     ragInfo = ragInfo,
-                    ragSources = result.retrievedFacts.formatRAGSources(),  // Domain extension
-                    ragConfidence = result.retrievedFacts.calculateRAGConfidence()  // Domain extension
+                    ragSources = result.retrievedFacts.formatRAGSources(), // Domain extension
+                    ragConfidence = result.retrievedFacts.calculateRAGConfidence(), // Domain extension
                 )
             } else {
                 RagResult(
                     context = "",
                     ragInfo = null,
                     ragSources = null,
-                    ragConfidence = null
+                    ragConfidence = null,
                 )
             }
         } catch (e: Exception) {
@@ -267,13 +294,12 @@ class ContextRetrievalUseCase(
                 context = "",
                 ragInfo = null,
                 ragSources = null,
-                ragConfidence = null
+                ragConfidence = null,
             )
         }
-    }
 
-    private suspend fun retrieveMemoryContext(prompt: String): String {
-        return try {
+    private suspend fun retrieveMemoryContext(prompt: String): String =
+        try {
             val topK = deviceInfo.getMemoryTopK()
             val result = memoryManager!!.retrieveRelevantMemories(prompt, topK)
 
@@ -296,7 +322,6 @@ class ContextRetrievalUseCase(
             logger.w(e) { "Memory retrieval failed" }
             ""
         }
-    }
 
     /**
      * Internal result from RAG retrieval.
@@ -305,7 +330,7 @@ class ContextRetrievalUseCase(
         val context: String,
         val ragInfo: String?,
         val ragSources: String?,
-        val ragConfidence: Double?
+        val ragConfidence: Double?,
     )
 }
 

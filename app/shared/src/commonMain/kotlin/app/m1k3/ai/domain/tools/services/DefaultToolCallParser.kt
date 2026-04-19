@@ -18,20 +18,25 @@ import app.m1k3.ai.domain.tools.ToolCall
  * - Bare JSON:   `{"tool":"id","args":{...}}`
  */
 class DefaultToolCallParser : ToolCallParser {
-
     companion object {
-        private val JSON_TOOL_PATTERN = Regex(
-            """\{\s*"tool"\s*:\s*"([^"]+)"(?:\s*,\s*"args"\s*:\s*(\{[^}]*\}))?\s*\}"""
-        )
+        private val JSON_TOOL_PATTERN =
+            Regex(
+                """\{\s*"tool"\s*:\s*"([^"]+)"(?:\s*,\s*"args"\s*:\s*(\{[^}]*\}))?\s*\}""",
+            )
 
-        private val XML_TOOL_PATTERN = Regex(
-            """<tool_call>(.*?)</tool_call>""",
-            RegexOption.DOT_MATCHES_ALL
-        )
+        private val XML_TOOL_PATTERN =
+            Regex(
+                """<tool_call>(.*?)</tool_call>""",
+                RegexOption.DOT_MATCHES_ALL,
+            )
 
-        private val ARGS_PATTERN = Regex(
-            """"([^"]+)"\s*:\s*(?:"([^"]*)"|(\w+))"""
-        )
+        // Unquoted value: number (with optional sign + fractional part) or boolean.
+        // Must mirror ToolCallGrammarBuilder's `number` / `boolean` rules — if that
+        // grammar broadens, this pattern broadens with it.
+        private val ARGS_PATTERN =
+            Regex(
+                """"([^"]+)"\s*:\s*(?:"([^"]*)"|(-?\d+(?:\.\d+)?|true|false))""",
+            )
     }
 
     override fun parse(output: String): List<ToolCall> {
@@ -59,18 +64,20 @@ class DefaultToolCallParser : ToolCallParser {
     }
 
     override fun extractPlainText(output: String): String =
-        XML_TOOL_PATTERN.replace(output, "")
+        XML_TOOL_PATTERN
+            .replace(output, "")
             .let { JSON_TOOL_PATTERN.replace(it, "") }
             .lines()
             .map { it.trim() }
             .filter { it.isNotBlank() }
             .joinToString("\n")
 
-    private fun toToolCall(match: MatchResult): ToolCall = ToolCall(
-        toolId = match.groupValues[1],
-        arguments = parseArgs(match.groupValues.getOrNull(2) ?: ""),
-        rawText = match.value
-    )
+    private fun toToolCall(match: MatchResult): ToolCall =
+        ToolCall(
+            toolId = match.groupValues[1],
+            arguments = parseArgs(match.groupValues.getOrNull(2) ?: ""),
+            rawText = match.value,
+        )
 
     private fun parseArgs(argsJson: String): Map<String, String> {
         if (argsJson.isBlank()) return emptyMap()
