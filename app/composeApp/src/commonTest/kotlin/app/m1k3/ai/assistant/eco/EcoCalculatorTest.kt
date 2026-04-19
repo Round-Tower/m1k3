@@ -31,7 +31,7 @@ class EcoCalculatorTest {
         assertEquals(120, savings.waterSavedMl, "Water saved should be 120ml for 100 tokens")
         assertEquals(3000, savings.energySavedWh, "Energy saved should be 3000 mWh (3 Wh) for 100 tokens")
         assertEquals(2, savings.co2PreventedG, "CO2 prevented should be 2g for 100 tokens")
-        assertEquals(0, savings.bytesSent, "Bytes sent should always be 0 (privacy)")
+        assertEquals(0L, savings.bytesSent, "Bytes sent should always be 0 (privacy)")
     }
 
     @Test
@@ -85,27 +85,27 @@ class EcoCalculatorTest {
 
         testCases.forEach { tokens ->
             val savings = EcoCalculator.calculateSavings(tokens)
-            assertEquals(0, savings.bytesSent, "Inference: bytesSent stays 0 for $tokens tokens")
-            assertEquals(0, savings.bytesReceived, "Inference: bytesReceived stays 0 for $tokens tokens")
+            assertEquals(0L, savings.bytesSent, "Inference: bytesSent stays 0 for $tokens tokens")
+            assertEquals(0L, savings.bytesReceived, "Inference: bytesReceived stays 0 for $tokens tokens")
         }
     }
 
     @Test
     fun `networkEvent creates row with zero inference but real bytes`() {
-        val event = EcoCalculator.networkEvent(bytesSent = 1024, bytesReceived = 5_000_000)
+        val event = EcoCalculator.networkEvent(bytesSent = 1024L, bytesReceived = 5_000_000L)
 
         assertEquals(0, event.tokensProcessed, "Network event has no inference tokens")
         assertEquals(0, event.waterSavedMl)
         assertEquals(0, event.energySavedWh)
         assertEquals(0, event.co2PreventedG)
-        assertEquals(1024, event.bytesSent)
-        assertEquals(5_000_000, event.bytesReceived)
+        assertEquals(1024L, event.bytesSent)
+        assertEquals(5_000_000L, event.bytesReceived)
     }
 
     @Test
     fun `networkEvent rejects negative bytes`() {
-        assertFails { EcoCalculator.networkEvent(bytesSent = -1, bytesReceived = 0) }
-        assertFails { EcoCalculator.networkEvent(bytesSent = 0, bytesReceived = -1) }
+        assertFails { EcoCalculator.networkEvent(bytesSent = -1L, bytesReceived = 0L) }
+        assertFails { EcoCalculator.networkEvent(bytesSent = 0L, bytesReceived = -1L) }
     }
 
     @Test
@@ -135,7 +135,7 @@ class EcoCalculatorTest {
         assertEquals(0, savings.waterSavedMl)
         assertEquals(0, savings.energySavedWh)
         assertEquals(0, savings.co2PreventedG)
-        assertEquals(0, savings.bytesSent)
+        assertEquals(0L, savings.bytesSent)
     }
 
     // ==================== Formatting Tests ====================

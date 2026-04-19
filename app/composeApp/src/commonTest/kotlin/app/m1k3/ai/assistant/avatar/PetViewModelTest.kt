@@ -114,8 +114,8 @@ class PetViewModelTest {
     @Test
     fun `onEcoMetricsRecorded accumulates lifetime totals`() = testScope.runTest {
         // Arrange
-        val savings1 = EcoSavings(100, 120, 3000, 2, 0)
-        val savings2 = EcoSavings(100, 180, 4500, 3, 0)
+        val savings1 = EcoSavings(100, 120, 3000, 2, 0L)
+        val savings2 = EcoSavings(100, 180, 4500, 3, 0L)
 
         // Act
         viewModel.onEcoMetricsRecorded(savings1)
@@ -133,7 +133,7 @@ class PetViewModelTest {
     @Test
     fun `onEcoMetricsRecorded spawns particles`() = testScope.runTest {
         // Arrange
-        val savings = EcoSavings(100, 120, 3000, 2, 0)
+        val savings = EcoSavings(100, 120, 3000, 2, 0L)
 
         // Act
         viewModel.onEcoMetricsRecorded(savings)
@@ -150,7 +150,7 @@ class PetViewModelTest {
     @Test
     fun `onEcoMetricsRecorded triggers evolution when threshold reached`() = testScope.runTest {
         // Arrange - Pet needs 5000ml to evolve to INTERMEDIATE
-        val largeSavings = EcoSavings(500, 6000, 15000, 10, 0) // 6L water
+        val largeSavings = EcoSavings(500, 6000, 15000, 10, 0L) // 6L water
 
         // Act
         viewModel.onEcoMetricsRecorded(largeSavings)
@@ -167,7 +167,7 @@ class PetViewModelTest {
     @Test
     fun `particles are removed after lifecycle expires`() = testScope.runTest {
         // Arrange
-        val savings = EcoSavings(100, 120, 3000, 2, 0)
+        val savings = EcoSavings(100, 120, 3000, 2, 0L)
         viewModel.onEcoMetricsRecorded(savings)
         advanceUntilIdle() // Let the spawn coroutine complete
 
@@ -183,9 +183,9 @@ class PetViewModelTest {
     @Test
     fun `multiple eco events create multiple particle sets`() = testScope.runTest {
         // Arrange & Act
-        viewModel.onEcoMetricsRecorded(EcoSavings(100, 120, 3000, 2, 0))
+        viewModel.onEcoMetricsRecorded(EcoSavings(100, 120, 3000, 2, 0L))
         advanceTimeBy(500) // 0.5 seconds delay
-        viewModel.onEcoMetricsRecorded(EcoSavings(100, 120, 3000, 2, 0))
+        viewModel.onEcoMetricsRecorded(EcoSavings(100, 120, 3000, 2, 0L))
 
         // Assert
         val particles = viewModel.particleEffects.first()
@@ -195,7 +195,7 @@ class PetViewModelTest {
     @Test
     fun `particle cleanup removes only expired particles`() = testScope.runTest {
         // Arrange - Spawn first batch
-        viewModel.onEcoMetricsRecorded(EcoSavings(100, 120, 3000, 2, 0))
+        viewModel.onEcoMetricsRecorded(EcoSavings(100, 120, 3000, 2, 0L))
         runCurrent() // Spawn without running cleanup
 
         // Verify first batch is there
@@ -206,7 +206,7 @@ class PetViewModelTest {
         advanceTimeBy(3000) // Advance past cleanup time
 
         // Spawn second batch
-        viewModel.onEcoMetricsRecorded(EcoSavings(100, 120, 3000, 2, 0))
+        viewModel.onEcoMetricsRecorded(EcoSavings(100, 120, 3000, 2, 0L))
         runCurrent() // Spawn second batch
 
         // Assert - First batch should be cleaned up, only second batch remains
@@ -291,7 +291,7 @@ class PetViewModelTest {
     @Test
     fun `pet remains BASIC below 5000ml water`() = testScope.runTest {
         // Arrange
-        val savings = EcoSavings(100, 4500, 10000, 9, 0) // 4.5L water
+        val savings = EcoSavings(100, 4500, 10000, 9, 0L) // 4.5L water
 
         // Act
         viewModel.onEcoMetricsRecorded(savings)
@@ -305,7 +305,7 @@ class PetViewModelTest {
     @Test
     fun `pet evolves to INTERMEDIATE at 5000ml water`() = testScope.runTest {
         // Arrange
-        val savings = EcoSavings(500, 5500, 15000, 10, 0) // 5.5L water
+        val savings = EcoSavings(500, 5500, 15000, 10, 0L) // 5.5L water
 
         // Act
         viewModel.onEcoMetricsRecorded(savings)
@@ -320,7 +320,7 @@ class PetViewModelTest {
     fun `pet evolves to ADVANCED at 100000ml water`() = testScope.runTest {
         // Arrange - Simulate multiple interactions accumulating to 100L
         repeat(10) {
-            viewModel.onEcoMetricsRecorded(EcoSavings(1000, 12000, 30000, 20, 0)) // 12L per interaction
+            viewModel.onEcoMetricsRecorded(EcoSavings(1000, 12000, 30000, 20, 0L)) // 12L per interaction
         }
         advanceUntilIdle()
 
@@ -333,13 +333,13 @@ class PetViewModelTest {
     @Test
     fun `evolution stages are permanent`() = testScope.runTest {
         // Arrange - Evolve to INTERMEDIATE
-        viewModel.onEcoMetricsRecorded(EcoSavings(500, 6000, 15000, 10, 0))
+        viewModel.onEcoMetricsRecorded(EcoSavings(500, 6000, 15000, 10, 0L))
         advanceUntilIdle()
         val evolvedStage = viewModel.petState.first().evolutionStage
 
         // Act - Add more interactions
         repeat(5) {
-            viewModel.onEcoMetricsRecorded(EcoSavings(100, 120, 3000, 2, 0))
+            viewModel.onEcoMetricsRecorded(EcoSavings(100, 120, 3000, 2, 0L))
         }
         advanceUntilIdle()
 
@@ -356,7 +356,7 @@ class PetViewModelTest {
     @Test
     fun `daily goal progress calculates correctly`() = testScope.runTest {
         // Arrange - Pet has default goal of 1000 credits
-        val savings = EcoSavings(100, 500, 3000, 2, 0) // Assume this gives ~500 credits
+        val savings = EcoSavings(100, 500, 3000, 2, 0L) // Assume this gives ~500 credits
 
         // Act
         viewModel.onEcoMetricsRecorded(savings)
@@ -372,7 +372,7 @@ class PetViewModelTest {
     fun `exceeding daily goal works correctly`() = testScope.runTest {
         // Arrange - Accumulate beyond 1000 credit goal
         repeat(15) {
-            viewModel.onEcoMetricsRecorded(EcoSavings(100, 120, 3000, 2, 0))
+            viewModel.onEcoMetricsRecorded(EcoSavings(100, 120, 3000, 2, 0L))
         }
         advanceUntilIdle()
 
@@ -386,7 +386,7 @@ class PetViewModelTest {
     @Test
     fun `pet stats respect max value of 100`() = testScope.runTest {
         // Arrange - Massive eco savings to push stats beyond 100
-        val hugeSavings = EcoSavings(10000, 200000, 500000, 10000, 0)
+        val hugeSavings = EcoSavings(10000, 200000, 500000, 10000, 0L)
 
         // Act
         viewModel.onEcoMetricsRecorded(hugeSavings)
@@ -426,7 +426,7 @@ class PetViewModelTest {
     @Test
     fun `current achievement updates at milestones`() = testScope.runTest {
         // Arrange - Reach Water Bottle achievement (500ml)
-        val savings = EcoSavings(100, 600, 3000, 2, 0) // 600ml
+        val savings = EcoSavings(100, 600, 3000, 2, 0L) // 600ml
 
         // Act
         viewModel.onEcoMetricsRecorded(savings)
@@ -445,7 +445,7 @@ class PetViewModelTest {
     fun `achievement progresses through tiers`() = testScope.runTest {
         // Arrange - Accumulate to Bucket achievement (5L)
         repeat(5) {
-            viewModel.onEcoMetricsRecorded(EcoSavings(100, 1200, 3000, 2, 0)) // 1.2L each
+            viewModel.onEcoMetricsRecorded(EcoSavings(100, 1200, 3000, 2, 0L)) // 1.2L each
         }
         advanceUntilIdle()
 
@@ -460,7 +460,7 @@ class PetViewModelTest {
     @Test
     fun `zero savings eco event still increments conversation count`() = testScope.runTest {
         // Arrange
-        val zeroSavings = EcoSavings(0, 0, 0, 0, 0)
+        val zeroSavings = EcoSavings(0, 0, 0, 0, 0L)
 
         // Act
         viewModel.onEcoMetricsRecorded(zeroSavings)
@@ -476,7 +476,7 @@ class PetViewModelTest {
     fun `rapid successive interactions work correctly`() = testScope.runTest {
         // Act - Rapid fire 10 interactions
         repeat(10) {
-            viewModel.onEcoMetricsRecorded(EcoSavings(100, 120, 3000, 2, 0))
+            viewModel.onEcoMetricsRecorded(EcoSavings(100, 120, 3000, 2, 0L))
         }
         advanceUntilIdle()
 
@@ -492,7 +492,7 @@ class PetViewModelTest {
         val initialState = viewModel.petState.first()
 
         // Act
-        viewModel.onEcoMetricsRecorded(EcoSavings(100, 120, 3000, 2, 0))
+        viewModel.onEcoMetricsRecorded(EcoSavings(100, 120, 3000, 2, 0L))
         advanceUntilIdle()
 
         // Assert
@@ -510,7 +510,7 @@ class PetViewModelTest {
     fun `daily power user scenario - 20 conversations`() = testScope.runTest {
         // Scenario: User has 20 conversations in a day
         repeat(20) {
-            viewModel.onEcoMetricsRecorded(EcoSavings(150, 180, 4500, 3, 0))
+            viewModel.onEcoMetricsRecorded(EcoSavings(150, 180, 4500, 3, 0L))
             advanceTimeBy(100) // Small delay between conversations
         }
         advanceUntilIdle()
@@ -528,7 +528,7 @@ class PetViewModelTest {
     fun `new user first week scenario`() = testScope.runTest {
         // Scenario: New user, 5 conversations per day for 7 days
         repeat(35) { // 5 × 7
-            viewModel.onEcoMetricsRecorded(EcoSavings(150, 180, 4500, 3, 0))
+            viewModel.onEcoMetricsRecorded(EcoSavings(150, 180, 4500, 3, 0L))
         }
         advanceUntilIdle()
 
@@ -542,9 +542,9 @@ class PetViewModelTest {
     @Test
     fun `interaction with pats and eco events combined`() = testScope.runTest {
         // Scenario: User chats and pats the pet
-        viewModel.onEcoMetricsRecorded(EcoSavings(100, 120, 3000, 2, 0))
+        viewModel.onEcoMetricsRecorded(EcoSavings(100, 120, 3000, 2, 0L))
         viewModel.onPat(InteractionType.PAT)
-        viewModel.onEcoMetricsRecorded(EcoSavings(150, 180, 4500, 3, 0))
+        viewModel.onEcoMetricsRecorded(EcoSavings(150, 180, 4500, 3, 0L))
         viewModel.onPat(InteractionType.DOUBLE_TAP)
         advanceUntilIdle()
 

@@ -1,6 +1,8 @@
 package app.m1k3.ai.assistant.ai.download
 
 import android.content.Context
+import app.m1k3.ai.assistant.eco.EcoCalculator
+import app.m1k3.ai.assistant.eco.EcoMetricsRepository
 import app.m1k3.ai.domain.ai.LlmModel
 import app.m1k3.ai.domain.ai.ModelDownloadManager
 import co.touchlab.kermit.Logger
@@ -19,10 +21,15 @@ import java.net.URL
  * Supports progress tracking and resumable downloads.
  *
  * @param context Android context for internal storage access
+ * @param ecoMetrics Optional — records real bytes transferred so EcoStats
+ *   can surface them. Null skips tracking (useful for tests / isolated builds).
  */
 class HttpModelDownloadManager(
-    private val context: Context
+    private val context: Context,
+    private val ecoMetrics: EcoMetricsRepository? = null,
 ) : ModelDownloadManager {
+    /** HTTP request envelope per connection — GET line + host/range/UA headers. */
+    private val requestBytesPerConnection = 512
 
     private val logger = Logger.withTag("HttpModelDownloadManager")
     private val modelsDir: File get() = File(context.filesDir, "models").also { it.mkdirs() }
@@ -46,7 +53,9 @@ class HttpModelDownloadManager(
         return if (file.exists()) {
             logger.i { "Deleting model $modelId (${file.length() / 1_000_000}MB)" }
             file.delete()
-        } else false
+        } else {
+            false
+        }
     }
 
     /**
@@ -55,65 +64,72 @@ class HttpModelDownloadManager(
      * @param model The LlmModel to download
      * @return Flow emitting DownloadProgress updates
      */
-    fun download(model: LlmModel): Flow<DownloadProgress> = flow {
-        val targetFile = File(modelsDir, model.filename)
-        val tempFile = File(modelsDir, "${model.filename}.tmp")
+    fun download(model: LlmModel): Flow<DownloadProgress> =
+        flow {
+            val targetFile = File(modelsDir, model.filename)
+            val tempFile = File(modelsDir, "${model.filename}.tmp")
 
-        // Capture existing bytes BEFORE opening any connection
-        val existingBytes = if (tempFile.exists()) tempFile.length() else 0L
+            // Capture existing bytes BEFORE opening any connection
+            val existingBytes = if (tempFile.exists()) tempFile.length() else 0L
 
-        logger.i { "Downloading ${model.displayName} (already on disk: ${existingBytes / 1_000_000}MB)" }
-        emit(DownloadProgress.Starting(model.id))
+            logger.i { "Downloading ${model.displayName} (already on disk: ${existingBytes / 1_000_000}MB)" }
+            emit(DownloadProgress.Starting(model.id))
 
-        try {
-            val conn = followRedirects(getDownloadUrl(model), tempFile)
-            val isResume = conn.responseCode == 206 && existingBytes > 0
+            try {
+                val conn = followRedirects(getDownloadUrl(model), tempFile)
+                val isResume = conn.responseCode == 206 && existingBytes > 0
 
-            // For a 206 response the server sends only the remaining bytes,
-            // so totalBytes = server content-length + already on disk.
-            // For a 200 (server ignored Range) start fresh.
-            val totalBytes = conn.contentLengthLong + if (isResume) existingBytes else 0L
-            var downloadedBytes = if (isResume) existingBytes else 0L
+                // For a 206 response the server sends only the remaining bytes,
+                // so totalBytes = server content-length + already on disk.
+                // For a 200 (server ignored Range) start fresh.
+                val totalBytes = conn.contentLengthLong + if (isResume) existingBytes else 0L
+                var downloadedBytes = if (isResume) existingBytes else 0L
 
-            logger.i { "Response ${conn.responseCode}, server bytes: ${conn.contentLengthLong / 1_000_000}MB, resume: $isResume" }
+                logger.i { "Response ${conn.responseCode}, server bytes: ${conn.contentLengthLong / 1_000_000}MB, resume: $isResume" }
 
-            conn.inputStream.use { input ->
-                // CRITICAL: append when resuming so prior bytes are not overwritten
-                java.io.FileOutputStream(tempFile, isResume).use { output ->
-                    val buf = ByteArray(65536)
-                    var n: Int
-                    while (input.read(buf).also { n = it } != -1) {
-                        output.write(buf, 0, n)
-                        downloadedBytes += n
-                        val pct = if (totalBytes > 0) (downloadedBytes * 100L / totalBytes).toInt() else 0
-                        emit(DownloadProgress.InProgress(model.id, downloadedBytes, totalBytes, pct))
+                conn.inputStream.use { input ->
+                    // CRITICAL: append when resuming so prior bytes are not overwritten
+                    java.io.FileOutputStream(tempFile, isResume).use { output ->
+                        val buf = ByteArray(65536)
+                        var n: Int
+                        while (input.read(buf).also { n = it } != -1) {
+                            output.write(buf, 0, n)
+                            downloadedBytes += n
+                            val pct = if (totalBytes > 0) (downloadedBytes * 100L / totalBytes).toInt() else 0
+                            emit(DownloadProgress.InProgress(model.id, downloadedBytes, totalBytes, pct))
+                        }
                     }
                 }
+
+                // Validate completeness before declaring success.
+                // HTTP streams can end early without an IOException — the loop exits
+                // normally but the file is truncated. Check we got ≥99% of expected bytes.
+                val actualBytes = tempFile.length()
+                val sessionBytes = actualBytes - existingBytes
+                if (totalBytes > 0 && actualBytes < totalBytes * 99 / 100) {
+                    logger.e { "Truncated download: got ${actualBytes / 1_000_000}MB of ${totalBytes / 1_000_000}MB" }
+                    // Still record what we actually transferred this session —
+                    // honest eco accounting even on partial failures.
+                    recordDownloadBytes(model.id, sessionBytes)
+                    // Keep as .tmp so next attempt resumes from this point
+                    emit(
+                        DownloadProgress.Failed(
+                            model.id,
+                            "Download incomplete (${actualBytes / 1_000_000}MB of ${totalBytes / 1_000_000}MB). Tap retry to resume.",
+                        ),
+                    )
+                    return@flow
+                }
+
+                tempFile.renameTo(targetFile)
+                recordDownloadBytes(model.id, sessionBytes)
+                logger.i { "Download complete: ${targetFile.length() / 1_000_000}MB" }
+                emit(DownloadProgress.Complete(model.id, targetFile.absolutePath))
+            } catch (e: Exception) {
+                logger.e(e) { "Download failed: ${e.message}" }
+                emit(DownloadProgress.Failed(model.id, e.message ?: "Download failed"))
             }
-
-            // Validate completeness before declaring success.
-            // HTTP streams can end early without an IOException — the loop exits
-            // normally but the file is truncated. Check we got ≥99% of expected bytes.
-            val actualBytes = tempFile.length()
-            if (totalBytes > 0 && actualBytes < totalBytes * 99 / 100) {
-                logger.e { "Truncated download: got ${actualBytes / 1_000_000}MB of ${totalBytes / 1_000_000}MB" }
-                // Keep as .tmp so next attempt resumes from this point
-                emit(DownloadProgress.Failed(
-                    model.id,
-                    "Download incomplete (${actualBytes / 1_000_000}MB of ${totalBytes / 1_000_000}MB). Tap retry to resume."
-                ))
-                return@flow
-            }
-
-            tempFile.renameTo(targetFile)
-            logger.i { "Download complete: ${targetFile.length() / 1_000_000}MB" }
-            emit(DownloadProgress.Complete(model.id, targetFile.absolutePath))
-
-        } catch (e: Exception) {
-            logger.e(e) { "Download failed: ${e.message}" }
-            emit(DownloadProgress.Failed(model.id, e.message ?: "Download failed"))
-        }
-    }.flowOn(Dispatchers.IO)
+        }.flowOn(Dispatchers.IO)
 
     /**
      * Follow HTTP redirects manually, including cross-host redirects.
@@ -122,7 +138,11 @@ class HttpModelDownloadManager(
      * redirects across different hosts (e.g., huggingface.co → xethub.hf.co).
      * HuggingFace uses cross-host 302s to CDN, so we handle it manually.
      */
-    private fun followRedirects(initialUrl: String, tempFile: File, maxRedirects: Int = 5): HttpURLConnection {
+    private fun followRedirects(
+        initialUrl: String,
+        tempFile: File,
+        maxRedirects: Int = 5,
+    ): HttpURLConnection {
         var url = initialUrl
         var redirectCount = 0
 
@@ -164,35 +184,77 @@ class HttpModelDownloadManager(
     }
 
     /**
+     * Record a network event in EcoMetrics for the bytes transferred this
+     * session. Caller passes the session delta (not the total file size) so
+     * resumed downloads don't double-count. Swallows exceptions — eco
+     * tracking is never allowed to fail a real download.
+     */
+    private fun recordDownloadBytes(
+        modelId: String,
+        sessionBytes: Long,
+    ) {
+        val repo = ecoMetrics ?: return
+        if (sessionBytes <= 0) return
+        runCatching {
+            repo.recordMetrics(
+                savings =
+                    EcoCalculator.networkEvent(
+                        bytesSent = requestBytesPerConnection.toLong(),
+                        bytesReceived = sessionBytes,
+                    ),
+                sessionId = "download:$modelId",
+            )
+        }.onFailure { logger.w(it) { "Eco record failed (non-fatal)" } }
+    }
+
+    /**
      * Get the HuggingFace download URL for a model.
      */
-    private fun getDownloadUrl(model: LlmModel): String {
-        return when (model) {
+    private fun getDownloadUrl(model: LlmModel): String =
+        when (model) {
             // Active tiers — public, no HuggingFace auth required
-            is LlmModel.Qwen35_0B8 ->
+            is LlmModel.Qwen35_0B8 -> {
                 "https://huggingface.co/bartowski/Qwen_Qwen3.5-0.8B-GGUF/resolve/main/${model.filename}"
-            is LlmModel.Qwen3_0B6 ->
+            }
+
+            is LlmModel.Qwen3_0B6 -> {
                 "https://huggingface.co/bartowski/Qwen_Qwen3-0.6B-GGUF/resolve/main/${model.filename}"
-            is LlmModel.Qwen35_2B ->
+            }
+
+            is LlmModel.Qwen35_2B -> {
                 "https://huggingface.co/bartowski/Qwen_Qwen3.5-2B-GGUF/resolve/main/${model.filename}"
-            is LlmModel.Qwen3_1B7 ->
+            }
+
+            is LlmModel.Qwen3_1B7 -> {
                 "https://huggingface.co/bartowski/Qwen_Qwen3-1.7B-GGUF/resolve/main/${model.filename}"
-            is LlmModel.Gemma4_E2B ->
+            }
+
+            is LlmModel.Gemma4_E2B -> {
                 "https://huggingface.co/unsloth/gemma-4-E2B-it-GGUF/resolve/main/${model.filename}"
+            }
+
             // Superseded — kept for reference, still downloadable
-            is LlmModel.Qwen25_1B5 ->
+            is LlmModel.Qwen25_1B5 -> {
                 "https://huggingface.co/bartowski/Qwen2.5-1.5B-Instruct-GGUF/resolve/main/${model.filename}"
-            is LlmModel.SmolLM2_360M ->
+            }
+
+            is LlmModel.SmolLM2_360M -> {
                 "https://huggingface.co/bartowski/SmolLM2-360M-Instruct-GGUF/resolve/main/${model.filename}"
+            }
+
             // Legacy — Gemma 3 requires HF auth (401 without token)
-            is LlmModel.Gemma3_270M ->
+            is LlmModel.Gemma3_270M -> {
                 "https://huggingface.co/bartowski/gemma-3-270m-it-GGUF/resolve/main/${model.filename}"
-            is LlmModel.Gemma3_1B ->
+            }
+
+            is LlmModel.Gemma3_1B -> {
                 "https://huggingface.co/bartowski/gemma-3-1b-it-GGUF/resolve/main/${model.filename}"
-            else ->
+            }
+
+            else -> {
                 "https://huggingface.co/models/${model.filename}"
+            }
         }
-    }
 }
 
 /**
@@ -201,22 +263,24 @@ class HttpModelDownloadManager(
 sealed class DownloadProgress {
     abstract val modelId: String
 
-    data class Starting(override val modelId: String) : DownloadProgress()
+    data class Starting(
+        override val modelId: String,
+    ) : DownloadProgress()
 
     data class InProgress(
         override val modelId: String,
         val bytesDownloaded: Long,
         val totalBytes: Long,
-        val progressPercent: Int
+        val progressPercent: Int,
     ) : DownloadProgress()
 
     data class Complete(
         override val modelId: String,
-        val filePath: String
+        val filePath: String,
     ) : DownloadProgress()
 
     data class Failed(
         override val modelId: String,
-        val error: String
+        val error: String,
     ) : DownloadProgress()
 }

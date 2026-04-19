@@ -65,8 +65,8 @@ class EcoMetricsRepository(
             water_saved_ml = savings.waterSavedMl.toLong(),
             energy_saved_wh = savings.energySavedWh.toLong(),
             co2_prevented_g = savings.co2PreventedG.toLong(),
-            bytes_sent = savings.bytesSent.toLong(),
-            bytes_received = savings.bytesReceived.toLong(),
+            bytes_sent = savings.bytesSent,
+            bytes_received = savings.bytesReceived,
             session_id = sessionId,
             project_id = projectId,
         )

@@ -73,8 +73,8 @@ object EcoCalculator {
             waterSavedMl = (WATER_ML_PER_100_TOKENS * scaleFactor).toInt(),
             energySavedWh = (ENERGY_MWH_PER_100_TOKENS * scaleFactor).toInt(),
             co2PreventedG = (CO2_G_PER_100_TOKENS * scaleFactor).toInt(),
-            bytesSent = 0,
-            bytesReceived = 0,
+            bytesSent = 0L,
+            bytesReceived = 0L,
         )
     }
 
@@ -86,10 +86,10 @@ object EcoCalculator {
      * "cloud bytes avoided" headline can be derived from a single table.
      */
     fun networkEvent(
-        bytesSent: Int,
-        bytesReceived: Int,
+        bytesSent: Long,
+        bytesReceived: Long,
     ): EcoSavings {
-        require(bytesSent >= 0 && bytesReceived >= 0) { "Bytes must be non-negative" }
+        require(bytesSent >= 0L && bytesReceived >= 0L) { "Bytes must be non-negative" }
         return EcoSavings(
             tokensProcessed = 0,
             waterSavedMl = 0,
@@ -205,8 +205,8 @@ data class EcoSavings(
     val waterSavedMl: Int,
     val energySavedWh: Int, // Stored as milliwatt-hours (mWh)
     val co2PreventedG: Int,
-    val bytesSent: Int = 0,
-    val bytesReceived: Int = 0,
+    val bytesSent: Long = 0L,
+    val bytesReceived: Long = 0L,
 )
 
 /**

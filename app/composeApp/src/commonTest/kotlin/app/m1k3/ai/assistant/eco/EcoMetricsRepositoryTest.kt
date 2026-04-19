@@ -39,7 +39,7 @@ class EcoMetricsRepositoryTest {
                 waterSavedMl = 120,
                 energySavedWh = 3000,
                 co2PreventedG = 2,
-                bytesSent = 0,
+                bytesSent = 0L,
             )
 
         // Act
@@ -70,7 +70,7 @@ class EcoMetricsRepositoryTest {
                 waterSavedMl = 120,
                 energySavedWh = 3000,
                 co2PreventedG = 2,
-                bytesSent = 0,
+                bytesSent = 0L,
             )
 
         // Act
@@ -99,7 +99,7 @@ class EcoMetricsRepositoryTest {
                 waterSavedMl = 120,
                 energySavedWh = 3000,
                 co2PreventedG = 2,
-                bytesSent = 0,
+                bytesSent = 0L,
             )
 
         // Act
@@ -124,8 +124,8 @@ class EcoMetricsRepositoryTest {
 
         val downloadEvent =
             EcoCalculator.networkEvent(
-                bytesSent = 512,
-                bytesReceived = 484_000_000, // Qwen3-0.6B Q4_K_M ~484MB
+                bytesSent = 512L,
+                bytesReceived = 484_000_000L, // Qwen3-0.6B Q4_K_M ~484MB
             )
 
         repository.recordMetrics(downloadEvent, sessionId = "download:qwen3-0.6b")
@@ -144,9 +144,9 @@ class EcoMetricsRepositoryTest {
         val repository = EcoMetricsRepository(database)
 
         // Record multiple queries
-        repository.recordMetrics(EcoSavings(100, 120, 3000, 2, 0))
-        repository.recordMetrics(EcoSavings(200, 240, 6000, 4, 0))
-        repository.recordMetrics(EcoSavings(50, 60, 1500, 1, 0))
+        repository.recordMetrics(EcoSavings(100, 120, 3000, 2, 0L))
+        repository.recordMetrics(EcoSavings(200, 240, 6000, 4, 0L))
+        repository.recordMetrics(EcoSavings(50, 60, 1500, 1, 0L))
 
         // Act
         val stats = repository.getLifetimeStats()
@@ -157,8 +157,8 @@ class EcoMetricsRepositoryTest {
         assertEquals(420, stats.totalWaterMl, "Total water: 120 + 240 + 60")
         assertEquals(10500, stats.totalEnergyWh, "Total energy: 3000 + 6000 + 1500")
         assertEquals(7, stats.totalCo2G, "Total CO2: 2 + 4 + 1")
-        assertEquals(0, stats.totalBytesSent, "Chat inference rows: bytesSent = 0")
-        assertEquals(0, stats.totalBytesReceived, "Chat inference rows: bytesReceived = 0")
+        assertEquals(0L, stats.totalBytesSent, "Chat inference rows: bytesSent = 0")
+        assertEquals(0L, stats.totalBytesReceived, "Chat inference rows: bytesReceived = 0")
         assertEquals(3, stats.totalQueries)
     }
 
@@ -183,9 +183,9 @@ class EcoMetricsRepositoryTest {
 
         val startTime = Clock.System.now().toEpochMilliseconds()
 
-        repository.recordMetrics(EcoSavings(100, 120, 3000, 2, 0))
+        repository.recordMetrics(EcoSavings(100, 120, 3000, 2, 0L))
         Thread.sleep(10) // Small delay to ensure different timestamps
-        repository.recordMetrics(EcoSavings(100, 120, 3000, 2, 0))
+        repository.recordMetrics(EcoSavings(100, 120, 3000, 2, 0L))
 
         // Act
         val stats = repository.getLifetimeStats()
@@ -205,11 +205,11 @@ class EcoMetricsRepositoryTest {
         val repository = EcoMetricsRepository(database)
 
         // Session 1: 2 queries
-        repository.recordMetrics(EcoSavings(100, 120, 3000, 2, 0), sessionId = "session_001")
-        repository.recordMetrics(EcoSavings(200, 240, 6000, 4, 0), sessionId = "session_001")
+        repository.recordMetrics(EcoSavings(100, 120, 3000, 2, 0L), sessionId = "session_001")
+        repository.recordMetrics(EcoSavings(200, 240, 6000, 4, 0L), sessionId = "session_001")
 
         // Session 2: 1 query
-        repository.recordMetrics(EcoSavings(50, 60, 1500, 1, 0), sessionId = "session_002")
+        repository.recordMetrics(EcoSavings(50, 60, 1500, 1, 0L), sessionId = "session_002")
 
         // Act
         val sessionStats = repository.getSessionStats()
@@ -234,9 +234,9 @@ class EcoMetricsRepositoryTest {
         val database = createTestDatabase()
         val repository = EcoMetricsRepository(database)
 
-        repository.recordMetrics(EcoSavings(100, 120, 3000, 2, 0), sessionId = "old_session")
+        repository.recordMetrics(EcoSavings(100, 120, 3000, 2, 0L), sessionId = "old_session")
         Thread.sleep(10)
-        repository.recordMetrics(EcoSavings(100, 120, 3000, 2, 0), sessionId = "new_session")
+        repository.recordMetrics(EcoSavings(100, 120, 3000, 2, 0L), sessionId = "new_session")
 
         // Act
         val sessionStats = repository.getSessionStats()
@@ -254,11 +254,11 @@ class EcoMetricsRepositoryTest {
         val repository = EcoMetricsRepository(database)
 
         // Project A: 2 queries
-        repository.recordMetrics(EcoSavings(100, 120, 3000, 2, 0), projectId = "project_a")
-        repository.recordMetrics(EcoSavings(200, 240, 6000, 4, 0), projectId = "project_a")
+        repository.recordMetrics(EcoSavings(100, 120, 3000, 2, 0L), projectId = "project_a")
+        repository.recordMetrics(EcoSavings(200, 240, 6000, 4, 0L), projectId = "project_a")
 
         // Project B: 1 query
-        repository.recordMetrics(EcoSavings(50, 60, 1500, 1, 0), projectId = "project_b")
+        repository.recordMetrics(EcoSavings(50, 60, 1500, 1, 0L), projectId = "project_b")
 
         // Act
         val projectStats = repository.getProjectStats()
@@ -281,8 +281,8 @@ class EcoMetricsRepositoryTest {
         val repository = EcoMetricsRepository(database)
 
         // Record metrics for today
-        repository.recordMetrics(EcoSavings(100, 120, 3000, 2, 0))
-        repository.recordMetrics(EcoSavings(200, 240, 6000, 4, 0))
+        repository.recordMetrics(EcoSavings(100, 120, 3000, 2, 0L))
+        repository.recordMetrics(EcoSavings(200, 240, 6000, 4, 0L))
 
         // Act
         val dailyStats = repository.getDailyStats(days = 7)
@@ -302,7 +302,7 @@ class EcoMetricsRepositoryTest {
         val database = createTestDatabase()
         val repository = EcoMetricsRepository(database)
 
-        repository.recordMetrics(EcoSavings(100, 120, 3000, 2, 0))
+        repository.recordMetrics(EcoSavings(100, 120, 3000, 2, 0L))
 
         // Act
         val last7Days = repository.getDailyStats(days = 7)
@@ -339,8 +339,8 @@ class EcoMetricsRepositoryTest {
         // Two inference rows (0 bytes) + one download (net bytes) + one search
         repository.recordMetrics(EcoCalculator.calculateSavings(100))
         repository.recordMetrics(EcoCalculator.calculateSavings(200))
-        repository.recordMetrics(EcoCalculator.networkEvent(bytesSent = 100, bytesReceived = 5_000_000))
-        repository.recordMetrics(EcoCalculator.networkEvent(bytesSent = 200, bytesReceived = 4_000))
+        repository.recordMetrics(EcoCalculator.networkEvent(bytesSent = 100L, bytesReceived = 5_000_000L))
+        repository.recordMetrics(EcoCalculator.networkEvent(bytesSent = 200L, bytesReceived = 4_000L))
 
         val bytes = repository.getTotalNetworkBytes()
         assertEquals(300L, bytes.bytesSent)
@@ -355,8 +355,8 @@ class EcoMetricsRepositoryTest {
         val database = createTestDatabase()
         val repository = EcoMetricsRepository(database)
 
-        repository.recordMetrics(EcoSavings(100, 120, 3000, 2, 0))
-        repository.recordMetrics(EcoSavings(200, 240, 6000, 4, 0))
+        repository.recordMetrics(EcoSavings(100, 120, 3000, 2, 0L))
+        repository.recordMetrics(EcoSavings(200, 240, 6000, 4, 0L))
 
         // Act
         val averages = repository.getAverageSavings()
@@ -380,7 +380,7 @@ class EcoMetricsRepositoryTest {
 
         // Simulate a conversation with 5 queries
         repeat(5) {
-            repository.recordMetrics(EcoSavings(100, 120, 3000, 2, 0), sessionId = sessionId)
+            repository.recordMetrics(EcoSavings(100, 120, 3000, 2, 0L), sessionId = sessionId)
         }
 
         // Act
@@ -401,7 +401,7 @@ class EcoMetricsRepositoryTest {
         val repository = EcoMetricsRepository(database)
 
         // Act
-        repository.recordMetrics(EcoSavings(100, 120, 3000, 2, 0))
+        repository.recordMetrics(EcoSavings(100, 120, 3000, 2, 0L))
 
         // Assert
         val stats = repository.getLifetimeStats()

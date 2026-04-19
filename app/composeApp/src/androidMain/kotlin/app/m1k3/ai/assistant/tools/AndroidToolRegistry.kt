@@ -1,11 +1,11 @@
 package app.m1k3.ai.assistant.tools
 
 import android.content.Context
-import app.m1k3.ai.domain.tools.Tool
-import app.m1k3.ai.domain.tools.ToolCategory
-import app.m1k3.ai.domain.tools.ToolParameter
-import app.m1k3.ai.domain.tools.ParameterType
+import app.m1k3.ai.assistant.eco.EcoMetricsRepository
 import app.m1k3.ai.assistant.tools.executors.BatteryLevelExecutor
+import app.m1k3.ai.assistant.tools.executors.GetHealthExecutor
+import app.m1k3.ai.assistant.tools.executors.GetNotificationsExecutor
+import app.m1k3.ai.assistant.tools.executors.GetScreenTimeExecutor
 import app.m1k3.ai.assistant.tools.executors.GetTimeExecutor
 import app.m1k3.ai.assistant.tools.executors.GetVolumeExecutor
 import app.m1k3.ai.assistant.tools.executors.OpenBrowserExecutor
@@ -16,10 +16,11 @@ import app.m1k3.ai.assistant.tools.executors.SetAlarmExecutor
 import app.m1k3.ai.assistant.tools.executors.SetTimerExecutor
 import app.m1k3.ai.assistant.tools.executors.SetVolumeExecutor
 import app.m1k3.ai.assistant.tools.executors.ToggleFlashlightExecutor
-import app.m1k3.ai.assistant.tools.executors.GetNotificationsExecutor
-import app.m1k3.ai.assistant.tools.executors.GetHealthExecutor
-import app.m1k3.ai.assistant.tools.executors.GetScreenTimeExecutor
 import app.m1k3.ai.assistant.tools.executors.WebSearchExecutor
+import app.m1k3.ai.domain.tools.ParameterType
+import app.m1k3.ai.domain.tools.Tool
+import app.m1k3.ai.domain.tools.ToolCategory
+import app.m1k3.ai.domain.tools.ToolParameter
 
 /**
  * Android Tool Registry - Registers Android-specific tool implementations
@@ -37,9 +38,9 @@ import app.m1k3.ai.assistant.tools.executors.WebSearchExecutor
  * @param context Android application context
  */
 class AndroidToolRegistry(
-    private val context: Context
+    private val context: Context,
+    private val ecoMetrics: EcoMetricsRepository? = null,
 ) : ToolRegistryImpl() {
-
     init {
         registerDeviceInfoTools()
         registerSystemTools()
@@ -57,9 +58,9 @@ class AndroidToolRegistry(
                 name = "Get Battery Level",
                 description = "Returns the current battery level as a percentage",
                 parameters = emptyList(),
-                category = ToolCategory.DEVICE_INFO
+                category = ToolCategory.DEVICE_INFO,
             ),
-            BatteryLevelExecutor(context)
+            BatteryLevelExecutor(context),
         )
 
         // Get Time
@@ -68,18 +69,19 @@ class AndroidToolRegistry(
                 id = "get_current_time",
                 name = "Get Current Time",
                 description = "Returns the current time in the specified format",
-                parameters = listOf(
-                    ToolParameter(
-                        name = "format",
-                        type = ParameterType.STRING,
-                        description = "Time format: 12h, 24h, or full (default: 12h)",
-                        required = false,
-                        defaultValue = "12h"
-                    )
-                ),
-                category = ToolCategory.DEVICE_INFO
+                parameters =
+                    listOf(
+                        ToolParameter(
+                            name = "format",
+                            type = ParameterType.STRING,
+                            description = "Time format: 12h, 24h, or full (default: 12h)",
+                            required = false,
+                            defaultValue = "12h",
+                        ),
+                    ),
+                category = ToolCategory.DEVICE_INFO,
             ),
-            GetTimeExecutor()
+            GetTimeExecutor(),
         )
 
         // Get Volume
@@ -88,19 +90,20 @@ class AndroidToolRegistry(
                 id = "get_volume",
                 name = "Get Volume",
                 description = "Returns the current volume level for a stream (media, ring, alarm, notification)",
-                parameters = listOf(
-                    ToolParameter(
-                        name = "stream",
-                        type = ParameterType.ENUM,
-                        description = "Volume stream type",
-                        required = false,
-                        defaultValue = "media",
-                        enumValues = listOf("media", "ring", "alarm", "notification")
-                    )
-                ),
-                category = ToolCategory.DEVICE_INFO
+                parameters =
+                    listOf(
+                        ToolParameter(
+                            name = "stream",
+                            type = ParameterType.ENUM,
+                            description = "Volume stream type",
+                            required = false,
+                            defaultValue = "media",
+                            enumValues = listOf("media", "ring", "alarm", "notification"),
+                        ),
+                    ),
+                category = ToolCategory.DEVICE_INFO,
             ),
-            GetVolumeExecutor(context)
+            GetVolumeExecutor(context),
         )
     }
 
@@ -111,17 +114,18 @@ class AndroidToolRegistry(
                 id = "toggle_flashlight",
                 name = "Toggle Flashlight",
                 description = "Turns the device flashlight on or off",
-                parameters = listOf(
-                    ToolParameter(
-                        name = "enable",
-                        type = ParameterType.BOOLEAN,
-                        description = "true to turn on, false to turn off",
-                        required = true
-                    )
-                ),
-                category = ToolCategory.SYSTEM
+                parameters =
+                    listOf(
+                        ToolParameter(
+                            name = "enable",
+                            type = ParameterType.BOOLEAN,
+                            description = "true to turn on, false to turn off",
+                            required = true,
+                        ),
+                    ),
+                category = ToolCategory.SYSTEM,
             ),
-            ToggleFlashlightExecutor(context)
+            ToggleFlashlightExecutor(context),
         )
 
         // Set Volume
@@ -130,25 +134,26 @@ class AndroidToolRegistry(
                 id = "set_volume",
                 name = "Set Volume",
                 description = "Sets the volume level (0-100) for a stream (media, ring, alarm, notification)",
-                parameters = listOf(
-                    ToolParameter(
-                        name = "level",
-                        type = ParameterType.NUMBER,
-                        description = "Volume level 0-100",
-                        required = true
+                parameters =
+                    listOf(
+                        ToolParameter(
+                            name = "level",
+                            type = ParameterType.NUMBER,
+                            description = "Volume level 0-100",
+                            required = true,
+                        ),
+                        ToolParameter(
+                            name = "stream",
+                            type = ParameterType.ENUM,
+                            description = "Volume stream type",
+                            required = false,
+                            defaultValue = "media",
+                            enumValues = listOf("media", "ring", "alarm", "notification"),
+                        ),
                     ),
-                    ToolParameter(
-                        name = "stream",
-                        type = ParameterType.ENUM,
-                        description = "Volume stream type",
-                        required = false,
-                        defaultValue = "media",
-                        enumValues = listOf("media", "ring", "alarm", "notification")
-                    )
-                ),
-                category = ToolCategory.SYSTEM
+                category = ToolCategory.SYSTEM,
             ),
-            SetVolumeExecutor(context)
+            SetVolumeExecutor(context),
         )
     }
 
@@ -160,9 +165,9 @@ class AndroidToolRegistry(
                 name = "Open Camera",
                 description = "Opens the device camera app",
                 parameters = emptyList(),
-                category = ToolCategory.APPS
+                category = ToolCategory.APPS,
             ),
-            OpenCameraExecutor(context)
+            OpenCameraExecutor(context),
         )
 
         // Browser
@@ -171,18 +176,19 @@ class AndroidToolRegistry(
                 id = "open_browser",
                 name = "Open Browser",
                 description = "Opens a URL in the default web browser",
-                parameters = listOf(
-                    ToolParameter(
-                        name = "url",
-                        type = ParameterType.STRING,
-                        description = "The URL to open (defaults to google.com)",
-                        required = false,
-                        defaultValue = "https://google.com"
-                    )
-                ),
-                category = ToolCategory.APPS
+                parameters =
+                    listOf(
+                        ToolParameter(
+                            name = "url",
+                            type = ParameterType.STRING,
+                            description = "The URL to open (defaults to google.com)",
+                            required = false,
+                            defaultValue = "https://google.com",
+                        ),
+                    ),
+                category = ToolCategory.APPS,
             ),
-            OpenBrowserExecutor(context)
+            OpenBrowserExecutor(context),
         )
 
         // Settings
@@ -191,19 +197,20 @@ class AndroidToolRegistry(
                 id = "open_settings",
                 name = "Open Settings",
                 description = "Opens device settings (main, wifi, bluetooth, display, sound, battery, or apps)",
-                parameters = listOf(
-                    ToolParameter(
-                        name = "section",
-                        type = ParameterType.ENUM,
-                        description = "Settings section to open",
-                        required = false,
-                        defaultValue = "main",
-                        enumValues = listOf("main", "wifi", "bluetooth", "display", "sound", "battery", "apps")
-                    )
-                ),
-                category = ToolCategory.APPS
+                parameters =
+                    listOf(
+                        ToolParameter(
+                            name = "section",
+                            type = ParameterType.ENUM,
+                            description = "Settings section to open",
+                            required = false,
+                            defaultValue = "main",
+                            enumValues = listOf("main", "wifi", "bluetooth", "display", "sound", "battery", "apps"),
+                        ),
+                    ),
+                category = ToolCategory.APPS,
             ),
-            OpenSettingsExecutor(context)
+            OpenSettingsExecutor(context),
         )
 
         // Maps
@@ -212,31 +219,32 @@ class AndroidToolRegistry(
                 id = "open_maps",
                 name = "Open Maps",
                 description = "Opens maps for search or turn-by-turn navigation",
-                parameters = listOf(
-                    ToolParameter(
-                        name = "query",
-                        type = ParameterType.STRING,
-                        description = "Search query (e.g., 'coffee shop', '123 Main St')",
-                        required = false
+                parameters =
+                    listOf(
+                        ToolParameter(
+                            name = "query",
+                            type = ParameterType.STRING,
+                            description = "Search query (e.g., 'coffee shop', '123 Main St')",
+                            required = false,
+                        ),
+                        ToolParameter(
+                            name = "destination",
+                            type = ParameterType.STRING,
+                            description = "Destination for turn-by-turn directions",
+                            required = false,
+                        ),
+                        ToolParameter(
+                            name = "mode",
+                            type = ParameterType.ENUM,
+                            description = "Navigation mode",
+                            required = false,
+                            defaultValue = "driving",
+                            enumValues = listOf("driving", "walking", "bicycling", "transit"),
+                        ),
                     ),
-                    ToolParameter(
-                        name = "destination",
-                        type = ParameterType.STRING,
-                        description = "Destination for turn-by-turn directions",
-                        required = false
-                    ),
-                    ToolParameter(
-                        name = "mode",
-                        type = ParameterType.ENUM,
-                        description = "Navigation mode",
-                        required = false,
-                        defaultValue = "driving",
-                        enumValues = listOf("driving", "walking", "bicycling", "transit")
-                    )
-                ),
-                category = ToolCategory.APPS
+                category = ToolCategory.APPS,
             ),
-            OpenMapsExecutor(context)
+            OpenMapsExecutor(context),
         )
     }
 
@@ -247,30 +255,31 @@ class AndroidToolRegistry(
                 id = "set_alarm",
                 name = "Set Alarm",
                 description = "Creates an alarm at the specified time",
-                parameters = listOf(
-                    ToolParameter(
-                        name = "hour",
-                        type = ParameterType.NUMBER,
-                        description = "Hour (0-23)",
-                        required = true
+                parameters =
+                    listOf(
+                        ToolParameter(
+                            name = "hour",
+                            type = ParameterType.NUMBER,
+                            description = "Hour (0-23)",
+                            required = true,
+                        ),
+                        ToolParameter(
+                            name = "minute",
+                            type = ParameterType.NUMBER,
+                            description = "Minute (0-59)",
+                            required = false,
+                            defaultValue = "0",
+                        ),
+                        ToolParameter(
+                            name = "message",
+                            type = ParameterType.STRING,
+                            description = "Label for the alarm",
+                            required = false,
+                        ),
                     ),
-                    ToolParameter(
-                        name = "minute",
-                        type = ParameterType.NUMBER,
-                        description = "Minute (0-59)",
-                        required = false,
-                        defaultValue = "0"
-                    ),
-                    ToolParameter(
-                        name = "message",
-                        type = ParameterType.STRING,
-                        description = "Label for the alarm",
-                        required = false
-                    )
-                ),
-                category = ToolCategory.SYSTEM
+                category = ToolCategory.SYSTEM,
             ),
-            SetAlarmExecutor(context)
+            SetAlarmExecutor(context),
         )
 
         // Set Timer
@@ -279,38 +288,39 @@ class AndroidToolRegistry(
                 id = "set_timer",
                 name = "Set Timer",
                 description = "Creates a countdown timer",
-                parameters = listOf(
-                    ToolParameter(
-                        name = "hours",
-                        type = ParameterType.NUMBER,
-                        description = "Hours (0-24)",
-                        required = false,
-                        defaultValue = "0"
+                parameters =
+                    listOf(
+                        ToolParameter(
+                            name = "hours",
+                            type = ParameterType.NUMBER,
+                            description = "Hours (0-24)",
+                            required = false,
+                            defaultValue = "0",
+                        ),
+                        ToolParameter(
+                            name = "minutes",
+                            type = ParameterType.NUMBER,
+                            description = "Minutes (0-59)",
+                            required = false,
+                            defaultValue = "0",
+                        ),
+                        ToolParameter(
+                            name = "seconds",
+                            type = ParameterType.NUMBER,
+                            description = "Seconds (0-59)",
+                            required = false,
+                            defaultValue = "0",
+                        ),
+                        ToolParameter(
+                            name = "message",
+                            type = ParameterType.STRING,
+                            description = "Label for the timer",
+                            required = false,
+                        ),
                     ),
-                    ToolParameter(
-                        name = "minutes",
-                        type = ParameterType.NUMBER,
-                        description = "Minutes (0-59)",
-                        required = false,
-                        defaultValue = "0"
-                    ),
-                    ToolParameter(
-                        name = "seconds",
-                        type = ParameterType.NUMBER,
-                        description = "Seconds (0-59)",
-                        required = false,
-                        defaultValue = "0"
-                    ),
-                    ToolParameter(
-                        name = "message",
-                        type = ParameterType.STRING,
-                        description = "Label for the timer",
-                        required = false
-                    )
-                ),
-                category = ToolCategory.SYSTEM
+                category = ToolCategory.SYSTEM,
             ),
-            SetTimerExecutor(context)
+            SetTimerExecutor(context),
         )
     }
 
@@ -322,9 +332,9 @@ class AndroidToolRegistry(
                 name = "Get Notifications",
                 description = "Returns recent notification content — app name, title, and message text",
                 parameters = emptyList(),
-                category = ToolCategory.DEVICE_INFO
+                category = ToolCategory.DEVICE_INFO,
             ),
-            GetNotificationsExecutor(context)
+            GetNotificationsExecutor(context),
         )
 
         // Get Health
@@ -334,9 +344,9 @@ class AndroidToolRegistry(
                 name = "Get Health Data",
                 description = "Returns health data — steps today, sleep last night, heart rate, active calories",
                 parameters = emptyList(),
-                category = ToolCategory.DEVICE_INFO
+                category = ToolCategory.DEVICE_INFO,
             ),
-            GetHealthExecutor(context)
+            GetHealthExecutor(context),
         )
 
         // Get Screen Time
@@ -346,9 +356,9 @@ class AndroidToolRegistry(
                 name = "Get Screen Time",
                 description = "Returns today's screen time total and top apps with usage",
                 parameters = emptyList(),
-                category = ToolCategory.DEVICE_INFO
+                category = ToolCategory.DEVICE_INFO,
             ),
-            GetScreenTimeExecutor(context)
+            GetScreenTimeExecutor(context),
         )
     }
 
@@ -359,17 +369,18 @@ class AndroidToolRegistry(
                 id = "web_search",
                 name = "Web Search",
                 description = "Search the web for weather, news, facts, answers, information, directions, and more using DuckDuckGo. No API key, no tracking.",
-                parameters = listOf(
-                    ToolParameter(
-                        name = "query",
-                        type = ParameterType.STRING,
-                        description = "Search query",
-                        required = true
-                    )
-                ),
-                category = ToolCategory.KNOWLEDGE
+                parameters =
+                    listOf(
+                        ToolParameter(
+                            name = "query",
+                            type = ParameterType.STRING,
+                            description = "Search query",
+                            required = true,
+                        ),
+                    ),
+                category = ToolCategory.KNOWLEDGE,
             ),
-            WebSearchExecutor()
+            WebSearchExecutor(ecoMetrics = ecoMetrics),
         )
     }
 }
