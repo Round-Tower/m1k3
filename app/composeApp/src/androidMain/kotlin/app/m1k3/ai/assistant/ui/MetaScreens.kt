@@ -312,8 +312,9 @@ fun PrivacyScreen() {
         PrivacySection(
             title = "What We Don't Collect",
             content =
-                "We don't collect ANY data. Not your conversations, not your usage patterns, " +
-                    "not your device information. Nothing. All AI processing happens locally on your device.",
+                "間 AI doesn't run an analytics pipeline. No events, no crash reporting SDKs, " +
+                    "no advertising IDs, no user profiling. Your conversations are never read, " +
+                    "logged, or transmitted by the app itself.",
         )
 
         PrivacySection(
@@ -324,10 +325,19 @@ fun PrivacyScreen() {
         )
 
         PrivacySection(
-            title = "Third-Party Services",
+            title = "ML Kit (Gemini Nano)",
             content =
-                "M1K3 uses ZERO third-party services. No analytics, no crash reporting, no telemetry. " +
-                    "The app is completely self-contained.",
+                "On-device chat via Google's Gemini Nano uses ML Kit. Your prompts and responses " +
+                    "never leave the device. ML Kit ships Google's usage-statistics library " +
+                    "(anonymous invocation counts, model version, crash reports) as part of Play " +
+                    "Services. You can opt out at the OS level: Settings → Google → Usage & Diagnostics.",
+        )
+
+        PrivacySection(
+            title = "Network You Can See",
+            content =
+                "Network bytes only leave when YOU ask: model downloads from HuggingFace, web " +
+                    "search via DuckDuckGo. Both show real byte counts in the Eco Stats screen.",
         )
     }
 }

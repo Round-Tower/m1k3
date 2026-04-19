@@ -102,11 +102,33 @@ These are the strongest parts of the story. They survive the pivot.
   contributors will see the inverted assertions and may need context.
 - `EcoMetricsRepository.bytes_sent = 0` database invariant is no longer
   defensible. Schema migration landed in a follow-up commit.
-- **ML Kit transitive telemetry**: `MlKitGenAiEngine` (on-device Gemini
-  Nano) pulls in `com.google.android.datatransport` via ML Kit vision
-  deps. This is Google's internal batching library used by ML Kit for
-  usage statistics. `ManifestPrivacyTest` allow-lists it with a comment,
-  and a follow-up task tracks the audit + opt-out.
+- **ML Kit transitive telemetry — audited 2026-04-19.** `MlKitGenAiEngine`
+  (on-device Gemini Nano) pulls in `com.google.android.datatransport` via
+  ML Kit vision deps. Concrete findings:
+  - **Prompts and responses stay on-device.** AICore processes user
+    content locally; no prompt content crosses the wire. Sources:
+    developers.google.com/ml-kit/genai/data-disclosure, ml-kit/terms.
+  - **What DOES leave:** anonymous API invocation events, latency, model
+    version, error/crash reports, aggregated usage counters. Sent via
+    Google Play Services' Firelog / `datatransport` to
+    `firebaselogging-pa.googleapis.com` / `crashlyticsreports-pa.googleapis.com`.
+    Includes install IDs + app metadata; no PII by default.
+  - **AICore itself** (the system service backing Gemini Nano) reports
+    separately at the OS level, governed by Google Play Services privacy
+    policy — outside app control. User-level opt-out: Settings → Google →
+    Usage & Diagnostics.
+  - **Our position:** we keep ML Kit (killer feature: on-device Gemini
+    Nano without a 2GB download). We disable Firebase SDK auto-collection
+    as belt-and-braces (`firebase_data_collection_default_enabled=false`
+    in manifest) so any transitive Firebase SDK that appears stays dark.
+    ML Kit's own datatransport usage-stats stream is NOT app-toggleable
+    without stripping the dep entirely (which breaks GenAI init).
+  - **User-facing disclosure:** Onboarding + Settings privacy copy calls
+    out ML Kit explicitly: "On-device chat uses Google's Gemini Nano.
+    Your prompts never leave the device. ML Kit sends Google anonymous
+    usage counters (model version, crash reports) as part of Play
+    Services — you can disable at the OS level in Settings → Google →
+    Usage & Diagnostics."
 
 ### Alternatives rejected
 

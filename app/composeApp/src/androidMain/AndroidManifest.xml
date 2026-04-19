@@ -56,6 +56,25 @@
         android:hardwareAccelerated="true"
         android:largeHeap="true"
         android:theme="@style/Theme.M1K3">
+
+        <!--
+          Belt-and-braces opt-out for Firebase SDK auto-collection. We do
+          not intentionally use Firebase Analytics / Crashlytics — these
+          meta-data values make sure that if a transitive dep ever brings
+          one in, it starts disabled. Does NOT affect ML Kit's own
+          invocation counters / crash pings (those ride Google Play
+          Services telemetry, not Firebase). See ADR-0006.
+        -->
+        <meta-data
+            android:name="firebase_data_collection_default_enabled"
+            android:value="false" />
+        <meta-data
+            android:name="firebase_analytics_collection_enabled"
+            android:value="false" />
+        <meta-data
+            android:name="firebase_crashlytics_collection_enabled"
+            android:value="false" />
+
         <activity
             android:exported="true"
             android:hardwareAccelerated="true"
