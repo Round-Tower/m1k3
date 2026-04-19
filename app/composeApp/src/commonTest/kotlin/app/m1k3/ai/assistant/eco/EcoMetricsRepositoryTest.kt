@@ -25,7 +25,6 @@ import kotlin.test.*
  * - Edge cases (no data, multiple sessions)
  */
 class EcoMetricsRepositoryTest {
-
     // ==================== Recording Metrics Tests ====================
 
     @Test
@@ -34,13 +33,14 @@ class EcoMetricsRepositoryTest {
         val database = createTestDatabase()
         val repository = EcoMetricsRepository(database)
 
-        val savings = EcoSavings(
-            tokensProcessed = 100,
-            waterSavedMl = 120,
-            energySavedWh = 3000,
-            co2PreventedG = 2,
-            bytesSent = 0
-        )
+        val savings =
+            EcoSavings(
+                tokensProcessed = 100,
+                waterSavedMl = 120,
+                energySavedWh = 3000,
+                co2PreventedG = 2,
+                bytesSent = 0,
+            )
 
         // Act
         repository.recordMetrics(savings)
@@ -64,21 +64,23 @@ class EcoMetricsRepositoryTest {
         val repository = EcoMetricsRepository(database)
         val sessionId = "session_001"
 
-        val savings = EcoSavings(
-            tokensProcessed = 100,
-            waterSavedMl = 120,
-            energySavedWh = 3000,
-            co2PreventedG = 2,
-            bytesSent = 0
-        )
+        val savings =
+            EcoSavings(
+                tokensProcessed = 100,
+                waterSavedMl = 120,
+                energySavedWh = 3000,
+                co2PreventedG = 2,
+                bytesSent = 0,
+            )
 
         // Act
         repository.recordMetrics(savings, sessionId = sessionId)
 
         // Assert
-        val sessionMetrics = database.ecoMetricsQueries
-            .getEcoMetricsBySession(sessionId)
-            .executeAsList()
+        val sessionMetrics =
+            database.ecoMetricsQueries
+                .getEcoMetricsBySession(sessionId)
+                .executeAsList()
 
         assertEquals(1, sessionMetrics.size)
         assertEquals(sessionId, sessionMetrics.first().session_id)
@@ -91,44 +93,46 @@ class EcoMetricsRepositoryTest {
         val repository = EcoMetricsRepository(database)
         val projectId = "project_001"
 
-        val savings = EcoSavings(
-            tokensProcessed = 100,
-            waterSavedMl = 120,
-            energySavedWh = 3000,
-            co2PreventedG = 2,
-            bytesSent = 0
-        )
+        val savings =
+            EcoSavings(
+                tokensProcessed = 100,
+                waterSavedMl = 120,
+                energySavedWh = 3000,
+                co2PreventedG = 2,
+                bytesSent = 0,
+            )
 
         // Act
         repository.recordMetrics(savings, projectId = projectId)
 
         // Assert
-        val projectMetrics = database.ecoMetricsQueries
-            .getEcoMetricsByProject(projectId)
-            .executeAsList()
+        val projectMetrics =
+            database.ecoMetricsQueries
+                .getEcoMetricsByProject(projectId)
+                .executeAsList()
 
         assertEquals(1, projectMetrics.size)
         assertEquals(projectId, projectMetrics.first().project_id)
     }
 
     @Test
-    fun `recordMetrics enforces privacy - rejects non-zero bytes sent`() {
-        // Arrange
+    fun `recordMetrics accepts network event with real bytes`() {
+        // ADR-0006: bytes_sent / bytes_received are now real. Downloads
+        // and web searches record their actual bytes. No precondition.
         val database = createTestDatabase()
         val repository = EcoMetricsRepository(database)
 
-        val compromisedSavings = EcoSavings(
-            tokensProcessed = 100,
-            waterSavedMl = 120,
-            energySavedWh = 3000,
-            co2PreventedG = 2,
-            bytesSent = 1024 // VIOLATION!
-        )
+        val downloadEvent =
+            EcoCalculator.networkEvent(
+                bytesSent = 512,
+                bytesReceived = 484_000_000, // Qwen3-0.6B Q4_K_M ~484MB
+            )
 
-        // Act & Assert
-        assertFails("Should reject non-zero bytes_sent") {
-            repository.recordMetrics(compromisedSavings)
-        }
+        repository.recordMetrics(downloadEvent, sessionId = "download:qwen3-0.6b")
+
+        val bytes = repository.getTotalNetworkBytes()
+        assertEquals(512L, bytes.bytesSent)
+        assertEquals(484_000_000L, bytes.bytesReceived)
     }
 
     // ==================== Lifetime Stats Tests ====================
@@ -153,7 +157,8 @@ class EcoMetricsRepositoryTest {
         assertEquals(420, stats.totalWaterMl, "Total water: 120 + 240 + 60")
         assertEquals(10500, stats.totalEnergyWh, "Total energy: 3000 + 6000 + 1500")
         assertEquals(7, stats.totalCo2G, "Total CO2: 2 + 4 + 1")
-        assertEquals(0, stats.totalBytesSent, "Privacy: always 0")
+        assertEquals(0, stats.totalBytesSent, "Chat inference rows: bytesSent = 0")
+        assertEquals(0, stats.totalBytesReceived, "Chat inference rows: bytesReceived = 0")
         assertEquals(3, stats.totalQueries)
     }
 
@@ -308,23 +313,38 @@ class EcoMetricsRepositoryTest {
         assertTrue(last30Days.size <= 30, "Should limit to 30 days")
     }
 
-    // ==================== Privacy Verification Tests ====================
+    // ==================== Network Usage ====================
 
     @Test
-    fun `verifyPrivacy confirms zero bytes transmitted`() {
-        // Arrange
+    fun `chat inference rows contribute zero to network bytes`() {
+        // Chat stays on-device — inference rows record 0 bytes even though
+        // the schema no longer enforces it. Verified in aggregate.
         val database = createTestDatabase()
         val repository = EcoMetricsRepository(database)
 
-        // Record multiple queries
-        repository.recordMetrics(EcoSavings(100, 120, 3000, 2, 0))
-        repository.recordMetrics(EcoSavings(200, 240, 6000, 4, 0))
+        repository.recordMetrics(EcoCalculator.calculateSavings(100))
+        repository.recordMetrics(EcoCalculator.calculateSavings(200))
 
-        // Act
-        val totalBytesSent = repository.verifyPrivacy()
+        val bytes = repository.getTotalNetworkBytes()
+        assertEquals(0L, bytes.bytesSent)
+        assertEquals(0L, bytes.bytesReceived)
+        assertEquals(0L, bytes.total)
+    }
 
-        // Assert
-        assertEquals(0, totalBytesSent, "Privacy verification: 0 bytes sent")
+    @Test
+    fun `getTotalNetworkBytes sums inference and network rows correctly`() {
+        val database = createTestDatabase()
+        val repository = EcoMetricsRepository(database)
+
+        // Two inference rows (0 bytes) + one download (net bytes) + one search
+        repository.recordMetrics(EcoCalculator.calculateSavings(100))
+        repository.recordMetrics(EcoCalculator.calculateSavings(200))
+        repository.recordMetrics(EcoCalculator.networkEvent(bytesSent = 100, bytesReceived = 5_000_000))
+        repository.recordMetrics(EcoCalculator.networkEvent(bytesSent = 200, bytesReceived = 4_000))
+
+        val bytes = repository.getTotalNetworkBytes()
+        assertEquals(300L, bytes.bytesSent)
+        assertEquals(5_004_000L, bytes.bytesReceived)
     }
 
     // ==================== Average Savings Tests ====================
@@ -391,7 +411,5 @@ class EcoMetricsRepositoryTest {
 
     // ==================== Helper Functions ====================
 
-    private fun createTestDatabase(): MaDatabase {
-        return TestDatabaseFactory.createInMemoryDatabase()
-    }
+    private fun createTestDatabase(): MaDatabase = TestDatabaseFactory.createInMemoryDatabase()
 }

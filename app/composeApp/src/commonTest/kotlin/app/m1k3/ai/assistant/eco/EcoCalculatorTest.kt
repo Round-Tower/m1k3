@@ -16,7 +16,6 @@ import kotlin.test.*
  * - Edge cases (0 tokens, negative tokens, large values)
  */
 class EcoCalculatorTest {
-
     // ==================== Savings Calculation Tests ====================
 
     @Test
@@ -79,15 +78,48 @@ class EcoCalculatorTest {
     }
 
     @Test
-    fun `calculateSavings always returns 0 bytes sent`() {
-        // Arrange
+    fun `inference rows record zero network bytes`() {
+        // Chat inference is on-device — rows created by calculateSavings
+        // never carry bytes. Real-network rows go through networkEvent.
         val testCases = listOf(1, 50, 100, 500, 1000, 10000)
 
-        // Act & Assert
         testCases.forEach { tokens ->
             val savings = EcoCalculator.calculateSavings(tokens)
-            assertEquals(0, savings.bytesSent, "Privacy metric: bytes sent should always be 0 for $tokens tokens")
+            assertEquals(0, savings.bytesSent, "Inference: bytesSent stays 0 for $tokens tokens")
+            assertEquals(0, savings.bytesReceived, "Inference: bytesReceived stays 0 for $tokens tokens")
         }
+    }
+
+    @Test
+    fun `networkEvent creates row with zero inference but real bytes`() {
+        val event = EcoCalculator.networkEvent(bytesSent = 1024, bytesReceived = 5_000_000)
+
+        assertEquals(0, event.tokensProcessed, "Network event has no inference tokens")
+        assertEquals(0, event.waterSavedMl)
+        assertEquals(0, event.energySavedWh)
+        assertEquals(0, event.co2PreventedG)
+        assertEquals(1024, event.bytesSent)
+        assertEquals(5_000_000, event.bytesReceived)
+    }
+
+    @Test
+    fun `networkEvent rejects negative bytes`() {
+        assertFails { EcoCalculator.networkEvent(bytesSent = -1, bytesReceived = 0) }
+        assertFails { EcoCalculator.networkEvent(bytesSent = 0, bytesReceived = -1) }
+    }
+
+    @Test
+    fun `cloudBytesAvoided scales linearly from 100-token baseline`() {
+        // 6 KB per 100 tokens — order-of-magnitude OpenAI chat-completion envelope.
+        assertEquals(0L, EcoCalculator.cloudBytesAvoided(0L))
+        assertEquals(6_000L, EcoCalculator.cloudBytesAvoided(100L))
+        assertEquals(60_000L, EcoCalculator.cloudBytesAvoided(1_000L))
+        assertEquals(3_000L, EcoCalculator.cloudBytesAvoided(50L))
+    }
+
+    @Test
+    fun `cloudBytesAvoided rejects negative tokens`() {
+        assertFails { EcoCalculator.cloudBytesAvoided(-1L) }
     }
 
     @Test

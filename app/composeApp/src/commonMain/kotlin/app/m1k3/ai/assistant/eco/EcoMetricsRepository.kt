@@ -17,11 +17,13 @@ import kotlinx.datetime.Clock
  * - Session tracking: Group metrics by conversation
  * - Project tracking: Per-project environmental savings
  * - Daily breakdown: Data for charts and visualization
- * - Privacy verification: Guarantee 0 bytes transmitted
+ * - Network usage: real bytes from downloads + web search (ADR-0006)
  *
- * **Privacy-First:**
- * Database-level CHECK constraint enforces `bytes_sent = 0`.
- * Any attempt to record non-zero bytes will fail immediately.
+ * **Privacy model:**
+ * Chat inference rows always record 0 bytes (stay on-device). Network
+ * events from HttpModelDownloadManager and WebSearchExecutor record
+ * their real bytes here. The "zero-bytes" invariant was retired in
+ * ADR-0006 — privacy enforcement moved to `ManifestPrivacyTest`.
  *
  * **Usage Example:**
  * ```kotlin
@@ -34,32 +36,27 @@ import kotlinx.datetime.Clock
  * println("Water saved: ${EcoCalculator.formatWater(lifetime.totalWaterMl)}")
  * ```
  */
-class EcoMetricsRepository(private val database: MaDatabase) {
-
+class EcoMetricsRepository(
+    private val database: MaDatabase,
+) {
     // ==================== Recording Metrics ====================
 
     /**
-     * Record environmental savings from a single AI query.
+     * Record one EcoMetrics row.
      *
-     * **Privacy Enforcement:**
-     * - Throws exception if `savings.bytesSent != 0`
-     * - Database CHECK constraint provides additional safety
+     * Accepts both inference rows (from [EcoCalculator.calculateSavings])
+     * and network events (from [EcoCalculator.networkEvent]). No privacy
+     * precondition — ADR-0006 retired the zero-bytes invariant.
      *
-     * @param savings Environmental savings from EcoCalculator
+     * @param savings Environmental + byte data from EcoCalculator
      * @param sessionId Optional chat session ID for grouping
      * @param projectId Optional project ID for linking
-     * @throws IllegalStateException if bytesSent is non-zero (privacy violation)
      */
     fun recordMetrics(
         savings: EcoSavings,
         sessionId: String? = null,
-        projectId: String? = null
+        projectId: String? = null,
     ) {
-        // Privacy validation
-        require(savings.bytesSent == 0) {
-            "Privacy violation: bytes_sent must be 0 (got ${savings.bytesSent})"
-        }
-
         val timestamp = Clock.System.now().toEpochMilliseconds()
 
         database.ecoMetricsQueries.insertEcoMetrics(
@@ -69,8 +66,9 @@ class EcoMetricsRepository(private val database: MaDatabase) {
             energy_saved_wh = savings.energySavedWh.toLong(),
             co2_prevented_g = savings.co2PreventedG.toLong(),
             bytes_sent = savings.bytesSent.toLong(),
+            bytes_received = savings.bytesReceived.toLong(),
             session_id = sessionId,
-            project_id = projectId
+            project_id = projectId,
         )
     }
 
@@ -85,8 +83,9 @@ class EcoMetricsRepository(private val database: MaDatabase) {
      * @return LifetimeStats or null if no metrics recorded
      */
     fun getLifetimeStats(): LifetimeStats? {
-        val result = database.ecoMetricsQueries.getLifetimeStats().executeAsOneOrNull()
-            ?: return null
+        val result =
+            database.ecoMetricsQueries.getLifetimeStats().executeAsOneOrNull()
+                ?: return null
 
         // Check if we have any data
         if (result.total_queries == 0L) {
@@ -99,9 +98,10 @@ class EcoMetricsRepository(private val database: MaDatabase) {
             totalEnergyWh = result.total_energy_wh ?: 0L,
             totalCo2G = result.total_co2_g ?: 0L,
             totalBytesSent = result.total_bytes_sent ?: 0L,
+            totalBytesReceived = result.total_bytes_received ?: 0L,
             totalQueries = result.total_queries ?: 0L,
             firstQueryAt = result.first_query_at ?: 0L,
-            lastQueryAt = result.last_query_at ?: 0L
+            lastQueryAt = result.last_query_at ?: 0L,
         )
     }
 
@@ -115,8 +115,9 @@ class EcoMetricsRepository(private val database: MaDatabase) {
      *
      * @return List of SessionStats, ordered by session end time (desc)
      */
-    fun getSessionStats(): List<SessionStats> {
-        return database.ecoMetricsQueries.getSessionStats()
+    fun getSessionStats(): List<SessionStats> =
+        database.ecoMetricsQueries
+            .getSessionStats()
             .executeAsList()
             .map { row ->
                 SessionStats(
@@ -127,10 +128,9 @@ class EcoMetricsRepository(private val database: MaDatabase) {
                     energyWh = row.energy_wh ?: 0L,
                     co2G = row.co2_g ?: 0L,
                     sessionStart = row.session_start ?: 0L,
-                    sessionEnd = row.session_end ?: 0L
+                    sessionEnd = row.session_end ?: 0L,
                 )
             }
-    }
 
     // ==================== Project Statistics ====================
 
@@ -141,8 +141,9 @@ class EcoMetricsRepository(private val database: MaDatabase) {
      *
      * @return List of ProjectStats
      */
-    fun getProjectStats(): List<ProjectStats> {
-        return database.ecoMetricsQueries.getProjectStats()
+    fun getProjectStats(): List<ProjectStats> =
+        database.ecoMetricsQueries
+            .getProjectStats()
             .executeAsList()
             .map { row ->
                 ProjectStats(
@@ -151,10 +152,9 @@ class EcoMetricsRepository(private val database: MaDatabase) {
                     tokens = row.tokens ?: 0L,
                     waterMl = row.water_ml ?: 0L,
                     energyWh = row.energy_wh ?: 0L,
-                    co2G = row.co2_g ?: 0L
+                    co2G = row.co2_g ?: 0L,
                 )
             }
-    }
 
     // ==================== Daily Statistics ====================
 
@@ -167,10 +167,12 @@ class EcoMetricsRepository(private val database: MaDatabase) {
      * @return List of DailyStats, ordered by date (desc)
      */
     fun getDailyStats(days: Int = 7): List<DailyStats> {
-        val cutoffTimestamp = Clock.System.now().toEpochMilliseconds() -
+        val cutoffTimestamp =
+            Clock.System.now().toEpochMilliseconds() -
                 (days * 24 * 60 * 60 * 1000L)
 
-        return database.ecoMetricsQueries.getDailyStats(cutoffTimestamp)
+        return database.ecoMetricsQueries
+            .getDailyStats(cutoffTimestamp)
             .executeAsList()
             .map { row ->
                 DailyStats(
@@ -179,23 +181,27 @@ class EcoMetricsRepository(private val database: MaDatabase) {
                     tokens = row.tokens ?: 0L,
                     waterMl = row.water_ml ?: 0L,
                     energyWh = row.energy_wh ?: 0L,
-                    co2G = row.co2_g ?: 0L
+                    co2G = row.co2_g ?: 0L,
                 )
             }
     }
 
-    // ==================== Privacy Verification ====================
+    // ==================== Network Usage ====================
 
     /**
-     * Verify privacy guarantee by checking total bytes transmitted.
+     * Total real bytes sent + received across all metrics. Sourced from
+     * HttpModelDownloadManager (HuggingFace GGUF) and WebSearchExecutor
+     * (DuckDuckGo). Chat inference rows contribute 0 (stays on-device).
      *
-     * This should ALWAYS return 0. If it doesn't, there's a serious bug.
-     *
-     * @return Total bytes sent across all metrics (should be 0)
+     * Used by the "Network usage" breakdown on EcoStatsScreen and by any
+     * future privacy dashboard.
      */
-    fun verifyPrivacy(): Long {
-        val result = database.ecoMetricsQueries.verifyPrivacy().executeAsOne()
-        return result.total_bytes_sent ?: 0L
+    fun getTotalNetworkBytes(): NetworkBytes {
+        val result = database.ecoMetricsQueries.getTotalNetworkBytes().executeAsOne()
+        return NetworkBytes(
+            bytesSent = result.total_bytes_sent ?: 0L,
+            bytesReceived = result.total_bytes_received ?: 0L,
+        )
     }
 
     // ==================== Average Savings ====================
@@ -208,14 +214,15 @@ class EcoMetricsRepository(private val database: MaDatabase) {
      * @return AverageSavings or null if no data
      */
     fun getAverageSavings(): AverageSavings? {
-        val result = database.ecoMetricsQueries.getAverageSavings().executeAsOneOrNull()
-            ?: return null
+        val result =
+            database.ecoMetricsQueries.getAverageSavings().executeAsOneOrNull()
+                ?: return null
 
         return AverageSavings(
             avgTokens = result.avg_tokens ?: 0.0,
             avgWaterMl = result.avg_water_ml ?: 0.0,
             avgEnergyWh = result.avg_energy_wh ?: 0.0,
-            avgCo2G = result.avg_co2_g ?: 0.0
+            avgCo2G = result.avg_co2_g ?: 0.0,
         )
     }
 
@@ -226,9 +233,7 @@ class EcoMetricsRepository(private val database: MaDatabase) {
      *
      * @return Total query count
      */
-    fun getRecordCount(): Long {
-        return database.ecoMetricsQueries.getRecordCount().executeAsOne()
-    }
+    fun getRecordCount(): Long = database.ecoMetricsQueries.getRecordCount().executeAsOne()
 
     /**
      * Delete metrics older than specified timestamp.
@@ -271,10 +276,23 @@ data class LifetimeStats(
     val totalEnergyWh: Long,
     val totalCo2G: Long,
     val totalBytesSent: Long,
+    val totalBytesReceived: Long,
     val totalQueries: Long,
     val firstQueryAt: Long,
-    val lastQueryAt: Long
+    val lastQueryAt: Long,
 )
+
+/**
+ * Network bytes summary — real upload / download from
+ * HttpModelDownloadManager + WebSearchExecutor. Chat inference rows
+ * contribute 0 (stay on-device).
+ */
+data class NetworkBytes(
+    val bytesSent: Long,
+    val bytesReceived: Long,
+) {
+    val total: Long get() = bytesSent + bytesReceived
+}
 
 /**
  * Session-based statistics for grouping metrics.
@@ -287,7 +305,7 @@ data class SessionStats(
     val energyWh: Long,
     val co2G: Long,
     val sessionStart: Long,
-    val sessionEnd: Long
+    val sessionEnd: Long,
 )
 
 /**
@@ -299,7 +317,7 @@ data class ProjectStats(
     val tokens: Long,
     val waterMl: Long,
     val energyWh: Long,
-    val co2G: Long
+    val co2G: Long,
 )
 
 /**
@@ -311,7 +329,7 @@ data class DailyStats(
     val tokens: Long,
     val waterMl: Long,
     val energyWh: Long,
-    val co2G: Long
+    val co2G: Long,
 )
 
 /**
@@ -321,5 +339,5 @@ data class AverageSavings(
     val avgTokens: Double,
     val avgWaterMl: Double,
     val avgEnergyWh: Double,
-    val avgCo2G: Double
+    val avgCo2G: Double,
 )

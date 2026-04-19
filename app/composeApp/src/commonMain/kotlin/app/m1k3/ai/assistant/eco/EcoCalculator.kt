@@ -43,12 +43,22 @@ object EcoCalculator {
      */
     private const val ENERGY_MWH_PER_100_TOKENS = 3000
 
+    /**
+     * Estimated bytes a round-trip to a cloud LLM API would consume per
+     * 100 tokens. Basis: ~2 KB JSON request envelope + ~4 KB response
+     * envelope for an OpenAI-shape chat completion. Order-of-magnitude —
+     * used only for the "cloud bytes avoided" hero stat.
+     */
+    private const val CLOUD_BYTES_PER_100_TOKENS = 6_000L
+
     // ==================== Calculation ====================
 
     /**
-     * Calculate environmental savings for a given number of tokens.
+     * Calculate environmental savings for on-device inference of [tokens].
      *
-     * Scales linearly from baseline (100 tokens).
+     * Scales linearly from baseline (100 tokens). Inference rows always
+     * record 0 network bytes — chat stays on-device. For real network
+     * events (downloads, web search), use [networkEvent] instead.
      *
      * @param tokens Number of tokens processed (input + output)
      * @return EcoSavings with calculated water, energy, and CO2 savings
@@ -63,8 +73,40 @@ object EcoCalculator {
             waterSavedMl = (WATER_ML_PER_100_TOKENS * scaleFactor).toInt(),
             energySavedWh = (ENERGY_MWH_PER_100_TOKENS * scaleFactor).toInt(),
             co2PreventedG = (CO2_G_PER_100_TOKENS * scaleFactor).toInt(),
-            bytesSent = 0, // Always 0 - privacy enforcement
+            bytesSent = 0,
+            bytesReceived = 0,
         )
+    }
+
+    /**
+     * Record a real network event (download or web-search round-trip).
+     *
+     * Zero tokens, zero inference savings — just real bytes. Persisted
+     * alongside inference rows so the "network usage" breakdown and the
+     * "cloud bytes avoided" headline can be derived from a single table.
+     */
+    fun networkEvent(
+        bytesSent: Int,
+        bytesReceived: Int,
+    ): EcoSavings {
+        require(bytesSent >= 0 && bytesReceived >= 0) { "Bytes must be non-negative" }
+        return EcoSavings(
+            tokensProcessed = 0,
+            waterSavedMl = 0,
+            energySavedWh = 0,
+            co2PreventedG = 0,
+            bytesSent = bytesSent,
+            bytesReceived = bytesReceived,
+        )
+    }
+
+    /**
+     * Estimate the bytes that WOULD have been sent to a cloud LLM API for
+     * [tokens] of on-device inference. Headline privacy-win metric.
+     */
+    fun cloudBytesAvoided(tokens: Long): Long {
+        require(tokens >= 0) { "Tokens must be non-negative" }
+        return (tokens * CLOUD_BYTES_PER_100_TOKENS) / 100L
     }
 
     // ==================== Formatting ====================
@@ -147,16 +189,24 @@ object EcoCalculator {
 // ==================== Data Classes ====================
 
 /**
- * Environmental savings from a single query.
+ * A single EcoMetrics row.
  *
- * All values represent savings compared to cloud-based AI inference.
+ * Two shapes — same data class, different fields populated:
+ *   - **Inference:** tokens + water/energy/co2 savings, bytes = 0.
+ *   - **Network event:** tokens = 0, savings = 0, real bytes set.
+ *
+ * Keeping both in one table lets the UI aggregate freely (e.g. "per-day
+ * tokens" sums inference rows naturally because network rows have 0 tokens).
+ * Use [EcoCalculator.calculateSavings] for inference, [EcoCalculator.networkEvent]
+ * for downloads / web searches.
  */
 data class EcoSavings(
     val tokensProcessed: Int,
     val waterSavedMl: Int,
     val energySavedWh: Int, // Stored as milliwatt-hours (mWh)
     val co2PreventedG: Int,
-    val bytesSent: Int = 0, // Always 0 for privacy metric
+    val bytesSent: Int = 0,
+    val bytesReceived: Int = 0,
 )
 
 /**

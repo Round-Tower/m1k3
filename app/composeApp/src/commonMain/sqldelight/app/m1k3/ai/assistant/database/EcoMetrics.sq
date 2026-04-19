@@ -1,31 +1,32 @@
--- Eco Credentials System: EcoMetrics Table Schema
+-- EcoMetrics Table Schema
 --
--- EcoMetrics tracks environmental savings from local AI processing vs cloud inference.
--- Each record represents savings from a single query/response cycle.
+-- Tracks environmental savings from on-device chat inference AND real
+-- network bytes from user-initiated downloads/searches. See ADR-0006.
 --
--- Baselines (per 100 tokens, vs cloud AI):
+-- Baselines for chat inference (per 100 tokens, vs cloud AI):
 -- - Water: ~120ml saved (data center cooling)
 -- - Energy: ~3 Wh saved (GPU + transmission)
 -- - CO2: ~2g prevented (electricity generation)
--- - Privacy: 0 bytes transmitted (100% local processing)
 --
--- Philosophy: Environmental consciousness + privacy transparency
+-- bytes_sent / bytes_received record actual network usage from
+-- HttpModelDownloadManager + WebSearchExecutor. Chat inference rows
+-- record 0 bytes (never hit the network). Schema no longer enforces
+-- "always 0" — privacy invariant moved to per-caller allow-list in
+-- ManifestPrivacyTest.
 --
--- Privacy: All content encrypted at rest (SQLCipher AES-256)
+-- Storage: all content encrypted at rest (SQLCipher AES-256).
 
 CREATE TABLE IF NOT EXISTS EcoMetrics (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     timestamp INTEGER NOT NULL, -- Unix timestamp in milliseconds
-    tokens_processed INTEGER NOT NULL, -- Input + output tokens
+    tokens_processed INTEGER NOT NULL, -- Input + output tokens (0 for non-inference rows)
     water_saved_ml INTEGER NOT NULL, -- Milliliters saved vs cloud
     energy_saved_wh INTEGER NOT NULL, -- Milliwatt-hours saved (divide by 1000 for Wh)
     co2_prevented_g INTEGER NOT NULL, -- Grams CO2 prevented vs cloud
-    bytes_sent INTEGER NOT NULL DEFAULT 0, -- Should always be 0 (privacy metric)
+    bytes_sent INTEGER NOT NULL DEFAULT 0, -- Real bytes uploaded (downloads/searches)
+    bytes_received INTEGER NOT NULL DEFAULT 0, -- Real bytes downloaded
     session_id TEXT, -- Optional: group metrics by chat session
     project_id TEXT, -- Optional: link to Project
-
-    -- Privacy enforcement at database level
-    CHECK (bytes_sent = 0),
 
     FOREIGN KEY (project_id) REFERENCES Project(id) ON DELETE SET NULL
 );
@@ -55,9 +56,10 @@ INSERT INTO EcoMetrics (
     energy_saved_wh,
     co2_prevented_g,
     bytes_sent,
+    bytes_received,
     session_id,
     project_id
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?);
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
 
 -- Get metrics by ID
 getEcoMetricsById:
@@ -88,7 +90,8 @@ SELECT
     SUM(water_saved_ml) AS total_water_ml,
     SUM(energy_saved_wh) AS total_energy_wh,
     SUM(co2_prevented_g) AS total_co2_g,
-    SUM(bytes_sent) AS total_bytes_sent, -- Should always be 0
+    SUM(bytes_sent) AS total_bytes_sent,
+    SUM(bytes_received) AS total_bytes_received,
     COUNT(*) AS total_queries,
     MIN(timestamp) AS first_query_at,
     MAX(timestamp) AS last_query_at
@@ -175,9 +178,12 @@ DELETE FROM EcoMetrics WHERE session_id = ?;
 deleteProject:
 DELETE FROM EcoMetrics WHERE project_id = ?;
 
--- Verify privacy: Check if any bytes were sent (should always return 0)
-verifyPrivacy:
-SELECT SUM(bytes_sent) AS total_bytes_sent FROM EcoMetrics;
+-- Total network usage (real bytes from downloads + searches)
+getTotalNetworkBytes:
+SELECT
+    SUM(bytes_sent) AS total_bytes_sent,
+    SUM(bytes_received) AS total_bytes_received
+FROM EcoMetrics;
 
 -- Get record count
 getRecordCount:
