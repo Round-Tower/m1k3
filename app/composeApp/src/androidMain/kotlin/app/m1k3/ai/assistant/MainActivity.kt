@@ -347,6 +347,18 @@ private fun MaAppContent(knowledgeStatus: String) {
             // for the full rationale (Vulkan OOM cascade, 2026-04-19).
             val toolbarAvatarVisible = remember { mutableStateOf(false) }
 
+            // Shared mutable state so the current screen can publish
+            // Toolbar actions (e.g. "New chat") without prop-drilling
+            // through the Scaffold. ChatScreen writes to this on entry
+            // and clears it on dispose.
+            val toolbarActionsState =
+                remember {
+                    mutableStateOf(
+                        app.m1k3.ai.assistant.ui.components
+                            .ToolbarActions(),
+                    )
+                }
+
             var drawerOpen by remember { mutableStateOf(false) }
 
             val drawerState = rememberDrawerState(DrawerValue.Closed)
@@ -424,6 +436,7 @@ private fun MaAppContent(knowledgeStatus: String) {
                         LocalSharedAvatarVM provides appAvatarVM,
                         app.m1k3.ai.assistant.avatar.LocalSelectedAvatarId provides selectedAvatarState,
                         app.m1k3.ai.assistant.avatar.LocalShowToolbarAvatar provides toolbarAvatarVisible,
+                        app.m1k3.ai.assistant.ui.components.LocalToolbarActions provides toolbarActionsState,
                     ) {
                         Scaffold(
                             topBar = {

@@ -3,6 +3,7 @@ package app.m1k3.ai.assistant.ui.components
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.sharp.Menu
@@ -60,6 +61,7 @@ fun Toolbar(
     modifier: Modifier = Modifier,
 ) {
     var showOverflowMenu by remember { mutableStateOf(false) }
+    val toolbarActions by LocalToolbarActions.current
     Box(
         modifier =
             modifier
@@ -117,31 +119,49 @@ fun Toolbar(
                     }
                 }
 
-                // Middle: Overflow menu (if onClearClick provided)
-                if (onClearClick != null) {
-                    Box {
+                // Middle: New Chat (primary) + overflow menu
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    toolbarActions.onNewChat?.let { onNewChat ->
                         IconButton(
-                            onClick = { showOverflowMenu = true },
-                            modifier = Modifier.size(40.dp),
+                            onClick = onNewChat,
+                            modifier =
+                                Modifier
+                                    .testTag("toolbar_new_chat")
+                                    .size(40.dp),
                         ) {
                             Icon(
-                                imageVector = Icons.Default.MoreVert,
-                                contentDescription = "More options",
-                                tint = MaColors.textPrimary(),
+                                imageVector = Icons.Default.Add,
+                                contentDescription = "New chat",
+                                tint = MaColors.Orange,
                             )
                         }
+                    }
 
-                        DropdownMenu(
-                            expanded = showOverflowMenu,
-                            onDismissRequest = { showOverflowMenu = false },
-                        ) {
-                            DropdownMenuItem(
-                                text = { Text("Clear Conversation") },
-                                onClick = {
-                                    showOverflowMenu = false
-                                    onClearClick()
-                                },
-                            )
+                    if (onClearClick != null) {
+                        Box {
+                            IconButton(
+                                onClick = { showOverflowMenu = true },
+                                modifier = Modifier.size(40.dp),
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.MoreVert,
+                                    contentDescription = "More options",
+                                    tint = MaColors.textPrimary(),
+                                )
+                            }
+
+                            DropdownMenu(
+                                expanded = showOverflowMenu,
+                                onDismissRequest = { showOverflowMenu = false },
+                            ) {
+                                DropdownMenuItem(
+                                    text = { Text("New Chat") },
+                                    onClick = {
+                                        showOverflowMenu = false
+                                        onClearClick()
+                                    },
+                                )
+                            }
                         }
                     }
                 }

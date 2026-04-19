@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -22,6 +23,7 @@ import androidx.compose.material3.Snackbar
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -31,6 +33,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
@@ -42,7 +45,6 @@ import app.m1k3.ai.assistant.chat.ChatScreenViewModel
 import app.m1k3.ai.assistant.chat.ContextWindowState
 import app.m1k3.ai.assistant.chat.GenerationState
 import app.m1k3.ai.assistant.chat.ModelDownloadState
-import app.m1k3.ai.assistant.chat.SessionEcoStats
 import app.m1k3.ai.assistant.chat.collectAsState
 import app.m1k3.ai.assistant.chat.isGenerating
 import app.m1k3.ai.assistant.chat.isInputEnabled
@@ -57,6 +59,8 @@ import app.m1k3.ai.assistant.design.components.ToolCallPill
 import app.m1k3.ai.assistant.design.haptics.rememberHapticFeedback
 import app.m1k3.ai.assistant.design.theme.MaTheme
 import app.m1k3.ai.assistant.design.tokens.MaColors
+import app.m1k3.ai.assistant.design.tokens.MaRadius
+import app.m1k3.ai.assistant.design.tokens.MaSpacing
 import app.m1k3.ai.assistant.design.tokens.MaTypography
 import app.m1k3.ai.assistant.globe.GlobeBackground
 import app.m1k3.ai.assistant.globe.GlobeMode
@@ -65,13 +69,16 @@ import app.m1k3.ai.assistant.globe.TIER_LOW
 import app.m1k3.ai.assistant.globe.TIER_MEDIUM
 import app.m1k3.ai.assistant.platform.PreferenceKeys
 import app.m1k3.ai.assistant.stt.AndroidSttEngine
+import app.m1k3.ai.assistant.ui.components.ChatContextBar
+import app.m1k3.ai.assistant.ui.components.ChatContextBarState
 import app.m1k3.ai.assistant.ui.components.ChatInputBar
 import app.m1k3.ai.assistant.ui.components.ChatInputBarContainer
 import app.m1k3.ai.assistant.ui.components.ChatMessageList
 import app.m1k3.ai.assistant.ui.components.ClearConversationDialog
 import app.m1k3.ai.assistant.ui.components.ContextWindowIndicator
-import app.m1k3.ai.assistant.ui.components.EcoIndicator
-import app.m1k3.ai.assistant.ui.components.EcoIndicatorVariant
+import app.m1k3.ai.assistant.ui.components.LocalToolbarActions
+import app.m1k3.ai.assistant.ui.components.ToolbarActions
+import app.m1k3.ai.domain.ai.LlmModel
 import app.m1k3.ai.domain.chat.ChatError
 import app.m1k3.ai.domain.stt.SttState
 import app.m1k3.ai.domain.stt.isListening
@@ -117,6 +124,7 @@ fun ChatScreen(
 
     val uiState by viewModel.collectAsState()
     var showClearDialog by remember { mutableStateOf(false) }
+    var inputFocused by remember { mutableStateOf(false) }
     val haptics = rememberHapticFeedback()
 
     // Permission requester for context providers
@@ -284,14 +292,42 @@ fun ChatScreen(
         }
     }
 
-    // Auto-scroll when new messages arrive
-    LaunchedEffect(uiState.messages.size) {
-        if (uiState.messages.isNotEmpty()) {
-            try {
-                listState.animateScrollToItem(uiState.messages.size - 1)
-            } catch (e: Exception) {
-                // Scroll animation failed, continue
+    // Stick-to-bottom: true when the last visible item is one of the last
+    // few entries, so we only auto-scroll if the user hasn't wandered up
+    // to read older messages.
+    val stickToBottom by remember {
+        androidx.compose.runtime.derivedStateOf {
+            val info = listState.layoutInfo
+            val total = info.totalItemsCount
+            if (total == 0) {
+                true
+            } else {
+                val lastVisible = info.visibleItemsInfo.lastOrNull()?.index ?: -1
+                lastVisible >= total - 2
             }
+        }
+    }
+
+    // Auto-scroll when new messages arrive (only if user is near bottom).
+    LaunchedEffect(uiState.messages.size) {
+        if (uiState.messages.isNotEmpty() && stickToBottom) {
+            runCatching { listState.animateScrollToItem(uiState.messages.size - 1) }
+        }
+    }
+
+    // Stream-stick: while tokens are streaming and the user is near bottom,
+    // keep the last message pinned as new content pushes it upward.
+    LaunchedEffect(uiState.generationState, uiState.messages.size) {
+        if (uiState.generationState.isGenerating && stickToBottom && uiState.messages.isNotEmpty()) {
+            runCatching { listState.scrollToItem(uiState.messages.size - 1) }
+        }
+    }
+
+    // Focus-stick: when the user taps into the input, surface the most
+    // recent message so the keyboard doesn't obscure where they were.
+    LaunchedEffect(inputFocused) {
+        if (inputFocused && uiState.messages.isNotEmpty()) {
+            runCatching { listState.animateScrollToItem(uiState.messages.size - 1) }
         }
     }
 
@@ -308,6 +344,23 @@ fun ChatScreen(
         onDispose { toolbarAvatarVisibility?.value = true }
     }
 
+    // Publish the "New chat" action to the app-level Toolbar whenever the
+    // conversation has messages. Cleared on dispose so other screens don't
+    // inherit our action.
+    val toolbarActionsState =
+        LocalToolbarActions.current as? androidx.compose.runtime.MutableState<ToolbarActions>
+    LaunchedEffect(uiState.messages.isNotEmpty()) {
+        toolbarActionsState?.value =
+            if (uiState.messages.isNotEmpty()) {
+                ToolbarActions(onNewChat = { showClearDialog = true })
+            } else {
+                ToolbarActions()
+            }
+    }
+    androidx.compose.runtime.DisposableEffect(Unit) {
+        onDispose { toolbarActionsState?.value = ToolbarActions() }
+    }
+
     Box(
         modifier =
             Modifier
@@ -322,12 +375,9 @@ fun ChatScreen(
         )
 
         // Layer 1: Messages list (behind overlays)
+        // Note: ContextWindowIndicator retired — its % lives in the
+        // ChatContextBar footer now (one signal, one place).
         Column(modifier = Modifier.fillMaxSize()) {
-            // Context Window Indicator - Shows conversation history usage
-            ContextWindowIndicator(
-                state = uiState.contextWindow,
-            )
-
             // Messages list
             ChatMessageList(
                 messages = uiState.messages,
@@ -340,12 +390,6 @@ fun ChatScreen(
                 onRequestHealth = permissionRequester.onRequestHealth,
                 onRequestScreenTime = permissionRequester.onRequestScreenTime,
                 generationState = uiState.generationState,
-            )
-
-            // Eco Indicator - Real-time environmental impact
-            EcoIndicatorSection(
-                stats = uiState.sessionEcoStats,
-                onEcoStatsClick = onEcoStatsClick,
             )
         }
 
@@ -360,49 +404,68 @@ fun ChatScreen(
             )
         }
 
-        // Bottom overlay: Input bar with gradient
-        ChatInputBarContainer(
-            inputBar = {
-                ChatInputBar(
-                    text = uiState.inputText,
-                    onTextChange = { viewModel.updateInputText(it) },
-                    onSend = {
-                        // Process avatar emotion from user message
-                        avatarVM?.processMessage(uiState.inputText, isUserMessage = true)
-                        viewModel.sendMessage()
-                    },
-                    enabled = uiState.isInputEnabled,
-                    currentModel = uiState.currentModel,
-                    onModelSwitch = { model -> viewModel.switchModel(model) },
-                    autoVoiceReply = uiState.autoVoiceReply,
-                    onAutoVoiceToggle = {
-                        haptics.medium()
-                        viewModel.toggleAutoVoiceReply()
-                    },
-                    isListening = sttState.isListening,
-                    onMicClick =
-                        if (sttEngine.isAvailable()) {
-                            {
-                                if (sttState.isListening) {
-                                    sttEngine.stopListening()
-                                } else {
-                                    sttEngine.startListening()
-                                }
+        // Bottom overlay: context bar + input bar with gradient
+        val partialTranscript = (sttState as? SttState.Listening)?.partialText ?: ""
+        val contextBarState =
+            ChatContextBarState.from(
+                uiState = uiState,
+                isListening = sttState.isListening,
+                partialTranscript = partialTranscript,
+            )
+        // Floating "island" cluster: input + footer share one rounded
+        // elevated surface, set off from the nav bar with breathing room
+        // so the globe bleeds around and under it.
+        val islandShape = RoundedCornerShape(MaRadius.xxl)
+        Column(
+            modifier =
+                Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .navigationBarsPadding()
+                    .imePadding()
+                    .padding(horizontal = MaSpacing.sm, vertical = MaSpacing.sm)
+                    .clip(islandShape)
+                    .background(MaColors.bgElevated(), islandShape)
+                    .border(1.dp, MaColors.borderSubtle(), islandShape),
+        ) {
+            ChatInputBar(
+                text = uiState.inputText,
+                onTextChange = { viewModel.updateInputText(it) },
+                onSend = {
+                    avatarVM?.processMessage(uiState.inputText, isUserMessage = true)
+                    viewModel.sendMessage()
+                },
+                enabled = uiState.isInputEnabled,
+                isListening = sttState.isListening,
+                onMicClick =
+                    if (sttEngine.isAvailable()) {
+                        {
+                            if (sttState.isListening) {
+                                sttEngine.stopListening()
+                            } else {
+                                sttEngine.startListening()
                             }
-                        } else {
-                            null
-                        },
-                    listeningPartialText = (sttState as? SttState.Listening)?.partialText ?: "",
-                    onNewChatClick =
-                        if (uiState.messages.isNotEmpty()) {
-                            { showClearDialog = true }
-                        } else {
-                            null
-                        },
-                )
-            },
-            modifier = Modifier.align(Alignment.BottomCenter),
-        )
+                        }
+                    } else {
+                        null
+                    },
+                listeningPartialText = partialTranscript,
+                onFocusChanged = { focused -> inputFocused = focused },
+            )
+            ChatContextBar(
+                state = contextBarState,
+                availableModels = LlmModel.all(),
+                onModelSwitch = { model ->
+                    haptics.medium()
+                    viewModel.switchModel(model)
+                },
+                onEcoTap = {
+                    haptics.light()
+                    onEcoStatsClick()
+                },
+                enabled = uiState.isInputEnabled,
+            )
+        }
 
         // Error dialog — haptic on appear
         uiState.error?.let { error ->
@@ -438,30 +501,6 @@ fun ChatScreen(
     // Expose clear callback to parent (for Toolbar)
     LaunchedEffect(onClearConversationClick) {
         // This registers the callback - when parent calls it, we show the dialog
-    }
-}
-
-/**
- * Eco Indicator Section - Shows environmental impact.
- */
-@Composable
-private fun EcoIndicatorSection(
-    stats: SessionEcoStats,
-    onEcoStatsClick: () -> Unit,
-) {
-    Box(
-        modifier =
-            Modifier
-                .testTag("eco_indicator")
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 8.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        EcoIndicator(
-            stats = stats,
-            onClick = onEcoStatsClick,
-            variant = EcoIndicatorVariant.COMPACT,
-        )
     }
 }
 
