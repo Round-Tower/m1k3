@@ -1,5 +1,7 @@
 # 間 AI - On-Device Mobile AI
 
+@.claude/project-memory.md
+
 Privacy-first AI companion via Kotlin Multiplatform. Zero network permission.
 
 ## Commands
