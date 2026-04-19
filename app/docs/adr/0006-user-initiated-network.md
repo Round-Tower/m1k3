@@ -101,8 +101,12 @@ These are the strongest parts of the story. They survive the pivot.
 - The `ManifestPrivacyTest` rewrite is a visible reversal — future
   contributors will see the inverted assertions and may need context.
 - `EcoMetricsRepository.bytes_sent = 0` database invariant is no longer
-  defensible. Schema migration deferred to a follow-up (tracked as a
-  separate task; does not block this ADR).
+  defensible. Schema migration landed in a follow-up commit.
+- **ML Kit transitive telemetry**: `MlKitGenAiEngine` (on-device Gemini
+  Nano) pulls in `com.google.android.datatransport` via ML Kit vision
+  deps. This is Google's internal batching library used by ML Kit for
+  usage statistics. `ManifestPrivacyTest` allow-lists it with a comment,
+  and a follow-up task tracks the audit + opt-out.
 
 ### Alternatives rejected
 
