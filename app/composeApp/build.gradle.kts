@@ -215,6 +215,15 @@ android {
         }
     }
 
+    // Disable unused AGP build features. buildConfig stays on — Logger.kt reads
+    // BuildConfig.DEBUG to set log severity.
+    buildFeatures {
+        aidl = false
+        renderScript = false
+        shaders = false
+        mlModelBinding = false
+    }
+
     packaging {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
@@ -306,17 +315,8 @@ sqldelight {
 // Web Avatar Integration - Asset Bundling
 // ============================================================================
 
-/**
- * Build web-avatar with Vite (production bundle)
- *
- * This task:
- * 1. Runs `npm install` in src/web-avatar/ (if needed)
- * 2. Runs `npm run build` to create optimized dist/
- * 3. Outputs to: src/web-avatar/dist/
- */
-/**
- * Install npm dependencies for web-avatar
- *
+/*
+ * Install npm dependencies for web-avatar.
  * Config-cache safe: captures paths at configuration time (not Project
  * references) and declares inputs/outputs so Gradle handles incremental
  * execution without an onlyIf closure.
@@ -338,9 +338,7 @@ tasks.register<Exec>("installWebAvatarDeps") {
     outputs.dir(nodeModulesDir).withPropertyName("nodeModules")
 }
 
-/**
- * Build web-avatar production bundle
- */
+// Build web-avatar production bundle with Vite. Copies dist-app/ to assets.
 tasks.register<Exec>("buildWebAvatar") {
     group = "web-avatar"
     description = "Build web-avatar production bundle with Vite"
@@ -360,13 +358,11 @@ tasks.register<Exec>("buildWebAvatar") {
     outputs.dir(distAppDir).withPropertyName("distApp")
 }
 
-/**
- * Copy web-avatar dist to Android assets
- *
- * This task:
- * 1. Copies dist/ → composeApp/src/androidMain/assets/web-avatar/
- * 2. Includes index.html, JS, CSS, and bundled models
- * 3. Runs automatically before Android build
+/*
+ * Copy web-avatar dist to Android assets:
+ *   dist-app/ → composeApp/src/androidMain/assets/web-avatar/
+ * Includes index.html, JS, CSS, and bundled models. Runs automatically
+ * before Android build via preBuild.dependsOn below.
  */
 tasks.register<Copy>("copyWebAvatarToAndroid") {
     group = "web-avatar"
@@ -388,13 +384,11 @@ tasks.register<Copy>("copyWebAvatarToAndroid") {
     }
 }
 
-/**
- * Copy web-avatar dist to iOS resources
- *
- * This task:
- * 1. Copies dist/ → ../iosApp/iosApp/Resources/web-avatar/
- * 2. Xcode will include this in app bundle
- * 3. Manual step: Add folder to Xcode project (blue folder reference)
+/*
+ * Copy web-avatar dist to iOS resources:
+ *   dist-app/ → ../iosApp/iosApp/Resources/web-avatar/
+ * Manual step: add Resources/web-avatar/ to Xcode project as a folder
+ * reference (blue folder) so Xcode includes it in the app bundle.
  */
 tasks.register<Copy>("copyWebAvatarToIOS") {
     group = "web-avatar"
@@ -417,9 +411,7 @@ tasks.register<Copy>("copyWebAvatarToIOS") {
     }
 }
 
-/**
- * Bundle web-avatar for all platforms
- */
+// Bundle web-avatar for both Android and iOS in one shot.
 tasks.register("bundleWebAvatar") {
     group = "web-avatar"
     description = "Build and bundle web-avatar for Android and iOS"
@@ -427,9 +419,7 @@ tasks.register("bundleWebAvatar") {
     dependsOn("copyWebAvatarToAndroid", "copyWebAvatarToIOS")
 }
 
-/**
- * Auto-bundle web-avatar before Android build
- */
+// Auto-bundle web-avatar before every Android build.
 tasks.named("preBuild") {
     dependsOn("copyWebAvatarToAndroid")
 }
