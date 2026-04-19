@@ -1,34 +1,37 @@
 package app.m1k3.ai.assistant.database
 
 import android.content.Context
+import android.util.Base64
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
 import app.cash.sqldelight.db.SqlDriver
 import app.cash.sqldelight.driver.android.AndroidSqliteDriver
 import java.security.SecureRandom
-import android.util.Base64
 
 /**
- * PHASE0-003: Android Database Factory Implementation
+ * Android Database Factory Implementation.
  *
- * Creates SQLite databases with:
- * - AndroidX Security Crypto for passphrase storage
- * - Android Keystore for master key management
+ * **Current state (2026-04-19):** the SQLite DB file is NOT encrypted at rest.
+ * The passphrase plumbing below (Keystore → MasterKey → EncryptedSharedPreferences)
+ * is wired up and ready, but the driver is plain `AndroidSqliteDriver` — no
+ * SQLCipher. UI copy, `.sq` headers, and the system-knowledge JSON that the LLM
+ * reads all still say "SQLCipher AES-256"; that's aspirational, not shipped.
  *
- * TODO: Add SQLCipher encryption once we resolve native library dependencies
+ * Privacy still rests on:
+ *   - Android app-private storage (every other app sandboxed out by default).
+ *   - Device full-disk encryption (mandatory on API 23+; we target 27+).
  *
- * Security Architecture:
- * 1. Master key stored in Android Keystore (hardware-backed)
- * 2. Database passphrase encrypted with master key
- * 3. Passphrase stored in EncryptedSharedPreferences
- *
- * Privacy Guarantee: Passphrase encrypted at rest.
+ * To actually ship SQLCipher: add `implementation(libs.sqlcipher)` in
+ * composeApp/build.gradle.kts, then swap `AndroidSqliteDriver` for a
+ * `SupportOpenHelperFactory`-based driver using `getOrCreatePassphrase()` below.
  */
 @Suppress("DEPRECATION")
-class AndroidDatabaseFactory(private val context: Context) : OldDatabaseFactory {
-
+class AndroidDatabaseFactory(
+    private val context: Context,
+) : OldDatabaseFactory {
     private val masterKey: MasterKey by lazy {
-        MasterKey.Builder(context)
+        MasterKey
+            .Builder(context)
             .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
             .build()
     }
@@ -39,7 +42,7 @@ class AndroidDatabaseFactory(private val context: Context) : OldDatabaseFactory 
             "ma_secure_prefs",
             masterKey,
             EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
-            EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+            EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM,
         )
     }
 
@@ -49,7 +52,7 @@ class AndroidDatabaseFactory(private val context: Context) : OldDatabaseFactory 
         return AndroidSqliteDriver(
             schema = MaDatabase.Schema,
             context = context,
-            name = DatabaseConfig.DATABASE_NAME
+            name = DatabaseConfig.DATABASE_NAME,
         )
     }
 
@@ -71,13 +74,15 @@ class AndroidDatabaseFactory(private val context: Context) : OldDatabaseFactory 
         random.nextBytes(passphraseBytes)
 
         // Encode as Base64 for storage
-        val passphrase = Base64.encodeToString(
-            passphraseBytes,
-            Base64.NO_WRAP or Base64.NO_PADDING
-        )
+        val passphrase =
+            Base64.encodeToString(
+                passphraseBytes,
+                Base64.NO_WRAP or Base64.NO_PADDING,
+            )
 
         // Store encrypted passphrase
-        encryptedPrefs.edit()
+        encryptedPrefs
+            .edit()
             .putString(DatabaseConfig.PASSPHRASE_KEY, passphrase)
             .apply()
 

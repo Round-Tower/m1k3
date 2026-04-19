@@ -53,12 +53,17 @@ kotlin {
 
             // M1K3 AI - Android-specific dependencies
             implementation(libs.sqldelight.driver.android)
-            // TODO: Re-enable SQLCipher once we resolve native library setup
+            // SQLCipher: DB stays unencrypted on disk for now. Docs/UI still
+            // reference "AES-256" — that's aspirational, not shipped. To wire
+            // this up: uncomment below, then override SqlDriver in
+            // DatabaseFactory.android.kt to open via SupportOpenHelperFactory
+            // with a passphrase sourced from androidx.security.crypto.
             // implementation(libs.sqlcipher)
             implementation(libs.androidx.security.crypto)
 
-            // Inference engines
-            implementation(libs.onnxruntime.android) // Keep for Gemma3Engine (Phase 4)
+            // ONNX Runtime — used by MiniLmEmbeddingEngine, GemmaEmbeddingEngine,
+            // and KokoroTtsEngine. Not used for LLM inference (that's Ma/llama.cpp).
+            implementation(libs.onnxruntime.android)
 
             // CameraX
             implementation(libs.camerax.core)
@@ -98,9 +103,11 @@ kotlin {
             implementation(libs.koin.android)
             implementation(libs.koin.androidx.compose)
 
-            // TODO: JVector for HNSW vector similarity search (not yet in Maven Central)
-            // Using linear search fallback for now (fine for <10K vectors)
-            // implementation("io.github.jbellis:jvector-base:1.0.0")
+            // Vector similarity search is currently linear-scan over cosine
+            // similarity (AndroidVectorSearchEngine, ~5-10 ms for <1K vectors).
+            // Fine at current corpus sizes. HNSW would want jvector-base, but
+            // io.github.jbellis:jvector-base still isn't on Maven Central as of
+            // last check — track there before introducing it.
         }
         commonMain.dependencies {
             implementation(compose.runtime)
