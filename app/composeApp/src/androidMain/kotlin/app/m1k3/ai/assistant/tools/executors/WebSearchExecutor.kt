@@ -5,6 +5,7 @@ import app.m1k3.ai.assistant.eco.EcoMetricsRepository
 import app.m1k3.ai.domain.tools.ToolCall
 import app.m1k3.ai.domain.tools.ToolError
 import app.m1k3.ai.domain.tools.ToolResult
+import app.m1k3.ai.domain.tools.services.DuckDuckGoHtmlParser
 import app.m1k3.ai.domain.tools.services.ToolExecutor
 import co.touchlab.kermit.Logger
 import kotlinx.coroutines.Dispatchers
@@ -67,13 +68,6 @@ class WebSearchExecutor(
                 val body = connection.inputStream.bufferedReader().readText()
                 connection.disconnect()
 
-                // Eco accounting — real bytes this search cost us on the wire.
-                recordSearchBytes(
-                    // Rough request size: GET line + headers + URL-encoded query.
-                    requestBytes = 256L + encoded.length,
-                    responseBytes = body.length.toLong(),
-                )
-
                 // Parse DuckDuckGo JSON response (simple extraction, no JSON library needed)
                 val abstract = extractJsonString(body, "AbstractText")
                 val answer = extractJsonString(body, "Answer")
@@ -83,6 +77,20 @@ class WebSearchExecutor(
 
                 // Extract related topics (first 5)
                 val relatedTopics = extractRelatedTopics(body, maxTopics = 5)
+
+                val instantAnswerEmpty =
+                    answer.isBlank() && abstract.isBlank() && relatedTopics.isEmpty()
+
+                // DDG Instant Answer only covers knowledge-graph queries (Wikipedia
+                // entities). Weather, news, current events fall through here — hit
+                // the HTML endpoint for real organic results.
+                val htmlFallback =
+                    if (instantAnswerEmpty) fetchHtmlFallback(encoded) else null
+
+                recordSearchBytes(
+                    requestBytes = 256L + encoded.length + (htmlFallback?.requestBytes ?: 0L),
+                    responseBytes = body.length.toLong() + (htmlFallback?.responseBytes ?: 0L),
+                )
 
                 val output =
                     buildString {
@@ -98,8 +106,11 @@ class WebSearchExecutor(
                             appendLine("Related results for \"$query\":")
                             relatedTopics.forEach { appendLine("• $it") }
                         }
+                        if (htmlFallback != null && htmlFallback.results.isNotEmpty()) {
+                            append(DuckDuckGoHtmlParser.format(htmlFallback.results, query))
+                        }
                         if (isEmpty()) {
-                            append("No instant answer found for \"$query\". Try asking more specifically.")
+                            append("No results found for \"$query\". Try asking more specifically.")
                         }
                     }.trim()
 
@@ -112,6 +123,12 @@ class WebSearchExecutor(
                 if (heading.isNotBlank()) data["heading"] = heading
                 if (abstractUrl.isNotBlank()) data["url"] = abstractUrl
                 if (relatedTopics.isNotEmpty()) data["related"] = relatedTopics
+                if (htmlFallback != null && htmlFallback.results.isNotEmpty()) {
+                    data["results"] =
+                        htmlFallback.results.map {
+                            mapOf("title" to it.title, "url" to it.url, "snippet" to it.snippet)
+                        }
+                }
 
                 ToolResult.Success(
                     toolId = toolId,
@@ -129,6 +146,48 @@ class WebSearchExecutor(
                 )
             }
         }
+
+    private data class HtmlFallback(
+        val results: List<DuckDuckGoHtmlParser.SearchResult>,
+        val requestBytes: Long,
+        val responseBytes: Long,
+    )
+
+    /**
+     * Hit html.duckduckgo.com when Instant Answer comes back empty. Swallows
+     * network errors — a failed fallback just leaves the "No results" message,
+     * it must not turn a partial success into a full failure.
+     */
+    private fun fetchHtmlFallback(encodedQuery: String): HtmlFallback? {
+        return try {
+            val url = URL("https://html.duckduckgo.com/html/?q=$encodedQuery")
+            val connection = url.openConnection() as HttpURLConnection
+            connection.requestMethod = "GET"
+            connection.connectTimeout = 5000
+            connection.readTimeout = 5000
+            connection.setRequestProperty(
+                "User-Agent",
+                "Mozilla/5.0 (Linux; Android; M1K3/1.0 Private AI Assistant)",
+            )
+
+            if (connection.responseCode != 200) {
+                logger.d { "HTML fallback non-200: ${connection.responseCode}" }
+                connection.disconnect()
+                return null
+            }
+            val body = connection.inputStream.bufferedReader().readText()
+            connection.disconnect()
+
+            HtmlFallback(
+                results = DuckDuckGoHtmlParser.parse(body, maxResults = 5),
+                requestBytes = 256L + encodedQuery.length,
+                responseBytes = body.length.toLong(),
+            )
+        } catch (e: Exception) {
+            logger.w(e) { "HTML fallback failed (non-fatal)" }
+            null
+        }
+    }
 
     /**
      * Record a network event in EcoMetrics for this search's bytes. Swallows
