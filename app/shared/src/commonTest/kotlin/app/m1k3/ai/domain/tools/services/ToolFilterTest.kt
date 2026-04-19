@@ -1,9 +1,9 @@
 package app.m1k3.ai.domain.tools.services
 
+import app.m1k3.ai.domain.tools.ParameterType
 import app.m1k3.ai.domain.tools.Tool
 import app.m1k3.ai.domain.tools.ToolCategory
 import app.m1k3.ai.domain.tools.ToolParameter
-import app.m1k3.ai.domain.tools.ParameterType
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -15,95 +15,100 @@ import kotlin.test.assertTrue
  * Goal: Reduce prompt bloat from 150 tokens (11 tools) to 0-50 tokens (0-3 tools).
  */
 class ToolFilterTest {
-
     private val filter = ToolFilter()
 
     // ===== Test Fixtures =====
 
-    private fun createTestTools(): List<Tool> = listOf(
-        Tool(
-            id = "get_battery_level",
-            name = "Get Battery",
-            description = "Returns the current battery level as a percentage",
-            parameters = emptyList(),
-            category = ToolCategory.DEVICE_INFO
-        ),
-        Tool(
-            id = "get_current_time",
-            name = "Get Time",
-            description = "Returns the current time in the specified format",
-            parameters = listOf(
-                ToolParameter(
-                    name = "format",
-                    description = "Time format",
-                    type = ParameterType.STRING,
-                    required = false
-                )
+    private fun createTestTools(): List<Tool> =
+        listOf(
+            Tool(
+                id = "get_battery_level",
+                name = "Get Battery",
+                description = "Returns the current battery level as a percentage",
+                parameters = emptyList(),
+                category = ToolCategory.DEVICE_INFO,
             ),
-            category = ToolCategory.DEVICE_INFO
-        ),
-        Tool(
-            id = "toggle_flashlight",
-            name = "Toggle Flashlight",
-            description = "Turns the device flashlight on or off",
-            parameters = listOf(
-                ToolParameter(
-                    name = "enable",
-                    description = "Turn on (true) or off (false)",
-                    type = ParameterType.BOOLEAN,
-                    required = true
-                )
+            Tool(
+                id = "get_current_time",
+                name = "Get Time",
+                description = "Returns the current time in the specified format",
+                parameters =
+                    listOf(
+                        ToolParameter(
+                            name = "format",
+                            description = "Time format",
+                            type = ParameterType.STRING,
+                            required = false,
+                        ),
+                    ),
+                category = ToolCategory.DEVICE_INFO,
             ),
-            category = ToolCategory.SYSTEM
-        ),
-        Tool(
-            id = "open_camera",
-            name = "Open Camera",
-            description = "Opens the device camera app",
-            parameters = emptyList(),
-            category = ToolCategory.APPS
-        ),
-        Tool(
-            id = "open_browser",
-            name = "Open Browser",
-            description = "Opens a URL in the default web browser",
-            parameters = listOf(
-                ToolParameter(
-                    name = "url",
-                    description = "URL to open",
-                    type = ParameterType.STRING,
-                    required = true
-                )
+            Tool(
+                id = "toggle_flashlight",
+                name = "Toggle Flashlight",
+                description = "Turns the device flashlight on or off",
+                parameters =
+                    listOf(
+                        ToolParameter(
+                            name = "enable",
+                            description = "Turn on (true) or off (false)",
+                            type = ParameterType.BOOLEAN,
+                            required = true,
+                        ),
+                    ),
+                category = ToolCategory.SYSTEM,
             ),
-            category = ToolCategory.APPS
-        ),
-        Tool(
-            id = "set_volume",
-            name = "Set Volume",
-            description = "Sets the volume level for a stream",
-            parameters = listOf(
-                ToolParameter(
-                    name = "level",
-                    description = "Volume level 0-100",
-                    type = ParameterType.NUMBER,
-                    required = true
-                )
+            Tool(
+                id = "open_camera",
+                name = "Open Camera",
+                description = "Opens the device camera app",
+                parameters = emptyList(),
+                category = ToolCategory.APPS,
             ),
-            category = ToolCategory.SYSTEM
+            Tool(
+                id = "open_browser",
+                name = "Open Browser",
+                description = "Opens a URL in the default web browser",
+                parameters =
+                    listOf(
+                        ToolParameter(
+                            name = "url",
+                            description = "URL to open",
+                            type = ParameterType.STRING,
+                            required = true,
+                        ),
+                    ),
+                category = ToolCategory.APPS,
+            ),
+            Tool(
+                id = "set_volume",
+                name = "Set Volume",
+                description = "Sets the volume level for a stream",
+                parameters =
+                    listOf(
+                        ToolParameter(
+                            name = "level",
+                            description = "Volume level 0-100",
+                            type = ParameterType.NUMBER,
+                            required = true,
+                        ),
+                    ),
+                category = ToolCategory.SYSTEM,
+            ),
         )
-    )
 
     // ===== Keyword Extraction Tests =====
 
     @Test
     fun `extractToolKeywords parses snake_case ID`() {
-        val tool = Tool(
-            id = "get_battery_level",
-            name = "Test",
-            description = "Test tool",
-            parameters = emptyList(),
-            category = ToolCategory.DEVICE_INFO
-        )
+        val tool =
+            Tool(
+                id = "get_battery_level",
+                name = "Test",
+                description = "Test tool",
+                parameters = emptyList(),
+                category = ToolCategory.DEVICE_INFO,
+            )
 
         val keywords = filter.extractToolKeywords(tool)
 
@@ -114,13 +119,14 @@ class ToolFilterTest {
 
     @Test
     fun `extractToolKeywords extracts description words`() {
-        val tool = Tool(
-            id = "test_tool",
-            name = "Test",
-            description = "Returns the current battery percentage",
-            parameters = emptyList(),
-            category = ToolCategory.DEVICE_INFO
-        )
+        val tool =
+            Tool(
+                id = "test_tool",
+                name = "Test",
+                description = "Returns the current battery percentage",
+                parameters = emptyList(),
+                category = ToolCategory.DEVICE_INFO,
+            )
 
         val keywords = filter.extractToolKeywords(tool)
 
@@ -132,13 +138,14 @@ class ToolFilterTest {
 
     @Test
     fun `extractToolKeywords filters stopwords`() {
-        val tool = Tool(
-            id = "test_tool",
-            name = "Test",
-            description = "the tool is for a test of the system",
-            parameters = emptyList(),
-            category = ToolCategory.SYSTEM
-        )
+        val tool =
+            Tool(
+                id = "test_tool",
+                name = "Test",
+                description = "the tool is for a test of the system",
+                parameters = emptyList(),
+                category = ToolCategory.SYSTEM,
+            )
 
         val keywords = filter.extractToolKeywords(tool)
 
@@ -155,13 +162,14 @@ class ToolFilterTest {
 
     @Test
     fun `extractToolKeywords handles short words`() {
-        val tool = Tool(
-            id = "a_b_c",  // Very short words
-            name = "Test",
-            description = "a to in on",  // All short/stopwords
-            parameters = emptyList(),
-            category = ToolCategory.SYSTEM
-        )
+        val tool =
+            Tool(
+                id = "a_b_c", // Very short words
+                name = "Test",
+                description = "a to in on", // All short/stopwords
+                parameters = emptyList(),
+                category = ToolCategory.SYSTEM,
+            )
 
         val keywords = filter.extractToolKeywords(tool)
 
@@ -173,7 +181,7 @@ class ToolFilterTest {
 
     @Test
     fun `scoreTool returns 0 for no match`() {
-        val tool = createTestTools()[2]  // toggle_flashlight
+        val tool = createTestTools()[2] // toggle_flashlight
         val query = "teach me about ireland"
         val keywords = filter.extractToolKeywords(tool)
 
@@ -184,7 +192,7 @@ class ToolFilterTest {
 
     @Test
     fun `scoreTool scores DEVICE_INFO category trigger correctly`() {
-        val tool = createTestTools()[0]  // get_battery_level
+        val tool = createTestTools()[0] // get_battery_level
         val keywords = filter.extractToolKeywords(tool)
 
         // DEVICE_INFO category should match "what/get/current/show/tell"
@@ -198,7 +206,7 @@ class ToolFilterTest {
 
     @Test
     fun `scoreTool scores APPS category trigger correctly`() {
-        val tool = createTestTools()[3]  // open_camera
+        val tool = createTestTools()[3] // open_camera
         val keywords = filter.extractToolKeywords(tool)
 
         // APPS category should match "open/launch/start"
@@ -212,7 +220,7 @@ class ToolFilterTest {
 
     @Test
     fun `scoreTool scores SYSTEM category trigger correctly`() {
-        val tool = createTestTools()[2]  // toggle_flashlight
+        val tool = createTestTools()[2] // toggle_flashlight
         val keywords = filter.extractToolKeywords(tool)
 
         // SYSTEM category should match "set/change/turn/toggle/enable/disable"
@@ -226,7 +234,7 @@ class ToolFilterTest {
 
     @Test
     fun `scoreTool scores keyword match correctly`() {
-        val tool = createTestTools()[0]  // get_battery_level
+        val tool = createTestTools()[0] // get_battery_level
         val keywords = filter.extractToolKeywords(tool)
 
         // Query with "battery" keyword should add +0.2
@@ -237,7 +245,7 @@ class ToolFilterTest {
 
     @Test
     fun `scoreTool combines category and keyword scores`() {
-        val tool = createTestTools()[1]  // get_current_time
+        val tool = createTestTools()[1] // get_current_time
         val keywords = filter.extractToolKeywords(tool)
 
         // "what time is it" should trigger:
@@ -251,13 +259,14 @@ class ToolFilterTest {
 
     @Test
     fun `scoreTool caps score at 1_0`() {
-        val tool = Tool(
-            id = "get_current_battery_time_level_status",  // Many keywords
-            name = "Test",
-            description = "returns shows displays current battery percentage",
-            parameters = emptyList(),
-            category = ToolCategory.DEVICE_INFO
-        )
+        val tool =
+            Tool(
+                id = "get_current_battery_time_level_status", // Many keywords
+                name = "Test",
+                description = "returns shows displays current battery percentage",
+                parameters = emptyList(),
+                category = ToolCategory.DEVICE_INFO,
+            )
         val keywords = filter.extractToolKeywords(tool)
 
         // Query with category match + many keyword matches
@@ -271,7 +280,7 @@ class ToolFilterTest {
 
     @Test
     fun `scoreTool handles case insensitivity`() {
-        val tool = createTestTools()[0]  // get_battery_level
+        val tool = createTestTools()[0] // get_battery_level
         val keywords = filter.extractToolKeywords(tool)
 
         val score1 = filter.scoreTool("BATTERY", tool, keywords)
@@ -307,15 +316,17 @@ class ToolFilterTest {
 
         // Scores should be descending
         for (i in 0 until results.size - 1) {
-            assertTrue(results[i].second >= results[i + 1].second,
-                "Scores should be sorted descending")
+            assertTrue(
+                results[i].second >= results[i + 1].second,
+                "Scores should be sorted descending",
+            )
         }
     }
 
     @Test
     fun `filterByRelevance respects maxTools limit`() {
         val tools = createTestTools()
-        val query = "open"  // Should match multiple APPS tools
+        val query = "open" // Should match multiple APPS tools
 
         val results = filter.filterByRelevance(query, tools, maxTools = 2)
 
@@ -341,7 +352,7 @@ class ToolFilterTest {
     @Test
     fun `filterByRelevance only returns tools with score greater than 0`() {
         val tools = createTestTools()
-        val query = "flashlight"  // Should only match toggle_flashlight
+        val query = "flashlight" // Should only match toggle_flashlight
 
         val results = filter.filterByRelevance(query, tools, maxTools = 5)
 
@@ -413,6 +424,31 @@ class ToolFilterTest {
     }
 
     @Test
+    fun `Single bare ID keyword passes threshold - battery alone`() {
+        // Regression: "battery percent and time of day?" used to score 0.2 (below 0.3)
+        // because a single description-keyword match gave only +0.2. ID keywords are
+        // the authoritative signal — they should push a query above threshold.
+        val tools = createTestTools()
+
+        val results = filter.filterByRelevance("battery", tools, maxTools = 3)
+
+        assertTrue(results.isNotEmpty(), "Bare ID keyword 'battery' should match get_battery_level")
+        assertEquals("get_battery_level", results[0].first.id)
+    }
+
+    @Test
+    fun `Multi-tool query with only bare ID keywords surfaces both tools`() {
+        val tools = createTestTools()
+        val query = "battery percent and time of day"
+
+        val results = filter.filterByRelevance(query, tools, maxTools = 5)
+
+        val ids = results.map { it.first.id }.toSet()
+        assertTrue("get_battery_level" in ids, "battery → get_battery_level")
+        assertTrue("get_current_time" in ids, "time → get_current_time")
+    }
+
+    @Test
     fun `Help me - ambiguous query returns limited tools`() {
         val tools = createTestTools()
         val query = "Help me"
@@ -463,13 +499,14 @@ class ToolFilterTest {
 
     @Test
     fun `Contraction - Don't matches category trigger`() {
-        val tool = Tool(
-            id = "disable_notifications",
-            name = "Disable",
-            description = "Disables notifications",
-            parameters = emptyList(),
-            category = ToolCategory.SYSTEM
-        )
+        val tool =
+            Tool(
+                id = "disable_notifications",
+                name = "Disable",
+                description = "Disables notifications",
+                parameters = emptyList(),
+                category = ToolCategory.SYSTEM,
+            )
         val keywords = filter.extractToolKeywords(tool)
 
         // "don't" should match "disable" category (SYSTEM)
@@ -482,7 +519,7 @@ class ToolFilterTest {
     @Test
     fun `Multiple apostrophes handled correctly`() {
         val tools = createTestTools()
-        val query = "What's today's time"  // Two apostrophes
+        val query = "What's today's time" // Two apostrophes
 
         val results = filter.filterByRelevance(query, tools, maxTools = 3)
 
@@ -495,22 +532,23 @@ class ToolFilterTest {
 
     @Test
     fun `Timer query does not match time tool`() {
-        val tools = listOf(
-            Tool(
-                id = "get_current_time",
-                name = "Get Time",
-                description = "Returns the current time",
-                parameters = emptyList(),
-                category = ToolCategory.DEVICE_INFO
-            ),
-            Tool(
-                id = "set_timer",
-                name = "Set Timer",
-                description = "Creates a countdown timer",
-                parameters = emptyList(),
-                category = ToolCategory.SYSTEM
+        val tools =
+            listOf(
+                Tool(
+                    id = "get_current_time",
+                    name = "Get Time",
+                    description = "Returns the current time",
+                    parameters = emptyList(),
+                    category = ToolCategory.DEVICE_INFO,
+                ),
+                Tool(
+                    id = "set_timer",
+                    name = "Set Timer",
+                    description = "Creates a countdown timer",
+                    parameters = emptyList(),
+                    category = ToolCategory.SYSTEM,
+                ),
             )
-        )
 
         val results = filter.filterByRelevance("Set a timer for 5 minutes", tools, maxTools = 3)
 
@@ -522,29 +560,32 @@ class ToolFilterTest {
         val timeToolInResults = results.find { it.first.id == "get_current_time" }
         if (timeToolInResults != null) {
             // If it made it in, score should be < 0.3 (below threshold)
-            assertTrue(timeToolInResults.second < 0.3f,
-                "get_current_time shouldn't match 'timer' query, score: ${timeToolInResults.second}")
+            assertTrue(
+                timeToolInResults.second < 0.3f,
+                "get_current_time shouldn't match 'timer' query, score: ${timeToolInResults.second}",
+            )
         }
     }
 
     @Test
     fun `Time query does not match timer tool`() {
-        val tools = listOf(
-            Tool(
-                id = "get_current_time",
-                name = "Get Time",
-                description = "Returns the current time",
-                parameters = emptyList(),
-                category = ToolCategory.DEVICE_INFO
-            ),
-            Tool(
-                id = "set_timer",
-                name = "Set Timer",
-                description = "Creates a countdown timer",
-                parameters = emptyList(),
-                category = ToolCategory.SYSTEM
+        val tools =
+            listOf(
+                Tool(
+                    id = "get_current_time",
+                    name = "Get Time",
+                    description = "Returns the current time",
+                    parameters = emptyList(),
+                    category = ToolCategory.DEVICE_INFO,
+                ),
+                Tool(
+                    id = "set_timer",
+                    name = "Set Timer",
+                    description = "Creates a countdown timer",
+                    parameters = emptyList(),
+                    category = ToolCategory.SYSTEM,
+                ),
             )
-        )
 
         val results = filter.filterByRelevance("What time is it", tools, maxTools = 3)
 
@@ -555,27 +596,32 @@ class ToolFilterTest {
         // set_timer should NOT be in results (or have much lower score)
         val timerToolInResults = results.find { it.first.id == "set_timer" }
         if (timerToolInResults != null) {
-            assertTrue(timerToolInResults.second < 0.3f,
-                "set_timer shouldn't match 'time' query, score: ${timerToolInResults.second}")
+            assertTrue(
+                timerToolInResults.second < 0.3f,
+                "set_timer shouldn't match 'time' query, score: ${timerToolInResults.second}",
+            )
         }
     }
 
     // ===== Web Search / KNOWLEDGE Category Tests =====
 
-    private fun createToolsWithWebSearch(): List<Tool> = createTestTools() + Tool(
-        id = "web_search",
-        name = "Web Search",
-        description = "Search the web for weather, news, facts, answers, information, directions, and more using DuckDuckGo. No API key, no tracking.",
-        parameters = listOf(
-            ToolParameter(
-                name = "query",
-                type = ParameterType.STRING,
-                description = "Search query",
-                required = true
+    private fun createToolsWithWebSearch(): List<Tool> =
+        createTestTools() +
+            Tool(
+                id = "web_search",
+                name = "Web Search",
+                description = "Search the web for weather, news, facts, answers, information, directions, and more using DuckDuckGo. No API key, no tracking.",
+                parameters =
+                    listOf(
+                        ToolParameter(
+                            name = "query",
+                            type = ParameterType.STRING,
+                            description = "Search query",
+                            required = true,
+                        ),
+                    ),
+                category = ToolCategory.KNOWLEDGE,
             )
-        ),
-        category = ToolCategory.KNOWLEDGE
-    )
 
     @Test
     fun `Weather query matches web_search`() {
@@ -635,13 +681,14 @@ class ToolFilterTest {
 
     @Test
     fun `KNOWLEDGE category scores on search and weather triggers`() {
-        val tool = Tool(
-            id = "web_search",
-            name = "Web Search",
-            description = "Search the web",
-            parameters = emptyList(),
-            category = ToolCategory.KNOWLEDGE
-        )
+        val tool =
+            Tool(
+                id = "web_search",
+                name = "Web Search",
+                description = "Search the web",
+                parameters = emptyList(),
+                category = ToolCategory.KNOWLEDGE,
+            )
         val keywords = filter.extractToolKeywords(tool)
 
         val searchQueries = listOf("search for", "find me", "look up", "weather today", "who is", "google it", "latest news")
@@ -668,24 +715,29 @@ class ToolFilterTest {
 
         // Should NOT include web_search for pure conversational queries
         val webSearch = results.find { it.first.id == "web_search" }
-        assertTrue(webSearch == null || webSearch.second < 0.3f,
-            "Educational query without search intent should not match web_search")
+        assertTrue(
+            webSearch == null || webSearch.second < 0.3f,
+            "Educational query without search intent should not match web_search",
+        )
     }
 
     @Test
     fun `Minimum score threshold filters weak matches`() {
-        val tool = Tool(
-            id = "unrelated_tool",
-            name = "Unrelated",
-            description = "Does something else entirely",
-            parameters = emptyList(),
-            category = ToolCategory.FILES
-        )
+        val tool =
+            Tool(
+                id = "unrelated_tool",
+                name = "Unrelated",
+                description = "Does something else entirely",
+                parameters = emptyList(),
+                category = ToolCategory.FILES,
+            )
 
         val results = filter.filterByRelevance("random query text", listOf(tool), maxTools = 3)
 
         // Tool with very low score should be filtered out
-        assertTrue(results.isEmpty() || results[0].second >= 0.3f,
-            "Tools with score < 0.3 should be filtered")
+        assertTrue(
+            results.isEmpty() || results[0].second >= 0.3f,
+            "Tools with score < 0.3 should be filtered",
+        )
     }
 }

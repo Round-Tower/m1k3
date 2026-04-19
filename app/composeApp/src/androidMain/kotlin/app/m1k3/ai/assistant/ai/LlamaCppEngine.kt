@@ -399,16 +399,18 @@ class LlamaCppEngine(
                         parserToolCalls
                     }
 
-                // When fallback extracted the call the raw tool_call block is still in content — strip it.
-                val displayContent =
-                    if (parserToolCalls.isEmpty() && toolCalls.isNotEmpty()) {
-                        content.replace(
+                // Strip generation-prompt leakage and the raw tool_call block from content.
+                // common_chat_parse prepends `params.generation_prompt` (e.g. "<|im_start|>assistant\n<think>\n")
+                // to the parsed content; when the fallback fires we also still carry the tool_call XML.
+                var displayContent = content
+                if (parserToolCalls.isEmpty() && toolCalls.isNotEmpty()) {
+                    displayContent =
+                        displayContent.replace(
                             Regex("<tool_call>.*?</tool_call>", RegexOption.DOT_MATCHES_ALL),
                             "",
                         )
-                    } else {
-                        content
-                    }
+                }
+                displayContent = stripNativeTemplatePrefix(displayContent)
 
                 logger.i { "Native chat: ${displayContent.length}c content, ${toolCalls.size} tool calls" }
                 Result.success(
@@ -547,6 +549,13 @@ class LlamaCppEngine(
         }
         return cleaned.trim()
     }
+
+    private fun stripNativeTemplatePrefix(content: String): String =
+        content
+            .replace(Regex("^\\s*<\\|im_start\\|>assistant\\s*"), "")
+            .replace(Regex("^\\s*<start_of_turn>model\\s*"), "")
+            .replace(Regex("^\\s*<\\|start_header_id\\|>assistant<\\|end_header_id\\|>\\s*"), "")
+            .replace(Regex("^\\s*<think>\\s*"), "")
 
     companion object {
         /** Format-specific prefix that opens the model's generation turn. */
