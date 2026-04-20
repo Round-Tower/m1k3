@@ -571,13 +571,20 @@ class LlamaCppEngine(
         return cleaned.trim()
     }
 
+    /**
+     * Strip chat-template scaffolding that `common_chat_parse` prepends when
+     * its PEG anchor slips. Only removes template role markers — never
+     * content-shape tags like `<think>`. Stripping the opening `<think>`
+     * alone would orphan the `</think>` closer and leak all reasoning into
+     * the visible content; `LlmOutputSanitizer` handles `<think>…</think>`
+     * as a matched pair once this function returns.
+     */
     private fun stripNativeTemplatePrefix(content: String): String =
         content
             .replace(Regex("^\\s*<\\|im_start\\|>assistant\\s*"), "")
             .replace(Regex("^\\s*<start_of_turn>model\\s*"), "")
             .replace(Regex("^\\s*<\\|start_header_id\\|>assistant<\\|end_header_id\\|>\\s*"), "")
             .replace(Regex("^\\s*<\\|turn\\|?>model\\s*"), "") // Gemma 4 turn marker
-            .replace(Regex("^\\s*<think>\\s*"), "")
 
     companion object {
         /** Format-specific prefix that opens the model's generation turn. */
