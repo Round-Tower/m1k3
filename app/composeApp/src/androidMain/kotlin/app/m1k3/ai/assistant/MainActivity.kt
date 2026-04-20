@@ -61,7 +61,6 @@ import app.m1k3.ai.assistant.app.ILogger
 import app.m1k3.ai.assistant.app.InitializationResult
 import app.m1k3.ai.assistant.app.InitializationState
 import app.m1k3.ai.assistant.app.InitializationViewModel
-import app.m1k3.ai.assistant.app.KnowledgeImportResult
 import app.m1k3.ai.assistant.app.LoggerAdapter
 import app.m1k3.ai.assistant.avatar.FilamentEngineManager
 import app.m1k3.ai.assistant.avatar.LocalSharedAvatarVM
@@ -290,9 +289,7 @@ private fun MaApp() {
         }
 
         is InitializationState.Success -> {
-            MaAppContent(
-                knowledgeStatus = state.knowledgeStatus,
-            )
+            MaAppContent()
         }
 
         is InitializationState.Error -> {
@@ -317,7 +314,7 @@ private fun MaApp() {
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun MaAppContent(knowledgeStatus: String) {
+private fun MaAppContent() {
     // Get database from Koin for screens that need it directly
     val database = koinInject<MaDatabase>()
 
@@ -473,7 +470,6 @@ private fun MaAppContent(knowledgeStatus: String) {
                                 composable(Screen.Demo.route) {
                                     MaAIDemo(
                                         onChatClick = { navController.navigate(Screen.Chat.route) },
-                                        knowledgeStatus = knowledgeStatus,
                                     )
                                 }
 

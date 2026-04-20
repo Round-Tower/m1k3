@@ -556,7 +556,6 @@ fun ChatBubble(
                     greeting = message.text.lines().firstOrNull() ?: "Hello!",
                     engineReady = true,
                     memoryCount = message.statusMemoryCount ?: 0,
-                    knowledgeCount = message.statusKnowledgeCount ?: 0,
                     maxContextTokens = message.statusMaxTokens ?: 2048,
                     deviceTierName = message.statusDeviceTier ?: "Unknown",
                     lastSessionWaterMl = message.statusLastWaterMl,

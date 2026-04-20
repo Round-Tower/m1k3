@@ -9,88 +9,46 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
 /**
- * InitializationViewModel
+ * InitializationViewModel.
  *
- * Manages app initialization state for database and knowledge setup.
- * Emits StateFlow events for reactive UI observation.
+ * Signals the first-frame init handshake for MainActivity. The database is
+ * created by Koin at module load; the ViewModel just emits the state so the
+ * composable tree can render the right screen.
  *
- * **Architecture:**
- * - Sealed InitializationState for type-safe state management
- * - Database injected from Koin (created by DatabaseFactory)
- * - Injected AndroidDatabaseInitializer for knowledge import
- * - viewModelScope for automatic lifecycle management
- * - Retry support for error recovery
- *
- * **Usage:**
- * ```kotlin
- * val viewModel = koinViewModel<InitializationViewModel>()
- * val state by viewModel.state.collectAsState()
- *
- * LaunchedEffect(Unit) {
- *     viewModel.initialize()
- * }
- *
- * when (state) {
- *     is InitializationState.Loading -> LoadingScreen()
- *     is InitializationState.Success -> MaAppContent(state.knowledgeStatus)
- *     is InitializationState.Error -> ErrorScreen(onRetry = viewModel::retry)
- *     else -> {}
- * }
- * ```
+ * History: knowledge seeding (TriviaFact) retired 2026-04-20. The `database`
+ * parameter is still here so a future init step (e.g. schema warmup, passage
+ * index rebuild) can consume it without another wiring change.
  */
 class InitializationViewModel(
-    private val database: MaDatabase,
-    private val databaseInitializer: IDatabaseInitializer
+    @Suppress("unused") private val database: MaDatabase,
+    private val databaseInitializer: IDatabaseInitializer,
 ) : ViewModel() {
-
     private val _state = MutableStateFlow<InitializationState>(InitializationState.NotStarted)
     val state: StateFlow<InitializationState> = _state.asStateFlow()
 
-    /**
-     * Initialize knowledge base
-     *
-     * Database is already created by Koin. This just imports knowledge.
-     *
-     * Emits state transitions:
-     * 1. Loading (with progress message)
-     * 2. Success (with knowledge status) OR
-     * 3. Error (with error message)
-     */
     fun initialize() {
         viewModelScope.launch {
             try {
-                _state.value = InitializationState.Loading("Loading knowledge base...")
+                _state.value = InitializationState.Loading("Opening database…")
 
-                // Import knowledge (optional - don't fail if it errors)
-                val knowledgeResult = databaseInitializer.importKnowledge(database)
-                val knowledgeStatus = when (knowledgeResult) {
-                    is KnowledgeImportResult.Success -> {
-                        "✅ Knowledge ready: ${knowledgeResult.totalDocs} curated documents"
+                when (val dbResult = databaseInitializer.initializeDatabase()) {
+                    is DatabaseInitResult.Success -> {
+                        _state.value = InitializationState.Success
                     }
-                    is KnowledgeImportResult.AlreadyImported -> {
-                        "✅ Knowledge ready: ${knowledgeResult.existingDocs} documents"
-                    }
-                    is KnowledgeImportResult.Error -> {
-                        "⚠️ Knowledge unavailable: ${knowledgeResult.message}"
+
+                    is DatabaseInitResult.Error -> {
+                        _state.value = InitializationState.Error(dbResult.message)
                     }
                 }
-
-                _state.value = InitializationState.Success(
-                    knowledgeStatus = knowledgeStatus
-                )
             } catch (e: Exception) {
-                _state.value = InitializationState.Error(
-                    message = "Initialization failed: ${e.message ?: "Unknown error"}"
-                )
+                _state.value =
+                    InitializationState.Error(
+                        message = "Initialization failed: ${e.message ?: "Unknown error"}",
+                    )
             }
         }
     }
 
-    /**
-     * Retry initialization after error
-     *
-     * Resets state to NotStarted and calls initialize() again.
-     */
     fun retry() {
         _state.value = InitializationState.NotStarted
         initialize()
@@ -98,38 +56,18 @@ class InitializationViewModel(
 }
 
 /**
- * Sealed class representing initialization state
- *
- * Type-safe state management for initialization flow.
+ * Sealed class representing initialization state.
  */
 sealed class InitializationState {
-    /**
-     * Initial state - no initialization attempted
-     */
     data object NotStarted : InitializationState()
 
-    /**
-     * Loading state with progress message
-     *
-     * @param message Current initialization step (e.g., "Initializing database...")
-     */
-    data class Loading(val message: String) : InitializationState()
-
-    /**
-     * Success state with knowledge loaded
-     *
-     * Database is available via Koin injection.
-     *
-     * @param knowledgeStatus Human-readable knowledge import status
-     */
-    data class Success(
-        val knowledgeStatus: String
+    data class Loading(
+        val message: String,
     ) : InitializationState()
 
-    /**
-     * Error state with failure message
-     *
-     * @param message Error description for user
-     */
-    data class Error(val message: String) : InitializationState()
+    data object Success : InitializationState()
+
+    data class Error(
+        val message: String,
+    ) : InitializationState()
 }

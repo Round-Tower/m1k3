@@ -31,51 +31,36 @@ import app.m1k3.ai.domain.status.ChatStatus
 data class ChatUiState(
     /** All messages in the conversation */
     val messages: List<ChatMessage> = emptyList(),
-
     /** Current text in the input field */
     val inputText: String = "",
-
     /** Current generation state (Idle, Thinking, Streaming, Complete, Failed) */
     val generationState: GenerationState = GenerationState.Idle,
-
     /** AI engine initialization state */
     val engineState: EngineState = EngineState.Loading,
-
     /** Session eco-metrics (water, energy, CO2 saved) */
     val sessionEcoStats: SessionEcoStats = SessionEcoStats(),
-
     /** Current error to display (null if none) */
     val error: ChatError? = null,
-
     /** RAG info for display (e.g., "Technical (85%) • 3 facts") */
     val ragInfo: String? = null,
-
     /** Context window usage tracking */
     val contextWindow: ContextWindowState = ContextWindowState(),
-
     /** Tool state for tool calling support */
     val toolState: ToolState = ToolState(),
-
     /** Chat status for initial status card (null until generated) */
     val chatStatus: ChatStatus? = null,
-
     /** Currently selected LLM model */
     val currentModel: LlmModel = LlmModel.default,
-
     /** TTS speaking state */
     val isSpeaking: Boolean = false,
-
     /** TTS model loading state (first-load latency indicator) */
     val isLoadingTts: Boolean = false,
-
     /** Model download progress (null when not downloading) */
     val modelDownload: ModelDownloadState? = null,
-
     /** Auto voice reply - automatically speak AI responses aloud */
     val autoVoiceReply: Boolean = false,
-
     /** User's real-world context for the welcome card (null until loaded) */
-    val userContext: app.m1k3.ai.domain.context.UserContext? = null
+    val userContext: app.m1k3.ai.domain.context.UserContext? = null,
 )
 
 /**
@@ -102,7 +87,7 @@ sealed class GenerationState {
         /** Thinking content accumulating inside <think>...</think> — null when not thinking */
         val thinkingPartial: String? = null,
         /** True while inside <think> block — drives the "Thinking..." animation */
-        val isThinking: Boolean = false
+        val isThinking: Boolean = false,
     ) : GenerationState()
 
     /**
@@ -113,7 +98,7 @@ sealed class GenerationState {
      */
     data class Complete(
         val finalText: String,
-        val stats: GenerationStats
+        val stats: GenerationStats,
     ) : GenerationState()
 
     /**
@@ -121,7 +106,9 @@ sealed class GenerationState {
      *
      * @property error Error that caused the failure
      */
-    data class Failed(val error: ChatError) : GenerationState()
+    data class Failed(
+        val error: ChatError,
+    ) : GenerationState()
 }
 
 /**
@@ -139,7 +126,9 @@ sealed class EngineState {
      *
      * @property error Error that caused the failure
      */
-    data class Failed(val error: ChatError) : EngineState()
+    data class Failed(
+        val error: ChatError,
+    ) : EngineState()
 }
 
 // ChatError is imported from app.m1k3.ai.domain.chat.ChatError
@@ -148,24 +137,26 @@ sealed class EngineState {
 /**
  * Extension: Get user-friendly error message for UI display.
  */
-fun ChatError.toUserMessage(): String = when (this) {
-    is ChatError.OutOfMemory -> "Not enough memory. Try closing other apps."
-    is ChatError.Timeout -> "Response took too long. Please try again."
-    is ChatError.ModelError -> "AI model error: $message"
-    is ChatError.EngineInitError -> "Failed to start AI: $message"
-    is ChatError.Unknown -> "Something went wrong: $message"
-}
+fun ChatError.toUserMessage(): String =
+    when (this) {
+        is ChatError.OutOfMemory -> "Not enough memory. Try closing other apps."
+        is ChatError.Timeout -> "Response took too long. Please try again."
+        is ChatError.ModelError -> "AI model error: $message"
+        is ChatError.EngineInitError -> "Failed to start AI: $message"
+        is ChatError.Unknown -> "Something went wrong: $message"
+    }
 
 /**
  * Extension: Get emoji for error type in UI display.
  */
-fun ChatError.toEmoji(): String = when (this) {
-    is ChatError.OutOfMemory -> "💾"
-    is ChatError.Timeout -> "⏱️"
-    is ChatError.ModelError -> "🤖"
-    is ChatError.EngineInitError -> "⚙️"
-    is ChatError.Unknown -> "❌"
-}
+fun ChatError.toEmoji(): String =
+    when (this) {
+        is ChatError.OutOfMemory -> "💾"
+        is ChatError.Timeout -> "⏱️"
+        is ChatError.ModelError -> "🤖"
+        is ChatError.EngineInitError -> "⚙️"
+        is ChatError.Unknown -> "❌"
+    }
 
 /**
  * Extension to check if generation is in progress.
@@ -214,7 +205,8 @@ val ChatUiState.canSendMessage: Boolean
  * - Not already speaking
  */
 val ChatUiState.shouldAutoSpeak: Boolean
-    get() = autoVoiceReply &&
+    get() =
+        autoVoiceReply &&
             !isSpeaking &&
             generationState is GenerationState.Complete &&
             (generationState as GenerationState.Complete).finalText.isNotBlank()
@@ -225,42 +217,29 @@ val ChatUiState.shouldAutoSpeak: Boolean
 data class ChatMessage(
     /** Message text content */
     val text: String,
-
     /** True if sent by user, false if from AI assistant */
     val isUser: Boolean,
-
     /** Message timestamp in milliseconds since epoch */
     val timestamp: Long = 0,
-
     /** True if this message represents an error */
     val isError: Boolean = false,
-
     /** Inference statistics for AI messages (e.g., "⚡ 42 tokens in 3.0s") */
     val inferenceStats: String? = null,
-
     /** RAG sources used for this response */
     val ragSources: String? = null,
-
     /** HTML artifact generated by the model (rendered in WebView). Null for plain text. */
     val artifact: app.m1k3.ai.domain.chat.artifact.ArtifactData? = null,
-
     /** Thinking content from <think>...</think> block. Shown in collapsible ThinkingPill. */
     val thinkingContent: String? = null,
-
     /** How long the model spent thinking in milliseconds. Shown as "Thought for Xs". */
     val thinkingDurationMs: Long? = null,
-
     /** Tool execution results for this message (shown in ToolCallPill) */
     val toolResults: List<ToolExecutionResult> = emptyList(),
-
     /** True if this is a status message (displayed as card, not chat bubble) */
     val isStatusMessage: Boolean = false,
-
     // Status card fields (only used when isStatusMessage = true)
     /** Memory count for status card */
     val statusMemoryCount: Long? = null,
-    /** Knowledge count for status card */
-    val statusKnowledgeCount: Long? = null,
     /** Max context tokens for status card */
     val statusMaxTokens: Int? = null,
     /** Device tier name for status card */
@@ -270,7 +249,7 @@ data class ChatMessage(
     /** Last session energy saved (Wh) for status card */
     val statusLastEnergyWh: Long? = null,
     /** Last session CO2 saved (g) for status card */
-    val statusLastCo2G: Long? = null
+    val statusLastCo2G: Long? = null,
 )
 
 /**
@@ -279,42 +258,41 @@ data class ChatMessage(
 data class SessionEcoStats(
     /** Total tokens generated in this session */
     val totalTokens: Long = 0,
-
     /** Water saved in milliliters (vs cloud AI) */
     val waterMl: Long = 0,
-
     /** Energy saved in watt-hours (vs cloud AI) */
     val energyWh: Long = 0,
-
     /** CO2 prevented in grams (vs cloud AI) */
     val co2G: Long = 0,
-
     /** Number of messages generated */
-    val messageCount: Int = 0
+    val messageCount: Int = 0,
 ) {
     /**
      * Format water savings for display.
      */
-    fun formatWater(): String = when {
-        waterMl >= 1000 -> "%.1fL".format(waterMl / 1000.0)
-        else -> "${waterMl}ml"
-    }
+    fun formatWater(): String =
+        when {
+            waterMl >= 1000 -> "%.1fL".format(waterMl / 1000.0)
+            else -> "${waterMl}ml"
+        }
 
     /**
      * Format energy savings for display.
      */
-    fun formatEnergy(): String = when {
-        energyWh >= 1000 -> "%.1fkWh".format(energyWh / 1000.0)
-        else -> "${energyWh}Wh"
-    }
+    fun formatEnergy(): String =
+        when {
+            energyWh >= 1000 -> "%.1fkWh".format(energyWh / 1000.0)
+            else -> "${energyWh}Wh"
+        }
 
     /**
      * Format CO2 savings for display.
      */
-    fun formatCO2(): String = when {
-        co2G >= 1000 -> "%.1fkg".format(co2G / 1000.0)
-        else -> "${co2G}g"
-    }
+    fun formatCO2(): String =
+        when {
+            co2G >= 1000 -> "%.1fkg".format(co2G / 1000.0)
+            else -> "${co2G}g"
+        }
 }
 
 /**
@@ -323,15 +301,12 @@ data class SessionEcoStats(
 data class ContextWindowState(
     /** Number of conversation history messages included in context */
     val historyMessageCount: Int = 0,
-
     /** Estimated tokens used by conversation history */
     val historyTokens: Int = 0,
-
     /** Maximum context tokens based on device tier */
     val maxContextTokens: Int = 4096,
-
     /** Device tier name for display */
-    val deviceTier: String = "Unknown"
+    val deviceTier: String = "Unknown",
 ) {
     /** Percentage of context window used (0-100) */
     val usagePercent: Float
@@ -341,10 +316,11 @@ data class ContextWindowState(
     fun formatUsage(): String = "$historyTokens / $maxContextTokens tokens"
 
     /** Format as compact badge */
-    fun formatCompact(): String = when {
-        historyMessageCount == 0 -> "No history"
-        else -> "${historyMessageCount} msgs (${usagePercent.toInt()}%)"
-    }
+    fun formatCompact(): String =
+        when {
+            historyMessageCount == 0 -> "No history"
+            else -> "$historyMessageCount msgs (${usagePercent.toInt()}%)"
+        }
 }
 
 /**
@@ -355,12 +331,10 @@ data class ContextWindowState(
 data class ToolState(
     /** Tools awaiting user confirmation */
     val pendingConfirmations: List<ToolConfirmation> = emptyList(),
-
     /** Results from executed tools (for display) */
     val executedTools: List<ToolExecutionResult> = emptyList(),
-
     /** Whether tools are currently executing */
-    val isExecuting: Boolean = false
+    val isExecuting: Boolean = false,
 ) {
     /** Whether there are pending confirmations */
     val hasPendingConfirmations: Boolean
@@ -373,18 +347,14 @@ data class ToolState(
 data class ToolConfirmation(
     /** Unique ID for this confirmation request */
     val id: String,
-
     /** Tool ID being requested */
     val toolId: String,
-
     /** Human-readable tool name */
     val toolName: String,
-
     /** Description of what the tool will do */
     val description: String,
-
     /** Arguments being passed to the tool */
-    val arguments: Map<String, String>
+    val arguments: Map<String, String>,
 )
 
 /**
@@ -393,15 +363,12 @@ data class ToolConfirmation(
 data class ToolExecutionResult(
     /** Tool ID that was executed */
     val toolId: String,
-
     /** Human-readable result for display */
     val displayResult: String,
-
     /** Whether execution was successful */
     val isSuccess: Boolean,
-
     /** Error message if failed */
-    val errorMessage: String? = null
+    val errorMessage: String? = null,
 )
 
 /**
@@ -412,19 +379,26 @@ data class ToolExecutionResult(
  */
 sealed class ModelDownloadState {
     /** Download is starting */
-    data class Starting(val modelName: String) : ModelDownloadState()
+    data class Starting(
+        val modelName: String,
+    ) : ModelDownloadState()
 
     /** Download in progress with percentage */
     data class InProgress(
         val modelName: String,
         val progressPercent: Int,
         val downloadedMB: Long,
-        val totalMB: Long
+        val totalMB: Long,
     ) : ModelDownloadState()
 
     /** Download complete, model ready */
-    data class Complete(val modelName: String) : ModelDownloadState()
+    data class Complete(
+        val modelName: String,
+    ) : ModelDownloadState()
 
     /** Download failed */
-    data class Failed(val modelName: String, val error: String) : ModelDownloadState()
+    data class Failed(
+        val modelName: String,
+        val error: String,
+    ) : ModelDownloadState()
 }

@@ -13,15 +13,13 @@ import org.junit.After
 import org.junit.Before
 import org.junit.Test
 import kotlin.test.assertIs
-import kotlin.test.assertTrue
 
 /**
  * Unit tests for InitializationViewModel.
  *
- * Originally in androidTest/ — moved to androidUnitTest/ so Kotlin
- * backtick-named functions DEX-compile and the suite actually runs.
- * Everything here uses mocks + an in-memory JDBC SQLite DB.
- * 2026-04-19.
+ * Knowledge seeding retired 2026-04-20 — the VM now just opens the DB
+ * and emits the state. These tests cover: initial state, success path,
+ * database-init failure, retry-after-error.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class InitializationViewModelTest {
@@ -44,85 +42,51 @@ class InitializationViewModelTest {
     }
 
     @Test
-    fun `initial state is NotStarted`() {
-        val state = viewModel.state.value
-        assertIs<InitializationState.NotStarted>(state)
+    fun initialStateIsNotStarted() {
+        assertIs<InitializationState.NotStarted>(viewModel.state.value)
     }
 
     @Test
-    fun `initialize emits Success with knowledge status`() =
+    fun initializeEmitsSuccessOnDatabaseOpen() =
         runTest(dispatcher) {
-            mockInitializer.knowledgeResult =
-                KnowledgeImportResult.Success(
-                    totalDocs = 100,
-                    curatedDocs = 100,
-                )
-
             viewModel.initialize()
             advanceUntilIdle()
 
-            val finalState = viewModel.state.value
-            assertIs<InitializationState.Success>(finalState)
-            assertTrue(finalState.knowledgeStatus.contains("100"))
+            assertIs<InitializationState.Success>(viewModel.state.value)
         }
 
     @Test
-    fun `initialize handles knowledge import failure gracefully`() =
+    fun initializeEmitsErrorWhenDatabaseFails() =
         runTest(dispatcher) {
-            mockInitializer.knowledgeResult =
-                KnowledgeImportResult.Error(
-                    message = "Knowledge import failed",
-                )
+            mockInitializer.dbResult = DatabaseInitResult.Error("boom", null)
 
             viewModel.initialize()
             advanceUntilIdle()
 
-            val state = viewModel.state.value
-            assertIs<InitializationState.Success>(state)
-            assertTrue(state.knowledgeStatus.contains("unavailable"))
+            assertIs<InitializationState.Error>(viewModel.state.value)
         }
 
     @Test
-    fun `initialize handles AlreadyImported knowledge result`() =
+    fun retryReinitializesAfterError() =
         runTest(dispatcher) {
-            mockInitializer.knowledgeResult =
-                KnowledgeImportResult.AlreadyImported(
-                    existingDocs = 150,
-                )
-
+            mockInitializer.dbResult = DatabaseInitResult.Error("boom", null)
             viewModel.initialize()
             advanceUntilIdle()
+            assertIs<InitializationState.Error>(viewModel.state.value)
 
-            val state = viewModel.state.value
-            assertIs<InitializationState.Success>(state)
-            assertTrue(state.knowledgeStatus.contains("150"))
-            assertTrue(state.knowledgeStatus.contains("ready"))
-        }
-
-    @Test
-    fun `retry reinitializes after error`() =
-        runTest(dispatcher) {
-            mockInitializer.knowledgeResult = KnowledgeImportResult.Success(50, 50)
-
-            viewModel.initialize()
-            advanceUntilIdle()
-            val state = viewModel.state.value
-            assertIs<InitializationState.Success>(state)
-            assertTrue(state.knowledgeStatus.contains("50"))
-
+            mockInitializer.dbResult = DatabaseInitResult.Success(database)
             viewModel.retry()
             advanceUntilIdle()
 
-            val retriedState = viewModel.state.value
-            assertIs<InitializationState.Success>(retriedState)
+            assertIs<InitializationState.Success>(viewModel.state.value)
         }
 
     class MockDatabaseInitializer : IDatabaseInitializer {
-        var knowledgeResult: KnowledgeImportResult = KnowledgeImportResult.Success(0, 0)
+        var dbResult: DatabaseInitResult =
+            DatabaseInitResult.Success(
+                TestDatabaseFactory.createInMemoryDatabase(),
+            )
 
-        override suspend fun initializeDatabase(): DatabaseInitResult =
-            DatabaseInitResult.Success(TestDatabaseFactory.createInMemoryDatabase())
-
-        override suspend fun importKnowledge(database: MaDatabase): KnowledgeImportResult = knowledgeResult
+        override suspend fun initializeDatabase(): DatabaseInitResult = dbResult
     }
 }

@@ -54,12 +54,11 @@ data class StatusItem(
 )
 
 /**
- * Get system status items for demo display
+ * Get system status items for demo display.
  *
- * @param knowledgeStatus Knowledge import status message (from DatabaseInitializer)
  * @return List of StatusItem for rendering
  */
-fun getSystemStatus(knowledgeStatus: String? = null): List<StatusItem> =
+fun getSystemStatus(): List<StatusItem> =
     listOf(
         StatusItem(
             name = "Privacy Protection",
@@ -69,15 +68,15 @@ fun getSystemStatus(knowledgeStatus: String? = null): List<StatusItem> =
         ),
         StatusItem(
             name = "Database Foundation",
-            description = "SQLDelight with encryption ready",
+            description = "SQLDelight with SQLCipher encryption",
             icon = "🗄️",
             isSuccess = true,
         ),
         StatusItem(
-            name = "Knowledge Base",
-            description = knowledgeStatus ?: "Loading...",
+            name = "Personal Knowledge",
+            description = "Import notes in Settings → Documents",
             icon = "📚",
-            isSuccess = knowledgeStatus?.startsWith("✅") == true,
+            isSuccess = true,
         ),
         StatusItem(
             name = "Package Name",
@@ -106,7 +105,7 @@ fun getSystemStatus(knowledgeStatus: String? = null): List<StatusItem> =
     )
 
 /**
- * MaAIDemo - Main demo/welcome screen composable
+ * MaAIDemo - Main demo/welcome screen composable.
  *
  * Displays:
  * - Interactive 3D avatar
@@ -116,14 +115,12 @@ fun getSystemStatus(knowledgeStatus: String? = null): List<StatusItem> =
  *
  * @param onChatClick Callback when user taps chat button
  * @param onDebugClick Callback when user taps debug button (optional)
- * @param knowledgeStatus Status message for knowledge base import
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MaAIDemo(
     onChatClick: () -> Unit,
     onDebugClick: () -> Unit = {},
-    knowledgeStatus: String? = null,
 ) {
     var systemStatus by remember { mutableStateOf<List<StatusItem>>(emptyList()) }
     val scope = rememberCoroutineScope()
@@ -132,13 +129,10 @@ fun MaAIDemo(
     val avatarVM = rememberAvatarViewModel()
     val avatarState by avatarVM.avatarState.collectAsState()
 
-    LaunchedEffect(knowledgeStatus) {
+    LaunchedEffect(Unit) {
         scope.launch {
-            systemStatus = getSystemStatus(knowledgeStatus)
-            // Set avatar to happy when knowledge loads successfully
-            if (knowledgeStatus?.startsWith("✅") == true) {
-                avatarVM.setEmotion(AvatarEmotion.HAPPY, 0.8f)
-            }
+            systemStatus = getSystemStatus()
+            avatarVM.setEmotion(AvatarEmotion.HAPPY, 0.8f)
         }
     }
 

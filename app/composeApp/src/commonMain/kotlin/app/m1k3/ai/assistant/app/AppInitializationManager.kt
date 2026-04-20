@@ -6,14 +6,18 @@ package app.m1k3.ai.assistant.app
  */
 interface ILogger {
     fun i(message: String)
-    fun e(error: Throwable?, message: String)
+
+    fun e(
+        error: Throwable?,
+        message: String,
+    )
 }
 
 /**
  * Sealed class representing initialization result
  *
  * Type-safe result handling without exceptions for expected failures
- * Follows project pattern (e.g., DatabaseInitResult, KnowledgeImportResult)
+ * Follows project pattern (e.g., DatabaseInitResult).
  *
  * Variants:
  * - Success: Both Koin and Filament (or whichever component) initialized
@@ -22,8 +26,14 @@ interface ILogger {
  */
 sealed class InitializationResult {
     data object Success : InitializationResult()
-    data class KoinSetupFailed(val error: Exception) : InitializationResult()
-    data class FilamentSetupFailed(val error: Exception) : InitializationResult()
+
+    data class KoinSetupFailed(
+        val error: Exception,
+    ) : InitializationResult()
+
+    data class FilamentSetupFailed(
+        val error: Exception,
+    ) : InitializationResult()
 }
 
 /**
@@ -92,9 +102,8 @@ sealed class InitializationResult {
 class AppInitializationManager(
     private val logger: ILogger,
     private val koinInitializer: () -> Unit = { /* Implemented in Android */ },
-    private val filamentInitializer: () -> Unit = { /* Implemented in Android */ }
+    private val filamentInitializer: () -> Unit = { /* Implemented in Android */ },
 ) {
-
     /**
      * Initialize Koin dependency injection framework
      *
@@ -102,8 +111,8 @@ class AppInitializationManager(
      *
      * @return InitializationResult.Success or InitializationResult.KoinSetupFailed
      */
-    fun initializeKoin(): InitializationResult {
-        return try {
+    fun initializeKoin(): InitializationResult =
+        try {
             koinInitializer()
             logger.i("Koin DI initialized successfully")
             InitializationResult.Success
@@ -111,7 +120,6 @@ class AppInitializationManager(
             logger.e(e, "Failed to initialize Koin DI")
             InitializationResult.KoinSetupFailed(e)
         }
-    }
 
     /**
      * Initialize Filament 3D rendering engine
@@ -120,8 +128,8 @@ class AppInitializationManager(
      *
      * @return InitializationResult.Success or InitializationResult.FilamentSetupFailed
      */
-    fun initializeFilament(): InitializationResult {
-        return try {
+    fun initializeFilament(): InitializationResult =
+        try {
             filamentInitializer()
             logger.i("Filament 3D engine initialized")
             InitializationResult.Success
@@ -129,5 +137,4 @@ class AppInitializationManager(
             logger.e(e, "Failed to initialize Filament 3D engine")
             InitializationResult.FilamentSetupFailed(e)
         }
-    }
 }

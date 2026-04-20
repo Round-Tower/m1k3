@@ -616,9 +616,7 @@ actual val platformModule =
  * doesn't fail opening plaintext bytes with an encrypted driver.
  *
  * Idempotent via a SharedPreferences marker; re-runs are no-ops. Safe at
- * current phase: active development, no prod users. The knowledge-base
- * re-import path in `KnowledgeImportManager` handles repopulating curated
- * data on the next empty-DB open.
+ * current phase: active development, no prod users.
  */
 private fun wipeLegacyPlaintextDbIfNeeded(context: Context) {
     val prefs = context.getSharedPreferences("ma_db_meta", Context.MODE_PRIVATE)

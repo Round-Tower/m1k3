@@ -675,12 +675,6 @@ class ChatScreenViewModel(
         // Build status card first
         val currentHour = userContext?.hourOfDay ?: dateTimeProvider?.getCurrentHour() ?: 12
         val memoryCount = memoryManager?.getMemoryCount() ?: 0L
-        val knowledgeCount =
-            try {
-                database.triviaFactQueries.getTotalFactCount().executeAsOne()
-            } catch (_: Exception) {
-                0L
-            }
         val deviceTier = deviceInfo.getDeviceTier()
         // Context window scales with device tier
         val maxContextTokens =
@@ -704,7 +698,6 @@ class ChatScreenViewModel(
                 hour = currentHour,
                 engineReady = true,
                 memoryCount = memoryCount,
-                knowledgeCount = knowledgeCount,
                 maxContextTokens = maxContextTokens,
                 deviceTierName = deviceTier.name.lowercase().replaceFirstChar { it.uppercase() },
                 lastSessionTokens = lastSession?.tokens,
@@ -721,7 +714,6 @@ class ChatScreenViewModel(
                 timestamp = Clock.System.now().toEpochMilliseconds(),
                 isStatusMessage = true,
                 statusMemoryCount = memoryCount,
-                statusKnowledgeCount = knowledgeCount,
                 statusMaxTokens = maxContextTokens,
                 statusDeviceTier = deviceTier.name.lowercase().replaceFirstChar { it.uppercase() },
                 statusLastWaterMl = lastSession?.waterMl,

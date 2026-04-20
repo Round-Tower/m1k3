@@ -11,7 +11,6 @@ import kotlin.test.assertTrue
  * Tests for ChatUiState and related state classes.
  */
 class ChatUiStateTest {
-
     // ===== GenerationState Tests =====
 
     @Test
@@ -162,41 +161,45 @@ class ChatUiStateTest {
 
     @Test
     fun `ChatUiState canSendMessage is false when engine not ready`() {
-        val state = ChatUiState(
-            engineState = EngineState.Loading,
-            generationState = GenerationState.Idle,
-            inputText = "Hello"
-        )
+        val state =
+            ChatUiState(
+                engineState = EngineState.Loading,
+                generationState = GenerationState.Idle,
+                inputText = "Hello",
+            )
         assertFalse(state.canSendMessage)
     }
 
     @Test
     fun `ChatUiState canSendMessage is false when generating`() {
-        val state = ChatUiState(
-            engineState = EngineState.Ready,
-            generationState = GenerationState.Thinking,
-            inputText = "Hello"
-        )
+        val state =
+            ChatUiState(
+                engineState = EngineState.Ready,
+                generationState = GenerationState.Thinking,
+                inputText = "Hello",
+            )
         assertFalse(state.canSendMessage)
     }
 
     @Test
     fun `ChatUiState canSendMessage is false when input is blank`() {
-        val state = ChatUiState(
-            engineState = EngineState.Ready,
-            generationState = GenerationState.Idle,
-            inputText = "   "
-        )
+        val state =
+            ChatUiState(
+                engineState = EngineState.Ready,
+                generationState = GenerationState.Idle,
+                inputText = "   ",
+            )
         assertFalse(state.canSendMessage)
     }
 
     @Test
     fun `ChatUiState canSendMessage is true when all conditions met`() {
-        val state = ChatUiState(
-            engineState = EngineState.Ready,
-            generationState = GenerationState.Idle,
-            inputText = "Hello"
-        )
+        val state =
+            ChatUiState(
+                engineState = EngineState.Ready,
+                generationState = GenerationState.Idle,
+                inputText = "Hello",
+            )
         assertTrue(state.canSendMessage)
     }
 
@@ -204,31 +207,34 @@ class ChatUiStateTest {
 
     @Test
     fun `ChatMessage user message has isUser true`() {
-        val message = ChatMessage(
-            text = "Hello",
-            isUser = true,
-            timestamp = 0L
-        )
+        val message =
+            ChatMessage(
+                text = "Hello",
+                isUser = true,
+                timestamp = 0L,
+            )
         assertTrue(message.isUser)
     }
 
     @Test
     fun `ChatMessage AI message has isUser false`() {
-        val message = ChatMessage(
-            text = "Hello",
-            isUser = false,
-            timestamp = 0L
-        )
+        val message =
+            ChatMessage(
+                text = "Hello",
+                isUser = false,
+                timestamp = 0L,
+            )
         assertFalse(message.isUser)
     }
 
     @Test
     fun `ChatMessage defaults have correct values`() {
-        val message = ChatMessage(
-            text = "Hello",
-            isUser = true,
-            timestamp = 12345L
-        )
+        val message =
+            ChatMessage(
+                text = "Hello",
+                isUser = true,
+                timestamp = 12345L,
+            )
         assertFalse(message.isError)
         assertEquals(null, message.inferenceStats)
         assertEquals(null, message.ragSources)
@@ -236,22 +242,24 @@ class ChatUiStateTest {
 
     @Test
     fun `ChatMessage isStatusMessage defaults to false`() {
-        val message = ChatMessage(
-            text = "Hello",
-            isUser = false,
-            timestamp = 0L
-        )
+        val message =
+            ChatMessage(
+                text = "Hello",
+                isUser = false,
+                timestamp = 0L,
+            )
         assertFalse(message.isStatusMessage)
     }
 
     @Test
     fun `ChatMessage can be created as status message`() {
-        val message = ChatMessage(
-            text = "Status info",
-            isUser = false,
-            timestamp = 0L,
-            isStatusMessage = true
-        )
+        val message =
+            ChatMessage(
+                text = "Status info",
+                isUser = false,
+                timestamp = 0L,
+                isStatusMessage = true,
+            )
         assertTrue(message.isStatusMessage)
     }
 
@@ -265,19 +273,21 @@ class ChatUiStateTest {
 
     @Test
     fun `ChatMessage can hold successful tool results`() {
-        val results = listOf(
-            ToolExecutionResult(
-                toolId = "get_battery",
-                displayResult = "Battery: 87%",
-                isSuccess = true
+        val results =
+            listOf(
+                ToolExecutionResult(
+                    toolId = "get_battery",
+                    displayResult = "Battery: 87%",
+                    isSuccess = true,
+                ),
             )
-        )
-        val message = ChatMessage(
-            text = "Your battery is at 87%",
-            isUser = false,
-            timestamp = 0L,
-            toolResults = results
-        )
+        val message =
+            ChatMessage(
+                text = "Your battery is at 87%",
+                isUser = false,
+                timestamp = 0L,
+                toolResults = results,
+            )
         assertEquals(1, message.toolResults.size)
         assertTrue(message.toolResults[0].isSuccess)
         assertEquals("get_battery", message.toolResults[0].toolId)
@@ -286,37 +296,41 @@ class ChatUiStateTest {
 
     @Test
     fun `ChatMessage can hold failed tool results`() {
-        val results = listOf(
-            ToolExecutionResult(
-                toolId = "web_search",
-                displayResult = "Search failed",
-                isSuccess = false,
-                errorMessage = "No network"
+        val results =
+            listOf(
+                ToolExecutionResult(
+                    toolId = "web_search",
+                    displayResult = "Search failed",
+                    isSuccess = false,
+                    errorMessage = "No network",
+                ),
             )
-        )
-        val message = ChatMessage(
-            text = "Sorry, I couldn't search",
-            isUser = false,
-            timestamp = 0L,
-            toolResults = results
-        )
+        val message =
+            ChatMessage(
+                text = "Sorry, I couldn't search",
+                isUser = false,
+                timestamp = 0L,
+                toolResults = results,
+            )
         assertFalse(message.toolResults[0].isSuccess)
         assertEquals("No network", message.toolResults[0].errorMessage)
     }
 
     @Test
     fun `ChatMessage can hold multiple tool results`() {
-        val results = listOf(
-            ToolExecutionResult(toolId = "get_battery", displayResult = "87%", isSuccess = true),
-            ToolExecutionResult(toolId = "get_time", displayResult = "14:32", isSuccess = true),
-            ToolExecutionResult(toolId = "web_search", displayResult = "Failed", isSuccess = false, errorMessage = "Timeout")
-        )
-        val message = ChatMessage(
-            text = "Here's what I found",
-            isUser = false,
-            timestamp = 0L,
-            toolResults = results
-        )
+        val results =
+            listOf(
+                ToolExecutionResult(toolId = "get_battery", displayResult = "87%", isSuccess = true),
+                ToolExecutionResult(toolId = "get_time", displayResult = "14:32", isSuccess = true),
+                ToolExecutionResult(toolId = "web_search", displayResult = "Failed", isSuccess = false, errorMessage = "Timeout"),
+            )
+        val message =
+            ChatMessage(
+                text = "Here's what I found",
+                isUser = false,
+                timestamp = 0L,
+                toolResults = results,
+            )
         assertEquals(3, message.toolResults.size)
         assertEquals(2, message.toolResults.count { it.isSuccess })
         assertEquals(1, message.toolResults.count { !it.isSuccess })
@@ -334,27 +348,30 @@ class ChatUiStateTest {
 
     @Test
     fun `ToolState hasPendingConfirmations when list is not empty`() {
-        val state = ToolState(
-            pendingConfirmations = listOf(
-                ToolConfirmation(
-                    id = "c1",
-                    toolId = "camera",
-                    toolName = "Camera",
-                    description = "Take a photo",
-                    arguments = emptyMap()
-                )
+        val state =
+            ToolState(
+                pendingConfirmations =
+                    listOf(
+                        ToolConfirmation(
+                            id = "c1",
+                            toolId = "camera",
+                            toolName = "Camera",
+                            description = "Take a photo",
+                            arguments = emptyMap(),
+                        ),
+                    ),
             )
-        )
         assertTrue(state.hasPendingConfirmations)
     }
 
     @Test
     fun `ToolExecutionResult formats tool name from ID`() {
-        val result = ToolExecutionResult(
-            toolId = "get_screen_time",
-            displayResult = "2h 30m",
-            isSuccess = true
-        )
+        val result =
+            ToolExecutionResult(
+                toolId = "get_screen_time",
+                displayResult = "2h 30m",
+                isSuccess = true,
+            )
         // toolId uses underscores — UI should format for display
         assertEquals("get_screen_time", result.toolId)
     }
@@ -369,18 +386,18 @@ class ChatUiStateTest {
 
     @Test
     fun `ChatUiState can have chatStatus set`() {
-        val chatStatus = app.m1k3.ai.domain.status.ChatStatus(
-            greeting = "Good afternoon!",
-            engineReady = true,
-            memoryCount = 100,
-            knowledgeCount = 1000,
-            maxContextTokens = 4096,
-            deviceTierName = "High-End",
-            lastSessionTokens = null,
-            lastSessionWaterMl = null,
-            lastSessionEnergyWh = null,
-            lastSessionCo2G = null
-        )
+        val chatStatus =
+            app.m1k3.ai.domain.status.ChatStatus(
+                greeting = "Good afternoon!",
+                engineReady = true,
+                memoryCount = 100,
+                maxContextTokens = 4096,
+                deviceTierName = "High-End",
+                lastSessionTokens = null,
+                lastSessionWaterMl = null,
+                lastSessionEnergyWh = null,
+                lastSessionCo2G = null,
+            )
         val state = ChatUiState(chatStatus = chatStatus)
         assertEquals("Good afternoon!", state.chatStatus?.greeting)
         assertEquals(true, state.chatStatus?.engineReady)

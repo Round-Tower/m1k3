@@ -16,12 +16,11 @@ import kotlin.test.assertTrue
  * - Validates cleanup on destroy
  */
 class MainActivityIntegrationTest {
-
     data class MainActivityTestSetup(
         val appInitManager: MockAppInitManager,
         val dbInitializer: MockDatabaseInitializer,
         val uiState: MainActivityUIState,
-        val lifecycle: ActivityLifecycle
+        val lifecycle: ActivityLifecycle,
     )
 
     private fun setupTest(): MainActivityTestSetup {
@@ -53,26 +52,6 @@ class MainActivityIntegrationTest {
 
         assertTrue(setup.dbInitializer.initializeDatabaseCalled)
         assertTrue(setup.uiState.database != null)
-    }
-
-    @Test
-    fun `onCreate imports knowledge base`() {
-        // GREEN: Verify knowledge import on init
-        val setup = setupTest()
-        setup.lifecycle.onCreate()
-
-        assertTrue(setup.dbInitializer.importKnowledgeCalled)
-        assertTrue(setup.uiState.knowledgeImported)
-    }
-
-    @Test
-    fun `onCreate displays knowledge status in UI`() {
-        // GREEN: Verify status shown to user
-        val setup = setupTest()
-        setup.lifecycle.onCreate()
-
-        assertTrue(setup.uiState.knowledgeStatus != null)
-        assertTrue(setup.uiState.knowledgeStatus!!.contains("✅"))
     }
 
     @Test
@@ -274,16 +253,11 @@ class MockAppInitManager {
 
 class MockDatabaseInitializer {
     var initializeDatabaseCalled = false
-    var importKnowledgeCalled = false
     var databaseCloseCalled = false
     var simulateCloseError = false
 
     fun initializeDatabase() {
         initializeDatabaseCalled = true
-    }
-
-    fun importKnowledge() {
-        importKnowledgeCalled = true
     }
 
     fun closeDatabase() {
@@ -294,8 +268,6 @@ class MockDatabaseInitializer {
 
 class MainActivityUIState {
     var database: Any? = Any()
-    var knowledgeImported = false
-    var knowledgeStatus: String? = "✅ Knowledge ready: 345 documents"
     var drawerOpen = false
     var currentScreen = "chat"
     var isDarkMode = true
@@ -332,7 +304,7 @@ class MainActivityUIState {
 class ActivityLifecycle(
     private val appInitManager: MockAppInitManager? = null,
     private val dbInitializer: MockDatabaseInitializer? = null,
-    private val uiState: MainActivityUIState? = null
+    private val uiState: MainActivityUIState? = null,
 ) {
     var aiEngineCloseCalled = false
     var filamentDestroyedForceCloseCalled = false
@@ -341,11 +313,7 @@ class ActivityLifecycle(
         // Initialize all systems in order
         appInitManager?.initializeKoin()
         appInitManager?.initializeFilament()
-        dbInitializer?.let {
-            it.initializeDatabase()
-            it.importKnowledge()
-            uiState?.knowledgeImported = true
-        }
+        dbInitializer?.initializeDatabase()
     }
 
     fun onDestroy() {
