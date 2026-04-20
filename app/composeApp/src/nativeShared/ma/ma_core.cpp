@@ -332,11 +332,18 @@ char *ma_core_generate(
 
     LOGD("generate: %d prompt tokens, maxTokens=%d", n_prompt, max_tokens);
 
-    /* --- Decode prompt tokens --- */
-    llama_batch batch = llama_batch_get_one(prompt_tokens.data(), n_prompt);
-    if (llama_decode(ma->ctx, batch) != 0) {
-        LOGE("generate: initial decode failed");
-        return heap_cstr("");
+    /* --- Decode prompt tokens in n_batch-sized chunks ---
+     * Upstream asserts n_tokens_all <= cparams.n_batch per decode call
+     * (llama-context.cpp:1595). Callers must split prompts themselves;
+     * the library does NOT auto-split across physical batches. */
+    const int n_batch = (int) llama_n_batch(ma->ctx);
+    for (int offset = 0; offset < n_prompt; offset += n_batch) {
+        const int chunk = std::min(n_batch, n_prompt - offset);
+        llama_batch batch = llama_batch_get_one(prompt_tokens.data() + offset, chunk);
+        if (llama_decode(ma->ctx, batch) != 0) {
+            LOGE("generate: prompt decode failed at offset=%d chunk=%d", offset, chunk);
+            return heap_cstr("");
+        }
     }
 
     /* --- Sampler chain --- */
@@ -524,11 +531,17 @@ char *ma_core_generate_chat(
 
     LOGD("generate_chat: %d prompt tokens, maxTokens=%d", n_prompt, max_tokens);
 
-    /* --- Decode prompt tokens --- */
-    llama_batch batch = llama_batch_get_one(prompt_tokens.data(), n_prompt);
-    if (llama_decode(ma->ctx, batch) != 0) {
-        LOGE("generate_chat: initial decode failed");
-        return heap_cstr("{\"error\":\"decode failed\"}");
+    /* --- Decode prompt tokens in n_batch-sized chunks ---
+     * See ma_core_generate for the rationale — upstream asserts
+     * n_tokens_all <= cparams.n_batch per llama_decode call. */
+    const int n_batch = (int) llama_n_batch(ma->ctx);
+    for (int offset = 0; offset < n_prompt; offset += n_batch) {
+        const int chunk = std::min(n_batch, n_prompt - offset);
+        llama_batch batch = llama_batch_get_one(prompt_tokens.data() + offset, chunk);
+        if (llama_decode(ma->ctx, batch) != 0) {
+            LOGE("generate_chat: prompt decode failed at offset=%d chunk=%d", offset, chunk);
+            return heap_cstr("{\"error\":\"decode failed\"}");
+        }
     }
 
     /* --- Sampler chain --- */
