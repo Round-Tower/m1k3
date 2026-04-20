@@ -70,7 +70,7 @@ static jmethodID resolve_on_token(JNIEnv *env, jobject callback) {
  * ========================================================================= */
 
 extern "C" JNIEXPORT jlong JNICALL
-Java_app_m1k3_ai_assistant_ai_ma_MaBridge_init(
+Java_app_m1k3_ai_assistant_ai_ma_MaBridge_nativeInit(
         JNIEnv *env, jobject /*thiz*/,
         jstring  jModelPath,
         jint     nCtx,
