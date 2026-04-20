@@ -537,6 +537,9 @@ private fun AppearanceSection(
     var globeMode by remember {
         mutableStateOf(prefs.getString(PreferenceKeys.GLOBE_MODE, "RUBIN") ?: "RUBIN")
     }
+    var heroStyle by remember {
+        mutableStateOf(prefs.getString(PreferenceKeys.HERO_STYLE, "DOT_MATRIX") ?: "DOT_MATRIX")
+    }
 
     SettingsSection(title = "Appearance", icon = Icons.Default.Palette) {
         SettingsItem(
@@ -575,6 +578,33 @@ private fun AppearanceSection(
                     }
                 globeMode = next
                 prefs.setString(PreferenceKeys.GLOBE_MODE, next)
+            },
+        )
+        SettingsItem(
+            title = "Hero mascot",
+            subtitle =
+                when (heroStyle) {
+                    "MODEL_3D" -> "3D model from your avatar gallery"
+                    else -> "LED dot-matrix face (pixel-native)"
+                },
+            icon =
+                when (heroStyle) {
+                    "MODEL_3D" -> Icons.Default.ViewInAr
+                    else -> Icons.Default.GridOn
+                },
+            iconTint = MaColors.Orange,
+            trailingContent = {
+                Text(
+                    text = if (heroStyle == "MODEL_3D") "3D" else "Dots",
+                    style = MaTypography.labelSmall,
+                    color = MaColors.textSecondary(),
+                )
+            },
+            onClick = {
+                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                val next = if (heroStyle == "DOT_MATRIX") "MODEL_3D" else "DOT_MATRIX"
+                heroStyle = next
+                prefs.setString(PreferenceKeys.HERO_STYLE, next)
             },
         )
     }

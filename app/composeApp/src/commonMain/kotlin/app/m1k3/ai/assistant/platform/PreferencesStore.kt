@@ -40,7 +40,10 @@ expect class PreferencesStore : PreferencesStoreInterface {
      * @param default Default value if not set
      * @return Current value or default
      */
-    override fun getBoolean(key: String, default: Boolean): Boolean
+    override fun getBoolean(
+        key: String,
+        default: Boolean,
+    ): Boolean
 
     /**
      * Set a boolean preference.
@@ -48,7 +51,10 @@ expect class PreferencesStore : PreferencesStoreInterface {
      * @param key Preference key
      * @param value Value to store
      */
-    override fun setBoolean(key: String, value: Boolean)
+    override fun setBoolean(
+        key: String,
+        value: Boolean,
+    )
 
     /**
      * Observe a boolean preference as a Flow.
@@ -57,7 +63,10 @@ expect class PreferencesStore : PreferencesStoreInterface {
      * @param default Default value if not set
      * @return Flow that emits when preference changes
      */
-    override fun observeBoolean(key: String, default: Boolean): Flow<Boolean>
+    override fun observeBoolean(
+        key: String,
+        default: Boolean,
+    ): Flow<Boolean>
 
     // ===== String =====
 
@@ -68,7 +77,10 @@ expect class PreferencesStore : PreferencesStoreInterface {
      * @param default Default value if not set
      * @return Current value or default
      */
-    override fun getString(key: String, default: String?): String?
+    override fun getString(
+        key: String,
+        default: String?,
+    ): String?
 
     /**
      * Set a string preference.
@@ -76,7 +88,10 @@ expect class PreferencesStore : PreferencesStoreInterface {
      * @param key Preference key
      * @param value Value to store (null removes the preference)
      */
-    override fun setString(key: String, value: String?)
+    override fun setString(
+        key: String,
+        value: String?,
+    )
 
     // ===== Int =====
 
@@ -87,7 +102,10 @@ expect class PreferencesStore : PreferencesStoreInterface {
      * @param default Default value if not set
      * @return Current value or default
      */
-    override fun getInt(key: String, default: Int): Int
+    override fun getInt(
+        key: String,
+        default: Int,
+    ): Int
 
     /**
      * Set an integer preference.
@@ -95,7 +113,10 @@ expect class PreferencesStore : PreferencesStoreInterface {
      * @param key Preference key
      * @param value Value to store
      */
-    override fun setInt(key: String, value: Int)
+    override fun setInt(
+        key: String,
+        value: Int,
+    )
 
     // ===== Operations =====
 
@@ -147,6 +168,9 @@ object PreferenceKeys {
 
     /** Globe background mode: "RUBIN" | "MAPLIBRE" | "NONE" */
     const val GLOBE_MODE = "globe_mode"
+
+    /** Empty-chat hero mascot style: "DOT_MATRIX" (default) | "MODEL_3D" */
+    const val HERO_STYLE = "hero_style"
 
     /** User-set display name (overrides GET_ACCOUNTS detection) */
     const val USER_NAME = "user_name"
