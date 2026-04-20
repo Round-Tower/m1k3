@@ -236,7 +236,7 @@ ma_init_result ma_core_init(
     /* Retry-on-null safety net: if the aggressive config (FA / Q8_0) fails on
      * this device's kernel variant, reset to F16 + FA disabled and retry once.
      * Init never fails over a tuning choice. */
-    llama_context *ctx = llama_new_context_with_model(model, cparams);
+    llama_context *ctx = llama_init_from_model(model, cparams);
     bool fellBack = false;
     if (!ctx && (wantFA || wantQ8)) {
         LOGE("init: aggressive context (fa=%d kv=%d) failed; retrying with F16 + FA disabled",
@@ -244,7 +244,7 @@ ma_init_result ma_core_init(
         cparams.flash_attn_type = LLAMA_FLASH_ATTN_TYPE_DISABLED;
         cparams.type_k = GGML_TYPE_F16;
         cparams.type_v = GGML_TYPE_F16;
-        ctx = llama_new_context_with_model(model, cparams);
+        ctx = llama_init_from_model(model, cparams);
         fellBack = true;
     }
     if (!ctx) {
