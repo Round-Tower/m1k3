@@ -88,4 +88,42 @@ class LlmOutputSanitizerTest {
         val raw = "<parameter=query>orphan</parameter> text"
         assertEquals("text", LlmOutputSanitizer.strip(raw).trim())
     }
+
+    @Test
+    fun `drops chatml im_start assistant prefix that leaks from common_chat_parse`() {
+        // Captured on Pixel 9a 2026-04-20: Qwen3.5 0.8B native-chat path — common_chat_parse
+        // returns msg.content with the assistant template prefix still attached when the PEG
+        // parser's <|im_start|>assistant anchor slips against the raw accumulated stream.
+        val raw = "<|im_start|>assistant\n<think>\nreasoning here\n</think>\nThe answer."
+        assertEquals("The answer.", LlmOutputSanitizer.strip(raw).trim())
+    }
+
+    @Test
+    fun `drops chatml im_end closing marker`() {
+        val raw = "Final answer.<|im_end|>"
+        assertEquals("Final answer.", LlmOutputSanitizer.strip(raw))
+    }
+
+    @Test
+    fun `drops chatml im_start variants for any role`() {
+        assertEquals("hi", LlmOutputSanitizer.strip("<|im_start|>user\nhi").trim())
+        assertEquals("hi", LlmOutputSanitizer.strip("<|im_start|>system\nhi").trim())
+        assertEquals("hi", LlmOutputSanitizer.strip("<|im_start|>tool\nhi").trim())
+    }
+
+    @Test
+    fun `drops bare im_start with no role attached`() {
+        // Defensive: if tokenizer split the role off, strip the marker alone
+        val raw = "<|im_start|>hi"
+        assertEquals("hi", LlmOutputSanitizer.strip(raw).trim())
+    }
+
+    @Test
+    fun `preserves plain text containing angle brackets unrelated to chat markers`() {
+        val raw = "Use <code>foo()</code> to call the function."
+        assertEquals(
+            "Use <code>foo()</code> to call the function.",
+            LlmOutputSanitizer.strip(raw),
+        )
+    }
 }

@@ -47,11 +47,28 @@ object LlmOutputSanitizer {
     private val strayCloseFunction = Regex("""< */ *function *>""", RegexOption.IGNORE_CASE)
     private val strayOpenParameter = Regex("""< *parameter *= *[^>]*>""", RegexOption.IGNORE_CASE)
     private val strayCloseParameter = Regex("""< */ *parameter *>""", RegexOption.IGNORE_CASE)
+
+    // ChatML template tokens that bleed through when common_chat_parse's PEG
+    // anchor slips against the raw accumulated stream (seen on Qwen3.5 0.8B
+    // native-chat path, Pixel 9a 2026-04-20). Role is restricted to the known
+    // ChatML values so we don't eat real body text that happens to start with
+    // lowercase letters after a bare <|im_start|>.
+    private val chatMlStart =
+        Regex(
+            """<\|im_start\|>(?:assistant|user|system|tool)?\s*\n?""",
+            RegexOption.IGNORE_CASE,
+        )
+    private val chatMlEnd = Regex("""<\|im_end\|>""", RegexOption.IGNORE_CASE)
+
     private val blankRun = Regex("""\n{3,}""")
 
     fun strip(raw: String): String {
         if (raw.isEmpty()) return raw
         return raw
+            // ChatML template tokens before structured-content regexes so a
+            // stray <|im_start|>assistant\n doesn't shield a <think> block.
+            .replace(chatMlStart, "")
+            .replace(chatMlEnd, "")
             .replace(thinkBlock, "")
             .replace(toolCallBlock, "")
             // Qwen bare-function shape (no tool_call envelope): strip the
