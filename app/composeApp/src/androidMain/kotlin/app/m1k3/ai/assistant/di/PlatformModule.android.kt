@@ -322,10 +322,28 @@ actual val platformModule =
             )
         }
 
+        /**
+         * VectorIndex — in-memory top-K cache of passage embeddings.
+         *
+         * Baseline [LinearScanVectorIndex] holds vectors deserialized for the
+         * lifetime of the process, so search avoids pulling every embedded
+         * row on every query. The repository lazy-warms it from the DB on
+         * the first search after launch.
+         *
+         * Scoped as `single` so one index per app process; survives ViewModel
+         * recreation but not process death (DB is the source of truth — a
+         * rebuild on cold start is fine).
+         */
+        single<app.m1k3.ai.domain.passages.services.VectorIndex> {
+            app.m1k3.ai.domain.passages.services
+                .LinearScanVectorIndex()
+        }
+
         single<app.m1k3.ai.domain.passages.repositories.PassageRepository> {
             app.m1k3.ai.assistant.passages.SqlDelightPassageRepository(
                 database = get<MaDatabase>(),
                 embedder = get<app.m1k3.ai.domain.passages.services.PassageEmbedder>(),
+                vectorIndex = get<app.m1k3.ai.domain.passages.services.VectorIndex>(),
             )
         }
 
