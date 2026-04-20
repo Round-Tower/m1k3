@@ -315,7 +315,13 @@ class ChatWithToolsUseCase(
         scope.send(ChatEvent.Generating)
 
         var tokenCount = 0
-        val thinkParser = StreamingThinkTagParser()
+        // Qwen's native chat template ends the prompt with
+        //   <|im_start|>assistant\n<think>\n
+        // so the model begins generating INSIDE a think block — the `<think>`
+        // opener never appears in the token stream. Start the parser already
+        // in thinking mode so reasoning routes to thinkingContent and the
+        // ThinkingPill gets populated; visible body picks up after </think>.
+        val thinkParser = StreamingThinkTagParser(startInThinking = true)
         // Native path ALWAYS has tools here (caller gates on relevantTools.isNotEmpty()).
         // Use the tool-focused config so small models actually trigger <tool_call>.
         val queryType = QueryType.fromIntentCategory(context.intentCategory)

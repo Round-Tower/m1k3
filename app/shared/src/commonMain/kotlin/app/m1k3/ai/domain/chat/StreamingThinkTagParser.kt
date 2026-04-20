@@ -10,22 +10,27 @@ import kotlinx.datetime.Clock
  * - Qwen3.5's "< think>" tokenization (space before tag name)
  * - Tags split across token boundaries
  * - Case-insensitive matching
+ * - Native-chat path: template ends with `<|im_start|>assistant\n<think>\n`
+ *   so the stream begins *inside* a think block without the parser ever
+ *   seeing the opening tag. Pass `startInThinking = true` in that case.
  *
  * Pure Kotlin, no platform dependencies — lives in domain layer.
  *
  * @see <a href="https://murphysig.dev">MurphySig</a>
  * Confidence: HIGH — extracted from battle-tested ChatWithToolsUseCase parser
  */
-class StreamingThinkTagParser {
-
+class StreamingThinkTagParser(
+    startInThinking: Boolean = false,
+) {
     private val visible = StringBuilder()
     private val thinking = StringBuilder()
     private val pending = StringBuilder() // buffered text that might be part of a tag
 
-    var isThinking: Boolean = false
+    var isThinking: Boolean = startInThinking
         private set
 
-    var thinkingStartMs: Long = 0L
+    var thinkingStartMs: Long =
+        if (startInThinking) Clock.System.now().toEpochMilliseconds() else 0L
         private set
 
     var thinkingDurationMs: Long = 0L

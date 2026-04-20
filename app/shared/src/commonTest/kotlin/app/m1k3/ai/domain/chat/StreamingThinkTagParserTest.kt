@@ -14,7 +14,6 @@ import kotlin.test.assertTrue
  * "< think>" tokenization quirk (space before tag name).
  */
 class StreamingThinkTagParserTest {
-
     @Test
     fun `plain text without think tags passes through`() {
         val parser = StreamingThinkTagParser()
@@ -191,10 +190,50 @@ class StreamingThinkTagParserTest {
     @Test
     fun `finalize flushes pending buffer`() {
         val parser = StreamingThinkTagParser()
-        parser.feed("Hello <")  // Partial tag buffered
+        parser.feed("Hello <") // Partial tag buffered
         // pending buffer has "<" — not flushed yet
         parser.finalize()
 
         assertTrue(parser.visibleText.contains("Hello"), "Finalize should flush pending buffer")
+    }
+
+    @Test
+    fun `startInThinking routes leading tokens to thinking until close tag`() {
+        // Native-chat path: Qwen template ends with `<|im_start|>assistant\n<think>\n`
+        // so the stream starts INSIDE a think block without an opener token.
+        val parser = StreamingThinkTagParser(startInThinking = true)
+        parser.feed("The user is asking about battery.\n")
+        parser.feed("</think>\n\nBattery response.")
+
+        assertEquals("The user is asking about battery.\n", parser.thinkingContent)
+        assertTrue(parser.visibleText.contains("Battery response"))
+        assertFalse(parser.isThinking, "Should exit thinking mode after </think>")
+    }
+
+    @Test
+    fun `startInThinking with no closing tag keeps all content in thinking then promotes on finalize`() {
+        val parser = StreamingThinkTagParser(startInThinking = true)
+        parser.feed("Reasoning without a closer.")
+        parser.finalize()
+
+        assertTrue(parser.visibleText.contains("Reasoning without a closer"))
+    }
+
+    @Test
+    fun `startInThinking captures thinkingStartMs at construction`() {
+        val before =
+            kotlinx.datetime.Clock.System
+                .now()
+                .toEpochMilliseconds()
+        val parser = StreamingThinkTagParser(startInThinking = true)
+        val after =
+            kotlinx.datetime.Clock.System
+                .now()
+                .toEpochMilliseconds()
+
+        assertTrue(
+            parser.thinkingStartMs in before..after,
+            "startInThinking should seed thinkingStartMs at construction so durations come out right",
+        )
     }
 }
