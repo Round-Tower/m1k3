@@ -179,8 +179,38 @@ no engine linked, **18 tests / 4 suites green** (→ 177/37 total).
 
 ---
 
-## Next up
+## Backlog — consolidated TODO (2026-06-06, after a big session)
 
-- **Run it on-device.** `xcodegen generate && open M1K3.xcodeproj`, sign with Kev's team, launch. First sandboxed boot is the milestone — drop a PDF, ask, hear it. Watch the three runtime-only risks above.
-- Then a deferred bucket: **MLX runtime** (turns the stack real, lights up the runtime picker) is the highest-leverage next move.
-- Push branch `feat/mac-mvp` when ready (local-only, ~17 commits so far).
+Status: P6 voice **shipped**; P7 calls built **end-to-end except one link** (consent →
+record → ??? → pipeline → encrypt → graph → UI). 210 tests / 44 suites green. 14 feature
+commits on `feat/mac-mvp` (PR #9). The pure brain is done; what's left is mostly device + UI.
+
+### 🔴 Closes the mic path (the one missing P7 link)
+- [ ] **WhisperKit-batch `BatchTranscriptionProvider`** — `whisperKit.transcribe(audioPath:)` → `[CallTranscriptSegment]`. Compiles headless; runs verify-by-launch.
+- [ ] Wire `AppEnvironment.stopRecording()` → transcribe `lastRecordingURL` → the **existing** `CallIntelligencePipeline` → persist + index. (Import path already proves the tail.)
+- [ ] **`FluidDiarizationProvider`** (CoreML/ANE, ~17% DER) + stereo fallback behind `DiarizationProvider`. (Device.)
+
+### 🔴 Kev's device session (Tuesday, ⌘R — verify-by-launch)
+- [ ] First **signed sandboxed boot** (the real milestone): GRDB in container, FoundationModels under entitlements, AVSpeech + mic under sandbox.
+- [ ] Verify **P6 voice** (grant mic + Speech) and **transcript import** end-to-end in the running app.
+- [ ] **Gemma-4 E4B diarization-continuity probe** — the `scratch/gemma4-audio-spike/SPIKE.md` kill-test (3–5 min 2-speaker clip, isolated package, eyeball speaker continuity FIRST).
+- [ ] On-device **MLX gen+embed** verify (the download-progress bar with uncached weights); **register MCP** per `docs/MCP_SETUP.md`.
+
+### 🟡 Engineering-quality follow-ups (mostly headless)
+- [ ] **Citation wiring** — `CitationValidator` → `RAGResponder` (finishes Phase 4; pure TDD, ~30–45 min).
+- [ ] **`MLXGemmaProvider.ensureLoaded` → actor** (kill the check-then-act double-load race the reviewer flagged).
+- [ ] **MLX preload cancellation** (switch away mid-download) + **cached-default model** (prefer an already-cached model over `gemma-3-1b-qat-4bit`).
+- [ ] **`security-auditor` pass** on the call crypto once the Keychain provider is app-integrated (key mgmt is where crypto fails).
+- [ ] Tests for the AppleSpeech mic-permission-denied cleanup path (throwing fake) + a self-healing `isListening` timeout (P6 review, low).
+- [ ] Persist the recorded `.caf` into the app container (not temp); consider adding an `audioPath` to `CallSession`.
+
+### 🟢 Future phases / spikes
+- [ ] **Avatar (P9)** — RealityKit emotion-driven avatar + TTS lip-sync.
+- [ ] **LiteRT spike (P3)** — now real: `litert-community/gemma-4-12B-it-litert-lm` (text+audio).
+- [ ] **GemmaAudio (P11)** — batch shadow `BatchTranscriptionProvider` if the E4B probe wins; then re-plan P7 diarization on one model (challenger pass).
+- [ ] **QueryGraphTool** — blocked on entity extraction (NER); graph builder is pure, nothing populates entities.
+- [ ] **Kokoro TTS** swap (post-MVP, behind `SpeechProvider`).
+
+### 🧹 Ship hygiene
+- [ ] Merge **PR #9** once the Mac reviewer + ⌘R verify clear it.
+- [ ] ~23G `~/.cache/huggingface` cleanup pass.
