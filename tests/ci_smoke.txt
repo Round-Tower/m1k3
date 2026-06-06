@@ -9,7 +9,6 @@ tests/python/test_cli_greeting.py
 tests/python/test_cli_integration.py
 tests/python/test_cli_startup.py
 tests/python/test_comprehensive_validation.py
-tests/python/test_format_optimization.py
 tests/python/test_full_system_integration.py
 tests/python/test_full_system.py
 tests/python/test_greeting_integration.py
@@ -27,7 +26,6 @@ tests/python/test_rag_end_to_end.py
 tests/python/test_rag_practical.py
 tests/python/test_sanitization_fix.py
 tests/python/test_shutdown_behavior.py
-tests/python/test_specific_system_prompt.py
 tests/python/test_syllable_completion.py
 tests/python/test_temperature_fix.py
 tests/python/test_temperature_investigation.py

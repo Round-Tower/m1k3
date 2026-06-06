@@ -16,7 +16,11 @@
   `ci_smoke`, the rest `quarantine`. Locally: `pytest -m quarantine <file>`.
 
 ## Smoke subset (green, in CI)
-44 files, ~102 tests, ~24s wall. Listed in `tests/ci_smoke.txt`.
+42 files, ~100 tests, ~17s wall. Listed in `tests/ci_smoke.txt`. Verified
+green against a **tracked-files-only checkout** (`git archive HEAD`) — important
+because parts of `src/` (e.g. `src/models/`) are gitignored, so a test that
+passes locally can still `ModuleNotFoundError` on the runner. Re-verify new
+additions the same way.
 
 ## Quarantine backlog (NOT in CI — rehabilitate me)
 
