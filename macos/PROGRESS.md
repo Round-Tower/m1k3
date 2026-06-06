@@ -148,10 +148,15 @@ no engine linked, **18 tests / 4 suites green** (→ 177/37 total).
   **AES-256-GCM**). Privacy-by-default: only `started_at` is plaintext; title/transcript/
   speakers/summaries live in the encrypted `payload` blob. **Encryption-at-rest VERIFIED** —
   reopen the raw SQLite, scan the bytes, no plaintext (+ a positive control proving the scan
-  works, + wrong-key-fails). Key is injected (app supplies a Keychain key — see follow-up).
+  works, + wrong-key-fails).
+- **Keychain key provider ✅** (6 tests): `KeyStore` seam + `StoredKeyProvider` (get-or-create a
+  256-bit key, stable across calls + launches, `reset()` to rotate) + `KeychainKeyStore` (Security,
+  device-only/after-first-unlock, verify-by-launch). Tested against an in-memory fake; an end-to-end
+  test proves the provider's key drives the encrypted round-trip. **The encryption story is now
+  closed:** Keychain key → `EncryptedCallCoder` → encrypted-at-rest, all linked + tested.
 - **Engines deferred** (the heavy/device parts): WhisperKit-batch, FluidAudio (the prior call-pipeline lift),
-  Gemma-4-shadow (post-benchmark), recording UI + consent gate. **Follow-up:** app-side
-  Keychain key provider (generate-once + fetch) to feed `EncryptedCallCoder`.
+  Gemma-4-shadow (post-benchmark), recording UI + consent gate. **App wiring** (compose
+  `KeychainKeyStore` → `StoredKeyProvider` → `GRDBCallPersistence`) lands with the recording flow.
 
 ## Deferred buckets (each wants a focused session)
 
