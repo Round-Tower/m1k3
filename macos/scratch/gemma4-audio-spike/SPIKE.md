@@ -64,26 +64,41 @@ it wants a **different method**: `transcribe(fileURL:) async throws -> [Transcri
 
 See `GemmaAudioTranscriber.swift` (sketch, batch design against the real API).
 
-## Benchmark protocol (P7 framing, device session)
+## Benchmark protocol — REORDERED after the challenger pass (2026-06-06)
 
-On a recorded **≤30s 2-speaker clip** (use `audio_samples/`):
+The challenger named the structural flaw: a 30s cap gives 10–40 independent windows on a
+real call, and **prompt diarization has no cross-window speaker identity** (no global speaker
+embedding — each window labels "Speaker A/B" from scratch). FluidAudio hits ~17% DER *because*
+it diarizes the whole file against persistent embeddings. So the most-likely failure is speaker
+**label drift across window boundaries** — and that single failure kills the "one model collapses
+calls" thesis. **So test the thing most likely to kill the idea, first, and on a LONG clip.**
 
-| Metric | WhisperKit + FluidAudio | Gemma 4 E4B (4-bit) |
-|---|---|---|
-| **WER** (accuracy) | | |
-| **Diarization DER** (the deciding metric) | FluidAudio | prompt-driven — *does it even work?* |
-| Transcribe latency for 30s | | |
-| Model size / load / peak mem | | |
-| Bonus: can it transcribe + summarise in one pass? | n/a | |
+**Probe (device, ~2h):** one **3–5 minute, 2-speaker** recording (NOT a 30s clip — the cap is the
+point; record a mock call if `audio_samples/` has nothing long enough). In the **isolated package
+only**, chunk into 30s windows, transcribe each with prompt *"Transcribe and label each speaker
+(Speaker A / Speaker B)."*, concatenate.
 
-## Decision gate
+| Gate (run in this order — stop at first failure) | Kill metric |
+|---|---|
+| **1. Diarization continuity** (eyeball 6+ window boundaries) | "Speaker A" swaps/drifts to a different human across windows → **STOP, thesis dead** |
+| 2. WER vs WhisperKit (same audio) | materially worse than WhisperKit |
+| 3. Transcribe+summarise in one pass | only summarises 30s (it will — call never fits one window) |
 
-- **Fold P7 onto Gemma 4** only if WER is competitive **and** prompt-driven diarization DER
-  is within range of FluidAudio. The summarise-in-the-same-model bonus is the tiebreaker.
-- **Else:** keep the prior call-pipeline's lift (WhisperKit batch + FluidAudio + AFM/Gemma summary) for P7;
-  shelve Gemma 4 audio behind the seam at `isAvailable=false`.
-- Either way: **P6 stays on WhisperKit.** Run a `challenger` pass before any "one model for
-  calls" commitment.
+## Decision gate + guardrails (from the challenger)
+
+- **Do NOT** adopt the dep into `macos/Package.swift`, delete anything from the prior call-pipeline, or extract IP —
+  until the continuity probe passes AND a separate **compatibility proof** shows the forced
+  `mlx-swift-lm`@main / `mlx-swift`≥0.31.3 bump does **not** perturb embedding output (re-embed a
+  fixed doc set, assert vectors unchanged — else RAG silently breaks).
+- **Bank the safe win regardless:** use Gemma 4 as the **text-only deep-summary tier** (already
+  `PLAN.md` Tier-2) via the `InferenceProvider` seam — zero 30s-cap problem, LLMs are proven here.
+- **Ship M1K3's P7 on the the prior call-pipeline lift NOW;** treat Gemma audio as a **shadow** `BatchTranscriptionProvider`
+  (`isAvailable=false`), run alongside WhisperKit+FluidAudio on real calls, log WER/DER deltas to a
+  file, promote only on logged evidence.
+- **IP:** the reusable asset is the **seam** (`TranscriptionProvider`/`DiarizationProvider`/
+  `SummarizationRouterProtocol`) — model-agnostic, fallback-chained, already shared by M1K3 + the prior call-pipeline.
+  Extract the seam, **never the volatile model**, and not until 2+ consumers ship in production.
+- **P6 stays on WhisperKit** unconditionally (no streaming audio in Gemma 4).
 
 ## Next actions (Tuesday, device)
 
