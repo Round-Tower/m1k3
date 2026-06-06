@@ -23,7 +23,7 @@ Update this file as phases move. Keep it scannable.
 | 5 | Chat UI + Liquid Glass | ⬜ not started | needs Xcode app target |
 | 6 | Transcription (pluggable) | ⬜ not started | WhisperKit dep (heavy) |
 | 7 | Call log (M1K3Calls) | ⬜ not started | lift the prior call-pipeline call subsystem |
-| 8 | TTS (AVSpeech) | ⬜ not started | AVSpeech now, Kokoro later |
+| 8 | TTS (AVSpeech) | 🟢 done | SpeechProvider + AVSpeechProvider + SpeechUtterance; ⏳ Kokoro swap (post-MVP) |
 | 9 | Avatar (RealityKit) | ⬜ not started | GLB→USDZ, emotion states |
 | 10 | Local agent + MCP | 🟢 agent+tools done | ReAct LocalAgent + AgentTool + search/list/get tools; ⏳ QueryGraphTool + MCP stdio server (swift-sdk) |
 | 11 | GemmaAudio ASR spike | ⬜ not started | non-blocking, LiteRT path |
@@ -43,7 +43,7 @@ Legend: ✅ done · 🟢 logic done (deferred adapter) · 🟡 partial · ⬜ no
 | `M1K3Chat` | M1K3Knowledge + M1K3Inference | ChatPromptBuilder (in Knowledge) + RAGResponder (embed→hybrid→prompt→answer+sources, streaming) |
 | `M1K3Embeddings` | M1K3Knowledge + mlx-swift-lm | ⏳ MLXEmbeddingService (nomic-embed-text-v1.5) |
 | `M1K3MCP` | swift-sdk + M1K3Knowledge | ⏳ stdio server |
-| `M1K3Voice` | WhisperKit + AVFoundation | ⏳ TranscriptionProvider + SpeechProvider |
+| `M1K3Voice` | AVFoundation (+ WhisperKit later) | SpeechProvider + SpeechUtterance + AVSpeechProvider; ⏳ TranscriptionProvider (WhisperKit, heavy) |
 | `M1K3Calls` | M1K3Knowledge + … | ⏳ CallSession, encrypted SQLite, diarization, summary |
 | `M1K3Avatar` | RealityKit | ⏳ emotion-driven avatar |
 | `M1K3App` (Xcode) | all | ⏳ SwiftUI shell, Liquid Glass |
@@ -52,7 +52,7 @@ Legend: ✅ done · 🟢 logic done (deferred adapter) · 🟡 partial · ⬜ no
 
 ## Test count
 
-Run `cd macos && swift test`. Last green: **108 tests, 19 suites**. Highlights:
+Run `cd macos && swift test`. Last green: **116 tests, 22 suites**. Highlights:
 agent→store integration (`SearchKnowledgeTool`), full doc ingest
 (PDF→extract→chunk→embed→store→search), and the RAG brain (`RAGResponder`:
 ask→embed→hybrid→documents-first prompt→grounded answer + sources, streaming).

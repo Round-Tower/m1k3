@@ -25,6 +25,7 @@ let package = Package(
         .library(name: "M1K3Agent", targets: ["M1K3Agent"]),
         .library(name: "M1K3KnowledgeTools", targets: ["M1K3KnowledgeTools"]),
         .library(name: "M1K3Chat", targets: ["M1K3Chat"]),
+        .library(name: "M1K3Voice", targets: ["M1K3Voice"]),
     ],
     dependencies: [
         .package(url: "https://github.com/groue/GRDB.swift.git", from: "7.0.0"),
@@ -92,6 +93,18 @@ let package = Package(
             name: "M1K3ChatTests",
             dependencies: ["M1K3Chat"],
             path: "Tests/M1K3ChatTests"
+        ),
+        // Voice. TTS now (AVSpeech behind SpeechProvider; Kokoro later);
+        // transcription (WhisperKit) joins this module in the heavy-dep session.
+        // AVFoundation is a system framework — no third-party dep.
+        .target(
+            name: "M1K3Voice",
+            path: "Sources/M1K3Voice"
+        ),
+        .testTarget(
+            name: "M1K3VoiceTests",
+            dependencies: ["M1K3Voice"],
+            path: "Tests/M1K3VoiceTests"
         ),
     ]
 )
