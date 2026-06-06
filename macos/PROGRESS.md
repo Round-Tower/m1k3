@@ -100,6 +100,29 @@ Selecting **MLX Gemma 3** no longer hangs silently while ~1GB of weights stream 
 - **Verify-by-launch:** the % bar itself is on-device only — confirm at ⌘R with
   uncached weights.
 
+## Voice input — Phase 6 (2026-06-06) ✅ (verify-by-launch)
+
+Tap the mic in the chat bar → live transcript streams into the input bar → tap
+again (or the recogniser settles) → auto-sends to chat. Both engines behind one
+seam, on-device only.
+
+- **Pure core (`M1K3Voice`, tested):** `TranscriptSegment` (slim — no call-domain
+  speaker/sentiment), `TranscriptionProvider` (live-session API), `TranscriptionRouter`
+  (selector mirroring `ProviderRouter`), `TranscriptAccumulator` (partial→final fold).
+  12 new tests → 159/33 green.
+- **`AppleSpeechTranscriber` (`M1K3Voice`):** SFSpeechRecognizer + AVAudioEngine,
+  system-framework, zero-dep, **on-device forced** (privacy floor). The day-one path.
+- **`WhisperKitProvider` (`M1K3WhisperKit`, isolated target like M1K3MLX):** WhisperKit
+  `AudioStreamTranscriber`; unavailable until its model loads, so the router uses
+  Apple Speech until you enable WhisperKit in Settings. New dep: `argmaxinc/WhisperKit`.
+- **App:** `AppEnvironment` dictation glue (router over [WhisperKit, AppleSpeech],
+  auto-send on stop, `enableWhisperKit` download); mic toggle + ticker in `ContentView`;
+  Voice section in `SettingsView`. Entitlement `device.audio-input` + mic/speech usage
+  strings in `project.yml`.
+- **Post-review fix:** a lock-inversion **deadlock** in `AppleSpeechTranscriber.stopListening`
+  (NSLock held across `audioEngine.stop()`) — caught by `code-quality-reviewer`, fixed
+  (engine ops moved outside the lock). Router's unsound `stopListening()` removed.
+
 ## Deferred buckets (each wants a focused session)
 
 1. **MLX runtime session** — `M1K3Embeddings` (nomic-embed-text-v1.5) + `MLXGemmaProvider` + LiteRT spike + `RuntimeBenchmark`. Heavy first build (`mlx-swift-lm`, MetalToolchain, weight downloads). Wires into the runtime picker (already stubbed in `SettingsView`).

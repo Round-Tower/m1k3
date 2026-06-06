@@ -65,6 +65,30 @@ struct SettingsView: View {
                         .font(.caption).foregroundStyle(.secondary)
                 }
 
+                Section {
+                    LabeledContent("Active engine", value: env.activeTranscriberName)
+                    if env.isPreparingWhisper {
+                        HStack(spacing: 8) {
+                            ProgressView().controlSize(.small)
+                            Text(env.whisperStatus ?? "Preparing WhisperKit…")
+                                .font(.caption).foregroundStyle(.secondary)
+                        }
+                    } else {
+                        Button("Enable WhisperKit (downloads model)") {
+                            Task { await env.enableWhisperKit() }
+                        }
+                        .buttonStyle(.glass)
+                        if let status = env.whisperStatus {
+                            Text(status).font(.caption).foregroundStyle(.secondary)
+                        }
+                    }
+                } header: {
+                    Text("Voice input")
+                } footer: {
+                    Text("Tap the mic in the chat bar to dictate — tap again to send. Apple Speech works out of the box; WhisperKit is higher accuracy after a one-time model download. On-device only.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+
                 Section("Memory") {
                     LabeledContent("Indexed items", value: "\(env.indexedItemCount)")
                     LabeledContent("Model availability",

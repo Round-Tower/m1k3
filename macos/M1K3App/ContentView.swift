@@ -96,13 +96,33 @@ struct ContentView: View {
     private var inputBar: some View {
         GlassEffectContainer(spacing: 12) {
             HStack(spacing: 12) {
-                TextField("Ask M1K3 about your documents…", text: $draft, axis: .vertical)
-                    .textFieldStyle(.plain)
-                    .lineLimit(1 ... 5)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 12)
-                    .glassEffect(.regular, in: .rect(cornerRadius: 22))
-                    .onSubmit(send)
+                if env.isListening {
+                    Text(env.liveTranscript.isEmpty ? "Listening…" : env.liveTranscript)
+                        .foregroundStyle(env.liveTranscript.isEmpty ? .secondary : .primary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .lineLimit(1 ... 5)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 12)
+                        .glassEffect(.regular, in: .rect(cornerRadius: 22))
+                } else {
+                    TextField("Ask M1K3 about your documents…", text: $draft, axis: .vertical)
+                        .textFieldStyle(.plain)
+                        .lineLimit(1 ... 5)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 12)
+                        .glassEffect(.regular, in: .rect(cornerRadius: 22))
+                        .onSubmit(send)
+                }
+
+                Button { env.toggleDictation() } label: {
+                    Image(systemName: env.isListening ? "mic.fill" : "mic")
+                        .font(.system(size: 16, weight: .semibold))
+                        .frame(width: 22, height: 22)
+                }
+                .buttonStyle(.glass)
+                .tint(env.isListening ? .red : nil)
+                .disabled(!env.canDictate && !env.isListening)
+                .help(env.canDictate ? "Voice input — tap to speak, tap to send" : "Microphone unavailable")
 
                 Button(action: send) {
                     Image(systemName: "arrow.up")

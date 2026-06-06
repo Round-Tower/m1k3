@@ -54,6 +54,8 @@ targets:
         product: M1K3KnowledgeTools
       - package: M1K3
         product: M1K3MLX
+      - package: M1K3
+        product: M1K3WhisperKit
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: dev.murphysig.M1K3
@@ -70,3 +72,5 @@ targets:
         CFBundleDisplayName: M1K3
         LSMinimumSystemVersion: "26.0"
         NSHumanReadableDescription: "Local, private AI companion."
+        NSMicrophoneUsageDescription: "M1K3 uses the microphone for voice input. Audio is transcribed on-device and never leaves your Mac."
+        NSSpeechRecognitionUsageDescription: "M1K3 transcribes your speech on-device to let you ask questions by voice. Nothing is sent to Apple or any server."

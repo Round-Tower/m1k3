@@ -24,6 +24,7 @@ import M1K3Inference
 import M1K3Knowledge
 import M1K3MLX
 import M1K3Voice
+import M1K3WhisperKit
 import Observation
 
 /// The inference backends the runtime picker offers. Only Apple Foundation
@@ -75,6 +76,21 @@ final class AppEnvironment {
     /// Held directly (not just inside the façade) so the picker can warm it ahead
     /// of the first turn and stream download progress to the UI.
     private let mlxGemma: MLXGemmaProvider
+    /// Voice input: WhisperKit (high accuracy, needs a model) routed ahead of
+    /// Apple Speech (system framework, always available). Held directly so the
+    /// app can load WhisperKit's model on demand.
+    private let transcription: TranscriptionRouter
+    private let whisperKit: WhisperKitProvider
+    private var dictationProvider: (any TranscriptionProvider)?
+    private var dictationTask: Task<Void, Never>?
+
+    /// True while the mic is live. `liveTranscript` is the best-so-far text shown
+    /// in the input bar as the user speaks.
+    private(set) var isListening = false
+    private(set) var liveTranscript = ""
+    /// WhisperKit model-load status, surfaced in Settings (nil = not attempted).
+    private(set) var whisperStatus: String?
+    private(set) var isPreparingWhisper = false
 
     private static let embedderPrefersMLXKey = "embedder.prefersMLX"
 
@@ -141,6 +157,14 @@ final class AppEnvironment {
         provider = runtimeProvider
         responder = RAGResponder(store: store, embedder: embedder, provider: runtimeProvider)
         speech = AVSpeechProvider()
+
+        // Voice input: WhisperKit first (better accuracy, but unavailable until
+        // its model loads), Apple Speech as the always-on fallback. So dictation
+        // works on Apple Speech day one and upgrades to WhisperKit on demand.
+        let whisper = WhisperKitProvider()
+        whisperKit = whisper
+        transcription = TranscriptionRouter(providers: [whisper, AppleSpeechTranscriber()])
+
         ingester = DocumentIngester(store: store, embedder: embedder)
         let transcriptURL = url.deletingLastPathComponent().appendingPathComponent("transcript.json")
         chat = ChatSession(responder: responder, transcript: ChatTranscriptStore(url: transcriptURL))
@@ -185,6 +209,90 @@ final class AppEnvironment {
 
     func stopSpeaking() async {
         await speech.stop()
+    }
+
+    // MARK: - Voice input
+
+    /// Whether any recogniser can serve right now (WhisperKit-if-loaded, else
+    /// Apple Speech). Drives the mic button's enabled state.
+    var canDictate: Bool {
+        transcription.activeProvider != nil
+    }
+
+    /// The engine voice input would currently use, for the Settings label.
+    var activeTranscriberName: String {
+        transcription.activeProviderName ?? "Unavailable"
+    }
+
+    /// Tap-to-start / tap-to-stop. On stop (user tap OR the recogniser settling
+    /// on a final result) the transcript is sent automatically.
+    func toggleDictation() {
+        if isListening { stopDictation() } else { startDictation() }
+    }
+
+    private func startDictation() {
+        guard let provider = transcription.activeProvider else { return }
+        dictationTask?.cancel() // belt-and-suspenders: never leave a prior consumer running
+        dictationProvider = provider
+        liveTranscript = ""
+        isListening = true
+        do {
+            let stream = try provider.startListening()
+            dictationTask = Task { @MainActor in
+                var accumulator = TranscriptAccumulator()
+                for await segment in stream {
+                    accumulator.ingest(segment)
+                    liveTranscript = accumulator.text
+                }
+                await finishDictation(text: accumulator.text)
+            }
+        } catch {
+            isListening = false
+            dictationProvider = nil
+            liveTranscript = ""
+        }
+    }
+
+    /// Ask the active recogniser to stop; the stream then finishes and
+    /// `finishDictation` auto-sends.
+    private func stopDictation() {
+        liveTranscript = "" // clear the ticker on the stop tap, not when the stream drains
+        dictationProvider?.stopListening()
+    }
+
+    private func finishDictation(text: String) async {
+        isListening = false
+        liveTranscript = ""
+        dictationProvider = nil
+        dictationTask = nil
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        await chat.send(trimmed)
+    }
+
+    /// Download + load WhisperKit's model so voice input upgrades from Apple
+    /// Speech to WhisperKit (the router prefers it once available).
+    func enableWhisperKit() async {
+        guard !isPreparingWhisper else { return }
+        isPreparingWhisper = true
+        whisperStatus = "Downloading WhisperKit model…"
+        do {
+            try await whisperKit.prepareModel { fraction in
+                // Only apply while still preparing — a late hop enqueued near 100%
+                // must not overwrite the terminal status below (same race we
+                // guarded in preloadGemma).
+                Task { @MainActor in
+                    if self.isPreparingWhisper {
+                        self.whisperStatus = "Downloading WhisperKit model… \(Int((fraction * 100).rounded()))%"
+                    }
+                }
+            }
+            isPreparingWhisper = false
+            whisperStatus = "WhisperKit ready — voice input now uses it."
+        } catch {
+            isPreparingWhisper = false
+            whisperStatus = "Couldn’t load WhisperKit: \(error.localizedDescription)"
+        }
     }
 
     /// Warm the MLX Gemma weights, folding download progress into `modelLoad` so

@@ -27,6 +27,7 @@ let package = Package(
         .library(name: "M1K3Chat", targets: ["M1K3Chat"]),
         .library(name: "M1K3Voice", targets: ["M1K3Voice"]),
         .library(name: "M1K3MLX", targets: ["M1K3MLX"]),
+        .library(name: "M1K3WhisperKit", targets: ["M1K3WhisperKit"]),
     ],
     dependencies: [
         .package(url: "https://github.com/groue/GRDB.swift.git", from: "7.0.0"),
@@ -37,6 +38,11 @@ let package = Package(
         // Official MCP Swift SDK — the M1K3MCP stdio server exposes M1K3's
         // knowledge to Claude Desktop/Code as MCP tools.
         .package(url: "https://github.com/modelcontextprotocol/swift-sdk.git", from: "0.7.0"),
+        // WhisperKit — high-accuracy on-device transcription (the P6 primary
+        // engine). Heavy (CoreML + model download), so it's isolated to the
+        // M1K3WhisperKit target; Apple Speech (system framework) is the
+        // always-available fallback behind the same TranscriptionProvider seam.
+        .package(url: "https://github.com/argmaxinc/WhisperKit.git", from: "0.15.0"),
     ],
     targets: [
         .target(
@@ -155,6 +161,22 @@ let package = Package(
             name: "M1K3MCP",
             dependencies: ["M1K3MCPKit"],
             path: "Sources/M1K3MCP"
+        ),
+        // WhisperKit transcription, isolated like M1K3MLX so only this target
+        // (and the app) link the heavy CoreML/model machinery. Conforms to
+        // M1K3Voice's TranscriptionProvider.
+        .target(
+            name: "M1K3WhisperKit",
+            dependencies: [
+                "M1K3Voice",
+                .product(name: "WhisperKit", package: "WhisperKit"),
+            ],
+            path: "Sources/M1K3WhisperKit"
+        ),
+        .testTarget(
+            name: "M1K3WhisperKitTests",
+            dependencies: ["M1K3WhisperKit", "M1K3Voice"],
+            path: "Tests/M1K3WhisperKitTests"
         ),
     ]
 )
