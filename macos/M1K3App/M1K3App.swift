@@ -18,7 +18,15 @@ struct M1K3App: App {
     var body: some Scene {
         WindowGroup {
             Group {
-                if let env {
+                if SelfTest.isRequested {
+                    ProgressView("Running self-test…")
+                        .frame(minWidth: 360, minHeight: 200)
+                        .task {
+                            let report = await SelfTest.run()
+                            FileHandle.standardError.write(Data(("\n" + report + "\n").utf8))
+                            exit(0)
+                        }
+                } else if let env {
                     ContentView()
                         .environment(env)
                 } else if let startupError {
@@ -30,7 +38,7 @@ struct M1K3App: App {
                 }
             }
             .task {
-                guard env == nil, startupError == nil else { return }
+                guard !SelfTest.isRequested, env == nil, startupError == nil else { return }
                 do {
                     env = try AppEnvironment()
                 } catch {
