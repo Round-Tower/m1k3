@@ -126,6 +126,46 @@ public final class KnowledgeStore: @unchecked Sendable {
         }
     }
 
+    /// Re-embed every stored chunk with `embedder`, replacing existing vectors
+    /// in one pass. Use when switching embedders (e.g. Hashing fallback → MLX):
+    /// the stored vectors define the search space, so a half-migrated store would
+    /// compare incompatible vectors. Returns the number of chunks re-embedded.
+    @discardableResult
+    public func reindexEmbeddings(using embedder: any EmbeddingService) async throws -> Int {
+        // Snapshot (chunkID, itemID, content) for every chunk first, so the async
+        // embed happens outside any DB transaction.
+        let rows: [(chunkID: UUID, itemID: UUID, content: String)] = try await dbQueue.read { db in
+            try Row.fetchAll(db, sql: "SELECT id, item_id, content FROM knowledge_chunks")
+                .compactMap { row -> (chunkID: UUID, itemID: UUID, content: String)? in
+                    guard let cid: String = row["id"], let chunkID = UUID(uuidString: cid),
+                          let iid: String = row["item_id"], let itemID = UUID(uuidString: iid)
+                    else { return nil }
+                    let content: String = row["content"] ?? ""
+                    return (chunkID, itemID, content)
+                }
+        }
+        guard !rows.isEmpty else { return 0 }
+
+        let vectors = try await embedder.embedBatch(rows.map(\.content))
+        guard vectors.count == rows.count else {
+            throw KnowledgeStoreError.embeddingCountMismatch(chunks: rows.count, embeddings: vectors.count)
+        }
+
+        try await dbQueue.write { db in
+            for (row, vector) in zip(rows, vectors) {
+                try db.execute(
+                    sql: """
+                    INSERT INTO knowledge_chunk_embeddings (chunk_id, item_id, embedding)
+                    VALUES (?, ?, ?)
+                    ON CONFLICT(chunk_id) DO UPDATE SET embedding = excluded.embedding
+                    """,
+                    arguments: [row.chunkID.uuidString, row.itemID.uuidString, VectorMath.serialize(vector)]
+                )
+            }
+        }
+        return rows.count
+    }
+
     /// The existing item id if one with this `sourceRef` is already indexed.
     public func itemID(forSourceRef sourceRef: String) throws -> UUID? {
         try dbQueue.read { db in
@@ -147,6 +187,14 @@ public final class KnowledgeStore: @unchecked Sendable {
     public func chunkCount() throws -> Int {
         try dbQueue.read { db in
             try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM knowledge_chunks") ?? 0
+        }
+    }
+
+    /// Number of chunks that currently carry an embedding vector. Lets callers
+    /// see how much of the store is vector-searchable (vs FTS-only).
+    public func embeddingCount() throws -> Int {
+        try dbQueue.read { db in
+            try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM knowledge_chunk_embeddings") ?? 0
         }
     }
 
