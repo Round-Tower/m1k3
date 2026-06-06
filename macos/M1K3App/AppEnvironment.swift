@@ -584,8 +584,13 @@ extension AppEnvironment {
 
         lastCallStatus = "Transcribing…"
         let title = "Call \(Self.callTitleFormatter.string(from: Date()))"
+        // Stereo-channel diarization attributes speakers when each party is on its
+        // own channel; it returns no turns for a mono file, so the pipeline simply
+        // leaves the transcript unattributed (no error). FluidAudio (mono) drops in
+        // behind the same seam later.
         let pipeline = CallIntelligencePipeline(
             transcriber: batchTranscriber,
+            diarizer: StereoChannelDiarizer(),
             summarizer: callSummarizer
         )
         do {
