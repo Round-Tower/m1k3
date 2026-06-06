@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- App Sandbox: privacy-by-default, matches the M1K3 ethos. The store and
+	     all data live in the app container; documents enter only via explicit
+	     user selection / drop. -->
+	<key>com.apple.security.app-sandbox</key>
+	<true/>
+	<!-- Read PDFs / text the user explicitly drops or opens. -->
+	<key>com.apple.security.files.user-selected.read-only</key>
+	<true/>
+</dict>
+</plist>

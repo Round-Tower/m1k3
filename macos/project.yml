@@ -1,0 +1,70 @@
+# M1K3 — macOS app shell (XcodeGen)
+#
+# Source of truth for M1K3.xcodeproj. Regenerate with `xcodegen generate`; the
+# pbxproj is a build artifact, not hand-maintained — this sidesteps the stale-
+# settings / ID-churn trap of copying a hand-authored project from another repo.
+#
+# The app target is a thin SwiftUI shell over the local SwiftPM package at `.`
+# (same package `swift test` drives). macOS 26 Tahoe only: real Liquid Glass +
+# on-device Foundation Models. App-sandboxed + hardened from day one so the
+# runtime constraints the unit tests can't see (sandbox file paths, entitlements)
+# surface now, not at ship.
+#
+# Signed: Kev + claude-opus-4-8, 2026-06-06, Confidence 0.8, Prior: Unknown
+
+name: M1K3
+
+options:
+  bundleIdPrefix: dev.murphysig
+  createIntermediateGroups: true
+  deploymentTarget:
+    macOS: "26.0"
+
+settings:
+  base:
+    SWIFT_VERSION: "6.2"
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    DEVELOPMENT_TEAM: ""
+    CODE_SIGN_STYLE: Automatic
+
+packages:
+  M1K3:
+    path: .
+
+targets:
+  M1K3:
+    type: application
+    platform: macOS
+    deploymentTarget: "26.0"
+    sources:
+      - path: M1K3App
+    dependencies:
+      - package: M1K3
+        product: M1K3Chat
+      - package: M1K3
+        product: M1K3Knowledge
+      - package: M1K3
+        product: M1K3Inference
+      - package: M1K3
+        product: M1K3Voice
+      - package: M1K3
+        product: M1K3Agent
+      - package: M1K3
+        product: M1K3KnowledgeTools
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.murphysig.M1K3
+        PRODUCT_NAME: M1K3
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_NSHumanReadableCopyright: "© 2026 Kevin Murphy"
+        INFOPLIST_KEY_LSApplicationCategoryType: "public.app-category.productivity"
+        CODE_SIGN_ENTITLEMENTS: M1K3App/M1K3.entitlements
+        ENABLE_HARDENED_RUNTIME: YES
+        SWIFT_EMIT_LOC_STRINGS: YES
+    info:
+      path: M1K3App/Info.generated.plist
+      properties:
+        CFBundleDisplayName: M1K3
+        LSMinimumSystemVersion: "26.0"
+        NSHumanReadableDescription: "Local, private AI companion."
