@@ -115,21 +115,28 @@ public struct ChunkHit: Identifiable, Equatable, Sendable {
 
 // MARK: - GRDB persistence records
 
-/// Row shape for `knowledge_items`.
+/// Row shape for `knowledge_items`. CodingKeys map camelCase properties to the
+/// snake_case columns GRDB reads/writes.
 struct ItemRecord: Codable, FetchableRecord, PersistableRecord {
     static let databaseTableName = "knowledge_items"
     var id: String
     var kind: String
     var title: String
-    var source_ref: String?
-    var created_at: Double
+    var sourceRef: String?
+    var createdAt: Double
+
+    enum CodingKeys: String, CodingKey {
+        case id, kind, title
+        case sourceRef = "source_ref"
+        case createdAt = "created_at"
+    }
 
     init(_ item: KnowledgeItem) {
         id = item.id.uuidString
         kind = item.kind.rawValue
         title = item.title
-        source_ref = item.sourceRef
-        created_at = item.createdAt.timeIntervalSince1970
+        sourceRef = item.sourceRef
+        createdAt = item.createdAt.timeIntervalSince1970
     }
 }
 
@@ -137,14 +144,19 @@ struct ItemRecord: Codable, FetchableRecord, PersistableRecord {
 struct ChunkRecord: Codable, FetchableRecord, PersistableRecord {
     static let databaseTableName = "knowledge_chunks"
     var id: String
-    var item_id: String
+    var itemID: String
     var ordinal: Int
     var heading: String?
     var content: String
 
+    enum CodingKeys: String, CodingKey {
+        case id, ordinal, heading, content
+        case itemID = "item_id"
+    }
+
     init(_ chunk: KnowledgeChunk) {
         id = chunk.id.uuidString
-        item_id = chunk.itemID.uuidString
+        itemID = chunk.itemID.uuidString
         ordinal = chunk.ordinal
         heading = chunk.heading
         content = chunk.content
