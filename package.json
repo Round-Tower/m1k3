@@ -1,7 +1,7 @@
 {
   "name": "m1k3",
   "version": "1.0.0",
-  "description": "<!-- CI/CD Status Badges --> ![M1K3 Tests](https://img.shields.io/github/actions/workflow/status/m1k3-team/m1k3/unified-tests.yml?style=for-the-badge&label=M1K3%20Tests&logo=github) ![Quick Tests](https://img.shields.io/github/actions/workflow/status/m1k3-team/m1k3/quick-tests.yml?style=for-the-badge&label=Quick%20Tests&logo=checkmarx) ![Test Coverage](https://img.shields.io/badge/Test%20Coverage-75%25-brightgreen?style=for-the-badge&logo=codecov) ![Test Count](https://img.shields.io/badge/Tests-166-blue?style=for-the-badge&logo=testinglibrary) ![Security Audit](https://img.shields.io/badge/Security-Audited-green?style=for-the-badge&logo=security)",
+  "description": "M1K3 — privacy-focused local AI assistant (Python desktop CLI/MCP server + Swift macOS MVP + KMP mobile). Status badges live in README.md.",
   "main": "test-dashboard-monochrome.js",
   "directories": {
     "doc": "docs",

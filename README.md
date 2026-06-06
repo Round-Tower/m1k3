@@ -1,5 +1,9 @@
 # M1K3 — Local AI Assistant (Desktop CLI + 間 AI Mobile)
 
+[![CI](https://github.com/Round-Tower/m1k3/actions/workflows/ci.yml/badge.svg)](https://github.com/Round-Tower/m1k3/actions/workflows/ci.yml)
+[![Security](https://github.com/Round-Tower/m1k3/actions/workflows/security.yml/badge.svg)](https://github.com/Round-Tower/m1k3/actions/workflows/security.yml)
+[![Mac review](https://github.com/Round-Tower/m1k3/actions/workflows/claude-code-review-mac.yml/badge.svg)](https://github.com/Round-Tower/m1k3/actions/workflows/claude-code-review-mac.yml)
+
 > ## ⚠️ README staleness — read this first
 >
 > **Active focus is the KMP mobile app** — see [`app/README.md`](./app/README.md)
@@ -611,45 +615,28 @@ m1k3/
 
 ## 🚀 CI/CD & Testing Pipeline
 
-M1K3 features a comprehensive continuous integration and testing pipeline powered by the **M1K3 Unified Test Suite**.
+A lean pipeline that tests **what M1K3 actually ships** (overhauled 2026-06-06 —
+the old Node/Playwright "unified suite" tested a web dashboard, was perpetually
+red, and never covered the Swift work).
 
-### **📊 Test Coverage**
-- **166 Tests** across 73 test files
-- **13.8 minutes** estimated runtime
-- **7 Test Categories**: Unit, Integration, Visual, Performance, Security, E2E, API
-- **Cross-Platform**: Linux, macOS, Windows validation
-- **Multi-Version**: Node.js 18/20/22 + Python 3.9/3.11/3.12 matrix
+### **🔄 Workflows**
 
-### **🔄 Automated Workflows**
+#### **CI** (`ci.yml`) — push to `master`/`develop`, all PRs
+- **`swift-mac`**: `swift test` on the macOS MVP, run on a `macos-26` (Tahoe) runner
+- **`python-smoke`**: a curated, verified-green subset of the legacy Python suite
+  (see [`tests/CI_TRIAGE.md`](./tests/CI_TRIAGE.md) for the green list + backlog)
 
-#### **Complete Test Suite** (`unified-tests.yml`)
-- **Triggers**: Push to main/develop, Pull requests, Daily schedule
-- **Features**: Full test coverage, screenshot testing, security audit, GitHub Pages deployment
-- **Artifacts**: Interactive HTML reports, screenshots, data exports (30-day retention)
+#### **Security** (`security.yml`) — push to `master`/`develop`, all PRs
+- **TruffleHog**: verified-secret detection
+- **Bandit**: Python SAST, gated on high-severity / high-confidence findings
 
-#### **Quick Validation** (`quick-tests.yml`) 
-- **Triggers**: Feature branch pushes, PR updates
-- **Duration**: ~5-10 minutes
-- **Features**: Fast feedback, security quick scan, code quality checks
+#### **Claude Code Review** (`claude-code-review.yml`, `claude-code-review-mac.yml`)
+- Automated review on PRs touching `app/**` (Kotlin) and `macos/**` (Swift)
 
-#### **Release Testing** (`release-testing.yml`)
-- **Triggers**: Release publish, Manual dispatch  
-- **Duration**: ~30-45 minutes
-- **Features**: Cross-platform validation, comprehensive release report (365-day retention)
+> **Note**: the `CI`/`Security` badges read "no status" until PR #9 merges to
+> `master` (the workflows currently live on `feat/mac-mvp`).
 
-### **📈 Quality Features**
-- **🎨 M1K3-Branded Reports**: Professional HTML reports with pure black design
-- **📸 Visual Regression**: Screenshot testing across Desktop/Tablet/Mobile viewports
-- **🔒 Security Auditing**: Dependency vulnerabilities, code analysis, secrets scanning
-- **📊 Interactive Dashboards**: Filterable results, click-to-expand screenshots
-- **🏷️ Automated Badges**: Real-time status indicators and coverage metrics
-
-### **🌐 Report Access**
-- **GitHub Pages**: [Live Test Reports](https://github.com/your-org/m1k3/actions)
-- **Artifacts**: Download detailed reports from any workflow run
-- **PR Comments**: Automated test summaries on pull requests
-
-**📚 Full Documentation**: [CI/CD Pipeline Guide](.github/workflows/README.md)
+**📚 Details**: [CI/CD Pipeline Guide](.github/workflows/README.md)
 
 ## 🤝 Contributing
 
