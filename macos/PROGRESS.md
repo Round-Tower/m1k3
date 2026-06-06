@@ -16,8 +16,8 @@ Update this file as phases move. Keep it scannable.
 | # | Phase | State | Notes |
 |---|-------|-------|-------|
 | 0 | Scaffold | ✅ done | SwiftPM multi-module package |
-| 1 | Knowledge core | 🟢 logic done | store + graph; ⏳ MLX embedder deferred |
-| 2 | Inference layer | 🟢 logic done | protocol + router + AFM; ⏳ MLX/LiteRT Gemma deferred |
+| 1 | Knowledge core | 🟢 logic done | store + graph; `MLXEmbeddingService` (bge_small) built behind seam; ⏳ wire as store embedder (needs re-index) |
+| 2 | Inference layer | 🟢 mostly done | protocol + router + AFM + **`MLXGemmaProvider`** (Gemma 3, MLXLLM) wired to runtime picker; ⏳ on-device gen verify · LiteRT spike |
 | 3 | LiteRT Gemma spike | ⬜ not started | needs MLX/runtime session |
 | 4 | Documents + RAG | 🟢 logic done | ingest (chunk/PDF/embed/store) + RAG (embed→hybrid→prompt→answer+sources, streaming); ⏳ citation validation wiring (needs citation-scheme decision) |
 | 5 | Chat UI + Liquid Glass | 🟢 shell done | XcodeGen app target; chat→RAG, drop→ingest, speak, settings; real `.glassEffect`. ⏳ voice input (P6) |
@@ -41,12 +41,12 @@ Legend: ✅ done · 🟢 logic done (deferred adapter) · 🟡 partial · ⬜ no
 | `M1K3Agent` | M1K3Inference | AgentTool + ToolParameter/ToolResult, LocalAgent (ReAct loop) |
 | `M1K3KnowledgeTools` | M1K3Agent + M1K3Knowledge | SearchKnowledgeTool, ListDocumentsTool, GetDocumentTool (⏳ hybrid search variant; QueryGraphTool) |
 | `M1K3Chat` | M1K3Knowledge + M1K3Inference | ChatPromptBuilder (in Knowledge) + RAGResponder (embed→hybrid→prompt→answer+sources, streaming) + `RAGResponding` seam + `ChatSession` (@MainActor @Observable, self-normalising token fold) |
-| `M1K3Embeddings` | M1K3Knowledge + mlx-swift-lm | ⏳ MLXEmbeddingService (nomic-embed-text-v1.5) |
+| `M1K3MLX` | M1K3Knowledge + M1K3Inference + mlx-swift-lm | ✅ `MLXEmbeddingService` (bge_small, [Float]) + `MLXGemmaProvider` (Gemma 3 1B 4-bit, MLXLLM). Heavy Metal target, isolated. Default embedder NOT nomic (the prior knowledge-server project weight-key gotcha). ⏳ on-device runtime verify |
 | `M1K3MCP` | swift-sdk + M1K3Knowledge | ⏳ stdio server |
 | `M1K3Voice` | AVFoundation (+ WhisperKit later) | SpeechProvider + SpeechUtterance + AVSpeechProvider; ⏳ TranscriptionProvider (WhisperKit, heavy) |
 | `M1K3Calls` | M1K3Knowledge + … | ⏳ CallSession, encrypted SQLite, diarization, summary |
 | `M1K3Avatar` | RealityKit | ⏳ emotion-driven avatar |
-| `M1K3App` (Xcode) | all | ✅ SwiftUI shell (XcodeGen `project.yml`), Liquid Glass, chat/import/speak/settings; macOS 26, app-sandboxed |
+| `M1K3App` (Xcode) | all (+ M1K3MLX) | ✅ SwiftUI shell (XcodeGen `project.yml`), Liquid Glass, chat/import/speak/settings; runtime picker hot-swaps AFM ↔ MLX Gemma via `RuntimeInferenceProvider` façade; macOS 26, app-sandboxed |
 
 ---
 
