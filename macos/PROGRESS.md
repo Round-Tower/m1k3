@@ -60,13 +60,18 @@ ask→embed→hybrid→documents-first prompt→grounded answer + sources, strea
 error path, blank-input guard), and `M1K3MLX` fast conformance. All fast tests
 run on the HashingEmbeddingService fallback — no MLX required.
 
-**⚠️ MLX gotcha (2026-06-06):** the gated MLX integration tier
-(`M1K3_MLX_INTEGRATION=1`) does NOT run under CLI `swift test` — MLX aborts with
-"Failed to load the default metallib (library not found)" because mlx-swift
-resolves Metal kernels relative to the running binary and xctest isn't an .app.
-**On-device MLX is verified by launching M1K3.app**, not the CLI. (Same reason
-the prior knowledge-server project runs MLX only inside its app.) Also: first MLX build needs
-`xcodebuild -downloadComponent MetalToolchain` once.
+**⚠️ MLX runtime boundary (2026-06-06, confirmed):** MLX runs **only from an
+xcodebuild product** (the `.app`). SwiftPM never compiles mlx-swift's Metal
+kernels — there is no `.metallib` anywhere in `.build` — so `swift test` AND
+`swift run` both abort with "Failed to load the default metallib". The `.app`'s
+headless self-test (`M1K3_SELFTEST=1`, streams to `/tmp/m1k3_selftest.log`) also
+needs a **live, unlocked GUI session** to fire its SwiftUI `.task`. So **on-device
+MLX (gen + embed) is verified by launching M1K3.app interactively** — `open
+M1K3.xcodeproj`, ⌘R, pick MLX, ask. A future xcodebuild command-line-tool target
+could verify headlessly (metallib + no GUI). Also: first MLX build needs
+`xcodebuild -downloadComponent MetalToolchain` once. And the product default
+`gemma-3-1b-it-qat-4bit` is NOT commonly cached — first selection stalls on a
+slow download with no UI feedback (tracked gap).
 
 **App build:** `cd macos && xcodegen generate && xcodebuild build -scheme M1K3
 -destination 'platform=macOS,arch=arm64' CODE_SIGNING_ALLOWED=NO | xcbeautify`.
