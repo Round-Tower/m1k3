@@ -34,6 +34,9 @@ let package = Package(
         // Same package family the prior knowledge-server project ships MLXEmbedders from; isolated to the
         // M1K3MLX target so the heavy Metal build never touches the core tests.
         .package(url: "https://github.com/ml-explore/mlx-swift-lm.git", from: "2.29.0"),
+        // Official MCP Swift SDK — the M1K3MCP stdio server exposes M1K3's
+        // knowledge to Claude Desktop/Code as MCP tools.
+        .package(url: "https://github.com/modelcontextprotocol/swift-sdk.git", from: "0.7.0"),
     ],
     targets: [
         .target(
@@ -130,6 +133,28 @@ let package = Package(
             name: "M1K3MLXTests",
             dependencies: ["M1K3MLX", "M1K3Knowledge", "M1K3Inference"],
             path: "Tests/M1K3MLXTests"
+        ),
+        // MCP server library: knowledge-tool handlers (pure, testable) + the
+        // stdio server wiring. Split from the executable so the tools can be
+        // unit-tested (executable targets are awkward to @testable import).
+        .target(
+            name: "M1K3MCPKit",
+            dependencies: [
+                "M1K3Knowledge",
+                .product(name: "MCP", package: "swift-sdk"),
+            ],
+            path: "Sources/M1K3MCPKit"
+        ),
+        .testTarget(
+            name: "M1K3MCPKitTests",
+            dependencies: ["M1K3MCPKit", "M1K3Knowledge"],
+            path: "Tests/M1K3MCPKitTests"
+        ),
+        // The thin executable Claude Desktop/Code spawns — just runs the server.
+        .executableTarget(
+            name: "M1K3MCP",
+            dependencies: ["M1K3MCPKit"],
+            path: "Sources/M1K3MCP"
         ),
     ]
 )
