@@ -134,12 +134,19 @@ struct ContentView: View {
     private var toolbarContent: some ToolbarContent {
         ToolbarItem(placement: .principal) {
             HStack(spacing: 6) {
-                Circle()
-                    .fill(env.providerAvailable ? .green : .orange)
-                    .frame(width: 8, height: 8)
-                Text(env.selectedRuntime.rawValue)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                if env.modelLoad.isActive {
+                    ProgressView().controlSize(.small)
+                    Text(env.modelLoad.label(modelName: "Gemma 3"))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } else {
+                    Circle()
+                        .fill(env.providerAvailable ? .green : .orange)
+                        .frame(width: 8, height: 8)
+                    Text(env.selectedRuntime.rawValue)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
         }
         ToolbarItemGroup(placement: .primaryAction) {

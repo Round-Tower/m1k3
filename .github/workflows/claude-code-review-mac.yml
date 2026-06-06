@@ -1,0 +1,102 @@
+name: Claude Code Review (Mac)
+
+# Companion to claude-code-review.yml (which is scoped to the Kotlin/Android app/).
+# This one reviews the Mac-native SwiftUI/SwiftPM surface under macos/ — the
+# Android reviewer never fires on Swift changes, so the Mac MVP had no automated
+# review until now.
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+    paths:
+      - "macos/**/*.swift"
+      - "macos/**/Package.swift"
+      - "macos/**/Package.resolved"
+      - "macos/**/project.yml"
+
+jobs:
+  claude-review-mac:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write # Required to post PR comments
+      issues: read
+      id-token: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Full history for better diff context
+
+      - name: Run Claude Code Review
+        id: claude-review-mac
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          prompt: |
+            REPO: ${{ github.repository }}
+            PR NUMBER: ${{ github.event.pull_request.number }}
+
+            You are reviewing the **Mac-native MVP** of M1K3 — a privacy-first,
+            100% on-device AI assistant. Target: macOS 26 (Tahoe), Swift 6.2,
+            SwiftUI Liquid Glass. Source of truth lives under `macos/`:
+            a multi-module SwiftPM package (`macos/Sources/*`) consumed by a thin
+            SwiftUI app shell (`macos/M1K3App/`).
+
+            Key technical context:
+            - **Inference**: pluggable `InferenceProvider` seam — Apple Foundation
+              Models (cheap turns), MLX Gemma 3 (1B, 4-bit, in-process Metal),
+              LiteRT (spike). MLX weights download lazily on first use.
+            - **Knowledge/RAG**: GRDB + FTS5 BM25 + cosine KNN + RRF hybrid search;
+              `EmbeddingService` seam (Hashing fallback ↔ MLX bge_small).
+            - **Architecture discipline**: ALL business logic lives in the
+              `Sources/*` packages and is unit-tested with `swift test`; the
+              `M1K3App/` target is deliberately dumb glue (TDD_SKIP). Flag any
+              real logic that leaked into the app target.
+            - **Privacy**: on-device only — documents and questions never leave the
+              Mac. Flag any network egress.
+
+            Please review this pull request focusing on:
+
+            **1. Swift 6 concurrency**
+            - `Sendable` / `@unchecked Sendable` correctness; document why any
+              `@unchecked` is safe (what guards the mutable state).
+            - Actor isolation: `@MainActor` for UI/observable state; no main-thread
+              blocking; `nonisolated` used deliberately.
+            - Locks: `NSLock.withLock { }` (scoped) — flag bare `.lock()`/`.unlock()`
+              in async contexts (unavailable / deadlock-prone).
+
+            **2. Architecture & seams**
+            - Pure logic in packages (tested) vs thin glue in `M1K3App/`.
+            - Protocol seams (`InferenceProvider`, `EmbeddingService`,
+              `SpeechProvider`, `ModelPreloading`) kept clean — no heavy deps (MLX,
+              Metal) leaking into `M1K3Knowledge`/`M1K3Inference`.
+
+            **3. MLX / on-device**
+            - Model-load and Metal boundaries (MLX runs only from a bundled .app —
+              not `swift test`); weight-download UX and progress reporting.
+            - No blocking the main actor during a model load.
+
+            **4. GRDB / persistence**
+            - The `SQL` (ExpressibleByStringInterpolation) leak: interpolated
+              `String` literals in closures can infer as `SQL` — annotate `-> String`.
+            - FTS5 / cosine / RRF correctness; sandbox-container paths.
+
+            **5. Correctness & tests**
+            - New logic in packages carries `swift test` coverage (Swift Testing:
+              `@Test` / `#expect`).
+            - Edge cases: empty input, cancellation, mid-stream errors, clamping.
+
+            **6. Provenance (MurphySig)**
+            - Respect existing `Signed:` blocks; never fabricate signatures or
+              authorship. New files should be signed `Prior: Unknown`.
+
+            Defer to the repo `CLAUDE.md` and `macos/PLAN.md` for style and intent.
+            Be specific and constructive — cite file:line, suggest concrete fixes,
+            and call out what's done well.
+
+            Use `gh pr comment` with your Bash tool to leave your review as a
+            comment on the PR.
+
+          claude_args: '--allowed-tools "Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*),Bash(gh pr list:*)"'

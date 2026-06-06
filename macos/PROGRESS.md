@@ -69,15 +69,36 @@ needs a **live, unlocked GUI session** to fire its SwiftUI `.task`. So **on-devi
 MLX (gen + embed) is verified by launching M1K3.app interactively** — `open
 M1K3.xcodeproj`, ⌘R, pick MLX, ask. A future xcodebuild command-line-tool target
 could verify headlessly (metallib + no GUI). Also: first MLX build needs
-`xcodebuild -downloadComponent MetalToolchain` once. And the product default
-`gemma-3-1b-it-qat-4bit` is NOT commonly cached — first selection stalls on a
-slow download with no UI feedback (tracked gap).
+`xcodebuild -downloadComponent MetalToolchain` once. The product default
+`gemma-3-1b-it-qat-4bit` is NOT commonly cached — first selection used to stall
+on a slow download with **no UI feedback**. ✅ **Fixed**: selecting MLX Gemma now
+preloads the weights and streams a real download % to Settings + the toolbar (see
+the download-UX entry below). Follow-up: prefer an already-cached model when one
+is present to skip the first-run download entirely.
 
 **App build:** `cd macos && xcodegen generate && xcodebuild build -scheme M1K3
 -destination 'platform=macOS,arch=arm64' CODE_SIGNING_ALLOWED=NO | xcbeautify`.
 `project.yml` is the source of truth; the `.xcodeproj` is gitignored + regenerated.
 
 ---
+
+## MLX download UX (2026-06-06) ✅
+
+Selecting **MLX Gemma 3** no longer hangs silently while ~1GB of weights stream in.
+
+- **Pure core (`M1K3Inference`):** `ModelLoadState` (`idle → downloading(fraction) →
+  ready / failed`, fraction clamped 0...1) + a dyslexia-friendly `label(modelName:)`
+  formatter + a `ModelPreloading` seam. 6 new tests in `M1K3InferenceTests` —
+  `swift test`-able with zero Metal (147 tests / 29 suites green).
+- **Progress threaded through MLX:** `MLXGemmaProvider` gained `prepare(progress:)`
+  and forwards `loadContainer`'s `progressHandler`; `MLXEmbeddingService` gained an
+  optional `onLoadProgress` (the embeddings switch now shows real download %).
+- **App glue:** `AppEnvironment.modelLoad` preloads on picker selection;
+  `SettingsView` shows a `ProgressView(value:)` row; `ContentView`'s toolbar shows
+  "Downloading Gemma 3… NN%" instead of a dead status dot.
+- **Honesty fix:** runtime labels said "Gemma **4**" (doesn't exist) → **Gemma 3**.
+- **Verify-by-launch:** the % bar itself is on-device only — confirm at ⌘R with
+  uncached weights.
 
 ## Deferred buckets (each wants a focused session)
 

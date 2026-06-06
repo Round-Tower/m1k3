@@ -23,6 +23,12 @@
 //  Context: First MLXLLM generation in the M1K3/the internal prior projects family — the PLAN's
 //  flagged Phase-2 risk ("confirm MLXLLM runs Gemma cleanly"). Compiles; runtime
 //  generation pending on-device verification.
+//
+//  Review: Kev + claude-opus-4-8, 2026-06-06, Confidence 0.8 — added
+//  `ModelPreloading` conformance + `prepare(progress:)` and threaded
+//  `loadContainer`'s `progressHandler` through `ensureLoaded`, so the ~1GB first
+//  download reports a 0...1 fraction to the UI instead of stalling silently. The
+//  progress path is still verify-by-launch (MLX only runs from the .app).
 
 import Foundation
 import M1K3Inference
@@ -31,7 +37,7 @@ import MLXLMCommon
 
 /// `@unchecked Sendable`: the loaded `ModelContainer` is cached behind a lock and
 /// is itself an isolation actor; everything else is immutable.
-public final class MLXGemmaProvider: InferenceProvider, @unchecked Sendable {
+public final class MLXGemmaProvider: InferenceProvider, ModelPreloading, @unchecked Sendable {
     public let name: String
 
     private let configuration: ModelConfiguration
@@ -64,6 +70,13 @@ public final class MLXGemmaProvider: InferenceProvider, @unchecked Sendable {
         true
     }
 
+    /// Warm the model ahead of the first turn, reporting download progress, so
+    /// the runtime picker can show a real bar instead of a silent ~1GB stall.
+    /// No-ops fast once the container is cached.
+    public func prepare(progress: @escaping @Sendable (Double) -> Void) async throws {
+        _ = try await ensureLoaded(progress: progress)
+    }
+
     public func generate(prompt: String) async throws -> String {
         let container = try await ensureLoaded()
         let session = ChatSession(container, generateParameters: generateParameters)
@@ -90,9 +103,13 @@ public final class MLXGemmaProvider: InferenceProvider, @unchecked Sendable {
         }
     }
 
-    private func ensureLoaded() async throws -> ModelContainer {
+    private func ensureLoaded(
+        progress: @escaping @Sendable (Double) -> Void = { _ in }
+    ) async throws -> ModelContainer {
         if let cached = lock.withLock({ container }) { return cached }
-        let loaded = try await LLMModelFactory.shared.loadContainer(configuration: configuration)
+        let loaded = try await LLMModelFactory.shared.loadContainer(configuration: configuration) { prog in
+            progress(prog.fractionCompleted)
+        }
         lock.withLock { container = loaded }
         return loaded
     }

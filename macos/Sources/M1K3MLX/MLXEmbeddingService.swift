@@ -31,6 +31,7 @@ import MLXNN
 public final class MLXEmbeddingService: EmbeddingService, @unchecked Sendable {
     private var modelContainer: ModelContainer?
     private let configuration: ModelConfiguration
+    private let onLoadProgress: (@Sendable (Double) -> Void)?
 
     public let dimension: Int
 
@@ -38,9 +39,18 @@ public final class MLXEmbeddingService: EmbeddingService, @unchecked Sendable {
     ///   - configuration: MLXEmbedders model. Defaults to `.bge_small` (the
     ///     known-good path); pass `.nomic_text_v1_5` only when its loader is fixed.
     ///   - dimension: vector width of `configuration` (bge_small = 384).
-    public init(configuration: ModelConfiguration = .bge_small, dimension: Int = 384) {
+    ///   - onLoadProgress: optional 0...1 callback fired while the model
+    ///     downloads on first use, so a re-index can show real download progress
+    ///     instead of an indefinite spinner. Nil = silent (the default base
+    ///     embedder; only the user-triggered switch wires it up).
+    public init(
+        configuration: ModelConfiguration = .bge_small,
+        dimension: Int = 384,
+        onLoadProgress: (@Sendable (Double) -> Void)? = nil
+    ) {
         self.configuration = configuration
         self.dimension = dimension
+        self.onLoadProgress = onLoadProgress
     }
 
     public func embed(_ text: String) async throws -> [Float] {
@@ -72,9 +82,10 @@ public final class MLXEmbeddingService: EmbeddingService, @unchecked Sendable {
 
     private func ensureLoaded() async throws -> ModelContainer {
         if let modelContainer { return modelContainer }
+        let report = onLoadProgress
         let container = try await loadModelContainer(
             configuration: configuration,
-            progressHandler: { _ in }
+            progressHandler: { prog in report?(prog.fractionCompleted) }
         )
         modelContainer = container
         return container

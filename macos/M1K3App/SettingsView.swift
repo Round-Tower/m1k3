@@ -29,6 +29,7 @@ struct SettingsView: View {
                             if option.isReady { env.selectedRuntime = option }
                         }
                     }
+                    modelLoadRow
                 } header: {
                     Text("Inference runtime")
                 } footer: {
@@ -73,6 +74,28 @@ struct SettingsView: View {
             .formStyle(.grouped)
         }
         .frame(width: 440, height: 440)
+    }
+
+    /// Shows the MLX Gemma weight download as a real progress bar while it
+    /// streams (~1GB on first use), or the failure, so selecting MLX never looks
+    /// like a silent hang. Renders nothing when idle or ready.
+    @ViewBuilder
+    private var modelLoadRow: some View {
+        switch env.modelLoad {
+        case let .downloading(fraction):
+            HStack(spacing: 8) {
+                ProgressView(value: fraction)
+                    .controlSize(.small)
+                    .frame(maxWidth: 160)
+                Text(env.modelLoad.label(modelName: "Gemma 3"))
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+        case .failed:
+            Label(env.modelLoad.label(modelName: "Gemma 3"), systemImage: "exclamationmark.triangle")
+                .font(.caption).foregroundStyle(.orange)
+        case .idle, .ready:
+            EmptyView()
+        }
     }
 
     private var header: some View {

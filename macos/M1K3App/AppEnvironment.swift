@@ -11,6 +11,12 @@
 //  (in-memory) can't exercise, so it's pinned explicitly here.
 //
 //  Signed: Kev + claude-opus-4-8, 2026-06-06, Confidence 0.8, Prior: Unknown
+//
+//  Review: Kev + claude-opus-4-8, 2026-06-06, Confidence 0.8 — selecting MLX
+//  Gemma now preloads the weights (`preloadGemma`) and folds download progress
+//  into the observable `modelLoad: ModelLoadState`, mirroring the existing
+//  embeddings-switch pattern; the embedder switch routes its own download % into
+//  `embeddingStatus`. Fixed the "Gemma 4" runtime labels (Gemma 3 is current).
 
 import Foundation
 import M1K3Chat
@@ -25,8 +31,8 @@ import Observation
 /// up in the heavy-dependency session.
 enum RuntimeOption: String, CaseIterable, Identifiable {
     case appleFoundationModels = "Apple Foundation Models"
-    case mlxGemma = "MLX Gemma 4"
-    case liteRTGemma = "LiteRT Gemma 4"
+    case mlxGemma = "MLX Gemma 3"
+    case liteRTGemma = "LiteRT Gemma 3"
 
     var id: String {
         rawValue
@@ -66,6 +72,9 @@ final class AppEnvironment {
     private let embedder: SwappableEmbeddingService
     private let ingester: DocumentIngester
     private let runtimeSelection: RuntimeSelectionBox
+    /// Held directly (not just inside the façade) so the picker can warm it ahead
+    /// of the first turn and stream download progress to the UI.
+    private let mlxGemma: MLXGemmaProvider
 
     private static let embedderPrefersMLXKey = "embedder.prefersMLX"
 
@@ -79,8 +88,18 @@ final class AppEnvironment {
     /// Runtime picker selection. Changing it re-points the inference façade at
     /// the chosen backend for the next turn — no rebuild, transcript preserved.
     var selectedRuntime: RuntimeOption = .appleFoundationModels {
-        didSet { runtimeSelection.value = selectedRuntime }
+        didSet {
+            runtimeSelection.value = selectedRuntime
+            // Warm MLX on selection so the ~1GB first-use download shows a
+            // progress bar in Settings rather than a silent hang on the first
+            // chat turn. Cheap/no-op once the weights are cached.
+            if selectedRuntime == .mlxGemma { Task { await preloadGemma() } }
+        }
     }
+
+    /// Progress of warming the MLX Gemma weights, surfaced in Settings (and the
+    /// chat send path). Stays `.idle` for the Apple Foundation Models default.
+    private(set) var modelLoad: ModelLoadState = .idle
 
     /// Last ingest outcome, surfaced to the UI.
     private(set) var lastIngestStatus: String?
@@ -109,11 +128,13 @@ final class AppEnvironment {
         let selection = RuntimeSelectionBox(.appleFoundationModels)
         runtimeSelection = selection
         let afm = AppleFoundationModelsProvider()
+        let gemma = MLXGemmaProvider()
+        mlxGemma = gemma
         let runtimeProvider = RuntimeInferenceProvider(
             selection: selection,
             backends: [
                 .appleFoundationModels: afm,
-                .mlxGemma: MLXGemmaProvider(),
+                .mlxGemma: gemma,
             ],
             fallback: afm
         )
@@ -166,6 +187,29 @@ final class AppEnvironment {
         await speech.stop()
     }
 
+    /// Warm the MLX Gemma weights, folding download progress into `modelLoad` so
+    /// Settings shows a real bar. Idempotent: returns fast once the model is
+    /// cached. Runs off the main actor for the load; progress hops back to update
+    /// the observable state.
+    private func preloadGemma() async {
+        if case .downloading = modelLoad { return }
+        modelLoad = .progress(0)
+        do {
+            try await mlxGemma.prepare { fraction in
+                // Only apply while still downloading. A progress callback fired
+                // near completion enqueues its main-actor hop *after* the `.ready`
+                // write below; the guard makes that stale hop a no-op instead of
+                // regressing the bar to 99% forever.
+                Task { @MainActor in
+                    if case .downloading = self.modelLoad { self.modelLoad = .progress(fraction) }
+                }
+            }
+            modelLoad = .ready
+        } catch {
+            modelLoad = .failed(message: error.localizedDescription)
+        }
+    }
+
     /// Switch the active embedder and re-embed the whole store so retrieval moves
     /// to (or back from) semantic MLX vectors. The choice persists; on failure the
     /// façade rolls back so query + stored vectors stay in the same space.
@@ -178,7 +222,11 @@ final class AppEnvironment {
         defer { isReindexing = false }
 
         let newEmbedder: any EmbeddingService = useMLX
-            ? MLXEmbeddingService()
+            ? MLXEmbeddingService(onLoadProgress: { fraction in
+                Task { @MainActor in
+                    self.embeddingStatus = "Downloading embedder… \(Int((fraction * 100).rounded()))%"
+                }
+            })
             : HashingEmbeddingService()
         embedder.setEmbedder(newEmbedder)
         do {
