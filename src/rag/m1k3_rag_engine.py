@@ -5,14 +5,12 @@ Integrates with existing M1K3 architecture for enhanced intelligence
 """
 
 import json
-import os
 import time
 import hashlib
 import numpy as np
 from pathlib import Path
-from typing import Dict, List, Optional, Any, Union
+from typing import Dict, List, Optional, Any
 from dataclasses import dataclass, asdict
-from enum import Enum
 import logging
 
 # Import existing M1K3 components
@@ -151,7 +149,7 @@ class EmbeddingEngine:
                         else:
                             print(f"✅ Matryoshka truncation: {self.embedding_dim}D → {self.truncate_dim}D")
                     else:
-                        print(f"⚠️ Truncation only supported for EmbeddingGemma")
+                        print("⚠️ Truncation only supported for EmbeddingGemma")
                         self.truncate_dim = None
 
                 print(f"✅ Embedding model loaded ({self.embedding_dim}D)")
@@ -199,7 +197,7 @@ class EmbeddingEngine:
         for text in texts:
             # Check cache first
             if self.embedding_cache:
-                cache_key = hashlib.md5(text.encode()).hexdigest()
+                cache_key = hashlib.md5(text.encode(), usedforsecurity=False).hexdigest()
                 if cache_key in self.embedding_cache:
                     embeddings.append(self.embedding_cache[cache_key])
                     continue
@@ -231,7 +229,7 @@ class EmbeddingEngine:
     def _mock_embedding(self, text: str) -> List[float]:
         """Generate mock embedding based on text hash"""
         # Create deterministic but varied embeddings based on text
-        hash_obj = hashlib.md5(text.encode())
+        hash_obj = hashlib.md5(text.encode(), usedforsecurity=False)
         seed = int(hash_obj.hexdigest()[:8], 16)
         np.random.seed(seed % (2**32))
         
@@ -690,7 +688,7 @@ def test_rag_engine():
                 print("  No relevant documents found")
         
         # Show stats
-        print(f"\n📊 RAG Engine Stats:")
+        print("\n📊 RAG Engine Stats:")
         stats = rag_engine.get_stats()
         print(f"  Total documents: {stats['knowledge_base']['total_documents']}")
         print(f"  Categories: {list(stats['knowledge_base']['categories'].keys())}")
