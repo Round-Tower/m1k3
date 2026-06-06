@@ -176,7 +176,7 @@ let package = Package(
         ),
         .testTarget(
             name: "M1K3CallsTests",
-            dependencies: ["M1K3Calls"],
+            dependencies: ["M1K3Calls", "M1K3Knowledge", "M1K3Inference"],
             path: "Tests/M1K3CallsTests"
         ),
         // WhisperKit transcription, isolated like M1K3MLX so only this target

@@ -137,9 +137,14 @@ no engine linked, **18 tests / 4 suites green** (→ 177/37 total).
   + deep (Gemma-as-TEXT — the challenger-blessed safe win) over `InferenceProvider`;
   `CallSummaryParser` (free text → structured `CallSummary`).
 - **`CallIntelligencePipeline`** (4 tests): composes the lot against fakes — diarization
-  + summary optional + isolated; a finished `CallSession` (→ a knowledge-graph node next).
+  + summary optional + isolated; a finished `CallSession`.
+- **Calls → knowledge graph ✅** (the M1K3 twist; 7 tests): `CallChunker` (speaker-grouped,
+  summary-leads, char-budget split) + `CallIngester` (mirrors `DocumentIngester`: chunk →
+  embed → store a `.call` item, dedupe on the call UUID). **END-TO-END proven on the real
+  in-memory store** — an indexed call is found by hybrid search, tagged `.call`, in the same
+  index as documents. So RAG / agent tools / MCP answer over calls too.
 - **Engines deferred** (the heavy/device parts): WhisperKit-batch, FluidAudio (the prior call-pipeline lift),
-  Gemma-4-shadow (post-benchmark), GRDB persistence, KG wiring, recording UI + consent gate.
+  Gemma-4-shadow (post-benchmark), GRDB call persistence, recording UI + consent gate.
 
 ## Deferred buckets (each wants a focused session)
 
