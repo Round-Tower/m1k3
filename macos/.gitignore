@@ -1,0 +1,12 @@
+# Swift Package Manager
+.build/
+.swiftpm/
+Package.resolved
+
+# Xcode (app shell added at the UI phase)
+DerivedData/
+*.xcuserstate
+xcuserdata/
+
+# macOS
+.DS_Store
