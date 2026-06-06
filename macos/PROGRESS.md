@@ -25,7 +25,7 @@ Update this file as phases move. Keep it scannable.
 | 7 | Call log (M1K3Calls) | ⬜ not started | lift the prior call-pipeline call subsystem |
 | 8 | TTS (AVSpeech) | ⬜ not started | AVSpeech now, Kokoro later |
 | 9 | Avatar (RealityKit) | ⬜ not started | GLB→USDZ, emotion states |
-| 10 | Local agent + MCP | 🟡 in progress | ReAct LocalAgent building; ⏳ MCP server |
+| 10 | Local agent + MCP | 🟢 agent done | ReAct LocalAgent + AgentTool done; ⏳ knowledge tools + MCP server |
 | 11 | GemmaAudio ASR spike | ⬜ not started | non-blocking, LiteRT path |
 
 Legend: ✅ done · 🟢 logic done (deferred adapter) · 🟡 partial · ⬜ not started · ⏳ remaining
@@ -38,7 +38,7 @@ Legend: ✅ done · 🟢 logic done (deferred adapter) · 🟡 partial · ⬜ no
 |--------|------|--------|
 | `M1K3Knowledge` | GRDB | VectorMath, RRFFusion, EmbeddingService(protocol), KnowledgeItem/Chunk, KnowledgeStore (FTS5+vector+RRF), KnowledgeGraphBuilder, DocumentChunker, DocumentPage, CitationValidator |
 | `M1K3Inference` | — | InferenceProvider, ProviderRouter, AppleFoundationModelsProvider |
-| `M1K3Agent` | M1K3Inference | *(building)* AgentTool, LocalAgent (ReAct) |
+| `M1K3Agent` | M1K3Inference | AgentTool + ToolParameter/ToolResult, LocalAgent (ReAct loop) |
 | `M1K3Embeddings` | M1K3Knowledge + mlx-swift-lm | ⏳ MLXEmbeddingService (nomic-embed-text-v1.5) |
 | `M1K3MCP` | swift-sdk + M1K3Knowledge | ⏳ stdio server |
 | `M1K3Voice` | WhisperKit + AVFoundation | ⏳ TranscriptionProvider + SpeechProvider |
@@ -50,7 +50,7 @@ Legend: ✅ done · 🟢 logic done (deferred adapter) · 🟡 partial · ⬜ no
 
 ## Test count
 
-Run `cd macos && swift test`. Last green: **62 tests, 8 suites** (VectorMath, RRFFusion, KnowledgeStore, KnowledgeGraph, DocumentChunker, CitationValidator, ProviderRouter, AppleFoundationModelsProvider).
+Run `cd macos && swift test`. Last green: **72 tests, 10 suites** (VectorMath, RRFFusion, KnowledgeStore, KnowledgeGraph, DocumentChunker, CitationValidator, ProviderRouter, AppleFoundationModelsProvider, LocalAgent, LocalAgent.parseAction).
 
 ---
 

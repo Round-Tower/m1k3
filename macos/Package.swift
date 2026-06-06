@@ -22,6 +22,7 @@ let package = Package(
     products: [
         .library(name: "M1K3Knowledge", targets: ["M1K3Knowledge"]),
         .library(name: "M1K3Inference", targets: ["M1K3Inference"]),
+        .library(name: "M1K3Agent", targets: ["M1K3Agent"]),
     ],
     dependencies: [
         .package(url: "https://github.com/groue/GRDB.swift.git", from: "7.0.0"),
@@ -51,6 +52,19 @@ let package = Package(
             name: "M1K3InferenceTests",
             dependencies: ["M1K3Inference"],
             path: "Tests/M1K3InferenceTests"
+        ),
+        // Local agent: ReAct loop + tool protocol. Pure logic over the
+        // InferenceProvider seam — tools are injected, so it tests against
+        // fakes with no model. Knowledge-backed tools wire in at the app layer.
+        .target(
+            name: "M1K3Agent",
+            dependencies: ["M1K3Inference"],
+            path: "Sources/M1K3Agent"
+        ),
+        .testTarget(
+            name: "M1K3AgentTests",
+            dependencies: ["M1K3Agent"],
+            path: "Tests/M1K3AgentTests"
         ),
     ]
 )
