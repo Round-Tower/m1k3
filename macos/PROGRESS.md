@@ -19,7 +19,7 @@ Update this file as phases move. Keep it scannable.
 | 1 | Knowledge core | 🟢 logic done | store + graph; ⏳ MLX embedder deferred |
 | 2 | Inference layer | 🟢 logic done | protocol + router + AFM; ⏳ MLX/LiteRT Gemma deferred |
 | 3 | LiteRT Gemma spike | ⬜ not started | needs MLX/runtime session |
-| 4 | Documents + RAG | 🟡 partial | chunker + citation validator done; ⏳ PDFKit + ingester |
+| 4 | Documents + RAG | 🟢 ingest done | chunker + citations + PDFKit extractor + ingester; ⏳ RAG retrieval wiring (ChatPromptBuilder, chat layer) |
 | 5 | Chat UI + Liquid Glass | ⬜ not started | needs Xcode app target |
 | 6 | Transcription (pluggable) | ⬜ not started | WhisperKit dep (heavy) |
 | 7 | Call log (M1K3Calls) | ⬜ not started | lift the prior call-pipeline call subsystem |
@@ -36,7 +36,7 @@ Legend: ✅ done · 🟢 logic done (deferred adapter) · 🟡 partial · ⬜ no
 
 | Target | Deps | Status |
 |--------|------|--------|
-| `M1K3Knowledge` | GRDB | VectorMath, RRFFusion, EmbeddingService(protocol), KnowledgeItem/Chunk, KnowledgeStore (FTS5+vector+RRF), KnowledgeGraphBuilder, DocumentChunker, DocumentPage, CitationValidator |
+| `M1K3Knowledge` | GRDB + PDFKit | VectorMath, RRFFusion, EmbeddingService(protocol) + HashingEmbeddingService(fallback), KnowledgeItem/Chunk, KnowledgeStore (FTS5+vector+RRF, fetch/list), KnowledgeGraphBuilder, DocumentChunker, DocumentPage, CitationValidator, PDFTextExtractor, DocumentIngester |
 | `M1K3Inference` | — | InferenceProvider, ProviderRouter, AppleFoundationModelsProvider |
 | `M1K3Agent` | M1K3Inference | AgentTool + ToolParameter/ToolResult, LocalAgent (ReAct loop) |
 | `M1K3KnowledgeTools` | M1K3Agent + M1K3Knowledge | SearchKnowledgeTool (FTS-backed; ⏳ hybrid w/ embedder) |
@@ -51,9 +51,9 @@ Legend: ✅ done · 🟢 logic done (deferred adapter) · 🟡 partial · ⬜ no
 
 ## Test count
 
-Run `cd macos && swift test`. Last green: **77 tests, 11 suites** — incl. an
-END-TO-END integration (`SearchKnowledgeTool`): LocalAgent → `ACTION:
-search_knowledge` → FTS over a real `KnowledgeStore` → concludes from real content.
+Run `cd macos && swift test`. Last green: **93 tests, 15 suites**. Highlights:
+agent→store integration (`SearchKnowledgeTool`) and full doc ingest
+(PDF→extract→chunk→embed→store→search, generated-PDF round-trip).
 
 ---
 
