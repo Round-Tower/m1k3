@@ -193,13 +193,16 @@ let package = Package(
             name: "M1K3WhisperKit",
             dependencies: [
                 "M1K3Voice",
+                // M1K3Calls owns the BatchTranscriptionProvider seam + CallTranscriptSegment
+                // that WhisperKitBatchTranscriber conforms to / produces (light deps only).
+                "M1K3Calls",
                 .product(name: "WhisperKit", package: "WhisperKit"),
             ],
             path: "Sources/M1K3WhisperKit"
         ),
         .testTarget(
             name: "M1K3WhisperKitTests",
-            dependencies: ["M1K3WhisperKit", "M1K3Voice"],
+            dependencies: ["M1K3WhisperKit", "M1K3Voice", "M1K3Calls"],
             path: "Tests/M1K3WhisperKitTests"
         ),
     ]

@@ -94,6 +94,10 @@ final class AppEnvironment {
     private let whisperKit: WhisperKitProvider
     private var dictationProvider: (any TranscriptionProvider)?
     private var dictationTask: Task<Void, Never>?
+    /// Batch (file → segments) transcription for recorded calls. Closes the mic
+    /// path: a stopped recording runs through the SAME CallIntelligencePipeline the
+    /// import path proves. Opt-in (needs a model) like live WhisperKit.
+    private let batchTranscriber: WhisperKitBatchTranscriber
 
     /// True while the mic is live. `liveTranscript` is the best-so-far text shown
     /// in the input bar as the user speaks.
@@ -141,8 +145,17 @@ final class AppEnvironment {
 
     /// True while the mic is capturing a call (drives the recording indicator).
     private(set) var isRecording = false
-    /// The most recent recording, awaiting transcription once a batch engine lands.
+    /// The most recent recording. Held so it can be (re)processed once the batch
+    /// transcription model is ready.
     private(set) var lastRecordingURL: URL?
+    /// True while a recorded call is being transcribed → summarised → indexed.
+    private(set) var isTranscribingCall = false
+    /// True while the batch transcription model is downloading/loading.
+    private(set) var isPreparingBatchTranscription = false
+    /// Whether recorded calls can be transcribed now (model loaded).
+    var batchTranscriptionReady: Bool {
+        batchTranscriber.isAvailable
+    }
 
     init() throws {
         let url = try Self.storeURL()
@@ -185,6 +198,7 @@ final class AppEnvironment {
         let whisper = WhisperKitProvider()
         whisperKit = whisper
         transcription = TranscriptionRouter(providers: [whisper, AppleSpeechTranscriber()])
+        batchTranscriber = WhisperKitBatchTranscriber()
 
         ingester = DocumentIngester(store: store, embedder: embedder)
         let transcriptURL = url.deletingLastPathComponent().appendingPathComponent("transcript.json")
@@ -490,17 +504,24 @@ final class AppEnvironment {
         }
     }
 
-    /// Stop capturing. The recorded file is held for transcription once a batch
-    /// transcription engine is wired (WhisperKit-batch / Gemma-4) — until then it's
-    /// captured-but-pending, surfaced honestly.
+    /// Stop capturing. If the batch transcription model is ready, the recording is
+    /// transcribed → summarised → encrypted → indexed straight away (the SAME
+    /// CallIntelligencePipeline the import path proves). If not, it's held and the
+    /// user is pointed at the Settings enable; `enableCallTranscription` picks it up.
     func stopRecording() {
         guard isRecording else { return }
         let url = recorder.stop()
         isRecording = false
         lastRecordingURL = url
-        lastCallStatus = url == nil
-            ? "Nothing was recorded."
-            : "Recorded — transcription pending (wire a transcription engine to finish)."
+        guard let url else {
+            lastCallStatus = "Nothing was recorded."
+            return
+        }
+        if batchTranscriber.isAvailable {
+            Task { await processRecording(url: url) }
+        } else {
+            lastCallStatus = "Recorded — enable call transcription in Settings to process it."
+        }
     }
 
     private func refreshCounts() {
@@ -520,6 +541,75 @@ final class AppEnvironment {
         try fm.createDirectory(at: dir, withIntermediateDirectories: true)
         return dir.appendingPathComponent("knowledge.sqlite")
     }
+}
+
+// MARK: - Recorded-call transcription
+
+extension AppEnvironment {
+    /// Download + load the batch transcription model, then process any recording
+    /// that's waiting. Opt-in (heavy first download), mirroring `enableWhisperKit`.
+    func enableCallTranscription() async {
+        guard !isPreparingBatchTranscription, !batchTranscriber.isAvailable else { return }
+        isPreparingBatchTranscription = true
+        lastCallStatus = "Downloading call-transcription model…"
+        do {
+            try await batchTranscriber.prepareModel { fraction in
+                // Only apply while still preparing — a late hop near 100% must not
+                // clobber the terminal status (same race guarded in preloadGemma).
+                Task { @MainActor in
+                    if self.isPreparingBatchTranscription {
+                        self.lastCallStatus = "Downloading call-transcription model… \(Int((fraction * 100).rounded()))%"
+                    }
+                }
+            }
+            isPreparingBatchTranscription = false
+            if let url = lastRecordingURL {
+                await processRecording(url: url)
+            } else {
+                lastCallStatus = "Call transcription ready."
+            }
+        } catch {
+            isPreparingBatchTranscription = false
+            lastCallStatus = "Couldn’t load call transcription: \(error.localizedDescription)"
+        }
+    }
+
+    /// Transcribe a recorded file through the call pipeline, then persist (encrypted)
+    /// + index into the knowledge graph — exactly the back half of `importCallTranscript`,
+    /// so a recorded call and an imported one land identically.
+    func processRecording(url: URL) async {
+        guard !isTranscribingCall else { return }
+        isTranscribingCall = true
+        defer { isTranscribingCall = false }
+
+        lastCallStatus = "Transcribing…"
+        let title = "Call \(Self.callTitleFormatter.string(from: Date()))"
+        let pipeline = CallIntelligencePipeline(
+            transcriber: batchTranscriber,
+            summarizer: callSummarizer
+        )
+        do {
+            let session = try await pipeline.process(fileURL: url, title: title, startedAt: Date())
+            guard !session.segments.isEmpty else {
+                lastCallStatus = "Transcription produced no speech."
+                return
+            }
+            try callPersistence.save(session)
+            try await callIngester.ingest(session)
+            lastRecordingURL = nil
+            refreshCounts()
+            lastCallStatus = "Transcribed “\(title)” — \(session.segments.count) segments, indexed."
+        } catch {
+            lastCallStatus = "Couldn’t transcribe the call: \(error.localizedDescription)"
+        }
+    }
+
+    fileprivate static let callTitleFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .short
+        return formatter
+    }()
 }
 
 /// Last-resort no-op store so a (near-impossible) persistence-init failure leaves

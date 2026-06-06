@@ -89,6 +89,36 @@ struct SettingsView: View {
                         .font(.caption).foregroundStyle(.secondary)
                 }
 
+                Section {
+                    if env.isTranscribingCall {
+                        HStack(spacing: 8) {
+                            ProgressView().controlSize(.small)
+                            Text("Transcribing call…").font(.caption).foregroundStyle(.secondary)
+                        }
+                    } else if env.isPreparingBatchTranscription {
+                        HStack(spacing: 8) {
+                            ProgressView().controlSize(.small)
+                            Text(env.lastCallStatus ?? "Preparing call transcription…")
+                                .font(.caption).foregroundStyle(.secondary)
+                        }
+                    } else if env.batchTranscriptionReady {
+                        LabeledContent("Transcription", value: "Ready")
+                    } else {
+                        Button("Enable call transcription (downloads model)") {
+                            Task { await env.enableCallTranscription() }
+                        }
+                        .buttonStyle(.glass)
+                    }
+                    if let status = env.lastCallStatus, !env.isPreparingBatchTranscription {
+                        Text(status).font(.caption).foregroundStyle(.secondary)
+                    }
+                } header: {
+                    Text("Call recording")
+                } footer: {
+                    Text("Record a call from the chat toolbar (consent-gated). With transcription enabled, a stopped recording is transcribed, summarised, encrypted, and indexed — on-device.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+
                 Section("Memory") {
                     LabeledContent("Indexed items", value: "\(env.indexedItemCount)")
                     LabeledContent("Model availability",
