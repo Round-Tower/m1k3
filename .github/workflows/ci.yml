@@ -23,10 +23,11 @@ permissions:
 jobs:
   swift-mac:
     name: Swift · Mac MVP (swift test)
-    # NOTE: macos/ targets .macOS(.v26) / swift-tools 6.2 — this job REQUIRES a
-    # runner image with Xcode 26+ (macOS 26 SDK). `latest-stable` picks the
-    # newest Xcode on the image; if the hosted image lags, pin a macos-26 runner.
-    runs-on: macos-latest
+    # macos/ targets .macOS(.v26): the package COMPILES on macos-latest (Xcode 26
+    # SDK) but the test binary links FoundationModels.framework, a macOS 26 runtime
+    # framework — so the tests must RUN on an actual Tahoe runner. macos-latest's
+    # OS still lags the SDK (build for 26 / run on 15 → dlopen fails). Pin macos-26.
+    runs-on: macos-26
     timeout-minutes: 40
     steps:
       - name: Checkout
