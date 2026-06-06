@@ -8,7 +8,15 @@
 //  M1K3_MLX_INTEGRATION env var, because it needs network + Metal + ~minutes on
 //  first run. Same split the prior knowledge-server project uses to keep its fast loop fast.
 //
-//  Run integration: M1K3_MLX_INTEGRATION=1 swift test --filter M1K3MLXTests
+//  KNOWN LIMIT (2026-06-06): the integration tier does NOT run under CLI
+//  `swift test` — MLX aborts with "Failed to load the default metallib (library
+//  not found)" because mlx-swift resolves its Metal kernels relative to the
+//  running binary, and the xctest runner isn't an .app bundle. Real on-device
+//  execution is verified by launching M1K3.app (which bundles the metallib) or
+//  via an xctest host app. The gate stays env-var'd so normal runs are clean;
+//  flipping it from the CLI will abort, by design of MLX, not a code fault.
+//
+//  Run integration (needs app-bundle context): M1K3_MLX_INTEGRATION=1
 //
 //  Signed: Kev + claude-opus-4-8, 2026-06-06, Confidence 0.8, Prior: Unknown
 

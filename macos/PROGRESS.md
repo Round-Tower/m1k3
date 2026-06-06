@@ -52,13 +52,21 @@ Legend: ✅ done · 🟢 logic done (deferred adapter) · 🟡 partial · ⬜ no
 
 ## Test count
 
-Run `cd macos && swift test`. Last green: **124 tests, 23 suites** (~70ms).
+Run `cd macos && swift test`. Last green: **129 tests, 25 suites** (~80ms).
 Highlights: agent→store integration (`SearchKnowledgeTool`), full doc ingest
 (PDF→extract→chunk→embed→store→search), the RAG brain (`RAGResponder`:
 ask→embed→hybrid→documents-first prompt→grounded answer + sources, streaming),
-and `ChatSession` (8 tests: user/assistant turn shape, cumulative+delta token
-fold, source attach, error path, blank-input guard). All runs today on the
-HashingEmbeddingService fallback — no MLX required.
+`ChatSession` (8 tests: turn shape, cumulative+delta token fold, source attach,
+error path, blank-input guard), and `M1K3MLX` fast conformance. All fast tests
+run on the HashingEmbeddingService fallback — no MLX required.
+
+**⚠️ MLX gotcha (2026-06-06):** the gated MLX integration tier
+(`M1K3_MLX_INTEGRATION=1`) does NOT run under CLI `swift test` — MLX aborts with
+"Failed to load the default metallib (library not found)" because mlx-swift
+resolves Metal kernels relative to the running binary and xctest isn't an .app.
+**On-device MLX is verified by launching M1K3.app**, not the CLI. (Same reason
+the prior knowledge-server project runs MLX only inside its app.) Also: first MLX build needs
+`xcodebuild -downloadComponent MetalToolchain` once.
 
 **App build:** `cd macos && xcodegen generate && xcodebuild build -scheme M1K3
 -destination 'platform=macOS,arch=arm64' CODE_SIGNING_ALLOWED=NO | xcbeautify`.
