@@ -26,9 +26,14 @@ let package = Package(
         .library(name: "M1K3KnowledgeTools", targets: ["M1K3KnowledgeTools"]),
         .library(name: "M1K3Chat", targets: ["M1K3Chat"]),
         .library(name: "M1K3Voice", targets: ["M1K3Voice"]),
+        .library(name: "M1K3MLX", targets: ["M1K3MLX"]),
     ],
     dependencies: [
         .package(url: "https://github.com/groue/GRDB.swift.git", from: "7.0.0"),
+        // On-device embeddings + Gemma generation on Apple Silicon (Metal).
+        // Same package family the prior knowledge-server project ships MLXEmbedders from; isolated to the
+        // M1K3MLX target so the heavy Metal build never touches the core tests.
+        .package(url: "https://github.com/ml-explore/mlx-swift-lm.git", from: "2.29.0"),
     ],
     targets: [
         .target(
@@ -105,6 +110,26 @@ let package = Package(
             name: "M1K3VoiceTests",
             dependencies: ["M1K3Voice"],
             path: "Tests/M1K3VoiceTests"
+        ),
+        // The heavy on-device backends, isolated here so nothing else links
+        // MLX/Metal. MLXEmbeddingService conforms to EmbeddingService; the
+        // MLXGemmaProvider conforms to InferenceProvider — both swap in behind
+        // the same seams the core already tests against fakes.
+        .target(
+            name: "M1K3MLX",
+            dependencies: [
+                "M1K3Knowledge",
+                "M1K3Inference",
+                .product(name: "MLXEmbedders", package: "mlx-swift-lm"),
+                .product(name: "MLXLLM", package: "mlx-swift-lm"),
+                .product(name: "MLXLMCommon", package: "mlx-swift-lm"),
+            ],
+            path: "Sources/M1K3MLX"
+        ),
+        .testTarget(
+            name: "M1K3MLXTests",
+            dependencies: ["M1K3MLX", "M1K3Knowledge", "M1K3Inference"],
+            path: "Tests/M1K3MLXTests"
         ),
     ]
 )
