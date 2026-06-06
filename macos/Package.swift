@@ -21,6 +21,7 @@ let package = Package(
     platforms: [.macOS(.v26)],
     products: [
         .library(name: "M1K3Knowledge", targets: ["M1K3Knowledge"]),
+        .library(name: "M1K3Inference", targets: ["M1K3Inference"]),
     ],
     dependencies: [
         .package(url: "https://github.com/groue/GRDB.swift.git", from: "7.0.0"),
@@ -37,6 +38,19 @@ let package = Package(
             name: "M1K3KnowledgeTests",
             dependencies: ["M1K3Knowledge"],
             path: "Tests/M1K3KnowledgeTests"
+        ),
+        // Pluggable LLM runtime. The InferenceProvider protocol + router are
+        // pure/testable; backends (Apple Foundation Models now, MLX/LiteRT
+        // Gemma later) are thin adapters behind it. No external deps —
+        // FoundationModels is a system framework on macOS 26.
+        .target(
+            name: "M1K3Inference",
+            path: "Sources/M1K3Inference"
+        ),
+        .testTarget(
+            name: "M1K3InferenceTests",
+            dependencies: ["M1K3Inference"],
+            path: "Tests/M1K3InferenceTests"
         ),
     ]
 )
