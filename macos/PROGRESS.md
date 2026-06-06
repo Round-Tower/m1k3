@@ -19,7 +19,7 @@ Update this file as phases move. Keep it scannable.
 | 1 | Knowledge core | 🟢 logic done | store + graph; ⏳ MLX embedder deferred |
 | 2 | Inference layer | 🟢 logic done | protocol + router + AFM; ⏳ MLX/LiteRT Gemma deferred |
 | 3 | LiteRT Gemma spike | ⬜ not started | needs MLX/runtime session |
-| 4 | Documents + RAG | 🟢 ingest done | chunker + citations + PDFKit extractor + ingester; ⏳ RAG retrieval wiring (ChatPromptBuilder, chat layer) |
+| 4 | Documents + RAG | 🟢 logic done | ingest (chunk/PDF/embed/store) + RAG (embed→hybrid→prompt→answer+sources, streaming); ⏳ citation validation wiring (needs citation-scheme decision) |
 | 5 | Chat UI + Liquid Glass | ⬜ not started | needs Xcode app target |
 | 6 | Transcription (pluggable) | ⬜ not started | WhisperKit dep (heavy) |
 | 7 | Call log (M1K3Calls) | ⬜ not started | lift the prior call-pipeline call subsystem |
@@ -40,6 +40,7 @@ Legend: ✅ done · 🟢 logic done (deferred adapter) · 🟡 partial · ⬜ no
 | `M1K3Inference` | — | InferenceProvider, ProviderRouter, AppleFoundationModelsProvider |
 | `M1K3Agent` | M1K3Inference | AgentTool + ToolParameter/ToolResult, LocalAgent (ReAct loop) |
 | `M1K3KnowledgeTools` | M1K3Agent + M1K3Knowledge | SearchKnowledgeTool (FTS-backed; ⏳ hybrid w/ embedder) |
+| `M1K3Chat` | M1K3Knowledge + M1K3Inference | ChatPromptBuilder (in Knowledge) + RAGResponder (embed→hybrid→prompt→answer+sources, streaming) |
 | `M1K3Embeddings` | M1K3Knowledge + mlx-swift-lm | ⏳ MLXEmbeddingService (nomic-embed-text-v1.5) |
 | `M1K3MCP` | swift-sdk + M1K3Knowledge | ⏳ stdio server |
 | `M1K3Voice` | WhisperKit + AVFoundation | ⏳ TranscriptionProvider + SpeechProvider |
@@ -51,9 +52,11 @@ Legend: ✅ done · 🟢 logic done (deferred adapter) · 🟡 partial · ⬜ no
 
 ## Test count
 
-Run `cd macos && swift test`. Last green: **93 tests, 15 suites**. Highlights:
-agent→store integration (`SearchKnowledgeTool`) and full doc ingest
-(PDF→extract→chunk→embed→store→search, generated-PDF round-trip).
+Run `cd macos && swift test`. Last green: **102 tests, 17 suites**. Highlights:
+agent→store integration (`SearchKnowledgeTool`), full doc ingest
+(PDF→extract→chunk→embed→store→search), and the RAG brain (`RAGResponder`:
+ask→embed→hybrid→documents-first prompt→grounded answer + sources, streaming).
+All runs today on the HashingEmbeddingService fallback — no MLX required.
 
 ---
 

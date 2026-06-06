@@ -24,6 +24,7 @@ let package = Package(
         .library(name: "M1K3Inference", targets: ["M1K3Inference"]),
         .library(name: "M1K3Agent", targets: ["M1K3Agent"]),
         .library(name: "M1K3KnowledgeTools", targets: ["M1K3KnowledgeTools"]),
+        .library(name: "M1K3Chat", targets: ["M1K3Chat"]),
     ],
     dependencies: [
         .package(url: "https://github.com/groue/GRDB.swift.git", from: "7.0.0"),
@@ -79,6 +80,18 @@ let package = Package(
             name: "M1K3KnowledgeToolsTests",
             dependencies: ["M1K3KnowledgeTools", "M1K3Inference"],
             path: "Tests/M1K3KnowledgeToolsTests"
+        ),
+        // RAG chat: embed → hybrid search → documents-first prompt → generate.
+        // The grounded-answer brain. Depends on knowledge + inference.
+        .target(
+            name: "M1K3Chat",
+            dependencies: ["M1K3Knowledge", "M1K3Inference"],
+            path: "Sources/M1K3Chat"
+        ),
+        .testTarget(
+            name: "M1K3ChatTests",
+            dependencies: ["M1K3Chat"],
+            path: "Tests/M1K3ChatTests"
         ),
     ]
 )
