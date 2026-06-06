@@ -52,6 +52,8 @@ targets:
         product: M1K3Agent
       - package: M1K3
         product: M1K3KnowledgeTools
+      - package: M1K3
+        product: M1K3MLX
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: dev.murphysig.M1K3

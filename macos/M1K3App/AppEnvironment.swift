@@ -16,6 +16,7 @@ import Foundation
 import M1K3Chat
 import M1K3Inference
 import M1K3Knowledge
+import M1K3MLX
 import M1K3Voice
 import Observation
 
@@ -33,13 +34,13 @@ enum RuntimeOption: String, CaseIterable, Identifiable {
 
     /// Wired and selectable today.
     var isReady: Bool {
-        self == .appleFoundationModels
+        self == .appleFoundationModels || self == .mlxGemma
     }
 
     var subtitle: String {
         switch self {
         case .appleFoundationModels: "On-device, cheap & fast. The MVP brain."
-        case .mlxGemma: "Metal in-process Gemma. Coming in the MLX session."
+        case .mlxGemma: "Metal in-process Gemma 3 (1B, 4-bit). Downloads on first use."
         case .liteRTGemma: "LiteRT-LM Gemma. Spike — not yet wired."
         }
     }
@@ -64,9 +65,14 @@ final class AppEnvironment {
 
     private let embedder: HashingEmbeddingService
     private let ingester: DocumentIngester
+    private let runtimeSelection: RuntimeSelectionBox
 
-    /// Runtime picker selection (stub — only AFM is wired).
-    var selectedRuntime: RuntimeOption = .appleFoundationModels
+    /// Runtime picker selection. Changing it re-points the inference façade at
+    /// the chosen backend for the next turn — no rebuild, transcript preserved.
+    var selectedRuntime: RuntimeOption = .appleFoundationModels {
+        didSet { runtimeSelection.value = selectedRuntime }
+    }
+
     /// Last ingest outcome, surfaced to the UI.
     private(set) var lastIngestStatus: String?
     private(set) var isIngesting = false
@@ -76,10 +82,26 @@ final class AppEnvironment {
     init() throws {
         let url = try Self.storeURL()
         store = try KnowledgeStore(path: url.path)
+        // Embeddings stay on the dependency-free Hashing fallback: it defines the
+        // stored vector space, and swapping to MLX would require re-indexing.
+        // (Tracked as the next MLX step.)
         embedder = HashingEmbeddingService()
+
+        // Generation IS swappable. The façade forwards to whichever backend the
+        // picker selects; AFM is the default + fallback, MLX Gemma the main brain.
+        let selection = RuntimeSelectionBox(.appleFoundationModels)
+        runtimeSelection = selection
         let afm = AppleFoundationModelsProvider()
-        provider = afm
-        responder = RAGResponder(store: store, embedder: embedder, provider: afm)
+        let runtimeProvider = RuntimeInferenceProvider(
+            selection: selection,
+            backends: [
+                .appleFoundationModels: afm,
+                .mlxGemma: MLXGemmaProvider(),
+            ],
+            fallback: afm
+        )
+        provider = runtimeProvider
+        responder = RAGResponder(store: store, embedder: embedder, provider: runtimeProvider)
         speech = AVSpeechProvider()
         ingester = DocumentIngester(store: store, embedder: embedder)
         chat = ChatSession(responder: responder)
