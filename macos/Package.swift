@@ -28,6 +28,7 @@ let package = Package(
         .library(name: "M1K3Voice", targets: ["M1K3Voice"]),
         .library(name: "M1K3MLX", targets: ["M1K3MLX"]),
         .library(name: "M1K3WhisperKit", targets: ["M1K3WhisperKit"]),
+        .library(name: "M1K3Calls", targets: ["M1K3Calls"]),
     ],
     dependencies: [
         .package(url: "https://github.com/groue/GRDB.swift.git", from: "7.0.0"),
@@ -161,6 +162,22 @@ let package = Package(
             name: "M1K3MCP",
             dependencies: ["M1K3MCPKit"],
             path: "Sources/M1K3MCP"
+        ),
+        // Call intelligence — the model-AGNOSTIC seam (this is the reusable IP, per
+        // the challenger pass): batch-transcription + diarization + summarization
+        // protocols, the pure DiarizationAligner, and a two-stage summary pipeline.
+        // Concrete engines (WhisperKit-batch, FluidAudio, Gemma-shadow) plug in
+        // behind the protocols; none are linked here. Depends on M1K3Inference for
+        // the summary tier and M1K3Knowledge so finished calls become graph nodes.
+        .target(
+            name: "M1K3Calls",
+            dependencies: ["M1K3Inference", "M1K3Knowledge"],
+            path: "Sources/M1K3Calls"
+        ),
+        .testTarget(
+            name: "M1K3CallsTests",
+            dependencies: ["M1K3Calls"],
+            path: "Tests/M1K3CallsTests"
         ),
         // WhisperKit transcription, isolated like M1K3MLX so only this target
         // (and the app) link the heavy CoreML/model machinery. Conforms to

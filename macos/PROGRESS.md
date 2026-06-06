@@ -123,6 +123,24 @@ seam, on-device only.
   (NSLock held across `audioEngine.stop()`) — caught by `code-quality-reviewer`, fixed
   (engine ops moved outside the lock). Router's unsound `stopListening()` removed.
 
+## Calls — Phase 7, model-agnostic core (2026-06-06) ✅ (pure, headless)
+
+The reusable IP the challenger pointed at: the **seam**, not the model. `M1K3Calls`
+package — transcribe → diarize → align → summarise, every stage behind a protocol,
+no engine linked, **18 tests / 4 suites green** (→ 177/37 total).
+
+- **Seams (`CallProviders.swift`):** `BatchTranscriptionProvider` (← WhisperKit-batch ·
+  Gemma-4 shadow) + `DiarizationProvider` (← FluidAudio · stereo). File-based.
+- **`DiarizationAligner`** (pure, 8 tests): overlap-based speaker attribution — the
+  algorithm that makes "transcribe with X, diarize with Y" deterministic + swappable.
+- **`SummarizationPipeline`** (pure, 3 tests): two-stage, **error-isolated** quick (AFM)
+  + deep (Gemma-as-TEXT — the challenger-blessed safe win) over `InferenceProvider`;
+  `CallSummaryParser` (free text → structured `CallSummary`).
+- **`CallIntelligencePipeline`** (4 tests): composes the lot against fakes — diarization
+  + summary optional + isolated; a finished `CallSession` (→ a knowledge-graph node next).
+- **Engines deferred** (the heavy/device parts): WhisperKit-batch, FluidAudio (the prior call-pipeline lift),
+  Gemma-4-shadow (post-benchmark), GRDB persistence, KG wiring, recording UI + consent gate.
+
 ## Deferred buckets (each wants a focused session)
 
 1. **MLX runtime session** — `M1K3Embeddings` (nomic-embed-text-v1.5) + `MLXGemmaProvider` + LiteRT spike + `RuntimeBenchmark`. Heavy first build (`mlx-swift-lm`, MetalToolchain, weight downloads). Wires into the runtime picker (already stubbed in `SettingsView`).
