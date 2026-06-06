@@ -51,6 +51,12 @@ public final class MLXGemmaProvider: InferenceProvider, @unchecked Sendable {
         self.name = name
     }
 
+    /// Convenience: point at any HuggingFace model id (e.g. a locally-cached
+    /// model) without the caller importing MLXLLM's ModelConfiguration.
+    public convenience init(modelID: String, maxTokens: Int = 512, name: String = "mlx-gemma") {
+        self.init(configuration: ModelConfiguration(id: modelID), maxTokens: maxTokens, name: name)
+    }
+
     /// True on this target by construction: macOS 26 / Apple Silicon always has
     /// the Metal GPU MLX needs. The model itself downloads lazily on first use,
     /// so availability here means "this backend can serve", not "weights present".

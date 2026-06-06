@@ -22,8 +22,7 @@ struct M1K3App: App {
                     ProgressView("Running self-test…")
                         .frame(minWidth: 360, minHeight: 200)
                         .task {
-                            let report = await SelfTest.run()
-                            FileHandle.standardError.write(Data(("\n" + report + "\n").utf8))
+                            await SelfTest.run()
                             exit(0)
                         }
                 } else if let env {
