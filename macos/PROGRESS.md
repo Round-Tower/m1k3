@@ -25,7 +25,7 @@ Update this file as phases move. Keep it scannable.
 | 7 | Call log (M1K3Calls) | ⬜ not started | lift the prior call-pipeline call subsystem |
 | 8 | TTS (AVSpeech) | 🟢 done | SpeechProvider + AVSpeechProvider + SpeechUtterance; ⏳ Kokoro swap (post-MVP) |
 | 9 | Avatar (RealityKit) | ⬜ not started | GLB→USDZ, emotion states |
-| 10 | Local agent + MCP | 🟢 agent+tools done | ReAct LocalAgent + AgentTool + search/list/get tools; ⏳ QueryGraphTool + MCP stdio server (swift-sdk) |
+| 10 | Local agent + MCP | 🟢 agent + MCP done | ReAct LocalAgent + AgentTool + search/list/get tools; **M1K3MCP stdio server** (swift-sdk) live — Claude pulls search_knowledge/list_documents/get_document; ⏳ QueryGraphTool (blocked on entity extraction / NER) |
 | 11 | GemmaAudio ASR spike | ⬜ not started | non-blocking, LiteRT path |
 
 Legend: ✅ done · 🟢 logic done (deferred adapter) · 🟡 partial · ⬜ not started · ⏳ remaining
@@ -42,7 +42,7 @@ Legend: ✅ done · 🟢 logic done (deferred adapter) · 🟡 partial · ⬜ no
 | `M1K3KnowledgeTools` | M1K3Agent + M1K3Knowledge | SearchKnowledgeTool, ListDocumentsTool, GetDocumentTool (⏳ hybrid search variant; QueryGraphTool) |
 | `M1K3Chat` | M1K3Knowledge + M1K3Inference | ChatPromptBuilder (in Knowledge) + RAGResponder (embed→hybrid→prompt→answer+sources, streaming) + `RAGResponding` seam + `ChatSession` (@MainActor @Observable, self-normalising token fold) |
 | `M1K3MLX` | M1K3Knowledge + M1K3Inference + mlx-swift-lm | ✅ `MLXEmbeddingService` (bge_small, [Float]) + `MLXGemmaProvider` (Gemma 3 1B 4-bit, MLXLLM). Heavy Metal target, isolated. Default embedder NOT nomic (the prior knowledge-server project weight-key gotcha). ⏳ on-device runtime verify |
-| `M1K3MCP` | swift-sdk + M1K3Knowledge | ⏳ stdio server |
+| `M1K3MCPKit` / `M1K3MCP` | swift-sdk + M1K3Knowledge | ✅ stdio server (library + thin executable) exposing search_knowledge/list_documents/get_document; FTS-only (no embedder in CLI); container-aware store path (`M1K3_STORE_PATH` override). Verified live. |
 | `M1K3Voice` | AVFoundation (+ WhisperKit later) | SpeechProvider + SpeechUtterance + AVSpeechProvider; ⏳ TranscriptionProvider (WhisperKit, heavy) |
 | `M1K3Calls` | M1K3Knowledge + … | ⏳ CallSession, encrypted SQLite, diarization, summary |
 | `M1K3Avatar` | RealityKit | ⏳ emotion-driven avatar |
@@ -52,7 +52,7 @@ Legend: ✅ done · 🟢 logic done (deferred adapter) · 🟡 partial · ⬜ no
 
 ## Test count
 
-Run `cd macos && swift test`. Last green: **129 tests, 25 suites** (~80ms).
+Run `cd macos && swift test`. Last green: **137 tests, 27 suites** (~70ms).
 Highlights: agent→store integration (`SearchKnowledgeTool`), full doc ingest
 (PDF→extract→chunk→embed→store→search), the RAG brain (`RAGResponder`:
 ask→embed→hybrid→documents-first prompt→grounded answer + sources, streaming),
