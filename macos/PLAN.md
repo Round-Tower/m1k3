@@ -11,7 +11,22 @@ The strategic unlock from exploration: we are **not** building this from scratch
 - **TTS:** native `AVSpeechSynthesizer` now, behind a protocol; swap in Kokoro post-MVP.
 - **Target:** **macOS 26 Tahoe only** → real SwiftUI Liquid Glass + on-device Foundation Models.
 - **Avatar:** 3D via **RealityKit/SceneKit**.
-- **Call transcription + log (NEW):** M1K3 records/transcribes calls with a searchable, summarised log — exactly like the prior call-pipeline. North star is **one model for all complex work** (ASR + reasoning + summary). Reality check: the Gemma *text* model can't do ASR; only the **audio-capable multimodal Gemma (3n / "e4b" line)** can, and its mature on-device audio path is **LiteRT/MediaPipe** — so this reinforces the LiteRT bet. Live streaming partials, word timing, and speaker diarization are still better served by purpose-built engines today. Therefore: transcription sits behind a **provider protocol** (the prior call-pipeline already has one), WhisperKit/AppleSpeech is the reliable default, and a `GemmaAudioTranscriber` is a spike toward the single-model goal — promote it when it wins on latency/accuracy.
+- **Call transcription + log (NEW):** M1K3 records/transcribes calls with a searchable, summarised log — exactly like the prior call-pipeline. North star is **one model for all complex work** (ASR + reasoning + summary). Transcription sits behind a **provider protocol** (the prior call-pipeline already has one), WhisperKit/AppleSpeech is the reliable default, and a `GemmaAudioTranscriber` is the spike toward the single-model goal — promote it when it wins on latency/accuracy. *(Superseded in part — see the Gemma 4 update below.)*
+
+---
+
+## Update — 2026-06-06: Gemma 4 shipped (changes the north star from "someday" to "spike now")
+
+**Gemma 4 12B released 2026-06-03** (post-cutoff; web-verified). It is encoder-free multimodal with **native audio** — built-in **speech recognition *and* speaker diarization** — Apache 2.0, on-device. The **edge variants E2B (2B eff.) / E4B (4B eff.)** carry native audio with an encoder **50% smaller than Gemma 3n** and a **40ms frame tuned for low-latency ASR**, sized for phone/laptop memory. Both runtimes M1K3 bet on now support it: **MLX-Swift** (`VincentGourbin/gemma-4-swift-mlx`) and **LiteRT-LM** (`litert-community/gemma-4-12B-it-litert-lm`, text+audio now).
+
+**What this revises in this plan:**
+- **"Gemma 4 doesn't exist / single model for ASR is not real yet" → false.** It exists and does ASR + diarization on-device. The inline claims below (and the Risks section) are corrected accordingly.
+- **"Diarization stays a separate engine regardless" → no longer a given.** Gemma 4 diarizes natively. This could collapse the P7 calls stack (WhisperKit + FluidAudio + summary LLM) toward **one model** — *pending a benchmark of its diarization quality*.
+- **The single-model goal is MVP-grade, not someday.** E4B is purpose-built for low-latency on-device ASR, so it's plausibly viable for **P6 live dictation** too — not just P7 batch. One Gemma 4 E4B could do chat-gen + ASR + diarization + summary, shrinking M1K3's dependency surface (drop WhisperKit + FluidAudio), reusing the MLX runtime + download-UX already built.
+
+**What it does NOT change:** P6 ships **today on WhisperKit + Apple Speech** (committed) — reliable, proven streaming. Gemma 4 audio enters via the `TranscriptionProvider` seam as `GemmaAudioTranscriber` (`isAvailable=false` until it wins a benchmark). **Risk to respect:** days-old; community/v1 Swift audio runtimes; streaming-partial API unproven vs WhisperKit's mature one; unifying concentrates risk in one model. **So: spike + benchmark E4B (latency / accuracy / diarization) before swapping — target E4B, not 12B.** (Spike scaffolding: `scratch/gemma4-audio-spike/`.)
+
+Naming note: the wired MLX *generation* model is `gemma-3-1b-qat-4bit` today; references to "Gemma 4" in the inference tier below are the **upgrade target**, now real.
 
 ---
 
@@ -63,8 +78,8 @@ Backends (all conform; router picks by task + availability):
 
 Reuse **the prior call-pipeline's `TranscriptionProvider` + `TranscriptionRouter`** (`internal-call-pipeline-sources/Transcription/`, `Providers/{WhisperKitProvider,AppleSpeechTranscriber}.swift`) rather than the prior knowledge-server project's single engine — the prior call-pipeline's is already pluggable and gives us the swap/compare seam Kev wants:
 
-- **`WhisperKitProvider`** (default, reliable) — live streaming via `AsyncStream<TranscriptSegment>`, word timing. Plus `AppleSpeechTranscriber` (on-device `SFSpeechRecognizer`) as the lighter live option; router falls back.
-- **`GemmaAudioTranscriber`** (spike → the single-model north star) — audio-capable multimodal Gemma (3n/e4b) via the **LiteRT/MediaPipe** audio path. Same `TranscriptionProvider` protocol, so it drops in once it beats Whisper. Starts in `scratch/`, `isAvailable=false` until proven — nothing blocks on it.
+- **`WhisperKitProvider`** (default, reliable) — live streaming, isolated in `M1K3WhisperKit`. Plus `AppleSpeechTranscriber` (on-device `SFSpeechRecognizer`, the day-one path) in `M1K3Voice`; `TranscriptionRouter` selects. **✅ Shipped 2026-06-06 (Phase 6).**
+- **`GemmaAudioTranscriber`** (spike → the single-model north star) — **Gemma 4 E4B** native audio via **MLX-Swift** (`gemma-4-swift-mlx`) or **LiteRT-LM**. Same `TranscriptionProvider` seam, so it drops in once it beats WhisperKit on a benchmark. Scaffolded in `scratch/gemma4-audio-spike/`, `isAvailable=false` until proven — nothing blocks on it.
 - **TTS:** new `SpeechProvider` protocol → `AVSpeechProvider` (wrap the prior knowledge-server project's `SpeechSynthesizer.swift`) for MVP; `KokoroSpeechProvider` (bridge to m1k3 Python TTS) post-MVP. Avatar lip-sync off TTS amplitude/word callbacks.
 
 ### Call transcription & log (lift the prior call-pipeline's call subsystem whole)
@@ -73,7 +88,7 @@ M1K3 records and logs calls with searchable, summarised history — the prior ca
 
 - **Data model:** `CallSession`, `TranscriptSegment`, `QuickSummary`/`CallSummary`, `KeyMoment`, `ReasoningStep`, `SpeakerSegment`/`SpeakerProfile` (`internal-call-pipeline-sources/{Models,Protocols}/`).
 - **Persistence:** `SQLiteCallPersistence` + `EncryptedCallPersistence` (AES-256-GCM, Keychain key) — privacy-by-default, matches the M1K3 ethos.
-- **Diarization (who-said-what):** `DiarizationRouter` → `FluidDiarizationProvider` (CoreML/ANE) + stereo fallback + `DiarizationAligner`. *Note: diarization stays a dedicated engine even after `GemmaAudioTranscriber` lands — a single LLM doesn't separate speakers reliably today.*
+- **Diarization (who-said-what):** `DiarizationRouter` → `FluidDiarizationProvider` (CoreML/ANE) + stereo fallback + `DiarizationAligner`. *Revised 2026-06-06: Gemma 4 diarizes natively, so the dedicated engine is no longer a given — if the E4B spike's diarization quality holds, this whole sub-stack could fold into the one model. Lift the prior call-pipeline's diarization for the MVP, but benchmark Gemma 4 before committing to maintain it.*
 - **Summarisation:** `SummarizationPipeline` two-stage — Tier 1 quick summary via **Apple Foundation Models** (<1s), Tier 2 deep analysis (action items, risk flags) via **Gemma 4** through our `InferenceProvider`. This is the "single model for complex work" payoff: Gemma 4 does the reasoning/summary; AFM does the cheap first pass.
 - **UI:** `SessionHistoryView`, `SessionDetailView`, `TranscriptView` (speaker-grouped ticker), `SummaryView`, `AgentReasoningView` — reskinned in Liquid Glass.
 - **Knowledge integration (the M1K3 twist):** each finished call becomes a node in the **knowledge graph** and its transcript flows into the **semantic store** as documents/observations — so calls are searchable via RAG, the local agent's tools, and the MCP server. This is what makes it M1K3 and not just the prior call pipeline on Mac.
@@ -115,12 +130,12 @@ SwiftUI, macOS 26, native `.glassEffect` / `GlassEffectContainer` for the real L
 3. **LiteRT spike** — prove Gemma 4 generation via LiteRT-LM in `scratch/`; promote to `LiteRTGemmaProvider` if viable; run `RuntimeBenchmark`. *Verify:* benchmark table MLX vs LiteRT vs AFM.
 4. **Documents** — PDF/text import, chunk, embed, store; citation validation. *Verify:* drop a PDF → ask about it → grounded answer with valid citations.
 5. **Chat UI + Liquid Glass** — streaming chat, runtime picker, glass styling. *Verify:* end-to-end RAG chat in the app.
-6. **Transcription layer** — `TranscriptionProvider` + WhisperKit/AppleSpeech + router into chat voice input. *Verify:* speak → transcript ticker → answer.
+6. **Transcription layer** — ✅ **shipped 2026-06-06.** `TranscriptionProvider` + `TranscriptionRouter` + `AppleSpeechTranscriber` (M1K3Voice) + `WhisperKitProvider` (M1K3WhisperKit) + mic toggle/ticker, auto-send on stop. *Verify (by launch):* speak → ticker → auto-sends → answer.
 7. **Call log** — lift `M1K3Calls` (session model, encrypted SQLite, diarization, two-stage summary, history UI); wire calls → knowledge graph. *Verify:* record a 2-party call → live diarized transcript → AFM quick + Gemma deep summary → logged, searchable, and answerable via RAG.
 8. **TTS** — `AVSpeechProvider` behind protocol; spoken responses. *Verify:* answer is spoken.
 9. **Avatar** — RealityKit avatar, emotion states, amplitude lip-sync. *Verify:* avatar emotes + mouths the TTS.
 10. **Agent + MCP** — `LocalAgent` ReAct loop with tools (incl. calls/knowledge); `M1K3MCP` stdio server. *Verify:* agent answers a multi-step question using tools; Claude Code connects to the MCP server and pulls knowledge + call data.
-11. **GemmaAudio spike** (parallel, non-blocking) — prove Gemma-3n-audio ASR via LiteRT in `scratch/`; promote to `GemmaAudioTranscriber` if it beats WhisperKit on latency/accuracy. *Verify:* transcription benchmark Whisper vs Gemma-audio.
+11. **GemmaAudio spike** (parallel, non-blocking; **elevated 2026-06-06**) — prove **Gemma 4 E4B** native-audio ASR **+ diarization** via MLX-Swift (or LiteRT) in `scratch/gemma4-audio-spike/`; promote to `GemmaAudioTranscriber` behind the seam if it beats WhisperKit on latency/accuracy. If diarization holds, re-plan **Phase 7** around one model (challenger pass first). *Verify:* benchmark table — WhisperKit vs Gemma 4 E4B (live latency, WER, diarization DER).
 
 ---
 
@@ -145,8 +160,8 @@ SwiftUI, macOS 26, native `.glassEffect` / `GlassEffectContainer` for the real L
 ## Risks / open items
 
 - **LiteRT on macOS/Swift is unproven** — no official Swift bindings; the C++ LiteRT-LM engine likely needs a C-shim or sidecar. De-risked by phasing it as a spike behind the protocol (MLX is the reliable Gemma path; LiteRT can fail without blocking the MVP).
-- **mlx-swift-lm LLM generation** — ✅ *de-risked at compile level* (2026-06-06). `MLXLLM` (`ChatSession` + `LLMModelFactory`) is wired in `MLXGemmaProvider` (default Gemma 3 1B QAT-4bit) and the app builds with it linked. ⏳ remaining: **first on-device generation** (download + stream). Gemma *4* doesn't exist in the registry — Gemma 3 / 3n are latest; "Gemma 4" in this plan reads as "the MLX Gemma tier". **Two gotchas locked in:** (1) embeddings default to `.bge_small` not nomic — MLXEmbedders' nomic loader has a weight-key mismatch (the prior knowledge-server project's lesson); (2) `xcodebuild` needs `xcodebuild -downloadComponent MetalToolchain` once (`swift build` doesn't). The MLX backends live in one isolated **`M1K3MLX`** target (both embedder + provider), not the originally-sketched `M1K3Embeddings`.
-- **"Single model" for ASR is not yet real for the *text* Gemma** — only the audio-multimodal Gemma (3n/e4b) can transcribe, and only via an immature on-device audio runtime (LiteRT path). Diarization stays a separate engine regardless. The MVP therefore ships on WhisperKit + FluidAudio; the single-model goal is a tracked spike, not an MVP dependency.
+- **mlx-swift-lm LLM generation** — ✅ *de-risked at compile level* (2026-06-06). `MLXLLM` (`ChatSession` + `LLMModelFactory`) is wired in `MLXGemmaProvider` (default Gemma 3 1B QAT-4bit) and the app builds with it linked. ⏳ remaining: **first on-device generation** (download + stream). **Gemma 4 now exists** (shipped 2026-06-03 — see the Gemma 4 update at the top); the wired generation model is still `gemma-3-1b-qat-4bit`, with **Gemma 4 E4B as the upgrade target** (and the unification candidate for ASR + diarization + summary). **Two gotchas locked in:** (1) embeddings default to `.bge_small` not nomic — MLXEmbedders' nomic loader has a weight-key mismatch (the prior knowledge-server project's lesson); (2) `xcodebuild` needs `xcodebuild -downloadComponent MetalToolchain` once (`swift build` doesn't). The MLX backends live in one isolated **`M1K3MLX`** target (both embedder + provider), not the originally-sketched `M1K3Embeddings`.
+- **"Single model" for ASR — now real, pending benchmark (revised 2026-06-06).** Gemma 4 E2B/E4B do native audio ASR **+ diarization** on-device via MLX-Swift or LiteRT. The MVP still **ships on WhisperKit + Apple Speech** (proven, low-latency streaming today); Gemma 4 E4B is a **tracked spike behind the `TranscriptionProvider` seam**, not an MVP dependency. Promote it only if it beats WhisperKit on latency/accuracy (and its diarization holds for P7). Risk if we unify: one model gates ASR, chat, and calls — benchmark before betting the stack.
 - **macOS 26-only** narrows the test surface to Tahoe machines — acceptable for a personal MVP, revisit before any wider release.
 - **Call recording legal/consent** — recording calls has consent obligations; the app must make recording explicit and consented (one of M1K3's privacy principles). Surface a clear recording indicator + consent gate.
 - **Placement** — assumes `m1k3/macos/`. If you'd rather it be its own repo, that's a one-line change to the scaffold.
