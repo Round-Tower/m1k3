@@ -30,9 +30,9 @@ public protocol RAGResponding: Sendable {
 
 /// One turn in the transcript. `sources` are the chunks the answer was grounded
 /// in (attached before tokens arrive, so the UI can show provenance up front).
-public struct ChatMessage: Identifiable, Sendable, Equatable {
-    public enum Role: Sendable, Equatable { case user, assistant }
-    public enum Status: Sendable, Equatable {
+public struct ChatMessage: Identifiable, Sendable, Equatable, Codable {
+    public enum Role: Sendable, Equatable, Codable { case user, assistant }
+    public enum Status: Sendable, Equatable, Codable {
         case complete
         case streaming
         case failed(String)
@@ -59,6 +59,26 @@ public struct ChatMessage: Identifiable, Sendable, Equatable {
     }
 }
 
+/// Persists the chat transcript to a JSON file so a relaunch keeps the
+/// conversation. Pure file I/O over Codable messages — no AppKit, fully testable.
+public struct ChatTranscriptStore: Sendable {
+    private let url: URL
+
+    public init(url: URL) {
+        self.url = url
+    }
+
+    public func load() -> [ChatMessage] {
+        guard let data = try? Data(contentsOf: url) else { return [] }
+        return (try? JSONDecoder().decode([ChatMessage].self, from: data)) ?? []
+    }
+
+    public func save(_ messages: [ChatMessage]) {
+        guard let data = try? JSONEncoder().encode(messages) else { return }
+        try? data.write(to: url, options: .atomic)
+    }
+}
+
 @MainActor
 @Observable
 public final class ChatSession {
@@ -66,9 +86,14 @@ public final class ChatSession {
     public private(set) var isResponding = false
 
     private let responder: any RAGResponding
+    private let transcript: ChatTranscriptStore?
 
-    public init(responder: any RAGResponding) {
+    public init(responder: any RAGResponding, transcript: ChatTranscriptStore? = nil) {
         self.responder = responder
+        self.transcript = transcript
+        if let transcript {
+            messages = transcript.load()
+        }
     }
 
     /// Send a user turn and stream the grounded answer into a new assistant
@@ -99,6 +124,13 @@ public final class ChatSession {
                 }
             }
         }
+        transcript?.save(messages)
+    }
+
+    /// Clear the transcript (and its persisted file).
+    public func clear() {
+        messages = []
+        transcript?.save([])
     }
 
     /// Fold a streamed chunk into the accumulated answer. A chunk that extends

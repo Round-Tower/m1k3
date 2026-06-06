@@ -78,7 +78,7 @@ public struct KnowledgeChunk: Identifiable, Equatable, Sendable, Codable {
 
 /// A search result: a chunk plus where it came from and how it scored.
 /// `similarity` is set on vector hits; `rrfScore` on fused hybrid hits.
-public struct ChunkHit: Identifiable, Equatable, Sendable {
+public struct ChunkHit: Identifiable, Equatable, Sendable, Codable {
     public var id: UUID {
         chunkID
     }
