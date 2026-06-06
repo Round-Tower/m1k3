@@ -171,12 +171,19 @@ let package = Package(
         // the summary tier and M1K3Knowledge so finished calls become graph nodes.
         .target(
             name: "M1K3Calls",
-            dependencies: ["M1K3Inference", "M1K3Knowledge"],
+            dependencies: [
+                "M1K3Inference",
+                "M1K3Knowledge",
+                .product(name: "GRDB", package: "GRDB.swift"),
+            ],
             path: "Sources/M1K3Calls"
         ),
         .testTarget(
             name: "M1K3CallsTests",
-            dependencies: ["M1K3Calls", "M1K3Knowledge", "M1K3Inference"],
+            dependencies: [
+                "M1K3Calls", "M1K3Knowledge", "M1K3Inference",
+                .product(name: "GRDB", package: "GRDB.swift"),
+            ],
             path: "Tests/M1K3CallsTests"
         ),
         // WhisperKit transcription, isolated like M1K3MLX so only this target

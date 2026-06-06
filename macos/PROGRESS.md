@@ -143,8 +143,15 @@ no engine linked, **18 tests / 4 suites green** (→ 177/37 total).
   embed → store a `.call` item, dedupe on the call UUID). **END-TO-END proven on the real
   in-memory store** — an indexed call is found by hybrid search, tagged `.call`, in the same
   index as documents. So RAG / agent tools / MCP answer over calls too.
+- **Encrypted persistence ✅** (10 tests): `CallPersistence` seam + `GRDBCallPersistence`
+  (mirrors `KnowledgeStore`'s GRDB idiom) + a pluggable `CallSessionCoder` (JSON ↔
+  **AES-256-GCM**). Privacy-by-default: only `started_at` is plaintext; title/transcript/
+  speakers/summaries live in the encrypted `payload` blob. **Encryption-at-rest VERIFIED** —
+  reopen the raw SQLite, scan the bytes, no plaintext (+ a positive control proving the scan
+  works, + wrong-key-fails). Key is injected (app supplies a Keychain key — see follow-up).
 - **Engines deferred** (the heavy/device parts): WhisperKit-batch, FluidAudio (the prior call-pipeline lift),
-  Gemma-4-shadow (post-benchmark), GRDB call persistence, recording UI + consent gate.
+  Gemma-4-shadow (post-benchmark), recording UI + consent gate. **Follow-up:** app-side
+  Keychain key provider (generate-once + fetch) to feed `EncryptedCallCoder`.
 
 ## Deferred buckets (each wants a focused session)
 
