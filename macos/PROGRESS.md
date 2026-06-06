@@ -16,7 +16,7 @@ Update this file as phases move. Keep it scannable.
 | # | Phase | State | Notes |
 |---|-------|-------|-------|
 | 0 | Scaffold | ✅ done | SwiftPM multi-module package |
-| 1 | Knowledge core | 🟢 logic done | store + graph; `MLXEmbeddingService` (bge_small) built behind seam; ⏳ wire as store embedder (needs re-index) |
+| 1 | Knowledge core | 🟢 logic done | store + graph; `MLXEmbeddingService` (bge_small) wired as a swappable store embedder + `reindexEmbeddings` (safe Hashing↔MLX swap, persisted); ⏳ on-device embed verify |
 | 2 | Inference layer | 🟢 mostly done | protocol + router + AFM + **`MLXGemmaProvider`** (Gemma 3, MLXLLM) wired to runtime picker; ⏳ on-device gen verify · LiteRT spike |
 | 3 | LiteRT Gemma spike | ⬜ not started | needs MLX/runtime session |
 | 4 | Documents + RAG | 🟢 logic done | ingest (chunk/PDF/embed/store) + RAG (embed→hybrid→prompt→answer+sources, streaming); ⏳ citation validation wiring (needs citation-scheme decision) |
@@ -46,7 +46,7 @@ Legend: ✅ done · 🟢 logic done (deferred adapter) · 🟡 partial · ⬜ no
 | `M1K3Voice` | AVFoundation (+ WhisperKit later) | SpeechProvider + SpeechUtterance + AVSpeechProvider; ⏳ TranscriptionProvider (WhisperKit, heavy) |
 | `M1K3Calls` | M1K3Knowledge + … | ⏳ CallSession, encrypted SQLite, diarization, summary |
 | `M1K3Avatar` | RealityKit | ⏳ emotion-driven avatar |
-| `M1K3App` (Xcode) | all (+ M1K3MLX) | ✅ SwiftUI shell (XcodeGen `project.yml`), Liquid Glass, chat/import/speak/settings; runtime picker hot-swaps AFM ↔ MLX Gemma via `RuntimeInferenceProvider` façade; macOS 26, app-sandboxed |
+| `M1K3App` (Xcode) | all (+ M1K3MLX) | ✅ SwiftUI shell (XcodeGen `project.yml`), Liquid Glass, chat/import/speak/settings; runtime picker hot-swaps AFM ↔ MLX Gemma (`RuntimeInferenceProvider` façade); Settings switches Hashing ↔ MLX **embeddings** (`SwappableEmbeddingService` + persisted reindex); macOS 26, app-sandboxed |
 
 ---
 

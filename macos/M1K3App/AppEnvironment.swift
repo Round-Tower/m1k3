@@ -63,9 +63,18 @@ final class AppEnvironment {
     let speech: AVSpeechProvider
     let chat: ChatSession
 
-    private let embedder: HashingEmbeddingService
+    private let embedder: SwappableEmbeddingService
     private let ingester: DocumentIngester
     private let runtimeSelection: RuntimeSelectionBox
+
+    private static let embedderPrefersMLXKey = "embedder.prefersMLX"
+
+    /// Whether retrieval is on semantic MLX embeddings (vs the Hashing fallback).
+    private(set) var usingMLXEmbeddings = false
+    /// True while a full re-embed of the store is in flight.
+    private(set) var isReindexing = false
+    /// Last embeddings-switch outcome, surfaced to Settings.
+    private(set) var embeddingStatus: String?
 
     /// Runtime picker selection. Changing it re-points the inference façade at
     /// the chosen backend for the next turn — no rebuild, transcript preserved.
@@ -82,10 +91,18 @@ final class AppEnvironment {
     init() throws {
         let url = try Self.storeURL()
         store = try KnowledgeStore(path: url.path)
-        // Embeddings stay on the dependency-free Hashing fallback: it defines the
-        // stored vector space, and swapping to MLX would require re-indexing.
-        // (Tracked as the next MLX step.)
-        embedder = HashingEmbeddingService()
+
+        // Embeddings define the stored vector space, so the choice must persist
+        // across launches (Hashing query vectors against MLX-stored vectors would
+        // not match). Honour the saved preference; switching at runtime re-embeds
+        // the whole store (see switchEmbeddings).
+        let preferMLX = UserDefaults.standard.bool(forKey: Self.embedderPrefersMLXKey)
+        let baseEmbedder: any EmbeddingService = preferMLX
+            ? MLXEmbeddingService()
+            : HashingEmbeddingService()
+        let swappable = SwappableEmbeddingService(baseEmbedder)
+        embedder = swappable
+        usingMLXEmbeddings = preferMLX
 
         // Generation IS swappable. The façade forwards to whichever backend the
         // picker selects; AFM is the default + fallback, MLX Gemma the main brain.
@@ -146,6 +163,35 @@ final class AppEnvironment {
 
     func stopSpeaking() async {
         await speech.stop()
+    }
+
+    /// Switch the active embedder and re-embed the whole store so retrieval moves
+    /// to (or back from) semantic MLX vectors. The choice persists; on failure the
+    /// façade rolls back so query + stored vectors stay in the same space.
+    func switchEmbeddings(toMLX useMLX: Bool) async {
+        guard useMLX != usingMLXEmbeddings, !isReindexing else { return }
+        isReindexing = true
+        embeddingStatus = useMLX
+            ? "Loading MLX embedder and rebuilding the index…"
+            : "Rebuilding the index with the Hashing embedder…"
+        defer { isReindexing = false }
+
+        let newEmbedder: any EmbeddingService = useMLX
+            ? MLXEmbeddingService()
+            : HashingEmbeddingService()
+        embedder.setEmbedder(newEmbedder)
+        do {
+            let count = try await store.reindexEmbeddings(using: newEmbedder)
+            usingMLXEmbeddings = useMLX
+            UserDefaults.standard.set(useMLX, forKey: Self.embedderPrefersMLXKey)
+            let label = useMLX ? "MLX bge_small" : "Hashing"
+            embeddingStatus = "Reindexed \(count) chunk\(count == 1 ? "" : "s") with \(label)."
+        } catch {
+            // Reindex writes atomically, so the store still matches the previous
+            // embedder — roll the façade back to it.
+            embedder.setEmbedder(usingMLXEmbeddings ? MLXEmbeddingService() : HashingEmbeddingService())
+            embeddingStatus = "Couldn’t switch embeddings: \(error.localizedDescription)"
+        }
     }
 
     private func refreshCounts() {

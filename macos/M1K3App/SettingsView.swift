@@ -37,9 +37,35 @@ struct SettingsView: View {
                         .foregroundStyle(.secondary)
                 }
 
+                Section {
+                    LabeledContent("Mode",
+                                   value: env.usingMLXEmbeddings ? "MLX bge_small (semantic)" : "Hashing (offline)")
+                    if env.isReindexing {
+                        HStack(spacing: 8) {
+                            ProgressView().controlSize(.small)
+                            Text(env.embeddingStatus ?? "Rebuilding index…")
+                                .font(.caption).foregroundStyle(.secondary)
+                        }
+                    } else {
+                        Button(env.usingMLXEmbeddings ? "Switch to Hashing (rebuild index)"
+                            : "Switch to MLX semantic embeddings (rebuild index)")
+                        {
+                            Task { await env.switchEmbeddings(toMLX: !env.usingMLXEmbeddings) }
+                        }
+                        .buttonStyle(.glass)
+                        if let status = env.embeddingStatus {
+                            Text(status).font(.caption).foregroundStyle(.secondary)
+                        }
+                    }
+                } header: {
+                    Text("Embeddings")
+                } footer: {
+                    Text("Semantic MLX embeddings improve retrieval but download a model on first use and re-embed every stored chunk.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+
                 Section("Memory") {
                     LabeledContent("Indexed items", value: "\(env.indexedItemCount)")
-                    LabeledContent("Embeddings", value: "Hashing (offline)")
                     LabeledContent("Model availability",
                                    value: env.providerAvailable ? "Ready" : "Unavailable")
                 }
