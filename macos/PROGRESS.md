@@ -25,7 +25,7 @@ Update this file as phases move. Keep it scannable.
 | 7 | Call log (M1K3Calls) | ⬜ not started | lift the prior call-pipeline call subsystem |
 | 8 | TTS (AVSpeech) | ⬜ not started | AVSpeech now, Kokoro later |
 | 9 | Avatar (RealityKit) | ⬜ not started | GLB→USDZ, emotion states |
-| 10 | Local agent + MCP | 🟢 agent done | ReAct LocalAgent + AgentTool done; ⏳ knowledge tools + MCP server |
+| 10 | Local agent + MCP | 🟢 agent+tools done | ReAct LocalAgent + AgentTool + search/list/get tools; ⏳ QueryGraphTool + MCP stdio server (swift-sdk) |
 | 11 | GemmaAudio ASR spike | ⬜ not started | non-blocking, LiteRT path |
 
 Legend: ✅ done · 🟢 logic done (deferred adapter) · 🟡 partial · ⬜ not started · ⏳ remaining
@@ -39,7 +39,7 @@ Legend: ✅ done · 🟢 logic done (deferred adapter) · 🟡 partial · ⬜ no
 | `M1K3Knowledge` | GRDB + PDFKit | VectorMath, RRFFusion, EmbeddingService(protocol) + HashingEmbeddingService(fallback), KnowledgeItem/Chunk, KnowledgeStore (FTS5+vector+RRF, fetch/list), KnowledgeGraphBuilder, DocumentChunker, DocumentPage, CitationValidator, PDFTextExtractor, DocumentIngester |
 | `M1K3Inference` | — | InferenceProvider, ProviderRouter, AppleFoundationModelsProvider |
 | `M1K3Agent` | M1K3Inference | AgentTool + ToolParameter/ToolResult, LocalAgent (ReAct loop) |
-| `M1K3KnowledgeTools` | M1K3Agent + M1K3Knowledge | SearchKnowledgeTool (FTS-backed; ⏳ hybrid w/ embedder) |
+| `M1K3KnowledgeTools` | M1K3Agent + M1K3Knowledge | SearchKnowledgeTool, ListDocumentsTool, GetDocumentTool (⏳ hybrid search variant; QueryGraphTool) |
 | `M1K3Chat` | M1K3Knowledge + M1K3Inference | ChatPromptBuilder (in Knowledge) + RAGResponder (embed→hybrid→prompt→answer+sources, streaming) |
 | `M1K3Embeddings` | M1K3Knowledge + mlx-swift-lm | ⏳ MLXEmbeddingService (nomic-embed-text-v1.5) |
 | `M1K3MCP` | swift-sdk + M1K3Knowledge | ⏳ stdio server |
@@ -52,7 +52,7 @@ Legend: ✅ done · 🟢 logic done (deferred adapter) · 🟡 partial · ⬜ no
 
 ## Test count
 
-Run `cd macos && swift test`. Last green: **102 tests, 17 suites**. Highlights:
+Run `cd macos && swift test`. Last green: **108 tests, 19 suites**. Highlights:
 agent→store integration (`SearchKnowledgeTool`), full doc ingest
 (PDF→extract→chunk→embed→store→search), and the RAG brain (`RAGResponder`:
 ask→embed→hybrid→documents-first prompt→grounded answer + sources, streaming).
