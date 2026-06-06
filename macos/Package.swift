@@ -23,6 +23,7 @@ let package = Package(
         .library(name: "M1K3Knowledge", targets: ["M1K3Knowledge"]),
         .library(name: "M1K3Inference", targets: ["M1K3Inference"]),
         .library(name: "M1K3Agent", targets: ["M1K3Agent"]),
+        .library(name: "M1K3KnowledgeTools", targets: ["M1K3KnowledgeTools"]),
     ],
     dependencies: [
         .package(url: "https://github.com/groue/GRDB.swift.git", from: "7.0.0"),
@@ -65,6 +66,19 @@ let package = Package(
             name: "M1K3AgentTests",
             dependencies: ["M1K3Agent"],
             path: "Tests/M1K3AgentTests"
+        ),
+        // Agent tools backed by the knowledge layer — the bridge that makes the
+        // LocalAgent able to actually search M1K3's memory. Depends on both the
+        // agent (AgentTool) and knowledge (KnowledgeStore) modules.
+        .target(
+            name: "M1K3KnowledgeTools",
+            dependencies: ["M1K3Agent", "M1K3Knowledge"],
+            path: "Sources/M1K3KnowledgeTools"
+        ),
+        .testTarget(
+            name: "M1K3KnowledgeToolsTests",
+            dependencies: ["M1K3KnowledgeTools", "M1K3Inference"],
+            path: "Tests/M1K3KnowledgeToolsTests"
         ),
     ]
 )

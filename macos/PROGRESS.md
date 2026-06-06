@@ -39,6 +39,7 @@ Legend: ✅ done · 🟢 logic done (deferred adapter) · 🟡 partial · ⬜ no
 | `M1K3Knowledge` | GRDB | VectorMath, RRFFusion, EmbeddingService(protocol), KnowledgeItem/Chunk, KnowledgeStore (FTS5+vector+RRF), KnowledgeGraphBuilder, DocumentChunker, DocumentPage, CitationValidator |
 | `M1K3Inference` | — | InferenceProvider, ProviderRouter, AppleFoundationModelsProvider |
 | `M1K3Agent` | M1K3Inference | AgentTool + ToolParameter/ToolResult, LocalAgent (ReAct loop) |
+| `M1K3KnowledgeTools` | M1K3Agent + M1K3Knowledge | SearchKnowledgeTool (FTS-backed; ⏳ hybrid w/ embedder) |
 | `M1K3Embeddings` | M1K3Knowledge + mlx-swift-lm | ⏳ MLXEmbeddingService (nomic-embed-text-v1.5) |
 | `M1K3MCP` | swift-sdk + M1K3Knowledge | ⏳ stdio server |
 | `M1K3Voice` | WhisperKit + AVFoundation | ⏳ TranscriptionProvider + SpeechProvider |
@@ -50,7 +51,9 @@ Legend: ✅ done · 🟢 logic done (deferred adapter) · 🟡 partial · ⬜ no
 
 ## Test count
 
-Run `cd macos && swift test`. Last green: **72 tests, 10 suites** (VectorMath, RRFFusion, KnowledgeStore, KnowledgeGraph, DocumentChunker, CitationValidator, ProviderRouter, AppleFoundationModelsProvider, LocalAgent, LocalAgent.parseAction).
+Run `cd macos && swift test`. Last green: **77 tests, 11 suites** — incl. an
+END-TO-END integration (`SearchKnowledgeTool`): LocalAgent → `ACTION:
+search_knowledge` → FTS over a real `KnowledgeStore` → concludes from real content.
 
 ---
 
