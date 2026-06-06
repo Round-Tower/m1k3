@@ -13,44 +13,8 @@ import Foundation
 @testable import M1K3Knowledge
 import Testing
 
-// MARK: - Deterministic test embedder
-
-/// Bag-of-words hashing embedder: each token bumps one dimension, so texts that
-/// share words land near each other under cosine similarity. No model, no I/O —
-/// gives vector search a meaningful, repeatable signal in tests.
-struct HashingEmbeddingService: EmbeddingService {
-    let dimension: Int
-    init(dimension: Int = 128) {
-        self.dimension = dimension
-    }
-
-    func embed(_ text: String) async throws -> [Float] {
-        var v = [Float](repeating: 0, count: dimension)
-        for token in tokens(text) {
-            v[bucket(token)] += 1
-        }
-        return v
-    }
-
-    func isAvailable() async -> Bool {
-        true
-    }
-
-    private func tokens(_ text: String) -> [String] {
-        text.lowercased()
-            .components(separatedBy: CharacterSet.alphanumerics.inverted)
-            .filter { !$0.isEmpty }
-    }
-
-    private func bucket(_ token: String) -> Int {
-        var hash: UInt64 = 1_469_598_103_934_665_603 // FNV-1a offset basis
-        for byte in token.utf8 {
-            hash ^= UInt64(byte)
-            hash = hash &* 1_099_511_628_211
-        }
-        return Int(hash % UInt64(dimension))
-    }
-}
+// The deterministic embedder used to live here as a private fixture; it's now a
+// first-class fallback in the library (`HashingEmbeddingService`), reused below.
 
 // MARK: - Fixture
 

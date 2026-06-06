@@ -168,6 +168,73 @@ public final class KnowledgeStore: @unchecked Sendable {
         }
     }
 
+    // MARK: - Fetch (for document tools + MCP resources)
+
+    /// Fetch a single item by id, or nil if absent.
+    public func item(id: UUID) throws -> KnowledgeItem? {
+        try dbQueue.read { db in
+            guard let row = try Row.fetchOne(
+                db, sql: "SELECT * FROM knowledge_items WHERE id = ?", arguments: [id.uuidString]
+            ) else { return nil }
+            return Self.item(from: row)
+        }
+    }
+
+    /// List items, newest first. Optionally filter by kind.
+    public func allItems(kind: KnowledgeKind? = nil, limit: Int = 200) throws -> [KnowledgeItem] {
+        try dbQueue.read { db in
+            let rows: [Row]
+            if let kind {
+                rows = try Row.fetchAll(
+                    db,
+                    sql: "SELECT * FROM knowledge_items WHERE kind = ? ORDER BY created_at DESC LIMIT ?",
+                    arguments: [kind.rawValue, limit]
+                )
+            } else {
+                rows = try Row.fetchAll(
+                    db,
+                    sql: "SELECT * FROM knowledge_items ORDER BY created_at DESC LIMIT ?",
+                    arguments: [limit]
+                )
+            }
+            return rows.compactMap { Self.item(from: $0) }
+        }
+    }
+
+    /// Fetch an item's chunks in order.
+    public func chunks(forItem itemID: UUID) throws -> [KnowledgeChunk] {
+        try dbQueue.read { db in
+            let rows = try Row.fetchAll(
+                db,
+                sql: "SELECT * FROM knowledge_chunks WHERE item_id = ? ORDER BY ordinal",
+                arguments: [itemID.uuidString]
+            )
+            return rows.compactMap { row -> KnowledgeChunk? in
+                guard let cid: String = row["id"], let chunkID = UUID(uuidString: cid),
+                      let iid: String = row["item_id"], let parsedItemID = UUID(uuidString: iid)
+                else { return nil }
+                return KnowledgeChunk(
+                    id: chunkID,
+                    itemID: parsedItemID,
+                    ordinal: row["ordinal"] ?? 0,
+                    heading: row["heading"],
+                    content: row["content"] ?? ""
+                )
+            }
+        }
+    }
+
+    private static func item(from row: Row) -> KnowledgeItem? {
+        guard let raw: String = row["id"], let id = UUID(uuidString: raw) else { return nil }
+        return KnowledgeItem(
+            id: id,
+            kind: KnowledgeKind(rawValue: row["kind"] ?? "note"),
+            title: row["title"] ?? "",
+            sourceRef: row["source_ref"],
+            createdAt: Date(timeIntervalSince1970: row["created_at"] ?? 0)
+        )
+    }
+
     // MARK: - Search
 
     /// FTS5 BM25 search over chunk text. Each query word is double-quoted to
