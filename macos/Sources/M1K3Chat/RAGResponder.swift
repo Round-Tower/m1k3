@@ -29,7 +29,7 @@ public struct RAGResponse: Sendable, Equatable {
     }
 }
 
-public struct RAGResponder: Sendable {
+public struct RAGResponder: RAGResponding, Sendable {
     private let store: KnowledgeStore
     private let embedder: any EmbeddingService
     private let provider: any InferenceProvider
