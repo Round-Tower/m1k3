@@ -1,0 +1,17 @@
+# Swift Package Manager
+.build/
+.swiftpm/
+Package.resolved
+
+# Xcode (app shell added at the UI phase)
+DerivedData/
+*.xcuserstate
+xcuserdata/
+
+# XcodeGen artifacts — project.yml is the source of truth; regenerate the
+# project + generated plist with `xcodegen generate`.
+M1K3.xcodeproj/
+M1K3App/Info.generated.plist
+
+# macOS
+.DS_Store

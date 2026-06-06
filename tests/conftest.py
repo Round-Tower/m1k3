@@ -9,13 +9,52 @@ import sys
 import tempfile
 import shutil
 from pathlib import Path
-from unittest.mock import Mock, MagicMock
 from datetime import datetime, timedelta
-import json
-import duckdb
+
+try:
+    import duckdb
+except ModuleNotFoundError:  # slim CI env may omit it; only temp_db needs it
+    duckdb = None
 
 # Add src directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
+
+
+# --- CI triage markers --------------------------------------------------------
+# The legacy Python suite is a swamp (see tests/CI_TRIAGE.md). `tests/ci_smoke.txt`
+# is the single source of truth: every file listed there is verified green + fast
+# and runs in CI; everything else is quarantined until rehabilitated. We derive
+# pytest markers from that list so you can locally run, e.g.:
+#     pytest -m ci_smoke      # the green core (also restrict paths — see below)
+#     pytest -m quarantine    # the backlog to fix
+# NOTE: `-m ci_smoke` alone still *collects* (imports) every file, and some
+# quarantined files crash at import (top-level sys.exit, heavy ML deps). To run
+# the green core safely, pass the allowlist paths explicitly — that's what CI does.
+
+_SMOKE_LIST = Path(__file__).parent / "ci_smoke.txt"
+
+
+def _smoke_paths():
+    if not _SMOKE_LIST.exists():
+        return set()
+    paths = set()
+    for line in _SMOKE_LIST.read_text().splitlines():
+        line = line.strip()
+        if line and not line.startswith("#"):
+            paths.add((Path(__file__).parent.parent / line).resolve())
+    return paths
+
+
+def pytest_configure(config):
+    config.addinivalue_line("markers", "ci_smoke: verified green + fast, runs in CI")
+    config.addinivalue_line("markers", "quarantine: legacy test not yet CI-ready")
+
+
+def pytest_collection_modifyitems(config, items):
+    smoke = _smoke_paths()
+    for item in items:
+        marker = "ci_smoke" if item.path.resolve() in smoke else "quarantine"
+        item.add_marker(getattr(pytest.mark, marker))
 
 @pytest.fixture
 def temp_db():

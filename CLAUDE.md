@@ -1,5 +1,7 @@
 # M1K3 - Local AI Assistant
 
+@.claude/project-memory.md
+
 Privacy-focused local AI with voice synthesis, RAG, 3D avatars, and CLI interfaces.
 
 ## Commands
