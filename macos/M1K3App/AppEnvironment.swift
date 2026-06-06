@@ -121,7 +121,8 @@ final class AppEnvironment {
         responder = RAGResponder(store: store, embedder: embedder, provider: runtimeProvider)
         speech = AVSpeechProvider()
         ingester = DocumentIngester(store: store, embedder: embedder)
-        chat = ChatSession(responder: responder)
+        let transcriptURL = url.deletingLastPathComponent().appendingPathComponent("transcript.json")
+        chat = ChatSession(responder: responder, transcript: ChatTranscriptStore(url: transcriptURL))
         refreshCounts()
     }
 
@@ -192,6 +193,24 @@ final class AppEnvironment {
             embedder.setEmbedder(usingMLXEmbeddings ? MLXEmbeddingService() : HashingEmbeddingService())
             embeddingStatus = "Couldn’t switch embeddings: \(error.localizedDescription)"
         }
+    }
+
+    /// All indexed items, newest first, for the document manager.
+    func documents() -> [KnowledgeItem] {
+        ((try? store.allItems()) ?? []).sorted { $0.createdAt > $1.createdAt }
+    }
+
+    /// Chunk count for one item (shown in the document list).
+    func chunkCount(for id: UUID) -> Int {
+        (try? store.chunks(forItem: id).count) ?? 0
+    }
+
+    /// Delete an item and everything it owns; refresh the counts.
+    @discardableResult
+    func deleteDocument(id: UUID) -> Bool {
+        let deleted = (try? store.deleteItem(id: id)) ?? false
+        if deleted { refreshCounts() }
+        return deleted
     }
 
     private func refreshCounts() {

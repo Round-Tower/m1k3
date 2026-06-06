@@ -17,6 +17,7 @@ struct ContentView: View {
 
     @State private var draft = ""
     @State private var showSettings = false
+    @State private var showDocuments = false
     @State private var showImporter = false
     @State private var isDropTargeted = false
 
@@ -37,6 +38,9 @@ struct ContentView: View {
         .toolbar { toolbarContent }
         .sheet(isPresented: $showSettings) {
             SettingsView().environment(env)
+        }
+        .sheet(isPresented: $showDocuments) {
+            DocumentsView().environment(env)
         }
         .fileImporter(
             isPresented: $showImporter,
@@ -139,8 +143,15 @@ struct ContentView: View {
             }
         }
         ToolbarItemGroup(placement: .primaryAction) {
+            Button { env.chat.clear() } label: {
+                Label("New chat", systemImage: "square.and.pencil")
+            }
+            .disabled(env.chat.messages.isEmpty || env.chat.isResponding)
             Button { showImporter = true } label: {
                 Label("Import", systemImage: "doc.badge.plus")
+            }
+            Button { showDocuments = true } label: {
+                Label("Documents", systemImage: "books.vertical")
             }
             Button { showSettings = true } label: {
                 Label("Settings", systemImage: "gearshape")
