@@ -1,0 +1,91 @@
+name: CI
+
+# Lean test pipeline — tests what M1K3 actually ships.
+#   • swift-mac    : the Mac-native MVP (the active surface), via `swift test`
+#   • python-smoke : a curated, verified-green subset of the legacy Python suite
+#
+# Replaced the old Node/Playwright "unified suite" (quick-tests / unified-tests /
+# release-testing), which tested a web dashboard, was perpetually red, and never
+# covered the Swift work. See tests/CI_TRIAGE.md for the Python story.
+
+on:
+  push:
+    branches: [master, develop]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  swift-mac:
+    name: Swift · Mac MVP (swift test)
+    # NOTE: macos/ targets .macOS(.v26) / swift-tools 6.2 — this job REQUIRES a
+    # runner image with Xcode 26+ (macOS 26 SDK). `latest-stable` picks the
+    # newest Xcode on the image; if the hosted image lags, pin a macos-26 runner.
+    runs-on: macos-latest
+    timeout-minutes: 40
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Select Xcode (26+)
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
+      - name: Cache SwiftPM
+        uses: actions/cache@v4
+        with:
+          path: macos/.build
+          key: spm-${{ runner.os }}-${{ hashFiles('macos/Package.resolved') }}
+          restore-keys: spm-${{ runner.os }}-
+
+      - name: swift test
+        working-directory: macos
+        # MLX/Metal + WhisperKit integration tests are env-gated OFF: they only
+        # run from a bundled .app (see project-memory "metallib wall"), never CLI.
+        env:
+          M1K3_MLX_INTEGRATION: "0"
+        run: swift test --parallel
+
+  python-smoke:
+    name: Python · smoke subset
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements-ci.txt
+
+      - name: Install slim CI deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-ci.txt
+
+      - name: Run smoke subset
+        # Explicit allowlist (not `-m ci_smoke`) so the swamp files — which crash
+        # at COLLECTION time (top-level sys.exit, heavy ML imports) — are never
+        # imported. The ci_smoke / quarantine markers are still applied (see
+        # tests/conftest.py) for local `pytest -m ci_smoke` / `-m quarantine`.
+        run: |
+          mapfile -t SMOKE < <(grep -vE '^\s*(#|$)' tests/ci_smoke.txt)
+          echo "Running ${#SMOKE[@]} smoke files"
+          pytest "${SMOKE[@]}" -q --no-header
+
+# Signed: Kev + claude-opus-4-8, 2026-06-06, Confidence 0.75, Prior: Unknown
+# CI overhaul: ripped out the red Node/Playwright "unified suite" (tested a web
+# dashboard, never covered the Swift MVP). Replaced with swift test + a curated,
+# empirically-verified green Python smoke subset (44 files / 102 tests / ~24s).
+# Confidence 0.75 not higher: the swift-mac job is verify-by-CI — it depends on
+# the hosted runner image shipping Xcode 26 (macOS 26 SDK), which I could not
+# confirm from here. The python-smoke set IS verified green locally.

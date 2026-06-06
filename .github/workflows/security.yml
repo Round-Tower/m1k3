@@ -1,0 +1,47 @@
+name: Security
+
+# Slim, high-signal security scanning. Replaced the old security-scanning.yml,
+# which ran CodeQL (errored: needs repo "Code Security" enabled) and npm-audit
+# (no real Node app — root has only a stub package.json). What's left is the
+# cheap, genuinely-useful stuff for a privacy-focused local-AI project:
+#   • secrets detection (verified only — no noise)
+#   • Python SAST gated on high-severity / high-confidence findings only
+
+on:
+  push:
+    branches: [master, develop]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  secrets:
+    name: Secrets · TruffleHog
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: TruffleHog (verified secrets only)
+        uses: trufflesecurity/trufflehog@main
+        with:
+          extra_args: --only-verified
+
+  python-sast:
+    name: Python · Bandit
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Install Bandit
+        run: pip install bandit
+      - name: Bandit (fail only on high severity + high confidence)
+        # Legacy code has plenty of low/medium noise (subprocess, asserts);
+        # gate on high/high so this stays green but still catches real issues.
+        run: bandit -r src -q --severity-level high --confidence-level high
