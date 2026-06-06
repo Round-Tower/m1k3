@@ -2,89 +2,102 @@
 //  GemmaAudioTranscriber.swift  (SPIKE SKETCH — not wired, not compiled)
 //  scratch/gemma4-audio-spike
 //
-//  Design sketch for the single-model voice path: Gemma 4 E4B native audio behind
-//  the SAME `TranscriptionProvider` seam the shipped WhisperKit/AppleSpeech
-//  providers use. The `// TODO(device)` markers are where the real audio-decode
-//  API plugs in once a runtime is chosen (MLX-Swift `gemma-4-swift-mlx`, or
-//  LiteRT-LM). Mirrors MLXGemmaProvider/WhisperKitProvider: `@unchecked Sendable`
-//  + NSLock, `isAvailable=false` until a model loads, `prepareModel(progress:)`
-//  reusing the model-download-UX pattern.
+//  Design sketch grounded in the REAL `gemma-4-swift-mlx` API (read from source
+//  2026-06-06). Gemma 4 audio is BATCH (file, ≤30s, low-level multimodal path) —
+//  NOT live streaming — so this is a P7 (call-transcription) tool, not the P6 mic
+//  button. It deliberately does NOT conform to the live `TranscriptionProvider`
+//  seam (startListening/AsyncStream); it offers a file→[TranscriptSegment] batch
+//  method instead (see SPIKE.md option A/B).
 //
-//  Intentionally lives in scratch/ — exploration, no tests, not built. Promote to
-//  an isolated `M1K3GemmaAudio` target only after the benchmark gate (see SPIKE.md).
+//  `// TODO(device)` = the low-level multimodal call I can't compile/run here.
+//  Promote to an isolated package/target only after the benchmark gate.
 //
 //  Signed: Kev + claude-opus-4-8, 2026-06-06, Confidence 0.4 (spike), Prior: Unknown
 
+import AVFoundation
 import Foundation
 import M1K3Voice
 
-// import MLXGemma4Audio   // TODO(device): whichever module exposes E4B audio decode
+// import Gemma4Swift   // TODO(device): VincentGourbin/gemma-4-swift-mlx — ISOLATED package only
 
-public final class GemmaAudioTranscriber: TranscriptionProvider, @unchecked Sendable {
-    public let name = "Gemma 4 E4B"
+/// Batch transcription via Gemma 4 E4B native audio. Loads once, transcribes audio
+/// files by chunking into ≤30s windows (the model's hard cap) and concatenating.
+public final class GemmaAudioTranscriber: @unchecked Sendable {
+    /// The model's hard limit: 30s @ 16kHz (per AudioProcessor source).
+    public static let maxChunkSeconds: Double = 30
 
-    private let modelID: String
+    private let model: Model
     private let lock = NSLock()
-    private var model: AnyObject? // TODO(device): the loaded Gemma 4 audio model
-    private var continuation: AsyncStream<TranscriptSegment>.Continuation?
-    private var isCapturing = false
+    private var pipeline: AnyObject? // TODO(device): Gemma4Pipeline
 
-    /// Default to an E4B audio build (not 12B — too heavy for the mic button).
-    public init(modelID: String = "google/gemma-4-E4B-it") {
-        self.modelID = modelID
+    public enum Model: String, Sendable {
+        case e4b4bit = "mlx-community/gemma-4-e4b-it-4bit" // spike default — audio tower, ~laptop-sized
+        case e2b4bit = "mlx-community/gemma-4-e2b-it-4bit" // smaller/faster, lower accuracy
     }
 
-    /// Unavailable until a model is loaded — so the router uses WhisperKit/Apple
-    /// Speech until Gemma 4 audio is both downloaded AND has won the benchmark.
+    public init(model: Model = .e4b4bit) {
+        self.model = model
+    }
+
     public var isAvailable: Bool {
         #if arch(arm64)
-            return lock.withLock { model != nil }
+            return lock.withLock { pipeline != nil }
         #else
             return false
         #endif
     }
 
-    /// Download + load E4B, reporting progress (reuse the ModelLoadState UI the way
-    /// MLXGemmaProvider.prepare does). Coarse or fine depending on the runtime's API.
     public func prepareModel(progress: @escaping @Sendable (Double) -> Void) async throws {
-        if lock.withLock({ model != nil }) { progress(1.0); return }
+        if lock.withLock({ pipeline != nil }) { progress(1.0); return }
         progress(0.05)
-        // TODO(device): let m = try await Gemma4Audio.load(modelID) { progress($0) }
-        // lock.withLock { model = m }
+        // TODO(device):
+        //   let p = Gemma4Pipeline()
+        //   try await p.load(.e4b4bit, downloadIfNeeded: true)   // reuse ModelLoadState UI
+        //   lock.withLock { pipeline = p }
         progress(1.0)
     }
 
-    public func startListening() throws -> AsyncStream<TranscriptSegment> {
-        guard lock.withLock({ model != nil }) else { throw GemmaAudioError.modelNotLoaded }
-        stopListening()
-        return AsyncStream { continuation in
-            lock.withLock { self.continuation = continuation; self.isCapturing = true }
-            Task {
-                // TODO(device): start mic capture (AVAudioEngine tap → audio frames),
-                // feed frames to the E4B audio decoder, and yield CUMULATIVE text per
-                // partial so TranscriptAccumulator's "latest wins" fold applies:
-                //
-                //   for await running in model.streamTranscribe(frames) {
-                //       continuation.yield(TranscriptSegment(text: running.text,
-                //                                            isFinal: running.isFinal))
-                //   }
-                //
-                // If E4B exposes per-speaker turns, carry them on a richer segment for
-                // P7 (calls). Apply the SAME lock-not-held-across-engine-stop rule the
-                // AppleSpeech deadlock fix taught us.
+    /// Transcribe an audio file by splitting into ≤30s windows, transcribing each via
+    /// the multimodal audio path, and timestamping segments by window offset.
+    public func transcribe(fileURL: URL) async throws -> [TranscriptSegment] {
+        guard lock.withLock({ pipeline != nil }) else { throw GemmaAudioError.modelNotLoaded }
+        let windows = try Self.chunkWindows(fileURL: fileURL, maxSeconds: Self.maxChunkSeconds)
+        var segments: [TranscriptSegment] = []
+        for _ in windows {
+            // TODO(device): the LOW-LEVEL multimodal call (chat() is text-only):
+            //   let features = try await AudioProcessor.processAudio(url: window.url)   // log-mel→Conformer
+            //   let prompt = Gemma4Processor.build(text: "Transcribe the speech verbatim.",
+            //                                      hasAudio: true, numAudioTokens: features.tokenCount)
+            //   let text = try await multimodalModel.generate(prompt, audio: features)
+            //   For P7 diarization, try: "Transcribe and label each speaker." → parse turns.
+            let text = "" // placeholder
+            if !text.isEmpty {
+                segments.append(TranscriptSegment(text: text, isFinal: true))
             }
         }
+        return segments
     }
 
-    public func stopListening() {
-        // TODO(device): stop mic capture OUTSIDE the lock (see AppleSpeechTranscriber).
-        let continuation = lock.withLock { () -> AsyncStream<TranscriptSegment>.Continuation? in
-            let c = self.continuation
-            self.continuation = nil
-            self.isCapturing = false
-            return c
+    // MARK: - Pure, testable: window planning (the one bit with real edge cases)
+
+    public struct Window: Equatable, Sendable {
+        public let url: URL
+        public let startSeconds: Double
+    }
+
+    /// Plan ≤maxSeconds windows over a file's duration. (The actual PCM slicing is
+    /// TODO(device); this is the offset math, which IS unit-testable when promoted.)
+    static func chunkWindows(fileURL: URL, maxSeconds: Double) throws -> [Window] {
+        let asset = AVURLAsset(url: fileURL)
+        let duration = CMTimeGetSeconds(asset.duration)
+        guard duration > 0 else { return [] }
+        var windows: [Window] = []
+        var start = 0.0
+        while start < duration {
+            windows.append(Window(url: fileURL, startSeconds: start)) // TODO(device): slice to a temp file
+            start += maxSeconds
         }
-        continuation?.finish()
+        return windows
     }
 }
 

@@ -1,100 +1,94 @@
 # Spike — Gemma 4 E4B native-audio transcription
 
-**Status:** scaffolded 2026-06-06 · not yet run (needs a device session — MLX runs
-only from a bundled `.app`, never CLI/`swift test`). This is the plan + design so
-the device session is turnkey.
+**Status:** investigated 2026-06-06 (desk research — Kev away until Tue; MLX can't
+run headless anyway). **Verdict reached without a device run** by reading the real
+runtime source. Device benchmark still wanted, but the *lane* is now decided.
 
-**Goal:** decide whether **Gemma 4 E4B** native audio should replace (or sit
-alongside) WhisperKit behind M1K3's `TranscriptionProvider` seam — and whether its
-native diarization is good enough to collapse the Phase-7 calls stack into one model.
+**Question:** should Gemma 4 E4B native audio replace/augment WhisperKit behind
+M1K3's `TranscriptionProvider` seam, and can its native diarization collapse Phase 7?
 
 ---
 
-## Why now
+## VERDICT (evidence-backed)
 
-Gemma 4 shipped 2026-06-03 (post-cutoff). The **edge variants** are the interesting
-ones for shipping in-app:
+**Gemma 4 audio is BATCH, file-based, ≤30s — not a live-streaming engine.**
+→ **It does NOT fit P6 (live dictation). WhisperKit + Apple Speech stay on the mic button.**
+→ **It DOES fit P7 (batch call transcription):** chunk a recording into ≤30s windows →
+transcribe each → same model can then summarise. Diarization would be prompt-driven
+("label speakers"), **unverified** — that's the one thing to benchmark on device.
 
-| Variant | Eff. params | Audio | Notes |
-|---|---|---|---|
-| E2B | ~2B | native in | phone-class memory |
-| **E4B** | ~4B | native in | **spike target** — audio encoder 50% smaller than Gemma 3n, **40ms frame tuned for low-latency ASR**, 128K ctx |
-| 12B | 12B | native in | too heavy for the mic button (~16GB unified) |
+This **corrects my earlier over-claim** ("E4B plausibly viable for P6 too"). The
+40ms-frame "low-latency ASR" headline does *not* mean a streaming Swift API exists
+today. It doesn't. Honest course-correction logged.
 
-E4B is ~the footprint of the `gemma-3-1b-qat-4bit` we already run for chat, rides the
-**same `mlx-swift-lm` runtime + the model-download-UX** built 2026-06-06, and does
-**ASR + speaker diarization** natively. The dream: one model for chat-gen + ASR +
-diarization + summary → drop WhisperKit **and** FluidAudio.
+## The evidence (read from source, 2026-06-06)
 
-## Two runtime paths (both verified to exist; neither yet wired)
+**Our pinned `mlx-swift-lm` (2.30.6) has NO Gemma 4 audio.** It ships Gemma 3n
+**E4B/E2B text-only** (`gemma3n_E4B_it_lm_*` in `LLMModelFactory`) — no audio tower.
+Libraries present: MLXLLM, MLXLMCommon, MLXEmbedders, MLXVLM (vision) — **no audio**.
 
-1. **MLX-Swift** — `VincentGourbin/gemma-4-swift-mlx` (native text+vision+audio+video
-   on Apple Silicon via MLX Swift). We already depend on `mlx-swift-lm`; check whether
-   it (or this repo) exposes a Gemma 4 **audio** config + a streaming decode loop.
-   *Preferred* — stays in the runtime we know, reuses the download-UX.
-2. **LiteRT-LM** — `litert-community/gemma-4-12B-it-litert-lm` on HF (text+audio now,
-   image later). This is the dormant P3 LiteRT path finally having a reason. Heavier
-   integration (C++/sidecar), but Google's first-party audio route.
+**The audio path is the community `VincentGourbin/gemma-4-swift-mlx`** (`Gemma4Swift`
+library product, Swift 6, macOS 14+, Apple Silicon). What its source actually shows:
+- Models: `mlx-community/gemma-4-e4b-it-4bit` (and e2b, 8/6/bf16). E2B/E4B have the
+  audio tower; 26B/31B do **not**.
+- `Gemma4Pipeline.chat(prompt:)` / `chatStream(prompt:)` are **TEXT-ONLY** — no audio
+  parameter. Audio is **not** on the convenient API.
+- Audio runs through the **low-level multimodal path**: `AudioProcessor.processAudio(
+  url:maxDurationSeconds: 30)` → log-mel (16kHz, vDSP FFT) → Conformer encoder →
+  `Gemma4Processor` expands `<|audio|>` tokens (boa + audio_token×N + eoa) →
+  `MultimodalEmbedder` scatters audio features into the sequence → multimodal generate.
+- Hard cap: **30s / 480K samples @ 16kHz** ("limite du modele", per the source).
 
-## Integration design (drops into the shipped seam)
+## Integration risks (for Tuesday — do NOT bolt onto the main package blind)
 
-The Phase-6 seam (committed) is exactly the plug point. A `GemmaAudioTranscriber`
-conforms to `TranscriptionProvider` (in `M1K3Voice`) and lives in a new isolated
-target `M1K3GemmaAudio` (mirrors `M1K3WhisperKit`/`M1K3MLX` — only it + the app link
-the heavy model). Then:
+1. **Version conflict.** `Gemma4Swift` wants `mlx-swift-lm`@**main** + `mlx-swift`
+   ≥0.31.3; M1K3 is pinned `mlx-swift-lm` 2.30.6 / `mlx-swift` 0.30.6. Adding it to the
+   main package could bump those for our **working** `MLXGemmaProvider`/`MLXEmbeddingService`
+   and break them. → **Prototype in an ISOLATED package first** (this dir), don't add the
+   dep to `macos/Package.swift` until proven compatible.
+2. **Low-level wiring.** No `chat(audio:)` — you drive `processAudio` + the multimodal
+   model directly (see the CLI's audio path for the reference call). More than "call chat".
+3. **MLX boundary.** `xcodebuild` not `swift build` (Metal); runs only from a bundled
+   `.app`. Same wall as our MLX gen.
 
-```swift
-// AppEnvironment wiring becomes:
-transcription = TranscriptionRouter(providers: [gemmaAudio, whisperKit, AppleSpeechTranscriber()])
-// gemmaAudio.isAvailable == false until its model loads → router falls through to
-// WhisperKit/AppleSpeech. No other code changes (mic button, ticker, accumulator,
-// auto-send all unchanged). Promotion = it reports available + wins the benchmark.
-```
+## Revised design — a BATCH transcriber (fits P7, not the live seam)
 
-`prepareModel(progress:)` reuses the same download-UX pattern as `MLXGemmaProvider`
-and `WhisperKitProvider`. Live partials: yield cumulative text (the
-`TranscriptAccumulator` contract) so nothing downstream changes.
+The shipped seam is `startListening() -> AsyncStream` (live). Gemma 4 audio is batch, so
+it wants a **different method**: `transcribe(fileURL:) async throws -> [TranscriptSegment]`
+(the prior call-pipeline's protocol had exactly this). Two clean options for Tuesday:
+- **A — extend the seam:** add an optional `transcribeFile(_:)` to `TranscriptionProvider`
+  (default-throws), implemented by a batch `GemmaAudioTranscriber`. WhisperKit/Apple keep
+  live; Gemma 4 serves files/calls.
+- **B — separate `BatchTranscriptionProvider` protocol** for the P7 call pipeline; keep the
+  live `TranscriptionProvider` untouched. Cleaner separation; my lean.
 
-See `GemmaAudioTranscriber.swift` in this dir for the skeleton.
+See `GemmaAudioTranscriber.swift` (sketch, batch design against the real API).
 
-## Benchmark protocol (the decision gate)
+## Benchmark protocol (P7 framing, device session)
 
-Run **on device** (⌘R), same audio inputs through each provider:
+On a recorded **≤30s 2-speaker clip** (use `audio_samples/`):
 
-| Metric | How | WhisperKit (base.en) | Gemma 4 E4B |
-|---|---|---|---|
-| **Live latency** | time from speech-end → final segment; partial cadence | | |
-| **WER** (accuracy) | a fixed read-aloud script vs ground truth | | |
-| **Diarization DER** | a 2-speaker clip; compare to hand-labelled turns | n/a (FluidAudio) | |
-| **Model size / load** | download MB + cold/warm load time | | |
-| **Peak memory** | Activity Monitor during a 60s session | | |
-
-Reuse `audio_samples/` (repo root) for fixed inputs; capture numbers in a results
-table appended here.
+| Metric | WhisperKit + FluidAudio | Gemma 4 E4B (4-bit) |
+|---|---|---|
+| **WER** (accuracy) | | |
+| **Diarization DER** (the deciding metric) | FluidAudio | prompt-driven — *does it even work?* |
+| Transcribe latency for 30s | | |
+| Model size / load / peak mem | | |
+| Bonus: can it transcribe + summarise in one pass? | n/a | |
 
 ## Decision gate
 
-- **Promote to default for P6** only if E4B matches WhisperKit on WER **and** is within
-  ~1.5× on live latency (the mic button must feel instant).
-- **Fold P7 diarization into Gemma 4** only if DER is competitive with FluidAudio on a
-  real 2-party clip. Otherwise keep diarization separate (the prior call-pipeline lift) and use Gemma 4
-  only for ASR + summary.
-- **If it loses:** keep it behind the seam at `isAvailable=false`; no harm, no rip-out.
-  Run a `challenger` pass before any "unify on one model" commitment — unifying
-  concentrates ASR + chat + calls risk in a single model's maturity.
+- **Fold P7 onto Gemma 4** only if WER is competitive **and** prompt-driven diarization DER
+  is within range of FluidAudio. The summarise-in-the-same-model bonus is the tiebreaker.
+- **Else:** keep the prior call-pipeline's lift (WhisperKit batch + FluidAudio + AFM/Gemma summary) for P7;
+  shelve Gemma 4 audio behind the seam at `isAvailable=false`.
+- Either way: **P6 stays on WhisperKit.** Run a `challenger` pass before any "one model for
+  calls" commitment.
 
-## Risks
+## Next actions (Tuesday, device)
 
-- Days-old; MLX-Swift audio support is a fresh community impl, LiteRT audio is v1.
-- **Streaming-partial API unproven** for Gemma 4 in Swift — WhisperKit's is mature. If
-  E4B only does batch (not low-latency partials), it's a P7 tool, not a P6 one.
-- MLX metallib boundary: verify only by launching the app, not `swift test`/`swift run`.
-
-## Next actions (device session)
-
-1. Add `gemma-4-swift-mlx` (or confirm `mlx-swift-lm` Gemma-4-audio support); resolve.
-2. Flesh out `GemmaAudioTranscriber` against the real audio decode API.
-3. New `M1K3GemmaAudio` target; wire as the first provider in the router (`isAvailable`
-   gated on model-loaded).
-4. ⌘R, load E4B, run the benchmark table above. Record results here.
-5. Decide per the gate. If promising → re-plan P7 with `challenger`.
+1. Isolated package here → add `Gemma4Swift`, `swift package resolve` (confirm it fetches
+   without forcing incompatible mlx versions on the main app — keep it ISOLATED).
+2. Flesh out the batch `GemmaAudioTranscriber` against `processAudio` + the multimodal model.
+3. ⌘R-equivalent / xcodebuild the spike; transcribe a fixed clip; fill the table.
+4. Decide per the gate; if promising, re-plan P7 (one model) with `challenger`.
