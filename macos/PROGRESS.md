@@ -160,8 +160,15 @@ no engine linked, **18 tests / 4 suites green** (→ 177/37 total).
   active-runtime deep). `TranscriptImporter` (pure) parses "Speaker: line" text → import a
   transcript → summarised + encrypted + indexed + shown. `CallsView` + `CallDetailView`
   (Liquid Glass) + toolbar button. The headless, no-mic entry point to the full P7 feature.
-- **Engines deferred** (the heavy/device parts): WhisperKit-batch, FluidAudio (the prior call-pipeline lift),
-  Gemma-4-shadow (post-benchmark), **live recording UI + consent gate** (the mic path).
+- **Consent gate + recording capture ✅** (5 consent tests; app builds): `RecordingConsentGate`
+  (pure — `.once` / `.remembered` scopes, `ConsentStore` seam, `UserDefaultsConsentStore`, logged
+  `ConsentDecision`) so recording is never silent/implicit. `AudioRecorder` seam +
+  `MicAudioRecorder` (AVAudioEngine → `.caf`, lock-not-held-across-`engine.stop()`, verify-by-launch).
+  App: consent-gated **Record call** toolbar button + confirmation dialog ("you're responsible for
+  consent; on-device only") + a red **Recording** indicator. Stop holds the audio file.
+- **Engines deferred** (the heavy/device parts): WhisperKit-batch + FluidAudio (the prior call-pipeline lift) — the
+  transcribe-on-stop step that turns a recording into a `CallSession` (feeds the SAME pipeline the
+  import path proves). Gemma-4-shadow (post-benchmark).
 
 ## Deferred buckets (each wants a focused session)
 

@@ -20,6 +20,7 @@ struct ContentView: View {
     @State private var showDocuments = false
     @State private var showCalls = false
     @State private var showImporter = false
+    @State private var showConsentDialog = false
     @State private var isDropTargeted = false
 
     var body: some View {
@@ -45,6 +46,13 @@ struct ContentView: View {
         }
         .sheet(isPresented: $showCalls) {
             CallsView().environment(env)
+        }
+        .confirmationDialog("Record this call?", isPresented: $showConsentDialog, titleVisibility: .visible) {
+            Button("Record once") { env.affirmConsentAndRecord(scope: .once) }
+            Button("Always allow") { env.affirmConsentAndRecord(scope: .remembered) }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("You’re responsible for having consent from everyone on the call. Recording is on-device only — audio never leaves this Mac.")
         }
         .fileImporter(
             isPresented: $showImporter,
@@ -158,7 +166,10 @@ struct ContentView: View {
     private var toolbarContent: some ToolbarContent {
         ToolbarItem(placement: .principal) {
             HStack(spacing: 6) {
-                if env.modelLoad.isActive {
+                if env.isRecording {
+                    Circle().fill(.red).frame(width: 8, height: 8)
+                    Text("Recording").font(.caption).foregroundStyle(.red)
+                } else if env.modelLoad.isActive {
                     ProgressView().controlSize(.small)
                     Text(env.modelLoad.label(modelName: "Gemma 3"))
                         .font(.caption)
@@ -187,6 +198,15 @@ struct ContentView: View {
             Button { showCalls = true } label: {
                 Label("Calls", systemImage: "phone.bubble")
             }
+            Button {
+                if env.isRecording { env.stopRecording() }
+                else if env.recordingPreAuthorised { env.startRecording() }
+                else { showConsentDialog = true }
+            } label: {
+                Label(env.isRecording ? "Stop recording" : "Record call",
+                      systemImage: env.isRecording ? "stop.circle.fill" : "record.circle")
+            }
+            .tint(env.isRecording ? .red : nil)
             Button { showSettings = true } label: {
                 Label("Settings", systemImage: "gearshape")
             }

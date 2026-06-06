@@ -80,6 +80,10 @@ final class AppEnvironment {
     private let callPersistence: any CallPersistence
     private let callIngester: CallIngester
     private let callSummarizer: SummarizationPipeline
+    /// Recording is consent-gated (legal: call recording needs consent) and captured
+    /// behind the AudioRecorder seam.
+    private let consentGate = RecordingConsentGate(store: UserDefaultsConsentStore())
+    private let recorder: any AudioRecorder = MicAudioRecorder()
     /// Held directly (not just inside the façade) so the picker can warm it ahead
     /// of the first turn and stream download progress to the UI.
     private let mlxGemma: MLXGemmaProvider
@@ -134,6 +138,11 @@ final class AppEnvironment {
     private(set) var lastCallStatus: String?
     private(set) var isImportingCall = false
     private(set) var callCount = 0
+
+    /// True while the mic is capturing a call (drives the recording indicator).
+    private(set) var isRecording = false
+    /// The most recent recording, awaiting transcription once a batch engine lands.
+    private(set) var lastRecordingURL: URL?
 
     init() throws {
         let url = try Self.storeURL()
@@ -453,6 +462,45 @@ final class AppEnvironment {
         _ = try? store.deleteItem(id: id) // the call's graph node shares the call UUID
         if removed { refreshCounts() }
         return removed
+    }
+
+    // MARK: - Recording (consent-gated)
+
+    /// Whether recording can start without re-asking for consent.
+    var recordingPreAuthorised: Bool {
+        consentGate.isPreAuthorised
+    }
+
+    /// Log a consent affirmation, then start recording.
+    func affirmConsentAndRecord(scope: ConsentScope) {
+        consentGate.affirm(scope: scope, at: Date())
+        startRecording()
+    }
+
+    /// Start capturing — only call once consent is in hand (pre-authorised or just
+    /// affirmed). Surfaces failures rather than crashing.
+    func startRecording() {
+        guard !isRecording else { return }
+        do {
+            try recorder.start()
+            isRecording = true
+            lastCallStatus = "Recording…"
+        } catch {
+            lastCallStatus = "Couldn’t start recording: \(error.localizedDescription)"
+        }
+    }
+
+    /// Stop capturing. The recorded file is held for transcription once a batch
+    /// transcription engine is wired (WhisperKit-batch / Gemma-4) — until then it's
+    /// captured-but-pending, surfaced honestly.
+    func stopRecording() {
+        guard isRecording else { return }
+        let url = recorder.stop()
+        isRecording = false
+        lastRecordingURL = url
+        lastCallStatus = url == nil
+            ? "Nothing was recorded."
+            : "Recorded — transcription pending (wire a transcription engine to finish)."
     }
 
     private func refreshCounts() {
