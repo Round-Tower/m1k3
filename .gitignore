@@ -153,3 +153,8 @@ bundletool-all-*.jar
 !app/src/main/res/**/*.png
 !docs/**/*.png
 !app/3d/**/*.png
+# Durable project memory should travel with the repo, even though the global
+# gitignore ignores all of .claude/. Anchored re-include (the prior knowledge-server project pattern).
+!/.claude/
+/.claude/*
+!/.claude/project-memory.md
