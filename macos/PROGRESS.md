@@ -20,7 +20,7 @@ Update this file as phases move. Keep it scannable.
 | 2 | Inference layer | 🟢 logic done | protocol + router + AFM; ⏳ MLX/LiteRT Gemma deferred |
 | 3 | LiteRT Gemma spike | ⬜ not started | needs MLX/runtime session |
 | 4 | Documents + RAG | 🟢 logic done | ingest (chunk/PDF/embed/store) + RAG (embed→hybrid→prompt→answer+sources, streaming); ⏳ citation validation wiring (needs citation-scheme decision) |
-| 5 | Chat UI + Liquid Glass | ⬜ not started | needs Xcode app target |
+| 5 | Chat UI + Liquid Glass | 🟢 shell done | XcodeGen app target; chat→RAG, drop→ingest, speak, settings; real `.glassEffect`. ⏳ voice input (P6) |
 | 6 | Transcription (pluggable) | ⬜ not started | WhisperKit dep (heavy) |
 | 7 | Call log (M1K3Calls) | ⬜ not started | lift the prior call-pipeline call subsystem |
 | 8 | TTS (AVSpeech) | 🟢 done | SpeechProvider + AVSpeechProvider + SpeechUtterance; ⏳ Kokoro swap (post-MVP) |
@@ -40,36 +40,43 @@ Legend: ✅ done · 🟢 logic done (deferred adapter) · 🟡 partial · ⬜ no
 | `M1K3Inference` | — | InferenceProvider, ProviderRouter, AppleFoundationModelsProvider |
 | `M1K3Agent` | M1K3Inference | AgentTool + ToolParameter/ToolResult, LocalAgent (ReAct loop) |
 | `M1K3KnowledgeTools` | M1K3Agent + M1K3Knowledge | SearchKnowledgeTool, ListDocumentsTool, GetDocumentTool (⏳ hybrid search variant; QueryGraphTool) |
-| `M1K3Chat` | M1K3Knowledge + M1K3Inference | ChatPromptBuilder (in Knowledge) + RAGResponder (embed→hybrid→prompt→answer+sources, streaming) |
+| `M1K3Chat` | M1K3Knowledge + M1K3Inference | ChatPromptBuilder (in Knowledge) + RAGResponder (embed→hybrid→prompt→answer+sources, streaming) + `RAGResponding` seam + `ChatSession` (@MainActor @Observable, self-normalising token fold) |
 | `M1K3Embeddings` | M1K3Knowledge + mlx-swift-lm | ⏳ MLXEmbeddingService (nomic-embed-text-v1.5) |
 | `M1K3MCP` | swift-sdk + M1K3Knowledge | ⏳ stdio server |
 | `M1K3Voice` | AVFoundation (+ WhisperKit later) | SpeechProvider + SpeechUtterance + AVSpeechProvider; ⏳ TranscriptionProvider (WhisperKit, heavy) |
 | `M1K3Calls` | M1K3Knowledge + … | ⏳ CallSession, encrypted SQLite, diarization, summary |
 | `M1K3Avatar` | RealityKit | ⏳ emotion-driven avatar |
-| `M1K3App` (Xcode) | all | ⏳ SwiftUI shell, Liquid Glass |
+| `M1K3App` (Xcode) | all | ✅ SwiftUI shell (XcodeGen `project.yml`), Liquid Glass, chat/import/speak/settings; macOS 26, app-sandboxed |
 
 ---
 
 ## Test count
 
-Run `cd macos && swift test`. Last green: **116 tests, 22 suites**. Highlights:
-agent→store integration (`SearchKnowledgeTool`), full doc ingest
-(PDF→extract→chunk→embed→store→search), and the RAG brain (`RAGResponder`:
-ask→embed→hybrid→documents-first prompt→grounded answer + sources, streaming).
-All runs today on the HashingEmbeddingService fallback — no MLX required.
+Run `cd macos && swift test`. Last green: **124 tests, 23 suites** (~70ms).
+Highlights: agent→store integration (`SearchKnowledgeTool`), full doc ingest
+(PDF→extract→chunk→embed→store→search), the RAG brain (`RAGResponder`:
+ask→embed→hybrid→documents-first prompt→grounded answer + sources, streaming),
+and `ChatSession` (8 tests: user/assistant turn shape, cumulative+delta token
+fold, source attach, error path, blank-input guard). All runs today on the
+HashingEmbeddingService fallback — no MLX required.
+
+**App build:** `cd macos && xcodegen generate && xcodebuild build -scheme M1K3
+-destination 'platform=macOS,arch=arm64' CODE_SIGNING_ALLOWED=NO | xcbeautify`.
+`project.yml` is the source of truth; the `.xcodeproj` is gitignored + regenerated.
 
 ---
 
 ## Deferred buckets (each wants a focused session)
 
-1. **MLX runtime session** — `M1K3Embeddings` (nomic-embed-text-v1.5) + `MLXGemmaProvider` + LiteRT spike + `RuntimeBenchmark`. Heavy first build (`mlx-swift-lm`, MetalToolchain, weight downloads).
-2. **App shell** — Xcode SwiftUI macOS 26 target consuming the package; Liquid Glass; chat view on AFM. First runnable window.
+1. **MLX runtime session** — `M1K3Embeddings` (nomic-embed-text-v1.5) + `MLXGemmaProvider` + LiteRT spike + `RuntimeBenchmark`. Heavy first build (`mlx-swift-lm`, MetalToolchain, weight downloads). Wires into the runtime picker (already stubbed in `SettingsView`).
+2. ~~**App shell**~~ ✅ done — XcodeGen target, Liquid Glass, chat on AFM.
 3. **Heavy-dep features** — WhisperKit transcription (P6), the prior call-pipeline call subsystem (P7), RealityKit avatar (P9), swift-sdk MCP server (P10b).
+4. **First *signed sandboxed launch*** — the real milestone the unit tests can't see (challenger's flag). Confirm GRDB writes into the App-Support container, FoundationModels availability under entitlements, AVSpeech under sandbox. Build compiles today; runtime not yet exercised on-device.
 
 ---
 
 ## Next up
 
-- Finish `M1K3Agent` ReAct `LocalAgent` (this session).
-- Then pick a deferred bucket: MLX runtime (turns stack real) · app shell (visible) · keep porting pure logic.
-- Push branch `feat/mac-mvp` when ready (local-only so far).
+- **Run it on-device.** `xcodegen generate && open M1K3.xcodeproj`, sign with Kev's team, launch. First sandboxed boot is the milestone — drop a PDF, ask, hear it. Watch the three runtime-only risks above.
+- Then a deferred bucket: **MLX runtime** (turns the stack real, lights up the runtime picker) is the highest-leverage next move.
+- Push branch `feat/mac-mvp` when ready (local-only, ~17 commits so far).
