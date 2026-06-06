@@ -19,6 +19,7 @@
 //  `embeddingStatus`. Fixed the "Gemma 4" runtime labels (Gemma 3 is current).
 
 import Foundation
+import M1K3Calls
 import M1K3Chat
 import M1K3Inference
 import M1K3Knowledge
@@ -73,6 +74,12 @@ final class AppEnvironment {
     private let embedder: SwappableEmbeddingService
     private let ingester: DocumentIngester
     private let runtimeSelection: RuntimeSelectionBox
+    /// Call intelligence: encrypted-at-rest persistence + indexing into the SAME
+    /// knowledge graph as documents (so calls are RAG-searchable) + two-stage
+    /// summary. Composed from the M1K3Calls seams.
+    private let callPersistence: any CallPersistence
+    private let callIngester: CallIngester
+    private let callSummarizer: SummarizationPipeline
     /// Held directly (not just inside the façade) so the picker can warm it ahead
     /// of the first turn and stream download progress to the UI.
     private let mlxGemma: MLXGemmaProvider
@@ -123,6 +130,11 @@ final class AppEnvironment {
     /// Count of indexed knowledge items, for the document drawer / settings.
     private(set) var indexedItemCount = 0
 
+    /// Call import outcome + count, surfaced to the Calls UI.
+    private(set) var lastCallStatus: String?
+    private(set) var isImportingCall = false
+    private(set) var callCount = 0
+
     init() throws {
         let url = try Self.storeURL()
         store = try KnowledgeStore(path: url.path)
@@ -168,7 +180,27 @@ final class AppEnvironment {
         ingester = DocumentIngester(store: store, embedder: embedder)
         let transcriptURL = url.deletingLastPathComponent().appendingPathComponent("transcript.json")
         chat = ChatSession(responder: responder, transcript: ChatTranscriptStore(url: transcriptURL))
+
+        // Calls: encrypted-at-rest store (key from the Keychain), indexed into the
+        // same knowledge graph, summarised by AFM (quick) + the active runtime (deep).
+        let callsURL = url.deletingLastPathComponent().appendingPathComponent("calls.sqlite")
+        callPersistence = Self.makeCallPersistence(at: callsURL)
+        callIngester = CallIngester(store: store, embedder: embedder)
+        callSummarizer = SummarizationPipeline(quickProvider: afm, deepProvider: runtimeProvider)
+
         refreshCounts()
+    }
+
+    /// Build the encrypted call store. Falls back to an in-memory (non-persistent)
+    /// store if the Keychain key can't be obtained, so a key hiccup degrades the
+    /// calls feature rather than crashing the app.
+    private static func makeCallPersistence(at url: URL) -> any CallPersistence {
+        do {
+            let key = try StoredKeyProvider(store: KeychainKeyStore()).symmetricKey()
+            return try GRDBCallPersistence(path: url.path, coder: EncryptedCallCoder(key: key))
+        } catch {
+            return (try? GRDBCallPersistence()) ?? NullCallPersistence()
+        }
     }
 
     /// Whether the on-device model is actually available on this machine.
@@ -369,8 +401,63 @@ final class AppEnvironment {
         return deleted
     }
 
+    // MARK: - Calls
+
+    /// Import a plain-text transcript as a call: parse → summarise → persist
+    /// (encrypted) → index into the knowledge graph (so it's RAG-searchable).
+    /// The headless, no-mic path to a real call while recording is still to come.
+    func importCallTranscript(url: URL) async {
+        isImportingCall = true
+        defer { isImportingCall = false }
+
+        let scoped = url.startAccessingSecurityScopedResource()
+        defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+
+        let title = url.deletingPathExtension().lastPathComponent
+        do {
+            let text = try String(contentsOf: url, encoding: .utf8)
+            let segments = TranscriptImporter.parse(text)
+            guard !segments.isEmpty else {
+                lastCallStatus = "“\(title)” had no readable lines."
+                return
+            }
+            let transcript = segments
+                .map { ($0.speaker.map { "\($0): " } ?? "") + $0.text }
+                .joined(separator: "\n")
+            let summary = await callSummarizer.summarize(transcript: transcript)
+            let session = CallSession(
+                startedAt: Date(),
+                title: title,
+                segments: segments,
+                quickSummary: summary.quick,
+                fullSummary: summary.full
+            )
+            try callPersistence.save(session)
+            try await callIngester.ingest(session)
+            refreshCounts()
+            lastCallStatus = "Imported “\(title)” — \(segments.count) lines, indexed + searchable."
+        } catch {
+            lastCallStatus = "Couldn’t import “\(title)”: \(error.localizedDescription)"
+        }
+    }
+
+    /// All stored calls, newest first.
+    func calls() -> [CallSession] {
+        (try? callPersistence.loadAll()) ?? []
+    }
+
+    /// Delete a call from both the encrypted store and the knowledge graph.
+    @discardableResult
+    func deleteCall(id: UUID) -> Bool {
+        let removed = (try? callPersistence.delete(id: id)) ?? false
+        _ = try? store.deleteItem(id: id) // the call's graph node shares the call UUID
+        if removed { refreshCounts() }
+        return removed
+    }
+
     private func refreshCounts() {
         indexedItemCount = (try? store.itemCount()) ?? indexedItemCount
+        callCount = (try? callPersistence.loadAll().count) ?? callCount
     }
 
     private static func storeURL() throws -> URL {
@@ -384,5 +471,22 @@ final class AppEnvironment {
         let dir = base.appendingPathComponent("M1K3", isDirectory: true)
         try fm.createDirectory(at: dir, withIntermediateDirectories: true)
         return dir.appendingPathComponent("knowledge.sqlite")
+    }
+}
+
+/// Last-resort no-op store so a (near-impossible) persistence-init failure leaves
+/// the app running with the calls feature simply inert, never crashing.
+private struct NullCallPersistence: CallPersistence {
+    func save(_: CallSession) throws {}
+    func load(id _: UUID) throws -> CallSession? {
+        nil
+    }
+
+    func loadAll() throws -> [CallSession] {
+        []
+    }
+
+    func delete(id _: UUID) throws -> Bool {
+        false
     }
 }

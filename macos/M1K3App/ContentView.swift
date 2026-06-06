@@ -18,6 +18,7 @@ struct ContentView: View {
     @State private var draft = ""
     @State private var showSettings = false
     @State private var showDocuments = false
+    @State private var showCalls = false
     @State private var showImporter = false
     @State private var isDropTargeted = false
 
@@ -41,6 +42,9 @@ struct ContentView: View {
         }
         .sheet(isPresented: $showDocuments) {
             DocumentsView().environment(env)
+        }
+        .sheet(isPresented: $showCalls) {
+            CallsView().environment(env)
         }
         .fileImporter(
             isPresented: $showImporter,
@@ -179,6 +183,9 @@ struct ContentView: View {
             }
             Button { showDocuments = true } label: {
                 Label("Documents", systemImage: "books.vertical")
+            }
+            Button { showCalls = true } label: {
+                Label("Calls", systemImage: "phone.bubble")
             }
             Button { showSettings = true } label: {
                 Label("Settings", systemImage: "gearshape")

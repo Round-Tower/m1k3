@@ -56,6 +56,8 @@ targets:
         product: M1K3MLX
       - package: M1K3
         product: M1K3WhisperKit
+      - package: M1K3
+        product: M1K3Calls
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: dev.murphysig.M1K3

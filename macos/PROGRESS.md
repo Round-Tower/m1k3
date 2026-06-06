@@ -154,9 +154,14 @@ no engine linked, **18 tests / 4 suites green** (→ 177/37 total).
   device-only/after-first-unlock, verify-by-launch). Tested against an in-memory fake; an end-to-end
   test proves the provider's key drives the encrypted round-trip. **The encryption story is now
   closed:** Keychain key → `EncryptedCallCoder` → encrypted-at-rest, all linked + tested.
+- **App wiring ✅** (transcript-import path; 5 importer tests, app builds): `AppEnvironment`
+  composes the whole stack — `KeychainKeyStore → StoredKeyProvider → EncryptedCallCoder →
+  GRDBCallPersistence` + `CallIngester` (same graph) + `SummarizationPipeline` (AFM quick /
+  active-runtime deep). `TranscriptImporter` (pure) parses "Speaker: line" text → import a
+  transcript → summarised + encrypted + indexed + shown. `CallsView` + `CallDetailView`
+  (Liquid Glass) + toolbar button. The headless, no-mic entry point to the full P7 feature.
 - **Engines deferred** (the heavy/device parts): WhisperKit-batch, FluidAudio (the prior call-pipeline lift),
-  Gemma-4-shadow (post-benchmark), recording UI + consent gate. **App wiring** (compose
-  `KeychainKeyStore` → `StoredKeyProvider` → `GRDBCallPersistence`) lands with the recording flow.
+  Gemma-4-shadow (post-benchmark), **live recording UI + consent gate** (the mic path).
 
 ## Deferred buckets (each wants a focused session)
 
