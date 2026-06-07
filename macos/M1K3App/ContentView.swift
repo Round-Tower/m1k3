@@ -128,22 +128,28 @@ struct ContentView: View {
 
                 Button { env.toggleDictation() } label: {
                     Image(systemName: env.isListening ? "mic.fill" : "mic")
-                        .font(.system(size: 16, weight: .semibold))
-                        .frame(width: 22, height: 22)
+                        .imageScale(.large)
+                        .fontWeight(.semibold)
+                        .frame(minWidth: 22, minHeight: 22)
                 }
                 .buttonStyle(.glass)
                 .tint(env.isListening ? .red : nil)
                 .disabled(!env.canDictate && !env.isListening)
                 .help(env.canDictate ? "Voice input — tap to speak, tap to send" : "Microphone unavailable")
+                .accessibilityLabel("Voice input")
+                .accessibilityValue(env.isListening ? "Listening" : "Off")
+                .accessibilityHint("Dictate a message")
 
                 Button(action: send) {
                     Image(systemName: "arrow.up")
-                        .font(.system(size: 16, weight: .semibold))
-                        .frame(width: 22, height: 22)
+                        .imageScale(.large)
+                        .fontWeight(.semibold)
+                        .frame(minWidth: 22, minHeight: 22)
                 }
                 .buttonStyle(.glassProminent)
                 .disabled(!canSend)
                 .keyboardShortcut(.return, modifiers: [])
+                .accessibilityLabel("Send")
             }
             .padding(16)
         }
@@ -151,6 +157,14 @@ struct ContentView: View {
 
     private var canSend: Bool {
         !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !env.chat.isResponding
+    }
+
+    /// One spoken label for the toolbar status pill — the colour-coded dots carry
+    /// no meaning to VoiceOver on their own.
+    private var statusAccessibilityLabel: String {
+        if env.isRecording { return "Recording in progress" }
+        if env.modelLoad.isActive { return env.modelLoad.label(modelName: "Gemma 3") }
+        return "Model \(env.providerAvailable ? "ready" : "unavailable"), runtime \(env.selectedRuntime.rawValue)"
     }
 
     private func send() {
@@ -167,12 +181,14 @@ struct ContentView: View {
         ToolbarItem(placement: .principal) {
             HStack(spacing: 6) {
                 if env.isRecording {
-                    Circle().fill(.red).frame(width: 8, height: 8)
+                    Image(systemName: "record.circle.fill")
+                        .symbolRenderingMode(.hierarchical)
+                        .foregroundStyle(.red)
                     Text("Recording").font(.caption).foregroundStyle(.red)
                 } else if env.modelLoad.isActive {
                     ProgressView().controlSize(.small)
                     Text(env.modelLoad.label(modelName: "Gemma 3"))
-                        .font(.caption)
+                        .font(.caption.monospacedDigit())
                         .foregroundStyle(.secondary)
                 } else {
                     Circle()
@@ -183,6 +199,8 @@ struct ContentView: View {
                         .foregroundStyle(.secondary)
                 }
             }
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel(statusAccessibilityLabel)
         }
         ToolbarItemGroup(placement: .primaryAction) {
             Button { env.chat.clear() } label: {

@@ -204,6 +204,21 @@ commits on `feat/mac-mvp` (PR #9). The pure brain is done; what's left is mostly
 - [ ] Tests for the AppleSpeech mic-permission-denied cleanup path (throwing fake) + a self-healing `isListening` timeout (P6 review, low).
 - [ ] Persist the recorded `.caf` into the app container (not temp); consider adding an `audioPath` to `CallSession`.
 
+### 🎨 Design & Accessibility — Mac-native pass (full detail in `UI_AUDIT.md`)
+**Quick wins DONE (2026-06-07):** icon-only button labels (send · mic · trash · speak),
+colour-only status → combined VoiceOver label + `record.circle.fill` symbol, 3 hardcoded font
+sizes → Dynamic-Type-safe, `.monospacedDigit()` on counters, hierarchical symbol-rendering pass.
+**Deferred (the substance):**
+- [ ] **Reduce Transparency** — solid-surface fallback when `accessibilityReduceTransparency` (biggest win for the all-glass UI).
+- [ ] **VoiceOver chat structure** — `accessibilityElement(.combine)` + composed labels on `MessageView` turns ("You said…", "M1K3: …, 3 sources").
+- [ ] **Reduce Motion** gate on the scroll animation + any `.symbolEffect`.
+- [ ] **Increase Contrast** — `.secondary`/`.tertiary` over glass likely <4.5:1; stronger fg + less translucency when `colorSchemeContrast == .increased`.
+- [ ] **Dynamic Type** — let fixed sheet frames grow; test at `.accessibility5`.
+- [ ] **Live announcements** — `AccessibilityNotification.Announcement` for streaming + status flips.
+- [ ] **Hit targets** — mic/send button areas ≥ ~28pt; **focus on present** (move VoiceOver focus to sheet headers, label sheets as modals).
+- [ ] **Craft** — tasteful `.symbolEffect` (pulse/variableColor, Reduce-Motion-gated); type-token + symbol-token helpers; SF Pro + SF Symbols in the Figma mockup once the plan is upgraded.
+- Verify: VoiceOver (⌘F5) · Xcode Accessibility Inspector · toggle the Accessibility system settings.
+
 ### 🟢 Future phases / spikes
 - [ ] **Avatar (P9)** — RealityKit emotion-driven avatar + TTS lip-sync.
 - [ ] **LiteRT spike (P3)** — now real: `litert-community/gemma-4-12B-it-litert-lm` (text+audio).

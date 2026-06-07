@@ -50,9 +50,10 @@ struct CallsView: View {
     private var header: some View {
         HStack {
             Label("Calls", systemImage: "phone.bubble")
+                .symbolRenderingMode(.hierarchical)
                 .font(.headline)
             Text("\(env.callCount)") // observable — re-renders the list after import/delete
-                .font(.caption).foregroundStyle(.secondary)
+                .font(.caption.monospacedDigit()).foregroundStyle(.secondary)
             Spacer()
             Button {
                 showImporter = true
@@ -99,12 +100,12 @@ private struct CallRow: View {
                 Text(call.title).font(.body.weight(.medium))
                 Spacer()
                 Text(call.startedAt, format: .dateTime.day().month().hour().minute())
-                    .font(.caption2).foregroundStyle(.secondary)
+                    .font(.caption2.monospacedDigit()).foregroundStyle(.secondary)
             }
             if let gist = call.fullSummary?.overview ?? call.quickSummary?.overview, !gist.isEmpty {
                 Text(gist).font(.caption).foregroundStyle(.secondary).lineLimit(2)
             }
-            Text("\(call.segments.count) lines").font(.caption2).foregroundStyle(.tertiary)
+            Text("\(call.segments.count) lines").font(.caption2.monospacedDigit()).foregroundStyle(.tertiary)
         }
         .padding(.vertical, 4)
         .contentShape(.rect)
@@ -118,7 +119,7 @@ struct CallDetailView: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack {
-                Label(call.title, systemImage: "phone.bubble").font(.headline)
+                Label(call.title, systemImage: "phone.bubble").symbolRenderingMode(.hierarchical).font(.headline)
                 Spacer()
                 Button("Done") { dismiss() }.buttonStyle(.glassProminent)
             }
@@ -192,7 +193,8 @@ struct CallDetailView: View {
 private struct BulletLabelStyle: LabelStyle {
     func makeBody(configuration: Configuration) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
-            configuration.icon.font(.system(size: 5)).foregroundStyle(.tint)
+            // imageScale scales with Dynamic Type; a fixed point size did not.
+            configuration.icon.imageScale(.small).foregroundStyle(.tint)
             configuration.title
         }
     }

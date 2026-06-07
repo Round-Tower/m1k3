@@ -31,9 +31,11 @@ struct MessageView: View {
         case .assistant:
             HStack(alignment: .top, spacing: 10) {
                 Image(systemName: "brain")
+                    .symbolRenderingMode(.hierarchical)
                     .foregroundStyle(.tint)
                     .font(.title3)
                     .padding(.top, 2)
+                    .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 8) {
                     assistantBody
                     if !message.sources.isEmpty {
@@ -63,6 +65,7 @@ struct MessageView: View {
 
             if case let .failed(reason) = message.status {
                 Label(reason, systemImage: "exclamationmark.triangle")
+                    .symbolRenderingMode(.hierarchical)
                     .font(.caption)
                     .foregroundStyle(.orange)
             }
@@ -72,9 +75,11 @@ struct MessageView: View {
                     onSpeak(message.text)
                 } label: {
                     Label("Speak", systemImage: "speaker.wave.2")
+                        .symbolRenderingMode(.hierarchical)
                         .font(.caption)
                 }
                 .buttonStyle(.glass)
+                .accessibilityLabel("Speak this answer")
             }
         }
         .padding(.horizontal, 14)
@@ -94,7 +99,7 @@ struct MessageView: View {
         } label: {
             Label("\(message.sources.count) source\(message.sources.count == 1 ? "" : "s")",
                   systemImage: "doc.text.magnifyingglass")
-                .font(.caption.weight(.medium))
+                .font(.caption.weight(.medium).monospacedDigit())
                 .foregroundStyle(.secondary)
         }
         .padding(.horizontal, 6)

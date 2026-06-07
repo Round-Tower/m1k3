@@ -121,6 +121,7 @@ struct SettingsView: View {
 
                 Section("Memory") {
                     LabeledContent("Indexed items", value: "\(env.indexedItemCount)")
+                        .monospacedDigit()
                     LabeledContent("Model availability",
                                    value: env.providerAvailable ? "Ready" : "Unavailable")
                 }
@@ -142,10 +143,11 @@ struct SettingsView: View {
                     .controlSize(.small)
                     .frame(maxWidth: 160)
                 Text(env.modelLoad.label(modelName: "Gemma 3"))
-                    .font(.caption).foregroundStyle(.secondary)
+                    .font(.caption.monospacedDigit()).foregroundStyle(.secondary)
             }
         case .failed:
             Label(env.modelLoad.label(modelName: "Gemma 3"), systemImage: "exclamationmark.triangle")
+                .symbolRenderingMode(.hierarchical)
                 .font(.caption).foregroundStyle(.orange)
         case .idle, .ready:
             EmptyView()
@@ -155,6 +157,7 @@ struct SettingsView: View {
     private var header: some View {
         HStack {
             Label("Settings", systemImage: "gearshape")
+                .symbolRenderingMode(.hierarchical)
                 .font(.headline)
             Spacer()
             Button("Done") { dismiss() }
@@ -173,8 +176,10 @@ private struct RuntimeRow: View {
         Button(action: onTap) {
             HStack(spacing: 12) {
                 Image(systemName: option.systemImage)
+                    .symbolRenderingMode(.hierarchical)
                     .frame(width: 24)
                     .foregroundStyle(option.isReady ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
+                    .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(option.rawValue)
                         .foregroundStyle(option.isReady ? .primary : .secondary)
@@ -184,7 +189,10 @@ private struct RuntimeRow: View {
                 }
                 Spacer()
                 if isSelected {
-                    Image(systemName: "checkmark.circle.fill").foregroundStyle(.tint)
+                    Image(systemName: "checkmark.circle.fill")
+                        .symbolRenderingMode(.hierarchical)
+                        .foregroundStyle(.tint)
+                        .accessibilityHidden(true)
                 } else if !option.isReady {
                     Text("Soon").font(.caption2).foregroundStyle(.secondary)
                 }
@@ -193,5 +201,6 @@ private struct RuntimeRow: View {
         }
         .buttonStyle(.plain)
         .disabled(!option.isReady)
+        .accessibilityAddTraits(isSelected ? [.isSelected] : [])
     }
 }
