@@ -227,5 +227,11 @@ sizes → Dynamic-Type-safe, `.monospacedDigit()` on counters, hierarchical symb
 - [ ] **Kokoro TTS** swap (post-MVP, behind `SpeechProvider`).
 
 ### 🧹 Ship hygiene
-- [ ] Merge **PR #9** once the Mac reviewer + ⌘R verify clear it.
+- [x] Merge **PR #9** (Mac MVP). ✅ 2026-06-06.
+- [ ] **Add `SLACK_WEBHOOK_URL` repo secret** → lights up the CI Slack build-status
+      list (the `notify` job in `ci.yml` no-ops until it's set). Reuse the
+      dyslexia-ai-server webhook (same channel) or make a new one for a dedicated
+      `#m1k3-ci`. Set it with:
+      `gh secret set SLACK_WEBHOOK_URL -R Round-Tower/m1k3` (paste when prompted).
+- [ ] Review + merge **PR #10** (call subsystem + a11y + Slack CI) once ⌘R clears it.
 - [ ] ~23G `~/.cache/huggingface` cleanup pass.
