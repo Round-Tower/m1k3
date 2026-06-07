@@ -83,7 +83,10 @@ final class AppEnvironment {
     /// Recording is consent-gated (legal: call recording needs consent) and captured
     /// behind the AudioRecorder seam.
     private let consentGate = RecordingConsentGate(store: UserDefaultsConsentStore())
-    private let recorder: any AudioRecorder = MicAudioRecorder()
+    /// Stereo capture: near-end mic + far-end system audio (ScreenCaptureKit),
+    /// muxed so the diarizer can separate speakers. Degrades to mono mic if
+    /// screen-recording permission is absent.
+    private let recorder = StereoCallRecorder()
     /// Held directly (not just inside the façade) so the picker can warm it ahead
     /// of the first turn and stream download progress to the UI.
     private let mlxGemma: MLXGemmaProvider
@@ -486,19 +489,23 @@ final class AppEnvironment {
     }
 
     /// Log a consent affirmation, then start recording.
-    func affirmConsentAndRecord(scope: ConsentScope) {
+    func affirmConsentAndRecord(scope: ConsentScope) async {
         consentGate.affirm(scope: scope, at: Date())
-        startRecording()
+        await startRecording()
     }
 
     /// Start capturing — only call once consent is in hand (pre-authorised or just
-    /// affirmed). Surfaces failures rather than crashing.
-    func startRecording() {
+    /// affirmed). Captures the far-end (system audio) too when screen-recording
+    /// permission is granted; falls back to mono mic otherwise. Surfaces failures
+    /// rather than crashing.
+    func startRecording() async {
         guard !isRecording else { return }
         do {
-            try recorder.start()
+            let stereo = try await recorder.start()
             isRecording = true
-            lastCallStatus = "Recording…"
+            lastCallStatus = stereo
+                ? "Recording… (both sides — speakers will be separated)"
+                : "Recording… (mic only — grant Screen Recording to capture the other side)"
         } catch {
             lastCallStatus = "Couldn’t start recording: \(error.localizedDescription)"
         }
@@ -508,9 +515,9 @@ final class AppEnvironment {
     /// transcribed → summarised → encrypted → indexed straight away (the SAME
     /// CallIntelligencePipeline the import path proves). If not, it's held and the
     /// user is pointed at the Settings enable; `enableCallTranscription` picks it up.
-    func stopRecording() {
+    func stopRecording() async {
         guard isRecording else { return }
-        let url = recorder.stop()
+        let url = await recorder.stop()
         isRecording = false
         lastRecordingURL = url
         guard let url else {

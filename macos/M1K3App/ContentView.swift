@@ -48,8 +48,8 @@ struct ContentView: View {
             CallsView().environment(env)
         }
         .confirmationDialog("Record this call?", isPresented: $showConsentDialog, titleVisibility: .visible) {
-            Button("Record once") { env.affirmConsentAndRecord(scope: .once) }
-            Button("Always allow") { env.affirmConsentAndRecord(scope: .remembered) }
+            Button("Record once") { Task { await env.affirmConsentAndRecord(scope: .once) } }
+            Button("Always allow") { Task { await env.affirmConsentAndRecord(scope: .remembered) } }
             Button("Cancel", role: .cancel) {}
         } message: {
             Text("You’re responsible for having consent from everyone on the call. Recording is on-device only — audio never leaves this Mac.")
@@ -199,8 +199,8 @@ struct ContentView: View {
                 Label("Calls", systemImage: "phone.bubble")
             }
             Button {
-                if env.isRecording { env.stopRecording() }
-                else if env.recordingPreAuthorised { env.startRecording() }
+                if env.isRecording { Task { await env.stopRecording() } }
+                else if env.recordingPreAuthorised { Task { await env.startRecording() } }
                 else { showConsentDialog = true }
             } label: {
                 Label(env.isRecording ? "Stop recording" : "Record call",
