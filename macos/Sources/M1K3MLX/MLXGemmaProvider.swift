@@ -29,32 +29,44 @@
 //  `loadContainer`'s `progressHandler` through `ensureLoaded`, so the ~1GB first
 //  download reports a 0...1 fraction to the UI instead of stalling silently. The
 //  progress path is still verify-by-launch (MLX only runs from the .app).
+//
+//  Review: Kev + claude-opus-4-8, 2026-06-08, Confidence 0.85 - replaced the
+//  check-then-act NSLock cache with a SingleFlightLoader actor. The old
+//  ensureLoaded read the cache under the lock, RELEASED it, then ran the slow
+//  load unlocked, so a Settings preload racing the first generate could both pass
+//  the nil-check and download the container twice. The loader coalesces them into
+//  one load (proven Metal-free in SingleFlightLoaderTests).
 
 import Foundation
 import M1K3Inference
 import MLXLLM
 import MLXLMCommon
 
-/// `@unchecked Sendable`: the loaded `ModelContainer` is cached behind a lock and
-/// is itself an isolation actor; everything else is immutable.
+/// `@unchecked Sendable`: model loading is coalesced through a `SingleFlightLoader`
+/// actor and the loaded `ModelContainer` is itself an isolation actor; everything
+/// else is immutable.
 public final class MLXGemmaProvider: InferenceProvider, ModelPreloading, @unchecked Sendable {
     public let name: String
 
-    private let configuration: ModelConfiguration
     private let generateParameters: GenerateParameters
-    private let lock = NSLock()
-    private var container: ModelContainer?
+    private let loader: SingleFlightLoader<ModelContainer>
 
     public init(
         configuration: ModelConfiguration = LLMRegistry.gemma3_1B_qat_4bit,
         maxTokens: Int = 512,
         name: String = "mlx-gemma"
     ) {
-        self.configuration = configuration
         var params = GenerateParameters()
         params.maxTokens = maxTokens
         generateParameters = params
         self.name = name
+        // Single-flight the container load so a Settings preload racing the first
+        // generate share ONE ~1GB download instead of each kicking off their own.
+        loader = SingleFlightLoader { progress in
+            try await LLMModelFactory.shared.loadContainer(configuration: configuration) { prog in
+                progress(prog.fractionCompleted)
+            }
+        }
     }
 
     /// Convenience: point at any HuggingFace model id (e.g. a locally-cached
@@ -106,11 +118,6 @@ public final class MLXGemmaProvider: InferenceProvider, ModelPreloading, @unchec
     private func ensureLoaded(
         progress: @escaping @Sendable (Double) -> Void = { _ in }
     ) async throws -> ModelContainer {
-        if let cached = lock.withLock({ container }) { return cached }
-        let loaded = try await LLMModelFactory.shared.loadContainer(configuration: configuration) { prog in
-            progress(prog.fractionCompleted)
-        }
-        lock.withLock { container = loaded }
-        return loaded
+        try await loader.value(progress: progress)
     }
 }

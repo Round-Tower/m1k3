@@ -126,10 +126,21 @@ final class AppEnvironment {
             runtimeSelection.value = selectedRuntime
             // Warm MLX on selection so the ~1GB first-use download shows a
             // progress bar in Settings rather than a silent hang on the first
-            // chat turn. Cheap/no-op once the weights are cached.
-            if selectedRuntime == .mlxGemma { Task { await preloadGemma() } }
+            // chat turn. Cheap/no-op once the weights are cached. Switching away
+            // cancels the warm-up — the SingleFlightLoader lets any in-flight
+            // download finish + cache; we just stop tracking it and clear the bar.
+            preloadTask?.cancel()
+            if selectedRuntime == .mlxGemma {
+                preloadTask = Task { await preloadGemma() }
+            } else {
+                preloadTask = nil
+                if modelLoad.isActive { modelLoad = .idle }
+            }
         }
     }
+
+    /// The in-flight MLX warm-up, so switching away can cancel it (idempotent).
+    private var preloadTask: Task<Void, Never>?
 
     /// Progress of warming the MLX Gemma weights, surfaced in Settings (and the
     /// chat send path). Stays `.idle` for the Apple Foundation Models default.
@@ -358,7 +369,11 @@ final class AppEnvironment {
     /// cached. Runs off the main actor for the load; progress hops back to update
     /// the observable state.
     private func preloadGemma() async {
-        if case .downloading = modelLoad { return }
+        // No re-entrancy guard needed: switching to MLX cancels any prior warm-up
+        // first, and the SingleFlightLoader dedupes the underlying download even
+        // if two briefly overlap. On cancellation we write nothing — whoever is
+        // the current selection (the didSet, or a newer warm-up) owns modelLoad,
+        // so a late-completing cancelled task can't clobber it.
         modelLoad = .progress(0)
         do {
             try await mlxGemma.prepare { fraction in
@@ -370,9 +385,13 @@ final class AppEnvironment {
                     if case .downloading = self.modelLoad { self.modelLoad = .progress(fraction) }
                 }
             }
+            if Task.isCancelled { return }
             modelLoad = .ready
+        } catch is CancellationError {
+            // Deliberately switched away mid-load — leave modelLoad to the current
+            // selection (the didSet already cleared the bar).
         } catch {
-            modelLoad = .failed(message: error.localizedDescription)
+            if !Task.isCancelled { modelLoad = .failed(message: error.localizedDescription) }
         }
     }
 
