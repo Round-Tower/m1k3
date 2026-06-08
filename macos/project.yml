@@ -58,6 +58,8 @@ targets:
         product: M1K3WhisperKit
       - package: M1K3
         product: M1K3Calls
+      - package: M1K3
+        product: M1K3Avatar
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: dev.murphysig.M1K3

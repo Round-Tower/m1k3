@@ -13,12 +13,21 @@
 import AVFoundation
 import Foundation
 
-public final class AVSpeechProvider: SpeechProvider, @unchecked Sendable {
+public final class AVSpeechProvider: NSObject, SpeechProvider, @unchecked Sendable {
     public let name = "av-speech"
 
     private let synthesizer = AVSpeechSynthesizer()
 
-    public init() {}
+    /// Called on the main thread when synthesis starts. Set by AppEnvironment to
+    /// drive the avatar into the .speaking activity state.
+    public var onSpeakingStarted: (@Sendable () -> Void)?
+    /// Called on the main thread when synthesis finishes or is stopped.
+    public var onSpeakingEnded: (@Sendable () -> Void)?
+
+    override public init() {
+        super.init()
+        synthesizer.delegate = self
+    }
 
     public nonisolated var isAvailable: Bool {
         true
@@ -46,5 +55,35 @@ public final class AVSpeechProvider: SpeechProvider, @unchecked Sendable {
 
     public func isSpeaking() async -> Bool {
         await MainActor.run { synthesizer.isSpeaking }
+    }
+}
+
+// MARK: - AVSpeechSynthesizerDelegate
+
+// Delegate methods are delivered on the main queue by AVFoundation.
+
+extension AVSpeechProvider: AVSpeechSynthesizerDelegate {
+    public nonisolated func speechSynthesizer(
+        _: AVSpeechSynthesizer,
+        didStart _: AVSpeechUtterance
+    ) {
+        let cb = onSpeakingStarted
+        Task { @MainActor in cb?() }
+    }
+
+    public nonisolated func speechSynthesizer(
+        _: AVSpeechSynthesizer,
+        didFinish _: AVSpeechUtterance
+    ) {
+        let cb = onSpeakingEnded
+        Task { @MainActor in cb?() }
+    }
+
+    public nonisolated func speechSynthesizer(
+        _: AVSpeechSynthesizer,
+        didCancel _: AVSpeechUtterance
+    ) {
+        let cb = onSpeakingEnded
+        Task { @MainActor in cb?() }
     }
 }

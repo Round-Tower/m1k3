@@ -72,20 +72,30 @@ struct SettingsView: View {
 
                 Section {
                     LabeledContent("Active engine", value: env.activeTranscriberName)
-                    if env.isPreparingWhisper {
-                        HStack(spacing: 8) {
-                            ProgressView().controlSize(.small)
-                            Text(env.whisperStatus ?? "Preparing WhisperKit…")
-                                .font(.caption).foregroundStyle(.secondary)
-                        }
-                    } else {
+                    switch env.whisperLoad {
+                    case .idle, .failed:
                         Button("Enable WhisperKit (downloads model)") {
                             Task { await env.enableWhisperKit() }
                         }
                         .buttonStyle(.glass)
-                        if let status = env.whisperStatus {
-                            Text(status).font(.caption).foregroundStyle(.secondary)
+                        if case let .failed(msg) = env.whisperLoad {
+                            Label(msg, systemImage: "exclamationmark.triangle")
+                                .symbolRenderingMode(.hierarchical)
+                                .font(.caption)
+                                .foregroundStyle(.orange)
                         }
+                    case let .downloading(fraction):
+                        VStack(alignment: .leading, spacing: 4) {
+                            ProgressView(value: fraction)
+                            Text(env.whisperLoad.label(modelName: "WhisperKit"))
+                                .font(.caption.monospacedDigit())
+                                .foregroundStyle(.secondary)
+                        }
+                    case .ready:
+                        Label("WhisperKit ready", systemImage: "checkmark.circle.fill")
+                            .symbolRenderingMode(.hierarchical)
+                            .font(.callout)
+                            .foregroundStyle(.green)
                     }
                 } header: {
                     Text("Voice input")

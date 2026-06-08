@@ -19,6 +19,7 @@
 //  `embeddingStatus`. Fixed the "Gemma 4" runtime labels (Gemma 3 is current).
 
 import Foundation
+import M1K3Avatar
 import M1K3Calls
 import M1K3Chat
 import M1K3Inference
@@ -111,9 +112,13 @@ final class AppEnvironment {
     /// in the input bar as the user speaks.
     private(set) var isListening = false
     private(set) var liveTranscript = ""
-    /// WhisperKit model-load status, surfaced in Settings (nil = not attempted).
-    private(set) var whisperStatus: String?
-    private(set) var isPreparingWhisper = false
+    /// WhisperKit model-load state — mirrors `modelLoad` for the brain tier.
+    private(set) var whisperLoad: ModelLoadState = .idle
+    private var isPreparingWhisper = false
+
+    /// The avatar companion state — driven by this environment at each transition
+    /// (listening → thinking → generating → speaking → idle).
+    private(set) var avatar = AvatarController()
 
     private static let embedderPrefersMLXKey = "embedder.prefersMLX"
     static let selectedBrainKey = "selectedBrain"
@@ -237,10 +242,11 @@ final class AppEnvironment {
         // Voice input: WhisperKit first (better accuracy, but unavailable until
         // its model loads), Apple Speech as the always-on fallback. So dictation
         // works on Apple Speech day one and upgrades to WhisperKit on demand.
-        let whisper = WhisperKitProvider()
+        let whisperDownloadBase = url.deletingLastPathComponent()
+        let whisper = WhisperKitProvider(downloadBase: whisperDownloadBase)
         whisperKit = whisper
         transcription = TranscriptionRouter(providers: [whisper, AppleSpeechTranscriber()])
-        batchTranscriber = WhisperKitBatchTranscriber()
+        batchTranscriber = WhisperKitBatchTranscriber(downloadBase: whisperDownloadBase)
 
         ingester = DocumentIngester(store: store, embedder: embedder)
         let transcriptURL = url.deletingLastPathComponent().appendingPathComponent("transcript.json")
@@ -254,6 +260,14 @@ final class AppEnvironment {
         callSummarizer = SummarizationPipeline(quickProvider: afm, deepProvider: runtimeProvider)
 
         refreshCounts()
+
+        // Wire avatar ↔ speech after all stored properties are initialized.
+        speech.onSpeakingStarted = { [weak self] in
+            Task { @MainActor [weak self] in self?.avatar.setActivity(.speaking) }
+        }
+        speech.onSpeakingEnded = { [weak self] in
+            Task { @MainActor [weak self] in self?.avatar.resetToIdle() }
+        }
 
         // Warm a restored MLX brain (Lil/Big) on launch so it's ready to answer;
         // Mini (Apple) needs nothing. Setting selectedRuntime drives the existing
@@ -306,13 +320,27 @@ final class AppEnvironment {
         }
     }
 
-    /// Speak text via the TTS provider (provider hops to the main actor itself).
+    /// Send a user message: drives avatar thinking → generating → idle, then
+    /// hands off to ChatSession. The speech delegate handles the speaking→idle
+    /// transition if the user taps Speak on the response.
+    func send(_ text: String) async {
+        avatar.setActivity(.thinking)
+        await chat.send(text)
+        // Only reset to idle if the avatar isn't already in a speaking state
+        // (e.g. auto-TTS path sets .speaking before we return here).
+        if case .speaking = avatar.state.activity { return }
+        avatar.resetToIdle()
+    }
+
+    /// Speak text via the TTS provider. The onSpeakingStarted/Ended delegate
+    /// callbacks drive avatar .speaking → .idle; no manual state change needed here.
     func speak(_ text: String) async {
         await speech.speak(text)
     }
 
     func stopSpeaking() async {
         await speech.stop()
+        avatar.resetToIdle()
     }
 
     // MARK: - Voice input
@@ -333,23 +361,22 @@ final class AppEnvironment {
     func enableWhisperKit() async {
         guard !isPreparingWhisper else { return }
         isPreparingWhisper = true
-        whisperStatus = "Downloading WhisperKit model…"
+        whisperLoad = .progress(0)
         do {
             try await whisperKit.prepareModel { fraction in
-                // Only apply while still preparing — a late hop enqueued near 100%
-                // must not overwrite the terminal status below (same race we
-                // guarded in preloadGemma).
+                // Guard against a late progress hop overwriting .ready — same race
+                // fixed in preloadGemma (the .downloading check is the fence).
                 Task { @MainActor in
-                    if self.isPreparingWhisper {
-                        self.whisperStatus = "Downloading WhisperKit model… \(Int((fraction * 100).rounded()))%"
+                    if case .downloading = self.whisperLoad {
+                        self.whisperLoad = .progress(fraction)
                     }
                 }
             }
             isPreparingWhisper = false
-            whisperStatus = "WhisperKit ready — voice input now uses it."
+            whisperLoad = .ready
         } catch {
             isPreparingWhisper = false
-            whisperStatus = "Couldn’t load WhisperKit: \(error.localizedDescription)"
+            whisperLoad = .failed(message: error.localizedDescription)
         }
     }
 
@@ -669,6 +696,7 @@ extension AppEnvironment {
         dictationProvider = provider
         liveTranscript = ""
         isListening = true
+        avatar.setActivity(.listening)
         do {
             let stream = try provider.startListening()
             dictationTask = Task { @MainActor in
@@ -699,8 +727,11 @@ extension AppEnvironment {
         dictationProvider = nil
         dictationTask = nil
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return }
-        await chat.send(trimmed)
+        guard !trimmed.isEmpty else {
+            avatar.resetToIdle()
+            return
+        }
+        await send(trimmed)
     }
 }
 

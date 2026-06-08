@@ -27,14 +27,18 @@ public final class WhisperKitBatchTranscriber: BatchTranscriptionProvider, @unch
     public let name = "WhisperKit (batch)"
 
     private let model: String
+    private let downloadBase: URL?
     private let lock = NSLock()
     private var whisperKit: WhisperKit?
 
     /// - Parameter model: WhisperKit variant. `base.en` (~142MB) balances size and
     ///   accuracy; batch transcription is latency-tolerant, so `small.en` is a fine
     ///   sharper upgrade. Can share a variant with the live provider's cache.
-    public init(model: String = "base.en") {
+    /// - Parameter downloadBase: Root URL for model storage. Should match the live
+    ///   `WhisperKitProvider`'s base so both share the same cached weights.
+    public init(model: String = "base.en", downloadBase: URL? = nil) {
         self.model = model
+        self.downloadBase = downloadBase
     }
 
     /// Available only on Apple Silicon once a model has been loaded.
@@ -50,7 +54,9 @@ public final class WhisperKitBatchTranscriber: BatchTranscriptionProvider, @unch
     public func prepareModel(progress: @escaping @Sendable (Double) -> Void) async throws {
         if lock.withLock({ whisperKit != nil }) { progress(1.0); return }
         progress(0.05)
-        let kit = try await WhisperKit(WhisperKitConfig(model: model, verbose: false, prewarm: true, load: true))
+        let config = WhisperKitConfig(model: model, verbose: false, prewarm: true, load: true)
+        config.downloadBase = downloadBase
+        let kit = try await WhisperKit(config)
         lock.withLock { whisperKit = kit }
         progress(1.0)
     }

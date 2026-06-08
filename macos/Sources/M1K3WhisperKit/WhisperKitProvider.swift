@@ -37,10 +37,17 @@ public final class WhisperKitProvider: TranscriptionProvider, @unchecked Sendabl
     private var continuation: AsyncStream<TranscriptSegment>.Continuation?
     private var lastText = ""
 
+    private let downloadBase: URL?
+
     /// - Parameter model: WhisperKit variant. `base.en` balances size (~142MB)
     ///   and accuracy; `tiny.en` (~75MB) downloads faster, `small.en` is sharper.
-    public init(model: String = "base.en") {
+    /// - Parameter downloadBase: Root URL for model storage. Pass the app's
+    ///   Application Support directory so downloads land in a stable sandbox path
+    ///   rather than the HuggingFace cache default (which can produce broken partial
+    ///   downloads in sandboxed apps).
+    public init(model: String = "base.en", downloadBase: URL? = nil) {
         self.model = model
+        self.downloadBase = downloadBase
     }
 
     /// Available only on Apple Silicon once a model has been loaded. Until then
@@ -58,7 +65,9 @@ public final class WhisperKitProvider: TranscriptionProvider, @unchecked Sendabl
     public func prepareModel(progress: @escaping @Sendable (Double) -> Void) async throws {
         if lock.withLock({ whisperKit != nil }) { progress(1.0); return }
         progress(0.05)
-        let kit = try await WhisperKit(WhisperKitConfig(model: model, verbose: false, prewarm: true, load: true))
+        let config = WhisperKitConfig(model: model, verbose: false, prewarm: true, load: true)
+        config.downloadBase = downloadBase
+        let kit = try await WhisperKit(config)
         lock.withLock { whisperKit = kit }
         progress(1.0)
     }

@@ -9,6 +9,7 @@
 //
 //  Signed: Kev + claude-opus-4-8, 2026-06-06, Confidence 0.8, Prior: Unknown
 
+import M1K3Avatar
 import SwiftUI
 import UniformTypeIdentifiers
 
@@ -21,9 +22,11 @@ struct ContentView: View {
     @State private var showImporter = false
     @State private var showConsentDialog = false
     @State private var isDropTargeted = false
+    @AppStorage("showAvatar") private var showAvatar = true
 
     var body: some View {
         VStack(spacing: 0) {
+            avatarPanel
             transcript
             inputBar
         }
@@ -74,6 +77,19 @@ struct ContentView: View {
             if let status = env.lastIngestStatus {
                 IngestBanner(text: status, busy: env.isIngesting)
             }
+        }
+    }
+
+    // MARK: - Avatar panel
+
+    @ViewBuilder
+    private var avatarPanel: some View {
+        if showAvatar {
+            AvatarView(controller: env.avatar)
+                .frame(height: 200)
+                .padding(.horizontal, 12)
+                .padding(.top, 8)
+                .transition(.move(edge: .top).combined(with: .opacity))
         }
     }
 
@@ -226,7 +242,7 @@ struct ContentView: View {
         guard canSend else { return }
         let text = draft
         draft = ""
-        Task { await env.chat.send(text) }
+        Task { await env.send(text) }
     }
 
     // MARK: - Toolbar
@@ -241,6 +257,15 @@ struct ContentView: View {
                 Label("New chat", systemImage: "square.and.pencil")
             }
             .disabled(env.chat.messages.isEmpty || env.chat.isResponding)
+            Button {
+                withAnimation(.spring(duration: 0.35)) { showAvatar.toggle() }
+            } label: {
+                Label(
+                    showAvatar ? "Hide Sparrow" : "Show Sparrow",
+                    systemImage: showAvatar ? "bird.fill" : "bird"
+                )
+            }
+            .help(showAvatar ? "Hide the avatar panel" : "Show the avatar panel")
             Button { showImporter = true } label: {
                 Label("Import", systemImage: "doc.badge.plus")
             }

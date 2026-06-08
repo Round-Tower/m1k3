@@ -24,7 +24,7 @@ Update this file as phases move. Keep it scannable.
 | 6 | Transcription (pluggable) | ⬜ not started | WhisperKit dep (heavy) |
 | 7 | Call log (M1K3Calls) | ⬜ not started | lift the prior call-pipeline call subsystem |
 | 8 | TTS (AVSpeech) | 🟢 done | SpeechProvider + AVSpeechProvider + SpeechUtterance; ⏳ Kokoro swap (post-MVP) |
-| 9 | Avatar (RealityKit) | ⬜ not started | GLB→USDZ, emotion states |
+| 9 | Avatar (RealityKit) | 🟡 core done, ⌘R pending | `M1K3Avatar` target: 26 tests (emotion/activity/state/tool-map/animation-resolver/controller); `AvatarView` (app target, RealityKit+SF Symbol placeholder); avatar wired into AppEnvironment (listening→thinking→speaking→idle); Sparrow.usdz conversion (Step 0) still needed |
 | 10 | Local agent + MCP | 🟢 agent + MCP done | ReAct LocalAgent + AgentTool + search/list/get tools; **M1K3MCP stdio server** (swift-sdk) live — Claude pulls search_knowledge/list_documents/get_document; ⏳ QueryGraphTool (blocked on entity extraction / NER) |
 | 11 | GemmaAudio ASR spike | ⬜ not started | non-blocking, LiteRT path |
 
@@ -45,7 +45,7 @@ Legend: ✅ done · 🟢 logic done (deferred adapter) · 🟡 partial · ⬜ no
 | `M1K3MCPKit` / `M1K3MCP` | swift-sdk + M1K3Knowledge | ✅ stdio server (library + thin executable) exposing search_knowledge/list_documents/get_document; FTS-only (no embedder in CLI); container-aware store path (`M1K3_STORE_PATH` override). Verified live. |
 | `M1K3Voice` | AVFoundation (+ WhisperKit later) | SpeechProvider + SpeechUtterance + AVSpeechProvider; ⏳ TranscriptionProvider (WhisperKit, heavy) |
 | `M1K3Calls` | M1K3Knowledge + … | ⏳ CallSession, encrypted SQLite, diarization, summary |
-| `M1K3Avatar` | RealityKit | ⏳ emotion-driven avatar |
+| `M1K3Avatar` | (system frameworks only) | ✅ pure: `AvatarEmotion`/`AvatarActivity`/`AvatarState`/`ToolEmotionMapper`/`AnimationResolver`/`AvatarController` (26 tests). `AvatarView` (RealityKit) lives in app target. ⏳ Step 0: Sparrow.usdz (GLB→USDZ Reality Composer Pro conversion) |
 | `M1K3App` (Xcode) | all (+ M1K3MLX) | ✅ SwiftUI shell (XcodeGen `project.yml`), Liquid Glass, chat/import/speak/settings; runtime picker hot-swaps AFM ↔ MLX Gemma (`RuntimeInferenceProvider` façade); Settings switches Hashing ↔ MLX **embeddings** (`SwappableEmbeddingService` + persisted reindex); macOS 26, app-sandboxed |
 
 ---

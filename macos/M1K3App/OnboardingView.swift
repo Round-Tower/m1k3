@@ -2,59 +2,80 @@
 //  OnboardingView.swift
 //  M1K3App
 //
-//  First-run "choose your brain" — Mini / Lil / Big M1K3, the macOS take on the
-//  KMP onboarding (app/.../ui/OnboardingScreen.kt). Pick a brain, then wake it:
-//  Mini (Apple Foundation Models) is instant; Lil / Big download once, with a real
-//  progress bar driven by the same ModelLoadState the Settings preload uses.
+//  Two-step first-run flow:
+//    1. Brain — Mini / Lil / Big M1K3 (existing). Download for Lil/Big, instant for Mini.
+//    2. Voice — Apple Speech (default, built-in) or WhisperKit (higher accuracy, ~142 MB).
 //
-//  Verify-by-launch SwiftUI glue — the brain metadata + recommendation are tested
-//  in BrainTierTests; the download itself only runs from the .app.
+//  Voice is always a choice; Apple Speech is the safe default so nobody is forced
+//  through a second download after their brain choice. WhisperKit can be started here
+//  or deferred to Settings → Voice input.
 //
-//  Signed: Kev + claude-opus-4-8, 2026-06-08, Confidence 0.75, Prior: Unknown
+//  Signed: Kev + claude-sonnet-4-6, 2026-06-08, Confidence 0.8,
+//  Prior: Kev + claude-opus-4-8 2026-06-08 (single-step brain-only version)
 
 import M1K3Inference
 import SwiftUI
 
 struct OnboardingView: View {
     @Environment(AppEnvironment.self) private var env
-    /// Called once a brain is chosen and (for Lil/Big) downloaded.
     let onComplete: () -> Void
 
-    @State private var selected: BrainTier = .recommendedForThisMac
-    @State private var isWaking = false
+    private enum Step { case brain, voice }
+    private enum VoiceEngine { case apple, whisperKit }
+
+    @State private var step: Step = .brain
+    @State private var selectedBrain: BrainTier = .recommendedForThisMac
+    @State private var isWakingBrain = false
+    @State private var selectedVoice: VoiceEngine = .apple
+    @State private var isDownloadingWhisper = false
 
     private let recommended = BrainTier.recommendedForThisMac
 
     var body: some View {
         VStack(spacing: 24) {
-            header
-            if isWaking {
-                awakening
-            } else {
-                picker
+            switch step {
+            case .brain:
+                header(
+                    glyph: "brain.head.profile.fill",
+                    title: "M1K3",
+                    subtitle: "Your local intelligence machine. Choose a brain — it runs entirely on this Mac."
+                )
+                if isWakingBrain { brainAwakening } else { brainPicker }
+            case .voice:
+                header(
+                    glyph: "waveform",
+                    title: "Voice",
+                    subtitle: "Tap the mic to dictate. Apple Speech works now; WhisperKit is a higher-accuracy upgrade."
+                )
+                if isDownloadingWhisper { voiceDownload } else { voicePicker }
             }
         }
         .padding(32)
         .frame(minWidth: 580, minHeight: 640)
         .glassBackdrop()
         .onChange(of: env.modelLoad) { _, state in
-            // Lil/Big finished downloading → into the app.
-            if case .ready = state, isWaking { onComplete() }
+            if case .ready = state, isWakingBrain {
+                isWakingBrain = false
+                step = .voice
+            }
+        }
+        .onChange(of: env.whisperLoad) { _, state in
+            if case .ready = state, isDownloadingWhisper { onComplete() }
         }
     }
 
-    // MARK: - Header
+    // MARK: - Shared header
 
-    private var header: some View {
+    private func header(glyph: String, title: String, subtitle: String) -> some View {
         VStack(spacing: 8) {
-            Image(systemName: "brain.head.profile.fill")
+            Image(systemName: glyph)
                 .font(.system(size: 40, weight: .semibold))
                 .foregroundStyle(.tint)
                 .padding(.bottom, 4)
-            Text("M1K3")
+            Text(title)
                 .font(.pixel(40))
                 .kerning(2)
-            Text("Your local intelligence machine. Choose a brain — it runs entirely on this Mac.")
+            Text(subtitle)
                 .font(.title3)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
@@ -62,20 +83,22 @@ struct OnboardingView: View {
         }
     }
 
-    // MARK: - Picker
+    // MARK: - Brain step
 
-    private var picker: some View {
+    private var brainPicker: some View {
         VStack(spacing: 16) {
             ForEach(BrainTier.allCases) { tier in
                 BrainCard(
                     tier: tier,
-                    isSelected: selected == tier,
+                    isSelected: selectedBrain == tier,
                     isRecommended: tier == recommended
-                ) { selected = tier }
+                ) { selectedBrain = tier }
             }
 
-            Button(action: wake) {
-                Text(wakeButtonTitle)
+            Button(action: wakeBrain) {
+                Text(selectedBrain.requiresDownload
+                    ? "Download \(selectedBrain.displayName) →"
+                    : "Wake up \(selectedBrain.displayName) →")
                     .font(.headline)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 6)
@@ -89,54 +112,124 @@ struct OnboardingView: View {
         }
     }
 
-    private var wakeButtonTitle: String {
-        selected.requiresDownload
-            ? "Download \(selected.displayName) →"
-            : "Wake up \(selected.displayName) →"
-    }
-
-    private func wake() {
-        env.selectBrain(selected)
-        if selected.requiresDownload {
-            isWaking = true // watch modelLoad; onComplete fires on .ready
-        } else {
-            onComplete() // Mini is instant
-        }
-    }
-
-    // MARK: - Awakening (download)
-
-    private var awakening: some View {
+    private var brainAwakening: some View {
         VStack(spacing: 20) {
             Spacer()
-            Image(systemName: selected.glyph)
+            Image(systemName: selectedBrain.glyph)
                 .font(.system(size: 44, weight: .semibold))
                 .foregroundStyle(.tint)
                 .symbolEffect(.pulse)
-            Text("Waking up \(selected.displayName)…")
+            Text("Waking up \(selectedBrain.displayName)…")
                 .font(.title2.weight(.semibold))
 
             switch env.modelLoad {
             case let .downloading(fraction):
                 VStack(spacing: 6) {
-                    ProgressView(value: fraction)
-                        .frame(maxWidth: 320)
-                    Text(env.modelLoad.label(modelName: selected.displayName))
+                    ProgressView(value: fraction).frame(maxWidth: 320)
+                    Text(env.modelLoad.label(modelName: selectedBrain.displayName))
                         .font(.caption.monospacedDigit())
                         .foregroundStyle(.secondary)
                 }
             case .failed:
                 VStack(spacing: 10) {
-                    Label(env.modelLoad.label(modelName: selected.displayName), systemImage: "exclamationmark.triangle")
+                    Label(env.modelLoad.label(modelName: selectedBrain.displayName),
+                          systemImage: "exclamationmark.triangle")
                         .symbolRenderingMode(.hierarchical)
                         .font(.callout)
                         .foregroundStyle(.orange)
-                    Button("Try again") { wake() }
+                    Button("Try again") { wakeBrain() }
                         .buttonStyle(.glass)
                     Button("Use Mini (built-in) instead") {
-                        selected = .mini
-                        isWaking = false
+                        selectedBrain = .mini
+                        isWakingBrain = false
                         env.selectBrain(.mini)
+                        step = .voice
+                    }
+                    .buttonStyle(.plain)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                }
+            case .idle, .ready:
+                ProgressView()
+            }
+
+            Text("Your data stays on your device, always.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Spacer()
+        }
+    }
+
+    private func wakeBrain() {
+        env.selectBrain(selectedBrain)
+        if selectedBrain.requiresDownload {
+            isWakingBrain = true
+        } else {
+            step = .voice
+        }
+    }
+
+    // MARK: - Voice step
+
+    private var voicePicker: some View {
+        VStack(spacing: 16) {
+            VoiceCard(
+                engine: .apple,
+                isSelected: selectedVoice == .apple
+            ) { selectedVoice = .apple }
+
+            VoiceCard(
+                engine: .whisperKit,
+                isSelected: selectedVoice == .whisperKit
+            ) { selectedVoice = .whisperKit }
+
+            Button(action: proceedVoice) {
+                Text(selectedVoice == .whisperKit
+                    ? "Download WhisperKit →"
+                    : "Continue with Apple Speech →")
+                    .font(.headline)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 6)
+            }
+            .buttonStyle(.glassProminent)
+            .padding(.top, 4)
+
+            Button("Skip — set up voice later in Settings") { onComplete() }
+                .buttonStyle(.plain)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private var voiceDownload: some View {
+        VStack(spacing: 20) {
+            Spacer()
+            Image(systemName: "waveform.badge.star")
+                .font(.system(size: 44, weight: .semibold))
+                .foregroundStyle(.tint)
+                .symbolEffect(.pulse)
+            Text("Downloading WhisperKit…")
+                .font(.title2.weight(.semibold))
+
+            switch env.whisperLoad {
+            case let .downloading(fraction):
+                VStack(spacing: 6) {
+                    ProgressView(value: fraction).frame(maxWidth: 320)
+                    Text(env.whisperLoad.label(modelName: "WhisperKit"))
+                        .font(.caption.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                }
+            case .failed:
+                VStack(spacing: 10) {
+                    Label(env.whisperLoad.label(modelName: "WhisperKit"),
+                          systemImage: "exclamationmark.triangle")
+                        .symbolRenderingMode(.hierarchical)
+                        .font(.callout)
+                        .foregroundStyle(.orange)
+                    Button("Try again") { proceedVoice() }
+                        .buttonStyle(.glass)
+                    Button("Use Apple Speech instead") {
+                        isDownloadingWhisper = false
                         onComplete()
                     }
                     .buttonStyle(.plain)
@@ -146,15 +239,25 @@ struct OnboardingView: View {
             case .idle, .ready:
                 ProgressView()
             }
-            Text("Your data stays on your device, always.")
+
+            Text("Your voice never leaves this Mac.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
             Spacer()
         }
     }
+
+    private func proceedVoice() {
+        if selectedVoice == .apple {
+            onComplete()
+        } else {
+            isDownloadingWhisper = true
+            Task { await env.enableWhisperKit() }
+        }
+    }
 }
 
-// MARK: - Brain card
+// MARK: - Brain card (unchanged)
 
 private struct BrainCard: View {
     let tier: BrainTier
@@ -220,12 +323,91 @@ private struct BrainCard: View {
     }
 
     private var sizeLabel: String {
-        guard let megabytes = tier.approxDownloadMB else {
-            return "Built-in · no download"
-        }
+        guard let megabytes = tier.approxDownloadMB else { return "Built-in · no download" }
         if megabytes >= 1000 {
             return String(format: "~%.1f GB · one-time download", Double(megabytes) / 1000)
         }
         return "~\(megabytes) MB · one-time download"
+    }
+}
+
+// MARK: - Voice card
+
+private struct VoiceCard: View {
+    enum Engine {
+        case apple, whisperKit
+
+        var glyph: String {
+            switch self {
+            case .apple: "waveform"
+            case .whisperKit: "waveform.badge.star"
+            }
+        }
+
+        var displayName: String {
+            switch self {
+            case .apple: "Apple Speech"
+            case .whisperKit: "WhisperKit"
+            }
+        }
+
+        var tagline: String {
+            switch self {
+            case .apple: "Ready now · no download"
+            case .whisperKit: "Higher accuracy · ~142 MB"
+            }
+        }
+
+        var detail: String {
+            switch self {
+            case .apple: "Built into macOS. Works immediately, always on-device."
+            case .whisperKit: "Open-source model. More accurate in noise and with accents. One download, then always offline."
+            }
+        }
+    }
+
+    let engine: Engine
+    let isSelected: Bool
+    let onTap: () -> Void
+
+    var body: some View {
+        Button(action: onTap) {
+            HStack(alignment: .top, spacing: 16) {
+                Image(systemName: engine.glyph)
+                    .symbolRenderingMode(.hierarchical)
+                    .font(.system(size: 26, weight: .semibold))
+                    .foregroundStyle(.tint)
+                    .frame(width: 40)
+                    .accessibilityHidden(true)
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(engine.displayName).font(.pixel(15)).padding(.bottom, 2)
+                    Text(engine.tagline)
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(.tint)
+                    Text(engine.detail)
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 0)
+                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                    .symbolRenderingMode(.hierarchical)
+                    .foregroundStyle(isSelected ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
+                    .font(.title3)
+                    .accessibilityHidden(true)
+            }
+            .padding(16)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .glassEffect(
+                isSelected ? .regular.tint(.accentColor.opacity(0.22)) : .regular,
+                in: .rect(cornerRadius: 18)
+            )
+            .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(engine.displayName), \(engine.tagline)")
+        .accessibilityAddTraits(isSelected ? [.isSelected] : [])
     }
 }

@@ -29,6 +29,7 @@ let package = Package(
         .library(name: "M1K3MLX", targets: ["M1K3MLX"]),
         .library(name: "M1K3WhisperKit", targets: ["M1K3WhisperKit"]),
         .library(name: "M1K3Calls", targets: ["M1K3Calls"]),
+        .library(name: "M1K3Avatar", targets: ["M1K3Avatar"]),
     ],
     dependencies: [
         .package(url: "https://github.com/groue/GRDB.swift.git", from: "7.0.0"),
@@ -204,6 +205,18 @@ let package = Package(
             name: "M1K3WhisperKitTests",
             dependencies: ["M1K3WhisperKit", "M1K3Voice", "M1K3Calls"],
             path: "Tests/M1K3WhisperKitTests"
+        ),
+        // Avatar companion: pure types (emotion, activity, state, tool→emotion
+        // mapping, animation resolver) + RealityKit view + Observable controller.
+        // RealityKit/SwiftUI are system frameworks — no third-party dep.
+        .target(
+            name: "M1K3Avatar",
+            path: "Sources/M1K3Avatar"
+        ),
+        .testTarget(
+            name: "M1K3AvatarTests",
+            dependencies: ["M1K3Avatar"],
+            path: "Tests/M1K3AvatarTests"
         ),
     ]
 )
