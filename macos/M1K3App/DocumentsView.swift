@@ -37,9 +37,11 @@ struct DocumentsView: View {
                     }
                 }
                 .listStyle(.inset)
+                .scrollContentBackground(.hidden)
             }
         }
         .frame(width: 480, height: 480)
+        .glassBackdrop()
         .onAppear { reload() }
     }
 

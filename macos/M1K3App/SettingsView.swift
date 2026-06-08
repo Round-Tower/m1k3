@@ -12,13 +12,13 @@ import SwiftUI
 
 struct SettingsView: View {
     @Environment(AppEnvironment.self) private var env
-    @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         @Bindable var env = env
 
-        VStack(spacing: 0) {
-            header
+        // No custom header / Done button: this is a native Settings window now,
+        // so the system title bar and ⌘W own the chrome. The Form is the content.
+        Group {
             Form {
                 Section {
                     ForEach(RuntimeOption.allCases) { option in
@@ -48,9 +48,10 @@ struct SettingsView: View {
                                 .font(.caption).foregroundStyle(.secondary)
                         }
                     } else {
-                        Button(env.usingMLXEmbeddings ? "Switch to Hashing (rebuild index)"
-                            : "Switch to MLX semantic embeddings (rebuild index)")
-                        {
+                        let embeddingToggleTitle = env.usingMLXEmbeddings
+                            ? "Switch to Hashing (rebuild index)"
+                            : "Switch to MLX semantic embeddings (rebuild index)"
+                        Button(embeddingToggleTitle) {
                             Task { await env.switchEmbeddings(toMLX: !env.usingMLXEmbeddings) }
                         }
                         .buttonStyle(.glass)
@@ -61,7 +62,8 @@ struct SettingsView: View {
                 } header: {
                     Text("Embeddings")
                 } footer: {
-                    Text("Semantic MLX embeddings improve retrieval but download a model on first use and re-embed every stored chunk.")
+                    Text("Semantic MLX embeddings improve retrieval but download a model on "
+                        + "first use and re-embed every stored chunk.")
                         .font(.caption).foregroundStyle(.secondary)
                 }
 
@@ -85,7 +87,9 @@ struct SettingsView: View {
                 } header: {
                     Text("Voice input")
                 } footer: {
-                    Text("Tap the mic in the chat bar to dictate — tap again to send. Apple Speech works out of the box; WhisperKit is higher accuracy after a one-time model download. On-device only.")
+                    Text("Tap the mic in the chat bar to dictate — tap again to send. Apple Speech "
+                        + "works out of the box; WhisperKit is higher accuracy after a one-time "
+                        + "model download. On-device only.")
                         .font(.caption).foregroundStyle(.secondary)
                 }
 
@@ -115,7 +119,9 @@ struct SettingsView: View {
                 } header: {
                     Text("Call recording")
                 } footer: {
-                    Text("Record a call from the chat toolbar (consent-gated). With transcription enabled, a stopped recording is transcribed, summarised, encrypted, and indexed — on-device.")
+                    Text("Record a call from the chat toolbar (consent-gated). With transcription "
+                        + "enabled, a stopped recording is transcribed, summarised, encrypted, and "
+                        + "indexed — on-device.")
                         .font(.caption).foregroundStyle(.secondary)
                 }
 
@@ -127,8 +133,10 @@ struct SettingsView: View {
                 }
             }
             .formStyle(.grouped)
+            .scrollContentBackground(.hidden)
         }
-        .frame(width: 440, height: 440)
+        .frame(width: 480, height: 520)
+        .glassBackdrop()
     }
 
     /// Shows the MLX Gemma weight download as a real progress bar while it
@@ -152,18 +160,6 @@ struct SettingsView: View {
         case .idle, .ready:
             EmptyView()
         }
-    }
-
-    private var header: some View {
-        HStack {
-            Label("Settings", systemImage: "gearshape")
-                .symbolRenderingMode(.hierarchical)
-                .font(.headline)
-            Spacer()
-            Button("Done") { dismiss() }
-                .buttonStyle(.glassProminent)
-        }
-        .padding(16)
     }
 }
 

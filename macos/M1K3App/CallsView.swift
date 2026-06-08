@@ -25,6 +25,7 @@ struct CallsView: View {
             content
         }
         .frame(width: 480, height: 540)
+        .glassBackdrop()
         .fileImporter(
             isPresented: $showImporter,
             allowedContentTypes: [.plainText, .text],
@@ -74,7 +75,8 @@ struct CallsView: View {
             ContentUnavailableView {
                 Label("No calls yet", systemImage: "phone.bubble")
             } description: {
-                Text("Import a transcript (lines like “Speaker: …”). M1K3 summarises it, encrypts it at rest, and makes it searchable alongside your documents.")
+                Text("Import a transcript (lines like “Speaker: …”). M1K3 summarises it, "
+                    + "encrypts it at rest, and makes it searchable alongside your documents.")
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
@@ -87,6 +89,7 @@ struct CallsView: View {
                         }
                 }
             }
+            .scrollContentBackground(.hidden)
         }
     }
 }
@@ -138,6 +141,7 @@ struct CallDetailView: View {
             }
         }
         .frame(width: 520, height: 560)
+        .glassBackdrop()
     }
 
     private func summarySection(_ summary: CallSummary) -> some View {

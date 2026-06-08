@@ -16,7 +16,6 @@ struct ContentView: View {
     @Environment(AppEnvironment.self) private var env
 
     @State private var draft = ""
-    @State private var showSettings = false
     @State private var showDocuments = false
     @State private var showCalls = false
     @State private var showImporter = false
@@ -29,7 +28,7 @@ struct ContentView: View {
             inputBar
         }
         .frame(minWidth: 600, minHeight: 520)
-        .background(BackdropView())
+        .glassBackdrop()
         .dropDestination(for: URL.self) { urls, _ in
             for url in urls {
                 Task { await env.ingest(url: url) }
@@ -38,9 +37,6 @@ struct ContentView: View {
         } isTargeted: { isDropTargeted = $0 }
         .overlay { if isDropTargeted { DropHintView() } }
         .toolbar { toolbarContent }
-        .sheet(isPresented: $showSettings) {
-            SettingsView().environment(env)
-        }
         .sheet(isPresented: $showDocuments) {
             DocumentsView().environment(env)
         }
@@ -52,7 +48,8 @@ struct ContentView: View {
             Button("Always allow") { Task { await env.affirmConsentAndRecord(scope: .remembered) } }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("You’re responsible for having consent from everyone on the call. Recording is on-device only — audio never leaves this Mac.")
+            Text("You’re responsible for having consent from everyone on the call. "
+                + "Recording is on-device only — audio never leaves this Mac.")
         }
         .fileImporter(
             isPresented: $showImporter,
@@ -83,8 +80,12 @@ struct ContentView: View {
             ScrollViewReader { proxy in
                 ScrollView {
                     LazyVStack(spacing: 16) {
-                        ForEach(env.chat.messages) { message in
-                            MessageView(message: message) { text in
+                        ForEach(Array(env.chat.messages.enumerated()), id: \.element.id) { index, message in
+                            let previous = index > 0 ? env.chat.messages[index - 1] : nil
+                            MessageView(
+                                message: message,
+                                showsAvatar: previous?.role != .assistant
+                            ) { text in
                                 Task { await env.speak(text) }
                             }
                             .id(message.id)
@@ -130,9 +131,10 @@ struct ContentView: View {
                     Image(systemName: env.isListening ? "mic.fill" : "mic")
                         .imageScale(.large)
                         .fontWeight(.semibold)
-                        .frame(minWidth: 22, minHeight: 22)
+                        .frame(width: 22, height: 22)
                 }
                 .buttonStyle(.glass)
+                .buttonBorderShape(.circle)
                 .tint(env.isListening ? .red : nil)
                 .disabled(!env.canDictate && !env.isListening)
                 .help(env.canDictate ? "Voice input — tap to speak, tap to send" : "Microphone unavailable")
@@ -144,9 +146,10 @@ struct ContentView: View {
                     Image(systemName: "arrow.up")
                         .imageScale(.large)
                         .fontWeight(.semibold)
-                        .frame(minWidth: 22, minHeight: 22)
+                        .frame(width: 22, height: 22)
                 }
                 .buttonStyle(.glassProminent)
+                .buttonBorderShape(.circle)
                 .disabled(!canSend)
                 .keyboardShortcut(.return, modifiers: [])
                 .accessibilityLabel("Send")
@@ -164,7 +167,36 @@ struct ContentView: View {
     private var statusAccessibilityLabel: String {
         if env.isRecording { return "Recording in progress" }
         if env.modelLoad.isActive { return env.modelLoad.label(modelName: "Gemma 3") }
-        return "Model \(env.providerAvailable ? "ready" : "unavailable"), runtime \(env.selectedRuntime.rawValue)"
+        return "Model unavailable, runtime \(env.selectedRuntime.rawValue)"
+    }
+
+    /// Status earns its place only when it deviates from "ready and quiet":
+    /// recording, a model download in flight, or an unavailable backend. When all
+    /// is well it renders nothing — the runtime lives in Settings, not the chrome.
+    @ViewBuilder
+    private var statusIndicator: some View {
+        if env.isRecording {
+            Label("Recording", systemImage: "record.circle.fill")
+                .symbolRenderingMode(.hierarchical)
+                .font(.caption)
+                .foregroundStyle(.red)
+                .accessibilityLabel(statusAccessibilityLabel)
+        } else if env.modelLoad.isActive {
+            HStack(spacing: 6) {
+                ProgressView().controlSize(.small)
+                Text(env.modelLoad.label(modelName: "Gemma 3"))
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(.secondary)
+            }
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel(statusAccessibilityLabel)
+        } else if !env.providerAvailable {
+            Label("Model unavailable", systemImage: "exclamationmark.triangle")
+                .symbolRenderingMode(.hierarchical)
+                .font(.caption)
+                .foregroundStyle(.orange)
+                .accessibilityLabel(statusAccessibilityLabel)
+        }
     }
 
     private func send() {
@@ -179,28 +211,7 @@ struct ContentView: View {
     @ToolbarContentBuilder
     private var toolbarContent: some ToolbarContent {
         ToolbarItem(placement: .principal) {
-            HStack(spacing: 6) {
-                if env.isRecording {
-                    Image(systemName: "record.circle.fill")
-                        .symbolRenderingMode(.hierarchical)
-                        .foregroundStyle(.red)
-                    Text("Recording").font(.caption).foregroundStyle(.red)
-                } else if env.modelLoad.isActive {
-                    ProgressView().controlSize(.small)
-                    Text(env.modelLoad.label(modelName: "Gemma 3"))
-                        .font(.caption.monospacedDigit())
-                        .foregroundStyle(.secondary)
-                } else {
-                    Circle()
-                        .fill(env.providerAvailable ? .green : .orange)
-                        .frame(width: 8, height: 8)
-                    Text(env.selectedRuntime.rawValue)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            }
-            .accessibilityElement(children: .combine)
-            .accessibilityLabel(statusAccessibilityLabel)
+            statusIndicator
         }
         ToolbarItemGroup(placement: .primaryAction) {
             Button { env.chat.clear() } label: {
@@ -217,15 +228,19 @@ struct ContentView: View {
                 Label("Calls", systemImage: "phone.bubble")
             }
             Button {
-                if env.isRecording { Task { await env.stopRecording() } }
-                else if env.recordingPreAuthorised { Task { await env.startRecording() } }
-                else { showConsentDialog = true }
+                if env.isRecording {
+                    Task { await env.stopRecording() }
+                } else if env.recordingPreAuthorised {
+                    Task { await env.startRecording() }
+                } else {
+                    showConsentDialog = true
+                }
             } label: {
                 Label(env.isRecording ? "Stop recording" : "Record call",
                       systemImage: env.isRecording ? "stop.circle.fill" : "record.circle")
             }
             .tint(env.isRecording ? .red : nil)
-            Button { showSettings = true } label: {
+            SettingsLink {
                 Label("Settings", systemImage: "gearshape")
             }
         }
@@ -233,18 +248,6 @@ struct ContentView: View {
 }
 
 // MARK: - Supporting views
-
-/// Soft gradient backdrop so the glass has something to refract.
-private struct BackdropView: View {
-    var body: some View {
-        LinearGradient(
-            colors: [Color(red: 0.06, green: 0.07, blue: 0.12), Color(red: 0.10, green: 0.08, blue: 0.16)],
-            startPoint: .topLeading,
-            endPoint: .bottomTrailing
-        )
-        .ignoresSafeArea()
-    }
-}
 
 private struct EmptyChatView: View {
     let itemCount: Int
