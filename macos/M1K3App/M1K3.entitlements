@@ -10,6 +10,15 @@
 	<!-- Read PDFs / text the user explicitly drops or opens. -->
 	<key>com.apple.security.files.user-selected.read-only</key>
 	<true/>
+	<!-- Outbound network — the ONLY reason the app reaches the internet: downloading
+	     on-device model weights (MLX brains + WhisperKit) from huggingface.co on
+	     first use. Without this the sandbox blocks DNS itself (NSURLError -1003,
+	     "hostname could not be found") and Lil/Big can't be fetched. Chat, RAG,
+	     documents, and calls stay fully on-device; nothing is uploaded. Matches the
+	     onboarding promise: "Downloads … only when you ask."
+	     Signed: Kev + claude-opus-4-8, 2026-06-08, Confidence 0.85, Prior: Unknown -->
+	<key>com.apple.security.network.client</key>
+	<true/>
 	<!-- Microphone access for voice input (Apple Speech / WhisperKit). On-device
 	     recognition only — audio never leaves this Mac. -->
 	<key>com.apple.security.device.audio-input</key>
