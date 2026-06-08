@@ -175,12 +175,24 @@ struct ContentView: View {
     /// is well it renders nothing — the runtime lives in Settings, not the chrome.
     @ViewBuilder
     private var statusIndicator: some View {
+        if env.isRecording || env.modelLoad.isActive || !env.providerAvailable {
+            statusContent
+                .padding(.horizontal, 12)
+                .padding(.vertical, 3)
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel(statusAccessibilityLabel)
+        }
+    }
+
+    /// The status pill's content; the wrapper above gives it breathing room inside
+    /// the toolbar's glass capsule so text/spinner aren't jammed against the edges.
+    @ViewBuilder
+    private var statusContent: some View {
         if env.isRecording {
             Label("Recording", systemImage: "record.circle.fill")
                 .symbolRenderingMode(.hierarchical)
                 .font(.caption)
                 .foregroundStyle(.red)
-                .accessibilityLabel(statusAccessibilityLabel)
         } else if env.modelLoad.isActive {
             HStack(spacing: 6) {
                 ProgressView().controlSize(.small)
@@ -188,14 +200,11 @@ struct ContentView: View {
                     .font(.caption.monospacedDigit())
                     .foregroundStyle(.secondary)
             }
-            .accessibilityElement(children: .combine)
-            .accessibilityLabel(statusAccessibilityLabel)
         } else if !env.providerAvailable {
             Label("Model unavailable", systemImage: "exclamationmark.triangle")
                 .symbolRenderingMode(.hierarchical)
                 .font(.caption)
                 .foregroundStyle(.orange)
-                .accessibilityLabel(statusAccessibilityLabel)
         }
     }
 
