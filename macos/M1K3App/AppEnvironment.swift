@@ -87,9 +87,14 @@ final class AppEnvironment {
     /// muxed so the diarizer can separate speakers. Degrades to mono mic if
     /// screen-recording permission is absent.
     private let recorder = StereoCallRecorder()
-    /// Held directly (not just inside the façade) so the picker can warm it ahead
-    /// of the first turn and stream download progress to the UI.
-    private let mlxGemma: MLXGemmaProvider
+    /// The MLX provider for the currently-selected brain (Lil = Qwen / Big =
+    /// Gemma). Rebuilt when the brain changes; held directly so the onboarding /
+    /// picker can warm it and stream download progress to the UI.
+    private var currentMLXProvider: MLXGemmaProvider
+    /// The single MLX slot behind `RuntimeOption.mlxGemma` in the façade; re-pointed
+    /// at `currentMLXProvider` whenever the brain switches between Lil and Big, so
+    /// the swap is seen without rebuilding the RAGResponder.
+    private let swappableMLX: SwappableInferenceProvider
     /// Voice input: WhisperKit (high accuracy, needs a model) routed ahead of
     /// Apple Speech (system framework, always available). Held directly so the
     /// app can load WhisperKit's model on demand.
@@ -111,6 +116,17 @@ final class AppEnvironment {
     private(set) var isPreparingWhisper = false
 
     private static let embedderPrefersMLXKey = "embedder.prefersMLX"
+    static let selectedBrainKey = "selectedBrain"
+    /// Whether the user has completed brain selection — gates the onboarding flow.
+    static let hasChosenBrainKey = "hasChosenBrain"
+
+    /// The chosen brain (Mini / Lil / Big). Restored on launch, persisted on change.
+    private(set) var selectedBrain: BrainTier = .mini
+
+    /// The downloading brain's name for progress labels (e.g. "Big M1K3").
+    var downloadingBrainName: String {
+        selectedBrain.displayName
+    }
 
     /// Whether retrieval is on semantic MLX embeddings (vs the Hashing fallback).
     private(set) var usingMLXEmbeddings = false
@@ -187,18 +203,30 @@ final class AppEnvironment {
         embedder = swappable
         usingMLXEmbeddings = preferMLX
 
+        // Restore the chosen brain (default Mini = Apple Foundation Models).
+        let brain = UserDefaults.standard.string(forKey: Self.selectedBrainKey)
+            .flatMap(BrainTier.init(rawValue:)) ?? .mini
+        selectedBrain = brain
+
         // Generation IS swappable. The façade forwards to whichever backend the
-        // picker selects; AFM is the default + fallback, MLX Gemma the main brain.
-        let selection = RuntimeSelectionBox(.appleFoundationModels)
+        // brain selects; AFM is Mini + the fallback, the MLX slot is Lil/Big. The
+        // slot starts on the chosen brain's model (or Big's, when Mini is active and
+        // MLX isn't needed yet) so switching Lil↔Big just re-points the slot.
+        let runtimeForBrain: RuntimeOption =
+            brain.backing == .appleFoundationModels ? .appleFoundationModels : .mlxGemma
+        let selection = RuntimeSelectionBox(runtimeForBrain)
         runtimeSelection = selection
         let afm = AppleFoundationModelsProvider()
-        let gemma = MLXGemmaProvider()
-        mlxGemma = gemma
+        let initialMLXModelID = brain.mlxModelID ?? BrainTier.big.mlxModelID ?? ""
+        let gemma = MLXGemmaProvider(modelID: initialMLXModelID)
+        currentMLXProvider = gemma
+        let mlxSlot = SwappableInferenceProvider(gemma)
+        swappableMLX = mlxSlot
         let runtimeProvider = RuntimeInferenceProvider(
             selection: selection,
             backends: [
                 .appleFoundationModels: afm,
-                .mlxGemma: gemma,
+                .mlxGemma: mlxSlot,
             ],
             fallback: afm
         )
@@ -226,6 +254,13 @@ final class AppEnvironment {
         callSummarizer = SummarizationPipeline(quickProvider: afm, deepProvider: runtimeProvider)
 
         refreshCounts()
+
+        // Warm a restored MLX brain (Lil/Big) on launch so it's ready to answer;
+        // Mini (Apple) needs nothing. Setting selectedRuntime drives the existing
+        // preload path + the progress UI. No-op/fast once the weights are cached.
+        if brain.mlxModelID != nil {
+            selectedRuntime = .mlxGemma
+        }
     }
 
     /// Build the encrypted call store. Falls back to an in-memory (non-persistent)
@@ -364,19 +399,36 @@ final class AppEnvironment {
         }
     }
 
-    /// Warm the MLX Gemma weights, folding download progress into `modelLoad` so
-    /// Settings shows a real bar. Idempotent: returns fast once the model is
-    /// cached. Runs off the main actor for the load; progress hops back to update
-    /// the observable state.
+    /// Choose a brain: persist it, re-point the active provider, and (for Lil/Big)
+    /// warm the model so onboarding / Settings show a real download bar. Mini is
+    /// instant — Apple Foundation Models, no download.
+    func selectBrain(_ tier: BrainTier) {
+        selectedBrain = tier
+        UserDefaults.standard.set(tier.rawValue, forKey: Self.selectedBrainKey)
+        UserDefaults.standard.set(true, forKey: Self.hasChosenBrainKey)
+        if let modelID = tier.mlxModelID {
+            let mlx = MLXGemmaProvider(modelID: modelID)
+            currentMLXProvider = mlx
+            swappableMLX.setProvider(mlx)
+            selectedRuntime = .mlxGemma // didSet warms it + streams progress
+        } else {
+            selectedRuntime = .appleFoundationModels // didSet clears the bar
+        }
+    }
+
+    /// Warm the current brain's MLX weights, folding download progress into
+    /// `modelLoad` so the UI shows a real bar. Idempotent: returns fast once the
+    /// model is cached. Runs off the main actor; progress hops back to update state.
     private func preloadGemma() async {
-        // No re-entrancy guard needed: switching to MLX cancels any prior warm-up
+        // No re-entrancy guard needed: switching brains cancels any prior warm-up
         // first, and the SingleFlightLoader dedupes the underlying download even
         // if two briefly overlap. On cancellation we write nothing — whoever is
         // the current selection (the didSet, or a newer warm-up) owns modelLoad,
         // so a late-completing cancelled task can't clobber it.
         modelLoad = .progress(0)
+        let mlx = currentMLXProvider
         do {
-            try await mlxGemma.prepare { fraction in
+            try await mlx.prepare { fraction in
                 // Only apply while still downloading. A progress callback fired
                 // near completion enqueues its main-actor hop *after* the `.ready`
                 // write below; the guard makes that stale hop a no-op instead of

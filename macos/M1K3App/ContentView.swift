@@ -166,7 +166,7 @@ struct ContentView: View {
     /// no meaning to VoiceOver on their own.
     private var statusAccessibilityLabel: String {
         if env.isRecording { return "Recording in progress" }
-        if env.modelLoad.isActive { return env.modelLoad.label(modelName: "Gemma 3") }
+        if env.modelLoad.isActive { return env.modelLoad.label(modelName: env.downloadingBrainName) }
         return "Model unavailable, runtime \(env.selectedRuntime.rawValue)"
     }
 
@@ -184,7 +184,7 @@ struct ContentView: View {
         } else if env.modelLoad.isActive {
             HStack(spacing: 6) {
                 ProgressView().controlSize(.small)
-                Text(env.modelLoad.label(modelName: "Gemma 3"))
+                Text(env.modelLoad.label(modelName: env.downloadingBrainName))
                     .font(.caption.monospacedDigit())
                     .foregroundStyle(.secondary)
             }

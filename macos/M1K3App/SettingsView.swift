@@ -21,19 +21,22 @@ struct SettingsView: View {
         Group {
             Form {
                 Section {
-                    ForEach(RuntimeOption.allCases) { option in
-                        RuntimeRow(
-                            option: option,
-                            isSelected: env.selectedRuntime == option
-                        ) {
-                            if option.isReady { env.selectedRuntime = option }
-                        }
+                    LabeledContent {
+                        Text(env.selectedBrain.tagline).foregroundStyle(.secondary)
+                    } label: {
+                        Label(env.selectedBrain.displayName, systemImage: env.selectedBrain.glyph)
+                            .symbolRenderingMode(.hierarchical)
                     }
                     modelLoadRow
+                    Button("Change brain…") {
+                        UserDefaults.standard.set(false, forKey: AppEnvironment.hasChosenBrainKey)
+                    }
+                    .buttonStyle(.glass)
                 } header: {
-                    Text("Inference runtime")
+                    Text("Brain")
                 } footer: {
-                    Text("On-device only. Your documents and questions never leave this Mac.")
+                    Text("Mini is Apple's built-in model (instant). Lil and Big are local models "
+                        + "that download once. On-device only — nothing leaves this Mac.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -150,53 +153,15 @@ struct SettingsView: View {
                 ProgressView(value: fraction)
                     .controlSize(.small)
                     .frame(maxWidth: 160)
-                Text(env.modelLoad.label(modelName: "Gemma 3"))
+                Text(env.modelLoad.label(modelName: env.downloadingBrainName))
                     .font(.caption.monospacedDigit()).foregroundStyle(.secondary)
             }
         case .failed:
-            Label(env.modelLoad.label(modelName: "Gemma 3"), systemImage: "exclamationmark.triangle")
+            Label(env.modelLoad.label(modelName: env.downloadingBrainName), systemImage: "exclamationmark.triangle")
                 .symbolRenderingMode(.hierarchical)
                 .font(.caption).foregroundStyle(.orange)
         case .idle, .ready:
             EmptyView()
         }
-    }
-}
-
-private struct RuntimeRow: View {
-    let option: RuntimeOption
-    let isSelected: Bool
-    let onTap: () -> Void
-
-    var body: some View {
-        Button(action: onTap) {
-            HStack(spacing: 12) {
-                Image(systemName: option.systemImage)
-                    .symbolRenderingMode(.hierarchical)
-                    .frame(width: 24)
-                    .foregroundStyle(option.isReady ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
-                    .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(option.rawValue)
-                        .foregroundStyle(option.isReady ? .primary : .secondary)
-                    Text(option.subtitle)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                Spacer()
-                if isSelected {
-                    Image(systemName: "checkmark.circle.fill")
-                        .symbolRenderingMode(.hierarchical)
-                        .foregroundStyle(.tint)
-                        .accessibilityHidden(true)
-                } else if !option.isReady {
-                    Text("Soon").font(.caption2).foregroundStyle(.secondary)
-                }
-            }
-            .contentShape(.rect)
-        }
-        .buttonStyle(.plain)
-        .disabled(!option.isReady)
-        .accessibilityAddTraits(isSelected ? [.isSelected] : [])
     }
 }

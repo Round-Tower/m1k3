@@ -14,6 +14,8 @@ import SwiftUI
 struct M1K3App: App {
     @State private var env: AppEnvironment?
     @State private var startupError: String?
+    /// First-run gate: show "choose your brain" until a brain has been picked.
+    @AppStorage(AppEnvironment.hasChosenBrainKey) private var hasChosenBrain = false
 
     var body: some Scene {
         WindowGroup {
@@ -26,8 +28,13 @@ struct M1K3App: App {
                             exit(0)
                         }
                 } else if let env {
-                    ContentView()
-                        .environment(env)
+                    if hasChosenBrain {
+                        ContentView()
+                            .environment(env)
+                    } else {
+                        OnboardingView { hasChosenBrain = true }
+                            .environment(env)
+                    }
                 } else if let startupError {
                     StartupFailureView(message: startupError)
                 } else {
