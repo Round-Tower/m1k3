@@ -17,6 +17,10 @@ struct M1K3App: App {
     /// First-run gate: show "choose your brain" until a brain has been picked.
     @AppStorage(AppEnvironment.hasChosenBrainKey) private var hasChosenBrain = false
 
+    init() {
+        PixelFont.register()
+    }
+
     var body: some Scene {
         WindowGroup {
             Group {

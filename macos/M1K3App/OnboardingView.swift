@@ -51,8 +51,9 @@ struct OnboardingView: View {
                 .font(.system(size: 40, weight: .semibold))
                 .foregroundStyle(.tint)
                 .padding(.bottom, 4)
-            Text("Meet M1K3")
-                .font(.largeTitle.weight(.bold))
+            Text("M1K3")
+                .font(.pixel(40))
+                .kerning(2)
             Text("Your local intelligence machine. Choose a brain — it runs entirely on this Mac.")
                 .font(.title3)
                 .foregroundStyle(.secondary)
@@ -173,9 +174,10 @@ private struct BrainCard: View {
 
                 VStack(alignment: .leading, spacing: 4) {
                     HStack(spacing: 8) {
-                        Text(tier.displayName).font(.headline)
+                        Text(tier.displayName).font(.pixel(15))
                         if isRecommended { recommendedBadge }
                     }
+                    .padding(.bottom, 2)
                     Text(tier.tagline)
                         .font(.subheadline.weight(.medium))
                         .foregroundStyle(.tint)
