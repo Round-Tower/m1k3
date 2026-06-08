@@ -13,7 +13,7 @@
 import AVFoundation
 import Foundation
 
-public final class AVSpeechProvider: NSObject, SpeechProvider, @unchecked Sendable {
+public final class AVSpeechProvider: NSObject, SpeechProviderWithLifecycle, @unchecked Sendable {
     public let name = "av-speech"
 
     private let synthesizer = AVSpeechSynthesizer()

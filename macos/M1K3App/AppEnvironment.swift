@@ -24,6 +24,7 @@ import M1K3Calls
 import M1K3Chat
 import M1K3Inference
 import M1K3Knowledge
+import M1K3Kokoro
 import M1K3MLX
 import M1K3Voice
 import M1K3WhisperKit
@@ -69,7 +70,9 @@ final class AppEnvironment {
     let store: KnowledgeStore
     let provider: any InferenceProvider
     let responder: RAGResponder
-    let speech: AVSpeechProvider
+    /// TTS behind a swappable seam: Built-in (Apple) by default, M1K3 Voice
+    /// (Kokoro) once downloaded. Callers never see the swap.
+    let speech: SwappableSpeechProvider
     let chat: ChatSession
 
     private let embedder: SwappableEmbeddingService
@@ -116,6 +119,16 @@ final class AppEnvironment {
     private(set) var whisperLoad: ModelLoadState = .idle
     private var isPreparingWhisper = false
 
+    /// Voice OUTPUT (TTS). The Built-in Apple voice is the swap-back target;
+    /// Kokoro is the premium "M1K3 Voice" tier (downloads on first use).
+    private let builtinSpeech: AVSpeechProvider
+    private let kokoro: KokoroSpeechProvider
+    /// "M1K3 Voice" model-load state — mirrors `whisperLoad`/`modelLoad`.
+    private(set) var voiceLoad: ModelLoadState = .idle
+    /// The chosen TTS tier; restored on launch, persisted on change.
+    private(set) var selectedVoiceTier: VoiceTier = .builtin
+    private var isPreparingVoice = false
+
     /// The avatar companion state — driven by this environment at each transition
     /// (listening → thinking → generating → speaking → idle).
     private(set) var avatar = AvatarController()
@@ -124,6 +137,9 @@ final class AppEnvironment {
     static let selectedBrainKey = "selectedBrain"
     /// Whether the user has completed brain selection — gates the onboarding flow.
     static let hasChosenBrainKey = "hasChosenBrain"
+    static let selectedVoiceTierKey = "selectedVoiceTier"
+    /// Whether the user has made a voice-output choice (onboarding speech step).
+    static let hasChosenVoiceKey = "hasChosenVoice"
 
     /// The chosen brain (Mini / Lil / Big). Restored on launch, persisted on change.
     private(set) var selectedBrain: BrainTier = .mini
@@ -237,7 +253,15 @@ final class AppEnvironment {
         )
         provider = runtimeProvider
         responder = RAGResponder(store: store, embedder: embedder, provider: runtimeProvider)
-        speech = AVSpeechProvider()
+
+        // TTS seam: Built-in Apple voice wrapped in a swappable façade so the
+        // premium Kokoro tier can drop in without rebuilding any caller.
+        let builtin = AVSpeechProvider()
+        builtinSpeech = builtin
+        kokoro = KokoroSpeechProvider()
+        speech = SwappableSpeechProvider(builtin)
+        selectedVoiceTier = UserDefaults.standard.string(forKey: Self.selectedVoiceTierKey)
+            .flatMap(VoiceTier.init(rawValue:)) ?? .builtin
 
         // Voice input: WhisperKit first (better accuracy, but unavailable until
         // its model loads), Apple Speech as the always-on fallback. So dictation
@@ -275,23 +299,12 @@ final class AppEnvironment {
         if brain.mlxModelID != nil {
             selectedRuntime = .mlxGemma
         }
-    }
 
-    /// Build the encrypted call store. Falls back to an in-memory (non-persistent)
-    /// store if the Keychain key can't be obtained, so a key hiccup degrades the
-    /// calls feature rather than crashing the app.
-    private static func makeCallPersistence(at url: URL) -> any CallPersistence {
-        do {
-            let key = try StoredKeyProvider(store: KeychainKeyStore()).symmetricKey()
-            return try GRDBCallPersistence(path: url.path, coder: EncryptedCallCoder(key: key))
-        } catch {
-            return (try? GRDBCallPersistence()) ?? NullCallPersistence()
+        // Restore M1K3 Voice only if it was chosen AND already staged — never kick
+        // a silent ~354 MB re-download on launch.
+        if selectedVoiceTier == .m1k3Voice, kokoro.isModelStaged {
+            Task { await prepareM1K3Voice() }
         }
-    }
-
-    /// Whether the on-device model is actually available on this machine.
-    var providerAvailable: Bool {
-        provider.isAvailable
     }
 
     /// Ingest a user-selected / dropped file (PDF or text) into the store.
@@ -325,7 +338,17 @@ final class AppEnvironment {
     /// transition if the user taps Speak on the response.
     func send(_ text: String) async {
         avatar.setActivity(.thinking)
+        // After a brief pause (RAG lookup), advance to .generating so Sparrow
+        // bounces while the LLM streams. Self-cancelling if the response is fast.
+        let advance = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .milliseconds(600))
+            guard let self else { return }
+            if case .thinking = self.avatar.state.activity {
+                self.avatar.setActivity(.generating)
+            }
+        }
         await chat.send(text)
+        advance.cancel()
         // Only reset to idle if the avatar isn't already in a speaking state
         // (e.g. auto-TTS path sets .speaking before we return here).
         if case .speaking = avatar.state.activity { return }
@@ -587,17 +610,41 @@ final class AppEnvironment {
         indexedItemCount = (try? store.itemCount()) ?? indexedItemCount
         callCount = (try? callPersistence.loadAll().count) ?? callCount
     }
+}
 
-    private static func storeURL() throws -> URL {
-        let fm = FileManager.default
-        let base = try fm.url(
+// MARK: - Composition helpers
+
+//
+// Same-file extension (keeps the class body under SwiftLint's type_body_length).
+
+extension AppEnvironment {
+    /// Whether the on-device model is actually available on this machine.
+    var providerAvailable: Bool {
+        provider.isAvailable
+    }
+
+    /// Build the encrypted call store. Falls back to an in-memory (non-persistent)
+    /// store if the Keychain key can't be obtained, so a key hiccup degrades the
+    /// calls feature rather than crashing the app.
+    static func makeCallPersistence(at url: URL) -> any CallPersistence {
+        do {
+            let key = try StoredKeyProvider(store: KeychainKeyStore()).symmetricKey()
+            return try GRDBCallPersistence(path: url.path, coder: EncryptedCallCoder(key: key))
+        } catch {
+            return (try? GRDBCallPersistence()) ?? NullCallPersistence()
+        }
+    }
+
+    static func storeURL() throws -> URL {
+        let fileManager = FileManager.default
+        let base = try fileManager.url(
             for: .applicationSupportDirectory,
             in: .userDomainMask,
             appropriateFor: nil,
             create: true
         )
         let dir = base.appendingPathComponent("M1K3", isDirectory: true)
-        try fm.createDirectory(at: dir, withIntermediateDirectories: true)
+        try fileManager.createDirectory(at: dir, withIntermediateDirectories: true)
         return dir.appendingPathComponent("knowledge.sqlite")
     }
 }
@@ -732,6 +779,63 @@ extension AppEnvironment {
             return
         }
         await send(trimmed)
+    }
+}
+
+// MARK: - Voice output (TTS tier)
+
+//
+// Same-file extension (keeps the class body under SwiftLint's type_body_length)
+// for the speech-output tier: choosing Built-in vs M1K3 Voice, downloading the
+// Kokoro model with progress, and a sample-playback helper for onboarding/Settings.
+
+extension AppEnvironment {
+    /// Switch the active TTS tier. Built-in swaps back instantly; M1K3 Voice kicks
+    /// the model download (or swaps in immediately if already staged).
+    func selectVoiceTier(_ tier: VoiceTier) {
+        UserDefaults.standard.set(true, forKey: Self.hasChosenVoiceKey)
+        switch tier {
+        case .builtin:
+            speech.setProvider(builtinSpeech)
+            selectedVoiceTier = .builtin
+            UserDefaults.standard.set(VoiceTier.builtin.rawValue, forKey: Self.selectedVoiceTierKey)
+            if voiceLoad.isActive { voiceLoad = .idle }
+        case .m1k3Voice:
+            Task { await prepareM1K3Voice() }
+        }
+    }
+
+    /// Download + stage the Kokoro model (real progress into `voiceLoad`), then swap
+    /// the speech façade to M1K3 Voice. Mirrors `enableWhisperKit`. Idempotent — the
+    /// provider returns instantly once the weights are on disk.
+    func prepareM1K3Voice() async {
+        guard !isPreparingVoice else { return }
+        isPreparingVoice = true
+        voiceLoad = .progress(0)
+        do {
+            try await kokoro.prepare { fraction in
+                // Only apply while still downloading — guard the late-hop-over-.ready
+                // race (same fix as preloadGemma / enableWhisperKit).
+                Task { @MainActor in
+                    if case .downloading = self.voiceLoad { self.voiceLoad = .progress(fraction) }
+                }
+            }
+            speech.setProvider(kokoro)
+            selectedVoiceTier = .m1k3Voice
+            UserDefaults.standard.set(VoiceTier.m1k3Voice.rawValue, forKey: Self.selectedVoiceTierKey)
+            UserDefaults.standard.set(true, forKey: Self.hasChosenVoiceKey)
+            isPreparingVoice = false
+            voiceLoad = .ready
+        } catch {
+            isPreparingVoice = false
+            voiceLoad = .failed(message: error.localizedDescription)
+        }
+    }
+
+    /// Speak a short sample line in the current voice — the onboarding/Settings
+    /// "Hear a sample" affordance.
+    func speakSample() async {
+        await speech.speak("Hi, I'm M1K3 — your local intelligence, running entirely on this Mac.")
     }
 }
 

@@ -63,8 +63,7 @@ struct MessageView: View {
     }
 
     private var bubble: some View {
-        Text(message.text)
-            .textSelection(.enabled)
+        ReadingText(message.text)
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
     }
@@ -72,8 +71,7 @@ struct MessageView: View {
     private var assistantBody: some View {
         VStack(alignment: .leading, spacing: 8) {
             if !message.text.isEmpty {
-                Text(message.text)
-                    .textSelection(.enabled)
+                ReadingText(message.text)
             } else if case .streaming = message.status {
                 ProgressView().controlSize(.small)
             } else if case .complete = message.status {

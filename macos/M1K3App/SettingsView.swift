@@ -8,10 +8,12 @@
 //
 //  Signed: Kev + claude-opus-4-8, 2026-06-06, Confidence 0.8, Prior: Unknown
 
+import M1K3Voice
 import SwiftUI
 
 struct SettingsView: View {
     @Environment(AppEnvironment.self) private var env
+    @AppStorage(ReadingMode.storageKey) private var readingMode: ReadingMode = .standard
 
     var body: some View {
         @Bindable var env = env
@@ -107,6 +109,20 @@ struct SettingsView: View {
                 }
 
                 Section {
+                    LabeledContent("Active voice", value: env.selectedVoiceTier.displayName)
+                    voiceOutputControl
+                    Button("Hear a sample") { Task { await env.speakSample() } }
+                        .buttonStyle(.glass)
+                } header: {
+                    Text("Voice output")
+                } footer: {
+                    Text("How M1K3 sounds when it speaks. Built-in is Apple's clear default; "
+                        + "M1K3 Voice runs the speech through M1K3's own voice character and "
+                        + "downloads the neural voice model for offline use. On-device only.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+
+                Section {
                     if env.isTranscribingCall {
                         HStack(spacing: 8) {
                             ProgressView().controlSize(.small)
@@ -138,6 +154,27 @@ struct SettingsView: View {
                         .font(.caption).foregroundStyle(.secondary)
                 }
 
+                Section {
+                    Picker("Reading mode", selection: $readingMode) {
+                        ForEach(ReadingMode.allCases) { mode in
+                            Text(mode.displayName).tag(mode)
+                        }
+                    }
+                    Text(readingMode.detail)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    // Live preview in the chosen mode.
+                    ReadingText("M1K3 keeps your words on this Mac — ask it anything.",
+                                mode: readingMode)
+                        .padding(.vertical, 4)
+                } header: {
+                    Text("Reading")
+                } footer: {
+                    Text("How M1K3's replies are typeset. Dyslexia-friendly uses OpenDyslexic; "
+                        + "Bionic reader bolds the start of each word to guide the eye.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+
                 Section("Memory") {
                     LabeledContent("Indexed items", value: "\(env.indexedItemCount)")
                         .monospacedDigit()
@@ -150,6 +187,35 @@ struct SettingsView: View {
         }
         .frame(width: 480, height: 520)
         .glassBackdrop()
+    }
+
+    /// The voice-output tier control: progress while the M1K3 Voice model
+    /// downloads, otherwise a Built-in ↔ M1K3 Voice toggle (+ any failure).
+    @ViewBuilder
+    private var voiceOutputControl: some View {
+        switch env.voiceLoad {
+        case let .downloading(fraction):
+            VStack(alignment: .leading, spacing: 4) {
+                ProgressView(value: fraction)
+                Text(env.voiceLoad.label(modelName: "M1K3 Voice"))
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(.secondary)
+            }
+        default:
+            if env.selectedVoiceTier == .m1k3Voice {
+                Button("Switch to Built-in voice") { env.selectVoiceTier(.builtin) }
+                    .buttonStyle(.glass)
+            } else {
+                Button("Upgrade to M1K3 Voice (downloads model)") { env.selectVoiceTier(.m1k3Voice) }
+                    .buttonStyle(.glass)
+            }
+            if case let .failed(message) = env.voiceLoad {
+                Label(message, systemImage: "exclamationmark.triangle")
+                    .symbolRenderingMode(.hierarchical)
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+            }
+        }
     }
 
     /// Shows the MLX Gemma weight download as a real progress bar while it

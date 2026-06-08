@@ -18,7 +18,7 @@ struct M1K3App: App {
     @AppStorage(AppEnvironment.hasChosenBrainKey) private var hasChosenBrain = false
 
     init() {
-        PixelFont.register()
+        BundledFonts.register()
     }
 
     var body: some Scene {

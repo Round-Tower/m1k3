@@ -23,14 +23,21 @@
 	     recognition only — audio never leaves this Mac. -->
 	<key>com.apple.security.device.audio-input</key>
 	<true/>
-	<!-- AVSpeechSynthesizer (P6 voice) reaches the audioanalyticsd mach service
+	<!-- AVSpeechSynthesizer (P6/P8 voice) reaches the audioanalyticsd mach service
 	     during TTS setup. Under the sandbox this throws a hard PRECONDITION
 	     FAILURE ("…doesn't contain 'com.apple.audioanalyticsd'") and kills audio
-	     output (CoreAudio -10877). macOS resolves this temporary-exception key
-	     into the runtime exception the precondition checks for. Scoped to the one
+	     output (CoreAudio -10877). The EffectfulSpeechProvider path
+	     (AVSpeechSynthesizer.write → AVAudioEngine) checks the NON-temporary
+	     `…exception.mach-lookup.global-name` key by name, so BOTH variants are
+	     listed: the temporary one satisfied plain .speak; the non-temporary one is
+	     what the engine/write path's precondition actually reads. Scoped to the one
 	     analytics service the synthesizer needs — no broader hole.
-	     Signed: Kev + claude-opus-4-8, 2026-06-08, Confidence 0.75, Prior: Unknown -->
+	     Signed: Kev + claude-sonnet-4-6, 2026-06-08, Confidence 0.6, Prior: Kev + claude-opus-4-8 -->
 	<key>com.apple.security.temporary-exception.mach-lookup.global-name</key>
+	<array>
+		<string>com.apple.audioanalyticsd</string>
+	</array>
+	<key>com.apple.security.exception.mach-lookup.global-name</key>
 	<array>
 		<string>com.apple.audioanalyticsd</string>
 	</array>

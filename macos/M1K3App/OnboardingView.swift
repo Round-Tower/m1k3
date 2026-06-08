@@ -14,13 +14,14 @@
 //  Prior: Kev + claude-opus-4-8 2026-06-08 (single-step brain-only version)
 
 import M1K3Inference
+import M1K3Voice
 import SwiftUI
 
 struct OnboardingView: View {
     @Environment(AppEnvironment.self) private var env
     let onComplete: () -> Void
 
-    private enum Step { case brain, voice }
+    private enum Step { case brain, voice, speech }
     private enum VoiceEngine { case apple, whisperKit }
 
     @State private var step: Step = .brain
@@ -28,6 +29,8 @@ struct OnboardingView: View {
     @State private var isWakingBrain = false
     @State private var selectedVoice: VoiceEngine = .apple
     @State private var isDownloadingWhisper = false
+    @State private var selectedSpeechTier: VoiceTier = .builtin
+    @State private var isDownloadingVoice = false
 
     private let recommended = BrainTier.recommendedForThisMac
 
@@ -48,6 +51,14 @@ struct OnboardingView: View {
                     subtitle: "Tap the mic to dictate. Apple Speech works now; WhisperKit is a higher-accuracy upgrade."
                 )
                 if isDownloadingWhisper { voiceDownload } else { voicePicker }
+            case .speech:
+                header(
+                    glyph: "speaker.wave.3.fill",
+                    title: "Speech",
+                    subtitle: "How M1K3 sounds when it speaks. Built-in is instant; "
+                        + "M1K3 Voice is a richer, on-device voice with its own character."
+                )
+                if isDownloadingVoice { speechDownload } else { speechPicker }
             }
         }
         .padding(32)
@@ -60,7 +71,13 @@ struct OnboardingView: View {
             }
         }
         .onChange(of: env.whisperLoad) { _, state in
-            if case .ready = state, isDownloadingWhisper { onComplete() }
+            if case .ready = state, isDownloadingWhisper {
+                isDownloadingWhisper = false
+                step = .speech
+            }
+        }
+        .onChange(of: env.voiceLoad) { _, state in
+            if case .ready = state, isDownloadingVoice { onComplete() }
         }
     }
 
@@ -82,10 +99,19 @@ struct OnboardingView: View {
                 .frame(maxWidth: 460)
         }
     }
+}
 
+// MARK: - Steps
+
+//
+// Same-file extension (keeps the OnboardingView struct body under SwiftLint's
+// type_body_length now that there are three steps). Step views read the struct's
+// @State directly — private members of a same-file extension are visible to `body`.
+
+private extension OnboardingView {
     // MARK: - Brain step
 
-    private var brainPicker: some View {
+    var brainPicker: some View {
         VStack(spacing: 16) {
             ForEach(BrainTier.allCases) { tier in
                 BrainCard(
@@ -194,7 +220,7 @@ struct OnboardingView: View {
             .buttonStyle(.glassProminent)
             .padding(.top, 4)
 
-            Button("Skip — set up voice later in Settings") { onComplete() }
+            Button("Skip — set up voice later in Settings") { step = .speech }
                 .buttonStyle(.plain)
                 .font(.caption)
                 .foregroundStyle(.secondary)
@@ -230,7 +256,7 @@ struct OnboardingView: View {
                         .buttonStyle(.glass)
                     Button("Use Apple Speech instead") {
                         isDownloadingWhisper = false
-                        onComplete()
+                        step = .speech
                     }
                     .buttonStyle(.plain)
                     .font(.caption)
@@ -249,165 +275,103 @@ struct OnboardingView: View {
 
     private func proceedVoice() {
         if selectedVoice == .apple {
-            onComplete()
+            step = .speech
         } else {
             isDownloadingWhisper = true
             Task { await env.enableWhisperKit() }
         }
     }
-}
 
-// MARK: - Brain card (unchanged)
+    // MARK: - Speech (TTS output) step
 
-private struct BrainCard: View {
-    let tier: BrainTier
-    let isSelected: Bool
-    let isRecommended: Bool
-    let onTap: () -> Void
+    private var speechPicker: some View {
+        VStack(spacing: 16) {
+            ForEach(VoiceTier.allCases) { tier in
+                SpeechVoiceCard(
+                    tier: tier,
+                    isSelected: selectedSpeechTier == tier
+                ) { selectedSpeechTier = tier }
+            }
 
-    var body: some View {
-        Button(action: onTap) {
-            HStack(alignment: .top, spacing: 16) {
-                Image(systemName: tier.glyph)
-                    .symbolRenderingMode(.hierarchical)
-                    .font(.system(size: 26, weight: .semibold))
-                    .foregroundStyle(.tint)
-                    .frame(width: 40)
-                    .accessibilityHidden(true)
+            Button(action: proceedSpeech) {
+                Text(selectedSpeechTier.requiresDownload
+                    ? "Download \(selectedSpeechTier.displayName) →"
+                    : "Continue with \(selectedSpeechTier.displayName) →")
+                    .font(.headline)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 6)
+            }
+            .buttonStyle(.glassProminent)
+            .padding(.top, 4)
 
-                VStack(alignment: .leading, spacing: 4) {
-                    HStack(spacing: 8) {
-                        Text(tier.displayName).font(.pixel(15))
-                        if isRecommended { recommendedBadge }
-                    }
-                    .padding(.bottom, 2)
-                    Text(tier.tagline)
-                        .font(.subheadline.weight(.medium))
-                        .foregroundStyle(.tint)
-                    Text(tier.detail)
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                    Text(sizeLabel)
+            Button("Hear a sample") { Task { await env.speakSample() } }
+                .buttonStyle(.glass)
+                .font(.callout)
+
+            Button("Skip — choose a voice later in Settings") {
+                env.selectVoiceTier(.builtin)
+                onComplete()
+            }
+            .buttonStyle(.plain)
+            .font(.caption)
+            .foregroundStyle(.secondary)
+        }
+    }
+
+    private var speechDownload: some View {
+        VStack(spacing: 20) {
+            Spacer()
+            Image(systemName: "speaker.wave.3.fill")
+                .font(.system(size: 44, weight: .semibold))
+                .foregroundStyle(.tint)
+                .symbolEffect(.pulse)
+            Text("Preparing the M1K3 voice…")
+                .font(.title2.weight(.semibold))
+
+            switch env.voiceLoad {
+            case let .downloading(fraction):
+                VStack(spacing: 6) {
+                    ProgressView(value: fraction).frame(maxWidth: 320)
+                    Text(env.voiceLoad.label(modelName: "M1K3 Voice"))
                         .font(.caption.monospacedDigit())
-                        .foregroundStyle(.tertiary)
-                        .padding(.top, 2)
-                }
-                Spacer(minLength: 0)
-                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                    .symbolRenderingMode(.hierarchical)
-                    .foregroundStyle(isSelected ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
-                    .font(.title3)
-                    .accessibilityHidden(true)
-            }
-            .padding(16)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .glassEffect(
-                isSelected ? .regular.tint(.accentColor.opacity(0.22)) : .regular,
-                in: .rect(cornerRadius: 18)
-            )
-            .contentShape(.rect)
-        }
-        .buttonStyle(.plain)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(tier.displayName), \(tier.tagline). \(sizeLabel)")
-        .accessibilityAddTraits(isSelected ? [.isSelected] : [])
-    }
-
-    private var recommendedBadge: some View {
-        Text("Recommended")
-            .font(.caption2.weight(.semibold))
-            .padding(.horizontal, 8)
-            .padding(.vertical, 2)
-            .glassEffect(.regular.tint(.accentColor.opacity(0.3)), in: .capsule)
-    }
-
-    private var sizeLabel: String {
-        guard let megabytes = tier.approxDownloadMB else { return "Built-in · no download" }
-        if megabytes >= 1000 {
-            return String(format: "~%.1f GB · one-time download", Double(megabytes) / 1000)
-        }
-        return "~\(megabytes) MB · one-time download"
-    }
-}
-
-// MARK: - Voice card
-
-private struct VoiceCard: View {
-    enum Engine {
-        case apple, whisperKit
-
-        var glyph: String {
-            switch self {
-            case .apple: "waveform"
-            case .whisperKit: "waveform.badge.star"
-            }
-        }
-
-        var displayName: String {
-            switch self {
-            case .apple: "Apple Speech"
-            case .whisperKit: "WhisperKit"
-            }
-        }
-
-        var tagline: String {
-            switch self {
-            case .apple: "Ready now · no download"
-            case .whisperKit: "Higher accuracy · ~142 MB"
-            }
-        }
-
-        var detail: String {
-            switch self {
-            case .apple: "Built into macOS. Works immediately, always on-device."
-            case .whisperKit: "Open-source model. More accurate in noise and with accents. One download, then always offline."
-            }
-        }
-    }
-
-    let engine: Engine
-    let isSelected: Bool
-    let onTap: () -> Void
-
-    var body: some View {
-        Button(action: onTap) {
-            HStack(alignment: .top, spacing: 16) {
-                Image(systemName: engine.glyph)
-                    .symbolRenderingMode(.hierarchical)
-                    .font(.system(size: 26, weight: .semibold))
-                    .foregroundStyle(.tint)
-                    .frame(width: 40)
-                    .accessibilityHidden(true)
-
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(engine.displayName).font(.pixel(15)).padding(.bottom, 2)
-                    Text(engine.tagline)
-                        .font(.subheadline.weight(.medium))
-                        .foregroundStyle(.tint)
-                    Text(engine.detail)
-                        .font(.callout)
                         .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
                 }
-                Spacer(minLength: 0)
-                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                    .symbolRenderingMode(.hierarchical)
-                    .foregroundStyle(isSelected ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
-                    .font(.title3)
-                    .accessibilityHidden(true)
+            case .failed:
+                VStack(spacing: 10) {
+                    Label(env.voiceLoad.label(modelName: "M1K3 Voice"),
+                          systemImage: "exclamationmark.triangle")
+                        .symbolRenderingMode(.hierarchical)
+                        .font(.callout)
+                        .foregroundStyle(.orange)
+                    Button("Try again") { proceedSpeech() }
+                        .buttonStyle(.glass)
+                    Button("Use Built-in instead") {
+                        isDownloadingVoice = false
+                        env.selectVoiceTier(.builtin)
+                        onComplete()
+                    }
+                    .buttonStyle(.plain)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                }
+            case .idle, .ready:
+                ProgressView()
             }
-            .padding(16)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .glassEffect(
-                isSelected ? .regular.tint(.accentColor.opacity(0.22)) : .regular,
-                in: .rect(cornerRadius: 18)
-            )
-            .contentShape(.rect)
+
+            Text("The voice runs entirely on this Mac — nothing is sent to a server.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Spacer()
         }
-        .buttonStyle(.plain)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(engine.displayName), \(engine.tagline)")
-        .accessibilityAddTraits(isSelected ? [.isSelected] : [])
+    }
+
+    private func proceedSpeech() {
+        if selectedSpeechTier == .builtin {
+            env.selectVoiceTier(.builtin)
+            onComplete()
+        } else {
+            isDownloadingVoice = true
+            Task { await env.prepareM1K3Voice() }
+        }
     }
 }
