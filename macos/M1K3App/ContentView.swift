@@ -28,6 +28,14 @@ struct ContentView: View {
             inputBar
         }
         .frame(minWidth: 600, minHeight: 520)
+        .background {
+            // Ambient drifting orbs while capturing audio (recording / dictation),
+            // fading in over the glass. Sits above the window glass, behind content.
+            if isCapturingAudio {
+                AudioCaptureBackdrop().transition(.opacity)
+            }
+        }
+        .animation(.easeInOut(duration: 0.45), value: isCapturingAudio)
         .glassBackdrop()
         .dropDestination(for: URL.self) { urls, _ in
             for url in urls {
@@ -160,6 +168,12 @@ struct ContentView: View {
 
     private var canSend: Bool {
         !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !env.chat.isResponding
+    }
+
+    /// True while M1K3 is capturing audio — dictation or a call recording — the cue
+    /// for the ambient animated backdrop.
+    private var isCapturingAudio: Bool {
+        env.isListening || env.isRecording
     }
 
     /// One spoken label for the toolbar status pill — the colour-coded dots carry
