@@ -14,50 +14,57 @@ import SwiftUI
 
 struct AudioCaptureBackdrop: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// Captured once so the animation phase starts near zero (see body).
+    @State private var start = Date()
 
     var body: some View {
         if reduceMotion {
             orbs(phase: 0)
         } else {
             TimelineView(.animation) { timeline in
-                orbs(phase: timeline.date.timeIntervalSinceReferenceDate)
+                // Elapsed-since-start, NOT timeIntervalSinceReferenceDate (~8e8):
+                // a Double can't resolve the ~0.006 rad/frame delta at that
+                // magnitude, so cos/sin returned a near-constant and the orbs sat
+                // frozen. Normalising to ~0 restores full precision → real motion.
+                orbs(phase: timeline.date.timeIntervalSince(start))
             }
         }
     }
 
-    private func orbs(phase: Double) -> some View {
+    private func orbs(phase elapsed: Double) -> some View {
         GeometryReader { geo in
             let width = geo.size.width
             let height = geo.size.height
             let span = min(width, height)
             ZStack {
-                orb(color: .accentColor, diameter: span * 0.95)
+                orb(color: .accentColor, diameter: span * 1.0, pulse: sin(elapsed * 0.8))
                     .position(
-                        x: width * (0.32 + 0.12 * cos(phase * 0.35)),
-                        y: height * (0.40 + 0.16 * sin(phase * 0.27))
+                        x: width * (0.34 + 0.20 * cos(elapsed * 0.55)),
+                        y: height * (0.40 + 0.22 * sin(elapsed * 0.55))
                     )
-                orb(color: .purple, diameter: span * 0.85)
+                orb(color: .purple, diameter: span * 0.9, pulse: sin(elapsed * 0.65 + 1))
                     .position(
-                        x: width * (0.70 + 0.13 * cos(phase * 0.23 + 1.5)),
-                        y: height * (0.58 + 0.14 * sin(phase * 0.31 + 0.8))
+                        x: width * (0.66 + 0.18 * cos(elapsed * 0.42 + 2)),
+                        y: height * (0.58 + 0.20 * sin(elapsed * 0.42 + 2))
                     )
             }
-            .blur(radius: 64)
+            .blur(radius: 56)
         }
         .ignoresSafeArea()
         .allowsHitTesting(false)
     }
 
-    private func orb(color: Color, diameter: Double) -> some View {
+    private func orb(color: Color, diameter: Double, pulse: Double) -> some View {
         Circle()
             .fill(
                 RadialGradient(
-                    colors: [color.opacity(0.45), color.opacity(0)],
+                    colors: [color.opacity(0.5), color.opacity(0)],
                     center: .center,
                     startRadius: 0,
                     endRadius: diameter / 2
                 )
             )
             .frame(width: diameter, height: diameter)
+            .scaleEffect(1.0 + 0.10 * pulse) // gentle breathing
     }
 }
