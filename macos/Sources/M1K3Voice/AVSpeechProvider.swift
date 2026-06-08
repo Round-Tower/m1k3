@@ -67,23 +67,23 @@ extension AVSpeechProvider: AVSpeechSynthesizerDelegate {
         _: AVSpeechSynthesizer,
         didStart _: AVSpeechUtterance
     ) {
-        let cb = onSpeakingStarted
-        Task { @MainActor in cb?() }
+        let callback = onSpeakingStarted
+        Task { @MainActor in callback?() }
     }
 
     public nonisolated func speechSynthesizer(
         _: AVSpeechSynthesizer,
         didFinish _: AVSpeechUtterance
     ) {
-        let cb = onSpeakingEnded
-        Task { @MainActor in cb?() }
+        let callback = onSpeakingEnded
+        Task { @MainActor in callback?() }
     }
 
     public nonisolated func speechSynthesizer(
         _: AVSpeechSynthesizer,
         didCancel _: AVSpeechUtterance
     ) {
-        let cb = onSpeakingEnded
-        Task { @MainActor in cb?() }
+        let callback = onSpeakingEnded
+        Task { @MainActor in callback?() }
     }
 }

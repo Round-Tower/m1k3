@@ -53,8 +53,8 @@ struct AvatarView: View {
                         guard let entity = content.entities
                             .first(where: { $0.name == "sparrow" })
                         else { return }
-                        let t = Float(context.date.timeIntervalSince1970)
-                        entity.position.y = bob(for: controller.state.activity, t: t)
+                        let time = Float(context.date.timeIntervalSince1970)
+                        entity.position.y = bob(for: controller.state.activity, time: time)
                     }
                 }
                 .onChange(of: controller.state) { _, newState in
@@ -84,12 +84,12 @@ struct AvatarView: View {
         }
     }
 
-    private func bob(for activity: AvatarActivity, t: Float) -> Float {
+    private func bob(for activity: AvatarActivity, time: Float) -> Float {
         switch activity {
-        case .speaking: sin(t * 10) * 0.015
-        case .thinking, .generating: sin(t * 2) * 0.008
-        case .listening: sin(t * 3) * 0.006
-        case .idle, .error: sin(t * 1) * 0.003
+        case .speaking: sin(time * 10) * 0.015
+        case .thinking, .generating: sin(time * 2) * 0.008
+        case .listening: sin(time * 3) * 0.006
+        case .idle, .error: sin(time * 1) * 0.003
         }
     }
 
