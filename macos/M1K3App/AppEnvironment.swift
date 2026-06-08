@@ -328,52 +328,6 @@ final class AppEnvironment {
         transcription.activeProviderName ?? "Unavailable"
     }
 
-    /// Tap-to-start / tap-to-stop. On stop (user tap OR the recogniser settling
-    /// on a final result) the transcript is sent automatically.
-    func toggleDictation() {
-        if isListening { stopDictation() } else { startDictation() }
-    }
-
-    private func startDictation() {
-        guard let provider = transcription.activeProvider else { return }
-        dictationTask?.cancel() // belt-and-suspenders: never leave a prior consumer running
-        dictationProvider = provider
-        liveTranscript = ""
-        isListening = true
-        do {
-            let stream = try provider.startListening()
-            dictationTask = Task { @MainActor in
-                var accumulator = TranscriptAccumulator()
-                for await segment in stream {
-                    accumulator.ingest(segment)
-                    liveTranscript = accumulator.text
-                }
-                await finishDictation(text: accumulator.text)
-            }
-        } catch {
-            isListening = false
-            dictationProvider = nil
-            liveTranscript = ""
-        }
-    }
-
-    /// Ask the active recogniser to stop; the stream then finishes and
-    /// `finishDictation` auto-sends.
-    private func stopDictation() {
-        liveTranscript = "" // clear the ticker on the stop tap, not when the stream drains
-        dictationProvider?.stopListening()
-    }
-
-    private func finishDictation(text: String) async {
-        isListening = false
-        liveTranscript = ""
-        dictationProvider = nil
-        dictationTask = nil
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return }
-        await chat.send(trimmed)
-    }
-
     /// Download + load WhisperKit's model so voice input upgrades from Apple
     /// Speech to WhisperKit (the router prefers it once available).
     func enableWhisperKit() async {
@@ -693,6 +647,61 @@ extension AppEnvironment {
         formatter.timeStyle = .short
         return formatter
     }()
+}
+
+// MARK: - Voice input (dictation)
+
+//
+// Extracted to a same-file extension (sees the class's private members) to keep
+// the main class body under SwiftLint's type_body_length — the established fix in
+// this file. Pure UI-driven orchestration over the tested TranscriptionRouter.
+
+extension AppEnvironment {
+    /// Tap-to-start / tap-to-stop. On stop (user tap OR the recogniser settling
+    /// on a final result) the transcript is sent automatically.
+    func toggleDictation() {
+        if isListening { stopDictation() } else { startDictation() }
+    }
+
+    private func startDictation() {
+        guard let provider = transcription.activeProvider else { return }
+        dictationTask?.cancel() // belt-and-suspenders: never leave a prior consumer running
+        dictationProvider = provider
+        liveTranscript = ""
+        isListening = true
+        do {
+            let stream = try provider.startListening()
+            dictationTask = Task { @MainActor in
+                var accumulator = TranscriptAccumulator()
+                for await segment in stream {
+                    accumulator.ingest(segment)
+                    liveTranscript = accumulator.text
+                }
+                await finishDictation(text: accumulator.text)
+            }
+        } catch {
+            isListening = false
+            dictationProvider = nil
+            liveTranscript = ""
+        }
+    }
+
+    /// Ask the active recogniser to stop; the stream then finishes and
+    /// `finishDictation` auto-sends.
+    private func stopDictation() {
+        liveTranscript = "" // clear the ticker on the stop tap, not when the stream drains
+        dictationProvider?.stopListening()
+    }
+
+    private func finishDictation(text: String) async {
+        isListening = false
+        liveTranscript = ""
+        dictationProvider = nil
+        dictationTask = nil
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        await chat.send(trimmed)
+    }
 }
 
 /// Last-resort no-op store so a (near-impossible) persistence-init failure leaves
