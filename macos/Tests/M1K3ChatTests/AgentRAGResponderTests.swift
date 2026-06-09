@@ -193,6 +193,34 @@ struct AgentRAGResponderTests {
         #expect(lastPrompt.contains("HOW TO ANSWER:"))
     }
 
+    @Test("with web search available, the rules route current-world questions to it")
+    func rulesRouteToWebSearch() async throws {
+        let (store, embedder) = try await ingestedStore()
+        let provider = AgentScriptedProvider(["CONCLUSION: ok."])
+        let responder = AgentRAGResponder(
+            store: store, embedder: embedder, provider: provider,
+            tools: [FixedTool(name: "web_search", response: "x")]
+        )
+        _ = try await collect(await responder.answerStreaming("weather?").stream)
+        let prompt = try #require(provider.allPrompts.first)
+        #expect(prompt.contains("weather, news"))
+        #expect(prompt.contains("use web_search"))
+        #expect(prompt.contains("already stored on this Mac"))
+    }
+
+    @Test("without web search, the rules say so instead of advertising a missing tool")
+    func rulesHonestWithoutWebSearch() async throws {
+        let (store, embedder) = try await ingestedStore()
+        let provider = AgentScriptedProvider(["CONCLUSION: ok."])
+        let responder = AgentRAGResponder(
+            store: store, embedder: embedder, provider: provider, tools: []
+        )
+        _ = try await collect(await responder.answerStreaming("weather?").stream)
+        let prompt = try #require(provider.allPrompts.first)
+        #expect(!prompt.contains("use web_search"))
+        #expect(prompt.contains("no web access"))
+    }
+
     @Test("the tools provider is consulted fresh each turn (settings toggles apply immediately)")
     func toolsProviderPerTurn() async throws {
         let (store, embedder) = try await ingestedStore()

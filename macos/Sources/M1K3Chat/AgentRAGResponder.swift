@@ -74,14 +74,16 @@ public struct AgentRAGResponder: RAGResponding, Sendable {
         onActivity(.retrieving)
         let queryVector = try await embedder.embed(question)
         let chunks = try store.searchHybrid(query: question, queryVector: queryVector, limit: topK)
-        let grounding = Self.grounding(chunks: chunks)
+        // Resolve the tool list once per turn; the routing rules must match
+        // what's actually callable (no advertising a disabled web_search).
+        let tools = toolsProvider()
 
         let stream = AsyncStream<String> { continuation in
             Task {
                 await runAgentTurn(
                     question: question,
                     chunks: chunks,
-                    grounding: grounding,
+                    tools: tools,
                     onActivity: onActivity,
                     continuation: continuation
                 )
@@ -96,15 +98,19 @@ public struct AgentRAGResponder: RAGResponding, Sendable {
     private func runAgentTurn(
         question: String,
         chunks: [ChunkHit],
-        grounding: String,
+        tools: [any AgentTool],
         onActivity: @escaping @Sendable (ResponderActivity) -> Void,
         continuation: AsyncStream<String>.Continuation
     ) async {
+        let grounding = Self.grounding(
+            chunks: chunks,
+            hasWebSearch: tools.contains { $0.name == "web_search" }
+        )
         // Fresh agent per turn — its reasoning trace must not bleed across
         // turns, and the tool list reflects current settings.
         let agent = LocalAgent(
             inferenceProvider: provider,
-            tools: toolsProvider(),
+            tools: tools,
             maxIterations: maxIterations,
             concludesOnUnstructuredThought: true
         )
@@ -165,8 +171,17 @@ public struct AgentRAGResponder: RAGResponding, Sendable {
 
     /// The grounding handed to the agent: the retrieved knowledge (with the
     /// same citation labels the validator expects) + tight behavioral rules
-    /// tuned for small models.
-    static func grounding(chunks: [ChunkHit]) -> String {
+    /// tuned for small models. The tool-routing line matches what's actually
+    /// callable — never advertise a disabled web_search (and never imply
+    /// search_knowledge can reach the live world; the ⌘R weather bug).
+    static func grounding(chunks: [ChunkHit], hasWebSearch: Bool) -> String {
+        let routing = hasWebSearch
+            ? "- For current or external information — weather, news, prices, "
+            + "anything happening now — use web_search. search_knowledge only "
+            + "finds documents already stored on this Mac."
+            : "- search_knowledge only finds documents already stored on this "
+            + "Mac. You have no web access — if the stored knowledge can't "
+            + "answer, say so plainly; do not guess."
         let rules = """
         RULES:
         - If the KNOWLEDGE already answers the question, reply IMMEDIATELY \
@@ -174,8 +189,7 @@ public struct AgentRAGResponder: RAGResponding, Sendable {
         - Cite knowledge sources inline with citation tokens like \
         [Title §heading]; never invent citations.
         - Use at most two tool calls, never repeating one with the same argument.
-        - Tools are for current or external information (the web), the clock, \
-        or this Mac's status.
+        \(routing)
         """
         guard !chunks.isEmpty else {
             return "No stored knowledge matched this question.\n\n\(rules)"

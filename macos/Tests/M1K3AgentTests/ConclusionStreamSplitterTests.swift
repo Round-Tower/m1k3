@@ -16,13 +16,25 @@ import M1K3Inference
 import Testing
 
 struct ConclusionStreamSplitterTests {
+    /// Run a chunk sequence through a splitter and collect everything it
+    /// emits, including the flush (the held-back guard window).
+    private func collect(_ chunks: [String], into splitter: inout ConclusionStreamSplitter) -> String {
+        var out = ""
+        for chunk in chunks {
+            out += splitter.feed(chunk)
+        }
+        out += splitter.flush()
+        return out
+    }
+
     @Test("delta tokens: buffers until the marker, then passes the tail live")
     func deltaTokens() {
         var splitter = ConclusionStreamSplitter()
-        #expect(splitter.feed("I think ").isEmpty)
-        #expect(splitter.feed("CONCLU").isEmpty)
-        #expect(splitter.feed("SION: The answer") == "The answer")
-        #expect(splitter.feed(" is 42.") == " is 42.")
+        let emitted = collect(
+            ["I think ", "CONCLU", "SION: The answer", " is 42."],
+            into: &splitter
+        )
+        #expect(emitted == "The answer is 42.")
         #expect(splitter.isConclusion)
         #expect(splitter.thought == "I think CONCLUSION: The answer is 42.")
     }
@@ -30,16 +42,19 @@ struct ConclusionStreamSplitterTests {
     @Test("cumulative snapshots (AFM contract) are normalised to deltas")
     func cumulativeSnapshots() {
         var splitter = ConclusionStreamSplitter()
-        #expect(splitter.feed("CONCLUSION: The") == "The")
-        #expect(splitter.feed("CONCLUSION: The answer") == " answer")
+        let emitted = collect(
+            ["CONCLUSION: The", "CONCLUSION: The answer"],
+            into: &splitter
+        )
+        #expect(emitted == "The answer")
         #expect(splitter.thought == "CONCLUSION: The answer")
     }
 
-    @Test("a thought with no marker emits nothing")
+    @Test("a thought with no marker emits nothing, even flushed")
     func noMarker() {
         var splitter = ConclusionStreamSplitter()
-        #expect(splitter.feed("ACTION: search(x)").isEmpty)
-        #expect(splitter.feed(" more reasoning").isEmpty)
+        let emitted = collect(["ACTION: search(x)", " more reasoning"], into: &splitter)
+        #expect(emitted.isEmpty)
         #expect(!splitter.isConclusion)
         #expect(splitter.thought == "ACTION: search(x) more reasoning")
     }
@@ -47,8 +62,37 @@ struct ConclusionStreamSplitterTests {
     @Test("leading whitespace after the marker is not emitted as a stray first token")
     func trimsAfterMarker() {
         var splitter = ConclusionStreamSplitter()
-        #expect(splitter.feed("CONCLUSION:   ").isEmpty)
-        #expect(splitter.feed("Clean answer.") == "Clean answer.")
+        let emitted = collect(["CONCLUSION:   ", "Clean answer."], into: &splitter)
+        #expect(emitted == "Clean answer.")
+    }
+
+    @Test("an ACTION after the conclusion is cut — scaffolding never streams to the user")
+    func truncatesAtAction() {
+        var splitter = ConclusionStreamSplitter()
+        let emitted = collect(
+            ["CONCLUSION: Done.", "\nACTION: search(more)", " trailing"],
+            into: &splitter
+        )
+        #expect(emitted == "Done.")
+    }
+
+    @Test("an ACTION marker split across chunks is still caught")
+    func truncatesSplitActionMarker() {
+        var splitter = ConclusionStreamSplitter()
+        let emitted = collect(
+            ["CONCLUSION: Fine so far. ", "ACT", "ION: go(x)"],
+            into: &splitter
+        )
+        #expect(emitted == "Fine so far.")
+    }
+
+    @Test("emission is incremental — most of the conclusion arrives before the flush")
+    func emitsIncrementally() {
+        var splitter = ConclusionStreamSplitter()
+        let first = splitter.feed("CONCLUSION: A reasonably long streamed answer")
+        #expect(first.hasPrefix("A reasonably long streamed"))
+        let rest = splitter.flush()
+        #expect(first + rest == "A reasonably long streamed answer")
     }
 }
 

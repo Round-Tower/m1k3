@@ -158,11 +158,24 @@ public actor LocalAgent {
         _ conclusion: String, _ usedTools: Set<String>, _ iterations: Int
     ) -> AgentResult {
         AgentResult(
-            conclusion: conclusion,
+            conclusion: Self.stripScaffolding(conclusion),
             toolsUsed: Array(usedTools),
             iterations: iterations,
             reasoningTrace: reasoningTrace
         )
+    }
+
+    /// Remove ReAct scaffolding (ACTION: lines, with or without markdown
+    /// decoration) from user-visible text. Small models leak these into
+    /// conclusions and the iteration-cap synthesis — seen live at ⌘R.
+    static func stripScaffolding(_ text: String) -> String {
+        text.components(separatedBy: "\n")
+            .filter { line in
+                let bare = line.trimmingCharacters(in: decoration)
+                return !bare.hasPrefix("ACTION:")
+            }
+            .joined(separator: "\n")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     // MARK: - Prompt construction
@@ -210,12 +223,18 @@ public actor LocalAgent {
                 onConclusionToken(live)
             }
         }
+        // Release the splitter's guard window now the stream is over.
+        let guarded = splitter.flush()
+        if !guarded.isEmpty {
+            onConclusionToken(guarded)
+        }
         return splitter.thought.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     private func synthesizeConclusion(context: String) async throws -> String {
         let prompt = context + "\n\n\nYou have reached the maximum iterations. "
-            + "Based on the information gathered, provide your final conclusion:"
+            + "Based on the information gathered, answer the user directly in "
+            + "plain language. Do not write ACTION: and do not call tools:"
         return try await inferenceProvider.generate(prompt: prompt)
     }
 
@@ -261,9 +280,10 @@ public actor LocalAgent {
     ) async -> String {
         if executedActions.contains(action.description) {
             // Repeat-guard: small models loop on the same call. Steer to a
-            // conclusion instead of re-executing.
-            return "You already ran \(action.description). "
-                + "Use what you have and reply starting with \"CONCLUSION:\"."
+            // DIFFERENT tool or a conclusion instead of re-executing.
+            return "You already ran \(action.description) — do not repeat it. "
+                + "Try a different tool if one fits, or use what you have and "
+                + "reply starting with \"CONCLUSION:\"."
         }
         guard let tool = tools[action.toolName] else {
             // Steer, don't just error: list what IS callable so the next

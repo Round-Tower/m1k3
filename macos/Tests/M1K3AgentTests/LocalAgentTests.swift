@@ -227,6 +227,43 @@ struct LocalAgentTests {
         #expect(provider.prompts.count == 2)
     }
 
+    @Test("a conclusion with a trailing ACTION line is stripped before it reaches the user")
+    func conclusionStripsScaffolding() async throws {
+        let provider = ScriptedProvider([
+            "CONCLUSION: The answer is 42.\nACTION: search(more things)",
+        ])
+        let agent = LocalAgent(inferenceProvider: provider, tools: [])
+        let result = try await agent.run(goal: "x")
+        #expect(result.conclusion == "The answer is 42.")
+    }
+
+    @Test("the iteration-cap synthesis never leaks ACTION lines (the ⌘R weather bug)")
+    func synthesisStripsScaffolding() async throws {
+        let provider = ScriptedProvider([
+            "still thinking 1",
+            "still thinking 2",
+            "I am unable to find a forecast.\nACTION: search_knowledge(weather boston)",
+        ])
+        let agent = LocalAgent(inferenceProvider: provider, tools: [], maxIterations: 2)
+        let result = try await agent.run(goal: "weather?")
+        #expect(result.conclusion == "I am unable to find a forecast.")
+        #expect(!result.conclusion.contains("ACTION"))
+    }
+
+    @Test("implicit prose conclusions are also stripped of malformed scaffolding")
+    func implicitConclusionStripsScaffolding() async throws {
+        let provider = ScriptedProvider([
+            "Let me think about this question.",
+            "The seal failed under load.\n**ACTION:** search_knowledge", // malformed: no parens
+        ])
+        let agent = LocalAgent(
+            inferenceProvider: provider, tools: [],
+            concludesOnUnstructuredThought: true
+        )
+        let result = try await agent.run(goal: "x")
+        #expect(result.conclusion == "The seal failed under load.")
+    }
+
     @Test("cancellation stops the loop between iterations")
     func cancellationStopsLoop() async {
         let provider = SleepyProvider()
