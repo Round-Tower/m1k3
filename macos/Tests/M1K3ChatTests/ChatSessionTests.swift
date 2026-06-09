@@ -51,8 +51,8 @@ private struct DeltaResponder: RAGResponding {
     ) async throws -> (sources: [ChunkHit], stream: AsyncStream<String>) {
         let deltas = deltas
         return (sources, AsyncStream { continuation in
-            for d in deltas {
-                continuation.yield(d)
+            for delta in deltas {
+                continuation.yield(delta)
             }
             continuation.finish()
         })
@@ -166,5 +166,25 @@ struct ChatSessionTests {
         #expect(session.messages.count == 2)
         #expect(session.messages[0].role == .user)
         #expect(session.messages[1].role == .assistant)
+    }
+
+    @Test("strips hallucinated citations from the streamed answer, records validated ones")
+    func validatesCitationsAfterStream() async {
+        let source = ChunkHit(
+            chunkID: UUID(), itemID: UUID(), itemTitle: "ICH-Q7",
+            kind: .document, heading: "5.2 Cleaning", content: "Clean the line."
+        )
+        let responder = DeltaResponder(
+            sources: [source],
+            deltas: ["Clean ", "(ICH-Q7 §5.2 Cleaning) ", "but not ", "[FAKE §9 Nope]."]
+        )
+        let session = ChatSession(responder: responder)
+        await session.send("How do I clean the line?")
+
+        let assistant = session.messages.last
+        #expect(assistant?.status == .complete)
+        #expect(assistant?.text.contains("ICH-Q7") == true) // grounded citation kept
+        #expect(assistant?.text.contains("FAKE") == false) // invented citation stripped
+        #expect(assistant?.citations == [Citation(source: "ICH-Q7", heading: "5.2 Cleaning")])
     }
 }

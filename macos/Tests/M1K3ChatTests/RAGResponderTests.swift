@@ -130,4 +130,17 @@ struct RAGResponderTests {
         }
         #expect(collected.contains("seal"))
     }
+
+    @Test("answer() strips a citation the model invented (not in the retrieved chunks)")
+    func stripsFabricatedCitation() async throws {
+        let (store, embedder) = try await ingestedStore()
+        // FAKE-DOC matches none of the ingested titles (Plant Notes / Safety), so it
+        // must be stripped regardless of what retrieval surfaces.
+        let provider = RecordingProvider(answer: "The seal failed (FAKE-DOC §9.9 Nope).")
+        let rag = RAGResponder(store: store, embedder: embedder, provider: provider)
+
+        let response = try await rag.answer("What failed on the conveyor?")
+        #expect(!response.answer.contains("FAKE-DOC"))
+        #expect(response.citations.isEmpty)
+    }
 }
