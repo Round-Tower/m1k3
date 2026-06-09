@@ -103,6 +103,19 @@ struct HTMLParserTests {
         #expect(DuckDuckGoHTMLParser.parse(html: html).isEmpty)
     }
 
+    @Test("the challenge page is recognised, ordinary pages are not")
+    func challengeDetection() throws {
+        let challenge = try #require(try String(
+            data: fixture("ddg-anomaly", extension: "html"), encoding: .utf8
+        ))
+        #expect(DuckDuckGoHTMLParser.isChallengePage(challenge))
+        let results = try #require(try String(
+            data: fixture("ddg-lite-results", extension: "html"), encoding: .utf8
+        ))
+        #expect(!DuckDuckGoHTMLParser.isChallengePage(results))
+        #expect(!DuckDuckGoHTMLParser.isChallengePage("<html>plain empty page</html>"))
+    }
+
     @Test("garbage and empty input yield no results")
     func garbage() {
         #expect(DuckDuckGoHTMLParser.parse(html: "").isEmpty)

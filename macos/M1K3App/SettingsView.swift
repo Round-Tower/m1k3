@@ -14,6 +14,7 @@ import SwiftUI
 struct SettingsView: View {
     @Environment(AppEnvironment.self) private var env
     @AppStorage(ReadingMode.storageKey) private var readingMode: ReadingMode = .standard
+    @AppStorage(AppEnvironment.webSearchEnabledKey) private var webSearchEnabled = true
 
     var body: some View {
         @Bindable var env = env
@@ -151,6 +152,18 @@ struct SettingsView: View {
                     Text("Record a call from the chat toolbar (consent-gated). With transcription "
                         + "enabled, a stopped recording is transcribed, summarised, encrypted, and "
                         + "indexed — on-device.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+
+                Section {
+                    Toggle("Web search (DuckDuckGo)", isOn: $webSearchEnabled)
+                } header: {
+                    Text("Tools")
+                } footer: {
+                    Text("M1K3 can search the web mid-answer. This is the one capability "
+                        + "that sends a query off this Mac (to DuckDuckGo) — every search is "
+                        + "shown in the reply as it happens. Date, time and system status "
+                        + "tools stay fully local. Off means the model can't see the tool.")
                         .font(.caption).foregroundStyle(.secondary)
                 }
 

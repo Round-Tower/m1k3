@@ -29,10 +29,30 @@ public struct AgentRAGResponder: RAGResponding, Sendable {
     private let store: KnowledgeStore
     private let embedder: any EmbeddingService
     private let provider: any InferenceProvider
-    private let tools: [any AgentTool]
+    /// Evaluated fresh each turn so a settings change (e.g. the web-search
+    /// privacy toggle) applies immediately — a disabled tool is never even
+    /// visible to the model.
+    private let toolsProvider: @Sendable () -> [any AgentTool]
     private let topK: Int
     private let maxIterations: Int
 
+    public init(
+        store: KnowledgeStore,
+        embedder: any EmbeddingService,
+        provider: any InferenceProvider,
+        toolsProvider: @escaping @Sendable () -> [any AgentTool],
+        topK: Int = 5,
+        maxIterations: Int = 3
+    ) {
+        self.store = store
+        self.embedder = embedder
+        self.provider = provider
+        self.toolsProvider = toolsProvider
+        self.topK = topK
+        self.maxIterations = maxIterations
+    }
+
+    /// Fixed tool list — convenience for tests and simple callers.
     public init(
         store: KnowledgeStore,
         embedder: any EmbeddingService,
@@ -41,12 +61,10 @@ public struct AgentRAGResponder: RAGResponding, Sendable {
         topK: Int = 5,
         maxIterations: Int = 3
     ) {
-        self.store = store
-        self.embedder = embedder
-        self.provider = provider
-        self.tools = tools
-        self.topK = topK
-        self.maxIterations = maxIterations
+        self.init(
+            store: store, embedder: embedder, provider: provider,
+            toolsProvider: { tools }, topK: topK, maxIterations: maxIterations
+        )
     }
 
     public func answerStreaming(
@@ -82,10 +100,11 @@ public struct AgentRAGResponder: RAGResponding, Sendable {
         onActivity: @escaping @Sendable (ResponderActivity) -> Void,
         continuation: AsyncStream<String>.Continuation
     ) async {
-        // Fresh agent per turn — its reasoning trace must not bleed across turns.
+        // Fresh agent per turn — its reasoning trace must not bleed across
+        // turns, and the tool list reflects current settings.
         let agent = LocalAgent(
             inferenceProvider: provider,
-            tools: tools,
+            tools: toolsProvider(),
             maxIterations: maxIterations,
             concludesOnUnstructuredThought: true
         )

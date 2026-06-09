@@ -15,6 +15,7 @@ import M1K3Agent
 @testable import M1K3Chat
 import M1K3Inference
 import M1K3Knowledge
+import Synchronization
 import Testing
 
 // MARK: - Fakes
@@ -190,6 +191,26 @@ struct AgentRAGResponderTests {
         let lastPrompt = try #require(provider.allPrompts.last)
         // ChatPromptBuilder's grounded template, not the ReAct scaffold.
         #expect(lastPrompt.contains("HOW TO ANSWER:"))
+    }
+
+    @Test("the tools provider is consulted fresh each turn (settings toggles apply immediately)")
+    func toolsProviderPerTurn() async throws {
+        let (store, embedder) = try await ingestedStore()
+        let provider = AgentScriptedProvider([
+            "CONCLUSION: one.",
+            "CONCLUSION: two.",
+        ])
+        let calls = Mutex(0)
+        let responder = AgentRAGResponder(
+            store: store, embedder: embedder, provider: provider,
+            toolsProvider: {
+                calls.withLock { $0 += 1 }
+                return []
+            }
+        )
+        _ = try await collect(await responder.answerStreaming("first?").stream)
+        _ = try await collect(await responder.answerStreaming("second?").stream)
+        #expect(calls.withLock { $0 } == 2)
     }
 
     @Test("prose without markers becomes the answer after one structured chance")

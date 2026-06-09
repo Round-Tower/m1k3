@@ -47,25 +47,39 @@ public struct WebSearchTool: AgentTool {
             return ToolResult(output: "Error: empty query.")
         }
         do {
-            let results = try await search(query: query)
-            guard !results.isEmpty else {
+            switch try await search(query: query) {
+            case .rateLimited:
+                return ToolResult(output: "Error: web search is temporarily unavailable "
+                    + "(DuckDuckGo rate-limited this Mac). Answer from what you already have.")
+            case let .results(results) where results.isEmpty:
                 return ToolResult(output: "No web results for \"\(query)\".")
+            case let .results(results):
+                return ToolResult(output: WebSearchFormatter.format(results, limit: maxResults))
             }
-            return ToolResult(output: WebSearchFormatter.format(results, limit: maxResults))
         } catch {
             return ToolResult(output: "Error: web search failed — \(error.localizedDescription)")
         }
     }
 
-    private func search(query: String) async throws -> [WebSearchResult] {
+    private enum SearchOutcome {
+        case results([WebSearchResult])
+        /// DDG served its bot-challenge page — rate-limited, not "no results".
+        case rateLimited
+    }
+
+    private func search(query: String) async throws -> SearchOutcome {
         let instant = try DuckDuckGoInstantAnswerParser.parse(
             await fetch(instantAnswerURL(for: query)).data
         )
-        if !instant.isEmpty { return instant }
+        if !instant.isEmpty { return .results(instant) }
 
         let fallback = try await fetch(liteURL(for: query))
         let html = String(data: fallback.data, encoding: .utf8) ?? ""
-        return DuckDuckGoHTMLParser.parse(html: html)
+        let results = DuckDuckGoHTMLParser.parse(html: html)
+        if results.isEmpty, DuckDuckGoHTMLParser.isChallengePage(html) {
+            return .rateLimited
+        }
+        return .results(results)
     }
 
     private func fetch(_ url: URL) async throws -> (data: Data, response: HTTPURLResponse) {

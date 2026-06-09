@@ -73,7 +73,18 @@ struct MessageView: View {
             if !message.text.isEmpty {
                 ReadingText(message.text)
             } else if case .streaming = message.status {
-                ProgressView().controlSize(.small)
+                // While the agent works (thinking, searching the web…) show what
+                // it's doing — the label doubles as the privacy surface for any
+                // query that leaves the device.
+                HStack(spacing: 8) {
+                    ProgressView().controlSize(.small)
+                    if let activity = message.activityLabel {
+                        Text(activity)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .contentTransition(.opacity)
+                    }
+                }
             } else if case .complete = message.status {
                 // A completed-but-empty reply (the model returned nothing) reads
                 // as a state, not a hollow glass bubble.

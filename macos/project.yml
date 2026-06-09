@@ -58,6 +58,8 @@ targets:
       - package: M1K3
         product: M1K3KnowledgeTools
       - package: M1K3
+        product: M1K3AgentTools
+      - package: M1K3
         product: M1K3MLX
       - package: M1K3
         product: M1K3WhisperKit

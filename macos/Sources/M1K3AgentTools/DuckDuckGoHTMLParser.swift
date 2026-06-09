@@ -39,6 +39,13 @@ enum DuckDuckGoHTMLParser {
         return results
     }
 
+    /// True when DDG served its bot-challenge ("anomaly") page instead of
+    /// results — seen live with status 202 after heavy use. Distinguishing it
+    /// from a genuinely-empty result page keeps the agent's observation honest.
+    static func isChallengePage(_ html: String) -> Bool {
+        html.contains("anomaly.js") || html.contains("challenge-form")
+    }
+
     /// DDG sometimes wraps result links as "//duckduckgo.com/l/?uddg=<dest>&rut=…".
     /// Unwrap to the destination; direct links pass through.
     static func decodeRedirectURL(_ href: String) -> String {

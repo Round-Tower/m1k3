@@ -19,11 +19,14 @@
 //  `embeddingStatus`. Fixed the "Gemma 4" runtime labels (Gemma 3 is current).
 
 import Foundation
+import M1K3Agent
+import M1K3AgentTools
 import M1K3Avatar
 import M1K3Calls
 import M1K3Chat
 import M1K3Inference
 import M1K3Knowledge
+import M1K3KnowledgeTools
 import M1K3Kokoro
 import M1K3MLX
 import M1K3Voice
@@ -69,7 +72,7 @@ enum RuntimeOption: String, CaseIterable, Identifiable {
 final class AppEnvironment {
     let store: KnowledgeStore
     let provider: any InferenceProvider
-    let responder: RAGResponder
+    let responder: any RAGResponding
     /// TTS behind a swappable seam: Built-in (Apple) by default, M1K3 Voice
     /// (Kokoro) once downloaded. Callers never see the swap.
     let speech: SwappableSpeechProvider
@@ -138,6 +141,11 @@ final class AppEnvironment {
     /// Whether the user has completed brain selection — gates the onboarding flow.
     static let hasChosenBrainKey = "hasChosenBrain"
     static let selectedVoiceTierKey = "selectedVoiceTier"
+    /// Web search (DuckDuckGo) in chat — ON by default, visible in the activity
+    /// label every time it fires, and switchable off in Settings (the tool is
+    /// then never offered to the model). The one capability that sends
+    /// chat-derived queries off this Mac.
+    nonisolated static let webSearchEnabledKey = "webSearchEnabled"
     /// Whether the user has made a voice-output choice (onboarding speech step).
     static let hasChosenVoiceKey = "hasChosenVoice"
 
@@ -252,7 +260,7 @@ final class AppEnvironment {
             fallback: afm
         )
         provider = runtimeProvider
-        responder = RAGResponder(store: store, embedder: embedder, provider: runtimeProvider)
+        responder = Self.makeAgentResponder(store: store, embedder: swappable, provider: runtimeProvider)
 
         // TTS seam: Built-in Apple voice wrapped in a swappable façade so the
         // premium Kokoro tier can drop in without rebuilding any caller.
@@ -646,6 +654,37 @@ extension AppEnvironment {
         let dir = base.appendingPathComponent("M1K3", isDirectory: true)
         try fileManager.createDirectory(at: dir, withIntermediateDirectories: true)
         return dir.appendingPathComponent("knowledge.sqlite")
+    }
+
+    /// The tool-calling chat responder: every turn runs the agent loop with
+    /// retrieve-first grounding, plus web search / datetime / system status /
+    /// a second knowledge lookup as tools. The tool list is built fresh each
+    /// turn so the Settings web-search toggle applies immediately — disabled
+    /// means the model never even sees the tool.
+    nonisolated static func makeAgentResponder(
+        store: KnowledgeStore,
+        embedder: any EmbeddingService,
+        provider: any InferenceProvider
+    ) -> any RAGResponding {
+        AgentRAGResponder(
+            store: store,
+            embedder: embedder,
+            provider: provider,
+            toolsProvider: {
+                var tools: [any AgentTool] = [
+                    DateTimeTool(),
+                    SystemStatusTool(),
+                    SearchKnowledgeTool(store: store),
+                ]
+                let defaults = UserDefaults.standard
+                let webAllowed = defaults.object(forKey: Self.webSearchEnabledKey) == nil
+                    || defaults.bool(forKey: Self.webSearchEnabledKey)
+                if webAllowed {
+                    tools.insert(WebSearchTool(), at: 0)
+                }
+                return tools
+            }
+        )
     }
 }
 

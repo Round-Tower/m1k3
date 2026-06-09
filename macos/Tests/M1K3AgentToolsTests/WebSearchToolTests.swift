@@ -88,6 +88,19 @@ struct WebSearchToolTests {
         #expect(result.output.hasPrefix("Error: web search failed"))
     }
 
+    @Test("a rate-limit challenge page is reported as unavailable, not 'no results'")
+    func challengePageReported() async throws {
+        let challengeHTML = """
+        <html><form id="challenge-form" action="//duckduckgo.com/anomaly.js?q=x"></form></html>
+        """
+        let fetcher = FakeHTTPFetcher { request in
+            request.url?.host == "api.duckduckgo.com" ? Data(emptyIA.utf8) : Data(challengeHTML.utf8)
+        }
+        let tool = WebSearchTool(fetcher: fetcher)
+        let result = try await tool.execute(input: ["query": "anything"])
+        #expect(result.output.hasPrefix("Error: web search is temporarily unavailable"))
+    }
+
     @Test("no results anywhere is reported honestly")
     func noResults() async throws {
         let fetcher = FakeHTTPFetcher { request in
