@@ -46,6 +46,10 @@ let package = Package(
         // M1K3WhisperKit target; Apple Speech (system framework) is the
         // always-available fallback behind the same TranscriptionProvider seam.
         .package(url: "https://github.com/argmaxinc/WhisperKit.git", from: "0.15.0"),
+        // ONNX Runtime — runs the Kokoro neural-TTS model on-device. Self-contained
+        // binary (no transitive deps → cannot clash with the mlx-swift stack), isolated
+        // to the M1K3Kokoro target so the core build never links it.
+        .package(url: "https://github.com/microsoft/onnxruntime-swift-package-manager", from: "1.16.0"),
     ],
     targets: [
         .target(
@@ -231,8 +235,17 @@ let package = Package(
         // SpeechProviderWithLifecycle and M1K3Inference's ModelPreloading.
         .target(
             name: "M1K3Kokoro",
-            dependencies: ["M1K3Voice", "M1K3Inference"],
-            path: "Sources/M1K3Kokoro"
+            dependencies: [
+                "M1K3Voice", "M1K3Inference",
+                .product(name: "onnxruntime", package: "onnxruntime-swift-package-manager"),
+            ],
+            path: "Sources/M1K3Kokoro",
+            resources: [.copy("Resources/g2p-en-gb.deflate")]
+        ),
+        .testTarget(
+            name: "M1K3KokoroTests",
+            dependencies: ["M1K3Kokoro"],
+            path: "Tests/M1K3KokoroTests"
         ),
     ]
 )
