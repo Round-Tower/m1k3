@@ -22,6 +22,9 @@ import Observation
 
 /// The seam ChatSession drives. RAGResponder conforms; tests inject fakes so the
 /// reducer is exercised without a model, store, or embedder.
+///
+/// The two requirements are cross-defaulted: implement either and the other
+/// follows (implementing neither recurses — conformers must provide one).
 public protocol RAGResponding: Sendable {
     /// Stream the answer. The stream is the model's RAW output — citation validation
     /// can't happen mid-stream, so the CALLER must validate the accumulated text once
@@ -31,6 +34,28 @@ public protocol RAGResponding: Sendable {
     func answerStreaming(
         _ question: String
     ) async throws -> (sources: [ChunkHit], stream: AsyncStream<String>)
+
+    /// As above, additionally reporting progress (retrieval, agent thinking,
+    /// tool use) so the UI can show what's happening before tokens arrive.
+    func answerStreaming(
+        _ question: String,
+        onActivity: @escaping @Sendable (ResponderActivity) -> Void
+    ) async throws -> (sources: [ChunkHit], stream: AsyncStream<String>)
+}
+
+public extension RAGResponding {
+    func answerStreaming(
+        _ question: String
+    ) async throws -> (sources: [ChunkHit], stream: AsyncStream<String>) {
+        try await answerStreaming(question, onActivity: { _ in })
+    }
+
+    func answerStreaming(
+        _ question: String,
+        onActivity _: @escaping @Sendable (ResponderActivity) -> Void
+    ) async throws -> (sources: [ChunkHit], stream: AsyncStream<String>) {
+        try await answerStreaming(question)
+    }
 }
 
 /// One turn in the transcript. `sources` are the chunks the answer was grounded
@@ -51,6 +76,10 @@ public struct ChatMessage: Identifiable, Sendable, Equatable, Codable {
     /// ones are stripped from `text`). Derived at response time — deliberately omitted
     /// from `CodingKeys` so it isn't persisted and old transcripts still decode.
     public var citations: [Citation] = []
+    /// What the responder is doing right now ("Searching the web…"), shown while
+    /// `.streaming` and no tokens have arrived. Transient — omitted from
+    /// `CodingKeys` like `citations`.
+    public var activityLabel: String?
     public var status: Status
 
     enum CodingKeys: String, CodingKey {
@@ -125,10 +154,23 @@ public final class ChatSession {
         defer { isResponding = false }
 
         do {
-            let (sources, stream) = try await responder.answerStreaming(trimmed)
+            let (sources, stream) = try await responder.answerStreaming(
+                trimmed,
+                onActivity: { [weak self] activity in
+                    Task { @MainActor in
+                        self?.update(assistantID) {
+                            $0.activityLabel = ActivityLabeler.label(for: activity)
+                        }
+                    }
+                }
+            )
             update(assistantID) { $0.sources = sources }
             for await chunk in stream {
-                update(assistantID) { $0.text = Self.fold($0.text, chunk) }
+                update(assistantID) {
+                    $0.text = Self.fold($0.text, chunk)
+                    // Real tokens replace the activity label.
+                    $0.activityLabel = nil
+                }
             }
             // Now the full answer is in hand: strip any citations the model invented
             // (not grounded in the retrieved sources) and record the validated ones.
@@ -137,11 +179,13 @@ public final class ChatSession {
             update(assistantID) {
                 $0.text = validation.cleanedText
                 $0.citations = validation.validated
+                $0.activityLabel = nil
                 $0.status = .complete
             }
         } catch {
             update(assistantID) { msg in
                 msg.status = .failed(String(describing: error))
+                msg.activityLabel = nil
                 if msg.text.isEmpty {
                     msg.text = "Sorry — I couldn't answer that. \(error.localizedDescription)"
                 }
