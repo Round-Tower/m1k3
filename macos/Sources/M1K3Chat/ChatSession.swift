@@ -23,6 +23,11 @@ import Observation
 /// The seam ChatSession drives. RAGResponder conforms; tests inject fakes so the
 /// reducer is exercised without a model, store, or embedder.
 public protocol RAGResponding: Sendable {
+    /// Stream the answer. The stream is the model's RAW output — citation validation
+    /// can't happen mid-stream, so the CALLER must validate the accumulated text once
+    /// the stream finishes (see `ChatSession.send`, which runs `CitationValidator`
+    /// against `sources`). This is the deliberate counterpart to the blocking
+    /// `RAGResponder.answer()`, which validates internally before returning.
     func answerStreaming(
         _ question: String
     ) async throws -> (sources: [ChunkHit], stream: AsyncStream<String>)

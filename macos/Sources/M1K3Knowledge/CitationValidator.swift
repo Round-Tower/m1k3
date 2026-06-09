@@ -81,12 +81,33 @@ public enum CitationValidator {
         responseText: String,
         against chunks: [ChunkHit]
     ) async -> Result {
-        await validate(responseText: responseText) { citation in
+        let result = await validate(responseText: responseText) { citation in
             chunks.contains { chunk in
                 chunk.itemTitle == citation.source
                     && (chunk.heading?.trimmingCharacters(in: .whitespaces) ?? "") == citation.heading
             }
         }
+        // Stripping a citation leaves a gap ("…not  ." / "see  and"); tidy it so the
+        // cleaned answer reads naturally in the UI (this overload feeds the rendered text).
+        guard !result.stripped.isEmpty else { return result }
+        return Result(
+            cleanedText: tidy(result.cleanedText),
+            validated: result.validated,
+            stripped: result.stripped
+        )
+    }
+
+    /// Collapse the whitespace a stripped citation leaves behind: runs of spaces → one,
+    /// no space before sentence punctuation, trimmed ends. Newlines are preserved.
+    static func tidy(_ text: String) -> String {
+        var cleaned = text
+        while cleaned.contains("  ") {
+            cleaned = cleaned.replacingOccurrences(of: "  ", with: " ")
+        }
+        for mark in [".", ",", ";", ":", "!", "?"] {
+            cleaned = cleaned.replacingOccurrences(of: " \(mark)", with: mark)
+        }
+        return cleaned.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     // MARK: - Parsing

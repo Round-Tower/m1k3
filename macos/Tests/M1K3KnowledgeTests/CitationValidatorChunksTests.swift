@@ -39,4 +39,22 @@ struct CitationValidatorChunksTests {
         #expect(result.validated.isEmpty)
         #expect(result.stripped.count == 1)
     }
+
+    @Test("stripping tidies the gap it leaves — no double space, no space before punctuation")
+    func stripTidiesWhitespace() async {
+        let result = await CitationValidator.validate(
+            responseText: "Clean it but not [FAKE §9 Nope]. Then rinse.", against: []
+        )
+        #expect(result.cleanedText == "Clean it but not. Then rinse.")
+        #expect(!result.cleanedText.contains("  "))
+    }
+
+    @Test("a citation cited twice is reported once and removed everywhere")
+    func deduplicatesRepeatedCitation() async {
+        let result = await CitationValidator.validate(
+            responseText: "[FAKE §1 A] said it; later [FAKE §1 A] again.", against: []
+        )
+        #expect(result.stripped == [Citation(source: "FAKE", heading: "1 A")])
+        #expect(!result.cleanedText.contains("FAKE"))
+    }
 }
