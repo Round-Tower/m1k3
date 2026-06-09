@@ -24,6 +24,7 @@ let package = Package(
         .library(name: "M1K3Inference", targets: ["M1K3Inference"]),
         .library(name: "M1K3Agent", targets: ["M1K3Agent"]),
         .library(name: "M1K3KnowledgeTools", targets: ["M1K3KnowledgeTools"]),
+        .library(name: "M1K3AgentTools", targets: ["M1K3AgentTools"]),
         .library(name: "M1K3Chat", targets: ["M1K3Chat"]),
         .library(name: "M1K3Voice", targets: ["M1K3Voice"]),
         .library(name: "M1K3MLX", targets: ["M1K3MLX"]),
@@ -103,11 +104,27 @@ let package = Package(
             dependencies: ["M1K3KnowledgeTools", "M1K3Inference"],
             path: "Tests/M1K3KnowledgeToolsTests"
         ),
+        // Self-contained agent tools: web search (DuckDuckGo), date/time, system
+        // status. Depends ONLY on M1K3Agent (the AgentTool seam) — pure parsers/
+        // formatters tested against fixtures; network/IOKit adapters stay thin.
+        // The app injects these into the chat agent; M1K3Chat never links this.
+        .target(
+            name: "M1K3AgentTools",
+            dependencies: ["M1K3Agent"],
+            path: "Sources/M1K3AgentTools"
+        ),
+        .testTarget(
+            name: "M1K3AgentToolsTests",
+            dependencies: ["M1K3AgentTools", "M1K3Agent"],
+            path: "Tests/M1K3AgentToolsTests",
+            resources: [.copy("Fixtures")]
+        ),
         // RAG chat: embed → hybrid search → documents-first prompt → generate.
-        // The grounded-answer brain. Depends on knowledge + inference.
+        // The grounded-answer brain. Depends on knowledge + inference, and on
+        // M1K3Agent for the always-on tool-calling responder (AgentRAGResponder).
         .target(
             name: "M1K3Chat",
-            dependencies: ["M1K3Knowledge", "M1K3Inference"],
+            dependencies: ["M1K3Knowledge", "M1K3Inference", "M1K3Agent"],
             path: "Sources/M1K3Chat"
         ),
         .testTarget(
