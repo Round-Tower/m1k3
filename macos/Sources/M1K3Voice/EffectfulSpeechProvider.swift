@@ -14,6 +14,9 @@
 //  Apple speech, so M1K3 is never left silent.
 //
 //  Signed: Kev + claude-sonnet-4-6, 2026-06-08, Confidence 0.55, Prior: Unknown
+//  Review: claude-opus-4-8, 2026-06-09 (PR #10) — stop() fires onSpeakingEnded once
+//  (was double-firing on interrupted playback); speak() now interrupts an in-flight
+//  utterance so a concurrent call can't leak play()'s continuation. Confidence 0.75.
 
 import AVFoundation
 import Foundation
@@ -48,6 +51,12 @@ public final class EffectfulSpeechProvider: NSObject, SpeechProviderWithLifecycl
     }
 
     public func speak(_ utterance: SpeechUtterance) async {
+        // A new utterance interrupts any in-flight one. Without this, a second
+        // concurrent speak() would overwrite play()'s playbackContinuation and the
+        // first speak() would suspend forever — and AppEnvironment.speak() does not
+        // serialise calls. stop() resumes the prior playback and fires its single
+        // onSpeakingEnded before we start fresh.
+        if await isSpeaking() { await stop() }
         do {
             let (samples, sampleRate) = try await synthesizeToFloats(utterance)
             guard !samples.isEmpty, sampleRate > 0 else {

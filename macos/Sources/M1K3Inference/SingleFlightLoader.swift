@@ -17,6 +17,8 @@
 //  contract is proven under `swift test`, not stuck behind the MLX launch wall.
 //
 //  Signed: Kev + claude-opus-4-8, 2026-06-08, Confidence 0.85, Prior: Unknown
+//  Review: claude-opus-4-8, 2026-06-09 (PR #10) — documented cancellation semantics
+//  on value(): cancelling clears the slot but does not cancel the underlying load.
 
 import Foundation
 
@@ -39,6 +41,12 @@ public actor SingleFlightLoader<Value: Sendable> {
     /// flight. Concurrent callers await the same load. `progress` is wired to the
     /// operation only for the call that actually starts it; later callers that
     /// join an in-flight (or completed) load just receive the result.
+    ///
+    /// Cancellation: if the calling task is cancelled, `await task.value` throws
+    /// `CancellationError` and the slot is cleared so a retry re-enters the
+    /// operation — but the underlying unstructured `Task` is NOT cancelled, so an
+    /// in-flight load (e.g. an MLX/WhisperKit download) keeps running to completion.
+    /// If it succeeds, the on-disk model cache makes the next `value()` call instant.
     public func value(
         progress: @escaping @Sendable (Double) -> Void = { _ in }
     ) async throws -> Value {

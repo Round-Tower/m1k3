@@ -20,6 +20,9 @@
 //  own async start()/stop() rather than the sync AudioRecorder seam.
 //
 //  Signed: Kev + claude-opus-4-8, 2026-06-07, Confidence 0.55, Prior: Unknown
+//  Review: claude-opus-4-8, 2026-06-09 (PR #10) — stop() now atomically claims the
+//  stop inside the lock before async teardown, so two concurrent stops can't both
+//  reach removeTap(onBus:) and trap; writeFile guards rather than force-unwraps.
 //  Context: lowest confidence in the session — entirely verify-by-launch OS
 //  capture; first ⌘R on a real call is where this gets shaken out.
 
@@ -67,8 +70,15 @@ public final class StereoCallRecorder: NSObject, @unchecked Sendable {
 
     /// Stop both captures and write the interleaved stereo (or mono) file.
     public func stop() async -> URL? {
-        let wasRecording = lock.withLock { recording }
-        guard wasRecording else { return nil }
+        // Atomically claim the stop before any async teardown. Two concurrent stops
+        // (double-tap, or a consent-timeout racing a user tap) must not both reach
+        // removeTap(onBus:) — removing a tap from a bus with none installed traps.
+        let claimed = lock.withLock { () -> Bool in
+            guard recording else { return false }
+            recording = false
+            return true
+        }
+        guard claimed else { return nil }
 
         if let stream {
             try? await stream.stopCapture()
@@ -81,7 +91,6 @@ public final class StereoCallRecorder: NSObject, @unchecked Sendable {
             stream = nil
             nearSamples = []
             farSamples = []
-            recording = false
             micConverter = nil
             return result
         }
@@ -156,7 +165,10 @@ public final class StereoCallRecorder: NSObject, @unchecked Sendable {
 
         buffer.frameLength = buffer.frameCapacity
         interleaved.withUnsafeBufferPointer { src in
-            buffer.floatChannelData![0].update(from: src.baseAddress!, count: interleaved.count)
+            // Float32 format guarantees floatChannelData; guard anyway, matching the
+            // defensive idiom used elsewhere in this file rather than force-unwrapping.
+            guard let channel = buffer.floatChannelData, let base = src.baseAddress else { return }
+            channel[0].update(from: base, count: interleaved.count)
         }
 
         let url = FileManager.default.temporaryDirectory
