@@ -22,15 +22,15 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      pull-requests: write  # Required to post PR comments
+      pull-requests: write # Required to post PR comments
       issues: read
       id-token: write
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
-          fetch-depth: 0  # Full history for better diff context
+          fetch-depth: 0 # Full history for better diff context
 
       - name: Run Claude Code Review
         id: claude-review

@@ -20,16 +20,16 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      pull-requests: write  # Required to post comments and suggestions
-      issues: write         # Required to respond to issues
+      pull-requests: write # Required to post comments and suggestions
+      issues: write # Required to respond to issues
       id-token: write
-      actions: read         # Required for Claude to read CI results on PRs
+      actions: read # Required for Claude to read CI results on PRs
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
-          fetch-depth: 0  # Full history for context
+          fetch-depth: 0 # Full history for context
 
       - name: Run Claude Code
         id: claude
