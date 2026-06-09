@@ -39,6 +39,11 @@ targets:
     deploymentTarget: "26.0"
     sources:
       - path: M1K3App
+      # Icon Composer (.icon) app icon — referenced as a single file so XcodeGen
+      # doesn't recurse into the bundle; actool compiles it via APPICON_NAME below.
+      - path: M1K3.icon
+        type: file
+        buildPhase: resources
     dependencies:
       - package: M1K3
         product: M1K3Chat
@@ -58,10 +63,15 @@ targets:
         product: M1K3WhisperKit
       - package: M1K3
         product: M1K3Calls
+      - package: M1K3
+        product: M1K3Avatar
+      - package: M1K3
+        product: M1K3Kokoro
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: dev.murphysig.M1K3
         PRODUCT_NAME: M1K3
+        ASSETCATALOG_COMPILER_APPICON_NAME: M1K3
         GENERATE_INFOPLIST_FILE: YES
         INFOPLIST_KEY_NSHumanReadableCopyright: "© 2026 Kevin Murphy"
         INFOPLIST_KEY_LSApplicationCategoryType: "public.app-category.productivity"

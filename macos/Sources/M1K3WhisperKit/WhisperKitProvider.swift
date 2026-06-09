@@ -19,9 +19,13 @@
 //  Prior: the internal call-pipeline project WhisperKitProvider (Kev) — re-pointed at M1K3's live
 //  TranscriptionProvider seam + AudioStreamTranscriber (the prior call-pipeline's was buffer-pump),
 //  ModelManaged/PowerEfficiency surface dropped.
+//  Review: claude-opus-4-8, 2026-06-09 — single-flight the model load through
+//  SingleFlightLoader to kill the same check-then-act double-download race as the
+//  batch transcriber. Confidence 0.8.
 
 import AVFoundation
 import Foundation
+import M1K3Inference
 import M1K3Voice
 @preconcurrency import WhisperKit
 
@@ -30,17 +34,30 @@ import M1K3Voice
 public final class WhisperKitProvider: TranscriptionProvider, @unchecked Sendable {
     public let name = "WhisperKit"
 
-    private let model: String
     private let lock = NSLock()
     private var whisperKit: WhisperKit?
     private var streamer: AudioStreamTranscriber?
     private var continuation: AsyncStream<TranscriptSegment>.Continuation?
     private var lastText = ""
 
+    /// Coalesces concurrent model loads into one in-flight download; the loaded
+    /// model is cached in `whisperKit` for the sync `isAvailable`/`startListening`
+    /// reads.
+    private let loader: SingleFlightLoader<LoadedWhisperKit>
+
     /// - Parameter model: WhisperKit variant. `base.en` balances size (~142MB)
     ///   and accuracy; `tiny.en` (~75MB) downloads faster, `small.en` is sharper.
-    public init(model: String = "base.en") {
-        self.model = model
+    /// - Parameter downloadBase: Root URL for model storage. Pass the app's
+    ///   Application Support directory so downloads land in a stable sandbox path
+    ///   rather than the HuggingFace cache default (which can produce broken partial
+    ///   downloads in sandboxed apps).
+    public init(model: String = "base.en", downloadBase: URL? = nil) {
+        loader = SingleFlightLoader { progress in
+            progress(0.05)
+            let config = WhisperKitConfig(model: model, verbose: false, prewarm: true, load: true)
+            config.downloadBase = downloadBase
+            return try LoadedWhisperKit(kit: await WhisperKit(config))
+        }
     }
 
     /// Available only on Apple Silicon once a model has been loaded. Until then
@@ -55,11 +72,12 @@ public final class WhisperKitProvider: TranscriptionProvider, @unchecked Sendabl
 
     /// Download + load the WhisperKit model, reporting coarse progress (WhisperKit
     /// init bundles download + load). Idempotent: returns fast if already loaded.
+    /// Concurrent callers share ONE load via the loader; the result is cached for
+    /// the sync reads.
     public func prepareModel(progress: @escaping @Sendable (Double) -> Void) async throws {
         if lock.withLock({ whisperKit != nil }) { progress(1.0); return }
-        progress(0.05)
-        let kit = try await WhisperKit(WhisperKitConfig(model: model, verbose: false, prewarm: true, load: true))
-        lock.withLock { whisperKit = kit }
+        let loaded = try await loader.value(progress: progress)
+        lock.withLock { whisperKit = loaded.kit }
         progress(1.0)
     }
 
@@ -124,4 +142,13 @@ public final class WhisperKitProvider: TranscriptionProvider, @unchecked Sendabl
 
 public enum WhisperKitProviderError: Error, Sendable {
     case modelNotLoaded
+}
+
+/// `@unchecked Sendable` box so a loaded `WhisperKit` can cross the
+/// `SingleFlightLoader` actor boundary. Justified for the same reason as the
+/// providers' class-level annotation: WhisperKit's components are actor/queue-
+/// isolated, and the instance is only handed straight into an NSLock-guarded
+/// store on the far side — never mutated across threads.
+struct LoadedWhisperKit: @unchecked Sendable {
+    let kit: WhisperKit
 }

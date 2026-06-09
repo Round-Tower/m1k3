@@ -19,10 +19,12 @@
 //  `embeddingStatus`. Fixed the "Gemma 4" runtime labels (Gemma 3 is current).
 
 import Foundation
+import M1K3Avatar
 import M1K3Calls
 import M1K3Chat
 import M1K3Inference
 import M1K3Knowledge
+import M1K3Kokoro
 import M1K3MLX
 import M1K3Voice
 import M1K3WhisperKit
@@ -68,7 +70,9 @@ final class AppEnvironment {
     let store: KnowledgeStore
     let provider: any InferenceProvider
     let responder: RAGResponder
-    let speech: AVSpeechProvider
+    /// TTS behind a swappable seam: Built-in (Apple) by default, M1K3 Voice
+    /// (Kokoro) once downloaded. Callers never see the swap.
+    let speech: SwappableSpeechProvider
     let chat: ChatSession
 
     private let embedder: SwappableEmbeddingService
@@ -83,10 +87,18 @@ final class AppEnvironment {
     /// Recording is consent-gated (legal: call recording needs consent) and captured
     /// behind the AudioRecorder seam.
     private let consentGate = RecordingConsentGate(store: UserDefaultsConsentStore())
-    private let recorder: any AudioRecorder = MicAudioRecorder()
-    /// Held directly (not just inside the façade) so the picker can warm it ahead
-    /// of the first turn and stream download progress to the UI.
-    private let mlxGemma: MLXGemmaProvider
+    /// Stereo capture: near-end mic + far-end system audio (ScreenCaptureKit),
+    /// muxed so the diarizer can separate speakers. Degrades to mono mic if
+    /// screen-recording permission is absent.
+    private let recorder = StereoCallRecorder()
+    /// The MLX provider for the currently-selected brain (Lil = Qwen / Big =
+    /// Gemma). Rebuilt when the brain changes; held directly so the onboarding /
+    /// picker can warm it and stream download progress to the UI.
+    private var currentMLXProvider: MLXGemmaProvider
+    /// The single MLX slot behind `RuntimeOption.mlxGemma` in the façade; re-pointed
+    /// at `currentMLXProvider` whenever the brain switches between Lil and Big, so
+    /// the swap is seen without rebuilding the RAGResponder.
+    private let swappableMLX: SwappableInferenceProvider
     /// Voice input: WhisperKit (high accuracy, needs a model) routed ahead of
     /// Apple Speech (system framework, always available). Held directly so the
     /// app can load WhisperKit's model on demand.
@@ -94,16 +106,48 @@ final class AppEnvironment {
     private let whisperKit: WhisperKitProvider
     private var dictationProvider: (any TranscriptionProvider)?
     private var dictationTask: Task<Void, Never>?
+    /// Batch (file → segments) transcription for recorded calls. Closes the mic
+    /// path: a stopped recording runs through the SAME CallIntelligencePipeline the
+    /// import path proves. Opt-in (needs a model) like live WhisperKit.
+    private let batchTranscriber: WhisperKitBatchTranscriber
 
     /// True while the mic is live. `liveTranscript` is the best-so-far text shown
     /// in the input bar as the user speaks.
     private(set) var isListening = false
     private(set) var liveTranscript = ""
-    /// WhisperKit model-load status, surfaced in Settings (nil = not attempted).
-    private(set) var whisperStatus: String?
-    private(set) var isPreparingWhisper = false
+    /// WhisperKit model-load state — mirrors `modelLoad` for the brain tier.
+    private(set) var whisperLoad: ModelLoadState = .idle
+    private var isPreparingWhisper = false
+
+    /// Voice OUTPUT (TTS). The Built-in Apple voice is the swap-back target;
+    /// Kokoro is the premium "M1K3 Voice" tier (downloads on first use).
+    private let builtinSpeech: AVSpeechProvider
+    private let kokoro: KokoroSpeechProvider
+    /// "M1K3 Voice" model-load state — mirrors `whisperLoad`/`modelLoad`.
+    private(set) var voiceLoad: ModelLoadState = .idle
+    /// The chosen TTS tier; restored on launch, persisted on change.
+    private(set) var selectedVoiceTier: VoiceTier = .builtin
+    private var isPreparingVoice = false
+
+    /// The avatar companion state — driven by this environment at each transition
+    /// (listening → thinking → generating → speaking → idle).
+    private(set) var avatar = AvatarController()
 
     private static let embedderPrefersMLXKey = "embedder.prefersMLX"
+    static let selectedBrainKey = "selectedBrain"
+    /// Whether the user has completed brain selection — gates the onboarding flow.
+    static let hasChosenBrainKey = "hasChosenBrain"
+    static let selectedVoiceTierKey = "selectedVoiceTier"
+    /// Whether the user has made a voice-output choice (onboarding speech step).
+    static let hasChosenVoiceKey = "hasChosenVoice"
+
+    /// The chosen brain (Mini / Lil / Big). Restored on launch, persisted on change.
+    private(set) var selectedBrain: BrainTier = .mini
+
+    /// The downloading brain's name for progress labels (e.g. "Big M1K3").
+    var downloadingBrainName: String {
+        selectedBrain.displayName
+    }
 
     /// Whether retrieval is on semantic MLX embeddings (vs the Hashing fallback).
     private(set) var usingMLXEmbeddings = false
@@ -119,10 +163,21 @@ final class AppEnvironment {
             runtimeSelection.value = selectedRuntime
             // Warm MLX on selection so the ~1GB first-use download shows a
             // progress bar in Settings rather than a silent hang on the first
-            // chat turn. Cheap/no-op once the weights are cached.
-            if selectedRuntime == .mlxGemma { Task { await preloadGemma() } }
+            // chat turn. Cheap/no-op once the weights are cached. Switching away
+            // cancels the warm-up — the SingleFlightLoader lets any in-flight
+            // download finish + cache; we just stop tracking it and clear the bar.
+            preloadTask?.cancel()
+            if selectedRuntime == .mlxGemma {
+                preloadTask = Task { await preloadGemma() }
+            } else {
+                preloadTask = nil
+                if modelLoad.isActive { modelLoad = .idle }
+            }
         }
     }
+
+    /// The in-flight MLX warm-up, so switching away can cancel it (idempotent).
+    private var preloadTask: Task<Void, Never>?
 
     /// Progress of warming the MLX Gemma weights, surfaced in Settings (and the
     /// chat send path). Stays `.idle` for the Apple Foundation Models default.
@@ -141,8 +196,17 @@ final class AppEnvironment {
 
     /// True while the mic is capturing a call (drives the recording indicator).
     private(set) var isRecording = false
-    /// The most recent recording, awaiting transcription once a batch engine lands.
+    /// The most recent recording. Held so it can be (re)processed once the batch
+    /// transcription model is ready.
     private(set) var lastRecordingURL: URL?
+    /// True while a recorded call is being transcribed → summarised → indexed.
+    private(set) var isTranscribingCall = false
+    /// True while the batch transcription model is downloading/loading.
+    private(set) var isPreparingBatchTranscription = false
+    /// Whether recorded calls can be transcribed now (model loaded).
+    var batchTranscriptionReady: Bool {
+        batchTranscriber.isAvailable
+    }
 
     init() throws {
         let url = try Self.storeURL()
@@ -160,31 +224,53 @@ final class AppEnvironment {
         embedder = swappable
         usingMLXEmbeddings = preferMLX
 
+        // Restore the chosen brain (default Mini = Apple Foundation Models).
+        let brain = UserDefaults.standard.string(forKey: Self.selectedBrainKey)
+            .flatMap(BrainTier.init(rawValue:)) ?? .mini
+        selectedBrain = brain
+
         // Generation IS swappable. The façade forwards to whichever backend the
-        // picker selects; AFM is the default + fallback, MLX Gemma the main brain.
-        let selection = RuntimeSelectionBox(.appleFoundationModels)
+        // brain selects; AFM is Mini + the fallback, the MLX slot is Lil/Big. The
+        // slot starts on the chosen brain's model (or Big's, when Mini is active and
+        // MLX isn't needed yet) so switching Lil↔Big just re-points the slot.
+        let runtimeForBrain: RuntimeOption =
+            brain.backing == .appleFoundationModels ? .appleFoundationModels : .mlxGemma
+        let selection = RuntimeSelectionBox(runtimeForBrain)
         runtimeSelection = selection
         let afm = AppleFoundationModelsProvider()
-        let gemma = MLXGemmaProvider()
-        mlxGemma = gemma
+        let initialMLXModelID = brain.mlxModelID ?? BrainTier.big.mlxModelID ?? ""
+        let gemma = MLXGemmaProvider(modelID: initialMLXModelID)
+        currentMLXProvider = gemma
+        let mlxSlot = SwappableInferenceProvider(gemma)
+        swappableMLX = mlxSlot
         let runtimeProvider = RuntimeInferenceProvider(
             selection: selection,
             backends: [
                 .appleFoundationModels: afm,
-                .mlxGemma: gemma,
+                .mlxGemma: mlxSlot,
             ],
             fallback: afm
         )
         provider = runtimeProvider
         responder = RAGResponder(store: store, embedder: embedder, provider: runtimeProvider)
-        speech = AVSpeechProvider()
+
+        // TTS seam: Built-in Apple voice wrapped in a swappable façade so the
+        // premium Kokoro tier can drop in without rebuilding any caller.
+        let builtin = AVSpeechProvider()
+        builtinSpeech = builtin
+        kokoro = KokoroSpeechProvider()
+        speech = SwappableSpeechProvider(builtin)
+        selectedVoiceTier = UserDefaults.standard.string(forKey: Self.selectedVoiceTierKey)
+            .flatMap(VoiceTier.init(rawValue:)) ?? .builtin
 
         // Voice input: WhisperKit first (better accuracy, but unavailable until
         // its model loads), Apple Speech as the always-on fallback. So dictation
         // works on Apple Speech day one and upgrades to WhisperKit on demand.
-        let whisper = WhisperKitProvider()
+        let whisperDownloadBase = url.deletingLastPathComponent()
+        let whisper = WhisperKitProvider(downloadBase: whisperDownloadBase)
         whisperKit = whisper
         transcription = TranscriptionRouter(providers: [whisper, AppleSpeechTranscriber()])
+        batchTranscriber = WhisperKitBatchTranscriber(downloadBase: whisperDownloadBase)
 
         ingester = DocumentIngester(store: store, embedder: embedder)
         let transcriptURL = url.deletingLastPathComponent().appendingPathComponent("transcript.json")
@@ -198,23 +284,27 @@ final class AppEnvironment {
         callSummarizer = SummarizationPipeline(quickProvider: afm, deepProvider: runtimeProvider)
 
         refreshCounts()
-    }
 
-    /// Build the encrypted call store. Falls back to an in-memory (non-persistent)
-    /// store if the Keychain key can't be obtained, so a key hiccup degrades the
-    /// calls feature rather than crashing the app.
-    private static func makeCallPersistence(at url: URL) -> any CallPersistence {
-        do {
-            let key = try StoredKeyProvider(store: KeychainKeyStore()).symmetricKey()
-            return try GRDBCallPersistence(path: url.path, coder: EncryptedCallCoder(key: key))
-        } catch {
-            return (try? GRDBCallPersistence()) ?? NullCallPersistence()
+        // Wire avatar ↔ speech after all stored properties are initialized.
+        speech.onSpeakingStarted = { [weak self] in
+            Task { @MainActor [weak self] in self?.avatar.setActivity(.speaking) }
         }
-    }
+        speech.onSpeakingEnded = { [weak self] in
+            Task { @MainActor [weak self] in self?.avatar.resetToIdle() }
+        }
 
-    /// Whether the on-device model is actually available on this machine.
-    var providerAvailable: Bool {
-        provider.isAvailable
+        // Warm a restored MLX brain (Lil/Big) on launch so it's ready to answer;
+        // Mini (Apple) needs nothing. Setting selectedRuntime drives the existing
+        // preload path + the progress UI. No-op/fast once the weights are cached.
+        if brain.mlxModelID != nil {
+            selectedRuntime = .mlxGemma
+        }
+
+        // Restore M1K3 Voice only if it was chosen AND already staged — never kick
+        // a silent ~354 MB re-download on launch.
+        if selectedVoiceTier == .m1k3Voice, kokoro.isModelStaged {
+            Task { await prepareM1K3Voice() }
+        }
     }
 
     /// Ingest a user-selected / dropped file (PDF or text) into the store.
@@ -243,13 +333,37 @@ final class AppEnvironment {
         }
     }
 
-    /// Speak text via the TTS provider (provider hops to the main actor itself).
+    /// Send a user message: drives avatar thinking → generating → idle, then
+    /// hands off to ChatSession. The speech delegate handles the speaking→idle
+    /// transition if the user taps Speak on the response.
+    func send(_ text: String) async {
+        avatar.setActivity(.thinking)
+        // After a brief pause (RAG lookup), advance to .generating so Sparrow
+        // bounces while the LLM streams. Self-cancelling if the response is fast.
+        let advance = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .milliseconds(600))
+            guard let self else { return }
+            if case .thinking = self.avatar.state.activity {
+                self.avatar.setActivity(.generating)
+            }
+        }
+        await chat.send(text)
+        advance.cancel()
+        // Only reset to idle if the avatar isn't already in a speaking state
+        // (e.g. auto-TTS path sets .speaking before we return here).
+        if case .speaking = avatar.state.activity { return }
+        avatar.resetToIdle()
+    }
+
+    /// Speak text via the TTS provider. The onSpeakingStarted/Ended delegate
+    /// callbacks drive avatar .speaking → .idle; no manual state change needed here.
     func speak(_ text: String) async {
         await speech.speak(text)
     }
 
     func stopSpeaking() async {
         await speech.stop()
+        avatar.resetToIdle()
     }
 
     // MARK: - Voice input
@@ -265,86 +379,60 @@ final class AppEnvironment {
         transcription.activeProviderName ?? "Unavailable"
     }
 
-    /// Tap-to-start / tap-to-stop. On stop (user tap OR the recogniser settling
-    /// on a final result) the transcript is sent automatically.
-    func toggleDictation() {
-        if isListening { stopDictation() } else { startDictation() }
-    }
-
-    private func startDictation() {
-        guard let provider = transcription.activeProvider else { return }
-        dictationTask?.cancel() // belt-and-suspenders: never leave a prior consumer running
-        dictationProvider = provider
-        liveTranscript = ""
-        isListening = true
-        do {
-            let stream = try provider.startListening()
-            dictationTask = Task { @MainActor in
-                var accumulator = TranscriptAccumulator()
-                for await segment in stream {
-                    accumulator.ingest(segment)
-                    liveTranscript = accumulator.text
-                }
-                await finishDictation(text: accumulator.text)
-            }
-        } catch {
-            isListening = false
-            dictationProvider = nil
-            liveTranscript = ""
-        }
-    }
-
-    /// Ask the active recogniser to stop; the stream then finishes and
-    /// `finishDictation` auto-sends.
-    private func stopDictation() {
-        liveTranscript = "" // clear the ticker on the stop tap, not when the stream drains
-        dictationProvider?.stopListening()
-    }
-
-    private func finishDictation(text: String) async {
-        isListening = false
-        liveTranscript = ""
-        dictationProvider = nil
-        dictationTask = nil
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return }
-        await chat.send(trimmed)
-    }
-
     /// Download + load WhisperKit's model so voice input upgrades from Apple
     /// Speech to WhisperKit (the router prefers it once available).
     func enableWhisperKit() async {
         guard !isPreparingWhisper else { return }
         isPreparingWhisper = true
-        whisperStatus = "Downloading WhisperKit model…"
+        whisperLoad = .progress(0)
         do {
             try await whisperKit.prepareModel { fraction in
-                // Only apply while still preparing — a late hop enqueued near 100%
-                // must not overwrite the terminal status below (same race we
-                // guarded in preloadGemma).
+                // Guard against a late progress hop overwriting .ready — same race
+                // fixed in preloadGemma (the .downloading check is the fence).
                 Task { @MainActor in
-                    if self.isPreparingWhisper {
-                        self.whisperStatus = "Downloading WhisperKit model… \(Int((fraction * 100).rounded()))%"
+                    if case .downloading = self.whisperLoad {
+                        self.whisperLoad = .progress(fraction)
                     }
                 }
             }
             isPreparingWhisper = false
-            whisperStatus = "WhisperKit ready — voice input now uses it."
+            whisperLoad = .ready
         } catch {
             isPreparingWhisper = false
-            whisperStatus = "Couldn’t load WhisperKit: \(error.localizedDescription)"
+            whisperLoad = .failed(message: error.localizedDescription)
         }
     }
 
-    /// Warm the MLX Gemma weights, folding download progress into `modelLoad` so
-    /// Settings shows a real bar. Idempotent: returns fast once the model is
-    /// cached. Runs off the main actor for the load; progress hops back to update
-    /// the observable state.
+    /// Choose a brain: persist it, re-point the active provider, and (for Lil/Big)
+    /// warm the model so onboarding / Settings show a real download bar. Mini is
+    /// instant — Apple Foundation Models, no download.
+    func selectBrain(_ tier: BrainTier) {
+        selectedBrain = tier
+        UserDefaults.standard.set(tier.rawValue, forKey: Self.selectedBrainKey)
+        UserDefaults.standard.set(true, forKey: Self.hasChosenBrainKey)
+        if let modelID = tier.mlxModelID {
+            let mlx = MLXGemmaProvider(modelID: modelID)
+            currentMLXProvider = mlx
+            swappableMLX.setProvider(mlx)
+            selectedRuntime = .mlxGemma // didSet warms it + streams progress
+        } else {
+            selectedRuntime = .appleFoundationModels // didSet clears the bar
+        }
+    }
+
+    /// Warm the current brain's MLX weights, folding download progress into
+    /// `modelLoad` so the UI shows a real bar. Idempotent: returns fast once the
+    /// model is cached. Runs off the main actor; progress hops back to update state.
     private func preloadGemma() async {
-        if case .downloading = modelLoad { return }
+        // No re-entrancy guard needed: switching brains cancels any prior warm-up
+        // first, and the SingleFlightLoader dedupes the underlying download even
+        // if two briefly overlap. On cancellation we write nothing — whoever is
+        // the current selection (the didSet, or a newer warm-up) owns modelLoad,
+        // so a late-completing cancelled task can't clobber it.
         modelLoad = .progress(0)
+        let mlx = currentMLXProvider
         do {
-            try await mlxGemma.prepare { fraction in
+            try await mlx.prepare { fraction in
                 // Only apply while still downloading. A progress callback fired
                 // near completion enqueues its main-actor hop *after* the `.ready`
                 // write below; the guard makes that stale hop a no-op instead of
@@ -353,9 +441,13 @@ final class AppEnvironment {
                     if case .downloading = self.modelLoad { self.modelLoad = .progress(fraction) }
                 }
             }
+            if Task.isCancelled { return }
             modelLoad = .ready
+        } catch is CancellationError {
+            // Deliberately switched away mid-load — leave modelLoad to the current
+            // selection (the didSet already cleared the bar).
         } catch {
-            modelLoad = .failed(message: error.localizedDescription)
+            if !Task.isCancelled { modelLoad = .failed(message: error.localizedDescription) }
         }
     }
 
@@ -472,53 +564,278 @@ final class AppEnvironment {
     }
 
     /// Log a consent affirmation, then start recording.
-    func affirmConsentAndRecord(scope: ConsentScope) {
+    func affirmConsentAndRecord(scope: ConsentScope) async {
         consentGate.affirm(scope: scope, at: Date())
-        startRecording()
+        await startRecording()
     }
 
     /// Start capturing — only call once consent is in hand (pre-authorised or just
-    /// affirmed). Surfaces failures rather than crashing.
-    func startRecording() {
+    /// affirmed). Captures the far-end (system audio) too when screen-recording
+    /// permission is granted; falls back to mono mic otherwise. Surfaces failures
+    /// rather than crashing.
+    func startRecording() async {
         guard !isRecording else { return }
         do {
-            try recorder.start()
+            let stereo = try await recorder.start()
             isRecording = true
-            lastCallStatus = "Recording…"
+            lastCallStatus = stereo
+                ? "Recording… (both sides — speakers will be separated)"
+                : "Recording… (mic only — grant Screen Recording to capture the other side)"
         } catch {
             lastCallStatus = "Couldn’t start recording: \(error.localizedDescription)"
         }
     }
 
-    /// Stop capturing. The recorded file is held for transcription once a batch
-    /// transcription engine is wired (WhisperKit-batch / Gemma-4) — until then it's
-    /// captured-but-pending, surfaced honestly.
-    func stopRecording() {
+    /// Stop capturing. If the batch transcription model is ready, the recording is
+    /// transcribed → summarised → encrypted → indexed straight away (the SAME
+    /// CallIntelligencePipeline the import path proves). If not, it's held and the
+    /// user is pointed at the Settings enable; `enableCallTranscription` picks it up.
+    func stopRecording() async {
         guard isRecording else { return }
-        let url = recorder.stop()
+        let url = await recorder.stop()
         isRecording = false
         lastRecordingURL = url
-        lastCallStatus = url == nil
-            ? "Nothing was recorded."
-            : "Recorded — transcription pending (wire a transcription engine to finish)."
+        guard let url else {
+            lastCallStatus = "Nothing was recorded."
+            return
+        }
+        if batchTranscriber.isAvailable {
+            Task { await processRecording(url: url) }
+        } else {
+            lastCallStatus = "Recorded — enable call transcription in Settings to process it."
+        }
     }
 
     private func refreshCounts() {
         indexedItemCount = (try? store.itemCount()) ?? indexedItemCount
         callCount = (try? callPersistence.loadAll().count) ?? callCount
     }
+}
 
-    private static func storeURL() throws -> URL {
-        let fm = FileManager.default
-        let base = try fm.url(
+// MARK: - Composition helpers
+
+//
+// Same-file extension (keeps the class body under SwiftLint's type_body_length).
+
+extension AppEnvironment {
+    /// Whether the on-device model is actually available on this machine.
+    var providerAvailable: Bool {
+        provider.isAvailable
+    }
+
+    /// Build the encrypted call store. Falls back to an in-memory (non-persistent)
+    /// store if the Keychain key can't be obtained, so a key hiccup degrades the
+    /// calls feature rather than crashing the app.
+    static func makeCallPersistence(at url: URL) -> any CallPersistence {
+        do {
+            let key = try StoredKeyProvider(store: KeychainKeyStore()).symmetricKey()
+            return try GRDBCallPersistence(path: url.path, coder: EncryptedCallCoder(key: key))
+        } catch {
+            return (try? GRDBCallPersistence()) ?? NullCallPersistence()
+        }
+    }
+
+    static func storeURL() throws -> URL {
+        let fileManager = FileManager.default
+        let base = try fileManager.url(
             for: .applicationSupportDirectory,
             in: .userDomainMask,
             appropriateFor: nil,
             create: true
         )
         let dir = base.appendingPathComponent("M1K3", isDirectory: true)
-        try fm.createDirectory(at: dir, withIntermediateDirectories: true)
+        try fileManager.createDirectory(at: dir, withIntermediateDirectories: true)
         return dir.appendingPathComponent("knowledge.sqlite")
+    }
+}
+
+// MARK: - Recorded-call transcription
+
+extension AppEnvironment {
+    /// Download + load the batch transcription model, then process any recording
+    /// that's waiting. Opt-in (heavy first download), mirroring `enableWhisperKit`.
+    func enableCallTranscription() async {
+        guard !isPreparingBatchTranscription, !batchTranscriber.isAvailable else { return }
+        isPreparingBatchTranscription = true
+        lastCallStatus = "Downloading call-transcription model…"
+        do {
+            try await batchTranscriber.prepareModel { fraction in
+                // Only apply while still preparing — a late hop near 100% must not
+                // clobber the terminal status (same race guarded in preloadGemma).
+                Task { @MainActor in
+                    if self.isPreparingBatchTranscription {
+                        self.lastCallStatus = "Downloading call-transcription model… \(Int((fraction * 100).rounded()))%"
+                    }
+                }
+            }
+            isPreparingBatchTranscription = false
+            if let url = lastRecordingURL {
+                await processRecording(url: url)
+            } else {
+                lastCallStatus = "Call transcription ready."
+            }
+        } catch {
+            isPreparingBatchTranscription = false
+            lastCallStatus = "Couldn’t load call transcription: \(error.localizedDescription)"
+        }
+    }
+
+    /// Transcribe a recorded file through the call pipeline, then persist (encrypted)
+    /// + index into the knowledge graph — exactly the back half of `importCallTranscript`,
+    /// so a recorded call and an imported one land identically.
+    func processRecording(url: URL) async {
+        guard !isTranscribingCall else { return }
+        isTranscribingCall = true
+        defer { isTranscribingCall = false }
+
+        lastCallStatus = "Transcribing…"
+        let title = "Call \(Self.callTitleFormatter.string(from: Date()))"
+        // Stereo-channel diarization attributes speakers when each party is on its
+        // own channel; it returns no turns for a mono file, so the pipeline simply
+        // leaves the transcript unattributed (no error). FluidAudio (mono) drops in
+        // behind the same seam later.
+        let pipeline = CallIntelligencePipeline(
+            transcriber: batchTranscriber,
+            diarizer: StereoChannelDiarizer(),
+            summarizer: callSummarizer
+        )
+        do {
+            let session = try await pipeline.process(fileURL: url, title: title, startedAt: Date())
+            guard !session.segments.isEmpty else {
+                lastCallStatus = "Transcription produced no speech."
+                return
+            }
+            try callPersistence.save(session)
+            try await callIngester.ingest(session)
+            lastRecordingURL = nil
+            refreshCounts()
+            lastCallStatus = "Transcribed “\(title)” — \(session.segments.count) segments, indexed."
+        } catch {
+            lastCallStatus = "Couldn’t transcribe the call: \(error.localizedDescription)"
+        }
+    }
+
+    fileprivate static let callTitleFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .short
+        return formatter
+    }()
+}
+
+// MARK: - Voice input (dictation)
+
+//
+// Extracted to a same-file extension (sees the class's private members) to keep
+// the main class body under SwiftLint's type_body_length — the established fix in
+// this file. Pure UI-driven orchestration over the tested TranscriptionRouter.
+
+extension AppEnvironment {
+    /// Tap-to-start / tap-to-stop. On stop (user tap OR the recogniser settling
+    /// on a final result) the transcript is sent automatically.
+    func toggleDictation() {
+        if isListening { stopDictation() } else { startDictation() }
+    }
+
+    private func startDictation() {
+        guard let provider = transcription.activeProvider else { return }
+        dictationTask?.cancel() // belt-and-suspenders: never leave a prior consumer running
+        dictationProvider = provider
+        liveTranscript = ""
+        isListening = true
+        avatar.setActivity(.listening)
+        do {
+            let stream = try provider.startListening()
+            dictationTask = Task { @MainActor in
+                var accumulator = TranscriptAccumulator()
+                for await segment in stream {
+                    accumulator.ingest(segment)
+                    liveTranscript = accumulator.text
+                }
+                await finishDictation(text: accumulator.text)
+            }
+        } catch {
+            isListening = false
+            dictationProvider = nil
+            liveTranscript = ""
+        }
+    }
+
+    /// Ask the active recogniser to stop; the stream then finishes and
+    /// `finishDictation` auto-sends.
+    private func stopDictation() {
+        liveTranscript = "" // clear the ticker on the stop tap, not when the stream drains
+        dictationProvider?.stopListening()
+    }
+
+    private func finishDictation(text: String) async {
+        isListening = false
+        liveTranscript = ""
+        dictationProvider = nil
+        dictationTask = nil
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            avatar.resetToIdle()
+            return
+        }
+        await send(trimmed)
+    }
+}
+
+// MARK: - Voice output (TTS tier)
+
+//
+// Same-file extension (keeps the class body under SwiftLint's type_body_length)
+// for the speech-output tier: choosing Built-in vs M1K3 Voice, downloading the
+// Kokoro model with progress, and a sample-playback helper for onboarding/Settings.
+
+extension AppEnvironment {
+    /// Switch the active TTS tier. Built-in swaps back instantly; M1K3 Voice kicks
+    /// the model download (or swaps in immediately if already staged).
+    func selectVoiceTier(_ tier: VoiceTier) {
+        UserDefaults.standard.set(true, forKey: Self.hasChosenVoiceKey)
+        switch tier {
+        case .builtin:
+            speech.setProvider(builtinSpeech)
+            selectedVoiceTier = .builtin
+            UserDefaults.standard.set(VoiceTier.builtin.rawValue, forKey: Self.selectedVoiceTierKey)
+            if voiceLoad.isActive { voiceLoad = .idle }
+        case .m1k3Voice:
+            Task { await prepareM1K3Voice() }
+        }
+    }
+
+    /// Download + stage the Kokoro model (real progress into `voiceLoad`), then swap
+    /// the speech façade to M1K3 Voice. Mirrors `enableWhisperKit`. Idempotent — the
+    /// provider returns instantly once the weights are on disk.
+    func prepareM1K3Voice() async {
+        guard !isPreparingVoice else { return }
+        isPreparingVoice = true
+        voiceLoad = .progress(0)
+        do {
+            try await kokoro.prepare { fraction in
+                // Only apply while still downloading — guard the late-hop-over-.ready
+                // race (same fix as preloadGemma / enableWhisperKit).
+                Task { @MainActor in
+                    if case .downloading = self.voiceLoad { self.voiceLoad = .progress(fraction) }
+                }
+            }
+            speech.setProvider(kokoro)
+            selectedVoiceTier = .m1k3Voice
+            UserDefaults.standard.set(VoiceTier.m1k3Voice.rawValue, forKey: Self.selectedVoiceTierKey)
+            UserDefaults.standard.set(true, forKey: Self.hasChosenVoiceKey)
+            isPreparingVoice = false
+            voiceLoad = .ready
+        } catch {
+            isPreparingVoice = false
+            voiceLoad = .failed(message: error.localizedDescription)
+        }
+    }
+
+    /// Speak a short sample line in the current voice — the onboarding/Settings
+    /// "Hear a sample" affordance.
+    func speakSample() async {
+        await speech.speak("Hi, I'm M1K3 — your local intelligence, running entirely on this Mac.")
     }
 }
 

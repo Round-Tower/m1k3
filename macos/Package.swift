@@ -29,6 +29,8 @@ let package = Package(
         .library(name: "M1K3MLX", targets: ["M1K3MLX"]),
         .library(name: "M1K3WhisperKit", targets: ["M1K3WhisperKit"]),
         .library(name: "M1K3Calls", targets: ["M1K3Calls"]),
+        .library(name: "M1K3Avatar", targets: ["M1K3Avatar"]),
+        .library(name: "M1K3Kokoro", targets: ["M1K3Kokoro"]),
     ],
     dependencies: [
         .package(url: "https://github.com/groue/GRDB.swift.git", from: "7.0.0"),
@@ -193,14 +195,44 @@ let package = Package(
             name: "M1K3WhisperKit",
             dependencies: [
                 "M1K3Voice",
+                // M1K3Calls owns the BatchTranscriptionProvider seam + CallTranscriptSegment
+                // that WhisperKitBatchTranscriber conforms to / produces (light deps only).
+                "M1K3Calls",
+                // M1K3Inference owns SingleFlightLoader — coalesces concurrent model
+                // loads so a preload racing the first transcribe shares ONE download.
+                "M1K3Inference",
                 .product(name: "WhisperKit", package: "WhisperKit"),
             ],
             path: "Sources/M1K3WhisperKit"
         ),
         .testTarget(
             name: "M1K3WhisperKitTests",
-            dependencies: ["M1K3WhisperKit", "M1K3Voice"],
+            dependencies: ["M1K3WhisperKit", "M1K3Voice", "M1K3Calls"],
             path: "Tests/M1K3WhisperKitTests"
+        ),
+        // Avatar companion: pure types (emotion, activity, state, tool→emotion
+        // mapping, animation resolver) + RealityKit view + Observable controller.
+        // RealityKit/SwiftUI are system frameworks — no third-party dep.
+        .target(
+            name: "M1K3Avatar",
+            path: "Sources/M1K3Avatar"
+        ),
+        .testTarget(
+            name: "M1K3AvatarTests",
+            dependencies: ["M1K3Avatar"],
+            path: "Tests/M1K3AvatarTests"
+        ),
+        // M1K3 Voice — the premium neural TTS tier (Kokoro). Isolated like
+        // M1K3MLX/M1K3WhisperKit so only this target (and the app) will link the
+        // ONNX runtime + G2P phonemizer once the synthesis spike lands. This
+        // session it carries the SpeechProvider scaffold + model-download
+        // (ModelPreloading) only — NO heavy dep yet, so the build stays fast and
+        // the working MLX/WhisperKit stack is untouched. Conforms to M1K3Voice's
+        // SpeechProviderWithLifecycle and M1K3Inference's ModelPreloading.
+        .target(
+            name: "M1K3Kokoro",
+            dependencies: ["M1K3Voice", "M1K3Inference"],
+            path: "Sources/M1K3Kokoro"
         ),
     ]
 )

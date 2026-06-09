@@ -1,0 +1,18 @@
+OpenDyslexic — SIL Open Font License 1.1
+========================================
+
+Font: OpenDyslexic (Regular + Bold), bundled here as .otf (converted from the
+project's .woff2 build via fontTools).
+
+Copyright: Abelardo Gonzalez and the OpenDyslexic project.
+License:   SIL Open Font License, Version 1.1 (OFL-1.1).
+Source:    https://opendyslexic.org  ·  https://github.com/antijingoist/opendyslexic
+
+OpenDyslexic is free to use, bundle, and redistribute under the OFL-1.1. The full
+license text is available at https://openfontlicense.org and in the upstream
+repository's OFL.txt. Reserved Font Name: "OpenDyslexic".
+
+Used in M1K3 as the optional "Dyslexia-friendly" reading mode for assistant
+replies — chosen because the typeface's weighted bottoms and distinct letterforms
+help some dyslexic readers track the line. Reading mode is opt-in (Settings ›
+Reading); the default remains the system font.

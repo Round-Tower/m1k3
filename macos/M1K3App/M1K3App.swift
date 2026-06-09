@@ -14,6 +14,12 @@ import SwiftUI
 struct M1K3App: App {
     @State private var env: AppEnvironment?
     @State private var startupError: String?
+    /// First-run gate: show "choose your brain" until a brain has been picked.
+    @AppStorage(AppEnvironment.hasChosenBrainKey) private var hasChosenBrain = false
+
+    init() {
+        BundledFonts.register()
+    }
 
     var body: some Scene {
         WindowGroup {
@@ -26,8 +32,13 @@ struct M1K3App: App {
                             exit(0)
                         }
                 } else if let env {
-                    ContentView()
-                        .environment(env)
+                    if hasChosenBrain {
+                        ContentView()
+                            .environment(env)
+                    } else {
+                        OnboardingView { hasChosenBrain = true }
+                            .environment(env)
+                    }
                 } else if let startupError {
                     StartupFailureView(message: startupError)
                 } else {
@@ -36,6 +47,11 @@ struct M1K3App: App {
                         .frame(minWidth: 560, minHeight: 480)
                 }
             }
+            // No forced colour scheme: M1K3 follows the system appearance. The
+            // surface is pure adaptive Liquid Glass (GlassBackground) that refracts
+            // the desktop and reads correctly in both light and dark — so the old
+            // painted-dark / white-sheet mismatch can't happen in either mode.
+            // Signed: Kev + claude-opus-4-8, 2026-06-08, Confidence 0.75, Prior: Unknown
             .task {
                 guard !SelfTest.isRequested, env == nil, startupError == nil else { return }
                 do {
@@ -46,6 +62,27 @@ struct M1K3App: App {
             }
         }
         .windowResizability(.contentSize)
+        // Hidden title bar: drop the "M1K3" window title so the glass runs
+        // uninterrupted to the top. Traffic lights + toolbar actions remain; the
+        // app's identity is the conversation, not a chrome label.
+        .windowStyle(.hiddenTitleBar)
+
+        // Native macOS Settings scene — opened with ⌘, (or the toolbar gear via
+        // SettingsLink), in its own window with the system title bar, instead of
+        // the iOS-style modal sheet it used to be. Shares the one AppEnvironment;
+        // the env-nil branch only shows in the first beat before startup completes.
+        // Signed: Kev + claude-opus-4-8, 2026-06-08, Confidence 0.8, Prior: Unknown
+        Settings {
+            Group {
+                if let env {
+                    SettingsView().environment(env)
+                } else {
+                    Text("M1K3 is still waking up…")
+                        .foregroundStyle(.secondary)
+                        .frame(width: 480, height: 220)
+                }
+            }
+        }
     }
 }
 

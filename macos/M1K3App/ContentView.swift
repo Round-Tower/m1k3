@@ -9,6 +9,7 @@
 //
 //  Signed: Kev + claude-opus-4-8, 2026-06-06, Confidence 0.8, Prior: Unknown
 
+import M1K3Avatar
 import SwiftUI
 import UniformTypeIdentifiers
 
@@ -16,20 +17,29 @@ struct ContentView: View {
     @Environment(AppEnvironment.self) private var env
 
     @State private var draft = ""
-    @State private var showSettings = false
     @State private var showDocuments = false
     @State private var showCalls = false
     @State private var showImporter = false
     @State private var showConsentDialog = false
     @State private var isDropTargeted = false
+    @AppStorage("showAvatar") private var showAvatar = true
 
     var body: some View {
         VStack(spacing: 0) {
+            avatarPanel
             transcript
             inputBar
         }
         .frame(minWidth: 600, minHeight: 520)
-        .background(BackdropView())
+        .background {
+            // Ambient drifting orbs while capturing audio (recording / dictation),
+            // fading in over the glass. Sits above the window glass, behind content.
+            if isCapturingAudio {
+                AudioCaptureBackdrop().transition(.opacity)
+            }
+        }
+        .animation(.easeInOut(duration: 0.45), value: isCapturingAudio)
+        .glassBackdrop()
         .dropDestination(for: URL.self) { urls, _ in
             for url in urls {
                 Task { await env.ingest(url: url) }
@@ -38,9 +48,6 @@ struct ContentView: View {
         } isTargeted: { isDropTargeted = $0 }
         .overlay { if isDropTargeted { DropHintView() } }
         .toolbar { toolbarContent }
-        .sheet(isPresented: $showSettings) {
-            SettingsView().environment(env)
-        }
         .sheet(isPresented: $showDocuments) {
             DocumentsView().environment(env)
         }
@@ -48,11 +55,12 @@ struct ContentView: View {
             CallsView().environment(env)
         }
         .confirmationDialog("Record this call?", isPresented: $showConsentDialog, titleVisibility: .visible) {
-            Button("Record once") { env.affirmConsentAndRecord(scope: .once) }
-            Button("Always allow") { env.affirmConsentAndRecord(scope: .remembered) }
+            Button("Record once") { Task { await env.affirmConsentAndRecord(scope: .once) } }
+            Button("Always allow") { Task { await env.affirmConsentAndRecord(scope: .remembered) } }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("You’re responsible for having consent from everyone on the call. Recording is on-device only — audio never leaves this Mac.")
+            Text("You’re responsible for having consent from everyone on the call. "
+                + "Recording is on-device only — audio never leaves this Mac.")
         }
         .fileImporter(
             isPresented: $showImporter,
@@ -72,6 +80,19 @@ struct ContentView: View {
         }
     }
 
+    // MARK: - Avatar panel
+
+    @ViewBuilder
+    private var avatarPanel: some View {
+        if showAvatar {
+            AvatarView(controller: env.avatar)
+                .frame(height: 200)
+                .padding(.horizontal, 12)
+                .padding(.top, 8)
+                .transition(.move(edge: .top).combined(with: .opacity))
+        }
+    }
+
     // MARK: - Transcript
 
     @ViewBuilder
@@ -83,8 +104,12 @@ struct ContentView: View {
             ScrollViewReader { proxy in
                 ScrollView {
                     LazyVStack(spacing: 16) {
-                        ForEach(env.chat.messages) { message in
-                            MessageView(message: message) { text in
+                        ForEach(Array(env.chat.messages.enumerated()), id: \.element.id) { index, message in
+                            let previous = index > 0 ? env.chat.messages[index - 1] : nil
+                            MessageView(
+                                message: message,
+                                showsAvatar: previous?.role != .assistant
+                            ) { text in
                                 Task { await env.speak(text) }
                             }
                             .id(message.id)
@@ -128,22 +153,30 @@ struct ContentView: View {
 
                 Button { env.toggleDictation() } label: {
                     Image(systemName: env.isListening ? "mic.fill" : "mic")
-                        .font(.system(size: 16, weight: .semibold))
+                        .imageScale(.large)
+                        .fontWeight(.semibold)
                         .frame(width: 22, height: 22)
                 }
                 .buttonStyle(.glass)
+                .buttonBorderShape(.circle)
                 .tint(env.isListening ? .red : nil)
                 .disabled(!env.canDictate && !env.isListening)
                 .help(env.canDictate ? "Voice input — tap to speak, tap to send" : "Microphone unavailable")
+                .accessibilityLabel("Voice input")
+                .accessibilityValue(env.isListening ? "Listening" : "Off")
+                .accessibilityHint("Dictate a message")
 
                 Button(action: send) {
                     Image(systemName: "arrow.up")
-                        .font(.system(size: 16, weight: .semibold))
+                        .imageScale(.large)
+                        .fontWeight(.semibold)
                         .frame(width: 22, height: 22)
                 }
                 .buttonStyle(.glassProminent)
+                .buttonBorderShape(.circle)
                 .disabled(!canSend)
                 .keyboardShortcut(.return, modifiers: [])
+                .accessibilityLabel("Send")
             }
             .padding(16)
         }
@@ -153,11 +186,63 @@ struct ContentView: View {
         !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !env.chat.isResponding
     }
 
+    /// True while M1K3 is capturing audio — dictation or a call recording — the cue
+    /// for the ambient animated backdrop.
+    private var isCapturingAudio: Bool {
+        env.isListening || env.isRecording
+    }
+
+    /// One spoken label for the toolbar status pill — the colour-coded dots carry
+    /// no meaning to VoiceOver on their own.
+    private var statusAccessibilityLabel: String {
+        if env.isRecording { return "Recording in progress" }
+        if env.modelLoad.isActive { return env.modelLoad.label(modelName: env.downloadingBrainName) }
+        return "Model unavailable, runtime \(env.selectedRuntime.rawValue)"
+    }
+
+    /// Status earns its place only when it deviates from "ready and quiet":
+    /// recording, a model download in flight, or an unavailable backend. When all
+    /// is well it renders nothing — the runtime lives in Settings, not the chrome.
+    @ViewBuilder
+    private var statusIndicator: some View {
+        if env.isRecording || env.modelLoad.isActive || !env.providerAvailable {
+            statusContent
+                .padding(.horizontal, 12)
+                .padding(.vertical, 3)
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel(statusAccessibilityLabel)
+        }
+    }
+
+    /// The status pill's content; the wrapper above gives it breathing room inside
+    /// the toolbar's glass capsule so text/spinner aren't jammed against the edges.
+    @ViewBuilder
+    private var statusContent: some View {
+        if env.isRecording {
+            Label("Recording", systemImage: "record.circle.fill")
+                .symbolRenderingMode(.hierarchical)
+                .font(.caption)
+                .foregroundStyle(.red)
+        } else if env.modelLoad.isActive {
+            HStack(spacing: 6) {
+                ProgressView().controlSize(.small)
+                Text(env.modelLoad.label(modelName: env.downloadingBrainName))
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(.secondary)
+            }
+        } else if !env.providerAvailable {
+            Label("Model unavailable", systemImage: "exclamationmark.triangle")
+                .symbolRenderingMode(.hierarchical)
+                .font(.caption)
+                .foregroundStyle(.orange)
+        }
+    }
+
     private func send() {
         guard canSend else { return }
         let text = draft
         draft = ""
-        Task { await env.chat.send(text) }
+        Task { await env.send(text) }
     }
 
     // MARK: - Toolbar
@@ -165,30 +250,22 @@ struct ContentView: View {
     @ToolbarContentBuilder
     private var toolbarContent: some ToolbarContent {
         ToolbarItem(placement: .principal) {
-            HStack(spacing: 6) {
-                if env.isRecording {
-                    Circle().fill(.red).frame(width: 8, height: 8)
-                    Text("Recording").font(.caption).foregroundStyle(.red)
-                } else if env.modelLoad.isActive {
-                    ProgressView().controlSize(.small)
-                    Text(env.modelLoad.label(modelName: "Gemma 3"))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                } else {
-                    Circle()
-                        .fill(env.providerAvailable ? .green : .orange)
-                        .frame(width: 8, height: 8)
-                    Text(env.selectedRuntime.rawValue)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            }
+            statusIndicator
         }
         ToolbarItemGroup(placement: .primaryAction) {
             Button { env.chat.clear() } label: {
                 Label("New chat", systemImage: "square.and.pencil")
             }
             .disabled(env.chat.messages.isEmpty || env.chat.isResponding)
+            Button {
+                withAnimation(.spring(duration: 0.35)) { showAvatar.toggle() }
+            } label: {
+                Label(
+                    showAvatar ? "Hide Sparrow" : "Show Sparrow",
+                    systemImage: showAvatar ? "bird.fill" : "bird"
+                )
+            }
+            .help(showAvatar ? "Hide the avatar panel" : "Show the avatar panel")
             Button { showImporter = true } label: {
                 Label("Import", systemImage: "doc.badge.plus")
             }
@@ -199,15 +276,19 @@ struct ContentView: View {
                 Label("Calls", systemImage: "phone.bubble")
             }
             Button {
-                if env.isRecording { env.stopRecording() }
-                else if env.recordingPreAuthorised { env.startRecording() }
-                else { showConsentDialog = true }
+                if env.isRecording {
+                    Task { await env.stopRecording() }
+                } else if env.recordingPreAuthorised {
+                    Task { await env.startRecording() }
+                } else {
+                    showConsentDialog = true
+                }
             } label: {
                 Label(env.isRecording ? "Stop recording" : "Record call",
                       systemImage: env.isRecording ? "stop.circle.fill" : "record.circle")
             }
             .tint(env.isRecording ? .red : nil)
-            Button { showSettings = true } label: {
+            SettingsLink {
                 Label("Settings", systemImage: "gearshape")
             }
         }
@@ -215,18 +296,6 @@ struct ContentView: View {
 }
 
 // MARK: - Supporting views
-
-/// Soft gradient backdrop so the glass has something to refract.
-private struct BackdropView: View {
-    var body: some View {
-        LinearGradient(
-            colors: [Color(red: 0.06, green: 0.07, blue: 0.12), Color(red: 0.10, green: 0.08, blue: 0.16)],
-            startPoint: .topLeading,
-            endPoint: .bottomTrailing
-        )
-        .ignoresSafeArea()
-    }
-}
 
 private struct EmptyChatView: View {
     let itemCount: Int

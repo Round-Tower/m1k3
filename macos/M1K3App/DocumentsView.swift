@@ -37,9 +37,11 @@ struct DocumentsView: View {
                     }
                 }
                 .listStyle(.inset)
+                .scrollContentBackground(.hidden)
             }
         }
         .frame(width: 480, height: 480)
+        .glassBackdrop()
         .onAppear { reload() }
     }
 
@@ -49,7 +51,7 @@ struct DocumentsView: View {
                 .font(.headline)
             Spacer()
             Text("\(docs.count) item\(docs.count == 1 ? "" : "s")")
-                .font(.caption)
+                .font(.caption.monospacedDigit())
                 .foregroundStyle(.secondary)
             Button("Done") { dismiss() }
                 .buttonStyle(.glassProminent)
@@ -75,12 +77,14 @@ private struct DocumentRow: View {
     var body: some View {
         HStack(spacing: 12) {
             Image(systemName: icon)
+                .symbolRenderingMode(.hierarchical)
                 .foregroundStyle(.tint)
+                .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {
                 Text(doc.title)
                     .lineLimit(1)
                 Text("\(doc.kind.rawValue) · \(chunks) chunk\(chunks == 1 ? "" : "s")")
-                    .font(.caption)
+                    .font(.caption.monospacedDigit())
                     .foregroundStyle(.secondary)
             }
             Spacer()
@@ -89,6 +93,7 @@ private struct DocumentRow: View {
             }
             .buttonStyle(.borderless)
             .help("Delete this document")
+            .accessibilityLabel("Delete \(doc.title)")
         }
         .padding(.vertical, 4)
     }

@@ -24,7 +24,7 @@ Update this file as phases move. Keep it scannable.
 | 6 | Transcription (pluggable) | ⬜ not started | WhisperKit dep (heavy) |
 | 7 | Call log (M1K3Calls) | ⬜ not started | lift the prior call-pipeline call subsystem |
 | 8 | TTS (AVSpeech) | 🟢 done | SpeechProvider + AVSpeechProvider + SpeechUtterance; ⏳ Kokoro swap (post-MVP) |
-| 9 | Avatar (RealityKit) | ⬜ not started | GLB→USDZ, emotion states |
+| 9 | Avatar (RealityKit) | 🟡 core done, ⌘R pending | `M1K3Avatar` target: 26 tests (emotion/activity/state/tool-map/animation-resolver/controller); `AvatarView` (app target, RealityKit+SF Symbol placeholder); avatar wired into AppEnvironment (listening→thinking→speaking→idle); Sparrow.usdz conversion (Step 0) still needed |
 | 10 | Local agent + MCP | 🟢 agent + MCP done | ReAct LocalAgent + AgentTool + search/list/get tools; **M1K3MCP stdio server** (swift-sdk) live — Claude pulls search_knowledge/list_documents/get_document; ⏳ QueryGraphTool (blocked on entity extraction / NER) |
 | 11 | GemmaAudio ASR spike | ⬜ not started | non-blocking, LiteRT path |
 
@@ -45,7 +45,7 @@ Legend: ✅ done · 🟢 logic done (deferred adapter) · 🟡 partial · ⬜ no
 | `M1K3MCPKit` / `M1K3MCP` | swift-sdk + M1K3Knowledge | ✅ stdio server (library + thin executable) exposing search_knowledge/list_documents/get_document; FTS-only (no embedder in CLI); container-aware store path (`M1K3_STORE_PATH` override). Verified live. |
 | `M1K3Voice` | AVFoundation (+ WhisperKit later) | SpeechProvider + SpeechUtterance + AVSpeechProvider; ⏳ TranscriptionProvider (WhisperKit, heavy) |
 | `M1K3Calls` | M1K3Knowledge + … | ⏳ CallSession, encrypted SQLite, diarization, summary |
-| `M1K3Avatar` | RealityKit | ⏳ emotion-driven avatar |
+| `M1K3Avatar` | (system frameworks only) | ✅ pure: `AvatarEmotion`/`AvatarActivity`/`AvatarState`/`ToolEmotionMapper`/`AnimationResolver`/`AvatarController` (26 tests). `AvatarView` (RealityKit) lives in app target. ⏳ Step 0: Sparrow.usdz (GLB→USDZ Reality Composer Pro conversion) |
 | `M1K3App` (Xcode) | all (+ M1K3MLX) | ✅ SwiftUI shell (XcodeGen `project.yml`), Liquid Glass, chat/import/speak/settings; runtime picker hot-swaps AFM ↔ MLX Gemma (`RuntimeInferenceProvider` façade); Settings switches Hashing ↔ MLX **embeddings** (`SwappableEmbeddingService` + persisted reindex); macOS 26, app-sandboxed |
 
 ---
@@ -204,6 +204,21 @@ commits on `feat/mac-mvp` (PR #9). The pure brain is done; what's left is mostly
 - [ ] Tests for the AppleSpeech mic-permission-denied cleanup path (throwing fake) + a self-healing `isListening` timeout (P6 review, low).
 - [ ] Persist the recorded `.caf` into the app container (not temp); consider adding an `audioPath` to `CallSession`.
 
+### 🎨 Design & Accessibility — Mac-native pass (full detail in `UI_AUDIT.md`)
+**Quick wins DONE (2026-06-07):** icon-only button labels (send · mic · trash · speak),
+colour-only status → combined VoiceOver label + `record.circle.fill` symbol, 3 hardcoded font
+sizes → Dynamic-Type-safe, `.monospacedDigit()` on counters, hierarchical symbol-rendering pass.
+**Deferred (the substance):**
+- [ ] **Reduce Transparency** — solid-surface fallback when `accessibilityReduceTransparency` (biggest win for the all-glass UI).
+- [ ] **VoiceOver chat structure** — `accessibilityElement(.combine)` + composed labels on `MessageView` turns ("You said…", "M1K3: …, 3 sources").
+- [ ] **Reduce Motion** gate on the scroll animation + any `.symbolEffect`.
+- [ ] **Increase Contrast** — `.secondary`/`.tertiary` over glass likely <4.5:1; stronger fg + less translucency when `colorSchemeContrast == .increased`.
+- [ ] **Dynamic Type** — let fixed sheet frames grow; test at `.accessibility5`.
+- [ ] **Live announcements** — `AccessibilityNotification.Announcement` for streaming + status flips.
+- [ ] **Hit targets** — mic/send button areas ≥ ~28pt; **focus on present** (move VoiceOver focus to sheet headers, label sheets as modals).
+- [ ] **Craft** — tasteful `.symbolEffect` (pulse/variableColor, Reduce-Motion-gated); type-token + symbol-token helpers; SF Pro + SF Symbols in the Figma mockup once the plan is upgraded.
+- Verify: VoiceOver (⌘F5) · Xcode Accessibility Inspector · toggle the Accessibility system settings.
+
 ### 🟢 Future phases / spikes
 - [ ] **Avatar (P9)** — RealityKit emotion-driven avatar + TTS lip-sync.
 - [ ] **LiteRT spike (P3)** — now real: `litert-community/gemma-4-12B-it-litert-lm` (text+audio).
@@ -212,5 +227,11 @@ commits on `feat/mac-mvp` (PR #9). The pure brain is done; what's left is mostly
 - [ ] **Kokoro TTS** swap (post-MVP, behind `SpeechProvider`).
 
 ### 🧹 Ship hygiene
-- [ ] Merge **PR #9** once the Mac reviewer + ⌘R verify clear it.
+- [x] Merge **PR #9** (Mac MVP). ✅ 2026-06-06.
+- [ ] **Add `SLACK_WEBHOOK_URL` repo secret** → lights up the CI Slack build-status
+      list (the `notify` job in `ci.yml` no-ops until it's set). Reuse the
+      dyslexia-ai-server webhook (same channel) or make a new one for a dedicated
+      `#m1k3-ci`. Set it with:
+      `gh secret set SLACK_WEBHOOK_URL -R Round-Tower/m1k3` (paste when prompted).
+- [ ] Review + merge **PR #10** (call subsystem + a11y + Slack CI) once ⌘R clears it.
 - [ ] ~23G `~/.cache/huggingface` cleanup pass.

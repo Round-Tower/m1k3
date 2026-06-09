@@ -15,6 +15,9 @@ import SwiftUI
 
 struct MessageView: View {
     let message: ChatMessage
+    /// Whether to draw the avatar — true only on the first assistant turn of a
+    /// run, so the mark appears once per reply, not on every consecutive line.
+    var showsAvatar = true
     /// Called with the message text when the user taps speak.
     let onSpeak: (String) -> Void
 
@@ -26,14 +29,16 @@ struct MessageView: View {
             HStack {
                 Spacer(minLength: 60)
                 bubble
-                    .glassEffect(.regular.tint(.accentColor.opacity(0.35)), in: .rect(cornerRadius: 18))
+                    .glassEffect(.regular.tint(.accentColor.opacity(0.2)), in: .rect(cornerRadius: 18))
             }
         case .assistant:
             HStack(alignment: .top, spacing: 10) {
-                Image(systemName: "brain")
-                    .foregroundStyle(.tint)
-                    .font(.title3)
-                    .padding(.top, 2)
+                if showsAvatar {
+                    avatar
+                } else {
+                    // Reserve the avatar's width so stacked replies stay aligned.
+                    Color.clear.frame(width: 30, height: 1)
+                }
                 VStack(alignment: .leading, spacing: 8) {
                     assistantBody
                     if !message.sources.isEmpty {
@@ -45,24 +50,41 @@ struct MessageView: View {
         }
     }
 
+    /// M1K3's mark: the brain glyph seated in a glass disc so it reads as an
+    /// avatar with presence, not a thin tinted icon floating beside the bubble.
+    private var avatar: some View {
+        Image(systemName: "brain")
+            .symbolRenderingMode(.hierarchical)
+            .foregroundStyle(.tint)
+            .font(.system(size: 16, weight: .semibold))
+            .frame(width: 30, height: 30)
+            .glassEffect(.regular, in: .circle)
+            .accessibilityHidden(true)
+    }
+
     private var bubble: some View {
-        Text(message.text)
-            .textSelection(.enabled)
+        ReadingText(message.text)
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
     }
 
     private var assistantBody: some View {
         VStack(alignment: .leading, spacing: 8) {
-            if message.text.isEmpty, case .streaming = message.status {
+            if !message.text.isEmpty {
+                ReadingText(message.text)
+            } else if case .streaming = message.status {
                 ProgressView().controlSize(.small)
-            } else {
-                Text(message.text)
-                    .textSelection(.enabled)
+            } else if case .complete = message.status {
+                // A completed-but-empty reply (the model returned nothing) reads
+                // as a state, not a hollow glass bubble.
+                Text("No response.")
+                    .italic()
+                    .foregroundStyle(.secondary)
             }
 
             if case let .failed(reason) = message.status {
                 Label(reason, systemImage: "exclamationmark.triangle")
+                    .symbolRenderingMode(.hierarchical)
                     .font(.caption)
                     .foregroundStyle(.orange)
             }
@@ -71,10 +93,13 @@ struct MessageView: View {
                 Button {
                     onSpeak(message.text)
                 } label: {
-                    Label("Speak", systemImage: "speaker.wave.2")
+                    Image(systemName: "speaker.wave.2")
+                        .symbolRenderingMode(.hierarchical)
                         .font(.caption)
                 }
                 .buttonStyle(.glass)
+                .accessibilityLabel("Speak this answer")
+                .help("Speak this answer")
             }
         }
         .padding(.horizontal, 14)
@@ -94,7 +119,7 @@ struct MessageView: View {
         } label: {
             Label("\(message.sources.count) source\(message.sources.count == 1 ? "" : "s")",
                   systemImage: "doc.text.magnifyingglass")
-                .font(.caption.weight(.medium))
+                .font(.caption.weight(.medium).monospacedDigit())
                 .foregroundStyle(.secondary)
         }
         .padding(.horizontal, 6)

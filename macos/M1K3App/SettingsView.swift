@@ -8,32 +8,37 @@
 //
 //  Signed: Kev + claude-opus-4-8, 2026-06-06, Confidence 0.8, Prior: Unknown
 
+import M1K3Voice
 import SwiftUI
 
 struct SettingsView: View {
     @Environment(AppEnvironment.self) private var env
-    @Environment(\.dismiss) private var dismiss
+    @AppStorage(ReadingMode.storageKey) private var readingMode: ReadingMode = .standard
 
     var body: some View {
         @Bindable var env = env
 
-        VStack(spacing: 0) {
-            header
+        // No custom header / Done button: this is a native Settings window now,
+        // so the system title bar and ⌘W own the chrome. The Form is the content.
+        Group {
             Form {
                 Section {
-                    ForEach(RuntimeOption.allCases) { option in
-                        RuntimeRow(
-                            option: option,
-                            isSelected: env.selectedRuntime == option
-                        ) {
-                            if option.isReady { env.selectedRuntime = option }
-                        }
+                    LabeledContent {
+                        Text(env.selectedBrain.tagline).foregroundStyle(.secondary)
+                    } label: {
+                        Label(env.selectedBrain.displayName, systemImage: env.selectedBrain.glyph)
+                            .symbolRenderingMode(.hierarchical)
                     }
                     modelLoadRow
+                    Button("Change brain…") {
+                        UserDefaults.standard.set(false, forKey: AppEnvironment.hasChosenBrainKey)
+                    }
+                    .buttonStyle(.glass)
                 } header: {
-                    Text("Inference runtime")
+                    Text("Brain")
                 } footer: {
-                    Text("On-device only. Your documents and questions never leave this Mac.")
+                    Text("Mini is Apple's built-in model (instant). Lil and Big are local models "
+                        + "that download once. On-device only — nothing leaves this Mac.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -48,9 +53,10 @@ struct SettingsView: View {
                                 .font(.caption).foregroundStyle(.secondary)
                         }
                     } else {
-                        Button(env.usingMLXEmbeddings ? "Switch to Hashing (rebuild index)"
-                            : "Switch to MLX semantic embeddings (rebuild index)")
-                        {
+                        let embeddingToggleTitle = env.usingMLXEmbeddings
+                            ? "Switch to Hashing (rebuild index)"
+                            : "Switch to MLX semantic embeddings (rebuild index)"
+                        Button(embeddingToggleTitle) {
                             Task { await env.switchEmbeddings(toMLX: !env.usingMLXEmbeddings) }
                         }
                         .buttonStyle(.glass)
@@ -61,43 +67,155 @@ struct SettingsView: View {
                 } header: {
                     Text("Embeddings")
                 } footer: {
-                    Text("Semantic MLX embeddings improve retrieval but download a model on first use and re-embed every stored chunk.")
+                    Text("Semantic MLX embeddings improve retrieval but download a model on "
+                        + "first use and re-embed every stored chunk.")
                         .font(.caption).foregroundStyle(.secondary)
                 }
 
                 Section {
                     LabeledContent("Active engine", value: env.activeTranscriberName)
-                    if env.isPreparingWhisper {
-                        HStack(spacing: 8) {
-                            ProgressView().controlSize(.small)
-                            Text(env.whisperStatus ?? "Preparing WhisperKit…")
-                                .font(.caption).foregroundStyle(.secondary)
-                        }
-                    } else {
+                    switch env.whisperLoad {
+                    case .idle, .failed:
                         Button("Enable WhisperKit (downloads model)") {
                             Task { await env.enableWhisperKit() }
                         }
                         .buttonStyle(.glass)
-                        if let status = env.whisperStatus {
-                            Text(status).font(.caption).foregroundStyle(.secondary)
+                        if case let .failed(msg) = env.whisperLoad {
+                            Label(msg, systemImage: "exclamationmark.triangle")
+                                .symbolRenderingMode(.hierarchical)
+                                .font(.caption)
+                                .foregroundStyle(.orange)
                         }
+                    case let .downloading(fraction):
+                        VStack(alignment: .leading, spacing: 4) {
+                            ProgressView(value: fraction)
+                            Text(env.whisperLoad.label(modelName: "WhisperKit"))
+                                .font(.caption.monospacedDigit())
+                                .foregroundStyle(.secondary)
+                        }
+                    case .ready:
+                        Label("WhisperKit ready", systemImage: "checkmark.circle.fill")
+                            .symbolRenderingMode(.hierarchical)
+                            .font(.callout)
+                            .foregroundStyle(.green)
                     }
                 } header: {
                     Text("Voice input")
                 } footer: {
-                    Text("Tap the mic in the chat bar to dictate — tap again to send. Apple Speech works out of the box; WhisperKit is higher accuracy after a one-time model download. On-device only.")
+                    Text("Tap the mic in the chat bar to dictate — tap again to send. Apple Speech "
+                        + "works out of the box; WhisperKit is higher accuracy after a one-time "
+                        + "model download. On-device only.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+
+                Section {
+                    LabeledContent("Active voice", value: env.selectedVoiceTier.displayName)
+                    voiceOutputControl
+                    Button("Hear a sample") { Task { await env.speakSample() } }
+                        .buttonStyle(.glass)
+                } header: {
+                    Text("Voice output")
+                } footer: {
+                    Text("How M1K3 sounds when it speaks. Built-in is Apple's clear default; "
+                        + "M1K3 Voice runs the speech through M1K3's own voice character and "
+                        + "downloads the neural voice model for offline use. On-device only.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+
+                Section {
+                    if env.isTranscribingCall {
+                        HStack(spacing: 8) {
+                            ProgressView().controlSize(.small)
+                            Text("Transcribing call…").font(.caption).foregroundStyle(.secondary)
+                        }
+                    } else if env.isPreparingBatchTranscription {
+                        HStack(spacing: 8) {
+                            ProgressView().controlSize(.small)
+                            Text(env.lastCallStatus ?? "Preparing call transcription…")
+                                .font(.caption).foregroundStyle(.secondary)
+                        }
+                    } else if env.batchTranscriptionReady {
+                        LabeledContent("Transcription", value: "Ready")
+                    } else {
+                        Button("Enable call transcription (downloads model)") {
+                            Task { await env.enableCallTranscription() }
+                        }
+                        .buttonStyle(.glass)
+                    }
+                    if let status = env.lastCallStatus, !env.isPreparingBatchTranscription {
+                        Text(status).font(.caption).foregroundStyle(.secondary)
+                    }
+                } header: {
+                    Text("Call recording")
+                } footer: {
+                    Text("Record a call from the chat toolbar (consent-gated). With transcription "
+                        + "enabled, a stopped recording is transcribed, summarised, encrypted, and "
+                        + "indexed — on-device.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+
+                Section {
+                    Picker("Reading mode", selection: $readingMode) {
+                        ForEach(ReadingMode.allCases) { mode in
+                            Text(mode.displayName).tag(mode)
+                        }
+                    }
+                    Text(readingMode.detail)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    // Live preview in the chosen mode.
+                    ReadingText("M1K3 keeps your words on this Mac — ask it anything.",
+                                mode: readingMode)
+                        .padding(.vertical, 4)
+                } header: {
+                    Text("Reading")
+                } footer: {
+                    Text("How M1K3's replies are typeset. Dyslexia-friendly uses OpenDyslexic; "
+                        + "Bionic reader bolds the start of each word to guide the eye.")
                         .font(.caption).foregroundStyle(.secondary)
                 }
 
                 Section("Memory") {
                     LabeledContent("Indexed items", value: "\(env.indexedItemCount)")
+                        .monospacedDigit()
                     LabeledContent("Model availability",
                                    value: env.providerAvailable ? "Ready" : "Unavailable")
                 }
             }
             .formStyle(.grouped)
+            .scrollContentBackground(.hidden)
         }
-        .frame(width: 440, height: 440)
+        .frame(width: 480, height: 520)
+        .glassBackdrop()
+    }
+
+    /// The voice-output tier control: progress while the M1K3 Voice model
+    /// downloads, otherwise a Built-in ↔ M1K3 Voice toggle (+ any failure).
+    @ViewBuilder
+    private var voiceOutputControl: some View {
+        switch env.voiceLoad {
+        case let .downloading(fraction):
+            VStack(alignment: .leading, spacing: 4) {
+                ProgressView(value: fraction)
+                Text(env.voiceLoad.label(modelName: "M1K3 Voice"))
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(.secondary)
+            }
+        default:
+            if env.selectedVoiceTier == .m1k3Voice {
+                Button("Switch to Built-in voice") { env.selectVoiceTier(.builtin) }
+                    .buttonStyle(.glass)
+            } else {
+                Button("Upgrade to M1K3 Voice (downloads model)") { env.selectVoiceTier(.m1k3Voice) }
+                    .buttonStyle(.glass)
+            }
+            if case let .failed(message) = env.voiceLoad {
+                Label(message, systemImage: "exclamationmark.triangle")
+                    .symbolRenderingMode(.hierarchical)
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+            }
+        }
     }
 
     /// Shows the MLX Gemma weight download as a real progress bar while it
@@ -111,57 +229,15 @@ struct SettingsView: View {
                 ProgressView(value: fraction)
                     .controlSize(.small)
                     .frame(maxWidth: 160)
-                Text(env.modelLoad.label(modelName: "Gemma 3"))
-                    .font(.caption).foregroundStyle(.secondary)
+                Text(env.modelLoad.label(modelName: env.downloadingBrainName))
+                    .font(.caption.monospacedDigit()).foregroundStyle(.secondary)
             }
         case .failed:
-            Label(env.modelLoad.label(modelName: "Gemma 3"), systemImage: "exclamationmark.triangle")
+            Label(env.modelLoad.label(modelName: env.downloadingBrainName), systemImage: "exclamationmark.triangle")
+                .symbolRenderingMode(.hierarchical)
                 .font(.caption).foregroundStyle(.orange)
         case .idle, .ready:
             EmptyView()
         }
-    }
-
-    private var header: some View {
-        HStack {
-            Label("Settings", systemImage: "gearshape")
-                .font(.headline)
-            Spacer()
-            Button("Done") { dismiss() }
-                .buttonStyle(.glassProminent)
-        }
-        .padding(16)
-    }
-}
-
-private struct RuntimeRow: View {
-    let option: RuntimeOption
-    let isSelected: Bool
-    let onTap: () -> Void
-
-    var body: some View {
-        Button(action: onTap) {
-            HStack(spacing: 12) {
-                Image(systemName: option.systemImage)
-                    .frame(width: 24)
-                    .foregroundStyle(option.isReady ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(option.rawValue)
-                        .foregroundStyle(option.isReady ? .primary : .secondary)
-                    Text(option.subtitle)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                Spacer()
-                if isSelected {
-                    Image(systemName: "checkmark.circle.fill").foregroundStyle(.tint)
-                } else if !option.isReady {
-                    Text("Soon").font(.caption2).foregroundStyle(.secondary)
-                }
-            }
-            .contentShape(.rect)
-        }
-        .buttonStyle(.plain)
-        .disabled(!option.isReady)
     }
 }
