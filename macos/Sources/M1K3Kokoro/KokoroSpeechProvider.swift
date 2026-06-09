@@ -43,15 +43,19 @@ public final class KokoroSpeechProvider: SpeechProviderWithLifecycle, ModelPrelo
     /// EFFECT-PROCESSED Apple voice — Apple's synthesizer run through M1K3's voice
     /// effect chain — so it already sounds distinct from the Built-in tier. When
     /// Kokoro's neural PCM arrives it flows through the same chain + renderer.
-    private let renderer: any SpeechProviderWithLifecycle
+    private let renderer: EffectfulSpeechProvider
+    private let synthesizer: KokoroSynthesizer
     private let modelDirectory: URL
 
     public init(
-        renderer: (any SpeechProviderWithLifecycle)? = nil,
-        modelDirectory: URL? = nil
+        renderer: EffectfulSpeechProvider? = nil,
+        modelDirectory: URL? = nil,
+        voice: String = "bm_daniel"
     ) {
+        let directory = modelDirectory ?? Self.defaultModelDirectory()
+        self.modelDirectory = directory
         self.renderer = renderer ?? EffectfulSpeechProvider(chain: .m1k3Character)
-        self.modelDirectory = modelDirectory ?? Self.defaultModelDirectory()
+        synthesizer = KokoroSynthesizer(modelDirectory: directory, voice: voice)
     }
 
     // MARK: - SpeechProvider
@@ -96,15 +100,21 @@ public final class KokoroSpeechProvider: SpeechProviderWithLifecycle, ModelPrelo
 
     // MARK: - Synthesis
 
+    /// Neural path: text → G2P → ONNX (kokoro-v1.0.onnx) → mono PCM @ 24 kHz → the
+    /// renderer's effect chain + playback. Falls back to the effect-processed Apple
+    /// voice on any failure (model not staged, all-OOV text, ORT error) so M1K3 is
+    /// never silent.
     private func synthesize(_ utterance: SpeechUtterance) async {
-        // TODO(kokoro-spike): replace this with real NEURAL synthesis — phonemize
-        // (G2P) → ONNX inference on the staged kokoro-v1.0.onnx + voices-v1.0.bin →
-        // PCM → the same effect chain + renderer used below. The model is already
-        // on disk (see `prepare`); only the PCM SOURCE changes. Until then, M1K3
-        // Voice = Apple speech run through M1K3's voice-effect chain (a real,
-        // distinct character — not the neural voice yet, but never silent and never
-        // identical to Built-in).
-        await renderer.speak(utterance)
+        do {
+            let pcm = try await synthesizer.synthesize(text: utterance.text)
+            guard !pcm.isEmpty else {
+                await renderer.speak(utterance) // nothing phonemized → Apple fallback
+                return
+            }
+            await renderer.speak(rawPCM: pcm, sampleRate: KokoroSynthesizer.sampleRate)
+        } catch {
+            await renderer.speak(utterance)
+        }
     }
 
     // MARK: - ModelPreloading
@@ -128,6 +138,7 @@ public final class KokoroSpeechProvider: SpeechProviderWithLifecycle, ModelPrelo
            fileManager.fileExists(atPath: voicesDest.path)
         {
             lock.withLock { _ready = true }
+            try? await synthesizer.preload()
             progress(1)
             return
         }
@@ -149,6 +160,7 @@ public final class KokoroSpeechProvider: SpeechProviderWithLifecycle, ModelPrelo
         }
 
         lock.withLock { _ready = true }
+        try? await synthesizer.preload()
         progress(1)
     }
 

@@ -1,0 +1,77 @@
+import Foundation
+@testable import M1K3Kokoro
+import Testing
+
+/// End-to-end integration smoke test for the FULL in-package neural path
+/// (KokoroG2P → KokoroVoices → ONNX inference). Guarded on the staged model files, so
+/// it runs locally (where models/kokoro/ exists) and is skipped in CI. This is the
+/// closest thing to ⌘R without launching the app — it proves the integrated pipeline
+/// produces real speech, not just that the pieces unit-test in isolation.
+struct KokoroSynthesizerTests {
+    /// Repo's `models/kokoro`, derived from this file's location so the guarded test
+    /// runs on any checkout (…/macos/Tests/M1K3KokoroTests/<thisFile>).
+    private var modelDir: URL {
+        URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("models/kokoro")
+    }
+
+    private var staged: Bool {
+        let fileManager = FileManager.default
+        return fileManager.fileExists(atPath: modelDir.appendingPathComponent("kokoro-v1.0.onnx").path)
+            && fileManager.fileExists(atPath: modelDir.appendingPathComponent("voices-v1.0.bin").path)
+    }
+
+    @Test("full pipeline synthesizes plausible speech for a sentence")
+    func synthesizesPlausibleAudio() async throws {
+        guard staged else { return } // skipped in CI
+        let synth = KokoroSynthesizer(modelDirectory: modelDir, voice: "bm_daniel")
+        let pcm = try await synth.synthesize(text: "Hello world. This is M1K3 speaking.")
+
+        // Plausible speech: non-empty, several hundred ms, energy in a speech range
+        // (not silence, not clipped noise).
+        #expect(pcm.count > 20000) // > ~0.8s @ 24kHz
+        let rms = (pcm.reduce(0) { $0 + $1 * $1 } / Float(pcm.count)).squareRoot()
+        #expect(rms > 0.01)
+        #expect(rms < 0.5)
+        let peak = pcm.map(abs).max() ?? 0
+        #expect(peak <= 1.0)
+
+        // Drop a WAV in the repo's scratch fixtures (best-effort) to listen to the path.
+        let scratch = modelDir.deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("scratch/kokoro-spike/fixtures")
+        try? FileManager.default.createDirectory(at: scratch, withIntermediateDirectories: true)
+        writeWav(pcm, sampleRate: 24000, to: scratch.appendingPathComponent("integrated_hello.wav").path)
+    }
+
+    @Test("empty/whitespace text yields no audio (caller falls back)")
+    func emptyTextNoAudio() async throws {
+        guard staged else { return }
+        let synth = KokoroSynthesizer(modelDirectory: modelDir)
+        let pcm = try await synth.synthesize(text: "   ")
+        #expect(pcm.isEmpty)
+    }
+}
+
+private func writeWav(_ samples: [Float], sampleRate: Int, to path: String) {
+    var data = Data()
+    let dataSize = samples.count * 2
+    func le32(_ value: UInt32) -> Data {
+        withUnsafeBytes(of: value.littleEndian) { Data($0) }
+    }
+    func le16(_ value: UInt16) -> Data {
+        withUnsafeBytes(of: value.littleEndian) { Data($0) }
+    }
+    data.append("RIFF".data(using: .ascii)!); data.append(le32(UInt32(36 + dataSize)))
+    data.append("WAVE".data(using: .ascii)!); data.append("fmt ".data(using: .ascii)!)
+    data.append(le32(16)); data.append(le16(1)); data.append(le16(1))
+    data.append(le32(UInt32(sampleRate))); data.append(le32(UInt32(sampleRate * 2)))
+    data.append(le16(2)); data.append(le16(16))
+    data.append("data".data(using: .ascii)!); data.append(le32(UInt32(dataSize)))
+    for sample in samples {
+        let clamped = max(-1, min(1, sample))
+        data.append(le16(UInt16(bitPattern: Int16(clamped * 32767))))
+    }
+    try? data.write(to: URL(fileURLWithPath: path))
+}
