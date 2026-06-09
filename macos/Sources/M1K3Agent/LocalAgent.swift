@@ -90,7 +90,8 @@ public actor LocalAgent {
     public func run(
         goal: String,
         context groundingContext: String? = nil,
-        onEvent: (@Sendable (AgentLoopEvent) -> Void)? = nil
+        onEvent: (@Sendable (AgentLoopEvent) -> Void)? = nil,
+        onConclusionToken: (@Sendable (String) -> Void)? = nil
     ) async throws -> AgentResult {
         reasoningTrace.removeAll()
         var usedTools = Set<String>()
@@ -100,7 +101,11 @@ public actor LocalAgent {
         for iteration in 0 ..< maxIterations {
             try Task.checkCancellation()
             onEvent?(.thinking(iteration: iteration))
-            let thought = try await generateThought(context: currentContext, iteration: iteration)
+            let thought = try await generateThought(
+                context: currentContext,
+                iteration: iteration,
+                onConclusionToken: onConclusionToken
+            )
 
             if thought.contains("CONCLUSION:") {
                 reasoningTrace.append(ReasoningStep(iteration: iteration, thought: thought))
@@ -185,10 +190,27 @@ public actor LocalAgent {
         """
     }
 
-    private func generateThought(context: String, iteration: Int) async throws -> String {
+    /// Generate one thought. With `onConclusionToken` set, the thought streams
+    /// through a ConclusionStreamSplitter so a conclusion's tail reaches the
+    /// caller live; non-conclusion thoughts buffer silently.
+    private func generateThought(
+        context: String,
+        iteration: Int,
+        onConclusionToken: (@Sendable (String) -> Void)? = nil
+    ) async throws -> String {
         let prompt = context + "\n\nThought \(iteration + 1):"
-        let response = try await inferenceProvider.generate(prompt: prompt)
-        return response.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let onConclusionToken else {
+            let response = try await inferenceProvider.generate(prompt: prompt)
+            return response.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        var splitter = ConclusionStreamSplitter()
+        for await chunk in inferenceProvider.generateStreaming(prompt: prompt) {
+            let live = splitter.feed(chunk)
+            if !live.isEmpty {
+                onConclusionToken(live)
+            }
+        }
+        return splitter.thought.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     private func synthesizeConclusion(context: String) async throws -> String {

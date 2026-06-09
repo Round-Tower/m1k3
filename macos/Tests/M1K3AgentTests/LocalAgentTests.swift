@@ -297,6 +297,15 @@ struct LocalAgentParseTests {
         LocalAgent(inferenceProvider: ScriptedProvider([]), tools: [])
     }
 
+    @Test("parses underscored tool names embedded in prose")
+    func parsesUnderscoredTool() async {
+        let action = await agent().parseAction(
+            from: "I should check the notes. ACTION: search_knowledge(hydraulic seal)"
+        )
+        #expect(action?.toolName == "search_knowledge")
+        #expect(action?.argument == "hydraulic seal")
+    }
+
     @Test("parses ACTION: Tool(arg)")
     func parsesAction() async {
         let action = await agent().parseAction(from: "I will ACTION: search(hydraulic seal) now")
