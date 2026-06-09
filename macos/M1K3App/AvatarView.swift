@@ -40,6 +40,11 @@ final class AvatarScene {
     /// The matrix cells, parallel to `cubes`/`materials` (build + animate order).
     var cells: [(col: Int, row: Int)] = []
     var built = false
+    /// Animation clock origin, captured at build time. Animation time is measured
+    /// elapsed-since-build so `sin/cos` arguments stay small — mirrors the
+    /// AudioCaptureBackdrop fix, where an absolute reference-date (~8e8) lost enough
+    /// per-frame precision to flatten the motion. (BUGS.md / AudioCaptureBackdrop.)
+    var startDate = Date()
 }
 
 struct AvatarView: View {
@@ -80,10 +85,11 @@ struct AvatarView: View {
                 scene.cubes = cubes
                 scene.materials = materials
                 scene.cells = cells
+                scene.startDate = context.date
                 scene.built = true
             } update: { _ in
                 guard scene.built else { return }
-                let time = context.date.timeIntervalSince1970
+                let time = context.date.timeIntervalSince(scene.startDate)
                 animate(at: time)
             }
         }

@@ -198,6 +198,9 @@ let package = Package(
                 // M1K3Calls owns the BatchTranscriptionProvider seam + CallTranscriptSegment
                 // that WhisperKitBatchTranscriber conforms to / produces (light deps only).
                 "M1K3Calls",
+                // M1K3Inference owns SingleFlightLoader — coalesces concurrent model
+                // loads so a preload racing the first transcribe shares ONE download.
+                "M1K3Inference",
                 .product(name: "WhisperKit", package: "WhisperKit"),
             ],
             path: "Sources/M1K3WhisperKit"

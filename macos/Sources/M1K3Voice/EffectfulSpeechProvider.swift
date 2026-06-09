@@ -63,14 +63,20 @@ public final class EffectfulSpeechProvider: NSObject, SpeechProviderWithLifecycl
 
     public func stop() async {
         let wasActive = await isSpeaking()
-        await MainActor.run {
+        let hadPlayback = await MainActor.run { () -> Bool in
             player.stop()
             _ = synthesizer.stopSpeaking(at: .immediate)
             // Resume any playback wait — .dataPlayedBack won't fire after stop().
+            let had = playbackContinuation != nil
             finishPlayback()
+            return had
         }
         await plainFallback.stop()
-        if wasActive { await MainActor.run { onSpeakingEnded?() } }
+        // When we cancelled active effectful playback, finishPlayback() resumes the
+        // continuation inside play(), which fires onSpeakingEnded as it unwinds — so
+        // fire here only when there was no playback to resume (cancelled mid-synthesis),
+        // otherwise the avatar gets a spurious second "ended" event.
+        if wasActive, !hadPlayback { await MainActor.run { onSpeakingEnded?() } }
     }
 
     public func isSpeaking() async -> Bool {
@@ -183,6 +189,12 @@ enum EffectfulSpeechError: Error {
 
 /// Accumulates the synthesizer's PCM chunks (float / int16 / int32) into one mono
 /// Float buffer and resumes exactly once when the final (empty) buffer arrives.
+///
+/// `@unchecked Sendable` safety: `onDone` is written once on the main actor (inside
+/// `synthesizeToFloats`) *before* `synthesizer.write` can deliver any callback, so
+/// that write happens-before every read in `finish()`. `samples`/`sampleRate`/`done`
+/// are all `lock`-guarded, and the `done` flag guarantees `finish()` resumes the
+/// continuation at most once even though `write` callbacks arrive on a background thread.
 private final class SynthBox: @unchecked Sendable {
     private let lock = NSLock()
     private var samples: [Float] = []

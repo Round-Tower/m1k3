@@ -6,6 +6,13 @@
 //
 //  Signed: Kev + claude-sonnet-4-6, 2026-06-08, Confidence 0.9,
 //  Prior: Kev + claude-opus-4-8 (AvatarEmotion.kt, app/composeApp)
+//
+//  Known tradeoff (review claude-sonnet-4-6, 2026-06-09): `accentColor: Color`
+//  imports SwiftUI into what is otherwise a pure, swift-test-able data package.
+//  Accepted for now — `Color` is available under `swift test` on macOS 26 and the
+//  call site (AvatarView/SwiftUI) wants a `Color` directly. If this package ever
+//  needs to stay UI-free, replace with a semantic `ColorToken` resolved to `Color`
+//  at the view layer. Deferred, not blocking.
 
 import SwiftUI
 

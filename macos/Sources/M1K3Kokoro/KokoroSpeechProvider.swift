@@ -168,6 +168,13 @@ public final class KokoroSpeechProvider: SpeechProviderWithLifecycle, ModelPrelo
 /// A small URLSession download wrapper that reports a 0…1 fraction and moves the
 /// finished file to a destination. Lives here (not in the app) so the whole staging
 /// path is in the isolated Kokoro target.
+///
+/// `@unchecked Sendable` safety: `continuation` is write-once by `run()` *before*
+/// `session.downloadTask(...).resume()` — the event that lets any delegate callback
+/// fire — so that write happens-before every delegate read. The URLSession's own
+/// serial delegate queue serialises the callbacks: the first to complete resumes the
+/// continuation and clears it to nil, so any later callback on that queue sees nil
+/// and skips. The continuation therefore resumes exactly once. No lock needed.
 private final class FileDownloader: NSObject, URLSessionDownloadDelegate, @unchecked Sendable {
     private let progress: @Sendable (Double) -> Void
     private let destination: URL

@@ -16,9 +16,13 @@
 //  Signed: Kev + claude-opus-4-8, 2026-06-07, Confidence 0.7,
 //  Prior: the internal call-pipeline project WhisperKit-batch (Kev) — re-pointed at M1K3's
 //  file-based BatchTranscriptionProvider seam; buffer/PowerEfficiency surface dropped.
+//  Review: claude-opus-4-8, 2026-06-09 — single-flight the model load through
+//  SingleFlightLoader to kill a check-then-act double-download race (a Settings
+//  preload racing the first transcribe could start two ~142MB downloads). Confidence 0.8.
 
 import Foundation
 import M1K3Calls
+import M1K3Inference
 @preconcurrency import WhisperKit
 
 /// `@unchecked Sendable`: the loaded model is guarded by `lock`; WhisperKit's own
@@ -26,10 +30,12 @@ import M1K3Calls
 public final class WhisperKitBatchTranscriber: BatchTranscriptionProvider, @unchecked Sendable {
     public let name = "WhisperKit (batch)"
 
-    private let model: String
-    private let downloadBase: URL?
     private let lock = NSLock()
     private var whisperKit: WhisperKit?
+    /// Coalesces concurrent model loads into one in-flight download. The loaded
+    /// model is then cached in `whisperKit` for the sync `isAvailable`/`transcribe`
+    /// reads the `BatchTranscriptionProvider` seam relies on.
+    private let loader: SingleFlightLoader<LoadedWhisperKit>
 
     /// - Parameter model: WhisperKit variant. `base.en` (~142MB) balances size and
     ///   accuracy; batch transcription is latency-tolerant, so `small.en` is a fine
@@ -37,8 +43,12 @@ public final class WhisperKitBatchTranscriber: BatchTranscriptionProvider, @unch
     /// - Parameter downloadBase: Root URL for model storage. Should match the live
     ///   `WhisperKitProvider`'s base so both share the same cached weights.
     public init(model: String = "base.en", downloadBase: URL? = nil) {
-        self.model = model
-        self.downloadBase = downloadBase
+        loader = SingleFlightLoader { progress in
+            progress(0.05)
+            let config = WhisperKitConfig(model: model, verbose: false, prewarm: true, load: true)
+            config.downloadBase = downloadBase
+            return try LoadedWhisperKit(kit: await WhisperKit(config))
+        }
     }
 
     /// Available only on Apple Silicon once a model has been loaded.
@@ -51,13 +61,12 @@ public final class WhisperKitBatchTranscriber: BatchTranscriptionProvider, @unch
     }
 
     /// Download + load the WhisperKit model, reporting coarse progress. Idempotent.
+    /// Concurrent callers share ONE load via the loader; the result is cached for
+    /// the sync reads.
     public func prepareModel(progress: @escaping @Sendable (Double) -> Void) async throws {
         if lock.withLock({ whisperKit != nil }) { progress(1.0); return }
-        progress(0.05)
-        let config = WhisperKitConfig(model: model, verbose: false, prewarm: true, load: true)
-        config.downloadBase = downloadBase
-        let kit = try await WhisperKit(config)
-        lock.withLock { whisperKit = kit }
+        let loaded = try await loader.value(progress: progress)
+        lock.withLock { whisperKit = loaded.kit }
         progress(1.0)
     }
 
