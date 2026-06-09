@@ -22,10 +22,6 @@ struct AvatarEmotionTests {
         #expect(AvatarEmotion.from("") == .neutral)
     }
 
-    @Test("accentColor is defined for every case")
-    func accentColorsDefined() {
-        for emotion in AvatarEmotion.allCases {
-            _ = emotion.accentColor // must not crash
-        }
-    }
+    // accentColor moved to the M1K3App SwiftUI extension (AvatarEmotion+SwiftUI.swift)
+    // to keep this package UI-free; its switch is exhaustive at compile time.
 }
