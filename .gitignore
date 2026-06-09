@@ -201,3 +201,5 @@ bundletool-all-*.jar
 !/.claude/
 /.claude/*
 !/.claude/project-memory.md
+# Archived project-memory blocks travel too (split off when the live file grows).
+!/.claude/project-memory-archive-*.md
