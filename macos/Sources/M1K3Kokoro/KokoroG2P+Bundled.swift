@@ -39,6 +39,9 @@ public extension KokoroG2P {
         var destination = Data(count: size)
         let written = destination.withUnsafeMutableBytes { dst -> Int in
             deflate.withUnsafeBytes { src -> Int in
+                // COMPRESSION_ZLIB in the buffer API = RAW DEFLATE (no zlib 2-byte header,
+                // no Adler-32 trailer) — matches Python's zlib.compressobj(wbits=-15)
+                // that produced this resource. The name is misleading.
                 compression_decode_buffer(
                     dst.bindMemory(to: UInt8.self).baseAddress!, size,
                     src.bindMemory(to: UInt8.self).baseAddress!, deflate.count,

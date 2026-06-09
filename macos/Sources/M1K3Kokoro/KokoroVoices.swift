@@ -20,6 +20,7 @@ public struct KokoroVoices: Sendable {
     public enum VoicesError: Error {
         case notNPZ
         case voiceNotFound(String)
+        case corruptData
     }
 
     /// Rows per voice array (max phoneme-token length + 1) and style width.
@@ -49,6 +50,8 @@ public struct KokoroVoices: Sendable {
         guard let base = dataOffsets[voice] else { throw VoicesError.voiceNotFound(voice) }
         let row = max(0, min(tokenCount, Self.rows - 1))
         let start = base + row * Self.styleWidth * 4
+        // Guard against a truncated/corrupt download — read past the end would crash.
+        guard start + Self.styleWidth * 4 <= data.count else { throw VoicesError.corruptData }
         var out = [Float](repeating: 0, count: Self.styleWidth)
         for column in 0 ..< Self.styleWidth {
             let off = start + column * 4

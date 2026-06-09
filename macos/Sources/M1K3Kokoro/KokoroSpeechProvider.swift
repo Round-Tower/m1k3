@@ -24,9 +24,12 @@
 import Foundation
 import M1K3Inference
 import M1K3Voice
+import os
 
 public final class KokoroSpeechProvider: SpeechProviderWithLifecycle, ModelPreloading, @unchecked Sendable {
     public let name = "kokoro"
+
+    private static let log = Logger(subsystem: "dev.m1k3.kokoro", category: "voice")
 
     /// Public release of the Kokoro v1.0 ONNX weights (matches the filenames M1K3
     /// already ships under `models/kokoro/`). The spike loads these.
@@ -39,10 +42,10 @@ public final class KokoroSpeechProvider: SpeechProviderWithLifecycle, ModelPrelo
 
     private let lock = NSLock()
     private var _ready = false
-    /// Until the real ONNX neural synthesis lands, M1K3 Voice speaks through the
-    /// EFFECT-PROCESSED Apple voice — Apple's synthesizer run through M1K3's voice
-    /// effect chain — so it already sounds distinct from the Built-in tier. When
-    /// Kokoro's neural PCM arrives it flows through the same chain + renderer.
+    /// Renders Kokoro's neural PCM (and the Apple-voice fallback) through M1K3's voice
+    /// effect chain + playback. Concrete `EffectfulSpeechProvider`, not the protocol:
+    /// the raw-PCM neural path needs `speak(rawPCM:)`, which the `SpeechProvider`
+    /// protocol is too narrow to express.
     private let renderer: EffectfulSpeechProvider
     private let synthesizer: KokoroSynthesizer
     private let modelDirectory: URL
@@ -138,7 +141,12 @@ public final class KokoroSpeechProvider: SpeechProviderWithLifecycle, ModelPrelo
            fileManager.fileExists(atPath: voicesDest.path)
         {
             lock.withLock { _ready = true }
-            try? await synthesizer.preload()
+            do {
+                try await synthesizer.preload()
+            } catch {
+                // Apple-voice fallback is the intended recovery; the missing signal isn't.
+                Self.log.warning("Kokoro preload failed: \(error.localizedDescription, privacy: .public)")
+            }
             progress(1)
             return
         }

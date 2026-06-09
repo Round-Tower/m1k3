@@ -73,6 +73,11 @@ public final class EffectfulSpeechProvider: NSObject, SpeechProviderWithLifecycl
     /// Play externally-synthesized mono PCM (e.g. Kokoro's neural audio) through the
     /// same effect chain + engine + lifecycle callbacks as `speak(_:)`. Lets a neural
     /// provider reuse this hardened playback path instead of re-implementing AVAudioEngine.
+    ///
+    /// `play()` owns ALL lifecycle signalling — it fires `onSpeakingStarted` before
+    /// scheduling and `onSpeakingEnded` as it unwinds, and `isSpeaking()` is computed
+    /// from `player.isPlaying` — so the neural path drives the avatar mouth + speaking
+    /// state identically to `speak(_:)`. No callback is bypassed.
     public func speak(rawPCM samples: [Float], sampleRate: Double) async {
         if await isSpeaking() { await stop() }
         guard !samples.isEmpty, sampleRate > 0 else { return }
