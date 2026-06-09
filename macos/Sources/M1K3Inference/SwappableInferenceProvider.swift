@@ -1,6 +1,6 @@
 //
 //  SwappableInferenceProvider.swift
-//  M1K3App
+//  M1K3Inference
 //
 //  An InferenceProvider façade whose backing provider can change at runtime, so
 //  switching the chosen brain's MLX model (Lil = Qwen ↔ Big = Gemma) re-points the
@@ -12,37 +12,40 @@
 //  reads safely off the main actor while the @Observable UI drives the change.
 //
 //  Signed: Kev + claude-opus-4-8, 2026-06-08, Confidence 0.8, Prior: Unknown
+//  Review: claude-opus-4-8, 2026-06-09 (PR #10 follow-up, issue #11) — promoted from
+//  the M1K3App target into M1K3Inference so the swap logic is `swift test`-covered,
+//  matching its siblings SwappableSpeechProvider/SwappableEmbeddingService. Behaviour
+//  unchanged; members made `public`.
 
 import Foundation
-import M1K3Inference
 
-final class SwappableInferenceProvider: InferenceProvider, @unchecked Sendable {
-    let name = "swappable-mlx"
+public final class SwappableInferenceProvider: InferenceProvider, @unchecked Sendable {
+    public let name = "swappable-mlx"
 
     private let lock = NSLock()
     private var current: any InferenceProvider
 
-    init(_ initial: any InferenceProvider) {
+    public init(_ initial: any InferenceProvider) {
         current = initial
     }
 
-    var active: any InferenceProvider {
+    public var active: any InferenceProvider {
         lock.withLock { current }
     }
 
-    func setProvider(_ provider: any InferenceProvider) {
+    public func setProvider(_ provider: any InferenceProvider) {
         lock.withLock { current = provider }
     }
 
-    var isAvailable: Bool {
+    public var isAvailable: Bool {
         active.isAvailable
     }
 
-    func generate(prompt: String) async throws -> String {
+    public func generate(prompt: String) async throws -> String {
         try await active.generate(prompt: prompt)
     }
 
-    func generateStreaming(prompt: String) -> AsyncStream<String> {
+    public func generateStreaming(prompt: String) -> AsyncStream<String> {
         active.generateStreaming(prompt: prompt)
     }
 }
