@@ -22,16 +22,12 @@
           "image-name" : "M1K3 2.png",
           "name" : "M1K3 2",
           "position" : {
-            "scale" : 0.2,
+            "scale" : 0.3,
             "translation-in-points" : [
               0,
               0
             ]
           }
-        },
-        {
-          "image-name" : "M1K3.svg",
-          "name" : "M1K3"
         }
       ],
       "shadow" : {
