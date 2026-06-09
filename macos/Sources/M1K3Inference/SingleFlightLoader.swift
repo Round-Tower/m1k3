@@ -17,8 +17,9 @@
 //  contract is proven under `swift test`, not stuck behind the MLX launch wall.
 //
 //  Signed: Kev + claude-opus-4-8, 2026-06-08, Confidence 0.85, Prior: Unknown
-//  Review: claude-opus-4-8, 2026-06-09 (PR #10) — documented cancellation semantics
-//  on value(): cancelling clears the slot but does not cancel the underlying load.
+//  Review: claude-opus-4-8, 2026-06-09 (PR #10) — cancelling a waiter now KEEPS the
+//  slot so a later caller rejoins the still-in-flight load instead of starting a
+//  duplicate download (only genuine failures clear the slot). Covered by a new test.
 
 import Foundation
 
@@ -43,10 +44,12 @@ public actor SingleFlightLoader<Value: Sendable> {
     /// join an in-flight (or completed) load just receive the result.
     ///
     /// Cancellation: if the calling task is cancelled, `await task.value` throws
-    /// `CancellationError` and the slot is cleared so a retry re-enters the
-    /// operation — but the underlying unstructured `Task` is NOT cancelled, so an
-    /// in-flight load (e.g. an MLX/WhisperKit download) keeps running to completion.
-    /// If it succeeds, the on-disk model cache makes the next `value()` call instant.
+    /// `CancellationError`, but the underlying unstructured `Task` is NOT cancelled —
+    /// it keeps loading. The slot is KEPT (not cleared) so a later caller rejoins that
+    /// same in-flight load and receives its result, rather than kicking off a
+    /// duplicate download. (Matters for long-lived loaders like the WhisperKit
+    /// providers, whose loader outlives any single cancelled `prepareModel` call.)
+    /// Only a genuine load *failure* clears the slot, to allow a fresh retry.
     public func value(
         progress: @escaping @Sendable (Double) -> Void = { _ in }
     ) async throws -> Value {
@@ -58,9 +61,14 @@ public actor SingleFlightLoader<Value: Sendable> {
         self.task = task
         do {
             return try await task.value
+        } catch let error as CancellationError {
+            // The CALLER was cancelled; the underlying load Task keeps running. Keep
+            // the slot so a later caller rejoins this same in-flight load (cache hit
+            // when it finishes) instead of starting a duplicate.
+            throw error
         } catch {
-            // Clear the failed load so the next caller retries instead of
-            // re-throwing this cached error indefinitely.
+            // A genuine load failure: clear the slot so the next caller retries
+            // instead of re-throwing this cached error indefinitely.
             self.task = nil
             throw error
         }

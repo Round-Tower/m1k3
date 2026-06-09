@@ -101,4 +101,27 @@ struct SingleFlightLoaderTests {
 
         #expect(collector.recorded == [0.5, 1.0])
     }
+
+    @Test("a cancelled waiter does not spawn a duplicate load")
+    func cancelledWaiterRejoinsInFlightLoad() async throws {
+        let counter = InvocationCounter()
+        let loader = SingleFlightLoader<Int> { _ in
+            _ = await counter.bump()
+            try? await Task.sleep(for: .milliseconds(50))
+            return 1
+        }
+
+        // Start a load, let it begin, then cancel the waiting task. The underlying
+        // load keeps running and the slot is kept, so the next caller rejoins it
+        // rather than starting a second download.
+        let first = Task { try await loader.value() }
+        try? await Task.sleep(for: .milliseconds(10))
+        first.cancel()
+        _ = try? await first.value
+
+        let result = try await loader.value()
+
+        #expect(result == 1)
+        #expect(await counter.count == 1) // still exactly one load, no duplicate
+    }
 }

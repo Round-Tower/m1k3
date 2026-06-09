@@ -50,6 +50,12 @@ public protocol SpeechProvider: Sendable {
     /// Whether the backend can speak right now.
     var isAvailable: Bool { get }
     /// Enqueue an utterance for speech.
+    ///
+    /// Completion semantics are implementation-defined: an implementation MAY return
+    /// as soon as speech is enqueued (fire-and-forget, e.g. `AVSpeechProvider`) or
+    /// only after audio finishes (e.g. `EffectfulSpeechProvider`). Callers MUST NOT
+    /// assume audio has finished when this returns — observe `onSpeakingEnded`
+    /// (`SpeechProviderWithLifecycle`) to react to actual completion.
     func speak(_ utterance: SpeechUtterance) async
     /// Stop any in-progress and queued speech immediately.
     func stop() async
