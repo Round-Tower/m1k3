@@ -22,10 +22,13 @@ public struct RAGResponse: Sendable, Equatable {
     public let answer: String
     /// The chunks retrieved as grounding, in rank order.
     public let sources: [ChunkHit]
+    /// Citations validated against `sources` (hallucinated ones stripped from `answer`).
+    public let citations: [Citation]
 
-    public init(answer: String, sources: [ChunkHit]) {
+    public init(answer: String, sources: [ChunkHit], citations: [Citation] = []) {
         self.answer = answer
         self.sources = sources
+        self.citations = citations
     }
 }
 
@@ -59,8 +62,10 @@ public struct RAGResponder: RAGResponding, Sendable {
     /// Answer `question`, grounded in retrieved knowledge.
     public func answer(_ question: String) async throws -> RAGResponse {
         let (chunks, prompt) = try await retrieve(for: question)
-        let answer = try await provider.generate(prompt: prompt)
-        return RAGResponse(answer: answer, sources: chunks)
+        let raw = try await provider.generate(prompt: prompt)
+        // Strip citations the model invented (not grounded in the retrieved chunks).
+        let validation = await CitationValidator.validate(responseText: raw, against: chunks)
+        return RAGResponse(answer: validation.cleanedText, sources: chunks, citations: validation.validated)
     }
 
     /// Stream the answer. Returns the resolved `sources` immediately (retrieval

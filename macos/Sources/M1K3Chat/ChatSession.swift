@@ -42,19 +42,29 @@ public struct ChatMessage: Identifiable, Sendable, Equatable, Codable {
     public let role: Role
     public var text: String
     public var sources: [ChunkHit]
+    /// Citations the model made that were validated against `sources` (hallucinated
+    /// ones are stripped from `text`). Derived at response time — deliberately omitted
+    /// from `CodingKeys` so it isn't persisted and old transcripts still decode.
+    public var citations: [Citation] = []
     public var status: Status
+
+    enum CodingKeys: String, CodingKey {
+        case id, role, text, sources, status
+    }
 
     public init(
         id: UUID = UUID(),
         role: Role,
         text: String,
         sources: [ChunkHit] = [],
+        citations: [Citation] = [],
         status: Status
     ) {
         self.id = id
         self.role = role
         self.text = text
         self.sources = sources
+        self.citations = citations
         self.status = status
     }
 }
@@ -115,7 +125,15 @@ public final class ChatSession {
             for await chunk in stream {
                 update(assistantID) { $0.text = Self.fold($0.text, chunk) }
             }
-            update(assistantID) { $0.status = .complete }
+            // Now the full answer is in hand: strip any citations the model invented
+            // (not grounded in the retrieved sources) and record the validated ones.
+            let finalText = messages.first { $0.id == assistantID }?.text ?? ""
+            let validation = await CitationValidator.validate(responseText: finalText, against: sources)
+            update(assistantID) {
+                $0.text = validation.cleanedText
+                $0.citations = validation.validated
+                $0.status = .complete
+            }
         } catch {
             update(assistantID) { msg in
                 msg.status = .failed(String(describing: error))
@@ -141,7 +159,7 @@ public final class ChatSession {
     }
 
     private func update(_ id: UUID, _ mutate: (inout ChatMessage) -> Void) {
-        guard let i = messages.firstIndex(where: { $0.id == id }) else { return }
-        mutate(&messages[i])
+        guard let index = messages.firstIndex(where: { $0.id == id }) else { return }
+        mutate(&messages[index])
     }
 }

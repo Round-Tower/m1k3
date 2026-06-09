@@ -23,7 +23,7 @@ import Foundation
 
 /// A citation reference parsed from model output: a source token (e.g.
 /// "ICH-Q7") and the cited heading.
-public struct Citation: Sendable, Equatable, Hashable {
+public struct Citation: Sendable, Equatable, Hashable, Codable {
     public let source: String
     public let heading: String
 
@@ -71,6 +71,22 @@ public enum CitationValidator {
         }
 
         return Result(cleanedText: cleanedText, validated: validated, stripped: stripped)
+    }
+
+    /// Validate against the retrieved chunks — the RAG grounding contract: a citation
+    /// is kept iff some chunk shares its title (source) and heading. The model may only
+    /// cite what it was shown, so a citation to un-retrieved content is stripped even if
+    /// that content exists elsewhere in the store.
+    public static func validate(
+        responseText: String,
+        against chunks: [ChunkHit]
+    ) async -> Result {
+        await validate(responseText: responseText) { citation in
+            chunks.contains { chunk in
+                chunk.itemTitle == citation.source
+                    && (chunk.heading?.trimmingCharacters(in: .whitespaces) ?? "") == citation.heading
+            }
+        }
     }
 
     // MARK: - Parsing
