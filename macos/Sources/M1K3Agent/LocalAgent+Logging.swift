@@ -14,6 +14,21 @@ import Foundation
 import os
 
 extension LocalAgent {
+    func logRunStart(goal: String, grounding: String?) {
+        let toolNames = tools.keys.sorted().joined(separator: ", ")
+        let cap = maxIterations
+        let groundingChars = grounding?.count ?? 0
+        M1K3Log.agentLoop.info("""
+        run start: goal="\(LogPreview.preview(goal, max: 80), privacy: .public)" \
+        tools=[\(toolNames, privacy: .public)] cap=\(cap) grounding=\(groundingChars) chars
+        """)
+    }
+
+    func logCapReached() {
+        let cap = maxIterations
+        M1K3Log.agentLoop.notice("iteration cap (\(cap)) reached — synthesising a final answer")
+    }
+
     func logThought(_ thought: String, iteration: Int, start: ContinuousClock.Instant) {
         let took = Self.elapsed(since: start)
         M1K3Log.agentLoop.debug("""

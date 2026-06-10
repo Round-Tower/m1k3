@@ -66,8 +66,9 @@ public enum AgentLoopEvent: Sendable, Equatable {
 
 public actor LocalAgent {
     private let inferenceProvider: any InferenceProvider
-    private let tools: [String: AgentTool]
-    private let maxIterations: Int
+    // Internal (not private) so the cross-file logging extension can read them.
+    let tools: [String: AgentTool]
+    let maxIterations: Int
     private let concludesOnUnstructuredThought: Bool
 
     public private(set) var reasoningTrace: [ReasoningStep] = []
@@ -123,8 +124,9 @@ public actor LocalAgent {
                     M1K3Log.agentLoop.info("iteration \(iteration): implicit conclusion (prose, no markers)")
                     return concluded(thought, usedTools, iteration + 1)
                 }
-                // No action — record the thought and keep reasoning.
-                currentContext += "\n\nThought: \(thought)"
+                // No action — keep reasoning, with a format reminder (models
+                // announce tools in prose without the marker; seen on Gemma).
+                currentContext += Self.proseContinuation(for: thought)
                 continue
             }
 
@@ -374,25 +376,18 @@ public actor LocalAgent {
     }
 }
 
-// MARK: - Diagnostics (unified logging)
+// MARK: - Prompt fragments
 
-/// Same-file extension for the two helpers that read private actor state;
-/// the param-only helpers live in LocalAgent+Logging.swift. Log helpers
-/// interpolate only locals — Logger interpolation is an autoclosure, and the
-/// formatter strips the `self.` the compiler would demand inside one.
 extension LocalAgent {
-    private func logRunStart(goal: String, grounding: String?) {
-        let toolNames = tools.keys.sorted().joined(separator: ", ")
-        let cap = maxIterations
-        let groundingChars = grounding?.count ?? 0
-        M1K3Log.agentLoop.info("""
-        run start: goal="\(LogPreview.preview(goal, max: 80), privacy: .public)" \
-        tools=[\(toolNames, privacy: .public)] cap=\(cap) grounding=\(groundingChars) chars
-        """)
-    }
+    /// Continuation block for a markerless thought: record it AND teach the
+    /// format — one nudge before implicit-conclusion can swallow the intent.
+    static func proseContinuation(for thought: String) -> String {
+        """
 
-    private func logCapReached() {
-        let cap = maxIterations
-        M1K3Log.agentLoop.notice("iteration cap (\(cap)) reached — synthesising a final answer")
+
+        Thought: \(thought)
+        (Reminder: to use a tool, reply with exactly "ACTION: tool_name(argument)". \
+        To give your final answer, start with "CONCLUSION:".)
+        """
     }
 }

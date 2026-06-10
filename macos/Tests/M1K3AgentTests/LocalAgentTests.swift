@@ -143,6 +143,26 @@ struct LocalAgentTests {
         #expect(result.conclusion == "thought it through.")
     }
 
+    @Test("a markerless thought earns a format reminder in the next prompt (the Gemma miss)")
+    func remindsFormatAfterProse() async throws {
+        // Seen live on Big/Gemma: 'I need to search the web' in plain prose,
+        // no ACTION ever emitted. The re-prompt must teach the format.
+        let provider = ScriptedProvider([
+            "I need to search the web to get the current weather forecast.",
+            "ACTION: search(boston weather)",
+            "CONCLUSION: done.",
+        ])
+        let tool = EchoTool(response: "found")
+        let agent = LocalAgent(inferenceProvider: provider, tools: [tool])
+        let result = try await agent.run(goal: "weather?")
+
+        #expect(result.conclusion == "done.")
+        #expect(result.toolsUsed == ["search"])
+        let secondPrompt = try #require(provider.prompts.dropFirst().first)
+        #expect(secondPrompt.contains("ACTION: tool_name(argument)"))
+        #expect(secondPrompt.contains("CONCLUSION:"))
+    }
+
     @Test("hitting the iteration cap synthesises a final conclusion")
     func maxIterationsSynthesises() async throws {
         // Never concludes within the cap; the (maxIter+1)th generate is the
