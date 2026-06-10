@@ -102,6 +102,18 @@ enum SelfTest {
             let answer = try await llm.generate(prompt: "In one short sentence, what is a hydraulic seal?")
             emit("✓ MLX generate: \(answer.trimmingCharacters(in: .whitespacesAndNewlines).prefix(180))")
 
+            // Raw-output diagnostics (M1K3_SELFTEST_DEBUG=1): when an answer
+            // comes back empty, show what the model ACTUALLY returned and how
+            // the chat template rendered — distinguishes "model emitted EOS
+            // immediately" from "detokenizer produced nothing".
+            if ProcessInfo.processInfo.environment["M1K3_SELFTEST_DEBUG"] == "1" {
+                emit("debug raw answer: count=\(answer.count) [\(answer.prefix(300))]")
+                let debug = await llm.templateDebugDescription(
+                    prompt: "In one short sentence, what is a hydraulic seal?"
+                )
+                emit("debug template: \(debug)")
+            }
+
             // 3b. Optional memory loop (M1K3_SELFTEST_MEMLOOP=N): N more
             // generations with a footprint snapshot after each. An agent turn
             // runs generations back-to-back, so a growing footprint here is

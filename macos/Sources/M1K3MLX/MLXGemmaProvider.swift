@@ -184,4 +184,28 @@ public final class MLXGemmaProvider: InferenceProvider, ModelPreloading, @unchec
         MLXMemoryBudget.applyOnce()
         return try await loader.value(progress: progress)
     }
+
+    /// Self-test diagnostics: how the chat template renders for `prompt` on
+    /// this model — token count, the rendered text, and EOS metadata. Used by
+    /// the headless self-test to debug template/tokenizer regressions; not a
+    /// production code path.
+    public func templateDebugDescription(prompt: String) async -> String {
+        do {
+            let container = try await ensureLoaded()
+            return try await container.perform { context in
+                let noTools: [[String: any Sendable]]? = nil
+                let noContext: [String: any Sendable]? = nil
+                let ids = try context.tokenizer.applyChatTemplate(
+                    messages: [["role": "user", "content": prompt]],
+                    tools: noTools,
+                    additionalContext: noContext
+                )
+                let rendered = context.tokenizer.decode(tokenIds: ids, skipSpecialTokens: false)
+                let eos = context.tokenizer.eosToken ?? "nil"
+                return "ids=\(ids.count) eos=\(eos) rendered=[\(rendered.suffix(160))]"
+            }
+        } catch {
+            return "template debug failed: \(error)"
+        }
+    }
 }
