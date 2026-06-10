@@ -35,6 +35,16 @@ public final class MLXEmbeddingService: EmbeddingService, @unchecked Sendable {
 
     public let dimension: Int
 
+    /// Hand-bumped whenever the mlx-swift pin changes minor version: the
+    /// embedding KERNELS live there, and a kernel change shifts the vector
+    /// space even with identical weights. Bumping this fires the store's
+    /// auto re-index on next launch (see EmbedderReindexPolicy).
+    public static let kernelTag = "mlx-swift-0.30"
+
+    public var fingerprint: String {
+        "mlx/\(configuration.name)/\(Self.kernelTag)"
+    }
+
     /// - Parameters:
     ///   - configuration: MLXEmbedders model. Defaults to `.bge_small` (the
     ///     known-good path); pass `.nomic_text_v1_5` only when its loader is fixed.

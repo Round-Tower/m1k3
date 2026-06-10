@@ -21,6 +21,10 @@ import Foundation
 public struct HashingEmbeddingService: EmbeddingService {
     public let dimension: Int
 
+    /// The hashing space is fixed by the FNV bucketing below — bump the suffix
+    /// only if that algorithm (and so every stored vector) changes.
+    public let fingerprint = "hashing/v1"
+
     public init(dimension: Int = 256) {
         self.dimension = dimension
     }

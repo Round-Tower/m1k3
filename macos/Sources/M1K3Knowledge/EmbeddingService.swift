@@ -23,6 +23,13 @@ public protocol EmbeddingService: Sendable {
     /// Dimensionality of the vectors this service produces (e.g. 768).
     var dimension: Int { get }
 
+    /// Stable identity of the vector space this service produces: embedder
+    /// family + model + kernel generation (e.g. "mlx/bge-small-en-v1.5/
+    /// mlx-swift-0.30"). Vectors from different fingerprints are NOT
+    /// comparable; the store records this with its vectors so a mismatch can
+    /// trigger a re-index (see `EmbedderReindexPolicy`).
+    var fingerprint: String { get }
+
     /// Embed a single string into a vector of `dimension` floats.
     func embed(_ text: String) async throws -> [Float]
 

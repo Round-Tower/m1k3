@@ -279,9 +279,8 @@ final class AppEnvironment {
         // its model loads), Apple Speech as the always-on fallback. So dictation
         // works on Apple Speech day one and upgrades to WhisperKit on demand.
         let whisperDownloadBase = url.deletingLastPathComponent()
-        let whisper = WhisperKitProvider(downloadBase: whisperDownloadBase)
-        whisperKit = whisper
-        transcription = TranscriptionRouter(providers: [whisper, AppleSpeechTranscriber()])
+        whisperKit = WhisperKitProvider(downloadBase: whisperDownloadBase)
+        transcription = TranscriptionRouter(providers: [whisperKit, AppleSpeechTranscriber()])
         batchTranscriber = WhisperKitBatchTranscriber(downloadBase: whisperDownloadBase)
 
         ingester = DocumentIngester(store: store, embedder: embedder)
@@ -296,6 +295,7 @@ final class AppEnvironment {
         callSummarizer = SummarizationPipeline(quickProvider: afm, deepProvider: runtimeProvider)
 
         refreshCounts()
+        Task { await self.reindexIfEmbedderChanged() }
 
         // Wire avatar ↔ speech after all stored properties are initialized.
         speech.onSpeakingStarted = { [weak self] in
@@ -483,7 +483,9 @@ final class AppEnvironment {
             : HashingEmbeddingService()
         embedder.setEmbedder(newEmbedder)
         do {
-            let count = try await store.reindexEmbeddings(using: newEmbedder)
+            let count = try await store.reindexEmbeddings(
+                using: newEmbedder, fingerprint: newEmbedder.fingerprint
+            )
             usingMLXEmbeddings = useMLX
             UserDefaults.standard.set(useMLX, forKey: Self.embedderPrefersMLXKey)
             let label = useMLX ? "MLX bge_small" : "Hashing"
@@ -633,6 +635,40 @@ extension AppEnvironment {
     /// Whether the on-device model is actually available on this machine.
     var providerAvailable: Bool {
         provider.isAvailable
+    }
+
+    /// Re-embed the store when the running embedder's vector space doesn't
+    /// match the one that produced the stored vectors — e.g. after an mlx-swift
+    /// bump changes the embedding kernels. Background, one-time; the Settings
+    /// progress row (isReindexing/embeddingStatus) reports it. FTS keeps
+    /// serving mid-reindex; vector ranks are briefly mixed-space, acceptable
+    /// for a minutes-long one-time migration.
+    func reindexIfEmbedderChanged() async {
+        let current = embedder.fingerprint
+        let stored = (try? store.meta(key: KnowledgeStore.embedderFingerprintKey)) ?? nil
+        let vectorCount = (try? store.embeddingCount()) ?? 0
+        guard EmbedderReindexPolicy.needsReindex(
+            stored: stored, current: current, embeddingCount: vectorCount
+        ) else {
+            // Adopt the marker on fresh/empty stores so the next comparison
+            // is against a real value.
+            if stored != current {
+                try? store.setMeta(key: KnowledgeStore.embedderFingerprintKey, value: current)
+            }
+            return
+        }
+        guard !isReindexing else { return }
+        isReindexing = true
+        embeddingStatus = "Updating the index for the new embedder…"
+        defer { isReindexing = false }
+        do {
+            let count = try await store.reindexEmbeddings(using: embedder, fingerprint: current)
+            embeddingStatus = "Reindexed \(count) chunk\(count == 1 ? "" : "s") for the new embedder."
+        } catch {
+            // Reindex writes atomically — the store still matches the stored
+            // marker, so the next launch retries.
+            embeddingStatus = "Couldn’t update the index: \(error.localizedDescription)"
+        }
     }
 
     /// Build the encrypted call store. Falls back to an in-memory (non-persistent)
