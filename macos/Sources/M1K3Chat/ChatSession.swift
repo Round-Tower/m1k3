@@ -80,10 +80,14 @@ public struct ChatMessage: Identifiable, Sendable, Equatable, Codable {
     /// `.streaming` and no tokens have arrived. Transient — omitted from
     /// `CodingKeys` like `citations`.
     public var activityLabel: String?
+    /// A reasoning model's `<think>…</think>` chain-of-thought, separated from
+    /// the answer and surfaced (collapsibly) for transparency. Persisted as an
+    /// optional key, so old transcripts (without it) still decode to nil.
+    public var reasoning: String?
     public var status: Status
 
     enum CodingKeys: String, CodingKey {
-        case id, role, text, sources, status
+        case id, role, text, sources, status, reasoning
     }
 
     public init(
@@ -92,6 +96,7 @@ public struct ChatMessage: Identifiable, Sendable, Equatable, Codable {
         text: String,
         sources: [ChunkHit] = [],
         citations: [Citation] = [],
+        reasoning: String? = nil,
         status: Status
     ) {
         self.id = id
@@ -99,6 +104,7 @@ public struct ChatMessage: Identifiable, Sendable, Equatable, Codable {
         self.text = text
         self.sources = sources
         self.citations = citations
+        self.reasoning = reasoning
         self.status = status
     }
 }
@@ -172,15 +178,19 @@ public final class ChatSession {
                     $0.activityLabel = nil
                 }
             }
-            // Now the full answer is in hand: strip any citations the model invented
-            // (not grounded in the retrieved sources) and record the validated ones.
+            // Now the full text is in hand. First peel off any reasoning-model
+            // chain-of-thought so it's surfaced separately, not buried in the
+            // answer; then strip invented citations from the ANSWER and record
+            // the validated ones.
             let finalText = messages.first { $0.id == assistantID }?.text ?? ""
-            let validation = await CitationValidator.validate(responseText: finalText, against: sources)
+            let (reasoning, answer) = ReasoningSplit.split(finalText)
+            let validation = await CitationValidator.validate(responseText: answer, against: sources)
             update(assistantID) {
                 // Flatten model markdown + tidy whitespace once the full text
                 // is in hand (ReadingText renders plain text).
                 $0.text = MessageTextPolish.polish(validation.cleanedText)
                 $0.citations = validation.validated
+                $0.reasoning = reasoning
                 $0.activityLabel = nil
                 $0.status = .complete
             }
