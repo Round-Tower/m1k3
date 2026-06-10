@@ -189,7 +189,7 @@ public final class ChatSession {
                 msg.status = .failed(String(describing: error))
                 msg.activityLabel = nil
                 if msg.text.isEmpty {
-                    msg.text = "Sorry — I couldn't answer that. \(error.localizedDescription)"
+                    msg.text = ChatFailureMessage.userFacing(for: error)
                 }
             }
         }

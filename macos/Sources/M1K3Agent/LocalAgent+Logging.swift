@@ -24,6 +24,14 @@ extension LocalAgent {
         """)
     }
 
+    func logPathSelection(provider: String, conforms: Bool, supportsToolCalls: Bool, usingNative: Bool) {
+        let path = usingNative ? "NATIVE tool-calling" : "ReAct floor"
+        M1K3Log.agentLoop.info("""
+        path: provider="\(provider, privacy: .public)" conformsToToolCalling=\(conforms) \
+        supportsToolCalls=\(supportsToolCalls) → \(path, privacy: .public)
+        """)
+    }
+
     func logCapReached() {
         let cap = maxIterations
         M1K3Log.agentLoop.notice("iteration cap (\(cap)) reached — synthesising a final answer")

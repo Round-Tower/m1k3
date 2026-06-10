@@ -41,6 +41,11 @@ import Foundation
 import M1K3Inference
 import MLXLLM
 import MLXLMCommon
+import os
+
+/// Model-load diagnostics. File-scope so the load closure (which runs off the
+/// provider's isolation) can log retries without capturing `self`.
+private let mlxLoadLog = Logger(subsystem: "dev.murphysig.M1K3", category: "mlx-load")
 
 /// `@unchecked Sendable`: model loading is coalesced through a `SingleFlightLoader`
 /// actor and the loaded `ModelContainer` is itself an isolation actor; everything
@@ -79,10 +84,23 @@ public final class MLXGemmaProvider: InferenceProvider, ModelPreloading, @unchec
 
         // Single-flight the container load so a Settings preload racing the first
         // generate share ONE ~1GB download instead of each kicking off their own.
+        // Retry on transient network failures: a HuggingFace CDN timeout would
+        // otherwise kill the turn, but the download is resumable so each retry
+        // continues the cached partial rather than restarting.
         loader = SingleFlightLoader { progress in
-            try await LLMModelFactory.shared.loadContainer(configuration: loadConfiguration) { prog in
-                progress(prog.fractionCompleted)
-            }
+            try await withRetry(
+                onRetry: { attempt, error in
+                    let reason = error.localizedDescription
+                    mlxLoadLog.notice(
+                        "model load attempt \(attempt) failed (\(reason, privacy: .public)); retrying"
+                    )
+                },
+                operation: {
+                    try await LLMModelFactory.shared.loadContainer(configuration: loadConfiguration) { prog in
+                        progress(prog.fractionCompleted)
+                    }
+                }
+            )
         }
     }
 

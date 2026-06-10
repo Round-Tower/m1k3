@@ -105,7 +105,15 @@ public actor LocalAgent {
     ) async throws -> AgentResult {
         reasoningTrace.removeAll()
 
-        if let toolProvider = inferenceProvider as? ToolCallingProvider, toolProvider.supportsToolCalls {
+        let toolProvider = inferenceProvider as? ToolCallingProvider
+        let supportsToolCalls = toolProvider?.supportsToolCalls ?? false
+        logPathSelection(
+            provider: inferenceProvider.name,
+            conforms: toolProvider != nil,
+            supportsToolCalls: supportsToolCalls,
+            usingNative: supportsToolCalls
+        )
+        if let toolProvider, supportsToolCalls {
             return try await runNative(
                 provider: toolProvider,
                 goal: goal,
