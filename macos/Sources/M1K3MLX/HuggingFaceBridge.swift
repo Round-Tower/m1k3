@@ -86,6 +86,7 @@ struct HubApiDownloader: MLXLMCommon.Downloader {
         let clock = ContinuousClock()
         let started = clock.now
         let throttle = Mutex(DownloadLogThrottle())
+        let rateState = Mutex<(sizeMB: Int, at: ContinuousClock.Instant)>((startSizeMB, started))
         do {
             let url = try await hub.snapshot(
                 from: repo,
@@ -95,7 +96,21 @@ struct HubApiDownloader: MLXLMCommon.Downloader {
                     let fraction = progress.fractionCompleted
                     let now = clock.now
                     if throttle.withLock({ $0.shouldEmit(fraction: fraction, now: now) }) {
-                        Self.logProgress(id: id, fraction: fraction, elapsed: now - started, localPath: localPath)
+                        // Byte-rate from the on-disk delta — HubApi's fraction
+                        // is FILE-weighted (one huge safetensors pins it for
+                        // minutes), so bytes are the only honest progress.
+                        let sizeMB = Self.directorySizeMB(localPath)
+                        let previous = rateState.withLock { state in
+                            let prior = state
+                            state = (sizeMB, now)
+                            return prior
+                        }
+                        let seconds = (now - previous.at).components.seconds
+                        let rate = seconds > 0 ? (sizeMB - previous.sizeMB) / Int(seconds) : 0
+                        Self.logProgress(
+                            id: id, fraction: fraction, elapsed: now - started,
+                            sizeMB: sizeMB, rateMBps: rate
+                        )
                     }
                     progressHandler(progress)
                 }
@@ -129,19 +144,16 @@ struct HubApiDownloader: MLXLMCommon.Downloader {
         }
     }
 
-    /// One throttled progress line: percent, elapsed, ETA projected from the
-    /// fraction rate, and what's actually on disk so far.
+    /// One throttled progress line. The percent is HubApi's FILE-weighted
+    /// fraction (labelled `files≈` because it sits still while a big shard
+    /// streams); the on-disk MB + MB/s are the honest signal.
     private static func logProgress(
-        id: String, fraction: Double, elapsed: Duration, localPath: URL
+        id: String, fraction: Double, elapsed: Duration, sizeMB: Int, rateMBps: Int
     ) {
         let percent = Int(fraction * 100)
         let elapsedSeconds = Int(elapsed.components.seconds)
-        let etaSeconds = fraction > 0.001
-            ? Int(Double(elapsedSeconds) * (1 - fraction) / fraction)
-            : -1
-        let sizeMB = directorySizeMB(localPath)
         downloadLog.notice(
-            "\(id, privacy: .public): \(percent)% elapsed=\(elapsedSeconds)s eta=\(etaSeconds)s onDiskMB=\(sizeMB)"
+            "\(id, privacy: .public): files≈\(percent)% onDiskMB=\(sizeMB) rate=\(rateMBps)MB/s elapsed=\(elapsedSeconds)s"
         )
     }
 
