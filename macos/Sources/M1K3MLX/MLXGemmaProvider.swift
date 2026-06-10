@@ -116,8 +116,8 @@ public final class MLXGemmaProvider: InferenceProvider, ModelPreloading, @unchec
             // memory-bandwidth-bound, speeds long transcripts. Replaces the
             // maxKVSize rotation backstop for these families — maxKVSize must stay
             // nil because upstream quantizes only KVCacheSimple (RotatingKVCache.
-            // toQuantized() is a fatalError TODO), so setting both silently
-            // disables kvBits. The rotation cap was sized to never fire anyway
+            // toQuantized() is an unimplemented fatalError), so setting both
+            // silently disables kvBits. The rotation cap was sized to never fire
             // (and would rotate the prompt out — a silent quality cliff — if it
             // did); growth stays bounded in practice by the per-turn session
             // lifecycle + maxTokens.
