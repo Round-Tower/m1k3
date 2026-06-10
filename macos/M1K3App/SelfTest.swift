@@ -170,6 +170,8 @@ enum SelfTest {
                     emit("ttft \(label): first=\(firstMS)ms total=\(milliseconds(total))ms chars=\(characters)")
                 }
             }
+
+            await runKVPersistProbeIfRequested(llm: llm)
         } catch {
             emit("✗ MLX generate stage: \(error)")
         }
@@ -189,6 +191,16 @@ enum SelfTest {
         }
 
         emit("=== END SELF-TEST ===")
+    }
+
+    /// 3d. Optional prompt-cache persistence probe (M1K3_SELFTEST_KVPERSIST=1):
+    /// persona-prefix KV → disk → reload → generate from the reloaded cache.
+    /// The prototype gate for persisting PersonaPrefixCache across launches.
+    private static func runKVPersistProbeIfRequested(llm: MLXGemmaProvider) async {
+        guard ProcessInfo.processInfo.environment["M1K3_SELFTEST_KVPERSIST"] == "1" else { return }
+        emit(await llm.promptCacheRoundTripProbe(
+            directory: FileManager.default.temporaryDirectory
+        ))
     }
 
     /// One model through the behavioral checklist. Self-contained on purpose:
@@ -277,6 +289,30 @@ enum SelfTest {
             ))
         }
 
+        // Check 4: needle recall across a few-thousand-token prompt — the only
+        // check that exercises a LONG KV cache (8-bit quantized on allow-listed
+        // families, rotation backstop elsewhere). Short prompts cannot catch
+        // cache-quality loss.
+        records.append(await evalLongContextRecall(provider: provider))
+
         return ModelEvalReport(modelID: modelID, records: records)
+    }
+
+    private static func evalLongContextRecall(provider: MLXGemmaProvider) async -> ModelEvalRecord {
+        do {
+            let raw = try await provider.generate(prompt: LongContextRecall.prompt())
+            let answer = ModelEvalReport.strippingThink(raw)
+            let recalled = LongContextRecall.passes(answer)
+            return ModelEvalRecord(
+                check: "long-context recall",
+                outcome: recalled ? .pass : .fail,
+                detail: recalled ? "needle recalled" : "answer: \(answer.prefix(60))"
+            )
+        } catch {
+            return ModelEvalRecord(
+                check: "long-context recall", outcome: .fail,
+                detail: String(describing: error).prefix(80) + ""
+            )
+        }
     }
 }
