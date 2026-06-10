@@ -250,13 +250,22 @@ extension MLXGemmaProvider: ToolCallingProvider {
     public func makeToolTurnSession(tools: [ToolDefinition]) async throws -> any ToolTurnSession {
         let container = try await ensureLoaded()
         let specs = tools.map(MLXToolMapping.toolSpec(from:))
+        let normalizedSpecs = specs.isEmpty ? nil : specs
+        // Persona (and tools — they render in the SAME system block) prefilled
+        // once per (model × tools × persona); this turn starts from a copy.
+        let seed = await personaPrefixSnapshot(
+            container: container,
+            specs: normalizedSpecs,
+            toolNames: tools.map(\.name)
+        )
         return MLXToolTurnSession(
             container: container,
             parameters: generateParameters,
             format: resolvedToolCallFormat ?? .gemma,
-            specs: specs.isEmpty ? nil : specs,
+            specs: normalizedSpecs,
             thinkingContext: thinkingAdditionalContext,
-            prefixNeeded: thinkPrefixNeeded
+            prefixNeeded: thinkPrefixNeeded,
+            seed: seed
         )
     }
 }
@@ -280,6 +289,10 @@ final class MLXToolTurnSession: ToolTurnSession, @unchecked Sendable {
     /// non-Sendable KVCache without tripping region isolation on the way out.
     private var kvCache: [KVCache]?
     private var sentTools = false
+    /// True when the session was seeded with a persona-prefix copy: the
+    /// system turn AND tool specs are already in the cache, so incoming
+    /// `.system` messages are dropped and tools are never re-rendered.
+    private let personaBaked: Bool
 
     init(
         container: ModelContainer,
@@ -287,7 +300,8 @@ final class MLXToolTurnSession: ToolTurnSession, @unchecked Sendable {
         format: ToolCallFormat,
         specs: [ToolSpec]?,
         thinkingContext: [String: any Sendable]?,
-        prefixNeeded: Bool
+        prefixNeeded: Bool,
+        seed: PersonaPrefixSnapshot? = nil
     ) {
         self.container = container
         self.parameters = parameters
@@ -295,6 +309,9 @@ final class MLXToolTurnSession: ToolTurnSession, @unchecked Sendable {
         self.specs = specs
         self.thinkingContext = thinkingContext
         self.prefixNeeded = prefixNeeded
+        kvCache = seed?.cache
+        personaBaked = seed != nil
+        sentTools = seed != nil
     }
 
     func send(
@@ -310,9 +327,17 @@ final class MLXToolTurnSession: ToolTurnSession, @unchecked Sendable {
         if prefixNeeded { onToken("<think>") }
 
         return try await container.perform { context in
-            let chat = messages.map { MLXToolMapping.chatMessage(from: $0, format: format) }
+            // A seeded session already holds the system turn in its cache —
+            // the agent's leading .system message must not render twice.
+            let outgoing = self.personaBaked
+                ? messages.filter { message in
+                    if case .system = message { return false }
+                    return true
+                }
+                : messages
+            let chat = outgoing.map { MLXToolMapping.chatMessage(from: $0, format: format) }
             // Tool specs render into the chat template once, on the first
-            // send — they live in the cache afterwards.
+            // send — they live in the cache afterwards (or in the seed).
             let userInput = UserInput(
                 chat: chat,
                 tools: self.sentTools ? nil : self.specs,

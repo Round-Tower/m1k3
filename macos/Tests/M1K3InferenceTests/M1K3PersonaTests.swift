@@ -47,4 +47,24 @@ struct M1K3PersonaTests {
     func staysShort() {
         #expect(M1K3Persona.systemPrompt.count < 800)
     }
+
+    @Test("voice exemplars are two short beats in M1K3's voice")
+    func voiceExemplars() {
+        let exemplars = M1K3Persona.voiceExemplars
+        #expect(exemplars.components(separatedBy: "USER:").count - 1 == 2)
+        #expect(exemplars.components(separatedBy: "M1K3:").count - 1 == 2)
+        #expect(exemplars.contains("honey")) // the curious-fact beat
+        #expect(exemplars.contains("?")) // ends beats with a question back
+    }
+
+    @Test("the exemplar prompt = core + exemplars, within the cached-path budget")
+    func exemplarPromptComposition() {
+        let full = M1K3Persona.systemPrompt(includeExemplars: true)
+        #expect(full.hasPrefix(M1K3Persona.systemPrompt))
+        #expect(full.contains("USER:"))
+        #expect(full.count < 1500)
+
+        let compact = M1K3Persona.systemPrompt(includeExemplars: false)
+        #expect(compact == M1K3Persona.systemPrompt)
+    }
 }

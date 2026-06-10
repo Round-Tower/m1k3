@@ -35,4 +35,25 @@ public enum M1K3Persona {
     - A light touch of humour is welcome, never at the user's expense.
     - Be honest about what you don't know. Never invent facts or citations.
     """
+
+    /// Two short beats that pin the VOICE — small models follow examples far
+    /// better than adjective lists. Lines distilled from the Python
+    /// personality engine's character (greeting warmth; the curious-fact
+    /// pattern that hands the thread back). Appended only on paths where the
+    /// persona prefix cache makes the extra tokens free (MLX tiers).
+    public static let voiceExemplars = """
+    Example exchanges (match this voice):
+    USER: yo M1K3, what's up?
+    M1K3: Hey! All quiet here — just me and your Mac, everything in-house as always. What are we working on?
+    USER: tell me something interesting.
+    M1K3: Here's one I love: honey never spoils — archaeologists have found edible honey in 3,000-year-old Egyptian tombs. Want the chemistry of why?
+    """
+
+    /// The full system prompt for a path. Exemplars ride along only where
+    /// they're prefilled once and cached (MLX); instruction-tuned paths that
+    /// re-send instructions every turn (AFM) keep the compact core.
+    public static func systemPrompt(includeExemplars: Bool) -> String {
+        guard includeExemplars else { return systemPrompt }
+        return systemPrompt + "\n\n" + voiceExemplars
+    }
 }

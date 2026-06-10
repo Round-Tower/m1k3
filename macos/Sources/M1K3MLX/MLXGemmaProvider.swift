@@ -39,6 +39,7 @@
 
 import Foundation
 import M1K3Inference
+import MLX
 import MLXLLM
 import MLXLMCommon
 import os
@@ -90,6 +91,11 @@ public final class MLXGemmaProvider: InferenceProvider, ModelPreloading, @unchec
     let thinkingEnabled: Bool
     /// Whether the family's template understands `enable_thinking` at all.
     private let supportsThinkingToggle: Bool
+    /// The model id this provider was built for — keys the persona prefix.
+    let modelIdentifier: String
+    /// Per-(tools × persona) prefilled system-block KV prefix; turns start
+    /// from copies instead of re-prefilling the persona every time.
+    let personaPrefix = PersonaPrefixCache()
 
     public init(
         configuration: ModelConfiguration = LLMRegistry.gemma3_1B_qat_4bit,
@@ -119,6 +125,7 @@ public final class MLXGemmaProvider: InferenceProvider, ModelPreloading, @unchec
         let resolved = Self.resolveToolCallFormat(for: configuration)
         resolvedToolCallFormat = resolved
         self.thinkingEnabled = thinkingEnabled
+        modelIdentifier = configuration.name
         let familyPreOpens = Self.templatePreOpensThink(for: configuration)
         supportsThinkingToggle = familyPreOpens
         thinkPrefixNeeded = thinkingEnabled && familyPreOpens
@@ -192,7 +199,7 @@ public final class MLXGemmaProvider: InferenceProvider, ModelPreloading, @unchec
         // Return cached Metal buffers after every generation — without this the
         // process-global MLX cache holds each generation's peak forever.
         defer { MLXMemoryBudget.reclaim(label: "generate") }
-        let session = makeUpstreamSession(container)
+        let session = await makeUpstreamSession(container)
         var raw = ""
         for try await event in session.streamDetails(to: prompt, images: [], videos: []) {
             if let piece = event.chunk { raw += piece }
@@ -209,7 +216,7 @@ public final class MLXGemmaProvider: InferenceProvider, ModelPreloading, @unchec
                 defer { MLXMemoryBudget.reclaim(label: "generateStreaming") }
                 do {
                     let container = try await ensureLoaded()
-                    let session = makeUpstreamSession(container)
+                    let session = await makeUpstreamSession(container)
                     // Qwen3.5's template pre-opens <think>, so the stream's
                     // first real token is already chain-of-thought — surface
                     // the opener so live reasoning splitting engages from
@@ -238,19 +245,102 @@ public final class MLXGemmaProvider: InferenceProvider, ModelPreloading, @unchec
         return try await loader.value(progress: progress)
     }
 
-    /// One-shot upstream session for the plain-chat paths: M1K3's standing
-    /// persona as the system turn, plus the thinking toggle rendered into the
-    /// template when the family supports it.
-    private func makeUpstreamSession(_ container: ModelContainer) -> ChatSession {
-        let session = ChatSession(
-            container,
-            instructions: M1K3Persona.systemPrompt,
-            generateParameters: generateParameters
-        )
+    /// One-shot upstream session for the plain-chat paths: seeded from the
+    /// persona prefix cache when available (instructions stay nil — the cache
+    /// IS the system turn), falling back to plain instructions. Thinking
+    /// toggle rendered when the family supports it.
+    private func makeUpstreamSession(_ container: ModelContainer) async -> ChatSession {
+        let session: ChatSession
+        if let seed = await personaPrefixSnapshot(container: container, specs: nil, toolNames: []) {
+            session = ChatSession(
+                container,
+                cache: seed.cache,
+                generateParameters: generateParameters
+            )
+        } else {
+            session = ChatSession(
+                container,
+                instructions: M1K3Persona.systemPrompt,
+                generateParameters: generateParameters
+            )
+        }
         if let context = thinkingAdditionalContext {
             session.additionalContext = context
         }
         return session
+    }
+
+    /// Get-or-build the persona prefix for this model + tool set. Best-effort:
+    /// any failure (no template tokenizer, render error) returns nil and the
+    /// caller falls back to sending the system turn as a normal message.
+    func personaPrefixSnapshot(
+        container: ModelContainer,
+        specs: [ToolSpec]?,
+        toolNames: [String]
+    ) async -> PersonaPrefixSnapshot? {
+        let key = PersonaCacheKey(
+            modelID: modelIdentifier,
+            toolNames: toolNames,
+            // Exemplars ride the CACHED render — they cost once per launch,
+            // not per turn. The fallback (inline instructions) stays compact.
+            personaText: M1K3Persona.systemPrompt(includeExemplars: true)
+        )
+        if let hit = personaPrefix.snapshot(for: key) { return hit }
+
+        let parameters = generateParameters
+        do {
+            // `@unchecked Sendable` box: the cache arrays are evaluated by the
+            // prefill generation before crossing isolation (the same contract
+            // MLXToolTurnSession relies on for its per-turn cache).
+            struct PrefixBox: @unchecked Sendable {
+                let cache: [KVCache]
+                let tokenCount: Int
+            }
+            let built: PrefixBox = try await container.perform { context in
+                // Render the system block WITHOUT the assistant generation
+                // opener — needs the upstream tokenizer's full overload.
+                guard let upstream = (context.tokenizer as? TransformersTokenizerAdapter)?.upstream else {
+                    throw InferenceError.generationFailed("no template tokenizer for persona prefix")
+                }
+                let ids = try upstream.applyChatTemplate(
+                    messages: [[
+                        "role": "system",
+                        "content": M1K3Persona.systemPrompt(includeExemplars: true),
+                    ]],
+                    chatTemplate: nil,
+                    addGenerationPrompt: false,
+                    truncation: false,
+                    maxLength: nil,
+                    tools: specs
+                )
+                // Prefill: run a 1-token generation over the prefix, then trim
+                // the cache back to exactly the prompt (the sampled token must
+                // not pollute the reusable prefix).
+                var prefill = parameters
+                prefill.maxTokens = 1
+                let cache = context.model.newCache(parameters: parameters)
+                let stream = try MLXLMCommon.generate(
+                    input: LMInput(tokens: MLXArray(ids)),
+                    cache: cache,
+                    parameters: prefill,
+                    context: context
+                )
+                for await _ in stream {}
+                for layer in cache {
+                    let extra = layer.offset - ids.count
+                    if extra > 0 { _ = layer.trim(extra) }
+                }
+                return PrefixBox(cache: cache, tokenCount: ids.count)
+            }
+            personaPrefix.store(built.cache, tokenCount: built.tokenCount, for: key)
+            let tokens = built.tokenCount
+            mlxTTFTLog.notice("persona prefix cached: \(tokens)tok (saved from every turn's prefill)")
+            return personaPrefix.snapshot(for: key)
+        } catch {
+            let reason = String(describing: error)
+            mlxLoadLog.notice("persona prefix unavailable — sending system turn inline (\(reason, privacy: .public))")
+            return nil
+        }
     }
 
     /// Template context for the `enable_thinking` switch. nil when thinking is
