@@ -56,6 +56,50 @@ struct DownloadLogThrottle {
     }
 }
 
+/// One entry of the HF `/api/models/{id}/tree/{revision}` listing.
+struct RepoTreeEntry: Decodable, Equatable {
+    let type: String
+    let size: Int
+    let path: String
+}
+
+/// Expected byte total for the files a snapshot will actually fetch — the
+/// basis for HONEST progress. HubApi's own Progress is file-weighted (one
+/// huge safetensors pins the bar at "25%" for minutes); bytes-on-disk over
+/// bytes-expected is what a download bar should show.
+enum RepoSizeEstimate {
+    /// Sum of file sizes matching the loader's glob patterns; nil when no
+    /// entry matches (no basis for an estimate — caller falls back).
+    static func expectedBytes(entries: [RepoTreeEntry], matching patterns: [String]) -> Int? {
+        let matched = entries.filter { entry in
+            entry.type == "file" && patterns.contains { pattern in
+                matches(filename: (entry.path as NSString).lastPathComponent, pattern: pattern)
+            }
+        }
+        guard !matched.isEmpty else { return nil }
+        return matched.reduce(0) { $0 + $1.size }
+    }
+
+    /// `*`/`?` glob match, same shape HubApi applies to its file patterns.
+    static func matches(filename: String, pattern: String) -> Bool {
+        NSPredicate(format: "SELF LIKE %@", pattern).evaluate(with: filename)
+    }
+
+    /// Fetch the repo tree. Best-effort: any failure (offline, 404, schema
+    /// drift) returns nil and progress falls back to the file-weighted kind.
+    static func fetchEntries(repoID: String, revision: String) async -> [RepoTreeEntry]? {
+        let encodedRevision = revision.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? revision
+        guard let url = URL(string: "https://huggingface.co/api/models/\(repoID)/tree/\(encodedRevision)") else {
+            return nil
+        }
+        let request = URLRequest(url: url, timeoutInterval: 8)
+        guard let (data, response) = try? await URLSession.shared.data(for: request),
+              (response as? HTTPURLResponse)?.statusCode == 200
+        else { return nil }
+        return try? JSONDecoder().decode([RepoTreeEntry].self, from: data)
+    }
+}
+
 /// `MLXLMCommon.Downloader` over swift-transformers' `HubApi`. Mirrors the
 /// snapshot + offline-fallback behaviour of mlx-swift-lm 2.x's `downloadModel`.
 struct HubApiDownloader: MLXLMCommon.Downloader {
@@ -87,6 +131,22 @@ struct HubApiDownloader: MLXLMCommon.Downloader {
         let started = clock.now
         let throttle = Mutex(DownloadLogThrottle())
         let rateState = Mutex<(sizeMB: Int, at: ContinuousClock.Instant)>((startSizeMB, started))
+
+        // Expected byte total from the repo tree (best-effort) — the basis for
+        // an HONEST progress bar. HubApi's own fraction is file-weighted, so
+        // onboarding sat at "25%" for minutes while one safetensors streamed.
+        let expectedBytes = await RepoSizeEstimate.fetchEntries(repoID: id, revision: revision ?? "main")
+            .flatMap { RepoSizeEstimate.expectedBytes(entries: $0, matching: patterns) }
+        if let expectedBytes {
+            let expectedMB = expectedBytes / 1_048_576
+            downloadLog.notice("expected size: \(id, privacy: .public) \(expectedMB)MB")
+        } else {
+            downloadLog.notice("no size estimate for \(id, privacy: .public) — file-weighted progress")
+        }
+        // UI rescan cadence: ~2Hz disk-size checks, far cheaper than the
+        // callback rate, smooth enough for a bar.
+        let scanState = Mutex<(at: ContinuousClock.Instant, bytes: Int)?>(nil)
+
         do {
             let url = try await hub.snapshot(
                 from: repo,
@@ -95,10 +155,16 @@ struct HubApiDownloader: MLXLMCommon.Downloader {
                 progressHandler: { progress in
                     let fraction = progress.fractionCompleted
                     let now = clock.now
+
+                    var forwarded = progress
+                    if let expectedBytes {
+                        let bytes = Self.throttledDiskBytes(at: localPath, now: now, state: scanState)
+                        let synthesized = Progress(totalUnitCount: Int64(expectedBytes))
+                        synthesized.completedUnitCount = Int64(min(bytes, expectedBytes))
+                        forwarded = synthesized
+                    }
+
                     if throttle.withLock({ $0.shouldEmit(fraction: fraction, now: now) }) {
-                        // Byte-rate from the on-disk delta — HubApi's fraction
-                        // is FILE-weighted (one huge safetensors pins it for
-                        // minutes), so bytes are the only honest progress.
                         let sizeMB = Self.directorySizeMB(localPath)
                         let previous = rateState.withLock { state in
                             let prior = state
@@ -108,11 +174,11 @@ struct HubApiDownloader: MLXLMCommon.Downloader {
                         let seconds = (now - previous.at).components.seconds
                         let rate = seconds > 0 ? (sizeMB - previous.sizeMB) / Int(seconds) : 0
                         Self.logProgress(
-                            id: id, fraction: fraction, elapsed: now - started,
-                            sizeMB: sizeMB, rateMBps: rate
+                            id: id, fraction: forwarded.fractionCompleted, elapsed: now - started,
+                            sizeMB: sizeMB, rateMBps: rate, byteAccurate: expectedBytes != nil
                         )
                     }
-                    progressHandler(progress)
+                    progressHandler(forwarded)
                 }
             )
             let totalSeconds = Int((clock.now - started).components.seconds)
@@ -144,22 +210,44 @@ struct HubApiDownloader: MLXLMCommon.Downloader {
         }
     }
 
-    /// One throttled progress line. The percent is HubApi's FILE-weighted
-    /// fraction (labelled `files≈` because it sits still while a big shard
-    /// streams); the on-disk MB + MB/s are the honest signal.
+    /// One throttled progress line: byte-accurate percent when the tree gave
+    /// us an estimate, the file-weighted `files≈` fallback otherwise; plus the
+    /// on-disk MB + measured MB/s either way.
     private static func logProgress(
-        id: String, fraction: Double, elapsed: Duration, sizeMB: Int, rateMBps: Int
+        id: String, fraction: Double, elapsed: Duration, sizeMB: Int, rateMBps: Int,
+        byteAccurate: Bool
     ) {
         let percent = Int(fraction * 100)
+        let label = byteAccurate ? "" : "files≈"
         let elapsedSeconds = Int(elapsed.components.seconds)
         downloadLog.notice(
-            "\(id, privacy: .public): files≈\(percent)% onDiskMB=\(sizeMB) rate=\(rateMBps)MB/s elapsed=\(elapsedSeconds)s"
+            "\(id, privacy: .public): \(label, privacy: .public)\(percent)% onDiskMB=\(sizeMB) rate=\(rateMBps)MB/s elapsed=\(elapsedSeconds)s"
         )
     }
 
-    /// Recursive on-disk size in MB — model repos are ~a dozen files, so this
-    /// is a handful of stats, cheap enough at the throttled emission rate.
+    /// On-disk byte count, rescanned at most twice a second — the progress
+    /// callback fires far more often than a bar needs.
+    private static func throttledDiskBytes(
+        at url: URL,
+        now: ContinuousClock.Instant,
+        state: borrowing Mutex<(at: ContinuousClock.Instant, bytes: Int)?>
+    ) -> Int {
+        let cached = state.withLock { $0 }
+        if let cached, now - cached.at < .milliseconds(500) {
+            return cached.bytes
+        }
+        let bytes = directorySizeBytes(url)
+        state.withLock { $0 = (now, bytes) }
+        return bytes
+    }
+
     private static func directorySizeMB(_ url: URL) -> Int {
+        directorySizeBytes(url) / 1_048_576
+    }
+
+    /// Recursive on-disk size — model repos are ~a dozen files, so this is a
+    /// handful of stats, cheap enough at the throttled scan rate.
+    private static func directorySizeBytes(_ url: URL) -> Int {
         let manager = FileManager.default
         guard let enumerator = manager.enumerator(
             at: url,
@@ -170,7 +258,7 @@ struct HubApiDownloader: MLXLMCommon.Downloader {
             let values = try? file.resourceValues(forKeys: [.totalFileAllocatedSizeKey, .fileSizeKey])
             total += values?.totalFileAllocatedSize ?? values?.fileSize ?? 0
         }
-        return total / 1_048_576
+        return total
     }
 }
 
