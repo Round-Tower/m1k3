@@ -240,6 +240,21 @@ struct AgentRAGResponderTests {
         #expect(prompt.contains("already stored on this Mac"))
     }
 
+    @Test("with fetch_page available, the rules teach the search→read→conclude flow")
+    func rulesTeachFetchFlow() async throws {
+        let (store, embedder) = try await ingestedStore()
+        let provider = AgentScriptedProvider(["CONCLUSION: ok."])
+        let responder = AgentRAGResponder(
+            store: store, embedder: embedder, provider: provider,
+            tools: [FixedTool(name: "web_search", response: "x"),
+                    FixedTool(name: "fetch_page", response: "y")]
+        )
+        _ = try await collect(await responder.answerStreaming("weather?").stream)
+        let prompt = try #require(provider.allPrompts.first)
+        #expect(prompt.contains("fetch_page"))
+        #expect(prompt.contains("most relevant result"))
+    }
+
     @Test("without web search, the rules say so instead of advertising a missing tool")
     func rulesHonestWithoutWebSearch() async throws {
         let (store, embedder) = try await ingestedStore()

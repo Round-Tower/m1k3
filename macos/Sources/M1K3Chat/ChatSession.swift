@@ -177,7 +177,9 @@ public final class ChatSession {
             let finalText = messages.first { $0.id == assistantID }?.text ?? ""
             let validation = await CitationValidator.validate(responseText: finalText, against: sources)
             update(assistantID) {
-                $0.text = validation.cleanedText
+                // Flatten model markdown + tidy whitespace once the full text
+                // is in hand (ReadingText renders plain text).
+                $0.text = MessageTextPolish.polish(validation.cleanedText)
                 $0.citations = validation.validated
                 $0.activityLabel = nil
                 $0.status = .complete

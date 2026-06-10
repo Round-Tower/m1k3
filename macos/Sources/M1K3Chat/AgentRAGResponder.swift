@@ -104,10 +104,7 @@ public struct AgentRAGResponder: RAGResponding, Sendable {
         onActivity: @escaping @Sendable (ResponderActivity) -> Void,
         continuation: AsyncStream<String>.Continuation
     ) async {
-        let grounding = Self.grounding(
-            chunks: chunks,
-            hasWebSearch: tools.contains { $0.name == "web_search" }
-        )
+        let grounding = Self.grounding(chunks: chunks, toolNames: Set(tools.map(\.name)))
         Self.logTurnStart(chunks: chunks, tools: tools, grounding: grounding)
         // Fresh agent per turn — its reasoning trace must not bleed across
         // turns, and the tool list reflects current settings.
@@ -253,17 +250,23 @@ public struct AgentRAGResponder: RAGResponding, Sendable {
 
     /// The grounding handed to the agent: the retrieved knowledge (with the
     /// same citation labels the validator expects) + tight behavioral rules
-    /// tuned for small models. The tool-routing line matches what's actually
+    /// tuned for small models. The tool-routing lines match what's actually
     /// callable — never advertise a disabled web_search (and never imply
     /// search_knowledge can reach the live world; the ⌘R weather bug).
-    static func grounding(chunks: [ChunkHit], hasWebSearch: Bool) -> String {
-        let routing = hasWebSearch
+    static func grounding(chunks: [ChunkHit], toolNames: Set<String>) -> String {
+        let hasWebSearch = toolNames.contains("web_search")
+        var routing = hasWebSearch
             ? "- For current or external information — weather, news, prices, "
             + "anything happening now — use web_search. search_knowledge only "
             + "finds documents already stored on this Mac."
             : "- search_knowledge only finds documents already stored on this "
             + "Mac. You have no web access — if the stored knowledge can't "
             + "answer, say so plainly; do not guess."
+        if hasWebSearch, toolNames.contains("fetch_page") {
+            routing += "\n- web_search returns links and snippets. For details "
+                + "(like an actual forecast), run fetch_page on the most "
+                + "relevant result URL, then conclude from the page text."
+        }
         let rules = """
         RULES:
         - If the KNOWLEDGE already answers the question, reply IMMEDIATELY \

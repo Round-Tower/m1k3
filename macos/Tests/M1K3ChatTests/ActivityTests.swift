@@ -28,6 +28,15 @@ struct ActivityLabelerTests {
             == "Checking system status…")
     }
 
+    @Test("fetch_page shows which site is being read")
+    func fetchPageLabel() {
+        #expect(ActivityLabeler.label(for: .usingTool(
+            name: "fetch_page", argument: "https://weather.com/boston/10-day"
+        )) == "Reading weather.com…")
+        #expect(ActivityLabeler.label(for: .usingTool(name: "fetch_page", argument: "junk"))
+            == "Reading a web page…")
+    }
+
     @Test("unknown tools and the loop phases have sensible copy")
     func phases() {
         #expect(ActivityLabeler.label(for: .retrieving) == "Looking through your knowledge…")

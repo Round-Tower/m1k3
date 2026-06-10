@@ -36,6 +36,8 @@ public enum ActivityLabeler {
         switch name {
         case "web_search":
             "Searching the web for “\(truncate(argument))”…"
+        case "fetch_page":
+            "Reading \(URL(string: argument)?.host() ?? "a web page")…"
         case "search_knowledge":
             "Searching your knowledge…"
         case "datetime":

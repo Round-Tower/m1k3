@@ -1,0 +1,140 @@
+//
+//  FetchPageToolTests.swift
+//  M1K3AgentToolsTests
+//
+//  web_search finds pages; fetch_page READS one — the difference between a
+//  link list and an actual answer. Pure extractor pinned on synthetic HTML;
+//  tool orchestration pinned with the scripted fetcher (scheme guard, browser
+//  headers, output cap, errors as observations).
+//
+//  Signed: Kev + claude-fable-5, 2026-06-10, Confidence 0.85, Prior: Unknown
+
+import Foundation
+@testable import M1K3AgentTools
+import Synchronization
+import Testing
+
+struct HTMLTextExtractorTests {
+    @Test("extracts readable text, dropping head/script/style and tags")
+    func extractsReadableText() {
+        let html = """
+        <html><head><title>Boston Weather</title><style>.x{color:red}</style></head>
+        <body>
+        <script>var tracking = "junk";</script>
+        <nav><a href="/">Home</a></nav>
+        <h1>10-Day Forecast</h1>
+        <p>Tuesday: Sunny, high of <b>25&#176;</b>. Wednesday: showers &amp; wind.</p>
+        <!-- a comment -->
+        </body></html>
+        """
+        let text = HTMLTextExtractor.text(from: html)
+        #expect(text.contains("10-Day Forecast"))
+        #expect(text.contains("Tuesday: Sunny, high of 25°. Wednesday: showers & wind."))
+        #expect(!text.contains("tracking"))
+        #expect(!text.contains("color:red"))
+        #expect(!text.contains("<"))
+        #expect(!text.contains("a comment"))
+        // Chrome (nav/header/footer) is dropped wholesale — on real pages it
+        // eats the output cap before the content starts (seen live).
+        #expect(!text.contains("Home"))
+    }
+
+    @Test("block elements become line breaks, runs of blank lines collapse")
+    func blockStructure() {
+        let html = "<body><p>one</p><p>two</p><div>three</div></body>"
+        #expect(HTMLTextExtractor.text(from: html) == "one\ntwo\nthree")
+    }
+
+    @Test("garbage in, empty out — never a crash")
+    func garbage() {
+        #expect(HTMLTextExtractor.text(from: "").isEmpty)
+        #expect(HTMLTextExtractor.text(from: "<script>only junk</script>").isEmpty)
+    }
+}
+
+struct FetchPageToolTests {
+    private final class ScriptedFetcher: HTTPFetching, Sendable {
+        private let requestLog = Mutex<[URLRequest]>([])
+        private let body: String
+
+        init(body: String) {
+            self.body = body
+        }
+
+        var requests: [URLRequest] {
+            requestLog.withLock { $0 }
+        }
+
+        func fetch(_ request: URLRequest) async throws -> (data: Data, response: HTTPURLResponse) {
+            requestLog.withLock { $0.append(request) }
+            let response = HTTPURLResponse(
+                url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil
+            )!
+            return (Data(body.utf8), response)
+        }
+    }
+
+    @Test("fetches a page with browser headers and returns its readable text")
+    func fetchesReadableText() async throws {
+        let fetcher = ScriptedFetcher(body: "<body><h1>Forecast</h1><p>Sunny, 25.</p></body>")
+        let tool = FetchPageTool(fetcher: fetcher)
+        let result = try await tool.execute(input: ["url": "https://weather.example/boston"])
+        #expect(result.output.contains("Forecast"))
+        #expect(result.output.contains("Sunny, 25."))
+        let request = try #require(fetcher.requests.first)
+        #expect(request.url?.absoluteString == "https://weather.example/boston")
+        #expect(request.value(forHTTPHeaderField: "User-Agent")?.contains("Safari") == true)
+    }
+
+    @Test("only http(s) urls are fetched")
+    func schemeGuard() async throws {
+        let fetcher = ScriptedFetcher(body: "nope")
+        let tool = FetchPageTool(fetcher: fetcher)
+        let file = try await tool.execute(input: ["url": "file:///etc/passwd"])
+        #expect(file.output.hasPrefix("Error:"))
+        let junk = try await tool.execute(input: ["url": "not a url"])
+        #expect(junk.output.hasPrefix("Error:"))
+        let empty = try await tool.execute(input: ["url": "  "])
+        #expect(empty.output.hasPrefix("Error:"))
+        #expect(fetcher.requests.isEmpty)
+    }
+
+    @Test("long pages are capped so a small model's context survives")
+    func capsOutput() async throws {
+        let longBody = "<body><p>" + String(repeating: "forecast words ", count: 500) + "</p></body>"
+        let fetcher = ScriptedFetcher(body: longBody)
+        let tool = FetchPageTool(fetcher: fetcher)
+        let result = try await tool.execute(input: ["url": "https://a.example"])
+        #expect(result.output.count <= 1600)
+        #expect(result.output.hasSuffix("…"))
+    }
+
+    @Test("a page with no readable text is reported honestly")
+    func emptyPage() async throws {
+        let fetcher = ScriptedFetcher(body: "<script>spa(){}</script>")
+        let tool = FetchPageTool(fetcher: fetcher)
+        let result = try await tool.execute(input: ["url": "https://spa.example"])
+        #expect(result.output.contains("no readable text"))
+    }
+
+    @Test("network failure becomes a recoverable Error observation")
+    func networkFailure() async throws {
+        struct Boom: Error {}
+        final class ThrowingFetcher: HTTPFetching, Sendable {
+            func fetch(_: URLRequest) async throws -> (data: Data, response: HTTPURLResponse) {
+                throw Boom()
+            }
+        }
+        let tool = FetchPageTool(fetcher: ThrowingFetcher())
+        let result = try await tool.execute(input: ["url": "https://a.example"])
+        #expect(result.output.hasPrefix("Error: could not fetch"))
+    }
+
+    @Test("declares the agent-facing contract")
+    func declaresContract() {
+        let tool = FetchPageTool()
+        #expect(tool.name == "fetch_page")
+        #expect(tool.description.contains("web_search"))
+        #expect(tool.parameters.first?.name == "url")
+    }
+}

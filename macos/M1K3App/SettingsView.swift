@@ -160,10 +160,11 @@ struct SettingsView: View {
                 } header: {
                     Text("Tools")
                 } footer: {
-                    Text("M1K3 can search the web mid-answer. This is the one capability "
-                        + "that sends a query off this Mac (to DuckDuckGo) — every search is "
-                        + "shown in the reply as it happens. Date, time and system status "
-                        + "tools stay fully local. Off means the model can't see the tool.")
+                    Text("M1K3 can search the web (DuckDuckGo) and read result pages "
+                        + "mid-answer. This is the one capability that sends anything off "
+                        + "this Mac — every search and page read is shown in the reply as "
+                        + "it happens. Date, time and system status tools stay fully local. "
+                        + "Off means the model can't see the web tools at all.")
                         .font(.caption).foregroundStyle(.secondary)
                 }
 
