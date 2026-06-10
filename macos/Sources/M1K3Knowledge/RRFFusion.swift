@@ -39,6 +39,16 @@ public enum ReciprocalRankFusion {
         key: (T) -> Key,
         k: Int = defaultK
     ) -> [T] {
+        fuseScored(rankings: rankings, key: key, k: k).map(\.item)
+    }
+
+    /// `fuse`, but each fused item carries its accumulated RRF score — for
+    /// callers that gate or log on relevance rather than just ordering.
+    public static func fuseScored<T, Key: Hashable>(
+        rankings: [[T]],
+        key: (T) -> Key,
+        k: Int = defaultK
+    ) -> [(item: T, score: Double)] {
         var scores: [Key: Double] = [:]
         var firstSeen: [Key: T] = [:]
         var insertionOrder: [Key] = []
@@ -62,6 +72,8 @@ public enum ReciprocalRankFusion {
             if lscore != rscore { return lscore > rscore }
             return (orderIndex[lhs] ?? 0) < (orderIndex[rhs] ?? 0)
         }
-        return sortedKeys.compactMap { firstSeen[$0] }
+        return sortedKeys.compactMap { id in
+            firstSeen[id].map { ($0, scores[id] ?? 0) }
+        }
     }
 }

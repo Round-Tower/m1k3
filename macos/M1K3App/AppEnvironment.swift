@@ -708,7 +708,10 @@ extension AppEnvironment {
         embedder: any EmbeddingService,
         provider: any InferenceProvider
     ) -> any RAGResponding {
-        AgentRAGResponder(
+        // Hits the model retrieves itself (search_knowledge) flow through the
+        // collector into the turn's sources + the citation allow-list.
+        let sourceCollector = ToolSourceCollector()
+        return AgentRAGResponder(
             store: store,
             embedder: embedder,
             provider: provider,
@@ -716,7 +719,11 @@ extension AppEnvironment {
                 var tools: [any AgentTool] = [
                     DateTimeTool(),
                     SystemStatusTool(),
-                    SearchKnowledgeTool(store: store),
+                    SearchKnowledgeTool(
+                        store: store,
+                        embedder: embedder,
+                        onHits: { hits in sourceCollector.record(hits) }
+                    ),
                 ]
                 let defaults = UserDefaults.standard
                 let webAllowed = defaults.object(forKey: Self.webSearchEnabledKey) == nil
@@ -726,7 +733,8 @@ extension AppEnvironment {
                     tools.insert(WebSearchTool(), at: 0)
                 }
                 return tools
-            }
+            },
+            sourceCollector: sourceCollector
         )
     }
 }

@@ -175,6 +175,26 @@ struct AgentRAGResponderTests {
         #expect(answer.contains("https://sealco.example"))
     }
 
+    @Test("an off-topic query injects NO knowledge and points the model at search_knowledge")
+    func gatedQueryInjectsNothing() async throws {
+        // The screenshot bug: "what model are you?" must not drag stored
+        // document chunks into the prompt just because top-K returned them.
+        let (store, embedder) = try await ingestedStore()
+        let provider = AgentScriptedProvider(["CONCLUSION: I'm M1K3, a local assistant."])
+        let responder = AgentRAGResponder(
+            store: store, embedder: embedder, provider: provider,
+            tools: [FixedTool(name: "search_knowledge", response: "(unused)")]
+        )
+
+        let (sources, stream) = try await responder.answerStreaming("what model are you?")
+        _ = await collect(stream)
+
+        #expect(sources.isEmpty)
+        let prompt = try #require(provider.allPrompts.first)
+        #expect(!prompt.contains("KNOWLEDGE (the user's own documents"))
+        #expect(prompt.contains("NOT in this context"))
+    }
+
     @Test("agent coming back empty with NO gathered info falls back to the plain RAG prompt")
     func emptyFallsBack() async throws {
         let (store, embedder) = try await ingestedStore()
@@ -184,7 +204,9 @@ struct AgentRAGResponderTests {
             store: store, embedder: embedder, provider: provider, tools: []
         )
 
-        let (_, stream) = try await responder.answerStreaming("what failed?")
+        // A query with strong lexical overlap so the grounding gate keeps the
+        // chunk (the gate dropping weak hits is pinned in GroundingGateTests).
+        let (_, stream) = try await responder.answerStreaming("hydraulic seal conveyor failed under load?")
         let answer = await collect(stream)
         #expect(answer == "Plain grounded answer.")
 

@@ -37,6 +37,9 @@ public struct AgentRAGResponder: RAGResponding, Sendable {
     private let toolsProvider: @Sendable () -> [any AgentTool]
     private let topK: Int
     private let maxIterations: Int
+    /// Hits the model retrieved itself via search_knowledge — drained after
+    /// the stream and merged into the turn's sources (see `collectedSources`).
+    private let sourceCollector: ToolSourceCollector?
 
     public init(
         store: KnowledgeStore,
@@ -44,7 +47,8 @@ public struct AgentRAGResponder: RAGResponding, Sendable {
         provider: any InferenceProvider,
         toolsProvider: @escaping @Sendable () -> [any AgentTool],
         topK: Int = 5,
-        maxIterations: Int = 3
+        maxIterations: Int = 3,
+        sourceCollector: ToolSourceCollector? = nil
     ) {
         self.store = store
         self.embedder = embedder
@@ -52,6 +56,7 @@ public struct AgentRAGResponder: RAGResponding, Sendable {
         self.toolsProvider = toolsProvider
         self.topK = topK
         self.maxIterations = maxIterations
+        self.sourceCollector = sourceCollector
     }
 
     /// Fixed tool list — convenience for tests and simple callers.
@@ -74,8 +79,16 @@ public struct AgentRAGResponder: RAGResponding, Sendable {
         onActivity: @escaping @Sendable (ResponderActivity) -> Void
     ) async throws -> (sources: [ChunkHit], stream: AsyncStream<String>) {
         onActivity(.retrieving)
+        // Stale tool hits from an aborted prior turn must not leak in.
+        _ = sourceCollector?.drain()
         let queryVector = try await embedder.embed(question)
-        let chunks = try store.searchHybrid(query: question, queryVector: queryVector, limit: topK)
+        let retrieved = try store.searchHybrid(query: question, queryVector: queryVector, limit: topK)
+        // Gate on relevance: top-K ALWAYS returns something, even for "what
+        // model are you?" — weak hits pollute the prompt and derail small
+        // models. Below threshold nothing is injected; the model can still
+        // retrieve on its own terms via search_knowledge.
+        let chunks = GroundingGate.filter(retrieved)
+        Self.logGateDecision(retrieved: retrieved, kept: chunks)
         // Resolve the tool list once per turn; the routing rules must match
         // what's actually callable (no advertising a disabled web_search).
         let tools = toolsProvider()
@@ -155,6 +168,31 @@ public struct AgentRAGResponder: RAGResponding, Sendable {
             await streamFallback(question: question, chunks: chunks, into: continuation)
             continuation.finish()
         }
+    }
+
+    /// Sources the model gathered itself via search_knowledge this turn —
+    /// merged into the message's sources (and the citation allow-list) by
+    /// ChatSession once the stream completes.
+    public func collectedSources() -> [ChunkHit] {
+        sourceCollector?.drain() ?? []
+    }
+
+    /// One line per retrieved hit with both relevance signals, so the gate
+    /// thresholds can be tuned on real queries from the unified log.
+    private static func logGateDecision(retrieved: [ChunkHit], kept: [ChunkHit]) {
+        let keptIDs = Set(kept.map(\.chunkID))
+        for hit in retrieved {
+            let similarity = hit.similarity.map { String(format: "%.3f", $0) } ?? "–"
+            let fused = hit.rrfScore.map { String(format: "%.4f", $0) } ?? "–"
+            let verdict = keptIDs.contains(hit.chunkID) ? "kept" : "gated"
+            let title = LogPreview.preview(hit.itemTitle, max: 60)
+            log.debug(
+                "gate \(verdict, privacy: .public): sim=\(similarity, privacy: .public) rrf=\(fused, privacy: .public) [\(title, privacy: .public)]"
+            )
+        }
+        let retrievedCount = retrieved.count
+        let keptCount = kept.count
+        log.info("grounding gate: kept \(keptCount)/\(retrievedCount)")
     }
 
     /// Map agent-loop events to UI activity.
@@ -284,7 +322,13 @@ public struct AgentRAGResponder: RAGResponding, Sendable {
         \(routing)
         """
         guard !chunks.isEmpty else {
-            return "No stored knowledge matched this question.\n\n\(rules)"
+            let hint = toolNames.contains("search_knowledge")
+                ? "No stored knowledge was injected — the user's documents are "
+                + "NOT in this context. If the question could concern their "
+                + "stored documents, calls, or notes, call search_knowledge; "
+                + "otherwise answer directly."
+                : "No stored knowledge matched this question."
+            return "\(hint)\n\n\(rules)"
         }
         let knowledge = chunks.enumerated().map { index, hit in
             "\(index + 1). \(ChatPromptBuilder.citationLabel(for: hit))\n\(hit.content)"
