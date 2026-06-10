@@ -82,14 +82,18 @@ public struct MLXMemoryBudget: Sendable, Equatable {
     /// Stream with:
     /// `log stream --predicate 'subsystem == "dev.murphysig.M1K3" AND category == "mlx-memory"'`
     public static func logSnapshot(label: String) {
+        log.notice("\(snapshotDescription(label: label), privacy: .public)")
+    }
+
+    /// The same snapshot as `logSnapshot`, as a string — for the headless
+    /// self-test report, which writes to a file instead of the unified log.
+    public static func snapshotDescription(label: String) -> String {
         let snapshot = MLX.Memory.snapshot()
         let activeMB = snapshot.activeMemory / mebibyte
         let cacheMB = snapshot.cacheMemory / mebibyte
         let peakMB = snapshot.peakMemory / mebibyte
         let footprintMB = (physicalFootprintBytes() ?? 0) / UInt64(mebibyte)
-        log.notice(
-            "\(label, privacy: .public) MB: active=\(activeMB) cache=\(cacheMB) peak=\(peakMB) footprint=\(footprintMB)"
-        )
+        return "\(label) MB: active=\(activeMB) cache=\(cacheMB) peak=\(peakMB) footprint=\(footprintMB)"
     }
 
     /// `phys_footprint` from task_vm_info — Activity Monitor's "Memory".

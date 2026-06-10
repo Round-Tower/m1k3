@@ -101,6 +101,23 @@ enum SelfTest {
             let llm = MLXGemmaProvider(modelID: modelID, maxTokens: 48)
             let answer = try await llm.generate(prompt: "In one short sentence, what is a hydraulic seal?")
             emit("✓ MLX generate: \(answer.trimmingCharacters(in: .whitespacesAndNewlines).prefix(180))")
+
+            // 3b. Optional memory loop (M1K3_SELFTEST_MEMLOOP=N): N more
+            // generations with a footprint snapshot after each. An agent turn
+            // runs generations back-to-back, so a growing footprint here is
+            // exactly the unbounded-Metal-cache pathology; a flat one means the
+            // budget holds.
+            if let loops = ProcessInfo.processInfo.environment["M1K3_SELFTEST_MEMLOOP"]
+                .flatMap(Int.init), loops > 0
+            {
+                emit(MLXMemoryBudget.snapshotDescription(label: "memloop start"))
+                for index in 1 ... loops {
+                    _ = try await llm.generate(
+                        prompt: "In two sentences, explain fact #\(index) about industrial conveyor maintenance."
+                    )
+                    emit(MLXMemoryBudget.snapshotDescription(label: "memloop gen \(index)"))
+                }
+            }
         } catch {
             emit("✗ MLX generate stage: \(error)")
         }
