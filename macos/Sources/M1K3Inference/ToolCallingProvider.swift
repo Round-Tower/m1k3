@@ -125,6 +125,9 @@ public enum ToolTurn: Sendable, Equatable {
 /// template (system/user/assistant/tool roles). This is the durable contract
 /// that survives whether the adapter is stateless-renders-array or stateful.
 public enum ToolMessage: Sendable, Equatable {
+    /// The standing persona/instructions, rendered into the chat template's
+    /// system turn. Sent once, at the start of a turn's transcript.
+    case system(String)
     /// The opening instruction + goal (and any grounding context).
     case user(String)
     /// What the model produced last turn — free text and/or the tool calls it

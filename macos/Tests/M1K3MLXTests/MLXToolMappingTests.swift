@@ -51,6 +51,13 @@ struct MLXChatMessageTests {
         #expect(message.content == "hello")
     }
 
+    @Test("a system message maps to the system role (the persona's seat)")
+    func systemRole() {
+        let message = MLXToolMapping.chatMessage(from: .system("You are M1K3."))
+        #expect(message.role == .system)
+        #expect(message.content == "You are M1K3.")
+    }
+
     @Test("a tool result maps to the tool role")
     func toolRole() {
         let message = MLXToolMapping.chatMessage(from: .toolResult(name: "search", output: "found it"))

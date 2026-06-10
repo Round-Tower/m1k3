@@ -60,6 +60,8 @@ enum MLXToolMapping {
     /// model's own dialect so the model sees its prior calls in trained form.
     static func chatMessage(from message: ToolMessage, format: ToolCallFormat = .gemma) -> Chat.Message {
         switch message {
+        case let .system(text):
+            return .system(text)
         case let .user(text):
             return .user(text)
         case let .toolResult(_, output):

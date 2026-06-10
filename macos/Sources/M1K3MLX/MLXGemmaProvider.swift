@@ -238,10 +238,15 @@ public final class MLXGemmaProvider: InferenceProvider, ModelPreloading, @unchec
         return try await loader.value(progress: progress)
     }
 
-    /// One-shot upstream session for the plain-chat paths, with the thinking
-    /// toggle rendered into the template when the family supports it.
+    /// One-shot upstream session for the plain-chat paths: M1K3's standing
+    /// persona as the system turn, plus the thinking toggle rendered into the
+    /// template when the family supports it.
     private func makeUpstreamSession(_ container: ModelContainer) -> ChatSession {
-        let session = ChatSession(container, generateParameters: generateParameters)
+        let session = ChatSession(
+            container,
+            instructions: M1K3Persona.systemPrompt,
+            generateParameters: generateParameters
+        )
         if let context = thinkingAdditionalContext {
             session.additionalContext = context
         }

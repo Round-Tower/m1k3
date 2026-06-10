@@ -32,7 +32,7 @@ public struct AppleFoundationModelsProvider: InferenceProvider {
     }
 
     public func generate(prompt: String) async throws -> String {
-        let session = LanguageModelSession()
+        let session = LanguageModelSession(instructions: M1K3Persona.systemPrompt)
         let response = try await session.respond(to: prompt)
         return response.content
     }
@@ -41,7 +41,7 @@ public struct AppleFoundationModelsProvider: InferenceProvider {
         AsyncStream { continuation in
             let task = Task {
                 do {
-                    let session = LanguageModelSession()
+                    let session = LanguageModelSession(instructions: M1K3Persona.systemPrompt)
                     let stream = session.streamResponse(to: prompt)
                     for try await snapshot in stream {
                         continuation.yield(snapshot.content)

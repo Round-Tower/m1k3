@@ -72,7 +72,12 @@ extension LocalAgent {
         // The trace/rescue record — the SESSION owns the model-side state, so
         // this array is never re-sent; only the per-iteration delta is.
         var transcript: [ToolMessage] = []
-        var pendingMessages: [ToolMessage] = [.user(Self.buildNativeGoal(goal: goal, grounding: grounding))]
+        // Persona first (the chat template's system turn), then the goal —
+        // identity is standing, the goal is this turn's.
+        var pendingMessages: [ToolMessage] = [
+            .system(M1K3Persona.systemPrompt),
+            .user(Self.buildNativeGoal(goal: goal, grounding: grounding)),
+        ]
 
         logRunStart(goal: goal, grounding: grounding)
 
@@ -220,13 +225,13 @@ extension LocalAgent {
     }
 
     /// The opening user turn: goal + optional grounding, with NO ReAct
-    /// scaffolding — tools are supplied structurally, not described in prose.
+    /// scaffolding — tools are supplied structurally, identity lives in the
+    /// system turn (M1K3Persona), so this carries only the turn's task.
     static func buildNativeGoal(goal: String, grounding: String?) -> String {
         let groundingBlock = grounding.map { "\n\nContext:\n\($0)" } ?? ""
         return """
-        You are M1K3, a local assistant. Use the available tools when they help \
-        answer the user's request. When you have enough information, reply with \
-        your final answer in plain language.
+        Use the available tools when they help answer the user's request. When \
+        you have enough information, reply with your final answer in plain language.
 
         Goal: \(goal)\(groundingBlock)
         """
