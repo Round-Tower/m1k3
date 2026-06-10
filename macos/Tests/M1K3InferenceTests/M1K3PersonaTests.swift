@@ -67,4 +67,22 @@ struct M1K3PersonaTests {
         let compact = M1K3Persona.systemPrompt(includeExemplars: false)
         #expect(compact == M1K3Persona.systemPrompt)
     }
+
+    @Test("a user profile composes in as an About-the-user block")
+    func profileComposes() {
+        let composed = M1K3Persona.compose(core: "CORE", profile: "Kev — dyslexic, prefers brief answers.")
+        #expect(composed.hasPrefix("CORE"))
+        #expect(composed.contains("About the user: Kev — dyslexic"))
+
+        #expect(M1K3Persona.compose(core: "CORE", profile: nil) == "CORE")
+        #expect(M1K3Persona.compose(core: "CORE", profile: "   ") == "CORE")
+    }
+
+    @Test("profiles are hard-capped — they ride the system turn every launch")
+    func profileCap() {
+        let long = String(repeating: "fact ", count: 200)
+        let composed = M1K3Persona.compose(core: "CORE", profile: long)
+        #expect(composed.count < 500 + M1K3Persona.profileCharacterCap)
+        #expect(composed.contains("…"))
+    }
 }

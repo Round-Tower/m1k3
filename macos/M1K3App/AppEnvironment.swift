@@ -299,7 +299,7 @@ final class AppEnvironment {
         callSummarizer = SummarizationPipeline(quickProvider: afm, deepProvider: runtimeProvider)
 
         refreshCounts()
-        Task { await self.reindexIfEmbedderChanged() }
+        Task { await self.runStartupMaintenance() }
 
         // Wire avatar ↔ speech after all stored properties are initialized.
         speech.onSpeakingStarted = { [weak self] in
@@ -639,6 +639,28 @@ extension AppEnvironment {
     /// Whether the on-device model is actually available on this machine.
     var providerAvailable: Bool {
         provider.isAvailable
+    }
+
+    /// Launch-time housekeeping off the init path: restore the user profile
+    /// into the persona, then the one-time embedder re-index check.
+    func runStartupMaintenance() async {
+        M1K3Persona.setUserProfile(try? store.meta(key: Self.userProfileMetaKey))
+        await reindexIfEmbedderChanged()
+    }
+
+    /// The user's self-description (onboarding "you" step). Lives in
+    /// knowledge_meta — NEVER in RAG chunks, so it can't be retrieved or
+    /// cited; it only rides the persona's About-the-user block.
+    nonisolated static var userProfileMetaKey: String {
+        "user.profile"
+    }
+
+    /// Persist + apply the profile. Empty input clears it. The persona prefix
+    /// cache re-keys off the persona text, so caches rebuild automatically.
+    func saveUserProfile(_ text: String?) {
+        let trimmed = text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        try? store.setMeta(key: Self.userProfileMetaKey, value: trimmed)
+        M1K3Persona.setUserProfile(trimmed.isEmpty ? nil : trimmed)
     }
 
     /// Re-embed the store when the running embedder's vector space doesn't

@@ -17,6 +17,7 @@
 //
 
 import Foundation
+import Synchronization
 
 /// Distilled (2026-06-10) from the character already living in the codebase:
 /// the Python personality engine's "curious, trivia-loving local AI companion"
@@ -25,7 +26,42 @@ import Foundation
 /// space — listen more than lecture). The pixel face and M1K3 Voice are this
 /// same character's body and voice.
 public enum M1K3Persona {
-    public static let systemPrompt = """
+    /// What the user told M1K3 about themselves (onboarding "you" step;
+    /// Phase D's distillation will grow it). Process-global so every provider
+    /// path reads the same identity; set at launch from the knowledge store.
+    /// Changing it changes `systemPrompt` → the persona prefix cache key →
+    /// the cached prefix rebuilds on next use, automatically.
+    private static let profileBox = Mutex<String?>(nil)
+
+    /// Hard cap — the profile rides the system turn, so length is a TTFT tax.
+    public static let profileCharacterCap = 400
+
+    public static func setUserProfile(_ text: String?) {
+        let trimmed = text?.trimmingCharacters(in: .whitespacesAndNewlines)
+        profileBox.withLock { $0 = (trimmed?.isEmpty ?? true) ? nil : trimmed }
+    }
+
+    public static var userProfile: String? {
+        profileBox.withLock { $0 }
+    }
+
+    /// Pure composition: core + the capped About-the-user block.
+    static func compose(core: String, profile: String?) -> String {
+        guard var profileText = profile?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !profileText.isEmpty
+        else { return core }
+        if profileText.count > profileCharacterCap {
+            profileText = profileText.prefix(profileCharacterCap)
+                .trimmingCharacters(in: .whitespaces) + "…"
+        }
+        return core + "\nAbout the user: " + profileText
+    }
+
+    public static var systemPrompt: String {
+        compose(core: corePrompt, profile: userProfile)
+    }
+
+    static let corePrompt = """
     You are M1K3 — a curious, kind AI companion that lives entirely on this Mac. \
     Nothing the user tells you leaves this machine unless they enable web search: \
     this conversation is as private as their own living room.
