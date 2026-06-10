@@ -123,18 +123,32 @@ struct MessageView: View {
         .glassEffect(.regular, in: .rect(cornerRadius: 18))
     }
 
+    /// True while the model is thinking out loud: still streaming, reasoning
+    /// arriving, no answer text yet.
+    private var isThinkingLive: Bool {
+        if case .streaming = message.status { return message.text.isEmpty }
+        return false
+    }
+
     /// The model's chain-of-thought, surfaced (collapsed by default) for
     /// transparency — the answer stays clean, the reasoning is one tap away.
+    /// While the model is still thinking it auto-expands and streams live, so
+    /// a long think phase reads as visible work, not a silent stall; it
+    /// collapses again the moment the answer starts (unless the user opened it).
     private func reasoningDisclosure(_ reasoning: String) -> some View {
-        DisclosureGroup(isExpanded: $showReasoning) {
+        DisclosureGroup(isExpanded: Binding(
+            get: { showReasoning || isThinkingLive },
+            set: { showReasoning = $0 }
+        )) {
             ReadingText(reasoning)
                 .foregroundStyle(.secondary)
                 .padding(.top, 4)
                 .frame(maxWidth: .infinity, alignment: .leading)
         } label: {
-            Label("Model reasoning", systemImage: "brain")
+            Label(isThinkingLive ? "Thinking…" : "Model reasoning", systemImage: "brain")
                 .font(.caption.weight(.medium))
                 .foregroundStyle(.secondary)
+                .contentTransition(.opacity)
         }
         .padding(.horizontal, 6)
     }

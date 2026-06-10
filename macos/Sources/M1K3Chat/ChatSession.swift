@@ -171,19 +171,27 @@ public final class ChatSession {
                 }
             )
             update(assistantID) { $0.sources = sources }
+            // Route chunks to reasoning vs answer LIVE, so chain-of-thought
+            // streams into the disclosure as it happens instead of flashing
+            // raw <think> text in the bubble until the stream ends.
+            var splitter = StreamingReasoningSplitter()
             for await chunk in stream {
+                splitter.feed(chunk)
+                let liveAnswer = splitter.answer
+                let liveReasoning = splitter.reasoning
                 update(assistantID) {
-                    $0.text = Self.fold($0.text, chunk)
+                    $0.text = liveAnswer
+                    $0.reasoning = liveReasoning.isEmpty ? nil : liveReasoning
                     // Real tokens replace the activity label.
                     $0.activityLabel = nil
                 }
             }
-            // Now the full text is in hand. First peel off any reasoning-model
-            // chain-of-thought so it's surfaced separately, not buried in the
-            // answer; then strip invented citations from the ANSWER and record
-            // the validated ones.
-            let finalText = messages.first { $0.id == assistantID }?.text ?? ""
-            let (reasoning, answer) = ReasoningSplit.split(finalText)
+            splitter.finish()
+            // Now the full text is in hand. Re-split the RAW stream as the
+            // final authority (the live splitter only drives rendering), then
+            // strip invented citations from the ANSWER and record the
+            // validated ones.
+            let (reasoning, answer) = ReasoningSplit.split(splitter.raw)
             let validation = await CitationValidator.validate(responseText: answer, against: sources)
             update(assistantID) {
                 // Flatten model markdown + tidy whitespace once the full text

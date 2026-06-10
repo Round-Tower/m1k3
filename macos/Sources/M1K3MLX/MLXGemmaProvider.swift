@@ -59,6 +59,20 @@ public final class MLXGemmaProvider: InferenceProvider, ModelPreloading, @unchec
     /// model family (Gemma → .gemma, Qwen/Llama → .json, …). nil means "no known
     /// dialect" → `supportsToolCalls` is false and the agent uses the ReAct floor.
     let resolvedToolCallFormat: ToolCallFormat?
+    /// Whether output needs a synthetic `<think>` opener: the model's chat
+    /// template PRE-OPENS `<think>` in the generation prompt (Qwen3.5), so the
+    /// model emits only the CLOSING tag — prepending the opener keeps the
+    /// downstream reasoning split seeing a well-formed pair. Effective flag:
+    /// family AND `thinkingEnabled` (a disabled-thinking prompt emits no tags).
+    let thinkPrefixNeeded: Bool
+    /// Reasoning on/off for models whose template supports `enable_thinking`
+    /// (Qwen3.5). Default on — M1K3 surfaces reasoning, it doesn't hide it.
+    /// `false` renders the empty think pair into the prompt (the model skips
+    /// straight to the answer — a large TTFT lever for a future fast-mode
+    /// toggle) and disables the synthetic prefix.
+    let thinkingEnabled: Bool
+    /// Whether the family's template understands `enable_thinking` at all.
+    private let supportsThinkingToggle: Bool
 
     public init(
         configuration: ModelConfiguration = LLMRegistry.gemma3_1B_qat_4bit,
@@ -68,7 +82,8 @@ public final class MLXGemmaProvider: InferenceProvider, ModelPreloading, @unchec
         // them off mid-thought (no call, empty answer). 4096 leaves room to think,
         // act, AND answer across an agent iteration.
         maxTokens: Int = 4096,
-        name: String = "mlx-gemma"
+        name: String = "mlx-gemma",
+        thinkingEnabled: Bool = true
     ) {
         var params = GenerateParameters()
         params.maxTokens = maxTokens
@@ -86,6 +101,10 @@ public final class MLXGemmaProvider: InferenceProvider, ModelPreloading, @unchec
         // and never parse — we set the format explicitly per model family.
         let resolved = Self.resolveToolCallFormat(for: configuration)
         resolvedToolCallFormat = resolved
+        self.thinkingEnabled = thinkingEnabled
+        let familyPreOpens = Self.templatePreOpensThink(for: configuration)
+        supportsThinkingToggle = familyPreOpens
+        thinkPrefixNeeded = thinkingEnabled && familyPreOpens
         let loadConfiguration: ModelConfiguration = {
             var config = configuration
             if let resolved { config.toolCallFormat = resolved }
@@ -123,11 +142,17 @@ public final class MLXGemmaProvider: InferenceProvider, ModelPreloading, @unchec
     /// Uses the upstream registry entry when one exists — that carries model
     /// metadata a bare id misses (Gemma 4 needs extraEOSTokens ["<turn|>"]);
     /// unknown ids fall back to a plain configuration.
-    public convenience init(modelID: String, maxTokens: Int = 4096, name: String = "mlx-gemma") {
+    public convenience init(
+        modelID: String,
+        maxTokens: Int = 4096,
+        name: String = "mlx-gemma",
+        thinkingEnabled: Bool = true
+    ) {
         self.init(
             configuration: LLMRegistry.shared.configuration(id: modelID),
             maxTokens: maxTokens,
-            name: name
+            name: name,
+            thinkingEnabled: thinkingEnabled
         )
     }
 
@@ -150,8 +175,9 @@ public final class MLXGemmaProvider: InferenceProvider, ModelPreloading, @unchec
         // Return cached Metal buffers after every generation — without this the
         // process-global MLX cache holds each generation's peak forever.
         defer { MLXMemoryBudget.reclaim(label: "generate") }
-        let session = ChatSession(container, generateParameters: generateParameters)
-        return try await session.respond(to: prompt)
+        let session = makeUpstreamSession(container)
+        let raw = try await session.respond(to: prompt)
+        return Self.normaliseThinkPrefix(raw, preOpened: thinkPrefixNeeded)
     }
 
     public func generateStreaming(prompt: String) -> AsyncStream<String> {
@@ -162,7 +188,12 @@ public final class MLXGemmaProvider: InferenceProvider, ModelPreloading, @unchec
                 defer { MLXMemoryBudget.reclaim(label: "generateStreaming") }
                 do {
                     let container = try await ensureLoaded()
-                    let session = ChatSession(container, generateParameters: generateParameters)
+                    let session = makeUpstreamSession(container)
+                    // Qwen3.5's template pre-opens <think>, so the stream's
+                    // first real token is already chain-of-thought — surface
+                    // the opener so live reasoning splitting engages from
+                    // token one instead of after the closing tag.
+                    if thinkPrefixNeeded { continuation.yield("<think>") }
                     for try await chunk in session.streamResponse(to: prompt, images: [], videos: []) {
                         continuation.yield(chunk)
                     }
@@ -183,6 +214,23 @@ public final class MLXGemmaProvider: InferenceProvider, ModelPreloading, @unchec
         // Bound the process-global Metal cache BEFORE any MLX work can run.
         MLXMemoryBudget.applyOnce()
         return try await loader.value(progress: progress)
+    }
+
+    /// One-shot upstream session for the plain-chat paths, with the thinking
+    /// toggle rendered into the template when the family supports it.
+    private func makeUpstreamSession(_ container: ModelContainer) -> ChatSession {
+        let session = ChatSession(container, generateParameters: generateParameters)
+        if let context = thinkingAdditionalContext {
+            session.additionalContext = context
+        }
+        return session
+    }
+
+    /// Template context for the `enable_thinking` switch. nil when thinking is
+    /// on (the template's default) or the family has no such switch.
+    var thinkingAdditionalContext: [String: any Sendable]? {
+        guard supportsThinkingToggle, !thinkingEnabled else { return nil }
+        return ["enable_thinking": false]
     }
 
     /// Self-test diagnostics: how the chat template renders for `prompt` on
@@ -207,5 +255,28 @@ public final class MLXGemmaProvider: InferenceProvider, ModelPreloading, @unchec
         } catch {
             return "template debug failed: \(error)"
         }
+    }
+}
+
+// MARK: - Reasoning-template normalisation
+
+extension MLXGemmaProvider {
+    /// Whether the model family's chat template pre-opens `<think>` in the
+    /// generation prompt, so the model emits only the CLOSING tag. Verified in
+    /// Qwen3.5's chat_template.jinja (both 2B and 9B). Qwen3 re-emits its own
+    /// opening tag in the output, so it is deliberately NOT listed.
+    static func templatePreOpensThink(for configuration: ModelConfiguration) -> Bool {
+        let modelName = configuration.name.lowercased()
+        return modelName.contains("qwen3.5") || modelName.contains("qwen3_5")
+            || modelName.contains("qwen3-5")
+    }
+
+    /// Prepend the synthetic `<think>` opener exactly once so downstream
+    /// reasoning splitting always sees a well-formed pair. No-op when the
+    /// template didn't pre-open, the text already opens one, or there is no
+    /// text at all.
+    static func normaliseThinkPrefix(_ text: String, preOpened: Bool) -> String {
+        guard preOpened, !text.isEmpty, !text.hasPrefix("<think>") else { return text }
+        return "<think>" + text
     }
 }
