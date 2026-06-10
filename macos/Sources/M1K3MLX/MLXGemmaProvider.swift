@@ -48,8 +48,12 @@ import MLXLMCommon
 public final class MLXGemmaProvider: InferenceProvider, ModelPreloading, @unchecked Sendable {
     public let name: String
 
-    private let generateParameters: GenerateParameters
+    let generateParameters: GenerateParameters
     private let loader: SingleFlightLoader<ModelContainer>
+    /// The native tool-call dialect for this model, resolved at init from the
+    /// model family (Gemma → .gemma, Qwen/Llama → .json, …). nil means "no known
+    /// dialect" → `supportsToolCalls` is false and the agent uses the ReAct floor.
+    let resolvedToolCallFormat: ToolCallFormat?
 
     public init(
         configuration: ModelConfiguration = LLMRegistry.gemma3_1B_qat_4bit,
@@ -60,10 +64,23 @@ public final class MLXGemmaProvider: InferenceProvider, ModelPreloading, @unchec
         params.maxTokens = maxTokens
         generateParameters = params
         self.name = name
+
+        // Resolve the model's native tool-call dialect and bake it into the
+        // configuration. `ToolCallFormat.infer` matches model_type == "gemma"
+        // EXACTLY, so Gemma-3/3n (and Qwen) would silently fall back to .json
+        // and never parse — we set the format explicitly per model family.
+        let resolved = Self.resolveToolCallFormat(for: configuration)
+        resolvedToolCallFormat = resolved
+        let loadConfiguration: ModelConfiguration = {
+            var config = configuration
+            if let resolved { config.toolCallFormat = resolved }
+            return config
+        }()
+
         // Single-flight the container load so a Settings preload racing the first
         // generate share ONE ~1GB download instead of each kicking off their own.
         loader = SingleFlightLoader { progress in
-            try await LLMModelFactory.shared.loadContainer(configuration: configuration) { prog in
+            try await LLMModelFactory.shared.loadContainer(configuration: loadConfiguration) { prog in
                 progress(prog.fractionCompleted)
             }
         }
@@ -115,7 +132,7 @@ public final class MLXGemmaProvider: InferenceProvider, ModelPreloading, @unchec
         }
     }
 
-    private func ensureLoaded(
+    func ensureLoaded(
         progress: @escaping @Sendable (Double) -> Void = { _ in }
     ) async throws -> ModelContainer {
         try await loader.value(progress: progress)

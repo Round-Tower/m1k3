@@ -1,0 +1,204 @@
+//
+//  MLXToolCalling.swift
+//  M1K3MLX
+//
+//  Phase 12c — makes MLXGemmaProvider a `ToolCallingProvider`, so M1K3's main
+//  on-device brain calls tools in its model's NATIVE dialect instead of the
+//  prompt-ReAct floor. mlx-swift-lm 2.30.6 already parses the output for us
+//  (ToolCallProcessor + per-dialect parsers emit `.toolCall(ToolCall)` inline
+//  off the `Generation` stream); this file is the WIRING + type mapping between
+//  the dialect-free seam (M1K3Inference) and the library's types — NOT a parser.
+//
+//  Model-agnostic by design (Kev's "support all brain types"): the dialect is
+//  resolved per model family (Gemma → .gemma, Qwen/Llama → .json), the OUTPUT
+//  parsing is the library's job for every family, and the only family-specific
+//  code here is echoing the assistant's prior call back in its own syntax.
+//
+//  The pure mappers below are unit-tested (no Metal). `continueToolTurn` runs
+//  the real model and is VERIFY-BY-LAUNCH — MLX needs the app-bundle metallib,
+//  so it can't execute under `swift test` (same limit as all MLX generation).
+//
+//  Signed: Kev + claude-opus-4-8, 2026-06-10, Confidence 0.75 (pure mappers
+//  tested; the generation glue is verify-by-launch). Prior: Unknown.
+
+import Foundation
+import M1K3Inference
+import MLXLMCommon
+import Tokenizers
+
+/// Pure, testable bridges between the M1K3 tool-calling seam and mlx-swift-lm.
+enum MLXToolMapping {
+    /// Project a dialect-free `ToolDefinition` into the JSON-schema `ToolSpec`
+    /// the model's chat template renders (same shape as the library's `Tool`
+    /// initializer builds).
+    static func toolSpec(from definition: ToolDefinition) -> ToolSpec {
+        var properties: [String: any Sendable] = [:]
+        var required: [String] = []
+        for parameter in definition.parameters {
+            properties[parameter.name] = [
+                "type": parameter.type,
+                "description": parameter.description,
+            ] as [String: any Sendable]
+            if parameter.isRequired { required.append(parameter.name) }
+        }
+        return [
+            "type": "function",
+            "function": [
+                "name": definition.name,
+                "description": definition.description,
+                "parameters": [
+                    "type": "object",
+                    "properties": properties,
+                    "required": required,
+                ] as [String: any Sendable],
+            ] as [String: any Sendable],
+        ]
+    }
+
+    /// Map one transcript turn to a `Chat.Message`. Tool results become the
+    /// `.tool` role; an assistant turn that made calls echoes them back in the
+    /// model's own dialect so the model sees its prior calls in trained form.
+    static func chatMessage(from message: ToolMessage, format: ToolCallFormat = .gemma) -> Chat.Message {
+        switch message {
+        case let .user(text):
+            return .user(text)
+        case let .toolResult(_, output):
+            return .tool(output)
+        case let .assistant(text, calls):
+            guard !calls.isEmpty else { return .assistant(text ?? "") }
+            let renderedCalls = calls.map { callText($0, format: format) }.joined(separator: "\n")
+            let content = [text, renderedCalls]
+                .compactMap { $0 }
+                .filter { !$0.isEmpty }
+                .joined(separator: "\n")
+            return .assistant(content)
+        }
+    }
+
+    /// Render a parsed call back into the model's native call syntax.
+    static func callText(_ call: ParsedToolCall, format: ToolCallFormat) -> String {
+        switch format {
+        case .gemma: gemmaCallText(call)
+        default: jsonCallText(call)
+        }
+    }
+
+    /// Gemma dialect: `<start_function_call>call:name{k:value,k:<escape>str<escape>}<end_function_call>`
+    /// — string args are escape-wrapped, scalars raw (mirrors GemmaFunctionParser).
+    static func gemmaCallText(_ call: ParsedToolCall) -> String {
+        let arguments = call.arguments
+            .sorted { $0.key < $1.key }
+            .map { key, value -> String in
+                if case let .string(string) = value {
+                    return "\(key):<escape>\(string)<escape>"
+                }
+                return "\(key):\(value.stringValue)"
+            }
+            .joined(separator: ",")
+        return "<start_function_call>call:\(call.name){\(arguments)}<end_function_call>"
+    }
+
+    /// JSON dialect (Qwen/Llama/most): `<tool_call>{"name":…,"arguments":{…}}</tool_call>`.
+    static func jsonCallText(_ call: ParsedToolCall) -> String {
+        let payload = WireCall(name: call.name, arguments: call.arguments)
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
+        guard let data = try? encoder.encode(payload),
+              let json = String(data: data, encoding: .utf8)
+        else {
+            return "<tool_call>{\"name\":\"\(call.name)\"}</tool_call>"
+        }
+        return "<tool_call>\(json)</tool_call>"
+    }
+
+    /// Map the library's parsed `ToolCall` to our dialect-free `ParsedToolCall`.
+    static func parsedToolCall(from call: MLXLMCommon.ToolCall) -> ParsedToolCall {
+        ParsedToolCall(
+            name: call.function.name,
+            arguments: call.function.arguments.mapValues(jsonValue(from:))
+        )
+    }
+
+    /// Convert the library's `JSONValue` to ours (identical case sets).
+    static func jsonValue(from value: MLXLMCommon.JSONValue) -> M1K3Inference.JSONValue {
+        switch value {
+        case .null: .null
+        case let .bool(bool): .bool(bool)
+        case let .int(int): .int(int)
+        case let .double(double): .double(double)
+        case let .string(string): .string(string)
+        case let .array(array): .array(array.map(jsonValue(from:)))
+        case let .object(object): .object(object.mapValues(jsonValue(from:)))
+        }
+    }
+
+    /// Codable shape for serialising a call to the JSON dialect.
+    private struct WireCall: Codable {
+        let name: String
+        let arguments: [String: M1K3Inference.JSONValue]
+    }
+}
+
+// MARK: - ToolCallingProvider conformance
+
+extension MLXGemmaProvider: ToolCallingProvider {
+    /// Resolve a model's native tool-call dialect from its identifier. Explicit
+    /// configuration wins; otherwise the model family decides. `nil` means we
+    /// don't recognise the family → the agent falls back to the ReAct floor
+    /// rather than running a native loop that will never parse a call.
+    static func resolveToolCallFormat(for configuration: ModelConfiguration) -> ToolCallFormat? {
+        if let explicit = configuration.toolCallFormat { return explicit }
+        let name = configuration.name.lowercased()
+        if name.contains("gemma") { return .gemma }
+        if name.contains("qwen") || name.contains("llama")
+            || name.contains("mistral") || name.contains("phi") { return .json }
+        if name.contains("glm") { return .glm4 }
+        if name.contains("lfm2") { return .lfm2 }
+        return nil
+    }
+
+    /// True only when the model family has a known dialect — defuses the silent
+    /// `.json` fallback trap (a model we can't parse would loop to the cap with
+    /// none of the ReAct safety nets).
+    public var supportsToolCalls: Bool {
+        resolvedToolCallFormat != nil
+    }
+
+    /// Run one model turn over the transcript + tools, returning structure. The
+    /// library parses the model's native dialect into `.toolCall` events inline;
+    /// we collect them (and any free text) into a `ToolTurn`. Stateless-renders-
+    /// array: the whole transcript is re-rendered each call so the agent keeps
+    /// owning it (for the trace + observation rescue), per the 12a challenger pass.
+    public func continueToolTurn(messages: [ToolMessage], tools: [ToolDefinition]) async throws -> ToolTurn {
+        let container = try await ensureLoaded()
+        let format = resolvedToolCallFormat ?? .gemma
+        let parameters = generateParameters
+
+        return try await container.perform { context in
+            let chat = messages.map { MLXToolMapping.chatMessage(from: $0, format: format) }
+            let specs = tools.map(MLXToolMapping.toolSpec(from:))
+            let userInput = UserInput(chat: chat, tools: specs.isEmpty ? nil : specs)
+            let input = try await context.processor.prepare(input: userInput)
+
+            let stream = try MLXLMCommon.generate(input: input, parameters: parameters, context: context)
+            var text = ""
+            var calls: [ParsedToolCall] = []
+            for await event in stream {
+                switch event {
+                case let .chunk(piece):
+                    text += piece
+                case let .toolCall(libraryCall):
+                    calls.append(MLXToolMapping.parsedToolCall(from: libraryCall))
+                case .info:
+                    break
+                @unknown default:
+                    break
+                }
+            }
+            if calls.isEmpty {
+                return ToolTurn.text(text.trimmingCharacters(in: .whitespacesAndNewlines))
+            }
+            return ToolTurn.toolCalls(calls)
+        }
+    }
+}
