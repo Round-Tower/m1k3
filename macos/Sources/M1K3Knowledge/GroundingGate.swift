@@ -21,11 +21,13 @@
 import Foundation
 
 public enum GroundingGate {
-    /// Minimum cosine similarity for a chunk to be injected. bge-small over
-    /// normalised vectors: unrelated content typically lands ≈0.3–0.45,
-    /// topical content ≈0.55+. Starting point, not gospel — the responder
-    /// logs every hit's score so this can be tuned on real queries.
-    public static let chunkThreshold: Float = 0.45
+    /// Minimum cosine similarity for a chunk to be injected. BGE-family
+    /// embeddings live in a NARROW cosine cone — unrelated pairs commonly
+    /// score 0.55–0.7, topical ≈0.72+ — so a "generous" floor passes
+    /// everything (proven live 2026-06-10: 0.45 injected arxiv chunks for
+    /// "Yo mike, what's up?"). Tune from the per-hit responder logs; per-query
+    /// normalisation is the upgrade path if a fixed floor keeps misfiring.
+    public static let chunkThreshold: Float = 0.62
 
     /// Filter retrieved hits down to the ones worth injecting. An FTS-only
     /// hit (no vector score) survives only when at least one vector hit passed

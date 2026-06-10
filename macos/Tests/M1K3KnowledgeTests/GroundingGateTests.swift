@@ -31,10 +31,11 @@ struct GroundingGateTests {
 
     @Test("topical hits pass; weak hits are dropped")
     func dropsWeakHits() {
+        // BGE's narrow cosine cone: unrelated content still scores ~0.55-0.7.
         let hits = [
-            hit("relevant", similarity: 0.71),
-            hit("borderline", similarity: 0.52),
-            hit("noise", similarity: 0.31),
+            hit("relevant", similarity: 0.78),
+            hit("borderline", similarity: 0.64),
+            hit("noise", similarity: 0.58),
         ]
         let kept = GroundingGate.filter(hits)
         #expect(kept.map(\.content) == ["relevant", "borderline"])
@@ -42,13 +43,13 @@ struct GroundingGateTests {
 
     @Test("when no hit is topical, nothing is injected at all")
     func allWeakInjectsNothing() {
-        let hits = [hit("noise a", similarity: 0.34), hit("noise b", similarity: 0.29)]
+        let hits = [hit("noise a", similarity: 0.57), hit("noise b", similarity: 0.49)]
         #expect(GroundingGate.filter(hits).isEmpty)
     }
 
     @Test("an FTS-only hit (no similarity) survives only beside a topical vector hit")
     func ftsOnlyNeedsTopicalSibling() {
-        let topical = [hit("vector match", similarity: 0.66), hit("fts only", similarity: nil)]
+        let topical = [hit("vector match", similarity: 0.74), hit("fts only", similarity: nil)]
         #expect(GroundingGate.filter(topical).count == 2)
 
         let alone = [hit("fts only", similarity: nil)]

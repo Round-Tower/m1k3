@@ -290,6 +290,36 @@ struct AgentRAGResponderTests {
         #expect(prompt.contains("no web access"))
     }
 
+    private func groundingChunk() -> ChunkHit {
+        ChunkHit(
+            chunkID: UUID(), itemID: UUID(), itemTitle: "Plant Notes", kind: .document,
+            heading: "3.2 Seals", content: "The hydraulic seal failed under load."
+        )
+    }
+
+    @Test("native-path rules carry NO ReAct scaffolding (no CONCLUSION:, no call budget)")
+    func nativeRulesDropReActScaffold() {
+        let rules = AgentRAGResponder.grounding(
+            chunks: [groundingChunk()], toolNames: ["web_search", "search_knowledge"],
+            style: .native
+        )
+        #expect(!rules.contains("CONCLUSION:"))
+        #expect(!rules.contains("at most two tool calls"))
+        #expect(rules.contains("Casual conversation needs no tools"))
+        // Routing + citation guidance survive on both paths.
+        #expect(rules.contains("use web_search"))
+        #expect(rules.contains("never invent citations"))
+    }
+
+    @Test("react-path rules keep the CONCLUSION: scaffold (the floor's format contract)")
+    func reactRulesKeepScaffold() {
+        let rules = AgentRAGResponder.grounding(
+            chunks: [groundingChunk()], toolNames: ["web_search"],
+            style: .react
+        )
+        #expect(rules.contains("CONCLUSION:"))
+    }
+
     @Test("the tools provider is consulted fresh each turn (settings toggles apply immediately)")
     func toolsProviderPerTurn() async throws {
         let (store, embedder) = try await ingestedStore()

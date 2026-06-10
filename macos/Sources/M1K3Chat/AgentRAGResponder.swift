@@ -130,8 +130,12 @@ public struct AgentRAGResponder: RAGResponding, Sendable {
         onActivity: @escaping @Sendable (ResponderActivity) -> Void,
         continuation: AsyncStream<String>.Continuation
     ) async {
+        // Match the loop LocalAgent will actually run (same capability check),
+        // so the native path never sees the ReAct format scaffold.
+        let style: Self.PromptStyle =
+            (provider as? ToolCallingProvider)?.supportsToolCalls == true ? .native : .react
         let grounding = Self.grounding(
-            chunks: chunks, toolNames: Set(tools.map(\.name)), history: history
+            chunks: chunks, toolNames: Set(tools.map(\.name)), history: history, style: style
         )
         Self.logTurnStart(chunks: chunks, tools: tools, grounding: grounding)
         // Fresh agent per turn — its reasoning trace must not bleed across
@@ -308,20 +312,33 @@ public struct AgentRAGResponder: RAGResponding, Sendable {
         """
     }
 
+    /// Which loop the prompt is feeding. The ReAct floor NEEDS its format
+    /// scaffold (CONCLUSION:/call budget); the native loop speaks structured
+    /// calls, and feeding it the ReAct scaffold makes reasoning models burn
+    /// their think budget obeying a format they never emit (seen live on
+    /// Qwen3.5-9B agonising over "CONCLUSION:" for a casual greeting).
+    enum PromptStyle {
+        case react
+        case native
+    }
+
     /// The grounding handed to the agent: the retrieved knowledge (with the
     /// same citation labels the validator expects) + tight behavioral rules
     /// tuned for small models. The tool-routing lines match what's actually
     /// callable — never advertise a disabled web_search (and never imply
     /// search_knowledge can reach the live world; the ⌘R weather bug).
     static func grounding(
-        chunks: [ChunkHit], toolNames: Set<String>, history: [ChatTurn] = []
+        chunks: [ChunkHit], toolNames: Set<String>, history: [ChatTurn] = [],
+        style: PromptStyle = .react
     ) -> String {
-        let body = groundingBody(chunks: chunks, toolNames: toolNames)
+        let body = groundingBody(chunks: chunks, toolNames: toolNames, style: style)
         guard let replay = HistoryWindow.render(history) else { return body }
         return "\(replay)\n\n\(body)"
     }
 
-    private static func groundingBody(chunks: [ChunkHit], toolNames: Set<String>) -> String {
+    private static func groundingBody(
+        chunks: [ChunkHit], toolNames: Set<String>, style: PromptStyle
+    ) -> String {
         let hasWebSearch = toolNames.contains("web_search")
         var routing = hasWebSearch
             ? "- For current or external information — weather, news, prices, "
@@ -335,15 +352,28 @@ public struct AgentRAGResponder: RAGResponding, Sendable {
                 + "(like an actual forecast), run fetch_page on the most "
                 + "relevant result URL, then conclude from the page text."
         }
-        let rules = """
-        RULES:
-        - If the KNOWLEDGE already answers the question, reply IMMEDIATELY \
-        starting with "CONCLUSION:" — do not use tools.
-        - Cite knowledge sources inline with citation tokens like \
-        [Title §heading]; never invent citations.
-        - Use at most two tool calls, never repeating one with the same argument.
-        \(routing)
-        """
+        let rules = switch style {
+        case .react:
+            """
+            RULES:
+            - If the KNOWLEDGE already answers the question, reply IMMEDIATELY \
+            starting with "CONCLUSION:" — do not use tools.
+            - Cite knowledge sources inline with citation tokens like \
+            [Title §heading]; never invent citations.
+            - Use at most two tool calls, never repeating one with the same argument.
+            \(routing)
+            """
+        case .native:
+            """
+            RULES:
+            - Casual conversation needs no tools and no knowledge — just reply.
+            - If the KNOWLEDGE above answers the question, answer from it directly.
+            - Cite knowledge sources inline with citation tokens like \
+            [Title §heading]; never invent citations.
+            - Never repeat a tool call with the same argument.
+            \(routing)
+            """
+        }
         guard !chunks.isEmpty else {
             let hint = toolNames.contains("search_knowledge")
                 ? "No stored knowledge was injected — the user's documents are "
