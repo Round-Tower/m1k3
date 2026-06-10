@@ -101,7 +101,8 @@ public actor LocalAgent {
         goal: String,
         context groundingContext: String? = nil,
         onEvent: (@Sendable (AgentLoopEvent) -> Void)? = nil,
-        onConclusionToken: (@Sendable (String) -> Void)? = nil
+        onConclusionToken: (@Sendable (String) -> Void)? = nil,
+        onReasoningToken: (@Sendable (String) -> Void)? = nil
     ) async throws -> AgentResult {
         reasoningTrace.removeAll()
 
@@ -119,7 +120,8 @@ public actor LocalAgent {
                 goal: goal,
                 grounding: groundingContext,
                 onEvent: onEvent,
-                onConclusionToken: onConclusionToken
+                onConclusionToken: onConclusionToken,
+                onReasoningToken: onReasoningToken
             )
         }
 

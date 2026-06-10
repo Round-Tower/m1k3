@@ -19,6 +19,7 @@
 import Foundation
 @testable import M1K3Agent
 import M1K3Inference
+import Synchronization
 import Testing
 
 // MARK: - Test doubles
@@ -208,12 +209,57 @@ struct NativeToolCallingTests {
         #expect(observation.contains("search"))
     }
 
-    @Test("at the iteration cap, synthesises a final answer with tools withdrawn")
+    @Test("think phase routes to onReasoningToken; the answer to onConclusionToken")
+    func thinkRoutesToReasoningChannel() async throws {
+        let provider = FakeToolCallingProvider { _, _, _ in
+            .text("<think>checking the weather</think>It's sunny.")
+        }
+        let agent = LocalAgent(inferenceProvider: provider, tools: [RecordingTool()])
+        let reasoning = Mutex("")
+        let conclusion = Mutex("")
+
+        let result = try await agent.run(
+            goal: "x",
+            onConclusionToken: { token in conclusion.withLock { $0 += token } },
+            onReasoningToken: { token in reasoning.withLock { $0 += token } }
+        )
+
+        #expect(reasoning.withLock { $0 } == "<think>checking the weather</think>")
+        #expect(conclusion.withLock { $0 } == "It's sunny.")
+        #expect(result.conclusion == "<think>checking the weather</think>It's sunny.")
+    }
+
+    @Test("a pure-think turn concludes empty so callers can fall back")
+    func pureThinkConcludesEmpty() async throws {
+        let provider = FakeToolCallingProvider { _, _, _ in
+            .text("<think>endless pondering, no answer</think>")
+        }
+        let agent = LocalAgent(inferenceProvider: provider, tools: [RecordingTool()])
+        let conclusion = Mutex("")
+
+        let result = try await agent.run(
+            goal: "x",
+            onConclusionToken: { token in conclusion.withLock { $0 += token } }
+        )
+
+        #expect(result.conclusion.isEmpty)
+        #expect(conclusion.withLock { $0 }.isEmpty)
+    }
+
+    @Test("at the iteration cap, synthesises a final answer on instruction")
     func iterationCapSynthesis() async throws {
-        // Always calls a tool while tools are offered; answers once tools are
-        // withdrawn (the cap synthesis call passes an empty tool list).
-        let provider = FakeToolCallingProvider { _, _, tools in
-            tools.isEmpty ? .text("synthesised from gathered facts") : call("search", ["query": .string("x")])
+        // Always calls a tool until the cap-synthesis INSTRUCTION arrives (the
+        // session keeps tools rendered; the instruction does the steering now).
+        let provider = FakeToolCallingProvider { _, messages, _ in
+            let instructed = messages.contains { message in
+                if case let .user(text) = message {
+                    return text.contains("maximum number of steps")
+                }
+                return false
+            }
+            return instructed
+                ? .text("synthesised from gathered facts")
+                : call("search", ["query": .string("x")])
         }
         let agent = LocalAgent(inferenceProvider: provider, tools: [RecordingTool()], maxIterations: 3)
 

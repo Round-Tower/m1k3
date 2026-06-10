@@ -29,6 +29,7 @@
 //  helpers rather than rewriting the proven ReAct path).
 
 import Foundation
+import Synchronization
 
 /// A JSON value as it arrives from a model's native tool-call output. Tool-call
 /// arguments are genuinely typed (numbers, bools, nested objects), so the WIRE
@@ -133,6 +134,30 @@ public enum ToolMessage: Sendable, Equatable {
     case toolResult(name: String, output: String)
 }
 
+/// A stateful conversation with a tool-capable model for ONE agent turn. The
+/// caller sends only the NEW messages each iteration — the session retains
+/// everything prior (for MLX that's a live KV cache, so iteration N prefills
+/// only the new tool results instead of re-prefilling the whole transcript).
+///
+/// Contract: for a `.text` outcome the session must have delivered the FULL
+/// turn text through `onToken` (chunked or in one piece) — the agent's live
+/// streaming gate derives what is still unemitted from that stream.
+public protocol ToolTurnSession: AnyObject, Sendable {
+    /// Append `messages` to the conversation and generate the model's next
+    /// turn, streaming raw text through `onToken` as it is produced.
+    func send(
+        _ messages: [ToolMessage],
+        onToken: @escaping @Sendable (String) -> Void
+    ) async throws -> ToolTurn
+
+    /// The turn is over: release per-turn resources (KV cache, pooled buffers).
+    func finish() async
+}
+
+public extension ToolTurnSession {
+    func finish() async {}
+}
+
 /// Capability refinement: an `InferenceProvider` that speaks its model's NATIVE
 /// tool-call dialect. `LocalAgent` runs the structured loop when the active
 /// provider conforms; otherwise the prompt-ReAct floor.
@@ -147,6 +172,12 @@ public protocol ToolCallingProvider: InferenceProvider {
     /// Continue the conversation: given the transcript so far and the available
     /// tools, return the model's next turn (final text, or tool calls to run).
     func continueToolTurn(messages: [ToolMessage], tools: [ToolDefinition]) async throws -> ToolTurn
+
+    /// Open a session for one agent turn. The default adapter re-renders the
+    /// whole transcript through `continueToolTurn` per send (behaviourally
+    /// identical to the pre-session loop); providers with real session state
+    /// (a KV cache) override to make iteration ≥2 prefill only the delta.
+    func makeToolTurnSession(tools: [ToolDefinition]) async throws -> any ToolTurnSession
 }
 
 public extension ToolCallingProvider {
@@ -154,5 +185,43 @@ public extension ToolCallingProvider {
     /// to reflect their current backing model.
     var supportsToolCalls: Bool {
         true
+    }
+
+    func makeToolTurnSession(tools: [ToolDefinition]) async throws -> any ToolTurnSession {
+        StatelessToolTurnSession(provider: self, tools: tools)
+    }
+}
+
+/// The default session: tracks the transcript internally and re-renders the
+/// whole of it through `continueToolTurn` each send — no cache, no behaviour
+/// change from the pre-session loop. `@unchecked Sendable`: the transcript is
+/// Mutex-guarded; the agent loop uses a session strictly serially anyway.
+final class StatelessToolTurnSession: ToolTurnSession, @unchecked Sendable {
+    private let provider: any ToolCallingProvider
+    private let tools: [ToolDefinition]
+    private let transcript = Mutex<[ToolMessage]>([])
+
+    init(provider: any ToolCallingProvider, tools: [ToolDefinition]) {
+        self.provider = provider
+        self.tools = tools
+    }
+
+    func send(
+        _ messages: [ToolMessage],
+        onToken: @escaping @Sendable (String) -> Void
+    ) async throws -> ToolTurn {
+        let snapshot = transcript.withLock { current in
+            current.append(contentsOf: messages)
+            return current
+        }
+        let turn = try await provider.continueToolTurn(messages: snapshot, tools: tools)
+        switch turn {
+        case let .text(answer):
+            transcript.withLock { $0.append(.assistant(text: answer, toolCalls: [])) }
+            if !answer.isEmpty { onToken(answer) }
+        case let .toolCalls(calls):
+            transcript.withLock { $0.append(.assistant(text: nil, toolCalls: calls)) }
+        }
+        return turn
     }
 }

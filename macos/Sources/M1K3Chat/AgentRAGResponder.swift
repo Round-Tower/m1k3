@@ -123,6 +123,13 @@ public struct AgentRAGResponder: RAGResponding, Sendable {
                 onConclusionToken: { token in
                     emittedLive.withLock { $0 = true }
                     continuation.yield(token)
+                },
+                // Chain-of-thought streams into the same chat stream — the
+                // chat-side splitter routes it to the reasoning disclosure.
+                // Deliberately does NOT set emittedLive: reasoning alone is
+                // not an answer, so the empty-conclusion fallback still fires.
+                onReasoningToken: { token in
+                    continuation.yield(token)
                 }
             )
 

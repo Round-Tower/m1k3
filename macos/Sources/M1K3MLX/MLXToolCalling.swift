@@ -24,6 +24,7 @@
 import Foundation
 import M1K3Inference
 import MLXLMCommon
+import Synchronization
 
 /// Pure, testable bridges between the M1K3 tool-calling seam and mlx-swift-lm.
 enum MLXToolMapping {
@@ -237,5 +238,122 @@ extension MLXGemmaProvider: ToolCallingProvider {
             }
             return ToolTurn.toolCalls(calls)
         }
+    }
+
+    /// The REAL session: one KV cache for the whole agent turn. Iteration ≥2
+    /// renders and prefills only the new tool-result messages — the prompt,
+    /// grounding, tool specs, and every prior generation are already in the
+    /// cache (upstream ChatSession's delta-render pattern, with our loop in
+    /// control).
+    public func makeToolTurnSession(tools: [ToolDefinition]) async throws -> any ToolTurnSession {
+        let container = try await ensureLoaded()
+        let specs = tools.map(MLXToolMapping.toolSpec(from:))
+        return MLXToolTurnSession(
+            container: container,
+            parameters: generateParameters,
+            format: resolvedToolCallFormat ?? .gemma,
+            specs: specs.isEmpty ? nil : specs,
+            thinkingContext: thinkingAdditionalContext,
+            prefixNeeded: thinkPrefixNeeded
+        )
+    }
+}
+
+/// Per-turn MLX session: a live `[KVCache]` shared across the turn's
+/// generations. `@unchecked Sendable`: the agent loop sends strictly serially,
+/// state hands off through a Mutex, and the cache arrays are evaluated by the
+/// generation loop before the next send (the same cross-isolation contract
+/// upstream ChatSession relies on).
+final class MLXToolTurnSession: ToolTurnSession, @unchecked Sendable {
+    private let container: ModelContainer
+    private let parameters: GenerateParameters
+    private let format: ToolCallFormat
+    private let specs: [ToolSpec]?
+    private let thinkingContext: [String: any Sendable]?
+    private let prefixNeeded: Bool
+
+    /// Serial-use contract (why @unchecked is sound): the agent loop awaits
+    /// each `send` before the next, so these are only ever touched one send at
+    /// a time, inside `container.perform`'s isolation. A Mutex can't hold a
+    /// non-Sendable KVCache without tripping region isolation on the way out.
+    private var kvCache: [KVCache]?
+    private var sentTools = false
+
+    init(
+        container: ModelContainer,
+        parameters: GenerateParameters,
+        format: ToolCallFormat,
+        specs: [ToolSpec]?,
+        thinkingContext: [String: any Sendable]?,
+        prefixNeeded: Bool
+    ) {
+        self.container = container
+        self.parameters = parameters
+        self.format = format
+        self.specs = specs
+        self.thinkingContext = thinkingContext
+        self.prefixNeeded = prefixNeeded
+    }
+
+    func send(
+        _ messages: [ToolMessage],
+        onToken: @escaping @Sendable (String) -> Void
+    ) async throws -> ToolTurn {
+        let format = format
+        let parameters = parameters
+        let prefixNeeded = prefixNeeded
+        let thinkingContext = thinkingContext
+        // Qwen3.5's template pre-opens <think> — surface the opener so live
+        // splitting engages from the generation's first real token.
+        if prefixNeeded { onToken("<think>") }
+
+        return try await container.perform { context in
+            let chat = messages.map { MLXToolMapping.chatMessage(from: $0, format: format) }
+            // Tool specs render into the chat template once, on the first
+            // send — they live in the cache afterwards.
+            let userInput = UserInput(
+                chat: chat,
+                tools: self.sentTools ? nil : self.specs,
+                additionalContext: thinkingContext
+            )
+            let input = try await context.processor.prepare(input: userInput)
+            let cache = self.kvCache ?? context.model.newCache(parameters: parameters)
+            self.kvCache = cache
+            self.sentTools = true
+
+            let stream = try MLXLMCommon.generate(
+                input: input, cache: cache, parameters: parameters, context: context
+            )
+            var text = ""
+            var calls: [ParsedToolCall] = []
+            for await event in stream {
+                switch event {
+                case let .chunk(piece):
+                    text += piece
+                    onToken(piece)
+                case let .toolCall(libraryCall):
+                    calls.append(MLXToolMapping.parsedToolCall(from: libraryCall))
+                case let .info(info):
+                    logGenerationInfo(info, label: "toolTurnSession")
+                @unknown default:
+                    break
+                }
+            }
+            if calls.isEmpty {
+                let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+                return ToolTurn.text(
+                    MLXGemmaProvider.normaliseThinkPrefix(trimmed, preOpened: prefixNeeded)
+                )
+            }
+            return ToolTurn.toolCalls(calls)
+        }
+    }
+
+    /// Turn over: drop the cache and hand the pooled Metal buffers back —
+    /// the per-TURN reclaim (per-generation would thrash the pool between
+    /// iterations that are about to reuse it).
+    func finish() async {
+        kvCache = nil
+        MLXMemoryBudget.reclaim(label: "toolTurnSession")
     }
 }

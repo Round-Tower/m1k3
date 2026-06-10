@@ -100,4 +100,22 @@ struct StreamingReasoningSplitterTests {
         let splitter = run(["the answer mentions <th"])
         #expect(splitter.answer == "the answer mentions <th")
     }
+
+    @Test("multiple think blocks (one per agent iteration) all join the reasoning")
+    func multipleThinkBlocks() {
+        let splitter = run([
+            "<think>check the weather</think>",
+            "<think>got 18°C, summarise</think>",
+            "It's 18°C in Galway.",
+        ])
+        #expect(splitter.reasoning == "check the weather\n\ngot 18°C, summarise")
+        #expect(splitter.answer == "It's 18°C in Galway.")
+    }
+
+    @Test("a think block reopening after answer text routes back to reasoning")
+    func reopenAfterAnswer() {
+        let splitter = run(["<think>plan</think>partial ", "<think>more thought</think>final"])
+        #expect(splitter.reasoning == "plan\n\nmore thought")
+        #expect(splitter.answer == "partial final")
+    }
 }

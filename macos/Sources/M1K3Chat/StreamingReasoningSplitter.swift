@@ -36,12 +36,16 @@ struct StreamingReasoningSplitter {
         case reasoning
         /// Plain text so far, but a lone `</think>` may still arrive (Qwen3.5).
         case answerWatching
-        /// Think block closed — everything else is answer.
+        /// At least one think block closed — answer text, but a NEW `<think>`
+        /// (the next agent iteration's reasoning) routes back to the disclosure.
         case answer
     }
 
     private var mode: Mode = .scanning
     private var buffer = ""
+    /// Set when a new think block begins after one already closed, so blocks
+    /// join with a blank line (matches ReasoningSplit's joined output).
+    private var pendingReasoningSeparator = false
 
     private static let openTag = "<think>"
     private static let closeTag = "</think>"
@@ -95,11 +99,13 @@ struct StreamingReasoningSplitter {
                     mode = .answer
                     advanced = true
                 } else {
-                    appendReasoning(takeAllButHoldback())
+                    appendReasoning(takeAllButHoldback(guarding: [Self.closeTag]))
                 }
 
             case .answerWatching:
-                if let close = buffer.range(of: Self.closeTag) {
+                let close = buffer.range(of: Self.closeTag)
+                let open = buffer.range(of: Self.openTag)
+                if let close, open == nil || close.lowerBound < open!.lowerBound {
                     // Lone close with no open: the template opened the block
                     // for us — everything emitted so far was reasoning.
                     let before = String(buffer[..<close.lowerBound])
@@ -108,25 +114,39 @@ struct StreamingReasoningSplitter {
                     buffer = String(buffer[close.upperBound...])
                     mode = .answer
                     advanced = true
+                } else if let open {
+                    appendAnswer(String(buffer[..<open.lowerBound]))
+                    buffer = String(buffer[open.upperBound...])
+                    beginReasoningBlock()
+                    mode = .reasoning
+                    advanced = true
                 } else {
-                    appendAnswer(takeAllButHoldback())
+                    appendAnswer(takeAllButHoldback(guarding: [Self.closeTag, Self.openTag]))
                 }
 
             case .answer:
-                appendAnswer(buffer)
-                buffer = ""
+                if let open = buffer.range(of: Self.openTag) {
+                    appendAnswer(String(buffer[..<open.lowerBound]))
+                    buffer = String(buffer[open.upperBound...])
+                    beginReasoningBlock()
+                    mode = .reasoning
+                    advanced = true
+                } else {
+                    appendAnswer(takeAllButHoldback(guarding: [Self.openTag]))
+                }
             }
         }
     }
 
     /// Drain the buffer except the longest tail that could still be the start
-    /// of a split `</think>` — keeps a dangling half-tag out of the output.
-    private mutating func takeAllButHoldback() -> String {
+    /// of one of the watched tags — keeps a dangling half-tag out of the output.
+    private mutating func takeAllButHoldback(guarding tags: [String]) -> String {
         var keep = 0
-        let maxKeep = min(buffer.count, Self.closeTag.count - 1)
-        if maxKeep > 0 {
+        for tag in tags {
+            let maxKeep = min(buffer.count, tag.count - 1)
+            guard maxKeep > 0 else { continue }
             for length in stride(from: maxKeep, through: 1, by: -1) {
-                if buffer.hasSuffix(Self.closeTag.prefix(length)) {
+                if length > keep, buffer.hasSuffix(tag.prefix(length)) {
                     keep = length
                     break
                 }
@@ -137,9 +157,22 @@ struct StreamingReasoningSplitter {
         return emitted
     }
 
+    /// A think block is opening after one already closed (the next agent
+    /// iteration): join blocks with a blank line, like ReasoningSplit does.
+    private mutating func beginReasoningBlock() {
+        if !reasoning.isEmpty { pendingReasoningSeparator = true }
+    }
+
     private mutating func appendReasoning(_ text: String) {
         var piece = text
-        if reasoning.isEmpty { piece = String(piece.drop(while: \.isWhitespace)) }
+        if reasoning.isEmpty || pendingReasoningSeparator {
+            piece = String(piece.drop(while: \.isWhitespace))
+        }
+        guard !piece.isEmpty else { return }
+        if pendingReasoningSeparator {
+            reasoning += "\n\n"
+            pendingReasoningSeparator = false
+        }
         reasoning += piece
     }
 
