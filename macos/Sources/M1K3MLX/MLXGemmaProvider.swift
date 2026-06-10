@@ -62,7 +62,12 @@ public final class MLXGemmaProvider: InferenceProvider, ModelPreloading, @unchec
 
     public init(
         configuration: ModelConfiguration = LLMRegistry.gemma3_1B_qat_4bit,
-        maxTokens: Int = 512,
+        // A generous ceiling, NOT a target — the model stops at EOS naturally, so
+        // this is free for short replies. Reasoning models (Qwen3) spend hundreds
+        // of tokens in <think> before the tool call / answer; the old 512 cap cut
+        // them off mid-thought (no call, empty answer). 4096 leaves room to think,
+        // act, AND answer across an agent iteration.
+        maxTokens: Int = 4096,
         name: String = "mlx-gemma"
     ) {
         var params = GenerateParameters()
@@ -106,7 +111,7 @@ public final class MLXGemmaProvider: InferenceProvider, ModelPreloading, @unchec
 
     /// Convenience: point at any HuggingFace model id (e.g. a locally-cached
     /// model) without the caller importing MLXLLM's ModelConfiguration.
-    public convenience init(modelID: String, maxTokens: Int = 512, name: String = "mlx-gemma") {
+    public convenience init(modelID: String, maxTokens: Int = 4096, name: String = "mlx-gemma") {
         self.init(configuration: ModelConfiguration(id: modelID), maxTokens: maxTokens, name: name)
     }
 
