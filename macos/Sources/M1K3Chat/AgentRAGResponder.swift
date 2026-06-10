@@ -133,9 +133,7 @@ public struct AgentRAGResponder: RAGResponding, Sendable {
                 .trimmingCharacters(in: .whitespacesAndNewlines)
             let streamed = emittedLive.withLock { $0 }
             if !streamed, conclusion.isEmpty {
-                // The loop produced nothing usable — answer the plain way.
-                Self.log.notice("agent returned empty (nothing streamed) — falling back to plain RAG")
-                await streamFallback(question: question, chunks: chunks, into: continuation)
+                await fallBack(question: question, chunks: chunks, result: result, into: continuation)
             } else {
                 var tail = streamed ? "" : conclusion
                 tail += Self.webSourcesBlock(for: result)
@@ -186,18 +184,71 @@ public struct AgentRAGResponder: RAGResponding, Sendable {
         """)
     }
 
-    /// Plain grounded generation — the safety net when the agent loop fails.
-    /// Only ever runs when nothing has been yielded, so the raw provider
-    /// chunks (cumulative or delta) fold correctly downstream.
+    /// The loop produced nothing usable as an answer — but its tools may have
+    /// gathered real information. Synthesise from that (plain RAG only when
+    /// there's truly nothing), keeping the deterministic web-sources block.
+    private func fallBack(
+        question: String,
+        chunks: [ChunkHit],
+        result: AgentResult,
+        into continuation: AsyncStream<String>.Continuation
+    ) async {
+        let steps = result.reasoningTrace.count
+        Self.log.notice("agent returned empty (nothing streamed) — falling back with \(steps) trace step(s)")
+        await streamFallback(
+            question: question, chunks: chunks,
+            gathered: result.reasoningTrace, into: continuation
+        )
+        let webBlock = Self.webSourcesBlock(for: result)
+        if !webBlock.isEmpty {
+            continuation.yield(webBlock)
+        }
+    }
+
+    /// Grounded generation — the safety net when the agent loop fails. Uses
+    /// the tool observations the loop already gathered when there are any
+    /// (don't throw away a good web search because the model fumbled the
+    /// CONCLUSION format), else the plain RAG prompt. Only ever runs when
+    /// nothing has been yielded, so the raw provider chunks (cumulative or
+    /// delta) fold correctly downstream.
     private func streamFallback(
         question: String,
         chunks: [ChunkHit],
+        gathered: [ReasoningStep] = [],
         into continuation: AsyncStream<String>.Continuation
     ) async {
-        let prompt = ChatPromptBuilder.build(chunks: chunks, userMessage: question)
+        let prompt = Self.fallbackPrompt(question: question, chunks: chunks, gathered: gathered)
         for await chunk in provider.generateStreaming(prompt: prompt) {
             continuation.yield(chunk)
         }
+    }
+
+    /// Pure fallback-prompt assembly: informative tool observations win;
+    /// otherwise the standard grounded prompt.
+    static func fallbackPrompt(
+        question: String, chunks: [ChunkHit], gathered: [ReasoningStep]
+    ) -> String {
+        let observations = gathered.compactMap { step -> String? in
+            guard let action = step.action,
+                  let observation = step.observation,
+                  !observation.hasPrefix("Error"),
+                  !observation.hasPrefix("You already ran")
+            else { return nil }
+            return "\(action):\n\(observation)"
+        }
+        guard !observations.isEmpty else {
+            return ChatPromptBuilder.build(chunks: chunks, userMessage: question)
+        }
+        return """
+        You are M1K3, a private local assistant. Answer the user's question \
+        using the INFORMATION GATHERED below. Be direct and plain — do not \
+        mention tools or actions.
+
+        INFORMATION GATHERED:
+        \(observations.joined(separator: "\n\n"))
+
+        USER: \(question)
+        """
     }
 
     /// The grounding handed to the agent: the retrieved knowledge (with the

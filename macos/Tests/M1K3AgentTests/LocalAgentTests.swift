@@ -264,6 +264,29 @@ struct LocalAgentTests {
         #expect(result.conclusion == "The seal failed under load.")
     }
 
+    @Test("'CONCLUSION: ACTION: …' is an action in a trench coat, not a conclusion")
+    func degenerateConclusionTreatedAsAction() async throws {
+        // Seen live (Boston weather): the model wrapped a repeat ACTION in the
+        // CONCLUSION marker, which stripped to an empty answer. The loop must
+        // fall through to the action path (repeat-guard steers) and let the
+        // model conclude properly next iteration.
+        let provider = ScriptedProvider([
+            "ACTION: search(weather boston)",
+            "CONCLUSION: ACTION: search(weather boston)",
+            "CONCLUSION: Sunny, 25 degrees all week.",
+        ])
+        let tool = EchoTool(response: "Sunny 25C for 10 days")
+        let agent = LocalAgent(inferenceProvider: provider, tools: [tool])
+        let result = try await agent.run(goal: "weather?")
+
+        #expect(result.conclusion == "Sunny, 25 degrees all week.")
+        #expect(result.toolsUsed == ["search"])
+        #expect(result.iterations == 3)
+        // The degenerate thought hit the repeat-guard, not a second execution.
+        let guardObservation = try #require(result.reasoningTrace[1].observation)
+        #expect(guardObservation.contains("already ran"))
+    }
+
     @Test("cancellation stops the loop between iterations")
     func cancellationStopsLoop() async {
         let provider = SleepyProvider()

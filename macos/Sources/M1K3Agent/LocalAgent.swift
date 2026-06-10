@@ -109,9 +109,8 @@ public actor LocalAgent {
                 onConclusionToken: onConclusionToken
             )
 
-            if thought.contains("CONCLUSION:") {
-                reasoningTrace.append(ReasoningStep(iteration: iteration, thought: thought))
-                return concluded(extractConclusion(from: thought), usedTools, iteration + 1)
+            if let result = markerConclusion(from: thought, iteration: iteration, usedTools: usedTools) {
+                return result
             }
 
             guard let action = parseAction(from: thought) else {
@@ -157,6 +156,25 @@ public actor LocalAgent {
         logCapReached()
         let finalConclusion = try await synthesizeConclusion(context: currentContext)
         return concluded(finalConclusion, usedTools, maxIterations)
+    }
+
+    /// Conclude from a CONCLUSION-marker thought — unless the "conclusion" is
+    /// an action in a trench coat ("CONCLUSION: ACTION: …", seen live): when
+    /// nothing survives the scaffolding strip but the thought parses as an
+    /// action, return nil so the loop falls through to the action path.
+    private func markerConclusion(
+        from thought: String, iteration: Int, usedTools: Set<String>
+    ) -> AgentResult? {
+        guard thought.contains("CONCLUSION:") else { return nil }
+        let conclusion = extractConclusion(from: thought)
+        if Self.stripScaffolding(conclusion).isEmpty, parseAction(from: thought) != nil {
+            M1K3Log.agentLoop.notice(
+                "iteration \(iteration): conclusion was only scaffolding — treating as action"
+            )
+            return nil
+        }
+        reasoningTrace.append(ReasoningStep(iteration: iteration, thought: thought))
+        return concluded(conclusion, usedTools, iteration + 1)
     }
 
     private func concluded(

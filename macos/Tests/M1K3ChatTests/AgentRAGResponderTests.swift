@@ -175,7 +175,7 @@ struct AgentRAGResponderTests {
         #expect(answer.contains("https://sealco.example"))
     }
 
-    @Test("agent coming back empty falls back to the plain RAG prompt")
+    @Test("agent coming back empty with NO gathered info falls back to the plain RAG prompt")
     func emptyFallsBack() async throws {
         let (store, embedder) = try await ingestedStore()
         // 3 empty thoughts (cap), empty synthesis, then the fallback stream.
@@ -191,6 +191,38 @@ struct AgentRAGResponderTests {
         let lastPrompt = try #require(provider.allPrompts.last)
         // ChatPromptBuilder's grounded template, not the ReAct scaffold.
         #expect(lastPrompt.contains("HOW TO ANSWER:"))
+    }
+
+    @Test("agent coming back empty AFTER gathering info synthesises from the observations")
+    func emptyFallbackUsesGatheredObservations() async throws {
+        // The Boston-weather bug: web_search returned real results, the model
+        // produced a scaffolding-only conclusion, and the fallback threw the
+        // results away. The fallback must answer FROM the gathered info.
+        let (store, embedder) = try await ingestedStore()
+        let provider = AgentScriptedProvider([
+            "ACTION: web_search(weather boston)",
+            "", // prose chance burnt
+            "", // cap
+            "", // empty synthesis
+            "Sunny and 25 all week.", // the gathered-info fallback stream
+        ])
+        let webObservation = "1. Boston 10-day — https://weather.example/boston\n   Sunny, 25C."
+        let responder = AgentRAGResponder(
+            store: store, embedder: embedder, provider: provider,
+            tools: [FixedTool(name: "web_search", response: webObservation)]
+        )
+
+        let (_, stream) = try await responder.answerStreaming("weather in boston?")
+        let answer = await collect(stream)
+        #expect(answer.contains("Sunny and 25 all week."))
+        // Deterministic provenance survives the fallback path too.
+        #expect(answer.contains("Web sources:"))
+        #expect(answer.contains("https://weather.example/boston"))
+
+        let lastPrompt = try #require(provider.allPrompts.last)
+        #expect(lastPrompt.contains("INFORMATION GATHERED"))
+        #expect(lastPrompt.contains("Sunny, 25C."))
+        #expect(lastPrompt.contains("weather in boston?"))
     }
 
     @Test("with web search available, the rules route current-world questions to it")
