@@ -69,6 +69,24 @@ private struct FailingResponder: RAGResponding {
     }
 }
 
+/// Records the history each send delivers (the chat-memory contract).
+private final class HistoryRecordingResponder: RAGResponding, @unchecked Sendable {
+    private let lock = NSLock()
+    private(set) var receivedHistories: [[ChatTurn]] = []
+
+    func answerStreaming(
+        _: String,
+        history: [ChatTurn],
+        onActivity _: @escaping @Sendable (ResponderActivity) -> Void
+    ) async throws -> (sources: [ChunkHit], stream: AsyncStream<String>) {
+        lock.withLock { receivedHistories.append(history) }
+        return ([], AsyncStream { continuation in
+            continuation.yield("answered")
+            continuation.finish()
+        })
+    }
+}
+
 private func fixtureSource(_ text: String) -> ChunkHit {
     ChunkHit(
         chunkID: UUID(),
@@ -100,6 +118,21 @@ struct ChatSessionTests {
         let session = ChatSession(responder: DeltaResponder(sources: [], deltas: ["ok"]))
         await session.send("   \n ")
         #expect(session.messages.isEmpty)
+    }
+
+    @Test("each send carries the PRIOR completed turns as history")
+    func sendCarriesHistory() async {
+        let responder = HistoryRecordingResponder()
+        let session = ChatSession(responder: responder)
+
+        await session.send("What's the weather in Galway?")
+        await session.send("And in Fahrenheit?")
+
+        #expect(responder.receivedHistories.count == 2)
+        #expect(responder.receivedHistories[0].isEmpty)
+        let second = responder.receivedHistories[1]
+        #expect(second.map(\.text) == ["What's the weather in Galway?", "answered"])
+        #expect(second.map(\.role) == [.user, .assistant])
     }
 
     @Test("folds CUMULATIVE snapshots into the final answer (AFM contract)")

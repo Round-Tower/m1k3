@@ -74,8 +74,19 @@ public struct AgentRAGResponder: RAGResponding, Sendable {
         )
     }
 
+    /// History-free entry point (tests, simple callers): same turn, no replay.
+    /// Implemented explicitly — relying on the protocol's cross-defaults here
+    /// would recurse, since this type's real implementation is the history one.
     public func answerStreaming(
         _ question: String,
+        onActivity: @escaping @Sendable (ResponderActivity) -> Void
+    ) async throws -> (sources: [ChunkHit], stream: AsyncStream<String>) {
+        try await answerStreaming(question, history: [], onActivity: onActivity)
+    }
+
+    public func answerStreaming(
+        _ question: String,
+        history: [ChatTurn],
         onActivity: @escaping @Sendable (ResponderActivity) -> Void
     ) async throws -> (sources: [ChunkHit], stream: AsyncStream<String>) {
         onActivity(.retrieving)
@@ -98,6 +109,7 @@ public struct AgentRAGResponder: RAGResponding, Sendable {
                 await runAgentTurn(
                     question: question,
                     chunks: chunks,
+                    history: history,
                     tools: tools,
                     onActivity: onActivity,
                     continuation: continuation
@@ -113,11 +125,14 @@ public struct AgentRAGResponder: RAGResponding, Sendable {
     private func runAgentTurn(
         question: String,
         chunks: [ChunkHit],
+        history: [ChatTurn],
         tools: [any AgentTool],
         onActivity: @escaping @Sendable (ResponderActivity) -> Void,
         continuation: AsyncStream<String>.Continuation
     ) async {
-        let grounding = Self.grounding(chunks: chunks, toolNames: Set(tools.map(\.name)))
+        let grounding = Self.grounding(
+            chunks: chunks, toolNames: Set(tools.map(\.name)), history: history
+        )
         Self.logTurnStart(chunks: chunks, tools: tools, grounding: grounding)
         // Fresh agent per turn — its reasoning trace must not bleed across
         // turns, and the tool list reflects current settings.
@@ -298,7 +313,15 @@ public struct AgentRAGResponder: RAGResponding, Sendable {
     /// tuned for small models. The tool-routing lines match what's actually
     /// callable — never advertise a disabled web_search (and never imply
     /// search_knowledge can reach the live world; the ⌘R weather bug).
-    static func grounding(chunks: [ChunkHit], toolNames: Set<String>) -> String {
+    static func grounding(
+        chunks: [ChunkHit], toolNames: Set<String>, history: [ChatTurn] = []
+    ) -> String {
+        let body = groundingBody(chunks: chunks, toolNames: toolNames)
+        guard let replay = HistoryWindow.render(history) else { return body }
+        return "\(replay)\n\n\(body)"
+    }
+
+    private static func groundingBody(chunks: [ChunkHit], toolNames: Set<String>) -> String {
         let hasWebSearch = toolNames.contains("web_search")
         var routing = hasWebSearch
             ? "- For current or external information — weather, news, prices, "

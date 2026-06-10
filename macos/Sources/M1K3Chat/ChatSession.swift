@@ -42,6 +42,15 @@ public protocol RAGResponding: Sendable {
         onActivity: @escaping @Sendable (ResponderActivity) -> Void
     ) async throws -> (sources: [ChunkHit], stream: AsyncStream<String>)
 
+    /// As above, with a capped replay of recent turns so follow-up questions
+    /// carry their context ("and in Fahrenheit?"). Responders that don't use
+    /// history fall through to the history-free variant.
+    func answerStreaming(
+        _ question: String,
+        history: [ChatTurn],
+        onActivity: @escaping @Sendable (ResponderActivity) -> Void
+    ) async throws -> (sources: [ChunkHit], stream: AsyncStream<String>)
+
     /// Sources gathered DURING the turn by tools the model called (e.g.
     /// search_knowledge). Read ONCE after the stream completes — they merge
     /// into the message's sources and the citation validator's allow-list.
@@ -61,6 +70,14 @@ public extension RAGResponding {
         onActivity _: @escaping @Sendable (ResponderActivity) -> Void
     ) async throws -> (sources: [ChunkHit], stream: AsyncStream<String>) {
         try await answerStreaming(question)
+    }
+
+    func answerStreaming(
+        _ question: String,
+        history _: [ChatTurn],
+        onActivity: @escaping @Sendable (ResponderActivity) -> Void
+    ) async throws -> (sources: [ChunkHit], stream: AsyncStream<String>) {
+        try await answerStreaming(question, onActivity: onActivity)
     }
 
     func collectedSources() -> [ChunkHit] {
@@ -162,6 +179,14 @@ public final class ChatSession {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, !isResponding else { return }
 
+        // Capture the replayable history BEFORE this turn joins the transcript:
+        // completed turns only, answer text only (reasoning/sources never leave
+        // the message). HistoryWindow caps how much of it reaches the prompt.
+        let history = messages.compactMap { message -> ChatTurn? in
+            guard case .complete = message.status, !message.text.isEmpty else { return nil }
+            return ChatTurn(role: message.role == .user ? .user : .assistant, text: message.text)
+        }
+
         messages.append(ChatMessage(role: .user, text: trimmed, status: .complete))
         let assistantID = UUID()
         messages.append(ChatMessage(id: assistantID, role: .assistant, text: "", status: .streaming))
@@ -172,6 +197,7 @@ public final class ChatSession {
         do {
             let (sources, stream) = try await responder.answerStreaming(
                 trimmed,
+                history: history,
                 onActivity: { [weak self] activity in
                     Task { @MainActor in
                         self?.update(assistantID) {
