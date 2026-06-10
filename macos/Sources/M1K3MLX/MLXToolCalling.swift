@@ -173,6 +173,9 @@ extension MLXGemmaProvider: ToolCallingProvider {
         let container = try await ensureLoaded()
         let format = resolvedToolCallFormat ?? .gemma
         let parameters = generateParameters
+        // An agent turn runs several generations back-to-back; reclaim after
+        // each so their peaks don't compound in the process-global MLX cache.
+        defer { MLXMemoryBudget.reclaim(label: "toolTurn") }
 
         return try await container.perform { context in
             let chat = messages.map { MLXToolMapping.chatMessage(from: $0, format: format) }

@@ -217,6 +217,11 @@ final class AppEnvironment {
     }
 
     init() throws {
+        // Bound the process-global MLX Metal cache before ANY MLX work (the
+        // embedder below may be the first) — without it the cache grows to the
+        // session's peak and never shrinks (~16GB footprint on easy queries).
+        MLXMemoryBudget.applyOnce()
+
         let url = try Self.storeURL()
         store = try KnowledgeStore(path: url.path)
 
@@ -264,10 +269,9 @@ final class AppEnvironment {
 
         // TTS seam: Built-in Apple voice wrapped in a swappable façade so the
         // premium Kokoro tier can drop in without rebuilding any caller.
-        let builtin = AVSpeechProvider()
-        builtinSpeech = builtin
+        builtinSpeech = AVSpeechProvider()
         kokoro = KokoroSpeechProvider()
-        speech = SwappableSpeechProvider(builtin)
+        speech = SwappableSpeechProvider(builtinSpeech)
         selectedVoiceTier = UserDefaults.standard.string(forKey: Self.selectedVoiceTierKey)
             .flatMap(VoiceTier.init(rawValue:)) ?? .builtin
 

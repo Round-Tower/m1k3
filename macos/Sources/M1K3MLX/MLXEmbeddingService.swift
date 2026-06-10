@@ -81,6 +81,9 @@ public final class MLXEmbeddingService: EmbeddingService, @unchecked Sendable {
     }
 
     private func ensureLoaded() async throws -> ModelContainer {
+        // The embedder shares the process-global MLX memory state with the LLM
+        // and can be the first MLX code to run (ingest before any chat turn).
+        MLXMemoryBudget.applyOnce()
         if let modelContainer { return modelContainer }
         let report = onLoadProgress
         let container = try await loadModelContainer(

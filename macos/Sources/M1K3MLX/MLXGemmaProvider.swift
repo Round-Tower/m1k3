@@ -72,6 +72,11 @@ public final class MLXGemmaProvider: InferenceProvider, ModelPreloading, @unchec
     ) {
         var params = GenerateParameters()
         params.maxTokens = maxTokens
+        // Hard-bound KV-cache growth (the cache rotates past this) so a long
+        // agent transcript can't balloon memory without limit. 8192 leaves the
+        // full 4096-token think-act-answer budget PLUS grounding/tools without
+        // ever rotating the prompt out mid-generation.
+        params.maxKVSize = 8192
         generateParameters = params
         self.name = name
 
@@ -131,6 +136,9 @@ public final class MLXGemmaProvider: InferenceProvider, ModelPreloading, @unchec
 
     public func generate(prompt: String) async throws -> String {
         let container = try await ensureLoaded()
+        // Return cached Metal buffers after every generation — without this the
+        // process-global MLX cache holds each generation's peak forever.
+        defer { MLXMemoryBudget.reclaim(label: "generate") }
         let session = ChatSession(container, generateParameters: generateParameters)
         return try await session.respond(to: prompt)
     }
@@ -138,6 +146,9 @@ public final class MLXGemmaProvider: InferenceProvider, ModelPreloading, @unchec
     public func generateStreaming(prompt: String) -> AsyncStream<String> {
         AsyncStream { continuation in
             let task = Task {
+                // Runs on every exit — completion, error, and cancellation via
+                // onTermination (cancel makes the stream loop throw into catch).
+                defer { MLXMemoryBudget.reclaim(label: "generateStreaming") }
                 do {
                     let container = try await ensureLoaded()
                     let session = ChatSession(container, generateParameters: generateParameters)
@@ -158,6 +169,8 @@ public final class MLXGemmaProvider: InferenceProvider, ModelPreloading, @unchec
     func ensureLoaded(
         progress: @escaping @Sendable (Double) -> Void = { _ in }
     ) async throws -> ModelContainer {
-        try await loader.value(progress: progress)
+        // Bound the process-global Metal cache BEFORE any MLX work can run.
+        MLXMemoryBudget.applyOnce()
+        return try await loader.value(progress: progress)
     }
 }
