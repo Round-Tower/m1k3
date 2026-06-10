@@ -1,0 +1,256 @@
+//
+//  NativeToolCallingTests.swift
+//  M1K3AgentTests
+//
+//  Contract tests for LocalAgent's NATIVE tool-calling loop (Phase 12a) — the
+//  path taken when the inference provider conforms to `ToolCallingProvider` and
+//  reports `supportsToolCalls`. Driven by a fake provider that returns scripted
+//  structured `ToolTurn`s — no model, no dialect. Covers: execute-then-conclude,
+//  structured-args passthrough, transcript threading (assistant + tool-result
+//  roles), repeat-guard, unknown-tool steering, iteration-cap synthesis, the
+//  runtime-capability fallback to ReAct, and event emission.
+//
+//  These assert the loop semantics are SHARED with the ReAct path (dispatch,
+//  repeat-guard, unknown-tool steering, cap, trace, events) while the model
+//  speaks structure instead of text.
+//
+//  Signed: Kev + claude-opus-4-8, 2026-06-10, Confidence 0.85, Prior: Unknown
+
+import Foundation
+@testable import M1K3Agent
+import M1K3Inference
+import Testing
+
+// MARK: - Test doubles
+
+/// A `ToolCallingProvider` whose next turn is decided by a handler over
+/// (callIndex, transcript, tools) — flexible enough to script linear
+/// conversations AND react to the empty-tools synthesis call. Records the
+/// transcripts it receives so threading can be asserted.
+final class FakeToolCallingProvider: ToolCallingProvider, @unchecked Sendable {
+    let name = "fake-tool"
+    let isAvailable = true
+    let supportsToolCalls: Bool
+
+    private let handler: @Sendable (Int, [ToolMessage], [ToolDefinition]) -> ToolTurn
+    private let lock = NSLock()
+    private var index = 0
+    private(set) var receivedTranscripts: [[ToolMessage]] = []
+    private(set) var continueCallCount = 0
+    private(set) var generateCallCount = 0
+
+    init(
+        supportsToolCalls: Bool = true,
+        handler: @escaping @Sendable (Int, [ToolMessage], [ToolDefinition]) -> ToolTurn
+    ) {
+        self.supportsToolCalls = supportsToolCalls
+        self.handler = handler
+    }
+
+    func continueToolTurn(messages: [ToolMessage], tools: [ToolDefinition]) async throws -> ToolTurn {
+        lock.withLock {
+            receivedTranscripts.append(messages)
+            defer { index += 1 }
+            continueCallCount += 1
+            return handler(index, messages, tools)
+        }
+    }
+
+    /// InferenceProvider floor — exercised only when the agent falls back to ReAct.
+    func generate(prompt _: String) async throws -> String {
+        lock.withLock {
+            generateCallCount += 1
+            return "CONCLUSION: react-fallback"
+        }
+    }
+
+    func generateStreaming(prompt _: String) -> AsyncStream<String> {
+        AsyncStream { $0.finish() }
+    }
+}
+
+/// Echoes back the named argument it received, so structured-args wiring can be
+/// asserted. Counts executions for the repeat-guard test.
+private final class RecordingTool: AgentTool, @unchecked Sendable {
+    let name: String
+    let description = "records its input"
+    let parameters: [ToolParameter]
+    private let lock = NSLock()
+    private(set) var executionCount = 0
+    private(set) var lastInput: [String: String] = [:]
+
+    init(name: String = "search", paramNames: [String] = ["query"]) {
+        self.name = name
+        parameters = paramNames.map { ToolParameter(name: $0, description: "p") }
+    }
+
+    func execute(input: [String: String]) async throws -> ToolResult {
+        lock.withLock {
+            executionCount += 1
+            lastInput = input
+        }
+        let rendered = input.sorted { $0.key < $1.key }
+            .map { "\($0.key)=\($0.value)" }
+            .joined(separator: ",")
+        return ToolResult(output: "got[\(rendered)]")
+    }
+}
+
+private final class EventLog: @unchecked Sendable {
+    private let lock = NSLock()
+    private(set) var events: [AgentLoopEvent] = []
+    func record(_ event: AgentLoopEvent) {
+        lock.withLock { events.append(event) }
+    }
+}
+
+// MARK: - Helpers
+
+private func call(_ name: String, _ args: [String: JSONValue]) -> ToolTurn {
+    .toolCalls([ParsedToolCall(name: name, arguments: args)])
+}
+
+// MARK: - Tests
+
+struct NativeToolCallingTests {
+    @Test("executes a structured tool call, then concludes on .text")
+    func executeThenConclude() async throws {
+        let provider = FakeToolCallingProvider { index, _, _ in
+            index == 0
+                ? call("search", ["query": .string("hydraulic seal")])
+                : .text("The seal failed under load.")
+        }
+        let tool = RecordingTool()
+        let agent = LocalAgent(inferenceProvider: provider, tools: [tool])
+
+        let result = try await agent.run(goal: "Why did it fail?")
+
+        #expect(result.conclusion == "The seal failed under load.")
+        #expect(result.toolsUsed == ["search"])
+        #expect(result.iterations == 2)
+        #expect(tool.executionCount == 1)
+        // Trace: a tool step then a conclusion step.
+        #expect(result.reasoningTrace.count == 2)
+        #expect(result.reasoningTrace[0].action?.contains("search") == true)
+        #expect(result.reasoningTrace[0].observation?.contains("got[query=hydraulic seal]") == true)
+    }
+
+    @Test("structured arguments reach the tool by name, including extra keys")
+    func structuredArgsPassedThrough() async throws {
+        let provider = FakeToolCallingProvider { index, _, _ in
+            index == 0
+                ? call("search", ["query": .string("seal failure"), "limit": .int(5)])
+                : .text("done")
+        }
+        let tool = RecordingTool(paramNames: ["query", "limit"])
+        let agent = LocalAgent(inferenceProvider: provider, tools: [tool])
+
+        _ = try await agent.run(goal: "x")
+
+        let input = tool.lastInput
+        #expect(input["query"] == "seal failure")
+        #expect(input["limit"] == "5") // typed int flattened to text at the edge
+    }
+
+    @Test("threads the model's call and the tool result back as roled messages")
+    func transcriptThreading() async throws {
+        let provider = FakeToolCallingProvider { index, _, _ in
+            index == 0 ? call("search", ["query": .string("x")]) : .text("ok")
+        }
+        let agent = LocalAgent(inferenceProvider: provider, tools: [RecordingTool()])
+
+        _ = try await agent.run(goal: "x")
+
+        // The SECOND call must see the assistant's tool call AND the tool result.
+        let secondTranscript = try #require(provider.receivedTranscripts.dropFirst().first)
+        let hasAssistantCall = secondTranscript.contains {
+            if case let .assistant(_, calls) = $0 { return calls.contains { $0.name == "search" } }
+            return false
+        }
+        let hasToolResult = secondTranscript.contains {
+            if case let .toolResult(name, output) = $0 { return name == "search" && output.contains("got[") }
+            return false
+        }
+        #expect(hasAssistantCall)
+        #expect(hasToolResult)
+    }
+
+    @Test("repeat-guard: an identical call is steered, not re-executed")
+    func repeatGuard() async throws {
+        let provider = FakeToolCallingProvider { index, _, _ in
+            switch index {
+            case 0, 1: call("search", ["query": .string("same")])
+            default: .text("done")
+            }
+        }
+        let tool = RecordingTool()
+        let agent = LocalAgent(inferenceProvider: provider, tools: [tool])
+
+        let result = try await agent.run(goal: "x")
+
+        #expect(tool.executionCount == 1) // second identical call blocked
+        let secondObservation = result.reasoningTrace[1].observation ?? ""
+        #expect(secondObservation.contains("already ran"))
+    }
+
+    @Test("an unknown tool yields a steering observation listing the real tools")
+    func unknownToolSteers() async throws {
+        let provider = FakeToolCallingProvider { index, _, _ in
+            index == 0 ? call("nonexistent", [:]) : .text("recovered")
+        }
+        let agent = LocalAgent(inferenceProvider: provider, tools: [RecordingTool(name: "search")])
+
+        let result = try await agent.run(goal: "x")
+
+        #expect(result.conclusion == "recovered")
+        let observation = try #require(result.reasoningTrace[0].observation)
+        #expect(observation.contains("unknown tool 'nonexistent'"))
+        #expect(observation.contains("search"))
+    }
+
+    @Test("at the iteration cap, synthesises a final answer with tools withdrawn")
+    func iterationCapSynthesis() async throws {
+        // Always calls a tool while tools are offered; answers once tools are
+        // withdrawn (the cap synthesis call passes an empty tool list).
+        let provider = FakeToolCallingProvider { _, _, tools in
+            tools.isEmpty ? .text("synthesised from gathered facts") : call("search", ["query": .string("x")])
+        }
+        let agent = LocalAgent(inferenceProvider: provider, tools: [RecordingTool()], maxIterations: 3)
+
+        let result = try await agent.run(goal: "x")
+
+        #expect(result.conclusion == "synthesised from gathered facts")
+        #expect(result.iterations == 3)
+    }
+
+    @Test("a provider reporting supportsToolCalls == false uses the ReAct floor")
+    func fallsBackToReActWhenUnsupported() async throws {
+        let provider = FakeToolCallingProvider(supportsToolCalls: false) { _, _, _ in
+            .text("should not be reached")
+        }
+        let agent = LocalAgent(inferenceProvider: provider, tools: [RecordingTool()])
+
+        let result = try await agent.run(goal: "x")
+
+        #expect(result.conclusion == "react-fallback") // came from generate(), not continueToolTurn
+        #expect(provider.continueCallCount == 0)
+        #expect(provider.generateCallCount >= 1)
+    }
+
+    @Test("emits thinking + actionStarted events on the native path")
+    func emitsEvents() async throws {
+        let provider = FakeToolCallingProvider { index, _, _ in
+            index == 0 ? call("search", ["query": .string("x")]) : .text("done")
+        }
+        let log = EventLog()
+        let agent = LocalAgent(inferenceProvider: provider, tools: [RecordingTool()])
+
+        _ = try await agent.run(goal: "x", onEvent: { log.record($0) })
+
+        let events = log.events
+        #expect(events.contains { if case .thinking = $0 { return true } else { return false } })
+        #expect(events.contains {
+            if case let .actionStarted(tool, _) = $0 { return tool == "search" } else { return false }
+        })
+    }
+}

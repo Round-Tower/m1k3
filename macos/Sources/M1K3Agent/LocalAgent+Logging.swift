@@ -38,11 +38,11 @@ extension LocalAgent {
     }
 
     func logObservation(
-        _ observation: String, action: Action, iteration: Int, start: ContinuousClock.Instant
+        _ observation: String, callDescription: String, iteration: Int, start: ContinuousClock.Instant
     ) {
         let took = Self.elapsed(since: start)
         M1K3Log.agentLoop.info("""
-        iteration \(iteration): \(action.description, privacy: .public) → observation in \
+        iteration \(iteration): \(callDescription, privacy: .public) → observation in \
         \(took, privacy: .public) (\(observation.count) chars): \
         "\(LogPreview.preview(observation), privacy: .public)"
         """)
