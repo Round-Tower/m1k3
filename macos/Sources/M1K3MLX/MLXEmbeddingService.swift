@@ -24,12 +24,13 @@ import Foundation
 import M1K3Knowledge
 import MLX
 import MLXEmbedders
+import MLXLMCommon
 import MLXNN
 
 /// `@unchecked Sendable`: `modelContainer` is an MLX actor; all model access is
 /// actor-isolated inside `perform`. Same guarantee the prior knowledge-server project's service relies on.
 public final class MLXEmbeddingService: EmbeddingService, @unchecked Sendable {
-    private var modelContainer: ModelContainer?
+    private var modelContainer: EmbedderModelContainer?
     private let configuration: ModelConfiguration
     private let onLoadProgress: (@Sendable (Double) -> Void)?
 
@@ -39,7 +40,7 @@ public final class MLXEmbeddingService: EmbeddingService, @unchecked Sendable {
     /// embedding KERNELS live there, and a kernel change shifts the vector
     /// space even with identical weights. Bumping this fires the store's
     /// auto re-index on next launch (see EmbedderReindexPolicy).
-    public static let kernelTag = "mlx-swift-0.30"
+    public static let kernelTag = "mlx-swift-0.31"
 
     public var fingerprint: String {
         "mlx/\(configuration.name)/\(Self.kernelTag)"
@@ -54,7 +55,7 @@ public final class MLXEmbeddingService: EmbeddingService, @unchecked Sendable {
     ///     instead of an indefinite spinner. Nil = silent (the default base
     ///     embedder; only the user-triggered switch wires it up).
     public init(
-        configuration: ModelConfiguration = .bge_small,
+        configuration: ModelConfiguration = EmbedderRegistry.bge_small,
         dimension: Int = 384,
         onLoadProgress: (@Sendable (Double) -> Void)? = nil
     ) {
@@ -66,13 +67,13 @@ public final class MLXEmbeddingService: EmbeddingService, @unchecked Sendable {
     public func embed(_ text: String) async throws -> [Float] {
         let container = try await ensureLoaded()
 
-        return await container.perform { model, tokenizer, pooler in
-            let tokenIds = tokenizer.encode(text: text)
+        return await container.perform { context in
+            let tokenIds = context.tokenizer.encode(text: text)
             let inputIds = MLXArray(tokenIds.map { Int32($0) }).expandedDimensions(axis: 0)
             let mask = MLXArray([Int32](repeating: 1, count: tokenIds.count)).expandedDimensions(axis: 0)
 
-            let output = model(inputIds, positionIds: nil, tokenTypeIds: nil, attentionMask: mask)
-            let pooled = pooler(output, mask: mask, normalize: true)
+            let output = context.model(inputIds, positionIds: nil, tokenTypeIds: nil, attentionMask: mask)
+            let pooled = context.pooling(output, mask: mask, normalize: true)
 
             // Must eval before leaving perform — MLXArray is not Sendable.
             let result = pooled.squeezed()
@@ -90,13 +91,15 @@ public final class MLXEmbeddingService: EmbeddingService, @unchecked Sendable {
         }
     }
 
-    private func ensureLoaded() async throws -> ModelContainer {
+    private func ensureLoaded() async throws -> EmbedderModelContainer {
         // The embedder shares the process-global MLX memory state with the LLM
         // and can be the first MLX code to run (ingest before any chat turn).
         MLXMemoryBudget.applyOnce()
         if let modelContainer { return modelContainer }
         let report = onLoadProgress
-        let container = try await loadModelContainer(
+        let container = try await EmbedderModelFactory.shared.loadContainer(
+            from: HubApiDownloader.embedderDefault,
+            using: TransformersTokenizerLoader(),
             configuration: configuration,
             progressHandler: { prog in report?(prog.fractionCompleted) }
         )

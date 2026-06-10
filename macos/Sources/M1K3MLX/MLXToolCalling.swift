@@ -24,7 +24,6 @@
 import Foundation
 import M1K3Inference
 import MLXLMCommon
-import Tokenizers
 
 /// Pure, testable bridges between the M1K3 tool-calling seam and mlx-swift-lm.
 enum MLXToolMapping {
@@ -79,6 +78,7 @@ enum MLXToolMapping {
     static func callText(_ call: ParsedToolCall, format: ToolCallFormat) -> String {
         switch format {
         case .gemma: gemmaCallText(call)
+        case .xmlFunction: xmlFunctionCallText(call)
         default: jsonCallText(call)
         }
     }
@@ -96,6 +96,24 @@ enum MLXToolMapping {
             }
             .joined(separator: ",")
         return "<start_function_call>call:\(call.name){\(arguments)}<end_function_call>"
+    }
+
+    /// XML function dialect (Qwen3.5/Nemotron):
+    /// `<function=name><parameter=key>value</parameter></function>`
+    /// (mirrors the library's XMLFunctionParser pattern).
+    static func xmlFunctionCallText(_ call: ParsedToolCall) -> String {
+        let parameters = call.arguments
+            .sorted { $0.key < $1.key }
+            .map { key, value -> String in
+                let rendered: String = if case let .string(string) = value {
+                    string
+                } else {
+                    value.stringValue
+                }
+                return "<parameter=\(key)>\(rendered)</parameter>"
+            }
+            .joined()
+        return "<function=\(call.name)>\(parameters)</function>"
     }
 
     /// JSON dialect (Qwen/Llama/most): `<tool_call>{"name":…,"arguments":{…}}</tool_call>`.
@@ -149,7 +167,16 @@ extension MLXGemmaProvider: ToolCallingProvider {
     static func resolveToolCallFormat(for configuration: ModelConfiguration) -> ToolCallFormat? {
         if let explicit = configuration.toolCallFormat { return explicit }
         let name = configuration.name.lowercased()
+        // Gemma 4 emits a NEW dialect (<|tool_call>…) that mlx-swift-lm 3.31.3
+        // has no parser for (.gemma4 landed upstream post-tag). nil → the agent
+        // uses the proven ReAct floor; flip to .gemma4 on the next upstream tag.
+        if name.contains("gemma-4") || name.contains("gemma4") { return nil }
         if name.contains("gemma") { return .gemma }
+        // Qwen3.5 is trained on the XML function dialect, NOT <tool_call> JSON
+        // (matches upstream infer(): qwen3_5 → .xmlFunction).
+        if name.contains("qwen3.5") || name.contains("qwen3_5") || name.contains("qwen3-5") {
+            return .xmlFunction
+        }
         if name.contains("qwen") || name.contains("llama")
             || name.contains("mistral") || name.contains("phi") { return .json }
         if name.contains("glm") { return .glm4 }

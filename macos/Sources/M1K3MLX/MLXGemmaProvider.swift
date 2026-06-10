@@ -106,7 +106,11 @@ public final class MLXGemmaProvider: InferenceProvider, ModelPreloading, @unchec
                     )
                 },
                 operation: {
-                    try await LLMModelFactory.shared.loadContainer(configuration: loadConfiguration) { prog in
+                    try await LLMModelFactory.shared.loadContainer(
+                        from: HubApiDownloader.llmDefault,
+                        using: TransformersTokenizerLoader(),
+                        configuration: loadConfiguration
+                    ) { prog in
                         progress(prog.fractionCompleted)
                     }
                 }

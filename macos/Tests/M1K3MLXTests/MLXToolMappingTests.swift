@@ -17,7 +17,6 @@ import M1K3Inference
 @testable import M1K3MLX
 import MLXLMCommon
 import Testing
-import Tokenizers
 
 struct MLXToolSpecTests {
     @Test("a ToolDefinition becomes a function-typed JSON schema")
@@ -95,6 +94,16 @@ struct MLXGemmaCallTextTests {
         #expect(text.contains("\"name\":\"search\""))
         #expect(text.contains("seals"))
     }
+
+    @Test("the xmlFunction dialect renders <function=>/<parameter=> (Qwen3.5)")
+    func xmlFunctionCallText() {
+        let call = ParsedToolCall(name: "search", arguments: ["query": .string("seals"), "limit": .int(3)])
+        let text = MLXToolMapping.callText(call, format: .xmlFunction)
+        #expect(text.hasPrefix("<function=search>"))
+        #expect(text.hasSuffix("</function>"))
+        #expect(text.contains("<parameter=query>seals</parameter>"))
+        #expect(text.contains("<parameter=limit>3</parameter>"))
+    }
 }
 
 struct MLXToolFormatResolutionTests {
@@ -104,6 +113,21 @@ struct MLXToolFormatResolutionTests {
         #expect(MLXGemmaProvider.resolveToolCallFormat(for: .init(id: "mlx-community/Qwen3-1.7B")) == .json)
         #expect(MLXGemmaProvider.resolveToolCallFormat(for: .init(id: "meta/Llama-3.2-1B")) == .json)
         #expect(MLXGemmaProvider.resolveToolCallFormat(for: .init(id: "some/unknown-model")) == nil)
+    }
+
+    @Test("gemma-4 resolves BEFORE the generic gemma arm — no parser at 3.31.3, ReAct floor")
+    func gemma4ResolvesNil() {
+        let gemma4 = ModelConfiguration(id: "mlx-community/gemma-4-e4b-it-4bit")
+        let gemma3n = ModelConfiguration(id: "mlx-community/gemma-3n-E4B-it-lm-4bit")
+        #expect(MLXGemmaProvider.resolveToolCallFormat(for: gemma4) == nil)
+        #expect(MLXGemmaProvider.resolveToolCallFormat(for: gemma3n) == .gemma)
+    }
+
+    @Test("qwen3.5 resolves to xmlFunction BEFORE the generic qwen arm")
+    func qwen35ResolvesXMLFunction() {
+        #expect(MLXGemmaProvider.resolveToolCallFormat(for: .init(id: "mlx-community/Qwen3.5-2B-4bit")) == .xmlFunction)
+        #expect(MLXGemmaProvider.resolveToolCallFormat(for: .init(id: "mlx-community/Qwen3.5-9B-4bit")) == .xmlFunction)
+        #expect(MLXGemmaProvider.resolveToolCallFormat(for: .init(id: "mlx-community/Qwen3-1.7B-4bit")) == .json)
     }
 
     @Test("an explicit configuration format wins over the family heuristic")
