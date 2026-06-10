@@ -111,11 +111,26 @@ public final class MLXGemmaProvider: InferenceProvider, ModelPreloading, @unchec
     ) {
         var params = GenerateParameters()
         params.maxTokens = maxTokens
-        // Hard-bound KV-cache growth (the cache rotates past this) so a long
-        // agent transcript can't balloon memory without limit. 8192 leaves the
-        // full 4096-token think-act-answer budget PLUS grounding/tools without
-        // ever rotating the prompt out mid-generation.
-        params.maxKVSize = 8192
+        if Self.supportsQuantizedKVCache(for: configuration) {
+            // 8-bit quantized KV: halves per-token KV memory and, since decode is
+            // memory-bandwidth-bound, speeds long transcripts. Replaces the
+            // maxKVSize rotation backstop for these families — maxKVSize must stay
+            // nil because upstream quantizes only KVCacheSimple (RotatingKVCache.
+            // toQuantized() is a fatalError TODO), so setting both silently
+            // disables kvBits. The rotation cap was sized to never fire anyway
+            // (and would rotate the prompt out — a silent quality cliff — if it
+            // did); growth stays bounded in practice by the per-turn session
+            // lifecycle + maxTokens.
+            params.kvBits = 8
+            params.kvGroupSize = 64
+            params.quantizedKVStart = 0
+        } else {
+            // Hard-bound KV-cache growth (the cache rotates past this) so a long
+            // agent transcript can't balloon memory without limit. 8192 leaves the
+            // full 4096-token think-act-answer budget PLUS grounding/tools without
+            // ever rotating the prompt out mid-generation.
+            params.maxKVSize = 8192
+        }
         generateParameters = params
         self.name = name
 
@@ -387,6 +402,20 @@ extension MLXGemmaProvider {
         let modelName = configuration.name.lowercased()
         return modelName.contains("qwen3.5") || modelName.contains("qwen3_5")
             || modelName.contains("qwen3-5")
+    }
+
+    /// Allow-list of families whose attention routes through upstream's
+    /// `attentionWithCacheUpdate` dispatcher (handles `QuantizedKVCache` via
+    /// `updateQuantized`). Gemma3nText and Gemma4Text call
+    /// `cache.update(keys:values:)` directly — an upstream fatalError on a
+    /// quantized cache — so they (and unknown families) stay unquantized.
+    /// Verified against the model sources at mlx-swift-lm 3.31.3; re-audit on
+    /// any version bump.
+    static func supportsQuantizedKVCache(for configuration: ModelConfiguration) -> Bool {
+        let modelName = configuration.name.lowercased()
+        // "qwen3" covers Qwen3 and every Qwen3.5 spelling; "gemma-3-" cannot
+        // match gemma-3n ids ("gemma-3n…" has no trailing dash after the 3).
+        return modelName.contains("qwen3") || modelName.contains("gemma-3-")
     }
 
     /// Prepend the synthetic `<think>` opener exactly once so downstream

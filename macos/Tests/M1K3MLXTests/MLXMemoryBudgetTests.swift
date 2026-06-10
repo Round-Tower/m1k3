@@ -51,9 +51,16 @@ struct MLXMemoryBudgetTests {
         }
     }
 
-    @Test("provider generate parameters carry the KV cap")
-    func generateParametersCarryKVCap() {
+    @Test("provider generate parameters quantize the KV cache at 8 bits")
+    func generateParametersQuantizeKVCache() {
         let provider = MLXGemmaProvider()
-        #expect(provider.generateParameters.maxKVSize == 8192)
+        #expect(provider.generateParameters.kvBits == 8)
+        #expect(provider.generateParameters.kvGroupSize == 64)
+        #expect(provider.generateParameters.quantizedKVStart == 0)
+        // maxKVSize must stay nil: upstream's maybeQuantizeKVCache only converts
+        // KVCacheSimple, and any maxKVSize forces RotatingKVCache (whose
+        // toQuantized() is an upstream fatalError TODO) — setting both would make
+        // kvBits a silent no-op.
+        #expect(provider.generateParameters.maxKVSize == nil)
     }
 }
