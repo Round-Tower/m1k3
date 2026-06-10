@@ -39,6 +39,12 @@ enum SelfTest {
         try? Data().write(to: URL(fileURLWithPath: outputPath))
     }
 
+    /// Whole milliseconds in a Duration, for the TTFT probe lines.
+    private static func milliseconds(_ duration: Duration) -> Int {
+        let parts = duration.components
+        return Int(parts.seconds * 1000) + Int(parts.attoseconds / 1_000_000_000_000_000)
+    }
+
     /// Append a line to the report file immediately so progress survives an
     /// interrupted run.
     private static func emit(_ line: String) {
@@ -128,6 +134,40 @@ enum SelfTest {
                         prompt: "In two sentences, explain fact #\(index) about industrial conveyor maintenance."
                     )
                     emit(MLXMemoryBudget.snapshotDescription(label: "memloop gen \(index)"))
+                }
+            }
+
+            // 3c. Optional TTFT probe (M1K3_SELFTEST_TTFT=1): wall-clock time
+            // to first streamed token for a short prompt and a grounded-size
+            // prompt — the A/B harness for prefill-cost changes. (Per-stage
+            // prefill/decode metrics also land in the unified log, category
+            // "ttft".)
+            if ProcessInfo.processInfo.environment["M1K3_SELFTEST_TTFT"] == "1" {
+                let grounded = String(
+                    repeating: "KNOWLEDGE: conveyor belts run on rollers; hydraulic seals retain fluid under pressure; "
+                        + "maintenance intervals follow load cycles. ",
+                    count: 40
+                ) + "\nIn one short sentence, what is a hydraulic seal?"
+                let probes: [(String, String)] = [
+                    ("short", "In one short sentence, what is a hydraulic seal?"),
+                    ("grounded", grounded),
+                ]
+                for (label, prompt) in probes {
+                    let clock = ContinuousClock()
+                    let start = clock.now
+                    var firstToken: Duration?
+                    var characters = 0
+                    for await chunk in llm.generateStreaming(prompt: prompt) {
+                        // The synthetic <think> opener is emitted before any
+                        // real generation — don't let it fake the first token.
+                        if firstToken == nil, !chunk.isEmpty, chunk != "<think>" {
+                            firstToken = clock.now - start
+                        }
+                        characters += chunk.count
+                    }
+                    let total = clock.now - start
+                    let firstMS = firstToken.map { milliseconds($0) } ?? -1
+                    emit("ttft \(label): first=\(firstMS)ms total=\(milliseconds(total))ms chars=\(characters)")
                 }
             }
         } catch {

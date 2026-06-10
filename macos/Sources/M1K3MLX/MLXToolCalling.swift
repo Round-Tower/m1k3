@@ -225,8 +225,8 @@ extension MLXGemmaProvider: ToolCallingProvider {
                     text += piece
                 case let .toolCall(libraryCall):
                     calls.append(MLXToolMapping.parsedToolCall(from: libraryCall))
-                case .info:
-                    break
+                case let .info(info):
+                    logGenerationInfo(info, label: "toolTurn")
                 @unknown default:
                     break
                 }

@@ -47,6 +47,23 @@ import os
 /// provider's isolation) can log retries without capturing `self`.
 private let mlxLoadLog = Logger(subsystem: "dev.murphysig.M1K3", category: "mlx-load")
 
+/// Per-generation latency diagnostics: prompt size, prefill time (the real
+/// time-to-first-token driver), and decode throughput. Stream with:
+///   log stream --predicate 'subsystem == "dev.murphysig.M1K3" AND category == "ttft"'
+let mlxTTFTLog = Logger(subsystem: "dev.murphysig.M1K3", category: "ttft")
+
+/// Log one generation's completion metrics. Free function taking only params
+/// (the swiftformat↔Logger autoclosure landmine: never interpolate members).
+func logGenerationInfo(_ info: GenerateCompletionInfo, label: String) {
+    let promptTokens = info.promptTokenCount
+    let prefillMS = Int(info.promptTime * 1000)
+    let decodeTokens = info.generationTokenCount
+    let tokensPerSecond = Int(info.tokensPerSecond)
+    mlxTTFTLog.notice(
+        "\(label, privacy: .public): prompt=\(promptTokens)tok prefill=\(prefillMS)ms decode=\(decodeTokens)tok @\(tokensPerSecond)tok/s"
+    )
+}
+
 /// `@unchecked Sendable`: model loading is coalesced through a `SingleFlightLoader`
 /// actor and the loaded `ModelContainer` is itself an isolation actor; everything
 /// else is immutable.
@@ -176,7 +193,11 @@ public final class MLXGemmaProvider: InferenceProvider, ModelPreloading, @unchec
         // process-global MLX cache holds each generation's peak forever.
         defer { MLXMemoryBudget.reclaim(label: "generate") }
         let session = makeUpstreamSession(container)
-        let raw = try await session.respond(to: prompt)
+        var raw = ""
+        for try await event in session.streamDetails(to: prompt, images: [], videos: []) {
+            if let piece = event.chunk { raw += piece }
+            if let info = event.info { logGenerationInfo(info, label: "generate") }
+        }
         return Self.normaliseThinkPrefix(raw, preOpened: thinkPrefixNeeded)
     }
 
@@ -194,8 +215,9 @@ public final class MLXGemmaProvider: InferenceProvider, ModelPreloading, @unchec
                     // the opener so live reasoning splitting engages from
                     // token one instead of after the closing tag.
                     if thinkPrefixNeeded { continuation.yield("<think>") }
-                    for try await chunk in session.streamResponse(to: prompt, images: [], videos: []) {
-                        continuation.yield(chunk)
+                    for try await event in session.streamDetails(to: prompt, images: [], videos: []) {
+                        if let chunk = event.chunk { continuation.yield(chunk) }
+                        if let info = event.info { logGenerationInfo(info, label: "stream") }
                     }
                     continuation.finish()
                 } catch {
