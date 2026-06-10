@@ -23,9 +23,11 @@ import Foundation
 import M1K3Agent
 import M1K3Inference
 import M1K3Knowledge
+import os
 import Synchronization
 
 public struct AgentRAGResponder: RAGResponding, Sendable {
+    private static let log = Logger(subsystem: M1K3Log.subsystem, category: "responder")
     private let store: KnowledgeStore
     private let embedder: any EmbeddingService
     private let provider: any InferenceProvider
@@ -106,6 +108,7 @@ public struct AgentRAGResponder: RAGResponding, Sendable {
             chunks: chunks,
             hasWebSearch: tools.contains { $0.name == "web_search" }
         )
+        Self.logTurnStart(chunks: chunks, tools: tools, grounding: grounding)
         // Fresh agent per turn — its reasoning trace must not bleed across
         // turns, and the tool list reflects current settings.
         let agent = LocalAgent(
@@ -119,14 +122,7 @@ public struct AgentRAGResponder: RAGResponding, Sendable {
             let result = try await agent.run(
                 goal: question,
                 context: grounding,
-                onEvent: { event in
-                    switch event {
-                    case let .thinking(iteration):
-                        onActivity(.thinking(iteration: iteration))
-                    case let .actionStarted(tool, argument):
-                        onActivity(.usingTool(name: tool, argument: argument))
-                    }
-                },
+                onEvent: { Self.forward($0, to: onActivity) },
                 onConclusionToken: { token in
                     emittedLive.withLock { $0 = true }
                     continuation.yield(token)
@@ -138,6 +134,7 @@ public struct AgentRAGResponder: RAGResponding, Sendable {
             let streamed = emittedLive.withLock { $0 }
             if !streamed, conclusion.isEmpty {
                 // The loop produced nothing usable — answer the plain way.
+                Self.log.notice("agent returned empty (nothing streamed) — falling back to plain RAG")
                 await streamFallback(question: question, chunks: chunks, into: continuation)
             } else {
                 var tail = streamed ? "" : conclusion
@@ -145,14 +142,48 @@ public struct AgentRAGResponder: RAGResponding, Sendable {
                 if !tail.isEmpty {
                     continuation.yield(tail)
                 }
+                Self.logTurnDone(streamed: streamed, tailCount: tail.count, result: result)
             }
             continuation.finish()
         } catch is CancellationError {
+            Self.log.notice("turn cancelled mid-loop")
             continuation.finish()
         } catch {
+            Self.log.error("agent threw — falling back to plain RAG: \(error, privacy: .public)")
             await streamFallback(question: question, chunks: chunks, into: continuation)
             continuation.finish()
         }
+    }
+
+    /// Map agent-loop events to UI activity.
+    private static func forward(
+        _ event: AgentLoopEvent,
+        to onActivity: @Sendable (ResponderActivity) -> Void
+    ) {
+        switch event {
+        case let .thinking(iteration):
+            onActivity(.thinking(iteration: iteration))
+        case let .actionStarted(tool, argument):
+            onActivity(.usingTool(name: tool, argument: argument))
+        }
+    }
+
+    // MARK: - Diagnostics (unified logging)
+
+    private static func logTurnStart(chunks: [ChunkHit], tools: [any AgentTool], grounding: String) {
+        let toolNames = tools.map(\.name).sorted().joined(separator: ", ")
+        log.info("""
+        turn start: \(chunks.count) chunk(s) retrieved, tools=[\(toolNames, privacy: .public)], \
+        grounding=\(grounding.count) chars
+        """)
+    }
+
+    private static func logTurnDone(streamed: Bool, tailCount: Int, result: AgentResult) {
+        let toolsUsed = result.toolsUsed.sorted().joined(separator: ", ")
+        log.info("""
+        turn done: streamedLive=\(streamed), tail=\(tailCount) chars, \
+        toolsUsed=[\(toolsUsed, privacy: .public)]
+        """)
     }
 
     /// Plain grounded generation — the safety net when the agent loop fails.

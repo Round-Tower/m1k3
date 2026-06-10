@@ -98,6 +98,8 @@ public actor LocalAgent {
         var executedActions = Set<String>()
         var currentContext = buildInitialContext(goal: goal, grounding: groundingContext)
 
+        logRunStart(goal: goal, grounding: groundingContext)
+
         for iteration in 0 ..< maxIterations {
             try Task.checkCancellation()
             onEvent?(.thinking(iteration: iteration))
@@ -119,6 +121,7 @@ public actor LocalAgent {
                 // treat substantive unstructured prose as the answer rather than
                 // burning the remaining iterations re-prompting.
                 if concludesOnUnstructuredThought, iteration >= 1, !thought.isEmpty {
+                    M1K3Log.agentLoop.info("iteration \(iteration): implicit conclusion (prose, no markers)")
                     return concluded(thought, usedTools, iteration + 1)
                 }
                 // No action — record the thought and keep reasoning.
@@ -128,6 +131,7 @@ public actor LocalAgent {
 
             let observation = await observe(
                 action: action,
+                iteration: iteration,
                 executedActions: &executedActions,
                 usedTools: &usedTools,
                 onEvent: onEvent
@@ -150,6 +154,7 @@ public actor LocalAgent {
         }
 
         // Iteration cap reached — synthesise from the accumulated context.
+        logCapReached()
         let finalConclusion = try await synthesizeConclusion(context: currentContext)
         return concluded(finalConclusion, usedTools, maxIterations)
     }
@@ -157,8 +162,10 @@ public actor LocalAgent {
     private func concluded(
         _ conclusion: String, _ usedTools: Set<String>, _ iterations: Int
     ) -> AgentResult {
-        AgentResult(
-            conclusion: Self.stripScaffolding(conclusion),
+        let cleaned = Self.stripScaffolding(conclusion)
+        logConclusion(cleaned, raw: conclusion, usedTools: usedTools, iterations: iterations)
+        return AgentResult(
+            conclusion: cleaned,
             toolsUsed: Array(usedTools),
             iterations: iterations,
             reasoningTrace: reasoningTrace
@@ -210,6 +217,19 @@ public actor LocalAgent {
         context: String,
         iteration: Int,
         onConclusionToken: (@Sendable (String) -> Void)? = nil
+    ) async throws -> String {
+        let start = ContinuousClock.now
+        let thought = try await rawThought(
+            context: context, iteration: iteration, onConclusionToken: onConclusionToken
+        )
+        logThought(thought, iteration: iteration, start: start)
+        return thought
+    }
+
+    private func rawThought(
+        context: String,
+        iteration: Int,
+        onConclusionToken: (@Sendable (String) -> Void)?
     ) async throws -> String {
         let prompt = context + "\n\nThought \(iteration + 1):"
         guard let onConclusionToken else {
@@ -274,6 +294,24 @@ public actor LocalAgent {
     /// dispatch, with unknown tools steered back toward the real tool list.
     private func observe(
         action: Action,
+        iteration: Int,
+        executedActions: inout Set<String>,
+        usedTools: inout Set<String>,
+        onEvent: (@Sendable (AgentLoopEvent) -> Void)?
+    ) async -> String {
+        let start = ContinuousClock.now
+        let observation = await dispatch(
+            action: action,
+            executedActions: &executedActions,
+            usedTools: &usedTools,
+            onEvent: onEvent
+        )
+        logObservation(observation, action: action, iteration: iteration, start: start)
+        return observation
+    }
+
+    private func dispatch(
+        action: Action,
         executedActions: inout Set<String>,
         usedTools: inout Set<String>,
         onEvent: (@Sendable (AgentLoopEvent) -> Void)?
@@ -315,5 +353,28 @@ public actor LocalAgent {
             return thought
         }
         return String(thought[range.upperBound...]).trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+}
+
+// MARK: - Diagnostics (unified logging)
+
+/// Same-file extension for the two helpers that read private actor state;
+/// the param-only helpers live in LocalAgent+Logging.swift. Log helpers
+/// interpolate only locals — Logger interpolation is an autoclosure, and the
+/// formatter strips the `self.` the compiler would demand inside one.
+extension LocalAgent {
+    private func logRunStart(goal: String, grounding: String?) {
+        let toolNames = tools.keys.sorted().joined(separator: ", ")
+        let cap = maxIterations
+        let groundingChars = grounding?.count ?? 0
+        M1K3Log.agentLoop.info("""
+        run start: goal="\(LogPreview.preview(goal, max: 80), privacy: .public)" \
+        tools=[\(toolNames, privacy: .public)] cap=\(cap) grounding=\(groundingChars) chars
+        """)
+    }
+
+    private func logCapReached() {
+        let cap = maxIterations
+        M1K3Log.agentLoop.notice("iteration cap (\(cap)) reached — synthesising a final answer")
     }
 }

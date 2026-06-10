@@ -19,8 +19,10 @@
 
 import Foundation
 import M1K3Agent
+import os
 
 public struct WebSearchTool: AgentTool {
+    private static let log = Logger(subsystem: M1K3Log.subsystem, category: "web-search")
     public let name = "web_search"
     public let description =
         "Search the web via DuckDuckGo for current or external information "
@@ -49,14 +51,18 @@ public struct WebSearchTool: AgentTool {
         do {
             switch try await search(query: query) {
             case .rateLimited:
+                Self.log.notice("rate-limited: DDG served the challenge page for \"\(query, privacy: .public)\"")
                 return ToolResult(output: "Error: web search is temporarily unavailable "
                     + "(DuckDuckGo rate-limited this Mac). Answer from what you already have.")
             case let .results(results) where results.isEmpty:
+                Self.log.info("no results for \"\(query, privacy: .public)\"")
                 return ToolResult(output: "No web results for \"\(query)\".")
             case let .results(results):
+                Self.log.info("\(results.count) result(s) for \"\(query, privacy: .public)\"")
                 return ToolResult(output: WebSearchFormatter.format(results, limit: maxResults))
             }
         } catch {
+            Self.log.error("fetch failed for \"\(query, privacy: .public)\": \(error, privacy: .public)")
             return ToolResult(output: "Error: web search failed — \(error.localizedDescription)")
         }
     }
@@ -68,14 +74,21 @@ public struct WebSearchTool: AgentTool {
     }
 
     private func search(query: String) async throws -> SearchOutcome {
-        let instant = try DuckDuckGoInstantAnswerParser.parse(
-            await fetch(instantAnswerURL(for: query)).data
-        )
+        let instantResponse = try await fetch(instantAnswerURL(for: query))
+        let instant = DuckDuckGoInstantAnswerParser.parse(instantResponse.data)
+        Self.log.debug("""
+        instant answer: HTTP \(instantResponse.response.statusCode) → \(instant.count) result(s) \
+        for "\(query, privacy: .public)"
+        """)
         if !instant.isEmpty { return .results(instant) }
 
         let fallback = try await fetch(liteURL(for: query))
         let html = String(data: fallback.data, encoding: .utf8) ?? ""
         let results = DuckDuckGoHTMLParser.parse(html: html)
+        Self.log.debug("""
+        lite fallback: HTTP \(fallback.response.statusCode), \(html.count) bytes → \
+        \(results.count) result(s), challenge=\(DuckDuckGoHTMLParser.isChallengePage(html))
+        """)
         if results.isEmpty, DuckDuckGoHTMLParser.isChallengePage(html) {
             return .rateLimited
         }
