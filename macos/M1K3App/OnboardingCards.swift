@@ -19,6 +19,9 @@ struct BrainCard: View {
     let tier: BrainTier
     let isSelected: Bool
     let isRecommended: Bool
+    /// True when this Mac is below the tier's memory floor — the card shows
+    /// but can't be chosen (honest about why, no silent hiding).
+    var isLocked = false
     let onTap: () -> Void
 
     var body: some View {
@@ -63,8 +66,10 @@ struct BrainCard: View {
                 in: .rect(cornerRadius: 18)
             )
             .contentShape(.rect)
+            .opacity(isLocked ? 0.45 : 1)
         }
         .buttonStyle(.plain)
+        .disabled(isLocked)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(tier.displayName), \(tier.tagline). \(sizeLabel)")
         .accessibilityAddTraits(isSelected ? [.isSelected] : [])
@@ -80,10 +85,15 @@ struct BrainCard: View {
 
     private var sizeLabel: String {
         guard let megabytes = tier.approxDownloadMB else { return "Built-in · no download" }
-        if megabytes >= 1000 {
-            return String(format: "~%.1f GB · one-time download", Double(megabytes) / 1000)
+        var label = if megabytes >= 1000 {
+            String(format: "~%.1f GB · one-time download", Double(megabytes) / 1000)
+        } else {
+            "~\(megabytes) MB · one-time download"
         }
-        return "~\(megabytes) MB · one-time download"
+        if isLocked, let floor = tier.minimumPhysicalMemoryGB {
+            label += " · needs \(Int(floor))GB+ memory"
+        }
+        return label
     }
 }
 

@@ -117,7 +117,8 @@ private extension OnboardingView {
                 BrainCard(
                     tier: tier,
                     isSelected: selectedBrain == tier,
-                    isRecommended: tier == recommended
+                    isRecommended: tier == recommended,
+                    isLocked: !tier.isSelectableOnThisMac
                 ) { selectedBrain = tier }
             }
 

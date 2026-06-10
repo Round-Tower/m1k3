@@ -2,20 +2,23 @@
 //  BrainTier.swift
 //  M1K3Inference
 //
-//  The three brains the user chooses between at onboarding — Mini / Lil / Big
-//  M1K3 — echoing the KMP app's tier concept (app/.../domain/ai/M1K3Tier.kt).
-//  Mini is Apple Foundation Models (instant, on-device, no download); Lil and Big
-//  are local MLX models that download once. Pure value type in the seam module
-//  (no MLX import), so its metadata + the device recommendation + persistence are
-//  `swift test`-able; AppEnvironment maps `.backing` to a concrete provider.
+//  The four brains the user chooses between at onboarding — Mini / Lil / Big /
+//  Huge M1K3 — echoing the KMP app's tier concept (app/.../domain/ai/M1K3Tier.kt).
+//  Mini is Apple Foundation Models (instant, on-device, no download); Lil, Big
+//  and Huge are local MLX models that download once. Pure value type in the seam
+//  module (no MLX import), so its metadata + the device recommendation + the
+//  selection gate + persistence are `swift test`-able; AppEnvironment maps
+//  `.backing` to a concrete provider.
 //
-//  Model mapping (2026-06-08): backed by models that load on the pinned
-//  mlx-swift-lm 2.30.6 — Lil = Qwen3-1.7B, Big = Gemma-3n-E4B. The literal
-//  Qwen3.5 / Gemma-4 upgrade is a one-line id change here, gated on a future
-//  mlx-swift-lm 3.x bump (a major-version + re-index effort — deferred after a
-//  dependency probe showed 2.x conflicts with WhisperKit's swift-transformers).
+//  Model mapping (2026-06-10, mlx-swift-lm 3.31.3): Lil = Qwen3.5-2B,
+//  Big = Gemma-4-E4B (the gemma-3n-E4B successor). Huge = Qwen3.5-9B — the
+//  intended gemma-4-12B uses a `gemma4_unified` arch that 3.31.3 cannot load
+//  (probe-verified, Gate B); swap the id once upstream registers it.
 //
 //  Signed: Kev + claude-opus-4-8, 2026-06-08, Confidence 0.8, Prior: Unknown
+//  Review: Kev + claude-fable-5, 2026-06-10 — Gemma 4 era: four tiers, new
+//  RAM thresholds (Big is ~7GB at inference now → recommended floor 24GB),
+//  Huge selectable at 32GB+, recommended at 48GB+.
 
 import Foundation
 
@@ -27,12 +30,13 @@ public enum BrainBacking: Sendable, Equatable {
     case mlx(modelID: String)
 }
 
-/// One of the three M1K3 brains. `rawValue` ("mini"/"lil"/"big") is the stable
-/// persistence key.
+/// One of the four M1K3 brains. `rawValue` ("mini"/"lil"/"big"/"huge") is the
+/// stable persistence key — pre-Huge installs persisted the first three.
 public enum BrainTier: String, CaseIterable, Identifiable, Sendable {
     case mini
     case lil
     case big
+    case huge
 
     public var id: String {
         rawValue
@@ -43,6 +47,7 @@ public enum BrainTier: String, CaseIterable, Identifiable, Sendable {
         case .mini: "Mini M1K3"
         case .lil: "Lil M1K3"
         case .big: "Big M1K3"
+        case .huge: "Huge M1K3"
         }
     }
 
@@ -52,6 +57,7 @@ public enum BrainTier: String, CaseIterable, Identifiable, Sendable {
         case .mini: "Fast and focused"
         case .lil: "Sharp and capable"
         case .big: "Full intelligence"
+        case .huge: "Frontier-class, fully local"
         }
     }
 
@@ -65,8 +71,11 @@ public enum BrainTier: String, CaseIterable, Identifiable, Sendable {
             "A downloaded local engine — multi-turn conversation, memory, and "
                 + "reasoning that keeps up with you. Runs entirely on your Mac."
         case .big:
-            "Maximum capability on your hardware — deeper reasoning and longer "
+            "Maximum capability for most Macs — deeper reasoning and longer "
                 + "context, fully local. The full M1K3."
+        case .huge:
+            "The biggest brain that fits on a Mac — for machines with 32GB+ "
+                + "of memory. Everything Big does, with more headroom."
         }
     }
 
@@ -77,16 +86,18 @@ public enum BrainTier: String, CaseIterable, Identifiable, Sendable {
         case .mini: "hare.fill"
         case .lil: "bolt.fill"
         case .big: "brain.head.profile.fill"
+        case .huge: "sparkles"
         }
     }
 
     public var backing: BrainBacking {
         switch self {
         case .mini: .appleFoundationModels
-        // Models that load on the current mlx-swift-lm pin; one-line swap to
-        // Qwen3.5-2B / Gemma-4-E4B once the 3.x bump lands.
-        case .lil: .mlx(modelID: "mlx-community/Qwen3-1.7B-4bit")
-        case .big: .mlx(modelID: "mlx-community/gemma-3n-E4B-it-lm-4bit")
+        case .lil: .mlx(modelID: "mlx-community/Qwen3.5-2B-4bit")
+        case .big: .mlx(modelID: "mlx-community/gemma-4-e4b-it-4bit")
+        // Gate B fallback — gemma-4-12B-it-4bit once mlx-swift-lm registers
+        // its `gemma4_unified` arch (unloadable at 3.31.3).
+        case .huge: .mlx(modelID: "mlx-community/Qwen3.5-9B-4bit")
         }
     }
 
@@ -98,12 +109,13 @@ public enum BrainTier: String, CaseIterable, Identifiable, Sendable {
 
     /// Approx one-time download in MB, or `nil` for the no-download Apple tier.
     /// Rough estimates surfaced as "~NN MB"; the real size shows on the progress
-    /// bar at download time.
+    /// bar at download time. (HF usedStorage, 2026-06-10.)
     public var approxDownloadMB: Int? {
         switch self {
         case .mini: nil
-        case .lil: 1100
-        case .big: 1500
+        case .lil: 1750
+        case .big: 5250
+        case .huge: 5970
         }
     }
 
@@ -111,11 +123,32 @@ public enum BrainTier: String, CaseIterable, Identifiable, Sendable {
         approxDownloadMB != nil
     }
 
-    /// The brain best matched to this Mac's memory, echoing KMP's device tiers
-    /// (flagship → Big, mid → Lil, low → Mini). Tunable thresholds.
+    /// The memory floor below which this brain shouldn't even be SELECTABLE
+    /// (the card disables with a "needs NN GB" badge), or nil for no gate.
+    /// Distinct from `recommended` — selection is permissive, recommendation
+    /// is comfortable.
+    public var minimumPhysicalMemoryGB: Double? {
+        switch self {
+        case .mini, .lil, .big: nil
+        case .huge: 32
+        }
+    }
+
+    /// Whether this Mac has enough memory to offer the tier at all.
+    public func isSelectable(forPhysicalMemoryGB gigabytes: Double) -> Bool {
+        guard let floor = minimumPhysicalMemoryGB else { return true }
+        return gigabytes >= floor
+    }
+
+    /// The brain best matched to this Mac's memory, echoing KMP's device tiers.
+    /// Big is a ~7GB-at-inference model in the Gemma 4 era — recommending it
+    /// on a 16GB Mac that also runs a browser would be hostile, so its floor
+    /// is 24GB; Huge is recommended only with real headroom (48GB+) though
+    /// selectable from 32GB. Tunable thresholds.
     public static func recommended(forPhysicalMemoryGB gigabytes: Double) -> BrainTier {
         switch gigabytes {
-        case 32...: .big
+        case 48...: .huge
+        case 24...: .big
         case 16...: .lil
         default: .mini
         }
@@ -123,7 +156,15 @@ public enum BrainTier: String, CaseIterable, Identifiable, Sendable {
 
     /// Convenience: the recommendation for the machine we're running on.
     public static var recommendedForThisMac: BrainTier {
-        let gigabytes = Double(ProcessInfo.processInfo.physicalMemory) / 1_073_741_824
-        return recommended(forPhysicalMemoryGB: gigabytes)
+        recommended(forPhysicalMemoryGB: physicalMemoryGB)
+    }
+
+    /// Convenience: whether this tier is selectable on the machine we're on.
+    public var isSelectableOnThisMac: Bool {
+        isSelectable(forPhysicalMemoryGB: Self.physicalMemoryGB)
+    }
+
+    private static var physicalMemoryGB: Double {
+        Double(ProcessInfo.processInfo.physicalMemory) / 1_073_741_824
     }
 }

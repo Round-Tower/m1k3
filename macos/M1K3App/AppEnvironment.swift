@@ -38,8 +38,10 @@ import Observation
 /// up in the heavy-dependency session.
 enum RuntimeOption: String, CaseIterable, Identifiable {
     case appleFoundationModels = "Apple Foundation Models"
-    case mlxGemma = "MLX Gemma 3"
-    case liteRTGemma = "LiteRT Gemma 3"
+    // Model-neutral label: the MLX slot now serves whichever brain is chosen
+    // (Qwen3.5 Lil/Huge, Gemma 4 Big) — not display-persisted, safe to rename.
+    case mlxGemma = "MLX (local model)"
+    case liteRTGemma = "LiteRT Gemma"
 
     var id: String {
         rawValue
@@ -53,7 +55,7 @@ enum RuntimeOption: String, CaseIterable, Identifiable {
     var subtitle: String {
         switch self {
         case .appleFoundationModels: "On-device, cheap & fast. The MVP brain."
-        case .mlxGemma: "Metal in-process Gemma 3 (1B, 4-bit). Downloads on first use."
+        case .mlxGemma: "Metal in-process local model (4-bit). Downloads on first use."
         case .liteRTGemma: "LiteRT-LM Gemma. Spike — not yet wired."
         }
     }
