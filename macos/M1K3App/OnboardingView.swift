@@ -13,6 +13,7 @@
 //  Signed: Kev + claude-sonnet-4-6, 2026-06-08, Confidence 0.8,
 //  Prior: Kev + claude-opus-4-8 2026-06-08 (single-step brain-only version)
 
+import M1K3Avatar
 import M1K3Inference
 import M1K3Voice
 import SwiftUI
@@ -79,6 +80,11 @@ struct OnboardingView: View {
         }
         .frame(minWidth: 580, minHeight: 640)
         .glassBackdrop()
+        .onAppear { env.avatar.setEmotion(emotion(for: step)) }
+        .onChange(of: step) { _, newStep in
+            env.avatar.setEmotion(emotion(for: newStep))
+        }
+        .onDisappear { env.avatar.resetToIdle() }
         .onChange(of: env.modelLoad) { _, state in
             if case .ready = state, isWakingBrain {
                 isWakingBrain = false
@@ -98,12 +104,15 @@ struct OnboardingView: View {
 
     // MARK: - Shared header
 
-    private func header(glyph: String, title: String, subtitle: String) -> some View {
+    /// The LIVE pixel face is the hero — M1K3 is present from the first
+    /// screen, not represented by a static glyph. (`glyph` is kept in the
+    /// step call sites' spirit via the per-step EMOTION instead.)
+    private func header(glyph _: String, title: String, subtitle: String) -> some View {
         VStack(spacing: 8) {
-            Image(systemName: glyph)
-                .font(.system(size: 40, weight: .semibold))
-                .foregroundStyle(.tint)
+            AvatarView(controller: env.avatar)
+                .frame(width: 260, height: 150)
                 .padding(.bottom, 4)
+                .accessibilityHidden(true)
             Text(title)
                 .font(.pixel(40))
                 .kerning(2)
@@ -112,6 +121,17 @@ struct OnboardingView: View {
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: 460)
+        }
+    }
+
+    /// The face reacts to where you are in the flow — meeting you, choosing
+    /// a brain, listening, speaking.
+    private func emotion(for step: Step) -> AvatarEmotion {
+        switch step {
+        case .you: .happy
+        case .brain: .thinking
+        case .voice: .surprised
+        case .speech: .excited
         }
     }
 }
