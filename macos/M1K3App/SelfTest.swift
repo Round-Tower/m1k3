@@ -174,6 +174,109 @@ enum SelfTest {
             emit("✗ MLX generate stage: \(error)")
         }
 
+        // 4. Optional per-model eval suite (M1K3_SELFTEST_EVAL=1): the same
+        //    behavioral checklist against every brain — or any ad-hoc list via
+        //    M1K3_SELFTEST_EVAL_MODELS=id,id. Promotion gate for new models.
+        if ProcessInfo.processInfo.environment["M1K3_SELFTEST_EVAL"] == "1" {
+            let models = ProcessInfo.processInfo.environment["M1K3_SELFTEST_EVAL_MODELS"]
+                .map { $0.split(separator: ",").map { String($0).trimmingCharacters(in: .whitespaces) } }
+                ?? BrainTier.allCases.compactMap(\.mlxModelID)
+            for modelID in models {
+                emit("• eval \(modelID)…")
+                let report = await evalModel(modelID)
+                emit(report.rendered)
+            }
+        }
+
         emit("=== END SELF-TEST ===")
+    }
+
+    /// One model through the behavioral checklist. Self-contained on purpose:
+    /// the reasoning-family detection reads the output itself (the provider's
+    /// synthetic <think> opener IS the contract being checked), so a new model
+    /// needs no eval-side configuration at all.
+    private static func evalModel(_ modelID: String) async -> ModelEvalReport {
+        var records: [ModelEvalRecord] = []
+        let provider = MLXGemmaProvider(modelID: modelID, maxTokens: 1024)
+
+        // Check 1+2: generates a usable answer; reasoning families emit a
+        // well-formed think pair (the Qwen3.5 lone-close bug class).
+        do {
+            let raw = try await provider.generate(
+                prompt: "Reply with exactly the word OK and nothing else."
+            )
+            let answer = ModelEvalReport.strippingThink(raw)
+            let generated = answer.localizedCaseInsensitiveContains("ok")
+            records.append(ModelEvalRecord(
+                check: "generates",
+                outcome: generated ? .pass : .fail,
+                detail: generated ? "\(raw.count) chars" : "answer: \(answer.prefix(60))"
+            ))
+            if raw.hasPrefix("<think>") {
+                let closed = raw.contains("</think>")
+                records.append(ModelEvalRecord(
+                    check: "think contract",
+                    outcome: closed ? .pass : .fail,
+                    detail: closed ? "well-formed pair" : "unclosed think — raise the token budget?"
+                ))
+            } else {
+                records.append(ModelEvalRecord(
+                    check: "think contract", outcome: .skip, detail: "not a reasoning family"
+                ))
+            }
+        } catch {
+            records.append(ModelEvalRecord(
+                check: "generates", outcome: .fail, detail: String(describing: error).prefix(80) + ""
+            ))
+            return ModelEvalReport(modelID: modelID, records: records)
+        }
+
+        // Check 3: the native tool-call dialect actually round-trips — the
+        // model SEES the tool (template renders it) and the library PARSES the
+        // call (the Gemma-3n silent-drop + missing-parser bug class).
+        if provider.supportsToolCalls {
+            do {
+                let datetime = ToolDefinition(
+                    name: "datetime",
+                    description: "Get the current date and time on this Mac.",
+                    parameters: []
+                )
+                let turn = try await provider.continueToolTurn(
+                    messages: [
+                        .system(M1K3Persona.systemPrompt),
+                        .user("What time is it right now? Use the datetime tool to find out."),
+                    ],
+                    tools: [datetime]
+                )
+                switch turn {
+                case let .toolCalls(calls) where calls.contains(where: { $0.name == "datetime" }):
+                    records.append(ModelEvalRecord(
+                        check: "native tool call", outcome: .pass, detail: "datetime called"
+                    ))
+                case let .toolCalls(calls):
+                    records.append(ModelEvalRecord(
+                        check: "native tool call", outcome: .fail,
+                        detail: "called \(calls.map(\.name).joined(separator: ",")) instead"
+                    ))
+                case let .text(text):
+                    records.append(ModelEvalRecord(
+                        check: "native tool call", outcome: .fail,
+                        detail: "no call — answered: \(ModelEvalReport.strippingThink(text).prefix(60))"
+                    ))
+                }
+            } catch {
+                records.append(ModelEvalRecord(
+                    check: "native tool call", outcome: .fail,
+                    detail: String(describing: error).prefix(80) + ""
+                ))
+            }
+        } else {
+            records.append(ModelEvalRecord(
+                check: "native tool call", outcome: .skip,
+                detail: "ReAct floor — no native dialect at this pin"
+            ))
+        }
+
+        return ModelEvalReport(modelID: modelID, records: records)
     }
 }
