@@ -225,11 +225,11 @@ enum SelfTest {
                 detail: generated ? "\(raw.count) chars" : "answer: \(answer.prefix(60))"
             ))
             if raw.hasPrefix("<think>") {
-                let closed = raw.contains("</think>")
+                let verdict = ThinkContract.verdict(raw: raw)
                 records.append(ModelEvalRecord(
                     check: "think contract",
-                    outcome: closed ? .pass : .fail,
-                    detail: closed ? "well-formed pair" : "unclosed think — raise the token budget?"
+                    outcome: verdict.outcome,
+                    detail: verdict.detail
                 ))
             } else {
                 records.append(ModelEvalRecord(

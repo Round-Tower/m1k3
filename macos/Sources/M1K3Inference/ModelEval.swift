@@ -82,3 +82,24 @@ public struct ModelEvalReport: Sendable, Equatable {
         return working.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 }
+
+/// The think-pair contract check, calibrated for what reasoning models
+/// actually do: a closed pair is healthy; a LONG unclosed output is mid-think
+/// truncation (raise the token budget); a TINY unclosed output is the model
+/// skipping thinking on a trivial prompt (the synthetic opener + a direct
+/// answer — seen live as "<think>OK") and is not a failure.
+public enum ThinkContract {
+    /// Below this, an unclosed output cannot be a budget truncation —
+    /// truncation by definition fills the budget (hundreds of tokens).
+    private static let truncationFloorChars = 200
+
+    public static func verdict(raw: String) -> (outcome: ModelEvalOutcome, detail: String) {
+        if raw.contains("</think>") {
+            return (.pass, "well-formed pair")
+        }
+        if raw.count < truncationFloorChars {
+            return (.skip, "model skipped thinking (direct answer)")
+        }
+        return (.fail, "unclosed think — raise the token budget?")
+    }
+}

@@ -26,12 +26,13 @@ public extension MLXGemmaProvider {
             let container = try await ensureLoaded()
 
             // 1. Build the persona prefix cold (the cost this feature deletes
-            //    from every cold launch).
+            //    from every cold launch). The throwing core, so a failure
+            //    reports its real error instead of the app path's silent nil.
             let buildStart = clock.now
-            guard let seed = await personaPrefixSnapshot(
+            guard let seed = try await buildPersonaPrefixSnapshot(
                 container: container, specs: nil, toolNames: []
             ) else {
-                return "✗ kv-persist: persona prefix unavailable (no template tokenizer?)"
+                return "✗ kv-persist: prefix built but snapshot missing (store anomaly)"
             }
             let buildMS = (clock.now - buildStart).milliseconds
 

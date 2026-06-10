@@ -294,6 +294,25 @@ public final class MLXGemmaProvider: InferenceProvider, ModelPreloading, @unchec
         specs: [ToolSpec]?,
         toolNames: [String]
     ) async -> PersonaPrefixSnapshot? {
+        do {
+            return try await buildPersonaPrefixSnapshot(
+                container: container, specs: specs, toolNames: toolNames
+            )
+        } catch {
+            let reason = String(describing: error)
+            mlxLoadLog.notice("persona prefix unavailable — sending system turn inline (\(reason, privacy: .public))")
+            return nil
+        }
+    }
+
+    /// The throwing core of the prefix build — the kv-persist probe calls this
+    /// directly so failures surface with their REAL error, not the app path's
+    /// swallowed best-effort nil.
+    func buildPersonaPrefixSnapshot(
+        container: ModelContainer,
+        specs: [ToolSpec]?,
+        toolNames: [String]
+    ) async throws -> PersonaPrefixSnapshot? {
         let key = PersonaCacheKey(
             modelID: modelIdentifier,
             toolNames: toolNames,
@@ -304,59 +323,53 @@ public final class MLXGemmaProvider: InferenceProvider, ModelPreloading, @unchec
         if let hit = personaPrefix.snapshot(for: key) { return hit }
 
         let parameters = generateParameters
-        do {
-            // `@unchecked Sendable` box: the cache arrays are evaluated by the
-            // prefill generation before crossing isolation (the same contract
-            // MLXToolTurnSession relies on for its per-turn cache).
-            struct PrefixBox: @unchecked Sendable {
-                let cache: [KVCache]
-                let tokenCount: Int
-            }
-            let built: PrefixBox = try await container.perform { context in
-                // Render the system block WITHOUT the assistant generation
-                // opener — needs the upstream tokenizer's full overload.
-                guard let upstream = (context.tokenizer as? TransformersTokenizerAdapter)?.upstream else {
-                    throw InferenceError.generationFailed("no template tokenizer for persona prefix")
-                }
-                let ids = try upstream.applyChatTemplate(
-                    messages: [[
-                        "role": "system",
-                        "content": M1K3Persona.systemPrompt(includeExemplars: true),
-                    ]],
-                    chatTemplate: nil,
-                    addGenerationPrompt: false,
-                    truncation: false,
-                    maxLength: nil,
-                    tools: specs
-                )
-                // Prefill: run a 1-token generation over the prefix, then trim
-                // the cache back to exactly the prompt (the sampled token must
-                // not pollute the reusable prefix).
-                var prefill = parameters
-                prefill.maxTokens = 1
-                let cache = context.model.newCache(parameters: parameters)
-                let stream = try MLXLMCommon.generate(
-                    input: LMInput(tokens: MLXArray(ids)),
-                    cache: cache,
-                    parameters: prefill,
-                    context: context
-                )
-                for await _ in stream {}
-                for layer in cache {
-                    let extra = layer.offset - ids.count
-                    if extra > 0 { _ = layer.trim(extra) }
-                }
-                return PrefixBox(cache: cache, tokenCount: ids.count)
-            }
-            personaPrefix.store(built.cache, tokenCount: built.tokenCount, for: key)
-            let tokens = built.tokenCount
-            mlxTTFTLog.notice("persona prefix cached: \(tokens)tok (saved from every turn's prefill)")
-            return personaPrefix.snapshot(for: key)
-        } catch {
-            let reason = String(describing: error)
-            mlxLoadLog.notice("persona prefix unavailable — sending system turn inline (\(reason, privacy: .public))")
-            return nil
+        // `@unchecked Sendable` box: the cache arrays are evaluated by the
+        // prefill generation before crossing isolation (the same contract
+        // MLXToolTurnSession relies on for its per-turn cache).
+        struct PrefixBox: @unchecked Sendable {
+            let cache: [KVCache]
+            let tokenCount: Int
         }
+        let built: PrefixBox = try await container.perform { context in
+            // Render the system block WITHOUT the assistant generation
+            // opener — needs the upstream tokenizer's full overload.
+            guard let upstream = (context.tokenizer as? TransformersTokenizerAdapter)?.upstream else {
+                throw InferenceError.generationFailed("no template tokenizer for persona prefix")
+            }
+            let ids = try upstream.applyChatTemplate(
+                messages: [[
+                    "role": "system",
+                    "content": M1K3Persona.systemPrompt(includeExemplars: true),
+                ]],
+                chatTemplate: nil,
+                addGenerationPrompt: false,
+                truncation: false,
+                maxLength: nil,
+                tools: specs
+            )
+            // Prefill: run a 1-token generation over the prefix, then trim
+            // the cache back to exactly the prompt (the sampled token must
+            // not pollute the reusable prefix).
+            var prefill = parameters
+            prefill.maxTokens = 1
+            let cache = context.model.newCache(parameters: parameters)
+            let stream = try MLXLMCommon.generate(
+                input: LMInput(tokens: MLXArray(ids)),
+                cache: cache,
+                parameters: prefill,
+                context: context
+            )
+            for await _ in stream {}
+            for layer in cache {
+                let extra = layer.offset - ids.count
+                if extra > 0 { _ = layer.trim(extra) }
+            }
+            return PrefixBox(cache: cache, tokenCount: ids.count)
+        }
+        personaPrefix.store(built.cache, tokenCount: built.tokenCount, for: key)
+        let tokens = built.tokenCount
+        mlxTTFTLog.notice("persona prefix cached: \(tokens)tok (saved from every turn's prefill)")
+        return personaPrefix.snapshot(for: key)
     }
 
     /// Template context for the `enable_thinking` switch. nil when thinking is

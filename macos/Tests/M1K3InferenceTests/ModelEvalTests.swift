@@ -51,4 +51,25 @@ struct ModelEvalTests {
         #expect(ModelEvalReport.strippingThink("reasoning</think>OK") == "OK")
         #expect(ModelEvalReport.strippingThink("OK") == "OK")
     }
+
+    @Test("think contract: closed pair passes")
+    func thinkContractClosedPasses() {
+        let verdict = ThinkContract.verdict(raw: "<think>plan the reply</think>OK")
+        #expect(verdict.outcome == .pass)
+    }
+
+    @Test("think contract: tiny unclosed output is skipped thinking, not truncation")
+    func thinkContractSkippedThinking() {
+        // The synthetic opener + a direct answer — the model chose not to
+        // think on a trivial prompt. Seen live: raw == "<think>OK".
+        let verdict = ThinkContract.verdict(raw: "<think>OK")
+        #expect(verdict.outcome == .skip)
+    }
+
+    @Test("think contract: long unclosed output is mid-think truncation")
+    func thinkContractTruncationFails() {
+        let rambling = "<think>" + String(repeating: "let me reconsider the question. ", count: 40)
+        let verdict = ThinkContract.verdict(raw: rambling)
+        #expect(verdict.outcome == .fail)
+    }
 }
