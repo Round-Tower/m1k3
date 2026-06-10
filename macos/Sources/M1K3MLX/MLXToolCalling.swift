@@ -247,24 +247,32 @@ extension MLXGemmaProvider: ToolCallingProvider {
     /// grounding, tool specs, and every prior generation are already in the
     /// cache (upstream ChatSession's delta-render pattern, with our loop in
     /// control).
-    public func makeToolTurnSession(tools: [ToolDefinition]) async throws -> any ToolTurnSession {
+    public func makeToolTurnSession(
+        tools: [ToolDefinition],
+        options: ToolTurnOptions
+    ) async throws -> any ToolTurnSession {
         let container = try await ensureLoaded()
         let specs = tools.map(MLXToolMapping.toolSpec(from:))
         let normalizedSpecs = specs.isEmpty ? nil : specs
         // Persona (and tools — they render in the SAME system block) prefilled
         // once per (model × tools × persona); this turn starts from a copy.
+        // (enable_thinking only touches the generation suffix, template-probe
+        // verified — the cached prefix is identical either way.)
         let seed = await personaPrefixSnapshot(
             container: container,
             specs: normalizedSpecs,
             toolNames: tools.map(\.name)
         )
+        // Per-turn thinking: a fast turn renders the EMPTY think pair into the
+        // generation prompt and skips the synthetic <think> opener.
+        let fastTurn = !options.thinkingEnabled && supportsThinkingToggle
         return MLXToolTurnSession(
             container: container,
             parameters: generateParameters,
             format: resolvedToolCallFormat ?? .gemma,
             specs: normalizedSpecs,
-            thinkingContext: thinkingAdditionalContext,
-            prefixNeeded: thinkPrefixNeeded,
+            thinkingContext: fastTurn ? ["enable_thinking": false] : thinkingAdditionalContext,
+            prefixNeeded: fastTurn ? false : thinkPrefixNeeded,
             seed: seed
         )
     }

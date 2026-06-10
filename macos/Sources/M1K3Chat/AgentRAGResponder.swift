@@ -40,6 +40,9 @@ public struct AgentRAGResponder: RAGResponding, Sendable {
     /// Hits the model retrieved itself via search_knowledge — drained after
     /// the stream and merged into the turn's sources (see `collectedSources`).
     private let sourceCollector: ToolSourceCollector?
+    /// The user's reasoning preference, read fresh each turn (Settings picker:
+    /// Auto / Always think / Fast answers) — same per-turn pattern as tools.
+    private let thinkingModeProvider: @Sendable () -> ThinkingMode
 
     public init(
         store: KnowledgeStore,
@@ -48,7 +51,8 @@ public struct AgentRAGResponder: RAGResponding, Sendable {
         toolsProvider: @escaping @Sendable () -> [any AgentTool],
         topK: Int = 5,
         maxIterations: Int = 3,
-        sourceCollector: ToolSourceCollector? = nil
+        sourceCollector: ToolSourceCollector? = nil,
+        thinkingModeProvider: @escaping @Sendable () -> ThinkingMode = { .auto }
     ) {
         self.store = store
         self.embedder = embedder
@@ -57,6 +61,7 @@ public struct AgentRAGResponder: RAGResponding, Sendable {
         self.topK = topK
         self.maxIterations = maxIterations
         self.sourceCollector = sourceCollector
+        self.thinkingModeProvider = thinkingModeProvider
     }
 
     /// Fixed tool list — convenience for tests and simple callers.
@@ -146,11 +151,19 @@ public struct AgentRAGResponder: RAGResponding, Sendable {
             maxIterations: maxIterations,
             concludesOnUnstructuredThought: true
         )
+        // Per-turn reasoning budget: casual asks skip the think phase
+        // entirely (instant answers); grounded/analytic asks keep it.
+        let thinkingEnabled = ThinkingPolicy.shouldThink(
+            question: question,
+            hasGroundedKnowledge: !chunks.isEmpty,
+            mode: thinkingModeProvider()
+        )
         let emittedLive = Mutex(false)
         do {
             let result = try await agent.run(
                 goal: question,
                 context: grounding,
+                thinkingEnabled: thinkingEnabled,
                 onEvent: { Self.forward($0, to: onActivity) },
                 onConclusionToken: { token in
                     emittedLive.withLock { $0 = true }

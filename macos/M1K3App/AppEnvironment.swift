@@ -148,6 +148,8 @@ final class AppEnvironment {
     /// then never offered to the model). The one capability that sends
     /// chat-derived queries off this Mac.
     nonisolated static let webSearchEnabledKey = "webSearchEnabled"
+    /// Settings: reasoning budget — ThinkingMode rawValue (auto/always/fast).
+    nonisolated static let thinkingModeKey = "thinkingMode"
     /// Whether the user has made a voice-output choice (onboarding speech step).
     static let hasChosenVoiceKey = "hasChosenVoice"
 
@@ -734,7 +736,11 @@ extension AppEnvironment {
                 }
                 return tools
             },
-            sourceCollector: sourceCollector
+            sourceCollector: sourceCollector,
+            thinkingModeProvider: {
+                UserDefaults.standard.string(forKey: Self.thinkingModeKey)
+                    .flatMap(ThinkingMode.init(rawValue:)) ?? .auto
+            }
         )
     }
 }

@@ -36,12 +36,16 @@ extension LocalAgent {
         provider: any ToolCallingProvider,
         goal: String,
         grounding: String?,
+        thinkingEnabled: Bool = true,
         onEvent: (@Sendable (AgentLoopEvent) -> Void)?,
         onConclusionToken: (@Sendable (String) -> Void)?,
         onReasoningToken: (@Sendable (String) -> Void)?
     ) async throws -> AgentResult {
         let toolDefinitions = tools.values.map(\.toolDefinition)
-        let session = try await provider.makeToolTurnSession(tools: toolDefinitions)
+        let session = try await provider.makeToolTurnSession(
+            tools: toolDefinitions,
+            options: ToolTurnOptions(thinkingEnabled: thinkingEnabled)
+        )
         do {
             let result = try await runNativeLoop(
                 session: session,

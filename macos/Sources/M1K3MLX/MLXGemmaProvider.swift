@@ -90,7 +90,8 @@ public final class MLXGemmaProvider: InferenceProvider, ModelPreloading, @unchec
     /// toggle) and disables the synthetic prefix.
     let thinkingEnabled: Bool
     /// Whether the family's template understands `enable_thinking` at all.
-    private let supportsThinkingToggle: Bool
+    /// (Internal: the tool-calling extension reads it for per-turn fast mode.)
+    let supportsThinkingToggle: Bool
     /// The model id this provider was built for — keys the persona prefix.
     let modelIdentifier: String
     /// Per-(tools × persona) prefilled system-block KV prefix; turns start

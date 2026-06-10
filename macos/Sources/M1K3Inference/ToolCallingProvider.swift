@@ -137,6 +137,20 @@ public enum ToolMessage: Sendable, Equatable {
     case toolResult(name: String, output: String)
 }
 
+/// Per-turn options for a tool session. Extend here rather than growing the
+/// protocol signature again.
+public struct ToolTurnOptions: Sendable, Equatable {
+    /// Whether the model may spend a reasoning phase this turn. Providers
+    /// whose template has no thinking switch ignore it.
+    public let thinkingEnabled: Bool
+
+    public init(thinkingEnabled: Bool = true) {
+        self.thinkingEnabled = thinkingEnabled
+    }
+
+    public static let `default` = ToolTurnOptions()
+}
+
 /// A stateful conversation with a tool-capable model for ONE agent turn. The
 /// caller sends only the NEW messages each iteration — the session retains
 /// everything prior (for MLX that's a live KV cache, so iteration N prefills
@@ -180,7 +194,10 @@ public protocol ToolCallingProvider: InferenceProvider {
     /// whole transcript through `continueToolTurn` per send (behaviourally
     /// identical to the pre-session loop); providers with real session state
     /// (a KV cache) override to make iteration ≥2 prefill only the delta.
-    func makeToolTurnSession(tools: [ToolDefinition]) async throws -> any ToolTurnSession
+    func makeToolTurnSession(
+        tools: [ToolDefinition],
+        options: ToolTurnOptions
+    ) async throws -> any ToolTurnSession
 }
 
 public extension ToolCallingProvider {
@@ -190,8 +207,16 @@ public extension ToolCallingProvider {
         true
     }
 
-    func makeToolTurnSession(tools: [ToolDefinition]) async throws -> any ToolTurnSession {
+    func makeToolTurnSession(
+        tools: [ToolDefinition],
+        options _: ToolTurnOptions
+    ) async throws -> any ToolTurnSession {
         StatelessToolTurnSession(provider: self, tools: tools)
+    }
+
+    /// Convenience: default options.
+    func makeToolTurnSession(tools: [ToolDefinition]) async throws -> any ToolTurnSession {
+        try await makeToolTurnSession(tools: tools, options: .default)
     }
 }
 

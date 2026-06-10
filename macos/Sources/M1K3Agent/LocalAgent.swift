@@ -100,6 +100,7 @@ public actor LocalAgent {
     public func run(
         goal: String,
         context groundingContext: String? = nil,
+        thinkingEnabled: Bool = true,
         onEvent: (@Sendable (AgentLoopEvent) -> Void)? = nil,
         onConclusionToken: (@Sendable (String) -> Void)? = nil,
         onReasoningToken: (@Sendable (String) -> Void)? = nil
@@ -119,6 +120,7 @@ public actor LocalAgent {
                 provider: toolProvider,
                 goal: goal,
                 grounding: groundingContext,
+                thinkingEnabled: thinkingEnabled,
                 onEvent: onEvent,
                 onConclusionToken: onConclusionToken,
                 onReasoningToken: onReasoningToken

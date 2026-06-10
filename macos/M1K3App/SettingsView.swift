@@ -8,6 +8,7 @@
 //
 //  Signed: Kev + claude-opus-4-8, 2026-06-06, Confidence 0.8, Prior: Unknown
 
+import M1K3Chat
 import M1K3Voice
 import SwiftUI
 
@@ -15,6 +16,7 @@ struct SettingsView: View {
     @Environment(AppEnvironment.self) private var env
     @AppStorage(ReadingMode.storageKey) private var readingMode: ReadingMode = .standard
     @AppStorage(AppEnvironment.webSearchEnabledKey) private var webSearchEnabled = true
+    @AppStorage(AppEnvironment.thinkingModeKey) private var thinkingMode = ThinkingMode.auto.rawValue
 
     var body: some View {
         @Bindable var env = env
@@ -165,6 +167,22 @@ struct SettingsView: View {
                         + "this Mac — every search and page read is shown in the reply as "
                         + "it happens. Date, time and system status tools stay fully local. "
                         + "Off means the model can't see the web tools at all.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+
+                Section {
+                    Picker("Reasoning", selection: $thinkingMode) {
+                        Text("Auto").tag(ThinkingMode.auto.rawValue)
+                        Text("Always think").tag(ThinkingMode.always.rawValue)
+                        Text("Fast answers").tag(ThinkingMode.fast.rawValue)
+                    }
+                    .pickerStyle(.segmented)
+                } header: {
+                    Text("Reasoning")
+                } footer: {
+                    Text("Reasoning models think out loud before answering — great for "
+                        + "hard questions, slow for small talk. Auto skips the thinking "
+                        + "on casual turns and keeps it for grounded or analytic ones.")
                         .font(.caption).foregroundStyle(.secondary)
                 }
 
