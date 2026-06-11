@@ -22,6 +22,7 @@ struct ContentView: View {
     @State private var draft = ""
     @State private var showDocuments = false
     @State private var showCalls = false
+    @State private var showHistory = false
     @State private var showImporter = false
     @State private var showConsentDialog = false
     @State private var isDropTargeted = false
@@ -66,6 +67,9 @@ struct ContentView: View {
         }
         .sheet(isPresented: $showCalls) {
             CallsView().environment(env)
+        }
+        .sheet(isPresented: $showHistory) {
+            HistoryView().environment(env)
         }
         .confirmationDialog("Record this call?", isPresented: $showConsentDialog, titleVisibility: .visible) {
             Button("Record once") { Task { await env.affirmConsentAndRecord(scope: .once) } }
@@ -294,10 +298,15 @@ struct ContentView: View {
     /// The chat-surface actions — hidden while voice mode owns the window.
     private var chatToolbarItems: some View {
         Group {
-            Button { env.chat.clear() } label: {
+            Button { env.chat.startNewConversation() } label: {
                 Label("New chat", systemImage: "square.and.pencil")
             }
+            .help("Start a fresh conversation — this one stays in History")
             .disabled(env.chat.messages.isEmpty || env.chat.isResponding)
+            Button { showHistory = true } label: {
+                Label("History", systemImage: "clock.arrow.circlepath")
+            }
+            .help("Browse and switch between past conversations")
             Button {
                 withAnimation(.spring(duration: 0.35)) { showAvatar.toggle() }
             } label: {

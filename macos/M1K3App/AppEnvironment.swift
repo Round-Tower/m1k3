@@ -302,8 +302,15 @@ final class AppEnvironment {
         batchTranscriber = WhisperKitBatchTranscriber(downloadBase: whisperDownloadBase)
 
         ingester = DocumentIngester(store: store, embedder: embedder)
-        let transcriptURL = url.deletingLastPathComponent().appendingPathComponent("transcript.json")
-        chat = ChatSession(responder: responder, transcript: ChatTranscriptStore(url: transcriptURL))
+        // Multi-conversation history (GRDB) + auto-titling via the routed
+        // provider; the legacy transcript.json imports once (factory runs the
+        // migrator BEFORE init so resume-most-recent finds the import).
+        let chatHistory = Self.makeChatHistoryStore(in: url.deletingLastPathComponent())
+        chat = ChatSession(
+            responder: responder,
+            history: chatHistory,
+            titler: ProviderConversationTitler(provider: runtimeProvider)
+        )
 
         // Calls: encrypted-at-rest store (key from the Keychain), indexed into the
         // same knowledge graph, summarised by AFM (quick) + the active runtime (deep).
@@ -716,6 +723,21 @@ extension AppEnvironment {
         } catch {
             return (try? GRDBCallPersistence()) ?? NullCallPersistence()
         }
+    }
+
+    /// Build the conversation store and run the one-shot legacy-transcript
+    /// migration BEFORE ChatSession init reads it (resume-most-recent must see
+    /// the import). nil on store failure → chat degrades to non-persistent,
+    /// exactly like the old optional transcript.
+    static func makeChatHistoryStore(in dir: URL) -> (any ChatHistoryPersisting)? {
+        guard let store = try? GRDBChatHistoryStore(
+            path: dir.appendingPathComponent("chat-history.sqlite").path
+        ) else { return nil }
+        try? TranscriptMigrator.migrateIfNeeded(
+            legacyURL: dir.appendingPathComponent("transcript.json"),
+            into: store
+        )
+        return store
     }
 
     static func storeURL() throws -> URL {
