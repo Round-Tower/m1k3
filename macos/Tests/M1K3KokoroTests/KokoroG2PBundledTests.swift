@@ -21,4 +21,17 @@ struct KokoroG2PBundledTests {
         // Contraction coverage (web2 lacks these; added to the generated dict).
         #expect(g2p.phonemeTokens("don't").isEmpty == false)
     }
+
+    @Test("numbers, units, and acronyms are spoken against the real dictionary")
+    func bundledFallbackChain() throws {
+        let g2p = try KokoroG2P.bundled()
+        // Every expansion word (fifteen/celsius/twenty/six…) must resolve in
+        // the shipped dict — this is the line that used to be silently mute.
+        let weather = g2p.annotatedTokens("It is 15°C in 2026.")
+        #expect(weather.words.allSatisfy { !$0.tokenRange.isEmpty })
+        // Mixed alphanumeric spells out (em one kay three), not silence.
+        #expect(g2p.phonemeTokens("M1K3").isEmpty == false)
+        // Percentages and decimals speak too.
+        #expect(g2p.phonemeTokens("3.5% today").isEmpty == false)
+    }
 }

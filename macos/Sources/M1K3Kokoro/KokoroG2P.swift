@@ -19,6 +19,11 @@
 //  string (per-word lowercase for lookup only) to add annotatedTokens word
 //  boundaries for karaoke timing; phonemeTokens is now a capped wrapper, all
 //  prior tests untouched-green. Confidence 0.85.
+//  Review: Kev + claude-fable-5, 2026-06-11 — OOV fallback chain added (the
+//  "skipping" fix): digit runs + unit suffixes become NumberSpeller words,
+//  no-vowel/short-caps OOV spells out via single-letter dict keys; one G2PWord
+//  per expansion keeps karaoke ranges exact. Pronounceable OOV still skips —
+//  conservative by design. Confidence 0.85 (audio quality verify-at-⌘R).
 //
 
 import Foundation
@@ -97,19 +102,12 @@ public struct KokoroG2P: Sendable {
 
         while index < charCount {
             let char = chars[index]
-            if char.isLetter {
-                // Maximal word run: letters + internal apostrophes.
-                var wordEnd = index
-                var wordUTF16 = 0
-                while wordEnd < charCount, chars[wordEnd].isLetter || chars[wordEnd] == "'" {
-                    wordUTF16 += chars[wordEnd].utf16.count
-                    wordEnd += 1
-                }
-                let raw = String(chars[index ..< wordEnd]).lowercased()
-                let textRange = offset ..< offset + wordUTF16
-                index = wordEnd
-                offset += wordUTF16
-                guard let toks = lookup(raw) else {
+            if char.isLetter || char.isASCIIDigit {
+                let run = scanRun(chars, from: index)
+                let textRange = offset ..< offset + run.utf16Count
+                index = run.end
+                offset += run.utf16Count
+                guard let toks = resolveTokens(for: run), !toks.isEmpty else {
                     // OOV: no phonemes, no space — an empty token range at the
                     // current position keeps the word addressable for timing.
                     words.append(G2PWord(textRange: textRange, tokenRange: tokens.count ..< tokens.count))
@@ -137,6 +135,113 @@ public struct KokoroG2P: Sendable {
             }
         }
         return G2PResult(tokens: tokens, words: words)
+    }
+
+    /// One maximal word run plus any unit suffix it absorbed.
+    private struct WordRun {
+        let text: String // original case, units excluded
+        let unitWords: [String] // "%" / "°C" / "°F" / "°" → speakable words
+        let containsDigit: Bool
+        let end: Int // exclusive char index after run + unit
+        let utf16Count: Int // run + unit, for the text range
+    }
+
+    /// Maximal run: letters, ASCII digits, internal apostrophes, and '.'/','
+    /// flanked by digits (decimals, grouping commas). A digit-containing run
+    /// absorbs a trailing %, °C, °F, or ° into the SAME run so "15°C" is one
+    /// word for timing.
+    private func scanRun(_ chars: [Character], from start: Int) -> WordRun {
+        var end = start
+        var utf16Count = 0
+        var containsDigit = false
+        while end < chars.count {
+            let runChar = chars[end]
+            if runChar.isLetter || runChar == "'" {
+                // word characters
+            } else if runChar.isASCIIDigit {
+                containsDigit = true
+            } else if runChar == "." || runChar == "," {
+                guard end > start, chars[end - 1].isASCIIDigit,
+                      end + 1 < chars.count, chars[end + 1].isASCIIDigit else { break }
+            } else {
+                break
+            }
+            utf16Count += runChar.utf16.count
+            end += 1
+        }
+        let text = String(chars[start ..< end])
+        var unitWords: [String] = []
+        if containsDigit, end < chars.count {
+            if chars[end] == "%" {
+                unitWords = ["percent"]
+                utf16Count += 1
+                end += 1
+            } else if chars[end] == "°" {
+                utf16Count += 1
+                end += 1
+                if end < chars.count, chars[end] == "C" || chars[end] == "c" {
+                    unitWords = ["celsius"]
+                    utf16Count += 1
+                    end += 1
+                } else if end < chars.count, chars[end] == "F" || chars[end] == "f" {
+                    unitWords = ["fahrenheit"]
+                    utf16Count += 1
+                    end += 1
+                } else {
+                    unitWords = ["degree"] // "degrees" is absent from the dict
+                }
+            }
+        }
+        return WordRun(text: text, unitWords: unitWords, containsDigit: containsDigit, end: end, utf16Count: utf16Count)
+    }
+
+    /// Fallback chain: dictionary → number expansion → per-character spell-out
+    /// → nil (silent skip). Expansions join their words with the space token so
+    /// one run yields one contiguous token span.
+    private func resolveTokens(for run: WordRun) -> [Int]? {
+        if run.containsDigit {
+            if let numberWords = NumberSpeller.numberWords(run.text) {
+                return joinedTokens(for: numberWords + run.unitWords)
+            }
+            // Mixed alphanumeric ("M1K3") → spell out per character.
+            return spellOutTokens(run.text, extraWords: run.unitWords)
+        }
+        let raw = run.text.lowercased()
+        if let hit = lookup(raw) { return hit }
+        if shouldSpellOut(run.text) { return spellOutTokens(run.text, extraWords: []) }
+        return nil
+    }
+
+    /// Spell-out is deliberately conservative: only runs that cannot plausibly
+    /// be pronounced (no vowels) or look like acronyms (short all-caps) — long
+    /// pronounceable proper nouns stay silent rather than becoming letter soup.
+    private func shouldSpellOut(_ original: String) -> Bool {
+        let lowered = original.lowercased()
+        let hasVowel = lowered.contains { "aeiouy".contains($0) }
+        if !hasVowel { return true }
+        return original.count <= 5 && original.allSatisfy(\.isUppercase)
+    }
+
+    /// Per-character expansion: letters via their single-character dictionary
+    /// keys (espeak letter names — all 26 are present), digits via NumberSpeller.
+    private func spellOutTokens(_ text: String, extraWords: [String]) -> [Int]? {
+        var words: [String] = []
+        for char in text {
+            if char.isLetter {
+                words.append(String(char).lowercased())
+            } else if let digit = NumberSpeller.digitWord(char) {
+                words.append(digit)
+            }
+        }
+        return joinedTokens(for: words + extraWords)
+    }
+
+    /// Dictionary tokens for each word, joined by the space token. Words the
+    /// dictionary lacks are dropped; nil when nothing resolved.
+    private func joinedTokens(for expansionWords: [String]) -> [Int]? {
+        let groups = expansionWords.compactMap { dictionary[$0] }.filter { !$0.isEmpty }
+        guard !groups.isEmpty else { return nil }
+        return Array(groups.joined(separator: [Self.space]))
     }
 
     /// Model input tokens = [pad] + phonemes + [pad].
