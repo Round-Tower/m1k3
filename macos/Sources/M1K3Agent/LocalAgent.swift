@@ -14,6 +14,12 @@
 //
 //  Signed: Kev + claude-opus-4-8, 2026-06-06, Confidence 0.85,
 //  Prior: the internal call-pipeline project the prior domain ReAct agent (Kev)
+//
+//  Review: Kev + claude-fable-5, 2026-06-09 — hardened for always-on chat with
+//  small on-device models: onEvent loop callbacks (drives the chat activity
+//  label), quote/markdown-tolerant action parsing, repeat-action guard,
+//  optional implicit-conclusion on unstructured prose, cooperative
+//  cancellation, and unknown-tool steering. Loop shape unchanged.
 
 import Foundation
 import M1K3Inference
@@ -51,58 +57,86 @@ public enum AgentError: Error, Sendable, Equatable {
     case toolNotFound(String)
 }
 
+/// Loop progress, surfaced so the chat UI can show what the agent is doing
+/// while no tokens are streaming ("Thinking…", "Searching the web…").
+public enum AgentLoopEvent: Sendable, Equatable {
+    case thinking(iteration: Int)
+    case actionStarted(tool: String, argument: String)
+}
+
 public actor LocalAgent {
     private let inferenceProvider: any InferenceProvider
-    private let tools: [String: AgentTool]
-    private let maxIterations: Int
+    // Internal (not private) so the cross-file logging extension can read them.
+    let tools: [String: AgentTool]
+    let maxIterations: Int
+    private let concludesOnUnstructuredThought: Bool
 
     public private(set) var reasoningTrace: [ReasoningStep] = []
 
     public init(
         inferenceProvider: any InferenceProvider,
         tools: [any AgentTool],
-        maxIterations: Int = 5
+        maxIterations: Int = 5,
+        concludesOnUnstructuredThought: Bool = false
     ) {
         self.inferenceProvider = inferenceProvider
         self.tools = Dictionary(tools.map { ($0.name, $0) }, uniquingKeysWith: { first, _ in first })
         self.maxIterations = maxIterations
+        self.concludesOnUnstructuredThought = concludesOnUnstructuredThought
     }
 
     /// Run the ReAct loop toward `goal`, optionally grounded in `context`
     /// (e.g. retrieved knowledge). Terminates on a `CONCLUSION:` thought or,
     /// at the iteration cap, by synthesising from what was gathered.
-    public func run(goal: String, context groundingContext: String? = nil) async throws -> AgentResult {
+    public func run(
+        goal: String,
+        context groundingContext: String? = nil,
+        onEvent: (@Sendable (AgentLoopEvent) -> Void)? = nil,
+        onConclusionToken: (@Sendable (String) -> Void)? = nil
+    ) async throws -> AgentResult {
         reasoningTrace.removeAll()
         var usedTools = Set<String>()
+        var executedActions = Set<String>()
         var currentContext = buildInitialContext(goal: goal, grounding: groundingContext)
 
-        for iteration in 0 ..< maxIterations {
-            let thought = try await generateThought(context: currentContext, iteration: iteration)
+        logRunStart(goal: goal, grounding: groundingContext)
 
-            if thought.contains("CONCLUSION:") {
-                reasoningTrace.append(ReasoningStep(iteration: iteration, thought: thought))
-                return AgentResult(
-                    conclusion: extractConclusion(from: thought),
-                    toolsUsed: Array(usedTools),
-                    iterations: iteration + 1,
-                    reasoningTrace: reasoningTrace
-                )
+        for iteration in 0 ..< maxIterations {
+            try Task.checkCancellation()
+            onEvent?(.thinking(iteration: iteration))
+            let thought = try await generateThought(
+                context: currentContext,
+                iteration: iteration,
+                onConclusionToken: onConclusionToken
+            )
+
+            if let result = markerConclusion(from: thought, iteration: iteration, usedTools: usedTools) {
+                return result
             }
 
             guard let action = parseAction(from: thought) else {
-                // No action — record the thought and keep reasoning.
                 reasoningTrace.append(ReasoningStep(iteration: iteration, thought: thought))
-                currentContext += "\n\nThought: \(thought)"
+                // Small models often just answer in prose instead of emitting the
+                // CONCLUSION marker. After they've had one structured chance,
+                // treat substantive unstructured prose as the answer rather than
+                // burning the remaining iterations re-prompting.
+                if concludesOnUnstructuredThought, iteration >= 1, !thought.isEmpty {
+                    M1K3Log.agentLoop.info("iteration \(iteration): implicit conclusion (prose, no markers)")
+                    return concluded(thought, usedTools, iteration + 1)
+                }
+                // No action — keep reasoning, with a format reminder (models
+                // announce tools in prose without the marker; seen on Gemma).
+                currentContext += Self.proseContinuation(for: thought)
                 continue
             }
 
-            let observation: String
-            do {
-                observation = try await executeTool(action: action)
-                usedTools.insert(action.toolName)
-            } catch {
-                observation = "Error executing \(action.toolName): \(error)"
-            }
+            let observation = await observe(
+                action: action,
+                iteration: iteration,
+                executedActions: &executedActions,
+                usedTools: &usedTools,
+                onEvent: onEvent
+            )
 
             reasoningTrace.append(ReasoningStep(
                 iteration: iteration,
@@ -121,13 +155,54 @@ public actor LocalAgent {
         }
 
         // Iteration cap reached — synthesise from the accumulated context.
+        logCapReached()
         let finalConclusion = try await synthesizeConclusion(context: currentContext)
+        return concluded(finalConclusion, usedTools, maxIterations)
+    }
+
+    /// Conclude from a CONCLUSION-marker thought — unless the "conclusion" is
+    /// an action in a trench coat ("CONCLUSION: ACTION: …", seen live): when
+    /// nothing survives the scaffolding strip but the thought parses as an
+    /// action, return nil so the loop falls through to the action path.
+    private func markerConclusion(
+        from thought: String, iteration: Int, usedTools: Set<String>
+    ) -> AgentResult? {
+        guard thought.contains("CONCLUSION:") else { return nil }
+        let conclusion = extractConclusion(from: thought)
+        if Self.stripScaffolding(conclusion).isEmpty, parseAction(from: thought) != nil {
+            M1K3Log.agentLoop.notice(
+                "iteration \(iteration): conclusion was only scaffolding — treating as action"
+            )
+            return nil
+        }
+        reasoningTrace.append(ReasoningStep(iteration: iteration, thought: thought))
+        return concluded(conclusion, usedTools, iteration + 1)
+    }
+
+    private func concluded(
+        _ conclusion: String, _ usedTools: Set<String>, _ iterations: Int
+    ) -> AgentResult {
+        let cleaned = Self.stripScaffolding(conclusion)
+        logConclusion(cleaned, raw: conclusion, usedTools: usedTools, iterations: iterations)
         return AgentResult(
-            conclusion: finalConclusion,
+            conclusion: cleaned,
             toolsUsed: Array(usedTools),
-            iterations: maxIterations,
+            iterations: iterations,
             reasoningTrace: reasoningTrace
         )
+    }
+
+    /// Remove ReAct scaffolding (ACTION: lines, with or without markdown
+    /// decoration) from user-visible text. Small models leak these into
+    /// conclusions and the iteration-cap synthesis — seen live at ⌘R.
+    static func stripScaffolding(_ text: String) -> String {
+        text.components(separatedBy: "\n")
+            .filter { line in
+                let bare = line.trimmingCharacters(in: decoration)
+                return !bare.hasPrefix("ACTION:")
+            }
+            .joined(separator: "\n")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     // MARK: - Prompt construction
@@ -155,15 +230,51 @@ public actor LocalAgent {
         """
     }
 
-    private func generateThought(context: String, iteration: Int) async throws -> String {
+    /// Generate one thought. With `onConclusionToken` set, the thought streams
+    /// through a ConclusionStreamSplitter so a conclusion's tail reaches the
+    /// caller live; non-conclusion thoughts buffer silently.
+    private func generateThought(
+        context: String,
+        iteration: Int,
+        onConclusionToken: (@Sendable (String) -> Void)? = nil
+    ) async throws -> String {
+        let start = ContinuousClock.now
+        let thought = try await rawThought(
+            context: context, iteration: iteration, onConclusionToken: onConclusionToken
+        )
+        logThought(thought, iteration: iteration, start: start)
+        return thought
+    }
+
+    private func rawThought(
+        context: String,
+        iteration: Int,
+        onConclusionToken: (@Sendable (String) -> Void)?
+    ) async throws -> String {
         let prompt = context + "\n\nThought \(iteration + 1):"
-        let response = try await inferenceProvider.generate(prompt: prompt)
-        return response.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let onConclusionToken else {
+            let response = try await inferenceProvider.generate(prompt: prompt)
+            return response.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        var splitter = ConclusionStreamSplitter()
+        for await chunk in inferenceProvider.generateStreaming(prompt: prompt) {
+            let live = splitter.feed(chunk)
+            if !live.isEmpty {
+                onConclusionToken(live)
+            }
+        }
+        // Release the splitter's guard window now the stream is over.
+        let guarded = splitter.flush()
+        if !guarded.isEmpty {
+            onConclusionToken(guarded)
+        }
+        return splitter.thought.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     private func synthesizeConclusion(context: String) async throws -> String {
         let prompt = context + "\n\n\nYou have reached the maximum iterations. "
-            + "Based on the information gathered, provide your final conclusion:"
+            + "Based on the information gathered, answer the user directly in "
+            + "plain language. Do not write ACTION: and do not call tools:"
         return try await inferenceProvider.generate(prompt: prompt)
     }
 
@@ -177,6 +288,11 @@ public actor LocalAgent {
         }
     }
 
+    /// Characters small models wrap tool names/arguments in: markdown bold,
+    /// backticks, straight quotes — stripped so `**ACTION:** search("x")`
+    /// dispatches the same as the canonical form.
+    private static let decoration = CharacterSet(charactersIn: "*`\"'").union(.whitespaces)
+
     func parseAction(from thought: String) -> Action? {
         guard let actionRange = thought.range(of: "ACTION:\\s*", options: .regularExpression) else {
             return nil
@@ -186,17 +302,66 @@ public actor LocalAgent {
               let closeParen = actionString.lastIndex(of: ")")
         else { return nil }
 
-        let toolName = String(actionString[..<openParen]).trimmingCharacters(in: .whitespaces)
+        let toolName = String(actionString[..<openParen])
+            .trimmingCharacters(in: Self.decoration)
         let argument = String(actionString[actionString.index(after: openParen) ..< closeParen])
-            .trimmingCharacters(in: .whitespaces)
+            .trimmingCharacters(in: Self.decoration)
         guard !toolName.isEmpty else { return nil }
         return Action(toolName: toolName, argument: argument)
     }
 
-    private func executeTool(action: Action) async throws -> String {
-        guard let tool = tools[action.toolName] else {
-            throw AgentError.toolNotFound(action.toolName)
+    /// Resolve one parsed action to its observation: repeat-guard first, then
+    /// dispatch, with unknown tools steered back toward the real tool list.
+    private func observe(
+        action: Action,
+        iteration: Int,
+        executedActions: inout Set<String>,
+        usedTools: inout Set<String>,
+        onEvent: (@Sendable (AgentLoopEvent) -> Void)?
+    ) async -> String {
+        let start = ContinuousClock.now
+        let observation = await dispatch(
+            action: action,
+            executedActions: &executedActions,
+            usedTools: &usedTools,
+            onEvent: onEvent
+        )
+        logObservation(observation, action: action, iteration: iteration, start: start)
+        return observation
+    }
+
+    private func dispatch(
+        action: Action,
+        executedActions: inout Set<String>,
+        usedTools: inout Set<String>,
+        onEvent: (@Sendable (AgentLoopEvent) -> Void)?
+    ) async -> String {
+        if executedActions.contains(action.description) {
+            // Repeat-guard: small models loop on the same call. Steer to a
+            // DIFFERENT tool or a conclusion instead of re-executing.
+            return "You already ran \(action.description) — do not repeat it. "
+                + "Try a different tool if one fits, or use what you have and "
+                + "reply starting with \"CONCLUSION:\"."
         }
+        guard let tool = tools[action.toolName] else {
+            // Steer, don't just error: list what IS callable so the next
+            // thought can correct itself.
+            let available = tools.keys.sorted().joined(separator: ", ")
+            return "Error: unknown tool '\(action.toolName)'. "
+                + "Available tools: \(available.isEmpty ? "(none)" : available)."
+        }
+        onEvent?(.actionStarted(tool: action.toolName, argument: action.argument))
+        executedActions.insert(action.description)
+        do {
+            let output = try await executeTool(tool, action: action)
+            usedTools.insert(action.toolName)
+            return output
+        } catch {
+            return "Error executing \(action.toolName): \(error)"
+        }
+    }
+
+    private func executeTool(_ tool: any AgentTool, action: Action) async throws -> String {
         // First declared parameter receives the positional argument.
         let paramName = tool.parameters.first?.name ?? "input"
         let result = try await tool.execute(input: [paramName: action.argument])
@@ -208,5 +373,21 @@ public actor LocalAgent {
             return thought
         }
         return String(thought[range.upperBound...]).trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+}
+
+// MARK: - Prompt fragments
+
+extension LocalAgent {
+    /// Continuation block for a markerless thought: record it AND teach the
+    /// format — one nudge before implicit-conclusion can swallow the intent.
+    static func proseContinuation(for thought: String) -> String {
+        """
+
+
+        Thought: \(thought)
+        (Reminder: to use a tool, reply with exactly "ACTION: tool_name(argument)". \
+        To give your final answer, start with "CONCLUSION:".)
+        """
     }
 }

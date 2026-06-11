@@ -30,6 +30,46 @@ Naming note: the wired MLX *generation* model is `gemma-3-1b-qat-4bit` today; re
 
 ---
 
+## Update — 2026-06-10: Tool calling shipped (prompt-ReAct) → next: NATIVE tool calling per backend
+
+**Shipped (`feat/agent-tool-calls`, 2026-06-09/10):** every chat turn now runs the `LocalAgent`
+ReAct loop with real tools — `web_search` (DuckDuckGo, IA → lite fallback), `fetch_page`
+(readable-text extraction), `datetime`, `system_status`, `search_knowledge` — behind a privacy
+toggle (web tools not injected when off), with live activity labels, a deterministic
+`Web sources:` block, unified-logging diagnostics, and a fallback that synthesises from
+gathered observations when the model fumbles the conclusion format. Verified end-to-end
+on-device (Boston weather → real forecast links + sources).
+
+**The lesson from running it on two brains:** tool-calling reliability is **per-model dialect**.
+AFM (Mini) follows the ReAct text protocol; Gemma-3n (Big) announces tools in prose
+("I need to search the web") without emitting `ACTION:` — it was trained on its own native
+tool-call format, not ours. Mitigations shipped (format reminder, scaffolding-strip,
+repeat-guard, implicit-conclusion, observation-rescue fallback) make ReAct a *workable floor*
+on any model — but the ceiling is teaching each runtime its own dialect.
+
+**The native path is real on both wired runtimes (verified in source, 2026-06-10):**
+- **MLX:** our pinned `mlx-swift-lm` already accepts `ChatSession(model, instructions:,
+  tools: [ToolSpec])` — JSON tool specs injected via the model's own chat template. That's the
+  *input* half; the *output* half (parsing Gemma's ` ```tool_code` / tool-call blocks into
+  dispatchable calls) is ours to build, per model family.
+- **AFM:** the macOS 26 FoundationModels framework has a native `Tool` protocol —
+  `LanguageModelSession` can call Swift tools directly.
+
+**Why it matters for the product:** M1K3 must work on **any device, agnostic of memory/compute**
+— that's what the Mini/Lil/Big brain tiers are for. Tool calling has to scale the same way:
+**native dialect where the runtime supports it, prompt-ReAct as the universal fallback** for
+runtimes/models with no tool support (and as the proven baseline). One `AgentTool` definition,
+three projections: FoundationModels `Tool` (AFM), `ToolSpec` chat-template JSON (MLX),
+ReAct text list (floor).
+
+**Design sketch (Phase 12):** a capability refinement on the inference seam —
+`protocol ToolCallingProvider: InferenceProvider { func generate(prompt:, tools: [ToolDefinition])
+async throws -> ToolTurn }` where `ToolTurn` is `.text(String)` or `.toolCalls([ParsedToolCall])`.
+`LocalAgent` detects the capability: native loop (structured calls, no text parsing) when the
+active provider conforms, today's ReAct loop otherwise. Same `AgentTool` execution, same
+activity/logging/citation pipeline either way — the loop semantics (repeat-guard, iteration cap,
+observation rescue) are dialect-independent and stay shared.
+
 ## Architecture
 
 A new SwiftUI app `M1K3.app` (macOS 26), composed of focused local SwiftPM packages. Business logic lives in testable packages (TDD); the app target is a thin shell. Proven files are **vendored** from the internal prior projects into M1K3 packages (not cross-repo path deps — the prior knowledge-server project's core drags in Hummingbird/InternalServerKit we don't need), each carrying a MurphySig review documenting the port.
@@ -108,6 +148,12 @@ public protocol AgentTool: Sendable {
 
 MVP tools: `SearchKnowledgeTool`, `QueryGraphTool`, `GetDocumentTool`, `ListDocumentsTool` (all thin wrappers over `M1K3Knowledge`).
 
+*Update 2026-06-10:* shipped and wired into EVERY chat turn via `AgentRAGResponder`
+(retrieve-first grounding preserved, fallback to plain RAG). Tool set grew a self-contained
+`M1K3AgentTools` target: `WebSearchTool` (DDG), `FetchPageTool`, `DateTimeTool`,
+`SystemStatusTool` — web tools behind a Settings privacy toggle. Tool-call *dialect* is
+prompt-ReAct today; native per-backend dialects are Phase 12 (see the 2026-06-10 update).
+
 ### MCP server (so Claude can pull from M1K3)
 
 New `M1K3MCP` package using the official **`modelcontextprotocol/swift-sdk`**, stdio transport. Exposes the same knowledge-tools as MCP tools/resources: `search_knowledge`, `query_graph`, `get_document`, `list_documents`. Registers into Claude Desktop/Code via config. (PriorKnowledgeServer's existing `/v1/graph`, `/v1/documents`, `/v1/search` HTTP routes are the behavioural reference for what each tool returns.)
@@ -136,6 +182,12 @@ SwiftUI, macOS 26, native `.glassEffect` / `GlassEffectContainer` for the real L
 9. **Avatar** — RealityKit avatar, emotion states, amplitude lip-sync. *Verify:* avatar emotes + mouths the TTS.
 10. **Agent + MCP** — `LocalAgent` ReAct loop with tools (incl. calls/knowledge); `M1K3MCP` stdio server. *Verify:* agent answers a multi-step question using tools; Claude Code connects to the MCP server and pulls knowledge + call data.
 11. **GemmaAudio spike** (parallel, non-blocking; **investigated 2026-06-06** — see `scratch/gemma4-audio-spike/SPIKE.md`). Finding: Gemma 4 audio is **batch ≤30s, no streaming** → a **P7** tool, **not** the P6 mic button. Next: benchmark **Gemma 4 E4B batch** transcription + prompt-diarization vs WhisperKit+FluidAudio on a ≤30s clip; if WER + diarization DER hold, re-plan **Phase 7** around one model (challenger pass first). Prototype in an ISOLATED package (version-conflict risk with our pinned mlx-swift-lm). *Verify:* batch benchmark table — WER, diarization DER, transcribe+summarise-in-one-pass.
+12. **Native tool calling per backend** (the multi-model play — see the 2026-06-10 update). One `AgentTool` definition, projected into each runtime's native dialect; prompt-ReAct stays as the universal floor so M1K3 keeps working on any model on any device.
+    - **12a — seam:** `ToolCallingProvider` capability refinement (`generate(prompt:tools:) → ToolTurn`); `LocalAgent` branches native-vs-ReAct on capability, sharing the loop semantics (repeat-guard, cap, observation rescue, activity, logging).
+    - **12b — AFM adapter:** FoundationModels `Tool` protocol bridge for Mini (likely the cleanest: the framework executes Swift tools natively).
+    - **12c — MLX adapter:** `ChatSession(tools: [ToolSpec])` injection (input half, already supported at our pin) + a TESTED parser for Gemma's native tool-call output format (the half that's ours). Probe the mlx-swift-lm version question FIRST (manifest read — the 2.x/3.x WhisperKit clash rule applies).
+    - **12d — benchmark:** same tool-task set through native vs ReAct per brain tier (call-format compliance rate, latency, wasted iterations) — promote native per-backend only where it wins, exactly like the transcription seam.
+    - *Verify:* Big (Gemma) calls `web_search` natively on the weather question with zero format coaching; Mini does the same via FoundationModels tools; a no-tool-support model still answers via ReAct.
 
 ---
 
@@ -162,6 +214,7 @@ SwiftUI, macOS 26, native `.glassEffect` / `GlassEffectContainer` for the real L
 - **LiteRT on macOS/Swift is unproven** — no official Swift bindings; the C++ LiteRT-LM engine likely needs a C-shim or sidecar. De-risked by phasing it as a spike behind the protocol (MLX is the reliable Gemma path; LiteRT can fail without blocking the MVP).
 - **mlx-swift-lm LLM generation** — ✅ *de-risked at compile level* (2026-06-06). `MLXLLM` (`ChatSession` + `LLMModelFactory`) is wired in `MLXGemmaProvider` (default Gemma 3 1B QAT-4bit) and the app builds with it linked. ⏳ remaining: **first on-device generation** (download + stream). **Gemma 4 now exists** (shipped 2026-06-03 — see the Gemma 4 update at the top); the wired generation model is still `gemma-3-1b-qat-4bit`, with **Gemma 4 E4B as the upgrade target** (and the unification candidate for ASR + diarization + summary). **Two gotchas locked in:** (1) embeddings default to `.bge_small` not nomic — MLXEmbedders' nomic loader has a weight-key mismatch (the prior knowledge-server project's lesson); (2) `xcodebuild` needs `xcodebuild -downloadComponent MetalToolchain` once (`swift build` doesn't). The MLX backends live in one isolated **`M1K3MLX`** target (both embedder + provider), not the originally-sketched `M1K3Embeddings`.
 - **"Single model" for ASR — now real, pending benchmark (revised 2026-06-06).** Gemma 4 E2B/E4B do native audio ASR **+ diarization** on-device via MLX-Swift or LiteRT. The MVP still **ships on WhisperKit + Apple Speech** (proven, low-latency streaming today); Gemma 4 E4B is a **tracked spike behind the `TranscriptionProvider` seam**, not an MVP dependency. Promote it only if it beats WhisperKit on latency/accuracy (and its diarization holds for P7). Risk if we unify: one model gates ASR, chat, and calls — benchmark before betting the stack.
+- **Tool-call dialect is per-model (learned on-device 2026-06-10).** Prompt-ReAct works as the floor everywhere but compliance varies (AFM follows it; Gemma-3n announces tools in prose — mitigated with format reminders + observation-rescue fallback). Native dialects (Phase 12) raise the ceiling but add a per-backend parsing surface to own; the seam keeps ReAct as the fallback so no model is ever locked out. Benchmark before promoting, same doctrine as transcription.
 - **macOS 26-only** narrows the test surface to Tahoe machines — acceptable for a personal MVP, revisit before any wider release.
 - **Call recording legal/consent** — recording calls has consent obligations; the app must make recording explicit and consented (one of M1K3's privacy principles). Surface a clear recording indicator + consent gate.
 - **Placement** — assumes `m1k3/macos/`. If you'd rather it be its own repo, that's a one-line change to the scaffold.
