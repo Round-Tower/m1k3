@@ -13,16 +13,20 @@
 //  change without the caller re-wiring anything.
 //
 //  Signed: Kev + claude-sonnet-4-6, 2026-06-08, Confidence 0.85, Prior: Unknown
+//  Review: Kev + claude-fable-5, 2026-06-11 — stores + re-applies the word-timing
+//  callbacks on swap, same pattern as lifecycle. Confidence 0.9.
 
 import Foundation
 
-public final class SwappableSpeechProvider: SpeechProviderWithLifecycle, @unchecked Sendable {
+public final class SwappableSpeechProvider: SpeechProviderWithWordTiming, @unchecked Sendable {
     public let name = "swappable-speech"
 
     private let lock = NSLock()
     private var current: any SpeechProvider
     private var startedCallback: (@Sendable () -> Void)?
     private var endedCallback: (@Sendable () -> Void)?
+    private var timelineCallback: (@Sendable (SpokenWordTimeline) -> Void)?
+    private var wordCallback: (@Sendable (Range<Int>) -> Void)?
 
     public init(_ initial: any SpeechProvider) {
         current = initial
@@ -52,12 +56,27 @@ public final class SwappableSpeechProvider: SpeechProviderWithLifecycle, @unchec
         set { lock.withLock { endedCallback = newValue; applyCallbacksLocked() } }
     }
 
+    public var onTimelineReady: (@Sendable (SpokenWordTimeline) -> Void)? {
+        get { lock.withLock { timelineCallback } }
+        set { lock.withLock { timelineCallback = newValue; applyCallbacksLocked() } }
+    }
+
+    public var onWordSpoken: (@Sendable (Range<Int>) -> Void)? {
+        get { lock.withLock { wordCallback } }
+        set { lock.withLock { wordCallback = newValue; applyCallbacksLocked() } }
+    }
+
     /// Forward the stored callbacks onto the active provider if it reports
-    /// lifecycle. Caller must hold `lock`.
+    /// lifecycle (and word timing — a lifecycle-only tier simply never emits
+    /// timing, so the karaoke view stays inert there). Caller must hold `lock`.
     private func applyCallbacksLocked() {
         if let lifecycle = current as? SpeechProviderWithLifecycle {
             lifecycle.onSpeakingStarted = startedCallback
             lifecycle.onSpeakingEnded = endedCallback
+        }
+        if let timing = current as? SpeechProviderWithWordTiming {
+            timing.onTimelineReady = timelineCallback
+            timing.onWordSpoken = wordCallback
         }
     }
 

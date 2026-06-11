@@ -17,28 +17,42 @@
 //  Review: claude-opus-4-8, 2026-06-09 (PR #10) — stop() fires onSpeakingEnded once
 //  (was double-firing on interrupted playback); speak() now interrupts an in-flight
 //  utterance so a concurrent call can't leak play()'s continuation. Confidence 0.75.
+//  Review: Kev + claude-fable-5, 2026-06-11 — Apple path gains word timing via
+//  delegate↔buffer correlation in SynthBox (markers deliver nothing — probed);
+//  speak(_:) routes through the streaming session; finishPlayback() now stops
+//  the node (a drained player reads isPlaying forever — integration-test catch).
+//  Confidence 0.75.
 
 import AVFoundation
 import Foundation
 
-public final class EffectfulSpeechProvider: NSObject, SpeechProviderWithLifecycle, @unchecked Sendable {
+public final class EffectfulSpeechProvider: NSObject, SpeechProviderWithWordTiming, @unchecked Sendable {
     public let name = "m1k3-effect-voice"
 
-    private let chain: VoiceEffectChain
+    // `chain`/`player`/`configureEngineIfNeeded`/`streamingSession` are internal
+    // (not private) for EffectfulSpeechProvider+Streaming.swift — the chunked
+    // playback path lives there to keep this file inside the length budget.
+    let chain: VoiceEffectChain
     private let synthesizer = AVSpeechSynthesizer()
     private let engine = AVAudioEngine()
-    private let player = AVAudioPlayerNode()
+    let player = AVAudioPlayerNode()
     /// Used only when the effect/render path fails — M1K3 still speaks, just dry.
     private let plainFallback: AVSpeechProvider
 
     public var onSpeakingStarted: (@Sendable () -> Void)?
     public var onSpeakingEnded: (@Sendable () -> Void)?
+    /// Word-timing seam (SpeechProviderWithWordTiming): the utterance timeline as
+    /// soon as it is known (growing per chunk), and the word currently being heard.
+    public var onTimelineReady: (@Sendable (SpokenWordTimeline) -> Void)?
+    public var onWordSpoken: (@Sendable (Range<Int>) -> Void)?
 
     @MainActor private var engineConfigured = false
     @MainActor private var configuredSampleRate: Double = 0
     /// The in-flight playback wait, so `stop()` can resume it (the .dataPlayedBack
     /// completion is NOT delivered after player.stop(), which would otherwise hang).
     @MainActor private var playbackContinuation: CheckedContinuation<Void, Never>?
+    /// The in-flight chunked playback (speak(stream:)), so `stop()` can cancel it.
+    @MainActor var streamingSession: StreamingPlaybackSession?
 
     public init(chain: VoiceEffectChain = .m1k3Character, fallback: AVSpeechProvider = AVSpeechProvider()) {
         self.chain = chain
@@ -58,13 +72,24 @@ public final class EffectfulSpeechProvider: NSObject, SpeechProviderWithLifecycl
         // onSpeakingEnded before we start fresh.
         if await isSpeaking() { await stop() }
         do {
-            let (samples, sampleRate) = try await synthesizeToFloats(utterance)
+            let (samples, sampleRate, wordOnsets) = try await synthesizeToFloats(utterance)
             guard !samples.isEmpty, sampleRate > 0 else {
                 await plainSpeak(utterance)
                 return
             }
-            let processed = chain.process(samples, sampleRate: sampleRate)
-            try await play(processed, sampleRate: sampleRate)
+            // Word onsets recorded during the offline render (the delegate fires
+            // interleaved with buffer delivery — probe-verified; the marker-callback
+            // API delivers nothing on system voices) give the Apple path an exact
+            // timeline through the same streaming/clock machinery Kokoro uses.
+            let timeline = AppleWordTiming.timeline(
+                text: utterance.text,
+                onsets: wordOnsets,
+                totalSamples: samples.count,
+                sampleRate: sampleRate
+            )
+            let chunk = TimedPCMChunk(samples: samples, timeline: timeline)
+            let spoke = await speak(stream: .single(chunk), sampleRate: sampleRate)
+            if !spoke { await plainSpeak(utterance) }
         } catch {
             await plainSpeak(utterance)
         }
@@ -96,28 +121,34 @@ public final class EffectfulSpeechProvider: NSObject, SpeechProviderWithLifecycl
             player.stop()
             _ = synthesizer.stopSpeaking(at: .immediate)
             // Resume any playback wait — .dataPlayedBack won't fire after stop().
-            let had = playbackContinuation != nil
+            let had = playbackContinuation != nil || streamingSession != nil
+            streamingSession?.cancel()
+            streamingSession = nil
             finishPlayback()
             return had
         }
         await plainFallback.stop()
-        // When we cancelled active effectful playback, finishPlayback() resumes the
-        // continuation inside play(), which fires onSpeakingEnded as it unwinds — so
-        // fire here only when there was no playback to resume (cancelled mid-synthesis),
-        // otherwise the avatar gets a spurious second "ended" event.
+        // When we cancelled active effectful playback, finishPlayback() (or the
+        // session cancel) resumes the wait inside play()/speak(stream:), which fires
+        // onSpeakingEnded as it unwinds — so fire here only when there was no
+        // playback to resume (cancelled mid-synthesis), otherwise the avatar gets a
+        // spurious second "ended" event.
         if wasActive, !hadPlayback { await MainActor.run { onSpeakingEnded?() } }
     }
 
     public func isSpeaking() async -> Bool {
-        await MainActor.run { player.isPlaying || synthesizer.isSpeaking }
+        // A live streaming session counts even before its first buffer is scheduled
+        // (chunk 1 still synthesizing) and between buffers during a dry gap.
+        await MainActor.run { player.isPlaying || synthesizer.isSpeaking || streamingSession != nil }
     }
 
     // MARK: - Synthesis → PCM
 
     // @MainActor: AVSpeechSynthesizer.write must be invoked on the main thread
     // (same contract as .speak), and building `spoken` here keeps it main-isolated.
-    /// Mono PCM samples + their sample rate.
-    private typealias PCM = ([Float], Double)
+    /// Mono PCM samples + their sample rate + word onsets (text range, sample offset)
+    /// recorded from the willSpeakRange delegate during the offline render.
+    private typealias PCM = ([Float], Double, [WordOnset])
 
     @MainActor
     private func synthesizeToFloats(_ utterance: SpeechUtterance) async throws -> PCM {
@@ -131,6 +162,7 @@ public final class EffectfulSpeechProvider: NSObject, SpeechProviderWithLifecycl
         }
 
         let box = SynthBox()
+        synthesizer.delegate = box // weak; the write callbacks keep `box` alive
         return try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<PCM, Error>) in
             box.onDone = { continuation.resume(with: $0) }
             synthesizer.write(spoken) { buffer in
@@ -179,15 +211,18 @@ public final class EffectfulSpeechProvider: NSObject, SpeechProviderWithLifecycl
     }
 
     /// Resume the playback wait exactly once — from either the .dataPlayedBack
-    /// completion (normal end) or stop() (cancelled).
+    /// completion (normal end) or stop() (cancelled). Halts the node either way:
+    /// a drained AVAudioPlayerNode keeps "playing" forever otherwise, leaving
+    /// isSpeaking() stuck true after the utterance.
     @MainActor
     private func finishPlayback() {
+        player.stop()
         playbackContinuation?.resume()
         playbackContinuation = nil
     }
 
     @MainActor
-    private func configureEngineIfNeeded(format: AVAudioFormat) throws {
+    func configureEngineIfNeeded(format: AVAudioFormat) throws {
         // Reconnect when the sample rate changes (e.g. a different system voice) —
         // scheduling a buffer whose format mismatches the connection asserts.
         if engineConfigured, configuredSampleRate == format.sampleRate { return }
@@ -216,20 +251,45 @@ enum EffectfulSpeechError: Error {
     case bufferAllocationFailed
 }
 
+/// A word onset captured during the offline render: where the word sits in the
+/// utterance text (UTF-16, from the delegate's NSRange) and how many samples had
+/// been rendered when the synthesizer announced it — i.e. the word's start offset.
+struct WordOnset: Equatable {
+    let textRange: Range<Int>
+    let sampleOffset: Int
+}
+
 /// Accumulates the synthesizer's PCM chunks (float / int16 / int32) into one mono
 /// Float buffer and resumes exactly once when the final (empty) buffer arrives.
+/// Also records `willSpeakRangeOfSpeechString` onsets against the samples rendered
+/// so far — the delegate interleaves with buffer delivery during `write`
+/// (probe-verified), which is how the Apple path gets word timing (the
+/// marker-callback API delivers nothing on system voices).
 ///
 /// `@unchecked Sendable` safety: `onDone` is written once on the main actor (inside
 /// `synthesizeToFloats`) *before* `synthesizer.write` can deliver any callback, so
-/// that write happens-before every read in `finish()`. `samples`/`sampleRate`/`done`
-/// are all `lock`-guarded, and the `done` flag guarantees `finish()` resumes the
-/// continuation at most once even though `write` callbacks arrive on a background thread.
-private final class SynthBox: @unchecked Sendable {
+/// that write happens-before every read in `finish()`. `samples`/`sampleRate`/`done`/
+/// `wordOnsets` are all `lock`-guarded, and the `done` flag guarantees `finish()`
+/// resumes the continuation at most once even though `write` callbacks arrive on a
+/// background thread.
+private final class SynthBox: NSObject, AVSpeechSynthesizerDelegate, @unchecked Sendable {
     private let lock = NSLock()
     private var samples: [Float] = []
     private var sampleRate: Double = 0
     private var done = false
-    var onDone: ((Result<([Float], Double), Error>) -> Void)?
+    private var wordOnsets: [WordOnset] = []
+    var onDone: ((Result<([Float], Double, [WordOnset]), Error>) -> Void)?
+
+    func speechSynthesizer(
+        _: AVSpeechSynthesizer,
+        willSpeakRangeOfSpeechString characterRange: NSRange,
+        utterance _: AVSpeechUtterance
+    ) {
+        lock.withLock {
+            let range = characterRange.location ..< characterRange.location + characterRange.length
+            wordOnsets.append(WordOnset(textRange: range, sampleOffset: samples.count))
+        }
+    }
 
     func ingest(_ buffer: AVAudioBuffer) {
         guard let pcm = buffer as? AVAudioPCMBuffer else { return }
@@ -259,10 +319,10 @@ private final class SynthBox: @unchecked Sendable {
     }
 
     private func finish() {
-        let payload: ([Float], Double)? = lock.withLock {
+        let payload: ([Float], Double, [WordOnset])? = lock.withLock {
             guard !done else { return nil }
             done = true
-            return (samples, sampleRate)
+            return (samples, sampleRate, wordOnsets)
         }
         guard let payload else { return }
         onDone?(.success(payload))
