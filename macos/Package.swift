@@ -134,7 +134,12 @@ let package = Package(
         // M1K3Agent for the always-on tool-calling responder (AgentRAGResponder).
         .target(
             name: "M1K3Chat",
-            dependencies: ["M1K3Knowledge", "M1K3Inference", "M1K3Agent"],
+            dependencies: [
+                "M1K3Knowledge", "M1K3Inference", "M1K3Agent",
+                // Multi-conversation chat history (GRDBChatHistoryStore) —
+                // M1K3Knowledge already links GRDB, so zero new build weight.
+                .product(name: "GRDB", package: "GRDB.swift"),
+            ],
             path: "Sources/M1K3Chat"
         ),
         .testTarget(

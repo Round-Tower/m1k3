@@ -160,14 +160,41 @@ public final class ChatSession {
     public private(set) var messages: [ChatMessage] = []
     public private(set) var isResponding = false
 
-    private let responder: any RAGResponding
-    private let transcript: ChatTranscriptStore?
+    /// The conversation the transcript belongs to. Rows are created LAZILY —
+    /// only `send` writes — so empty conversations never reach the store.
+    public private(set) var activeConversationID = UUID()
+    /// nil until auto-titled (UI shows "New chat").
+    public private(set) var activeTitle: String?
+    /// Bumped on every persist/title/delete — the history drawer reads this
+    /// observable counter to re-fetch summaries (the CallsView callCount trick).
+    public private(set) var historyRevision = 0
 
-    public init(responder: any RAGResponding, transcript: ChatTranscriptStore? = nil) {
+    private let responder: any RAGResponding
+    /// Internal (not private): ChatSession+Conversations.swift is a cross-file
+    /// same-module extension and needs the seams.
+    let history: (any ChatHistoryPersisting)?
+    let titler: (any ConversationTitling)?
+    /// Test hook — `await titlingTask?.value` makes fire-and-forget titling
+    /// deterministic in tests.
+    private(set) var titlingTask: Task<Void, Never>?
+
+    public init(
+        responder: any RAGResponding,
+        history: (any ChatHistoryPersisting)? = nil,
+        titler: (any ConversationTitling)? = nil
+    ) {
         self.responder = responder
-        self.transcript = transcript
-        if let transcript {
-            messages = transcript.load()
+        self.history = history
+        self.titler = titler
+        // Relaunch restores the most recent conversation — the same feel the
+        // single-transcript file gave, now one of many.
+        if let history,
+           let recent = try? history.list().first,
+           let restored = try? history.loadMessages(id: recent.id)
+        {
+            messages = restored
+            activeConversationID = recent.id
+            activeTitle = recent.title
         }
     }
 
@@ -248,13 +275,52 @@ public final class ChatSession {
                 }
             }
         }
-        transcript?.save(messages)
+        persistActiveConversation()
+        scheduleTitlingIfNeeded(question: trimmed)
     }
 
-    /// Clear the transcript (and its persisted file).
-    public func clear() {
-        messages = []
-        transcript?.save([])
+    /// Save the live transcript to the active conversation's row and tell the
+    /// drawer to refresh. Lazy row creation happens here — nowhere else writes.
+    func persistActiveConversation() {
+        guard let history else { return }
+        try? history.save(id: activeConversationID, messages: messages, updatedAt: Date())
+        historyRevision += 1
+    }
+
+    /// The one mutation point ChatSession+Conversations routes through —
+    /// private(set) setters are file-scoped, so the cross-file extension
+    /// cannot (and must not) touch the stored properties directly.
+    func setActiveConversation(id: UUID, messages: [ChatMessage], title: String?) {
+        self.messages = messages
+        activeConversationID = id
+        activeTitle = title
+    }
+
+    func noteHistoryChanged() {
+        historyRevision += 1
+    }
+
+    /// Fire-and-forget auto-titling after a successful exchange of an untitled
+    /// conversation. Never blocks send; failure or garbage output just means
+    /// "retry after the next exchange". The conversation id is captured at
+    /// spawn so a title resolving after a switch/new lands on the RIGHT row.
+    private func scheduleTitlingIfNeeded(question: String) {
+        guard let history, let titler, activeTitle == nil, titlingTask == nil else { return }
+        guard let answer = messages.last, answer.role == .assistant,
+              case .complete = answer.status, !answer.text.isEmpty else { return }
+        let conversationID = activeConversationID
+        let answerText = answer.text
+        titlingTask = Task { [weak self] in
+            defer { self?.titlingTask = nil }
+            guard let raw = try? await titler.title(forUser: question, assistant: answerText),
+                  let title = TitleSanitizer.sanitize(raw) else { return }
+            try? history.setTitle(id: conversationID, title: title)
+            guard let self else { return }
+            if self.activeConversationID == conversationID {
+                self.activeTitle = title
+            }
+            self.historyRevision += 1
+        }
     }
 
     /// Fold a streamed chunk into the accumulated answer. A chunk that extends

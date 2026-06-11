@@ -2,11 +2,15 @@
 //  ChatTranscriptStoreTests.swift
 //  M1K3ChatTests
 //
-//  Persisting the transcript so a relaunch doesn't lose the conversation. The
-//  store is pure file I/O over Codable messages; ChatSession loads on init and
-//  saves after each turn.
+//  The LEGACY single-transcript JSON store — now migration-only input for
+//  TranscriptMigrator (ChatSession persists via ChatHistoryPersisting since
+//  the multi-conversation refactor). Load/save round-trips stay pinned
+//  because the migrator decodes through this exact type.
 //
 //  Signed: Kev + claude-opus-4-8, 2026-06-06, Confidence 0.85, Prior: Unknown
+//  Review: Kev + claude-fable-5, 2026-06-11 — ChatSession integration test
+//  superseded by ChatSessionConversationsTests (session no longer takes a
+//  transcript store); file round-trip tests unchanged.
 
 import Foundation
 @testable import M1K3Chat
@@ -55,33 +59,5 @@ struct ChatTranscriptStoreTests {
     func loadMissing() {
         let store = ChatTranscriptStore(url: tempURL())
         #expect(store.load().isEmpty)
-    }
-
-    @Test("ChatSession loads prior history on init and appends to it")
-    func sessionLoadsHistory() async {
-        let url = tempURL()
-        defer { try? FileManager.default.removeItem(at: url) }
-        let store = ChatTranscriptStore(url: url)
-        store.save([ChatMessage(role: .user, text: "earlier", status: .complete)])
-
-        let responder = StubResponder()
-        let session = ChatSession(responder: responder, transcript: store)
-        #expect(session.messages.count == 1) // loaded the prior turn
-
-        await session.send("now")
-        #expect(session.messages.count == 3) // earlier + user + assistant
-
-        // A fresh session reading the same file sees the persisted transcript.
-        let reloaded = ChatSession(responder: responder, transcript: store)
-        #expect(reloaded.messages.count == 3)
-        #expect(reloaded.messages.first?.text == "earlier")
-    }
-}
-
-private struct StubResponder: RAGResponding {
-    func answerStreaming(
-        _: String
-    ) async throws -> (sources: [ChunkHit], stream: AsyncStream<String>) {
-        ([], AsyncStream { $0.yield("ok"); $0.finish() })
     }
 }
