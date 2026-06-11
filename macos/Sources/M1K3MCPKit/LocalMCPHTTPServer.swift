@@ -31,13 +31,21 @@ public actor LocalMCPHTTPServer {
 
     private let port: UInt16
     private let makeSession: SessionFactory
+    /// Called when the server stops itself (session rebuild failed) — the
+    /// host UI uses it to show an honest status instead of a stale "Running".
+    private let onAbnormalStop: (@Sendable (String) -> Void)?
     private var listener: NWListener?
     private var session: (server: Server, transport: StatelessHTTPServerTransport)?
 
     public private(set) var isRunning = false
 
-    public init(port: UInt16, makeSession: @escaping SessionFactory) {
+    public init(
+        port: UInt16,
+        onAbnormalStop: (@Sendable (String) -> Void)? = nil,
+        makeSession: @escaping SessionFactory
+    ) {
         self.port = port
+        self.onAbnormalStop = onAbnormalStop
         self.makeSession = makeSession
     }
 
@@ -102,7 +110,15 @@ public actor LocalMCPHTTPServer {
                 await session.transport.disconnect()
             }
             session = nil
-            session = try? await makeSession()
+            do {
+                session = try await makeSession()
+            } catch {
+                // A factory throw must not leave a zombie listener returning
+                // 500s while claiming to run — stop honestly and tell the host.
+                await stop()
+                onAbnormalStop?("MCP session rebuild failed: \(error)")
+                return .error(statusCode: 500, MCPError.internalError("MCP session rebuild failed"))
+            }
         }
         guard let transport = session?.transport else {
             return .error(statusCode: 500, MCPError.internalError("MCP session unavailable"))

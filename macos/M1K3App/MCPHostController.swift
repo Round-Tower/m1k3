@@ -43,12 +43,14 @@ final class MCPHostController {
         return UInt16(stored)
     }
 
-    var isEnabled: Bool {
-        UserDefaults.standard.bool(forKey: Self.enabledKey)
-    }
+    /// Stored (not computed off UserDefaults) so @Observable actually tracks
+    /// it — the Settings Toggle re-renders on this, not by coincidence of
+    /// isRunning changing nearby.
+    private(set) var isEnabled: Bool
 
     init(environment: AppEnvironment) {
         env = environment
+        isEnabled = UserDefaults.standard.bool(forKey: Self.enabledKey)
     }
 
     func startIfEnabled() {
@@ -57,6 +59,7 @@ final class MCPHostController {
     }
 
     func setEnabled(_ enabled: Bool) {
+        isEnabled = enabled
         UserDefaults.standard.set(enabled, forKey: Self.enabledKey)
         Task { enabled ? await start() : await stop() }
     }
@@ -66,7 +69,16 @@ final class MCPHostController {
         let registry = MCPToolRegistry(
             makeKnowledgeToolDefinitions(store: env.store) + makeVoiceToolDefinitions(handlers: makeVoiceHandlers())
         )
-        let host = LocalMCPHTTPServer(port: port) {
+        let host = LocalMCPHTTPServer(
+            port: port,
+            onAbnormalStop: { [weak self] reason in
+                Task { @MainActor [weak self] in
+                    self?.server = nil
+                    self?.isRunning = false
+                    self?.statusText = "Stopped: \(reason)"
+                }
+            }
+        ) {
             let transport = StatelessHTTPServerTransport()
             let mcpServer = await makeM1K3Server(registry: registry)
             try await mcpServer.start(transport: transport)
@@ -170,7 +182,16 @@ final class MCPHostController {
                 }
             }
         }
+        // Bound the drain itself: stopListening() SHOULD end the stream, but a
+        // misbehaving provider must not hang the MCP call forever (and leak
+        // the listening avatar state). AsyncStream iteration honours task
+        // cancellation, so cancelling the consumer ends the for-await.
+        let drainDeadline = Task { @MainActor in
+            try? await Task.sleep(for: .seconds(timeout + 5))
+            consumer.cancel()
+        }
         let text = await consumer.value
+        drainDeadline.cancel()
         session.finished = true
         watchdog.cancel()
         return text.trimmingCharacters(in: .whitespacesAndNewlines)

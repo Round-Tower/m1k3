@@ -41,6 +41,30 @@ private func post(_ json: String, port: UInt16) async throws -> (status: Int, bo
     return (status, String(decoding: data, as: UTF8.self))
 }
 
+private final class Counter: @unchecked Sendable {
+    private let lock = NSLock()
+    private var count = 0
+
+    var value: Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return count
+    }
+
+    func increment() {
+        lock.lock()
+        count += 1
+        lock.unlock()
+    }
+
+    func incrementAndGet() -> Int {
+        lock.lock()
+        defer { lock.unlock() }
+        count += 1
+        return count
+    }
+}
+
 private let initializeBody = #"""
 {"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"wire-test","version":"0"}}}
 """#
@@ -77,6 +101,36 @@ struct LocalMCPHTTPServerTests {
         await server.stop()
         let stopped = await server.isRunning
         #expect(!stopped)
+    }
+
+    @Test("a session-rebuild failure stops the server honestly instead of zombie 500s")
+    func rebuildFailureStopsServer() async throws {
+        let port = UInt16.random(in: 52000 ... 59000)
+        let attempts = Counter()
+        let stopped = Counter()
+        let server = LocalMCPHTTPServer(
+            port: port,
+            onAbnormalStop: { _ in stopped.increment() }
+        ) {
+            if attempts.incrementAndGet() > 1 { throw MCPVoiceError("factory down") }
+            let transport = StatelessHTTPServerTransport()
+            let registry = MCPToolRegistry([])
+            let mcpServer = await makeM1K3Server(registry: registry)
+            try await mcpServer.start(transport: transport)
+            return (mcpServer, transport)
+        }
+        try await server.start()
+        try await Task.sleep(for: .milliseconds(200))
+
+        _ = try await post(initializeBody, port: port)
+        // Second initialize → factory throws → server must stop, not zombie.
+        let failed = try? await post(initializeBody, port: port)
+        if let failed { #expect(failed.status == 500) } // connection may also just close
+
+        try await Task.sleep(for: .milliseconds(100))
+        let running = await server.isRunning
+        #expect(!running)
+        #expect(stopped.value == 1)
     }
 
     @Test("tool calls dispatch through the live stack")
