@@ -22,6 +22,7 @@ import Foundation
 import M1K3Avatar
 import M1K3MCPKit
 import M1K3Voice
+import MCP // StatelessHTTPServerTransport (the SDK type the session factory builds)
 import Observation
 
 @MainActor

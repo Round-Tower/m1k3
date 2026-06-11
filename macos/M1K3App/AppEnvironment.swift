@@ -115,7 +115,8 @@ final class AppEnvironment {
     /// recogniser seam (LocalAgent+Logging precedent).
     let transcription: TranscriptionRouter
     private let whisperKit: WhisperKitProvider
-    private var dictationProvider: (any TranscriptionProvider)?, dictationTask: Task<Void, Never>?
+    private var dictationProvider: (any TranscriptionProvider)?
+    private var dictationTask: Task<Void, Never>?
     /// Batch (file → segments) transcription for recorded calls. Closes the mic
     /// path: a stopped recording runs through the SAME CallIntelligencePipeline the
     /// import path proves. Opt-in (needs a model) like live WhisperKit.
@@ -152,8 +153,10 @@ final class AppEnvironment {
     /// Set once at init tail (needs self for the handler closures).
     private(set) var mcpHost: MCPHostController!
 
-    private static let embedderPrefersMLXKey = "embedder.prefersMLX"
-    static let selectedBrainKey = "selectedBrain"
+    /// Statics merged onto shared lines where sensible: the class body rides the
+    /// type_body_length ceiling, and @Observable ignores statics (unlike stored
+    /// instance vars, which CANNOT share a declaration line under the macro).
+    private static let embedderPrefersMLXKey = "embedder.prefersMLX"; static let selectedBrainKey = "selectedBrain"
     /// Whether the user has completed brain selection — gates the onboarding flow.
     static let hasChosenBrainKey = "hasChosenBrain"
     static let selectedVoiceTierKey = "selectedVoiceTier"

@@ -32,6 +32,9 @@ let package = Package(
         .library(name: "M1K3Calls", targets: ["M1K3Calls"]),
         .library(name: "M1K3Avatar", targets: ["M1K3Avatar"]),
         .library(name: "M1K3Kokoro", targets: ["M1K3Kokoro"]),
+        // Exported for the app's in-process MCP host (the stdio executable
+        // reaches the target directly; the app needs the product).
+        .library(name: "M1K3MCPKit", targets: ["M1K3MCPKit"]),
     ],
     dependencies: [
         .package(url: "https://github.com/groue/GRDB.swift.git", from: "7.0.0"),
