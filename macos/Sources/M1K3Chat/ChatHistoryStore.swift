@@ -60,12 +60,12 @@ public final class GRDBChatHistoryStore: ChatHistoryPersisting, @unchecked Senda
     private func migrate() throws {
         var migrator = DatabaseMigrator()
         migrator.registerMigration("v1") { db in
-            try db.create(table: "conversations") { t in
-                t.column("id", .text).primaryKey()
-                t.column("title", .text) // NULL until auto-titled
-                t.column("created_at", .double).notNull()
-                t.column("updated_at", .double).notNull().indexed()
-                t.column("payload", .blob).notNull() // JSONEncoder([ChatMessage])
+            try db.create(table: "conversations") { table in
+                table.column("id", .text).primaryKey()
+                table.column("title", .text) // NULL until auto-titled
+                table.column("created_at", .double).notNull()
+                table.column("updated_at", .double).notNull().indexed()
+                table.column("payload", .blob).notNull() // JSONEncoder([ChatMessage])
             }
         }
         try migrator.migrate(dbQueue)

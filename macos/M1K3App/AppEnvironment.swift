@@ -725,21 +725,6 @@ extension AppEnvironment {
         }
     }
 
-    /// Build the conversation store and run the one-shot legacy-transcript
-    /// migration BEFORE ChatSession init reads it (resume-most-recent must see
-    /// the import). nil on store failure → chat degrades to non-persistent,
-    /// exactly like the old optional transcript.
-    static func makeChatHistoryStore(in dir: URL) -> (any ChatHistoryPersisting)? {
-        guard let store = try? GRDBChatHistoryStore(
-            path: dir.appendingPathComponent("chat-history.sqlite").path
-        ) else { return nil }
-        try? TranscriptMigrator.migrateIfNeeded(
-            legacyURL: dir.appendingPathComponent("transcript.json"),
-            into: store
-        )
-        return store
-    }
-
     static func storeURL() throws -> URL {
         let fileManager = FileManager.default
         let base = try fileManager.url(
