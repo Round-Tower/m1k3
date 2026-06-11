@@ -21,6 +21,11 @@ extension AppEnvironment {
     /// Transient flag consulted by thinkingModeProvider (Auto → fast in voice mode).
     nonisolated static let voiceModeActiveKey = "voiceMode.active"
 
+    /// Persisted voice-mode avatar choice. Empty string (default) = the pixel face;
+    /// otherwise a CompanionSpec id (e.g. "Fox"). The picker writes it; VoiceModeView
+    /// reads it. The pixel face stays M1K3's default everywhere else.
+    nonisolated static let voiceCompanionKey = "voiceMode.companion"
+
     /// One-time wiring (from init): speech lifecycle drives the avatar's speaking
     /// state, and the word-timing callbacks feed the karaoke highlight. Lives here
     /// (with speak/stopSpeaking) so the swap façade re-applies everything onto

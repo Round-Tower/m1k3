@@ -28,7 +28,12 @@ public enum FaceExpression {
             eyeIntensity(col: col, row: row, state: state, time: time),
             mouthIntensity(col: col, row: row, state: state, time: time)
         )
-        let base = max(background, feature)
+        var base = max(background, feature)
+        // While erroring, rows the glitch tear is shearing also glow — the whole
+        // band reads as a corrupted scanline, not just a positional wobble.
+        if columnShift(row: row, state: state, time: time) != 0 {
+            base = max(base, 0.3)
+        }
         // ~7 Hz reads as live LED shimmer while staying smooth at the 30 fps the
         // view renders (faster would alias into a slow wobble).
         let flicker = 1 + 0.06 * Float(sin(time * 7 + cellPhase(col: col, row: row)))
@@ -79,12 +84,23 @@ public enum FaceExpression {
             return onArc ? 1 : 0
         }
 
-        // Round pupil, drifting up + side-to-side while thinking.
+        // Surprised: wide eyes — a plus-shape around the anchor instead of a
+        // single pupil cell.
+        if state.emotion == .surprised {
+            let onPlus = (col == anchor.col && abs(row - anchor.row) <= 1)
+                || (row == anchor.row && abs(col - anchor.col) <= 1)
+            return onPlus ? 1 : 0
+        }
+
+        // Round pupil, drifting up + side-to-side while thinking, with occasional
+        // sideways saccades while idle so the resting face keeps looking around.
         var pupilCol = anchor.col
         var pupilRow = anchor.row
         if state.activity == .thinking {
             pupilRow -= 1
             pupilCol += Int(sin(time * 1.3).rounded()) // -1 / 0 / +1
+        } else if state.activity == .idle {
+            pupilCol += saccadeOffset(time: time)
         }
         return (col == pupilCol && row == pupilRow) ? 1 : 0
     }
@@ -93,6 +109,32 @@ public enum FaceExpression {
     private static func isBlinking(time: Double) -> Bool {
         let phase = time.truncatingRemainder(dividingBy: 3.5)
         return phase >= 0 && phase < 0.14
+    }
+
+    /// Idle saccade: every 5.3 s the pupils dart one cell sideways for half a
+    /// second (phase 2.0..<2.5), alternating direction each cycle. The 5.3 s
+    /// period is incommensurate with the 3.5 s blink, so the two never lock step.
+    private static func saccadeOffset(time: Double) -> Int {
+        let period = 5.3
+        let phase = time.truncatingRemainder(dividingBy: period)
+        guard phase >= 2.0, phase < 2.5 else { return 0 }
+        let cycle = Int((time / period).rounded(.down))
+        return cycle.isMultiple(of: 2) ? 1 : -1
+    }
+
+    // MARK: - Glitch (error)
+
+    /// Horizontal CRT-style tear while erroring: a band sweeps down the matrix
+    /// (~0.9 s per pass) and rows inside it shear sideways. Returned in CELL
+    /// units (the renderer multiplies by its spacing); zero outside `.error`.
+    public static func columnShift(row: Int, state: AvatarState, time: Double) -> Float {
+        guard state.activity == .error else { return 0 }
+        let sweep = 0.9
+        let phase = time.truncatingRemainder(dividingBy: sweep) / sweep
+        let tearRow = Int(phase * Double(FaceGrid.rows))
+        if row == tearRow { return 0.55 }
+        if row == tearRow + 1 { return -0.35 }
+        return 0
     }
 
     // MARK: - Mouth
@@ -106,6 +148,13 @@ public enum FaceExpression {
     /// plus extra rows below while speaking, so the mouth visibly opens.
     private static func mouthRows(col: Int, state: AvatarState, time: Double) -> Set<Int> {
         let distance = abs(col - FaceGrid.centreCol)
+
+        // Surprised: a small O — two rows tall, three columns wide, even at rest.
+        // Speaking falls through so the talk animation still wins.
+        if state.emotion == .surprised, state.activity != .speaking {
+            return distance <= 1 ? [FaceGrid.mouthRow, FaceGrid.mouthRow + 1] : []
+        }
+
         // +1 smile (ends rise), -1 frown (ends fall), 0 flat.
         let curl = curlSign(for: state.emotion)
         let curveRow = FaceGrid.mouthRow - curl * (distance / 2)

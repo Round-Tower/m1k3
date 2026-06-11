@@ -21,10 +21,12 @@ import SwiftUI
 
 struct VoiceModeView: View {
     @Environment(AppEnvironment.self) private var env
+    /// Persisted voice-mode avatar: "" (default) = the pixel face, else a companion id.
+    @AppStorage(AppEnvironment.voiceCompanionKey) private var voiceCompanion = ""
 
     var body: some View {
         VStack(spacing: 12) {
-            AvatarView(controller: env.avatar)
+            avatar
                 .frame(maxWidth: 420, maxHeight: 260)
                 .padding(.top, 12)
 
@@ -48,6 +50,20 @@ struct VoiceModeView: View {
         }
         .onChange(of: env.chat.messages.last?.text) {
             bumpToGeneratingIfStreaming()
+        }
+    }
+
+    // MARK: - Avatar (pixel face by default; opt-in companion)
+
+    /// The voice-mode hero: the pixel face unless the user opted into a companion
+    /// that's actually installed. An unknown or uninstalled id falls back to the
+    /// pixel face, so a stale setting can never blank the hero.
+    @ViewBuilder
+    private var avatar: some View {
+        if let companion = CompanionSpec.named(voiceCompanion), CompanionAssets.isInstalled(companion) {
+            CompanionAvatarView(controller: env.avatar, companion: companion)
+        } else {
+            AvatarView(controller: env.avatar)
         }
     }
 

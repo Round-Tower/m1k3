@@ -87,6 +87,73 @@ struct FaceExpressionTests {
         }
     }
 
+    @Test("idle eyes saccade — the pupil darts sideways during the dart window")
+    func idleSaccade() {
+        // Saccade cycle is 5.3s with the dart at phase 2.0..<2.5. Phase 2.2 of
+        // cycle 0 (t=2.2) darts right; the same phase in cycle 1 (t=7.5) darts
+        // left. Both times sit outside the 3.5s blink window.
+        let home = FaceGrid.leftEye
+        let resting = FaceExpression.intensity(col: home.col, row: home.row, state: neutral(), time: openTime)
+        #expect(resting > 0.5)
+
+        let dartedRight = FaceExpression.intensity(col: home.col + 1, row: home.row, state: neutral(), time: 2.2)
+        let homeDuringDart = FaceExpression.intensity(col: home.col, row: home.row, state: neutral(), time: 2.2)
+        #expect(dartedRight > 0.5)
+        #expect(homeDuringDart < 0.5)
+
+        let dartedLeft = FaceExpression.intensity(col: home.col - 1, row: home.row, state: neutral(), time: 7.5)
+        #expect(dartedLeft > 0.5)
+    }
+
+    @Test("surprised widens the eyes beyond a single pupil cell")
+    func surprisedWidensEyes() {
+        let surprised = AvatarState(emotion: .surprised, activity: .idle)
+        let anchor = FaceGrid.leftEye
+        // The plus-shape lights the anchor AND its vertical neighbours.
+        for row in (anchor.row - 1) ... (anchor.row + 1) {
+            let value = FaceExpression.intensity(col: anchor.col, row: row, state: surprised, time: openTime)
+            #expect(value > 0.5, "expected wide-eye cell lit at row \(row)")
+        }
+    }
+
+    @Test("surprised opens the mouth into an O even while idle")
+    func surprisedOpensMouth() {
+        let surprised = AvatarState(emotion: .surprised, activity: .idle)
+        let centre = FaceGrid.centreCol
+        #expect(litMouthCellCount(col: centre, state: surprised, time: openTime) > 1)
+        // The O is narrow — the outer mouth columns stay dark.
+        #expect(litMouthRow(col: FaceGrid.mouthCols.lowerBound, state: surprised, time: openTime) == nil)
+    }
+
+    @Test("columnShift is zero unless erroring, nonzero somewhere during error")
+    func glitchColumnShift() {
+        for time in stride(from: 0.0, through: 2.0, by: 0.07) {
+            for row in 0 ..< FaceGrid.rows {
+                #expect(FaceExpression.columnShift(row: row, state: neutral(), time: time) == 0)
+            }
+        }
+        let error = AvatarState.error
+        let anyShift = stride(from: 0.0, through: 2.0, by: 0.07).contains { time in
+            (0 ..< FaceGrid.rows).contains { row in
+                FaceExpression.columnShift(row: row, state: error, time: time) != 0
+            }
+        }
+        #expect(anyShift)
+    }
+
+    @Test("columnShift is deterministic and bounded")
+    func glitchShiftBounded() {
+        let error = AvatarState.error
+        for time in stride(from: 0.0, through: 2.0, by: 0.07) {
+            for row in 0 ..< FaceGrid.rows {
+                let a = FaceExpression.columnShift(row: row, state: error, time: time)
+                let b = FaceExpression.columnShift(row: row, state: error, time: time)
+                #expect(a == b)
+                #expect(abs(a) <= 1.0)
+            }
+        }
+    }
+
     // MARK: - Helpers
 
     /// The mouth lives below the eyes; scan only the lower band so eye cells (rows

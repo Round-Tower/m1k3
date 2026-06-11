@@ -52,9 +52,18 @@ struct AvatarView: View {
 
     @State private var scene = AvatarScene()
 
-    // Layout constants (RealityKit world units).
+    /// Layout constants (RealityKit world units).
     private static let spacing: Float = 0.1
-    private static let cubeSize: Float = 0.075
+    /// Die size vs the 0.1 spacing sets the gutter. 0.082 made the rounded dies
+    /// touch (solid-quilt look, seen at ⌘R) — 0.068 gives a 0.032 gutter so each
+    /// LED reads as its own peg even with a lit-cell swell on top.
+    private static let cubeSize: Float = 0.068
+    /// Corner rounding as a fraction of cube size: 0 = sharp dies, 0.5 ≈ dome.
+    /// ~0.3 reads as keycap / Lite-Brite peg. Tune by eye at ⌘R.
+    private static let cornerRadiusFactor: Float = 0.3
+    /// Lit cells swell up to this much over background cells — a geometric fake
+    /// of LED bloom (UnlitMaterial can't glow). Scaled by per-cell intensity.
+    private static let litSwell: Float = 0.15
 
     var body: some View {
         TimelineView(schedule) { context in
@@ -66,7 +75,10 @@ struct AvatarView: View {
                 var materials: [UnlitMaterial] = []
                 let cells = FaceGrid.allCells()
                 for cell in cells {
-                    let mesh = MeshResource.generateBox(size: Self.cubeSize)
+                    let mesh = MeshResource.generateBox(
+                        size: Self.cubeSize,
+                        cornerRadius: Self.cubeSize * Self.cornerRadiusFactor
+                    )
                     let material = UnlitMaterial(color: .black)
                     let cube = ModelEntity(mesh: mesh, materials: [material])
                     cube.position = Self.basePosition(for: cell)
@@ -93,6 +105,7 @@ struct AvatarView: View {
                 animate(at: time)
             }
         }
+        .overlay(CRTOverlay())
         .frame(maxWidth: .infinity)
         .clipShape(RoundedRectangle(cornerRadius: 16))
     }
@@ -107,8 +120,10 @@ struct AvatarView: View {
             let cell = scene.cells[index]
             let cube = scene.cubes[index]
 
-            // Depth pop for lit features.
+            // Depth pop for lit features, plus the error-glitch horizontal tear
+            // (columnShift is in cell units → scale by the grid spacing).
             var position = Self.basePosition(for: cell)
+            position.x += FaceExpression.columnShift(row: cell.row, state: state, time: time) * Self.spacing
             position.z = FaceExpression.displacement(col: cell.col, row: cell.row, state: state, time: time)
             cube.position = position
 
@@ -117,6 +132,11 @@ struct AvatarView: View {
             let intensity = FaceExpression.intensity(col: cell.col, row: cell.row, state: state, time: time)
             scene.materials[index].color = .init(tint: Self.scaled(accent, by: intensity))
             cube.model?.materials = [scene.materials[index]]
+
+            // Lit cells swell with brightness — a geometric stand-in for LED
+            // bloom. Background cells (~0.06) barely move; full-lit gets the
+            // whole litSwell.
+            cube.scale = SIMD3(repeating: 1 + Self.litSwell * intensity)
         }
 
         animateBody(at: time, root: scene.root)
@@ -174,5 +194,270 @@ struct AvatarView: View {
     /// to read as a smooth analog shiver rather than aliasing into a slow wobble.
     private var schedule: AnimationTimelineSchedule {
         AnimationTimelineSchedule(minimumInterval: 1.0 / 30.0)
+    }
+}
+
+// MARK: - Companion avatar (opt-in 3D creature)
+
+/// Stable storage for the loaded companion: the mesh-bearing host entity and the
+/// harvested per-clip animations. NOT @Observable — like AvatarScene, the update
+/// closure drives it while SwiftUI is mid-graph-update.
+@MainActor
+final class CompanionScene {
+    var host: Entity?
+    var fillLight: DirectionalLight?
+    /// Clip name → harvested animation resource (cross-bound onto `host`'s rig).
+    var clips: [String: AnimationResource] = [:]
+    var currentClip: String?
+    /// Last emotion the fill light was tinted for — guards the per-frame colour write.
+    var lastEmotion: AvatarEmotion = .neutral
+    var built = false
+}
+
+/// The 3D companion: an opt-in alternative to the pixel face for voice mode. Loads
+/// one mesh + N per-clip USDZs from M1K3Avatar's bundle, harvests each clip onto a
+/// single rig (the one-mesh/N-clip-files architecture proven in scratch/usdz-probe),
+/// and crossfades clips as the AvatarController's state changes — driven by the same
+/// AvatarState the pixel face reads, through ClipMapper instead of FaceExpression.
+///
+/// The pixel face stays M1K3's default brand face (chat, onboarding, the app icon);
+/// this is the wink the curious user opts into.
+///
+/// VERIFY-BY-LAUNCH: RealityKit load/animation/lighting is eyeballed at ⌘R; the
+/// state→clip maths is unit-tested in M1K3Avatar (ClipMapper / CompanionSpec).
+///
+/// Signed: Kev + claude-opus-4-8, 2026-06-11, Confidence 0.6 (render quality is the
+/// gate this view exists to answer; lighting + framing constants are by-eye), Prior: Unknown
+struct CompanionAvatarView: View {
+    let controller: AvatarController
+    let companion: CompanionSpec
+
+    @State private var scene = CompanionScene()
+
+    /// Fit the creature's largest dimension to this many world units, then frame it.
+    private static let targetSize: Float = 1.7
+    /// A flattering three-quarter base pose (radians about Y) rather than head-on —
+    /// after the upright correction the creature's length runs in Z (depth), so this
+    /// turns its broadside toward the camera.
+    private static let baseYaw: Float = -0.9
+
+    var body: some View {
+        RealityView { content in
+            await build(into: &content)
+        } update: { _ in
+            guard scene.built else { return }
+            sync(to: controller.state)
+        }
+        .overlay(CRTOverlay())
+        .frame(maxWidth: .infinity)
+        .clipShape(RoundedRectangle(cornerRadius: 16))
+    }
+
+    // MARK: - Build (once, async)
+
+    /// Blender exports Z-up; RealityKit is Y-up, so a companion loads standing on
+    /// its nose. The base pose pitches it upright (−90° about X) THEN turns it to
+    /// the three-quarter yaw. Uniform across companions — all share the Blender
+    /// export pipeline; a future Y-up source would need this per-spec.
+    private static let blenderZUpCorrection: Float = -.pi / 2
+    private static var basePose: simd_quatf {
+        simd_quatf(angle: baseYaw, axis: [0, 1, 0])
+            * simd_quatf(angle: blenderZUpCorrection, axis: [1, 0, 0])
+    }
+
+    private func build(into content: inout some RealityViewContentProtocol) async {
+        guard let idleURL = CompanionAssets.clipURL(companion: companion.id, clip: companion.idleClip),
+              let host = try? await Entity(contentsOf: idleURL)
+        else { return }
+
+        let clips = await harvestClips(idleHost: host)
+        // A loaded-but-animationless asset (corrupt or re-exported without the clip
+        // baked) would render a frozen bind pose. Treat it like a missing file:
+        // require the resting clip, and otherwise don't claim `built` — so a broken
+        // asset never enters voice mode as a static mesh masquerading as the companion.
+        guard let idle = clips[companion.idleClip] else { return }
+
+        // Pose BEFORE fit() so the recentre + scale measure the final, upright silhouette.
+        host.orientation = Self.basePose
+        fit(host)
+
+        let root = Entity()
+        root.addChild(host)
+        content.add(root)
+        addLighting(to: &content)
+        addCamera(to: &content)
+        host.playAnimation(idle.repeat(), transitionDuration: 0.3)
+
+        scene.host = host
+        scene.clips = clips
+        scene.currentClip = companion.idleClip
+        scene.lastEmotion = controller.state.emotion
+        scene.built = true
+    }
+
+    /// Harvest each bundled clip as an animation resource bound to the idle host's
+    /// rig. The idle file's own clip comes from `host`; the rest cross-bind from
+    /// their donor files (one mesh + N clip files — proven in scratch/usdz-probe).
+    private func harvestClips(idleHost host: Entity) async -> [String: AnimationResource] {
+        var clips: [String: AnimationResource] = [:]
+        if let idleAnim = host.availableAnimations.first {
+            clips[companion.idleClip] = idleAnim
+        }
+        for (name, url) in CompanionAssets.clipURLs(for: companion) where name != companion.idleClip {
+            if let donor = try? await Entity(contentsOf: url), let anim = donor.availableAnimations.first {
+                clips[name] = anim
+            }
+        }
+        return clips
+    }
+
+    /// Scale the creature so its largest extent fills `targetSize`, then recentre it
+    /// on the origin — companions are authored at wildly different native sizes (the
+    /// probe read native height from accessor min/max; this does it live). Assumes
+    /// `host`'s parent is identity-transform (the freshly-made `root`), so world-space
+    /// bounds equal local bounds.
+    private func fit(_ host: Entity) {
+        host.scale = SIMD3(repeating: companion.scale)
+        let extents = host.visualBounds(relativeTo: nil).extents
+        let maxDim = max(extents.x, extents.y, extents.z)
+        if maxDim > 0 { host.scale *= Self.targetSize / maxDim }
+        // Re-measure post-scale: the centre shifts with scale, so this is a second,
+        // necessary read (not a cacheable duplicate of the pre-scale bounds above).
+        host.position -= host.visualBounds(relativeTo: nil).center
+    }
+
+    private func addLighting(to content: inout some RealityViewContentProtocol) {
+        let key = DirectionalLight()
+        key.light.intensity = 6000
+        key.light.color = .white
+        key.look(at: .zero, from: [-1.2, 1.4, 2.0], relativeTo: nil)
+        content.add(key)
+
+        // Emotion-accent fill from the opposite side — the companion's equivalent
+        // of the pixel face's accent tint, as mood lighting (textures survive).
+        let fill = DirectionalLight()
+        fill.light.intensity = 1800
+        fill.light.color = Self.fillColor(for: controller.state.emotion)
+        fill.look(at: .zero, from: [1.6, 0.4, 1.6], relativeTo: nil)
+        content.add(fill)
+        scene.fillLight = fill
+    }
+
+    private func addCamera(to content: inout some RealityViewContentProtocol) {
+        let camera = PerspectiveCamera()
+        camera.look(at: [0, 0, 0], from: [0, 0.15, 2.4], relativeTo: nil)
+        content.add(camera)
+    }
+
+    // MARK: - Per-update sync
+
+    private func sync(to state: AvatarState) {
+        // Re-tint the fill only when the emotion actually changes — sync() runs every
+        // SwiftUI update (30 fps) and a colour write is a GPU command each time.
+        if state.emotion != scene.lastEmotion {
+            scene.fillLight?.light.color = Self.fillColor(for: state.emotion)
+            scene.lastEmotion = state.emotion
+        }
+
+        let desired = ClipMapper.clip(for: state, dialect: companion.dialect)
+        guard desired != scene.currentClip, let resource = scene.clips[desired], let host = scene.host
+        else { return }
+        let gait = ClipMapper.gait(for: state)
+        host.playAnimation(resource.repeat(), transitionDuration: ClipMapper.crossfadeDuration(to: gait))
+        scene.currentClip = desired
+    }
+
+    /// Accent colour for the fill light. Neutral gets a soft warm white rather than
+    /// the dynamic `.secondary` grey, which doesn't read as light.
+    private static func fillColor(for emotion: AvatarEmotion) -> NSColor {
+        guard emotion != .neutral else { return NSColor(white: 0.95, alpha: 1) }
+        return NSColor(emotion.accentColor).usingColorSpace(.deviceRGB) ?? .white
+    }
+}
+
+// MARK: - CRT overlay
+
+/// A retro-CRT pass composited over the avatar: horizontal scanlines, a slow
+/// rolling sync band, a corner vignette, and a faint phosphor breathe. Pure
+/// SwiftUI Canvas in a TimelineView — no Metal, no shaders, so it layers over
+/// the RealityView (SwiftUI shader effects can't reach platform-backed views).
+///
+/// VERIFY-BY-LAUNCH: purely visual; tune the constants by eye at ⌘R.
+/// Lives in this file (not its own) so the spike needs no xcodegen regen.
+///
+/// Signed: Kev + claude-fable-5, 2026-06-11, Confidence 0.6 (spike — constants
+/// are first-guess, judged by eye, not measured), Prior: Unknown.
+struct CRTOverlay: View {
+    /// Elapsed-time origin — sin/cos arguments stay small (the
+    /// AudioCaptureBackdrop precision lesson; see AvatarScene.startDate).
+    @State private var start = Date()
+
+    // Tunables, judged by eye.
+    private static let scanlineSpacing: CGFloat = 3
+    private static let scanlineOpacity: Double = 0.20
+    private static let bandHeight: CGFloat = 70
+    private static let bandSpeed: CGFloat = 26 // points per second, downward
+    private static let vignetteOpacity: Double = 0.38
+
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { context in
+            let time = context.date.timeIntervalSince(start)
+            Canvas { canvas, size in
+                drawScanlines(canvas, size: size, time: time)
+                drawRollingBand(canvas, size: size, time: time)
+                drawVignette(canvas, size: size)
+            }
+        }
+        .allowsHitTesting(false)
+    }
+
+    /// Thin dark lines every few points; opacity breathes ~8% at a slow beat so
+    /// the mask shimmers like a real tube instead of sitting like a sticker.
+    private func drawScanlines(_ canvas: GraphicsContext, size: CGSize, time: Double) {
+        let breathe = 1 + 0.08 * sin(time * 1.7)
+        let opacity = Self.scanlineOpacity * breathe
+        var y: CGFloat = 0
+        while y < size.height {
+            let line = CGRect(x: 0, y: y, width: size.width, height: 1)
+            canvas.fill(Path(line), with: .color(.black.opacity(opacity)))
+            y += Self.scanlineSpacing
+        }
+    }
+
+    /// A soft bright band rolling down the screen — the classic out-of-sync
+    /// refresh artifact. Starts above the frame and exits below before wrapping.
+    private func drawRollingBand(_ canvas: GraphicsContext, size: CGSize, time: Double) {
+        let travel = size.height + Self.bandHeight * 2
+        let offset = (CGFloat(time) * Self.bandSpeed).truncatingRemainder(dividingBy: travel)
+        let bandY = offset - Self.bandHeight
+        let rect = CGRect(x: 0, y: bandY, width: size.width, height: Self.bandHeight)
+        let gradient = Gradient(stops: [
+            .init(color: .clear, location: 0),
+            .init(color: .white.opacity(0.05), location: 0.5),
+            .init(color: .clear, location: 1),
+        ])
+        canvas.fill(
+            Path(rect),
+            with: .linearGradient(
+                gradient,
+                startPoint: CGPoint(x: 0, y: rect.minY),
+                endPoint: CGPoint(x: 0, y: rect.maxY)
+            )
+        )
+    }
+
+    /// Radial darkening toward the corners — curved-glass falloff.
+    private func drawVignette(_ canvas: GraphicsContext, size: CGSize) {
+        let centre = CGPoint(x: size.width / 2, y: size.height / 2)
+        let radius = max(size.width, size.height) * 0.75
+        let gradient = Gradient(stops: [
+            .init(color: .clear, location: 0),
+            .init(color: .clear, location: 0.55),
+            .init(color: .black.opacity(Self.vignetteOpacity), location: 1),
+        ])
+        canvas.fill(
+            Path(CGRect(origin: .zero, size: size)),
+            with: .radialGradient(gradient, center: centre, startRadius: 0, endRadius: radius)
+        )
     }
 }

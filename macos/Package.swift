@@ -260,7 +260,10 @@ let package = Package(
         // RealityKit/SwiftUI are system frameworks — no third-party dep.
         .target(
             name: "M1K3Avatar",
-            path: "Sources/M1K3Avatar"
+            path: "Sources/M1K3Avatar",
+            // Per-clip companion USDZs (Fox v1; more are a folder + spec). Copied
+            // verbatim — RealityKit loads them via Bundle.module at the app layer.
+            resources: [.copy("Companions")]
         ),
         .testTarget(
             name: "M1K3AvatarTests",

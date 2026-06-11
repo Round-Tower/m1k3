@@ -8,6 +8,7 @@
 //
 //  Signed: Kev + claude-opus-4-8, 2026-06-06, Confidence 0.8, Prior: Unknown
 
+import M1K3Avatar
 import M1K3Chat
 import M1K3Inference
 import M1K3Voice
@@ -18,6 +19,7 @@ struct SettingsView: View {
     @AppStorage(ReadingMode.storageKey) private var readingMode: ReadingMode = .standard
     @AppStorage(AppEnvironment.webSearchEnabledKey) private var webSearchEnabled = true
     @AppStorage(AppEnvironment.thinkingModeKey) private var thinkingMode = ThinkingMode.auto.rawValue
+    @AppStorage(AppEnvironment.voiceCompanionKey) private var voiceCompanion = ""
     @State private var profileDraft = ""
 
     var body: some View {
@@ -126,6 +128,8 @@ struct SettingsView: View {
                         + "downloads the neural voice model for offline use. On-device only.")
                         .font(.caption).foregroundStyle(.secondary)
                 }
+
+                companionSection
 
                 Section {
                     if env.isTranscribingCall {
@@ -253,6 +257,28 @@ struct SettingsView: View {
                     .font(.caption)
                     .foregroundStyle(.orange)
             }
+        }
+    }
+
+    /// Voice-mode face: the pixel face (default) or an opt-in 3D companion. Only
+    /// companions with bundled assets are offered. The pixel face stays M1K3's
+    /// face everywhere else — this is just the voice-mode skin. (Own property — the
+    /// Form is at the type-checker budget; see aboutYouSection.)
+    private var companionSection: some View {
+        Section {
+            Picker("Voice companion", selection: $voiceCompanion) {
+                Text("Pixel face").tag("")
+                ForEach(CompanionSpec.all.filter(CompanionAssets.isInstalled)) { spec in
+                    Text(spec.displayName).tag(spec.id)
+                }
+            }
+        } header: {
+            Text("Voice companion")
+        } footer: {
+            Text("Who greets you in voice mode. The pixel face is M1K3 — a companion "
+                + "is an optional skin for full-window voice conversations, and only "
+                + "there. Everywhere else, the pixel face stays.")
+                .font(.caption).foregroundStyle(.secondary)
         }
     }
 
