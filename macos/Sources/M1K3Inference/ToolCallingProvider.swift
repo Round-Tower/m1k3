@@ -253,3 +253,34 @@ final class StatelessToolTurnSession: ToolTurnSession, @unchecked Sendable {
         return turn
     }
 }
+
+/// Accumulates a tool turn's FULL conversation — every message sent to the
+/// model plus every turn it generated — so a session can re-render the whole
+/// thing into a fresh cache when delta-rendering fails. Some chat templates
+/// re-validate the entire message array on every render and reject a
+/// tool-result-only delta (Qwen3.5: "No user query found in messages"); the
+/// full transcript always carries the user query and the assistant tool-call
+/// turns, so a clean re-render succeeds. Pure + ordered: the sent-then-
+/// generated interleaving must reproduce a valid conversation.
+public struct ToolTurnTranscript: Sendable {
+    public private(set) var full: [ToolMessage] = []
+
+    public init() {}
+
+    /// The messages the agent just sent (recorded RAW — `.system` included, so
+    /// a fresh re-render gets the persona back even when the delta path drops it).
+    public mutating func recordSent(_ messages: [ToolMessage]) {
+        full.append(contentsOf: messages)
+    }
+
+    /// The turn the model just produced, as the assistant message that turn
+    /// represents — so the next re-render shows the model its own prior calls.
+    public mutating func recordGenerated(_ turn: ToolTurn) {
+        switch turn {
+        case let .text(answer):
+            full.append(.assistant(text: answer, toolCalls: []))
+        case let .toolCalls(calls):
+            full.append(.assistant(text: nil, toolCalls: calls))
+        }
+    }
+}
