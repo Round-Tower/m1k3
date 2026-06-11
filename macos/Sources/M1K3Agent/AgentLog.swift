@@ -27,10 +27,18 @@ public enum M1K3Log {
 
 /// Bounded, single-line content previews for log lines.
 public enum LogPreview {
+    /// Compiled once — this runs on every agent log line (thoughts,
+    /// observations, conclusions); per-call NSRegularExpression compilation
+    /// via `.regularExpression` options would be pure overhead.
+    /// `nonisolated(unsafe)`: this toolchain still treats `Regex<Substring>`
+    /// as non-Sendable (verified: the bare `static let` is a compile error).
+    /// A literal with no transform closures is immutable, so unsafe is sound.
+    private nonisolated(unsafe) static let whitespaceRun = /\s+/
+
     /// Collapse all whitespace runs to single spaces and cap the length.
     public static func preview(_ text: String, max cap: Int = 120) -> String {
         let flattened = text
-            .replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
+            .replacing(whitespaceRun, with: " ")
             .trimmingCharacters(in: .whitespaces)
         guard flattened.count > cap else { return flattened }
         return flattened.prefix(cap).trimmingCharacters(in: .whitespaces) + "…"

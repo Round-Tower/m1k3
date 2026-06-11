@@ -105,7 +105,7 @@ struct StreamingReasoningSplitter {
             case .answerWatching:
                 let close = buffer.range(of: Self.closeTag)
                 let open = buffer.range(of: Self.openTag)
-                if let close, open == nil || close.lowerBound < open!.lowerBound {
+                if let close, Self.comesFirst(close, before: open) {
                     // Lone close with no open: the template opened the block
                     // for us — everything emitted so far was reasoning.
                     let before = String(buffer[..<close.lowerBound])
@@ -136,6 +136,15 @@ struct StreamingReasoningSplitter {
                 }
             }
         }
+    }
+
+    /// True when `close` precedes `open` (or there is no open at all) — the
+    /// lone-`</think>` rule, without a force-unwrap at the call site.
+    private static func comesFirst(
+        _ close: Range<String.Index>, before open: Range<String.Index>?
+    ) -> Bool {
+        guard let open else { return true }
+        return close.lowerBound < open.lowerBound
     }
 
     /// Drain the buffer except the longest tail that could still be the start

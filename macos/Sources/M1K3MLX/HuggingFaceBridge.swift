@@ -92,7 +92,10 @@ enum RepoSizeEstimate {
         guard let url = URL(string: "https://huggingface.co/api/models/\(repoID)/tree/\(encodedRevision)") else {
             return nil
         }
-        let request = URLRequest(url: url, timeoutInterval: 8)
+        // Short fuse: this fires BEFORE the snapshot download, so on the
+        // offline/auth-fallback path every second here is added launch
+        // latency for a purely cosmetic (progress-bar) win.
+        let request = URLRequest(url: url, timeoutInterval: 3)
         guard let (data, response) = try? await URLSession.shared.data(for: request),
               (response as? HTTPURLResponse)?.statusCode == 200
         else { return nil }

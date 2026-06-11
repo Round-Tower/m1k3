@@ -46,6 +46,11 @@ public struct ReasoningStep: Sendable, Equatable {
 }
 
 public struct AgentResult: Sendable, Equatable {
+    /// The model's final-turn output, RAW — on the native path it can still
+    /// carry `<think>…</think>` when a remainder streamed live (the
+    /// user-visible conclusion went through `onConclusionToken`). Display
+    /// callers must split/strip reasoning themselves (`ReasoningSplit`,
+    /// `ModelEvalReport.strippingThink`); `AgentRAGResponder` already does.
     public let conclusion: String
     public let toolsUsed: [String]
     public let iterations: Int

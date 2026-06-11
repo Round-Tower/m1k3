@@ -23,8 +23,11 @@ import Observation
 /// The seam ChatSession drives. RAGResponder conforms; tests inject fakes so the
 /// reducer is exercised without a model, store, or embedder.
 ///
-/// The two requirements are cross-defaulted: implement either and the other
-/// follows (implementing neither recurses — conformers must provide one).
+/// Default chain is strictly ONE-WAY (history → activity → plain): the richer
+/// variants fall through to the plain one, which has NO default — so every
+/// conformer must ground the chain, and a half-implemented conformer is a
+/// compile error, never a mutual-default infinite recursion (the PR #15
+/// review's blocking finding).
 public protocol RAGResponding: Sendable {
     /// Stream the answer. The stream is the model's RAW output — citation validation
     /// can't happen mid-stream, so the CALLER must validate the accumulated text once
@@ -52,19 +55,14 @@ public protocol RAGResponding: Sendable {
     ) async throws -> (sources: [ChunkHit], stream: AsyncStream<String>)
 
     /// Sources gathered DURING the turn by tools the model called (e.g.
-    /// search_knowledge). Read ONCE after the stream completes — they merge
-    /// into the message's sources and the citation validator's allow-list.
+    /// search_knowledge). DESTRUCTIVE: this is a draining read — a second call
+    /// returns empty. Call exactly once, after the stream completes; the hits
+    /// merge into the message's sources and the citation validator's allow-list.
     /// Defaults to empty for responders without tools.
     func collectedSources() -> [ChunkHit]
 }
 
 public extension RAGResponding {
-    func answerStreaming(
-        _ question: String
-    ) async throws -> (sources: [ChunkHit], stream: AsyncStream<String>) {
-        try await answerStreaming(question, onActivity: { _ in })
-    }
-
     func answerStreaming(
         _ question: String,
         onActivity _: @escaping @Sendable (ResponderActivity) -> Void

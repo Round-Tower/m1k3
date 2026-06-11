@@ -65,4 +65,17 @@ struct GroundingGateTests {
     func emptyStaysEmpty() {
         #expect(GroundingGate.filter([]).isEmpty)
     }
+
+    @Test("the threshold boundary is inclusive: exactly 0.62 passes, just below is gated")
+    func thresholdBoundary() {
+        // Pins the CONSTANT, not just the ordering — a silent threshold edit
+        // (or >= flipping to >) should fail here, not at ⌘R.
+        let exactlyAt = hit("at threshold", similarity: GroundingGate.chunkThreshold)
+        let justBelow = hit("below threshold", similarity: GroundingGate.chunkThreshold - 0.001)
+        #expect(GroundingGate.filter([exactlyAt]).count == 1)
+        #expect(GroundingGate.filter([justBelow]).isEmpty)
+        // A passing sibling never carries a below-threshold hit through.
+        #expect(GroundingGate.filter([exactlyAt, justBelow]).map(\.content) == ["at threshold"])
+        #expect(GroundingGate.chunkThreshold == 0.62)
+    }
 }

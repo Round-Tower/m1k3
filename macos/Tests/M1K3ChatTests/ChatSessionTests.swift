@@ -74,6 +74,14 @@ private final class HistoryRecordingResponder: RAGResponding, @unchecked Sendabl
     private let lock = NSLock()
     private(set) var receivedHistories: [[ChatTurn]] = []
 
+    /// Grounds the protocol's one-way default chain (the plain variant has no
+    /// default by design — see RAGResponding).
+    func answerStreaming(
+        _ question: String
+    ) async throws -> (sources: [ChunkHit], stream: AsyncStream<String>) {
+        try await answerStreaming(question, history: [], onActivity: { _ in })
+    }
+
     func answerStreaming(
         _: String,
         history: [ChatTurn],
@@ -82,6 +90,39 @@ private final class HistoryRecordingResponder: RAGResponding, @unchecked Sendabl
         lock.withLock { receivedHistories.append(history) }
         return ([], AsyncStream { continuation in
             continuation.yield("answered")
+            continuation.finish()
+        })
+    }
+}
+
+/// Throws on the first send, records history and answers from then on —
+/// pins that a failed turn never re-enters the replay window.
+private final class FailOnceThenRecordResponder: RAGResponding, @unchecked Sendable {
+    private struct Boom: Error {}
+    private let lock = NSLock()
+    private var hasFailed = false
+    private(set) var receivedHistories: [[ChatTurn]] = []
+
+    func answerStreaming(
+        _ question: String
+    ) async throws -> (sources: [ChunkHit], stream: AsyncStream<String>) {
+        try await answerStreaming(question, history: [], onActivity: { _ in })
+    }
+
+    func answerStreaming(
+        _: String,
+        history: [ChatTurn],
+        onActivity _: @escaping @Sendable (ResponderActivity) -> Void
+    ) async throws -> (sources: [ChunkHit], stream: AsyncStream<String>) {
+        let shouldFail = lock.withLock {
+            if hasFailed { return false }
+            hasFailed = true
+            return true
+        }
+        if shouldFail { throw Boom() }
+        lock.withLock { receivedHistories.append(history) }
+        return ([], AsyncStream { continuation in
+            continuation.yield("recovered")
             continuation.finish()
         })
     }
@@ -133,6 +174,24 @@ struct ChatSessionTests {
         let second = responder.receivedHistories[1]
         #expect(second.map(\.text) == ["What's the weather in Galway?", "answered"])
         #expect(second.map(\.role) == [.user, .assistant])
+    }
+
+    @Test("a FAILED prior turn is excluded from the history replay")
+    func failedTurnNeverReplays() async {
+        // A turn that errors mid-stream stays .failed (never flipped to
+        // .complete with partial text) — its user question AND its failure
+        // text must not ride into the next turn's prompt.
+        let responder = FailOnceThenRecordResponder()
+        let session = ChatSession(responder: responder)
+
+        await session.send("doomed question")
+        await session.send("fresh question")
+
+        let replayed = responder.receivedHistories.last ?? []
+        // Only the doomed USER turn replays (it completed); the failed
+        // assistant message is excluded.
+        #expect(replayed.map(\.role) == [.user])
+        #expect(replayed.map(\.text) == ["doomed question"])
     }
 
     @Test("folds CUMULATIVE snapshots into the final answer (AFM contract)")

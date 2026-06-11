@@ -166,9 +166,13 @@ private extension OnboardingView {
             .frame(maxWidth: 440)
 
             Button {
+                // Same trim as the disabled-check below — a spaces-only name
+                // must not produce "Name:   ." in the persona block.
+                let name = userName.trimmingCharacters(in: .whitespaces)
+                let notes = userNotes.trimmingCharacters(in: .whitespacesAndNewlines)
                 let profile = [
-                    userName.isEmpty ? nil : "Name: \(userName).",
-                    userNotes.isEmpty ? nil : userNotes,
+                    name.isEmpty ? nil : "Name: \(name).",
+                    notes.isEmpty ? nil : notes,
                 ].compactMap(\.self).joined(separator: " ")
                 env.saveUserProfile(profile)
                 step = .brain

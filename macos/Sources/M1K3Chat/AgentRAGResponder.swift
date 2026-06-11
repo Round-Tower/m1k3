@@ -79,9 +79,15 @@ public struct AgentRAGResponder: RAGResponding, Sendable {
         )
     }
 
-    /// History-free entry point (tests, simple callers): same turn, no replay.
-    /// Implemented explicitly — relying on the protocol's cross-defaults here
-    /// would recurse, since this type's real implementation is the history one.
+    /// History-free entry points (tests, simple callers): same turn, no replay.
+    /// Both forward UP to the real (history) implementation — the protocol's
+    /// one-way defaults would forward DOWN to the plain variant and bypass it.
+    public func answerStreaming(
+        _ question: String
+    ) async throws -> (sources: [ChunkHit], stream: AsyncStream<String>) {
+        try await answerStreaming(question, history: [], onActivity: { _ in })
+    }
+
     public func answerStreaming(
         _ question: String,
         onActivity: @escaping @Sendable (ResponderActivity) -> Void
@@ -110,7 +116,7 @@ public struct AgentRAGResponder: RAGResponding, Sendable {
         let tools = toolsProvider()
 
         let stream = AsyncStream<String> { continuation in
-            Task {
+            let turnTask = Task {
                 await runAgentTurn(
                     question: question,
                     chunks: chunks,
@@ -120,6 +126,11 @@ public struct AgentRAGResponder: RAGResponding, Sendable {
                     continuation: continuation
                 )
             }
+            // The Task above is NOT a child of the stream's consumer, so the
+            // consumer cancelling (user sends a new message mid-loop, voice
+            // mode bails) would otherwise leave the agent loop running to the
+            // iteration cap. Terminating the stream cancels the turn.
+            continuation.onTermination = { _ in turnTask.cancel() }
         }
         return (chunks, stream)
     }
@@ -422,12 +433,29 @@ enum WebSourceExtractor {
         for step in trace where step.action?.hasPrefix("web_search(") == true {
             guard let observation = step.observation else { continue }
             for match in observation.matches(of: /— (https?:\/\/\S+)/) {
-                let url = String(match.1)
+                // \S+ greedily eats sentence punctuation after the URL
+                // ("… — https://example.com/page." captures the dot) — trim
+                // trailing punctuation that is never meaningful at a URL end.
+                let url = String(match.1).trimmedOfTrailingPunctuation()
                 if seen.insert(url).inserted {
                     ordered.append(url)
                 }
             }
         }
         return ordered
+    }
+}
+
+private extension String {
+    /// Known trade-off: a URL legitimately ENDING in a balanced `)`/`]`
+    /// (Wikipedia "…_(disambiguation)") gets over-trimmed. Acceptable —
+    /// sentence punctuation dominates DDG observations, and these are
+    /// display/citation URLs, never fetch targets.
+    func trimmedOfTrailingPunctuation() -> String {
+        var trimmed = Substring(self)
+        while let last = trimmed.last, ".,;:)]»'\"".contains(last) {
+            trimmed = trimmed.dropLast()
+        }
+        return String(trimmed)
     }
 }

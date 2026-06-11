@@ -59,4 +59,14 @@ struct ThinkStreamGateTests {
         #expect(live.hasPrefix("<think>"))
         #expect(live + gate.flushRemainder() == "<think>endless thought")
     }
+
+    @Test("a bare </think> with no opener buffers as plain text, never streams live")
+    func bareCloseWithoutOpen() {
+        // Only reachable when the synthetic opener is NOT prepended (a
+        // non-pre-opening template emitting a stray close): it must be held
+        // for the outcome like any other non-think text.
+        var (live, gate) = feedAll(["</think>just an answer"])
+        #expect(live.isEmpty)
+        #expect(gate.flushRemainder() == "</think>just an answer")
+    }
 }

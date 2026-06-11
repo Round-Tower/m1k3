@@ -20,6 +20,10 @@
 //
 //  Signed: Kev + claude-opus-4-8, 2026-06-10, Confidence 0.75 (pure mappers
 //  tested; the generation glue is verify-by-launch). Prior: Unknown.
+//  Review: Kev + claude-fable-5, 2026-06-11, Confidence 0.85 — PR #16/#17
+//  review follow-ups: nil-dialect now guard-throws (was a silent .gemma
+//  fallback) in continueToolTurn + makeToolTurnSession; serial-use contract
+//  comments extended to finish() and the non-seeded fallback path.
 
 import Foundation
 import M1K3Inference
@@ -68,6 +72,10 @@ enum MLXToolMapping {
         case let .user(text):
             return .user(text)
         case let .toolResult(_, output):
+            // The library's Chat.Message.tool takes only the output text; the
+            // model correlates result-to-call by turn order (one result per
+            // call, in sequence). Revisit if multi-call round-trips ever need
+            // the name for correlation.
             return .tool(output)
         case let .assistant(text, calls):
             guard !calls.isEmpty else { return .assistant(text ?? "") }
@@ -204,7 +212,14 @@ extension MLXGemmaProvider: ToolCallingProvider {
     /// owning it (for the trace + observation rescue), per the 12a challenger pass.
     public func continueToolTurn(messages: [ToolMessage], tools: [ToolDefinition]) async throws -> ToolTurn {
         let container = try await ensureLoaded()
-        let format = resolvedToolCallFormat ?? .gemma
+        // Unreachable via LocalAgent (supportsToolCalls == false gates this
+        // path for an unrecognised family), but this is public API — throwing
+        // beats silently rendering the wrong dialect and never parsing a call.
+        guard let format = resolvedToolCallFormat else {
+            throw InferenceError.generationFailed(
+                "no tool-call dialect resolved for this model family"
+            )
+        }
         let parameters = generateParameters
         let prefixNeeded = thinkPrefixNeeded
         let thinkingContext = thinkingAdditionalContext
@@ -254,6 +269,13 @@ extension MLXGemmaProvider: ToolCallingProvider {
         tools: [ToolDefinition],
         options: ToolTurnOptions
     ) async throws -> any ToolTurnSession {
+        // Same gate as continueToolTurn: an unrecognised family must not get
+        // a session that renders the wrong dialect.
+        guard let format = resolvedToolCallFormat else {
+            throw InferenceError.generationFailed(
+                "no tool-call dialect resolved for this model family"
+            )
+        }
         let container = try await ensureLoaded()
         let specs = tools.map(MLXToolMapping.toolSpec(from:))
         let normalizedSpecs = specs.isEmpty ? nil : specs
@@ -272,7 +294,7 @@ extension MLXGemmaProvider: ToolCallingProvider {
         return MLXToolTurnSession(
             container: container,
             parameters: generateParameters,
-            format: resolvedToolCallFormat ?? .gemma,
+            format: format,
             specs: normalizedSpecs,
             thinkingContext: fastTurn ? ["enable_thinking": false] : thinkingAdditionalContext,
             prefixNeeded: fastTurn ? false : thinkPrefixNeeded,
@@ -294,15 +316,19 @@ final class MLXToolTurnSession: ToolTurnSession, @unchecked Sendable {
     private let thinkingContext: [String: any Sendable]?
     private let prefixNeeded: Bool
 
-    /// Serial-use contract (why @unchecked is sound): the agent loop awaits
-    /// each `send` before the next, so these are only ever touched one send at
-    /// a time, inside `container.perform`'s isolation. A Mutex can't hold a
-    /// non-Sendable KVCache without tripping region isolation on the way out.
+    /// Serial-use contract (why @unchecked is sound): `LocalAgent` is an
+    /// actor and `runNativeLoop` awaits each `send` — and calls `finish()`
+    /// only after the loop returns — so these are only ever touched one call
+    /// at a time, inside `container.perform`'s isolation. The actor enforces
+    /// what the compiler can't check here. A Mutex can't hold a non-Sendable
+    /// KVCache without tripping region isolation on the way out.
     private var kvCache: [KVCache]?
     private var sentTools = false
     /// True when the session was seeded with a persona-prefix copy: the
     /// system turn AND tool specs are already in the cache, so incoming
     /// `.system` messages are dropped and tools are never re-rendered.
+    /// A nil seed (no template tokenizer, prefill failed) leaves BOTH flags
+    /// false — system and tools then flow through the first send normally.
     private let personaBaked: Bool
     /// The full conversation, for the fresh-cache re-render fallback when a
     /// chat template rejects a tool-result-only delta (Qwen3.5).
@@ -424,7 +450,9 @@ final class MLXToolTurnSession: ToolTurnSession, @unchecked Sendable {
 
     /// Turn over: drop the cache and hand the pooled Metal buffers back —
     /// the per-TURN reclaim (per-generation would thrash the pool between
-    /// iterations that are about to reuse it).
+    /// iterations that are about to reuse it). The bare `kvCache = nil` write
+    /// is covered by the serial-use contract above: finish() is reachable
+    /// only after runNativeLoop returns, never overlapping a `send`.
     func finish() async {
         kvCache = nil
         MLXMemoryBudget.reclaim(label: "toolTurnSession")

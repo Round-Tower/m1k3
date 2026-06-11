@@ -32,6 +32,28 @@ struct MLXEmbeddingServiceTests {
         #expect(service.dimension == 384) // bge_small default
     }
 
+    @Test("kernelTag matches the mlx-swift minor actually pinned in Package.resolved")
+    func kernelTagMatchesPinnedVersion() throws {
+        // kernelTag is a hand-bumped contract: when an mlx-swift bump changes
+        // the embedding kernels, stored vectors must re-index (EmbedderReindex-
+        // Policy). Reading the REAL pin makes forgetting the bump a test
+        // failure instead of a silently mixed vector space.
+        let resolved = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent() // M1K3MLXTests/
+            .deletingLastPathComponent() // Tests/
+            .deletingLastPathComponent() // macos/
+            .appendingPathComponent("Package.resolved")
+        let data = try Data(contentsOf: resolved)
+        let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+        let pins = try #require(json?["pins"] as? [[String: Any]])
+        let mlxSwift = try #require(pins.first { $0["identity"] as? String == "mlx-swift" })
+        let state = try #require(mlxSwift["state"] as? [String: Any])
+        let version = try #require(state["version"] as? String)
+        let minor = version.split(separator: ".").prefix(2).joined(separator: ".")
+        #expect(MLXEmbeddingService.kernelTag == "mlx-swift-\(minor)",
+                "mlx-swift moved to \(version) — bump kernelTag so stores re-index")
+    }
+
     @Test(
         "INTEGRATION: embeds text into a unit-length vector of the right size",
         .enabled(if: ProcessInfo.processInfo.environment["M1K3_MLX_INTEGRATION"] == "1")

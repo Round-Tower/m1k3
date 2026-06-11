@@ -42,6 +42,9 @@ struct ThinkStreamGate {
         pending += token
         switch mode {
         case .scanning:
+            // Leading whitespace is dropped while undecided, so the gate is
+            // not byte-lossless for a whitespace-prefixed non-think turn —
+            // benign: every consumer trims the remainder anyway.
             pending = String(pending.drop(while: \.isWhitespace))
             if pending.hasPrefix(Self.openTag) {
                 mode = .live

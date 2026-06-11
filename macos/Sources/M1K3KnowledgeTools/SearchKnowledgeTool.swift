@@ -51,6 +51,10 @@ public struct SearchKnowledgeTool: AgentTool {
         guard !query.isEmpty else {
             return ToolResult(output: "Error: empty query.")
         }
+        // Deliberately UNGATED (asymmetric with GroundingGate's 0.62 cosine
+        // bar on implicit injection): the model chose to search with its own
+        // query, so it judges the relevance of what comes back — the gate
+        // exists to police what the model never asked for.
         let hits: [ChunkHit]
         if let embedder {
             let queryVector = try await embedder.embed(query)
