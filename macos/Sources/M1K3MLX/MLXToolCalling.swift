@@ -27,6 +27,7 @@
 
 import Foundation
 import M1K3Inference
+import MLX
 import MLXLMCommon
 import os
 import Synchronization
@@ -323,15 +324,19 @@ final class MLXToolTurnSession: ToolTurnSession, @unchecked Sendable {
     /// what the compiler can't check here. A Mutex can't hold a non-Sendable
     /// KVCache without tripping region isolation on the way out.
     private var kvCache: [KVCache]?
-    private var sentTools = false
-    /// True when the session was seeded with a persona-prefix copy: the
-    /// system turn AND tool specs are already in the cache, so incoming
-    /// `.system` messages are dropped and tools are never re-rendered.
-    /// A nil seed (no template tokenizer, prefill failed) leaves BOTH flags
-    /// false — system and tools then flow through the first send normally.
-    private let personaBaked: Bool
-    /// The full conversation, for the fresh-cache re-render fallback when a
-    /// chat template rejects a tool-result-only delta (Qwen3.5).
+    /// An EXACT mirror of the token sequence the live cache holds, so a
+    /// token-level common prefix against the next render is positionally-valid
+    /// KV. Seeded from the persona prefix; kept in sync on every send (trim the
+    /// generated tail, set to the rendered fullIDs). The whole reuse scheme
+    /// rests on this staying truthful — see CrossTurnCacheReuse.
+    private var cachedIDs: [Int]
+    /// Sends so far this session — the first send is the one whose reuse SHOULD
+    /// equal the seeded persona prefix, so a shortfall there is a diagnosable
+    /// seed/render mismatch (logged, decoded).
+    private var sendCount = 0
+    /// The full conversation — re-rendered every turn so strict templates
+    /// (Qwen3.5's "No user query found") always see the user query; only the
+    /// suffix beyond `cachedIDs` is actually prefilled.
     private var transcript = ToolTurnTranscript()
 
     init(
@@ -350,8 +355,7 @@ final class MLXToolTurnSession: ToolTurnSession, @unchecked Sendable {
         self.thinkingContext = thinkingContext
         self.prefixNeeded = prefixNeeded
         kvCache = seed?.cache
-        personaBaked = seed != nil
-        sentTools = seed != nil
+        cachedIDs = seed?.tokenIDs ?? []
     }
 
     func send(
@@ -369,45 +373,51 @@ final class MLXToolTurnSession: ToolTurnSession, @unchecked Sendable {
         return try await container.perform { context in
             self.transcript.recordSent(messages)
 
-            let input: LMInput
-            let cache: [KVCache]
-            do {
-                // Fast path: render only this send's delta against the retained
-                // KV cache. A seeded session already holds the system turn, so
-                // the agent's leading .system must not render twice.
-                let outgoing = self.personaBaked
-                    ? messages.filter { message in
-                        if case .system = message { return false }
-                        return true
-                    }
-                    : messages
-                let chat = outgoing.map { MLXToolMapping.chatMessage(from: $0, format: format) }
-                // Tool specs render into the chat template once, on the first
-                // send — they live in the cache afterwards (or in the seed).
-                let userInput = UserInput(
-                    chat: chat,
-                    tools: self.sentTools ? nil : self.specs,
-                    additionalContext: thinkingContext
+            // Render the WHOLE conversation (system + goal + every assistant
+            // call + every tool result). A full array always carries the user
+            // query, so strict templates never reject it — but we prefill only
+            // the suffix past what the live cache already holds.
+            let fullChat = self.transcript.full.map { MLXToolMapping.chatMessage(from: $0, format: format) }
+            let prepared = try await context.processor.prepare(
+                input: UserInput(chat: fullChat, tools: self.specs, additionalContext: thinkingContext)
+            )
+            let fullIDs = prepared.text.tokens.asArray(Int.self)
+
+            let seedCount = self.cachedIDs.count
+            let reuse = CrossTurnCacheReuse.reusableLength(
+                cached: self.cachedIDs, full: fullIDs, hasCache: self.kvCache != nil
+            )
+            // Diagnose a first-send seed miss: the persona prefix SHOULD be a
+            // full prefix of the first render. If reuse falls short, decode the
+            // tokens either side of the divergence so the cause is visible (a
+            // tool-JSON ordering drift, a persona-text mismatch, …).
+            if self.sendCount == 0, seedCount > 0, reuse < seedCount {
+                let window = { (ids: [Int]) -> String in
+                    let lo = max(0, reuse - 3), hi = min(ids.count, reuse + 8)
+                    return context.tokenizer.decode(tokenIds: Array(ids[lo ..< hi]))
+                }
+                self.logSeedReuseMiss(
+                    at: reuse, of: seedCount, seed: window(self.cachedIDs), render: window(fullIDs)
                 )
-                input = try await context.processor.prepare(input: userInput)
-                cache = self.kvCache ?? context.model.newCache(parameters: parameters)
-            } catch is CancellationError {
-                throw CancellationError()
-            } catch {
-                // Recovery: some chat templates re-validate the WHOLE message
-                // array on every render and reject a tool-result-only delta
-                // (Qwen3.5: "No user query found in messages"). Re-render the
-                // FULL conversation — system, user goal, every assistant call,
-                // every tool result — into a FRESH cache, which always carries
-                // the user query. Costs one prefill; fires only on the throw.
-                self.logFullRenderRecovery(error: error)
-                let full = self.transcript.full.map { MLXToolMapping.chatMessage(from: $0, format: format) }
-                let userInput = UserInput(chat: full, tools: self.specs, additionalContext: thinkingContext)
-                input = try await context.processor.prepare(input: userInput)
-                cache = context.model.newCache(parameters: parameters)
             }
+            self.sendCount += 1
+            let cache: [KVCache]
+            let input: LMInput
+            if reuse > 0, let existing = self.kvCache {
+                // Keep the reusable prefix; trim past it (the prior turn's
+                // generated tail + any divergence) and prefill only the rest.
+                for layer in existing {
+                    let extra = layer.offset - reuse
+                    if extra > 0 { _ = layer.trim(extra) }
+                }
+                cache = existing
+                input = LMInput(tokens: MLXArray(Array(fullIDs[reuse...])))
+            } else {
+                cache = context.model.newCache(parameters: parameters)
+                input = prepared
+            }
+            self.logPrefillReuse(reused: reuse, total: fullIDs.count)
             self.kvCache = cache
-            self.sentTools = true
 
             let stream = try MLXLMCommon.generate(
                 input: input, cache: cache, parameters: parameters, context: context
@@ -427,6 +437,15 @@ final class MLXToolTurnSession: ToolTurnSession, @unchecked Sendable {
                     break
                 }
             }
+            // Keep cachedIDs an EXACT mirror of the cache: trim this turn's
+            // generated tokens (unstable — the next render re-derives the
+            // assistant turn structurally), leaving precisely fullIDs in place.
+            for layer in cache {
+                let extra = layer.offset - fullIDs.count
+                if extra > 0 { _ = layer.trim(extra) }
+            }
+            self.cachedIDs = fullIDs
+
             let turn: ToolTurn
             if calls.isEmpty {
                 let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -441,10 +460,17 @@ final class MLXToolTurnSession: ToolTurnSession, @unchecked Sendable {
 
     /// Param-only (the Logger interpolation is an autoclosure; swiftformat
     /// strips the `self.` the compiler would need on a member).
-    private func logFullRenderRecovery(error: any Error) {
-        let reason = String(describing: error)
+    private func logPrefillReuse(reused: Int, total: Int) {
+        mlxToolLog.notice(
+            "toolTurnSession reuse: \(reused, privacy: .public)/\(total, privacy: .public) tok from cache, prefilling \(total - reused, privacy: .public)"
+        )
+    }
+
+    /// First-send persona-prefix shortfall — the seed should be a full prefix
+    /// of the first render; decode both sides of the divergence to show why.
+    private func logSeedReuseMiss(at index: Int, of seed: Int, seed seedSlice: String, render: String) {
         mlxToolLog.error(
-            "tool-turn delta render rejected — re-rendering full transcript into a fresh cache (\(reason, privacy: .public))"
+            "toolTurnSession seed-reuse miss: \(index, privacy: .public)/\(seed, privacy: .public) — diverges at seed=[\(seedSlice, privacy: .public)] render=[\(render, privacy: .public)]"
         )
     }
 

@@ -50,8 +50,9 @@ struct PersonaPrefixCacheTests {
         let key = PersonaCacheKey(modelID: "m", toolNames: [], personaText: "p")
         #expect(store.snapshot(for: key) == nil)
 
-        store.store([], tokenCount: 42, for: key)
+        store.store([], tokenIDs: Array(0 ..< 42), for: key)
         #expect(store.snapshot(for: key)?.tokenCount == 42)
+        #expect(store.snapshot(for: key)?.tokenIDs == Array(0 ..< 42))
 
         let otherKey = PersonaCacheKey(modelID: "m", toolNames: ["x"], personaText: "p")
         #expect(store.snapshot(for: otherKey) == nil)

@@ -316,12 +316,13 @@ public final class MLXGemmaProvider: InferenceProvider, ModelPreloading, @unchec
         specs: [ToolSpec]?,
         toolNames: [String]
     ) async throws -> PersonaPrefixSnapshot? {
+        let persona = M1K3Persona.systemPrompt(includeExemplars: true)
         let key = PersonaCacheKey(
             modelID: modelIdentifier,
             toolNames: toolNames,
             // Exemplars ride the CACHED render — they cost once per launch,
             // not per turn. The fallback (inline instructions) stays compact.
-            personaText: M1K3Persona.systemPrompt(includeExemplars: true)
+            personaText: persona
         )
         if let hit = personaPrefix.snapshot(for: key) { return hit }
 
@@ -331,25 +332,13 @@ public final class MLXGemmaProvider: InferenceProvider, ModelPreloading, @unchec
         // MLXToolTurnSession relies on for its per-turn cache).
         struct PrefixBox: @unchecked Sendable {
             let cache: [KVCache]
-            let tokenCount: Int
+            let tokenIDs: [Int]
         }
         let built: PrefixBox = try await container.perform { context in
-            // Render the system block WITHOUT the assistant generation
-            // opener — needs the upstream tokenizer's full overload.
-            guard let upstream = (context.tokenizer as? TransformersTokenizerAdapter)?.upstream else {
-                throw InferenceError.generationFailed("no template tokenizer for persona prefix")
-            }
-            let ids = try upstream.applyChatTemplate(
-                messages: [[
-                    "role": "system",
-                    "content": M1K3Persona.systemPrompt(includeExemplars: true),
-                ]],
-                chatTemplate: nil,
-                addGenerationPrompt: false,
-                truncation: false,
-                maxLength: nil,
-                tools: specs
-            )
+            // System-block token ids, no assistant opener. Lenient templates
+            // render a system-only array; strict ones (Qwen3.5) reject it and
+            // need the two-probe boundary slice — see systemBlockIDs.
+            let ids = try self.systemBlockIDs(context: context, persona: persona, specs: specs)
             // Prefill: run a 1-token generation over the prefix, then trim
             // the cache back to exactly the prompt (the sampled token must
             // not pollute the reusable prefix).
@@ -367,12 +356,66 @@ public final class MLXGemmaProvider: InferenceProvider, ModelPreloading, @unchec
                 let extra = layer.offset - ids.count
                 if extra > 0 { _ = layer.trim(extra) }
             }
-            return PrefixBox(cache: cache, tokenCount: ids.count)
+            return PrefixBox(cache: cache, tokenIDs: ids)
         }
-        personaPrefix.store(built.cache, tokenCount: built.tokenCount, for: key)
-        let tokens = built.tokenCount
+        personaPrefix.store(built.cache, tokenIDs: built.tokenIDs, for: key)
+        let tokens = built.tokenIDs.count
         mlxTTFTLog.notice("persona prefix cached: \(tokens)tok (saved from every turn's prefill)")
         return personaPrefix.snapshot(for: key)
+    }
+
+    /// System-block token ids for the persona prefill (no assistant opener).
+    ///
+    /// Lenient templates (gemma) render a system-only message array directly.
+    /// Strict ones (Qwen3.5) raise "No user query found in messages" on a
+    /// system-only array — so on that throw we bracket the system block behind
+    /// two throwaway user turns whose first content token differs, and slice at
+    /// the boundary the subtraction locates (SystemBlockBoundary). The shared
+    /// user header cancels in the subtraction, so even a leading-space
+    /// tokenisation artifact is harmless. An unresolvable boundary re-throws the
+    /// original error → the caller sends the system turn inline (correct, just
+    /// unoptimised). A wrong boundary is never returned.
+    func systemBlockIDs(
+        context: ModelContext,
+        persona: String,
+        specs: [ToolSpec]?
+    ) throws -> [Int] {
+        guard let upstream = (context.tokenizer as? TransformersTokenizerAdapter)?.upstream else {
+            throw InferenceError.generationFailed("no template tokenizer for persona prefix")
+        }
+        func render(_ messages: [[String: String]], tools: [ToolSpec]?) throws -> [Int] {
+            try upstream.applyChatTemplate(
+                messages: messages,
+                chatTemplate: nil,
+                addGenerationPrompt: false,
+                truncation: false,
+                maxLength: nil,
+                tools: tools
+            )
+        }
+        let system: [String: String] = ["role": "system", "content": persona]
+        do {
+            return try render([system], tools: specs)
+        } catch {
+            let userA: [String: String] = ["role": "user", "content": "x"]
+            let userB: [String: String] = ["role": "user", "content": "7"]
+            // Probes carry the SAME tools (R) / none (U) as the persona render,
+            // so the user-header length the subtraction removes is exact.
+            let renderA = try render([system, userA], tools: specs)
+            let renderB = try render([system, userB], tools: specs)
+            let userOnlyA = try render([userA], tools: nil)
+            let userOnlyB = try render([userB], tools: nil)
+            guard let length = SystemBlockBoundary.systemBlockLength(
+                renderA: renderA,
+                renderB: renderB,
+                userOnlyA: userOnlyA,
+                userOnlyB: userOnlyB
+            ) else {
+                mlxLoadLog.notice("persona prefix: system-block boundary unresolved — inline system turn")
+                throw error
+            }
+            return Array(renderA.prefix(length))
+        }
     }
 
     /// Template context for the `enable_thinking` switch. nil when thinking is

@@ -172,6 +172,14 @@ enum SelfTest {
             }
 
             await runKVPersistProbeIfRequested(llm: llm)
+
+            // 3e. Optional persona-prefix invariant (M1K3_SELFTEST_PREFIX=1):
+            // assert [cached system block] + [delta] == [full render] for this
+            // model, and report the prefill tokens the cache saves. The safety
+            // net for the Qwen two-probe boundary slice — and gemma's prefix too.
+            if ProcessInfo.processInfo.environment["M1K3_SELFTEST_PREFIX"] == "1" {
+                emit(await llm.personaPrefixInvariantProbe())
+            }
         } catch {
             emit("✗ MLX generate stage: \(error)")
         }

@@ -50,7 +50,10 @@ public extension MLXGemmaProvider {
             try savePromptCache(
                 url: url,
                 cache: seed.cache,
-                metadata: ["tokenCount": String(seed.tokenCount)]
+                // Persist the token ids, not just the count — a disk-reloaded
+                // prefix needs them to drive cross-turn reuse (the count is the
+                // derived display value).
+                metadata: ["tokenIDs": seed.tokenIDs.map(String.init).joined(separator: ",")]
             )
             let saveMS = (clock.now - saveStart).milliseconds
             let bytes = (try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? Int) ?? 0
@@ -59,7 +62,9 @@ public extension MLXGemmaProvider {
             let loadStart = clock.now
             let (loaded, metadata) = try loadPromptCache(url: url)
             let loadMS = (clock.now - loadStart).milliseconds
-            let tokenCount = metadata["tokenCount"].flatMap(Int.init) ?? seed.tokenCount
+            let reloadedIDs = metadata["tokenIDs"]
+                .map { $0.split(separator: ",").compactMap { Int($0) } } ?? seed.tokenIDs
+            let tokenCount = reloadedIDs.count
             let cacheClass = loaded.first.map { String(describing: type(of: $0)) } ?? "empty"
 
             // 4. The proof: a generation seeded with the RELOADED cache must
@@ -67,7 +72,7 @@ public extension MLXGemmaProvider {
             let genStart = clock.now
             let answer = try await seededAnswer(
                 container: container,
-                seed: PersonaPrefixSnapshot(cache: loaded, tokenCount: tokenCount)
+                seed: PersonaPrefixSnapshot(cache: loaded, tokenIDs: reloadedIDs)
             )
             let genMS = (clock.now - genStart).milliseconds
 

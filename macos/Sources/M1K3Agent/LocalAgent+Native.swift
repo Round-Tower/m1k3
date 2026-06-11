@@ -41,7 +41,14 @@ extension LocalAgent {
         onConclusionToken: (@Sendable (String) -> Void)?,
         onReasoningToken: (@Sendable (String) -> Void)?
     ) async throws -> AgentResult {
-        let toolDefinitions = tools.values.map(\.toolDefinition)
+        // Sort by name: `tools` is a Dictionary and `.values` iterates in a
+        // nondeterministic order, so an unsorted list renders the tools block
+        // in a different order each turn — diverging from the persona-prefix
+        // seed (built once) right where the tools JSON begins, and silently
+        // collapsing cross-turn reuse. Sorting matches the persona-cache key,
+        // which already sorts tool names. (Tools resolve by name; order is
+        // behaviourally irrelevant.)
+        let toolDefinitions = tools.values.map(\.toolDefinition).sorted { $0.name < $1.name }
         let session = try await provider.makeToolTurnSession(
             tools: toolDefinitions,
             options: ToolTurnOptions(thinkingEnabled: thinkingEnabled)
@@ -77,9 +84,12 @@ extension LocalAgent {
         // this array is never re-sent; only the per-iteration delta is.
         var transcript: [ToolMessage] = []
         // Persona first (the chat template's system turn), then the goal —
-        // identity is standing, the goal is this turn's.
+        // identity is standing, the goal is this turn's. Exemplars included so
+        // this system text matches the persona-prefix seed token-for-token —
+        // that exact match is what lets the cache reuse the persona block at
+        // iteration 0 (MLXToolTurnSession's cross-turn reuse).
         var pendingMessages: [ToolMessage] = [
-            .system(M1K3Persona.systemPrompt),
+            .system(M1K3Persona.systemPrompt(includeExemplars: true)),
             .user(Self.buildNativeGoal(goal: goal, grounding: grounding)),
         ]
 
