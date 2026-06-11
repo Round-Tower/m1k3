@@ -354,14 +354,16 @@ private final class CountingTool: AgentTool, @unchecked Sendable {
     }
 }
 
-/// Never concludes; sleeps (cancellation-tolerant) so a cancel always lands
-/// before the iteration cap, letting the loop's own check trip.
+/// Never concludes; sleeps so a cancel always lands before the iteration cap.
+/// The sleep RE-THROWS on cancellation — an honest fake: a mid-generation
+/// cancel must propagate, not return "still thinking" (try? would let a
+/// non-cooperative loop pass this suite's cancellation test).
 private final class SleepyProvider: InferenceProvider, @unchecked Sendable {
     let name = "sleepy"
     let isAvailable = true
 
     func generate(prompt _: String) async throws -> String {
-        try? await Task.sleep(for: .milliseconds(20))
+        try await Task.sleep(for: .milliseconds(20))
         return "still thinking"
     }
 

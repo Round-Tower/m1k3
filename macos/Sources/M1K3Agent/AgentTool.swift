@@ -44,5 +44,11 @@ public protocol AgentTool: Sendable {
     /// Declared parameters. The first receives the positional argument.
     var parameters: [ToolParameter] { get }
     /// Execute against a name→value input map and return an observation.
+    ///
+    /// Error contract: failures the MODEL should see (network down, no
+    /// results, bad page) are returned as "Error: …" observations, never
+    /// thrown — the loop feeds them back so the model can adapt. `throws`
+    /// stays in the signature for genuinely unrecoverable tool states; the
+    /// built-in web/OS tools deliberately never use it.
     func execute(input: [String: String]) async throws -> ToolResult
 }

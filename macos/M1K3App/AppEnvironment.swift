@@ -658,10 +658,14 @@ extension AppEnvironment {
 
     /// Persist + apply the profile. Empty input clears it. The persona prefix
     /// cache re-keys off the persona text, so caches rebuild automatically.
+    /// Capped at the STORE boundary too (compose soft-trims at render time as
+    /// the safety net) — what's persisted is what the model actually sees,
+    /// and Settings re-displays the stored value.
     func saveUserProfile(_ text: String?) {
-        let trimmed = text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        try? store.setMeta(key: Self.userProfileMetaKey, value: trimmed)
-        M1K3Persona.setUserProfile(trimmed.isEmpty ? nil : trimmed)
+        let trimmed = (text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "")
+        let capped = String(trimmed.prefix(M1K3Persona.profileCharacterCap))
+        try? store.setMeta(key: Self.userProfileMetaKey, value: capped)
+        M1K3Persona.setUserProfile(capped.isEmpty ? nil : capped)
     }
 
     /// Re-embed the store when the running embedder's vector space doesn't

@@ -64,6 +64,10 @@ public enum PromptCachePolicy {
             fingerprint.kernelTag,
         ].joined(separator: separator)
         let digest = SHA256.hash(data: Data(canonical.utf8))
+        // 8 bytes = 64 bits of SHA-256: birthday-collision odds stay ~1e-9
+        // up to ~200k distinct fingerprints; this directory holds a handful
+        // (one per model × persona × tool set). Widen if prefixes ever
+        // become per-conversation.
         let hex = digest.prefix(8).map { String(format: "%02x", $0) }.joined()
         return "prompt-prefix-\(hex).safetensors"
     }

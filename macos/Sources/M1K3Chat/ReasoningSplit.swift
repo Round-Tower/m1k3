@@ -28,7 +28,8 @@ enum ReasoningSplit {
         // for us. Later tags are then handled by the normal pair loop.
         if let close = remaining.range(of: "</think>") {
             let open = remaining.range(of: "<think>")
-            if open == nil || close.lowerBound < open!.lowerBound {
+            let closeComesFirst = open.map { close.lowerBound < $0.lowerBound } ?? true
+            if closeComesFirst {
                 reasoningParts.append(String(remaining[..<close.lowerBound]))
                 remaining = remaining[close.upperBound...]
             }

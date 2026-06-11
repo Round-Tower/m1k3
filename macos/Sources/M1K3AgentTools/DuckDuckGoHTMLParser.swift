@@ -34,7 +34,9 @@ enum DuckDuckGoHTMLParser {
                 url: decodeRedirectURL(href),
                 snippet: snippet ?? ""
             ))
-            cursor = marker.upperBound
+            // Skip past the whole anchor, not just the marker — re-scanning a
+            // parsed result's tail made the walk superlinear in result count.
+            cursor = anchor.end
         }
         return results
     }
@@ -76,16 +78,25 @@ enum DuckDuckGoHTMLParser {
 
     // MARK: - Scanning helpers
 
+    /// One matched `<a class='result-link' …>…</a>`: its attribute text, inner
+    /// text, and where it ends (so the scan can skip past the whole anchor).
+    private struct AnchorMatch {
+        let attributes: Substring
+        let innerText: Substring
+        let end: String.Index
+    }
+
     private static func enclosingAnchor(
         in html: String, around marker: Range<String.Index>
-    ) -> (attributes: Substring, innerText: Substring)? {
+    ) -> AnchorMatch? {
         guard let open = html.range(of: "<a ", options: .backwards, range: html.startIndex ..< marker.lowerBound),
               let tagClose = html.range(of: ">", range: marker.upperBound ..< html.endIndex),
               let close = html.range(of: "</a>", range: tagClose.upperBound ..< html.endIndex)
         else { return nil }
-        return (
+        return AnchorMatch(
             attributes: html[open.upperBound ..< tagClose.lowerBound],
-            innerText: html[tagClose.upperBound ..< close.lowerBound]
+            innerText: html[tagClose.upperBound ..< close.lowerBound],
+            end: close.upperBound
         )
     }
 

@@ -89,6 +89,9 @@ private extension MLXGemmaProvider {
         let session = MLXToolTurnSession(
             container: container,
             parameters: generateParameters,
+            // Probe-only fallback (production paths guard-throw on nil):
+            // specs is nil so the format never renders a call here — it only
+            // keeps the probe runnable on a dialect-less family.
             format: resolvedToolCallFormat ?? .gemma,
             specs: nil,
             thinkingContext: thinkingAdditionalContext,

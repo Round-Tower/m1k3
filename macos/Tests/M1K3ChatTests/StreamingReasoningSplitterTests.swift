@@ -118,4 +118,40 @@ struct StreamingReasoningSplitterTests {
         #expect(splitter.reasoning == "plan\n\nmore thought")
         #expect(splitter.answer == "partial final")
     }
+
+    @Test("a cumulative snapshot landing mid-tag (AFM + holdback) still splits cleanly")
+    func cumulativeSnapshotWithSplitTag() {
+        // The subtlest interaction in the file: snapshot normalisation
+        // (hasPrefix → delta) while a close tag straddles the holdback window.
+        let splitter = run([
+            "<think>plan",
+            "<think>plan</th",
+            "<think>plan</think>ans",
+            "<think>plan</think>answer",
+        ])
+        #expect(splitter.reasoning == "plan")
+        #expect(splitter.answer == "answer")
+    }
+
+    @Test("finish() agrees with ReasoningSplit.split(raw) — the two authorities cannot drift")
+    func agreesWithPostStreamSplit() {
+        // ChatSession streams via this splitter but treats ReasoningSplit over
+        // `raw` as the final authority. Both implement the lone-</think> rule
+        // independently — pin the SPLIT placement to one contract (compared
+        // trimmed: the post-stream pass owns byte-level whitespace).
+        let streams: [[String]] = [
+            ["plain answer, no tags"],
+            ["<think>a</think>b"],
+            ["reasoning only</think>", " then answer"], // Qwen3.5 lone close
+            ["<think>one</think>mid<think>two</think>end"],
+            ["<think>unclosed thought"],
+        ]
+        for chunks in streams {
+            let splitter = run(chunks)
+            let (reasoning, answer) = ReasoningSplit.split(splitter.raw)
+            let trim = { (text: String) in text.trimmingCharacters(in: .whitespacesAndNewlines) }
+            #expect(trim(splitter.answer) == trim(answer), "answer drift on \(chunks)")
+            #expect(trim(splitter.reasoning) == trim(reasoning ?? ""), "reasoning drift on \(chunks)")
+        }
+    }
 }

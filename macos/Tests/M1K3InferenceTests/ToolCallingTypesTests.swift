@@ -33,6 +33,58 @@ struct JSONValueTests {
         let value = JSONValue.object(["b": .int(2), "a": .string("x")])
         #expect(value.stringValue == "a=x, b=2")
     }
+
+    @Test("encodes as plain JSON, not the synthesized enum container")
+    func encodesAsPlainJSON() throws {
+        // SE-0295 synthesis would wrap every case in a discriminant
+        // ({"string":{"_0":"x"}}) — a model echo built from that is garbage.
+        let value = JSONValue.object([
+            "query": .string("seals"),
+            "limit": .int(3),
+            "depth": .double(1.5),
+            "strict": .bool(true),
+            "tags": .array([.string("a")]),
+            "none": .null,
+        ])
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
+        let json = try #require(String(bytes: encoder.encode(value), encoding: .utf8))
+        #expect(json == #"{"depth":1.5,"limit":3,"none":null,"query":"seals","strict":true,"tags":["a"]}"#)
+    }
+
+    @Test("decodes plain JSON back into the matching cases")
+    func decodesPlainJSON() throws {
+        let json = #"{"query":"seals","limit":3,"strict":true,"tags":["a",2.5],"none":null}"#
+        let value = try JSONDecoder().decode(JSONValue.self, from: Data(json.utf8))
+        #expect(value == .object([
+            "query": .string("seals"),
+            "limit": .int(3),
+            "strict": .bool(true),
+            "tags": .array([.string("a"), .double(2.5)]),
+            "none": .null,
+        ]))
+    }
+
+    @Test("JSON 1/0 decode as ints, never coerced to bools")
+    func integerZeroOneStayInts() throws {
+        // Some model families emit integer-valued booleans; the Bool-first
+        // decode order must not swallow them (JSONDecoder doesn't coerce,
+        // pinned here so a future decoder swap can't regress it).
+        let json = #"{"flag":1,"off":0,"real":true}"#
+        let value = try JSONDecoder().decode(JSONValue.self, from: Data(json.utf8))
+        #expect(value == .object(["flag": .int(1), "off": .int(0), "real": .bool(true)]))
+    }
+
+    @Test("encode → decode round-trips every case")
+    func codableRoundTrip() throws {
+        let original = JSONValue.object([
+            "nested": .object(["k": .array([.int(1), .bool(false), .null])]),
+            "text": .string("x"),
+        ])
+        let data = try JSONEncoder().encode(original)
+        let decoded = try JSONDecoder().decode(JSONValue.self, from: data)
+        #expect(decoded == original)
+    }
 }
 
 struct ParsedToolCallTests {

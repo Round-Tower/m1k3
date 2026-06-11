@@ -127,6 +127,9 @@ extension LocalAgent {
                 // unchanged conversation (an empty delta has nothing to render).
                 pendingMessages = [.user("Reply with your final answer, or call one of the tools.")]
                 transcript.append(.assistant(text: nil, toolCalls: []))
+                // Every iteration leaves a trace step — a silent gap at this
+                // index would make a stalled turn look like a skipped one.
+                reasoningTrace.append(ReasoningStep(iteration: iteration, thought: "(empty turn)"))
 
             case let .toolCalls(calls):
                 transcript.append(.assistant(text: nil, toolCalls: calls))
@@ -194,7 +197,11 @@ extension LocalAgent {
             ToolCallSite(
                 toolName: parsedCall.name,
                 displayDescription: display,
-                eventArgument: parsedCall.stringArguments.values.first ?? ""
+                // Dictionary.values.first is order-nondeterministic; sort so a
+                // multi-arg call always surfaces the same argument in the UI.
+                eventArgument: parsedCall.stringArguments
+                    .sorted { $0.key < $1.key }
+                    .first?.value ?? ""
             ),
             executedActions: &executedActions,
             usedTools: &usedTools,
@@ -229,8 +236,15 @@ extension LocalAgent {
         switch turn {
         case let .text(answer) where !remainder.isEmpty:
             onConclusionToken?(remainder)
+            // Deliberate asymmetry with the main loop's `remainder.isEmpty ?
+            // "" : answer`: the user-visible conclusion already streamed via
+            // onConclusionToken; AgentResult.conclusion carries the RAW text
+            // (see its doc) for the trace/eval consumers.
             return answer
         case .text, .toolCalls:
+            // .text with an EMPTY remainder lands here on purpose: the model
+            // only reasoned (or called a tool against the instruction) — the
+            // gathered evidence is the best available answer in both cases.
             return Self.gatheredObservations(from: transcript)
         }
     }

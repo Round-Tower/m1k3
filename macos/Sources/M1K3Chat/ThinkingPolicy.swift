@@ -27,7 +27,10 @@ enum ThinkingPolicy {
     private static let longQuestionWordCount = 12
 
     /// Analytic markers — asks that benefit from chain-of-thought even when
-    /// short.
+    /// short. Matched as SUBSTRINGS (not word prefixes) on purpose — "analy"
+    /// catches analyse/analyze/analysis — which also means "barcode" trips
+    /// "code" and "rewrite" trips "write": acceptable false positives, they
+    /// only cost a think phase. Tune from real ttft logs.
     private static let analyticMarkers = [
         "why", "how", "explain", "compare", "analy", "plan", "debug",
         "write", "code", "calculate", "summar", "review", "design",

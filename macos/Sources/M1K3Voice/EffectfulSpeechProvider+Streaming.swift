@@ -182,7 +182,7 @@ final class StreamingPlaybackSession {
 
     /// Suspends until the last buffer plays back (or the session is cancelled).
     func awaitCompletion() async {
-        if isCancelled || (streamEnded && pendingBuffers <= 0) { return }
+        if isCancelled || (streamEnded && pendingBuffers == 0) { return }
         await withCheckedContinuation { completion = $0 }
     }
 
@@ -195,11 +195,14 @@ final class StreamingPlaybackSession {
 
     private func bufferCompleted() {
         pendingBuffers -= 1
+        // `== 0` (not `<= 0`) everywhere so an extra completion callback
+        // can't be masked — surface the imbalance in debug builds instead.
+        assert(pendingBuffers >= 0, "buffer completions exceeded schedules")
         finishIfDone()
     }
 
     private func finishIfDone() {
-        guard streamEnded, pendingBuffers <= 0 else { return }
+        guard streamEnded, pendingBuffers == 0 else { return }
         complete()
     }
 
@@ -211,6 +214,9 @@ final class StreamingPlaybackSession {
         player.stop()
         clockTask?.cancel()
         clockTask = nil
+        // Consume the continuation: a buffer callback already in flight when
+        // cancel() resumed us must find nil here, not a second resume (a
+        // CheckedContinuation traps on double-resume).
         completion?.resume()
         completion = nil
     }

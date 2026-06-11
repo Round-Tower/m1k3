@@ -99,7 +99,35 @@ struct MLXGemmaCallTextTests {
         #expect(text.contains("<tool_call>"))
         #expect(text.contains("</tool_call>"))
         #expect(text.contains("\"name\":\"search\""))
-        #expect(text.contains("seals"))
+        // Plain JSON scalar, NOT the synthesized enum container
+        // {"string":{"_0":"seals"}} — a .json-dialect model reads this echo.
+        #expect(text.contains("\"arguments\":{\"query\":\"seals\"}"))
+    }
+
+    @Test("json call text is valid RFC-8259 JSON for mixed argument types")
+    func jsonCallTextIsRealJSON() throws {
+        let call = ParsedToolCall(name: "lookup", arguments: [
+            "query": .string("seals"),
+            "limit": .int(3),
+            "strict": .bool(true),
+            "tags": .array([.string("a"), .string("b")]),
+            "filters": .object(["depth": .double(1.5), "none": .null]),
+        ])
+        let text = MLXToolMapping.callText(call, format: .json)
+        let payload = text
+            .replacingOccurrences(of: "<tool_call>", with: "")
+            .replacingOccurrences(of: "</tool_call>", with: "")
+        let object = try JSONSerialization.jsonObject(with: Data(payload.utf8)) as? [String: Any]
+        let parsed = try #require(object)
+        #expect(parsed["name"] as? String == "lookup")
+        let arguments = try #require(parsed["arguments"] as? [String: Any])
+        #expect(arguments["query"] as? String == "seals")
+        #expect(arguments["limit"] as? Int == 3)
+        #expect(arguments["strict"] as? Bool == true)
+        #expect(arguments["tags"] as? [String] == ["a", "b"])
+        let filters = try #require(arguments["filters"] as? [String: Any])
+        #expect(filters["depth"] as? Double == 1.5)
+        #expect(filters["none"] is NSNull)
     }
 
     @Test("the xmlFunction dialect renders <function=>/<parameter=> (Qwen3.5)")

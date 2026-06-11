@@ -70,6 +70,9 @@ public struct RAGResponder: RAGResponding, Sendable {
 
     /// Stream the answer. Returns the resolved `sources` immediately (retrieval
     /// happens up front) plus a token stream for the generated text.
+    /// Implements ONLY the plain variant — the protocol's one-way defaults
+    /// (history → activity → plain) all ground out here; this responder has
+    /// no history or activity behaviour to hook.
     public func answerStreaming(
         _ question: String
     ) async throws -> (sources: [ChunkHit], stream: AsyncStream<String>) {

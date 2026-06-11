@@ -59,4 +59,25 @@ struct ToolTurnTranscriptTests {
     func startsEmpty() {
         #expect(ToolTurnTranscript().full.isEmpty)
     }
+
+    @Test("a prepare-throw re-render sees no phantom assistant turn")
+    func noPhantomAssistantAfterSendThrow() {
+        // The recovery flow: recordSent happens BEFORE the render that can
+        // throw; recordGenerated only after a successful generation. A
+        // re-render of `full` right after the throw must therefore end on the
+        // sent messages — an invented empty assistant turn here would put the
+        // fresh render off-distribution. Pins the call-site ordering contract.
+        var transcript = ToolTurnTranscript()
+        transcript.recordSent([.system("persona"), .user("goal")])
+        transcript.recordGenerated(.toolCalls([ParsedToolCall(name: "search", arguments: [:])]))
+        transcript.recordSent([.toolResult(name: "search", output: "data")])
+        // Delta render rejected here — nothing generated.
+        let assistantTurns = transcript.full.filter {
+            if case .assistant = $0 { return true } else { return false }
+        }
+        #expect(assistantTurns.count == 1)
+        guard case .toolResult = transcript.full.last else {
+            Issue.record("re-render must end on the tool result"); return
+        }
+    }
 }

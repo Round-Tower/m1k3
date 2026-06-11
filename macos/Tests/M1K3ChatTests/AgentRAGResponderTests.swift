@@ -175,6 +175,25 @@ struct AgentRAGResponderTests {
         #expect(answer.contains("https://sealco.example"))
     }
 
+    @Test("web source URLs shed trailing sentence punctuation")
+    func webSourceTrailingPunctuation() {
+        // The regex's \S+ would otherwise capture the dot/paren that belongs
+        // to the sentence, not the URL ("… — https://a.example/page.").
+        let trace = [ReasoningStep(
+            iteration: 0,
+            thought: "",
+            action: "web_search(seals)",
+            observation: """
+            1. Acme — https://a.example/page.
+            2. SealCo — https://b.example/path),
+            """
+        )]
+        #expect(WebSourceExtractor.urls(from: trace) == [
+            "https://a.example/page",
+            "https://b.example/path",
+        ])
+    }
+
     @Test("an off-topic query injects NO knowledge and points the model at search_knowledge")
     func gatedQueryInjectsNothing() async throws {
         // The screenshot bug: "what model are you?" must not drag stored

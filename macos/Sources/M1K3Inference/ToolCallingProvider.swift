@@ -27,6 +27,10 @@
 //  challenger (typed transcript + typed args + runtime capability flag adopted;
 //  full TurnStrategy extraction deferred — runNative reuses the shared dispatch
 //  helpers rather than rewriting the proven ReAct path).
+//  Review: Kev + claude-fable-5, 2026-06-11, Confidence 0.9 — PR #16 review
+//  follow-ups: JSONValue Codable is now MANUAL RFC-8259 (the synthesized
+//  encoding was wire-garbage for the .json dialect, test-pinned);
+//  supportsToolCalls default flipped to false (native loop is opt-in).
 
 import Foundation
 import Synchronization
@@ -44,6 +48,47 @@ public enum JSONValue: Sendable, Equatable, Codable {
     case array([JSONValue])
     case object([String: JSONValue])
     case null
+
+    /// Codable is MANUAL: the SE-0295 synthesized conformance wraps each case
+    /// in a discriminant container (`{"string":{"_0":"seals"}}`), which is
+    /// not JSON a model can read — the `.json` tool-call dialect echoes these
+    /// values back into the chat transcript, so they must encode as the plain
+    /// JSON they represent (PR #16 review finding).
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        if container.decodeNil() {
+            self = .null
+        } else if let bool = try? container.decode(Bool.self) {
+            self = .bool(bool)
+        } else if let int = try? container.decode(Int.self) {
+            self = .int(int)
+        } else if let double = try? container.decode(Double.self) {
+            self = .double(double)
+        } else if let string = try? container.decode(String.self) {
+            self = .string(string)
+        } else if let array = try? container.decode([JSONValue].self) {
+            self = .array(array)
+        } else if let object = try? container.decode([String: JSONValue].self) {
+            self = .object(object)
+        } else {
+            throw DecodingError.dataCorruptedError(
+                in: container, debugDescription: "Not a JSON value"
+            )
+        }
+    }
+
+    public func encode(to encoder: any Encoder) throws {
+        var container = encoder.singleValueContainer()
+        switch self {
+        case let .string(value): try container.encode(value)
+        case let .int(value): try container.encode(value)
+        case let .double(value): try container.encode(value)
+        case let .bool(value): try container.encode(value)
+        case let .array(values): try container.encode(values)
+        case let .object(pairs): try container.encode(pairs)
+        case .null: try container.encodeNil()
+        }
+    }
 
     /// A flat string rendering for tools that take plain text. Scalars render
     /// naturally; containers fall back to their JSON-ish description.
@@ -201,10 +246,15 @@ public protocol ToolCallingProvider: InferenceProvider {
 }
 
 public extension ToolCallingProvider {
-    /// Conforming types are tool-capable by default; swappable wrappers override
-    /// to reflect their current backing model.
+    /// Defaults to FALSE — the safe direction. A conformer that forgets to
+    /// override stays on the ReAct floor (which works for every model) instead
+    /// of silently running a native loop whose calls never parse, burning all
+    /// iterations with no safety net. Real providers override with a runtime
+    /// answer (MLX: dialect recognised; wrappers: forward to the active backend).
+    /// NOTE this flipped from `true` (PR #16 review): conformers MUST override
+    /// to opt into the native loop — the default is a floor, not a hint.
     var supportsToolCalls: Bool {
-        true
+        false
     }
 
     func makeToolTurnSession(
@@ -224,6 +274,10 @@ public extension ToolCallingProvider {
 /// whole of it through `continueToolTurn` each send — no cache, no behaviour
 /// change from the pre-session loop. `@unchecked Sendable`: the transcript is
 /// Mutex-guarded; the agent loop uses a session strictly serially anyway.
+///
+/// The re-render makes iteration N's prefill O(transcript) — fine at today's
+/// iteration caps. TODO: profile TTFT here when a non-MLX provider (AFM tool
+/// bridge, Phase 12b) starts carrying real agent turns.
 final class StatelessToolTurnSession: ToolTurnSession, @unchecked Sendable {
     private let provider: any ToolCallingProvider
     private let tools: [ToolDefinition]

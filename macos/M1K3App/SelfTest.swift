@@ -209,7 +209,10 @@ enum SelfTest {
     /// needs no eval-side configuration at all.
     private static func evalModel(_ modelID: String) async -> ModelEvalReport {
         var records: [ModelEvalRecord] = []
-        let provider = MLXGemmaProvider(modelID: modelID, maxTokens: 1024)
+        // 2048, not the chat default: a reasoning model can spend 200–800
+        // tokens inside <think> before the one-word answer the think-contract
+        // check wants — 1024 risked false truncation FAILs on verbose models.
+        let provider = MLXGemmaProvider(modelID: modelID, maxTokens: 2048)
 
         // Check 1+2: generates a usable answer; reasoning families emit a
         // well-formed think pair (the Qwen3.5 lone-close bug class).

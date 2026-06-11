@@ -80,6 +80,10 @@ extension RuntimeInferenceProvider: ToolCallingProvider {
     }
 
     func continueToolTurn(messages: [ToolMessage], tools: [ToolDefinition]) async throws -> ToolTurn {
+        // Defensive against the swap race, not against logic: `active` may
+        // have been re-pointed (Settings brain switch) between LocalAgent
+        // reading supportsToolCalls and this call. Throwing surfaces the rare
+        // mid-turn swap; the responder's plain-RAG fallback absorbs it.
         guard let toolProvider = active as? ToolCallingProvider else {
             throw InferenceError.generationFailed("active backend does not support tool calls")
         }
