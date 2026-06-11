@@ -172,6 +172,8 @@ struct SettingsView: View {
                         .font(.caption).foregroundStyle(.secondary)
                 }
 
+                mcpSection
+
                 aboutYouSection
 
                 Section {
@@ -251,6 +253,30 @@ struct SettingsView: View {
                     .font(.caption)
                     .foregroundStyle(.orange)
             }
+        }
+    }
+
+    /// In-process MCP server controls. Own property — the Form expression
+    /// is over the type-checker budget when sections are inlined.
+    private var mcpSection: some View {
+        Section {
+            Toggle("MCP server (HTTP, localhost)", isOn: Binding(
+                get: { env.mcpHost.isEnabled },
+                set: { env.mcpHost.setEnabled($0) }
+            ))
+            if let status = env.mcpHost.statusText {
+                LabeledContent("Status", value: status)
+            }
+        } header: {
+            Text("MCP server")
+        } footer: {
+            Text("Lets Claude (or any MCP client) on THIS Mac use M1K3's "
+                + "knowledge search, voice, and microphone. Loopback only — "
+                + "never reachable from the network. One client at a time. "
+                + "Connect with:  claude mcp add --transport http m1k3 "
+                + "http://127.0.0.1:\(env.mcpHost.port)/mcp")
+                .font(.caption).foregroundStyle(.secondary)
+                .textSelection(.enabled)
         }
     }
 

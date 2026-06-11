@@ -115,8 +115,7 @@ final class AppEnvironment {
     /// recogniser seam (LocalAgent+Logging precedent).
     let transcription: TranscriptionRouter
     private let whisperKit: WhisperKitProvider
-    private var dictationProvider: (any TranscriptionProvider)?
-    private var dictationTask: Task<Void, Never>?
+    private var dictationProvider: (any TranscriptionProvider)?, dictationTask: Task<Void, Never>?
     /// Batch (file → segments) transcription for recorded calls. Closes the mic
     /// path: a stopped recording runs through the SAME CallIntelligencePipeline the
     /// import path proves. Opt-in (needs a model) like live WhisperKit.
@@ -149,6 +148,9 @@ final class AppEnvironment {
     /// Written ONLY by enterVoiceMode/exitVoiceMode (AppEnvironment+VoiceMode.swift;
     /// internal because private(set) is file-scoped).
     var voiceLoop: VoiceLoopController?
+    /// In-process MCP server lifecycle + voice tool glue (MCPHostController.swift).
+    /// Set once at init tail (needs self for the handler closures).
+    private(set) var mcpHost: MCPHostController!
 
     private static let embedderPrefersMLXKey = "embedder.prefersMLX"
     static let selectedBrainKey = "selectedBrain"
@@ -317,6 +319,8 @@ final class AppEnvironment {
         // initialized (see the Voice output extension).
         wireSpeechCallbacks()
         Self.resetVoiceModeFlagAtLaunch()
+        mcpHost = MCPHostController(environment: self)
+        mcpHost.startIfEnabled()
 
         // Warm a restored MLX brain (Lil/Big) on launch so it's ready to answer;
         // Mini (Apple) needs nothing. Setting selectedRuntime drives the existing

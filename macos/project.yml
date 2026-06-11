@@ -69,6 +69,8 @@ targets:
         product: M1K3Avatar
       - package: M1K3
         product: M1K3Kokoro
+      - package: M1K3
+        product: M1K3MCPKit
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: dev.murphysig.M1K3
