@@ -28,6 +28,17 @@ struct M1K3PersonaTests {
         #expect(M1K3Persona.systemPrompt.lowercased().contains("casual"))
     }
 
+    @Test("routes real-time questions to web search instead of refusing")
+    func realTimeUsesWebSearch() {
+        // The ⌘R weather bug: "Yo Mike what's the weather" read as casual, and
+        // the persona's "no searching" + "lives entirely on this Mac" made the
+        // model refuse with "I don't have real-time data". The persona must
+        // carve out current-world questions and point them at web search.
+        let prompt = M1K3Persona.systemPrompt.lowercased()
+        #expect(prompt.contains("web search"))
+        #expect(prompt.contains("weather") || prompt.contains("news") || prompt.contains("right now"))
+    }
+
     @Test("carries the distilled character: curious, kind, listens, teaches, humour")
     func character() {
         let prompt = M1K3Persona.systemPrompt.lowercased()

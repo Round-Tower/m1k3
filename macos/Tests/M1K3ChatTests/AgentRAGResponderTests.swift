@@ -305,7 +305,10 @@ struct AgentRAGResponderTests {
         )
         #expect(!rules.contains("CONCLUSION:"))
         #expect(!rules.contains("at most two tool calls"))
-        #expect(rules.contains("Casual conversation needs no tools"))
+        #expect(rules.contains("Pure small talk"))
+        // A casually-phrased real-time question must NOT read as no-tool chat
+        // (the ⌘R weather refusal).
+        #expect(rules.contains("NOT small talk"))
         // Routing + citation guidance survive on both paths.
         #expect(rules.contains("use web_search"))
         #expect(rules.contains("never invent citations"))

@@ -47,10 +47,15 @@ struct GroundingGateTests {
         #expect(GroundingGate.filter(hits).isEmpty)
     }
 
-    @Test("an FTS-only hit (no similarity) survives only beside a topical vector hit")
-    func ftsOnlyNeedsTopicalSibling() {
-        let topical = [hit("vector match", similarity: 0.74), hit("fts only", similarity: nil)]
-        #expect(GroundingGate.filter(topical).count == 2)
+    @Test("an FTS-only hit (no vector score) is never injected — even beside a topical hit")
+    func ftsOnlyAlwaysDropped() {
+        // A nil-similarity hit appeared ONLY in the keyword ranking, never the
+        // vector top-K (post-backfill): "Cork/weather/today" matching stored
+        // docs is lexical coincidence, not topical relevance. One borderline
+        // vector hit must NOT flood the prompt with all the keyword noise (the
+        // ⌘R weather bug: 7KB of grounding for "what's the weather in Cork").
+        let beside = [hit("vector match", similarity: 0.74), hit("fts only", similarity: nil)]
+        #expect(GroundingGate.filter(beside).map(\.content) == ["vector match"])
 
         let alone = [hit("fts only", similarity: nil)]
         #expect(GroundingGate.filter(alone).isEmpty)

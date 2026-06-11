@@ -29,16 +29,15 @@ public enum GroundingGate {
     /// normalisation is the upgrade path if a fixed floor keeps misfiring.
     public static let chunkThreshold: Float = 0.62
 
-    /// Filter retrieved hits down to the ones worth injecting. An FTS-only
-    /// hit (no vector score) survives only when at least one vector hit passed
-    /// — a keyword match against an off-topic query is exactly the noise this
-    /// gate exists to drop.
+    /// Filter retrieved hits down to the ones worth injecting: a hit must clear
+    /// the cosine bar ON ITS OWN. An FTS-only hit (no vector score) appeared
+    /// only in the keyword ranking, never the vector top-K — lexical
+    /// coincidence, not relevance — so it is dropped, NOT carried in on a
+    /// topical sibling. (Letting it ride along flooded a "what's the weather in
+    /// Cork" prompt with 7KB of keyword-matched noise that drowned the
+    /// web_search routing — the ⌘R weather bug.) When nothing clears the bar,
+    /// nothing is injected and the model retrieves on its own via search_knowledge.
     public static func filter(_ hits: [ChunkHit]) -> [ChunkHit] {
-        let anyTopical = hits.contains { ($0.similarity ?? 0) >= chunkThreshold }
-        guard anyTopical else { return [] }
-        return hits.filter { hit in
-            guard let similarity = hit.similarity else { return true }
-            return similarity >= chunkThreshold
-        }
+        hits.filter { ($0.similarity ?? 0) >= chunkThreshold }
     }
 }

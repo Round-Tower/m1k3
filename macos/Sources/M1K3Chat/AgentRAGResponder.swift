@@ -379,7 +379,8 @@ public struct AgentRAGResponder: RAGResponding, Sendable {
         case .native:
             """
             RULES:
-            - Casual conversation needs no tools and no knowledge — just reply.
+            - Pure small talk — greetings, banter — needs no tools or knowledge; just reply. \
+            A question about the current world is NOT small talk, even phrased casually.
             - If the KNOWLEDGE above answers the question, answer from it directly.
             - Cite knowledge sources inline with citation tokens like \
             [Title §heading]; never invent citations.
