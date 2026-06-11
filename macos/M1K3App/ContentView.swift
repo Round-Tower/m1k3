@@ -8,6 +8,9 @@
 //  package methods; all the stateful folding lives in the tested ChatSession.
 //
 //  Signed: Kev + claude-opus-4-8, 2026-06-06, Confidence 0.8, Prior: Unknown
+//  Review: Kev + claude-fable-5, 2026-06-11 — voice-first mode: full-window body
+//  swap to VoiceModeView, toolbar entry + ⌘⇧V, chat actions hidden while active.
+//  Confidence 0.8.
 
 import M1K3Avatar
 import SwiftUI
@@ -25,11 +28,20 @@ struct ContentView: View {
     @AppStorage("showAvatar") private var showAvatar = true
 
     var body: some View {
-        VStack(spacing: 0) {
-            avatarPanel
-            transcript
-            inputBar
+        Group {
+            if env.isVoiceModeActive {
+                VoiceModeView()
+                    .transition(.opacity.combined(with: .scale(scale: 0.97)))
+            } else {
+                VStack(spacing: 0) {
+                    avatarPanel
+                    transcript
+                    inputBar
+                }
+                .transition(.opacity)
+            }
         }
+        .animation(.easeInOut(duration: 0.3), value: env.isVoiceModeActive)
         .frame(minWidth: 600, minHeight: 520)
         .background {
             // Ambient drifting orbs while capturing audio (recording / dictation),
@@ -253,6 +265,32 @@ struct ContentView: View {
             statusIndicator
         }
         ToolbarItemGroup(placement: .primaryAction) {
+            Button {
+                if env.isVoiceModeActive {
+                    env.exitVoiceMode()
+                } else {
+                    env.enterVoiceMode()
+                }
+            } label: {
+                Label(
+                    env.isVoiceModeActive ? "Leave voice mode" : "Voice mode",
+                    systemImage: env.isVoiceModeActive ? "person.wave.2.fill" : "person.wave.2"
+                )
+            }
+            .keyboardShortcut("v", modifiers: [.command, .shift])
+            .disabled(!env.isVoiceModeActive && (!env.canDictate || env.chat.isResponding || env.isListening))
+            .help(env.isVoiceModeActive
+                ? "Back to the chat (⌘⇧V)"
+                : "Talk with M1K3 — hands-free conversation (⌘⇧V)")
+            if !env.isVoiceModeActive {
+                chatToolbarItems
+            }
+        }
+    }
+
+    /// The chat-surface actions — hidden while voice mode owns the window.
+    private var chatToolbarItems: some View {
+        Group {
             Button { env.chat.clear() } label: {
                 Label("New chat", systemImage: "square.and.pencil")
             }

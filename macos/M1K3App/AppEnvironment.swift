@@ -17,6 +17,10 @@
 //  into the observable `modelLoad: ModelLoadState`, mirroring the existing
 //  embeddings-switch pattern; the embedder switch routes its own download % into
 //  `embeddingStatus`. Fixed the "Gemma 4" runtime labels (Gemma 3 is current).
+//  Review: Kev + claude-fable-5, 2026-06-11 — speech wiring moved to
+//  wireSpeechCallbacks() (+ word-timing → SpeechHighlight); voiceLoop stored
+//  property + speechDidEnd routing; voice-mode Auto→fast thinking override;
+//  stale voiceMode.active cleared at launch. Confidence 0.8.
 
 import Foundation
 import M1K3Agent
@@ -106,8 +110,10 @@ final class AppEnvironment {
     private let swappableMLX: SwappableInferenceProvider
     /// Voice input: WhisperKit (high accuracy, needs a model) routed ahead of
     /// Apple Speech (system framework, always available). Held directly so the
-    /// app can load WhisperKit's model on demand.
-    private let transcription: TranscriptionRouter
+    /// app can load WhisperKit's model on demand. Internal (not private) for
+    /// AppEnvironment+VoiceMode.swift — the voice loop consumes the same
+    /// recogniser seam (LocalAgent+Logging precedent).
+    let transcription: TranscriptionRouter
     private let whisperKit: WhisperKitProvider
     private var dictationProvider: (any TranscriptionProvider)?
     private var dictationTask: Task<Void, Never>?
@@ -137,6 +143,12 @@ final class AppEnvironment {
     /// The avatar companion state — driven by this environment at each transition
     /// (listening → thinking → generating → speaking → idle).
     private(set) var avatar = AvatarController()
+    /// Word-highlight state for speech playback (the karaoke reading view).
+    let speechHighlight = SpeechHighlight()
+    /// Voice-first mode's conversation loop — non-nil while the mode is active.
+    /// Written ONLY by enterVoiceMode/exitVoiceMode (AppEnvironment+VoiceMode.swift;
+    /// internal because private(set) is file-scoped).
+    var voiceLoop: VoiceLoopController?
 
     private static let embedderPrefersMLXKey = "embedder.prefersMLX"
     static let selectedBrainKey = "selectedBrain"
@@ -301,13 +313,10 @@ final class AppEnvironment {
         refreshCounts()
         Task { await self.runStartupMaintenance() }
 
-        // Wire avatar ↔ speech after all stored properties are initialized.
-        speech.onSpeakingStarted = { [weak self] in
-            Task { @MainActor [weak self] in self?.avatar.setActivity(.speaking) }
-        }
-        speech.onSpeakingEnded = { [weak self] in
-            Task { @MainActor [weak self] in self?.avatar.resetToIdle() }
-        }
+        // Wire avatar + word highlight ↔ speech after all stored properties are
+        // initialized (see the Voice output extension).
+        wireSpeechCallbacks()
+        Self.resetVoiceModeFlagAtLaunch()
 
         // Warm a restored MLX brain (Lil/Big) on launch so it's ready to answer;
         // Mini (Apple) needs nothing. Setting selectedRuntime drives the existing
@@ -371,16 +380,8 @@ final class AppEnvironment {
         avatar.resetToIdle()
     }
 
-    /// Speak text via the TTS provider. The onSpeakingStarted/Ended delegate
-    /// callbacks drive avatar .speaking → .idle; no manual state change needed here.
-    func speak(_ text: String) async {
-        await speech.speak(text)
-    }
-
-    func stopSpeaking() async {
-        await speech.stop()
-        avatar.resetToIdle()
-    }
+    // speak/stopSpeaking/wireSpeechCallbacks live in AppEnvironment+VoiceMode.swift
+    // (relocated to keep this class body under SwiftLint's ceilings).
 
     // MARK: - Voice input
 
@@ -760,8 +761,14 @@ extension AppEnvironment {
             },
             sourceCollector: sourceCollector,
             thinkingModeProvider: {
-                UserDefaults.standard.string(forKey: Self.thinkingModeKey)
+                let stored = UserDefaults.standard.string(forKey: Self.thinkingModeKey)
                     .flatMap(ThinkingMode.init(rawValue:)) ?? .auto
+                // Voice mode maps Auto → fast replies (latency IS the UX in a
+                // spoken loop); an explicit Always is respected.
+                if stored == .auto, UserDefaults.standard.bool(forKey: Self.voiceModeActiveKey) {
+                    return .fast
+                }
+                return stored
             }
         )
     }
