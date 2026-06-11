@@ -44,13 +44,14 @@ struct ContentView: View {
         .animation(.easeInOut(duration: 0.3), value: env.isVoiceModeActive)
         .frame(minWidth: 600, minHeight: 520)
         .background {
-            // Ambient drifting orbs while capturing audio (recording / dictation),
-            // fading in over the glass. Sits above the window glass, behind content.
-            if isCapturingAudio {
+            // Ambient drifting orbs while capturing audio (recording / dictation)
+            // or throughout voice-first mode, fading in over the glass. Sits
+            // above the window glass, behind content.
+            if showsAmbientBackdrop {
                 AudioCaptureBackdrop().transition(.opacity)
             }
         }
-        .animation(.easeInOut(duration: 0.45), value: isCapturingAudio)
+        .animation(.easeInOut(duration: 0.45), value: showsAmbientBackdrop)
         .glassBackdrop()
         .dropDestination(for: URL.self) { urls, _ in
             for url in urls {
@@ -198,10 +199,12 @@ struct ContentView: View {
         !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !env.chat.isResponding
     }
 
-    /// True while M1K3 is capturing audio — dictation or a call recording — the cue
-    /// for the ambient animated backdrop.
-    private var isCapturingAudio: Bool {
-        env.isListening || env.isRecording
+    /// Cue for the ambient animated backdrop: audio capture (dictation / call
+    /// recording) or the WHOLE of voice-first mode. The mode is one continuous
+    /// audio conversation — gating per phase would fade the orbs out every time
+    /// M1K3 starts speaking, which reads as the app going dead mid-sentence.
+    private var showsAmbientBackdrop: Bool {
+        env.isListening || env.isRecording || env.isVoiceModeActive
     }
 
     /// One spoken label for the toolbar status pill — the colour-coded dots carry
