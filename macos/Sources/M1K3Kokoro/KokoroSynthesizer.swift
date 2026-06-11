@@ -19,10 +19,29 @@
 //  Signed: Kev + claude-opus-4-8, 2026-06-09, Confidence 0.6, Prior: Unknown
 //  Review: claude (PR #13) — hoisted blocking load/inference off the cooperative pool
 //  via Task.detached + single-flight load Task. Confidence 0.7.
+//  Review: Kev + claude-fable-5, 2026-06-11 — synthesizeStream: sentence-chunked
+//  synthesis (SpeechChunker) with per-chunk word timelines; synthesize() now
+//  concatenates the stream — the silent 510-token truncation is gone.
+//  Confidence 0.8.
 //
 
 import Foundation
+import M1K3Voice
 import OnnxRuntimeBindings
+
+/// One synthesized piece of an utterance: its audio and the word timing for
+/// exactly that audio. `timeline.text` is the FULL utterance text (ranges
+/// already offset); times are relative to the CHUNK's own start — the playback
+/// layer anchors them globally as it schedules.
+public struct SynthesizedChunk: Sendable {
+    public let samples: [Float]
+    public let timeline: SpokenWordTimeline
+
+    public init(samples: [Float], timeline: SpokenWordTimeline) {
+        self.samples = samples
+        self.timeline = timeline
+    }
+}
 
 public actor KokoroSynthesizer {
     public struct SynthError: Error, CustomStringConvertible {
@@ -77,17 +96,72 @@ public actor KokoroSynthesizer {
 
     /// Synthesize `text` to mono float PCM @ 24 kHz. Empty result ⇒ nothing to say
     /// (all words out-of-vocabulary); the caller should fall back.
+    ///
+    /// Concatenates `synthesizeStream` — long text is sentence-chunked under the
+    /// model's 510-token context, never truncated (the old single-pass cap
+    /// silently dropped everything past ~150 words).
     public func synthesize(text: String, speed: Float = 1.0) async throws -> [Float] {
+        var all: [Float] = []
+        for try await chunk in synthesizeStream(text: text, speed: speed) {
+            all.append(contentsOf: chunk.samples)
+        }
+        return all
+    }
+
+    /// Synthesize `text` chunk-by-chunk: sentence-aware pieces ≤ the model's
+    /// 510-token context, each yielded with its word timeline as soon as its
+    /// inference finishes — playback can start after the first sentence.
+    public nonisolated func synthesizeStream(
+        text: String,
+        speed: Float = 1.0
+    ) -> AsyncThrowingStream<SynthesizedChunk, Error> {
+        AsyncThrowingStream { continuation in
+            let producer = Task {
+                do {
+                    try await self.produceChunks(text: text, speed: speed) {
+                        continuation.yield($0)
+                    }
+                    continuation.finish()
+                } catch {
+                    continuation.finish(throwing: error)
+                }
+            }
+            continuation.onTermination = { _ in producer.cancel() }
+        }
+    }
+
+    private func produceChunks(
+        text: String,
+        speed: Float,
+        yield: @Sendable (SynthesizedChunk) -> Void
+    ) async throws {
         let box = try await ensureLoaded()
-        let phonemes = box.g2p.phonemeTokens(text)
-        guard !phonemes.isEmpty else { return [] }
-        let style = try box.voices.style(voice: voice, tokenCount: phonemes.count)
-        let modelTokens: [Int64] = [0] + phonemes.map(Int64.init) + [0]
-        // Inference is OS-blocking; run it off the cooperative pool. Safe to run
-        // concurrently on the shared session (ORT `run()` is thread-safe).
-        return try await Task.detached(priority: .userInitiated) {
-            try Self.infer(box, tokens: modelTokens, style: style, speed: speed)
-        }.value
+        let ranges = SpeechChunker.chunkRanges(
+            text,
+            tokenCount: { box.g2p.annotatedTokens(String($0)).tokens.count },
+            maxTokens: KokoroG2P.maxTokens
+        )
+        let fullText = text as NSString
+        for range in ranges {
+            try Task.checkCancellation()
+            let chunkText = fullText.substring(with: NSRange(location: range.lowerBound, length: range.count))
+            let result = box.g2p.annotatedTokens(chunkText)
+            guard !result.tokens.isEmpty else { continue } // all-OOV chunk: no audio to time
+            let style = try box.voices.style(voice: voice, tokenCount: result.tokens.count)
+            let modelTokens: [Int64] = [0] + result.tokens.map(Int64.init) + [0]
+            // Inference is OS-blocking; run it off the cooperative pool. Safe to run
+            // concurrently on the shared session (ORT `run()` is thread-safe).
+            let samples = try await Task.detached(priority: .userInitiated) {
+                try Self.infer(box, tokens: modelTokens, style: style, speed: speed)
+            }.value
+            let timeline = KokoroWordTiming.timeline(
+                text: text,
+                result: result,
+                audioDuration: Double(samples.count) / Self.sampleRate,
+                textOffset: range.lowerBound
+            )
+            yield(SynthesizedChunk(samples: samples, timeline: timeline))
+        }
     }
 
     /// Single-flight load: the first caller creates the detached load Task and stores
