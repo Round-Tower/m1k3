@@ -20,6 +20,7 @@
 
 import Foundation
 import M1K3Avatar
+import M1K3Chat // HeadlessAsk + RAGResponding (the ask_m1k3 core)
 import M1K3MCPKit
 import M1K3Voice
 import MCP // StatelessHTTPServerTransport (the SDK type the session factory builds)
@@ -34,6 +35,9 @@ final class MCPHostController {
 
     private unowned let env: AppEnvironment
     private var server: LocalMCPHTTPServer?
+    /// One ask_m1k3 at a time — a second concurrent generation on the same
+    /// MLX provider is undefined territory.
+    private var askInFlight = false
 
     private(set) var isRunning = false
     private(set) var statusText: String?
@@ -68,7 +72,9 @@ final class MCPHostController {
     func start() async {
         guard server == nil else { return }
         let registry = MCPToolRegistry(
-            makeKnowledgeToolDefinitions(store: env.store) + makeVoiceToolDefinitions(handlers: makeVoiceHandlers())
+            makeKnowledgeToolDefinitions(store: env.store)
+                + makeVoiceToolDefinitions(handlers: makeVoiceHandlers())
+                + makeIntelligenceToolDefinitions(handlers: makeIntelligenceHandlers())
         )
         let host = LocalMCPHTTPServer(
             port: port,
@@ -111,9 +117,9 @@ final class MCPHostController {
     /// over a live voice conversation or an in-flight chat turn.
     private func makeVoiceHandlers() -> VoiceToolHandlers {
         VoiceToolHandlers(
-            speak: { [weak self] text, emotion in
+            speak: { [weak self] text, emotion, wait in
                 guard let self else { throw MCPVoiceError("M1K3 is shutting down") }
-                try await self.beginSpeak(text: text, emotion: emotion)
+                try await self.beginSpeak(text: text, emotion: emotion, wait: wait)
             },
             stopSpeaking: { [weak self] in
                 await self?.env.stopSpeaking()
@@ -128,22 +134,79 @@ final class MCPHostController {
         )
     }
 
-    private func beginSpeak(text: String, emotion: String?) async throws {
+    /// `wait: false` fires speech and returns immediately — env.speak awaits
+    /// FULL playback (EffectfulSpeechProvider+Streaming awaitCompletion), and
+    /// the SDK Server is serial, so a blocking speak would starve every status
+    /// poll for the whole utterance (the report's F3-as-observed).
+    private func beginSpeak(text: String, emotion: String?, wait: Bool) async throws {
         guard env.voiceLoop == nil, !env.chat.isResponding else {
             throw MCPVoiceError("M1K3 is in a conversation right now — try again shortly")
         }
         if let emotion {
             env.avatar.setEmotion(AvatarEmotion.from(emotion))
         }
-        await env.speak(text)
+        if wait {
+            await env.speak(text)
+        } else {
+            let environment = env
+            Task { @MainActor in await environment.speak(text) }
+        }
     }
 
     private func voiceStatus() async -> VoiceStatus {
-        VoiceStatus(
+        // speaking covers the Kokoro synthesis gap too: the highlight's
+        // utterance text is set at utterance start and cleared on end.
+        let speaking = await env.speech.isSpeaking() || env.speechHighlight.utteranceText != nil
+        return VoiceStatus(
             providerName: env.speech.active.name,
             tier: env.selectedVoiceTier.displayName,
-            isSpeaking: await env.speech.isSpeaking()
+            brain: env.selectedBrain.displayName,
+            isSpeaking: speaking,
+            inConversation: env.voiceLoop != nil || env.chat.isResponding,
+            micInUse: env.voiceLoop != nil || env.isListening || env.isRecording
         )
+    }
+
+    // MARK: - Intelligence tool handlers
+
+    /// ask_m1k3 runs on a DEDICATED responder instance — collectedSources()
+    /// is a draining read, so sharing the chat UI's responder would race a
+    /// live turn. Same store/embedder/provider, fresh per server start.
+    private func makeIntelligenceHandlers() -> IntelligenceToolHandlers {
+        let askResponder = AppEnvironment.makeAgentResponder(
+            store: env.store, embedder: env.embedder, provider: env.provider
+        )
+        return IntelligenceToolHandlers(
+            ask: { [weak self] question in
+                guard let self else { throw MCPVoiceError("M1K3 is shutting down") }
+                return try await self.askBrain(question, responder: askResponder)
+            },
+            remember: { [weak self] title, text in
+                guard let self else { throw MCPVoiceError("M1K3 is shutting down") }
+                return try await self.rememberText(title: title, text: text)
+            }
+        )
+    }
+
+    private func askBrain(_ question: String, responder: any RAGResponding) async throws -> String {
+        guard env.voiceLoop == nil, !env.chat.isResponding else {
+            throw MCPVoiceError("M1K3 is in a conversation right now — try again shortly")
+        }
+        guard !askInFlight else {
+            throw MCPVoiceError("M1K3 is already answering an ask_m1k3 call")
+        }
+        askInFlight = true
+        defer { askInFlight = false }
+        env.avatar.setActivity(.thinking)
+        defer { env.avatar.resetToIdle() }
+        return try await HeadlessAsk.answer(question, using: responder)
+    }
+
+    private func rememberText(title: String, text: String) async throws -> String {
+        let result = try await env.ingester.ingest(title: title, text: text)
+        env.refreshCounts()
+        let dedup = result.wasDeduped ? " (already indexed)" : ""
+        return "Indexed “\(title)” — \(result.chunkCount) chunks\(dedup)."
     }
 
     /// Pull-model transcription for the `listen` tool: open the active STT
@@ -156,6 +219,14 @@ final class MCPHostController {
         }
         guard let provider = env.transcription.activeProvider else {
             throw MCPVoiceError("no speech recognizer is available")
+        }
+        // Don't open the mic over our own voice (the speak→listen race):
+        // wait, bounded, for any in-progress utterance to finish.
+        let quietDeadline = Date().addingTimeInterval(20)
+        while Date() < quietDeadline,
+              await env.speech.isSpeaking() || env.speechHighlight.utteranceText != nil
+        {
+            try? await Task.sleep(for: .milliseconds(150))
         }
         env.avatar.setActivity(.listening)
         defer { env.avatar.resetToIdle() }

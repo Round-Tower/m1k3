@@ -67,6 +67,19 @@ public struct DocumentIngester: Sendable {
         return IngestResult(itemID: itemID, chunkCount: knowledgeChunks.count, wasDeduped: false)
     }
 
+    public enum IngestError: Error, Sendable, Equatable, LocalizedError {
+        /// The payload is markup (SVG/XML/HTML), not prose — indexing it
+        /// pollutes FTS with tag noise (the "Artboard" finding).
+        case markupNotProse
+
+        public var errorDescription: String? {
+            switch self {
+            case .markupNotProse:
+                "This looks like raw markup (SVG/XML/HTML), not readable text — convert it to prose or PDF first."
+            }
+        }
+    }
+
     /// Ingest a single block of raw text as a one-page document.
     @discardableResult
     public func ingest(
@@ -74,7 +87,8 @@ public struct DocumentIngester: Sendable {
         text: String,
         sourceRef: String? = nil
     ) async throws -> IngestResult {
-        try await ingest(
+        guard !MarkupGuard.looksLikeMarkup(text) else { throw IngestError.markupNotProse }
+        return try await ingest(
             title: title,
             pages: [DocumentPage(pageNumber: 1, text: text)],
             sourceRef: sourceRef

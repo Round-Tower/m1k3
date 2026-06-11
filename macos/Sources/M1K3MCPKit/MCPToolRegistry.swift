@@ -78,3 +78,8 @@ public func doubleArg(_ args: [String: Value]?, _ key: String) -> Double? {
     default: return nil
     }
 }
+
+public func boolArg(_ args: [String: Value]?, _ key: String) -> Bool? {
+    if case let .bool(value)? = args?[key] { return value }
+    return nil
+}

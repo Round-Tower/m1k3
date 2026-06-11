@@ -84,8 +84,8 @@ final class AppEnvironment {
     let speech: SwappableSpeechProvider
     let chat: ChatSession
 
-    private let embedder: SwappableEmbeddingService
-    private let ingester: DocumentIngester
+    let embedder: SwappableEmbeddingService // internal: MCPHostController builds a dedicated responder
+    let ingester: DocumentIngester // internal: the MCP remember tool ingests through it
     private let runtimeSelection: RuntimeSelectionBox
     /// Call intelligence: encrypted-at-rest persistence + indexing into the SAME
     /// knowledge graph as documents (so calls are RAG-searchable) + two-stage
@@ -639,7 +639,7 @@ final class AppEnvironment {
         }
     }
 
-    private func refreshCounts() {
+    func refreshCounts() { // internal: MCP remember tool refreshes after ingest
         indexedItemCount = (try? store.itemCount()) ?? indexedItemCount
         callCount = (try? callPersistence.loadAll().count) ?? callCount
     }

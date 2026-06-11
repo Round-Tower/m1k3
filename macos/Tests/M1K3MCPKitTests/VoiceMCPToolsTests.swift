@@ -36,13 +36,20 @@ private func makeHandlers(
     listenResult: String = "hello from the mic"
 ) -> VoiceToolHandlers {
     VoiceToolHandlers(
-        speak: { text, emotion in
+        speak: { text, emotion, wait in
             if speakThrows { throw MCPVoiceError("M1K3 is in a voice conversation") }
-            log.add("speak:\(text):\(emotion ?? "nil")")
+            log.add("speak:\(text):\(emotion ?? "nil"):\(wait)")
         },
         stopSpeaking: { log.add("stop") },
         status: {
-            VoiceStatus(providerName: "kokoro", tier: "M1K3 Voice", isSpeaking: false)
+            VoiceStatus(
+                providerName: "kokoro",
+                tier: "M1K3 Voice",
+                brain: "Huge M1K3",
+                isSpeaking: false,
+                inConversation: true,
+                micInUse: false
+            )
         },
         listen: { timeout in
             log.add("listen:\(timeout)")
@@ -63,7 +70,7 @@ struct VoiceMCPToolsTests {
         #expect(registry.tools.map(\.name) == ["speak", "stop_speaking", "get_voice_status", "listen"])
     }
 
-    @Test("speak passes text and emotion through")
+    @Test("speak passes text and emotion through, defaulting wait to false")
     func speakPassthrough() async {
         let log = HandlerLog()
         let registry = MCPToolRegistry(makeVoiceToolDefinitions(handlers: makeHandlers(log: log)))
@@ -72,7 +79,8 @@ struct VoiceMCPToolsTests {
             arguments: ["text": .string("hello"), "emotion": .string("happy")]
         )
         #expect(result.isError != true)
-        #expect(log.all == ["speak:hello:happy"])
+        #expect(text(result) == "Speaking.")
+        #expect(log.all == ["speak:hello:happy:false"])
     }
 
     @Test("speak without emotion passes nil")
@@ -80,7 +88,19 @@ struct VoiceMCPToolsTests {
         let log = HandlerLog()
         let registry = MCPToolRegistry(makeVoiceToolDefinitions(handlers: makeHandlers(log: log)))
         _ = await registry.call(name: "speak", arguments: ["text": .string("hi")])
-        #expect(log.all == ["speak:hi:nil"])
+        #expect(log.all == ["speak:hi:nil:false"])
+    }
+
+    @Test("speak with wait true passes through and reports Spoken")
+    func speakWaits() async {
+        let log = HandlerLog()
+        let registry = MCPToolRegistry(makeVoiceToolDefinitions(handlers: makeHandlers(log: log)))
+        let result = await registry.call(
+            name: "speak",
+            arguments: ["text": .string("hello"), "wait": .bool(true)]
+        )
+        #expect(text(result) == "Spoken.")
+        #expect(log.all == ["speak:hello:nil:true"])
     }
 
     @Test("speak with missing or empty text is an isError without invoking the handler")
@@ -104,7 +124,7 @@ struct VoiceMCPToolsTests {
         #expect(text(result)?.contains("voice conversation") == true)
     }
 
-    @Test("get_voice_status renders compact JSON")
+    @Test("get_voice_status renders compact JSON including the busy/brain fields")
     func status() async throws {
         let registry = MCPToolRegistry(makeVoiceToolDefinitions(handlers: makeHandlers(log: HandlerLog())))
         let result = await registry.call(name: "get_voice_status", arguments: nil)
@@ -112,7 +132,10 @@ struct VoiceMCPToolsTests {
         let decoded = try #require(try JSONSerialization.jsonObject(with: payload) as? [String: Any])
         #expect(decoded["provider"] as? String == "kokoro")
         #expect(decoded["tier"] as? String == "M1K3 Voice")
+        #expect(decoded["brain"] as? String == "Huge M1K3")
         #expect(decoded["speaking"] as? Bool == false)
+        #expect(decoded["in_conversation"] as? Bool == true)
+        #expect(decoded["mic_in_use"] as? Bool == false)
     }
 
     @Test("listen defaults the timeout and returns the transcript")

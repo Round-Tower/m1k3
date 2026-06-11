@@ -20,16 +20,38 @@
 import Foundation
 import MCP
 
-/// Snapshot of the speech stack for `get_voice_status`.
+/// Snapshot of the speech stack for `get_voice_status`. The busy flags are
+/// computed from the SAME predicates the speak/listen guards use — the whole
+/// point is that an agent can poll for readiness instead of getting blind
+/// errors (test-report F2).
 public struct VoiceStatus: Sendable, Equatable {
     public let providerName: String
     public let tier: String
+    /// Active brain tier ("Huge M1K3" etc.) — an agent deciding whether to
+    /// delegate wants to know if it's talking to Mini or Huge.
+    public let brain: String
+    /// True from utterance start (synthesis included) until playback ends.
     public let isSpeaking: Bool
+    /// The lock that gates `speak` and `ask_m1k3`: a live voice-mode loop or
+    /// an in-flight chat turn.
+    public let inConversation: Bool
+    /// The lock that gates `listen`: dictation, call recording, or voice mode.
+    public let micInUse: Bool
 
-    public init(providerName: String, tier: String, isSpeaking: Bool) {
+    public init(
+        providerName: String,
+        tier: String,
+        brain: String = "",
+        isSpeaking: Bool,
+        inConversation: Bool = false,
+        micInUse: Bool = false
+    ) {
         self.providerName = providerName
         self.tier = tier
+        self.brain = brain
         self.isSpeaking = isSpeaking
+        self.inConversation = inConversation
+        self.micInUse = micInUse
     }
 }
 
@@ -44,13 +66,16 @@ public struct MCPVoiceError: Error, CustomStringConvertible {
 
 /// The app-injected implementations behind the voice tools.
 public struct VoiceToolHandlers: Sendable {
-    public var speak: @Sendable (_ text: String, _ emotion: String?) async throws -> Void
+    /// `wait: false` returns at utterance start (frees the serial MCP loop —
+    /// the SDK Server processes one request at a time, so a blocking speak
+    /// starves every status poll); `wait: true` returns after playback ends.
+    public var speak: @Sendable (_ text: String, _ emotion: String?, _ wait: Bool) async throws -> Void
     public var stopSpeaking: @Sendable () async -> Void
     public var status: @Sendable () async -> VoiceStatus
     public var listen: @Sendable (_ timeoutSeconds: Double) async throws -> String
 
     public init(
-        speak: @escaping @Sendable (_ text: String, _ emotion: String?) async throws -> Void,
+        speak: @escaping @Sendable (_ text: String, _ emotion: String?, _ wait: Bool) async throws -> Void,
         stopSpeaking: @escaping @Sendable () async -> Void,
         status: @escaping @Sendable () async -> VoiceStatus,
         listen: @escaping @Sendable (_ timeoutSeconds: Double) async throws -> String
@@ -73,12 +98,16 @@ public func makeVoiceToolDefinitions(handlers: VoiceToolHandlers) -> [MCPToolDef
         MCPToolDefinition(
             tool: Tool(
                 name: "speak",
-                description: "Speak text aloud through M1K3's voice (and animate the avatar). Optional emotion: happy, sad, angry, surprised, love, thinking, excited, sleepy, neutral.",
+                description: "Speak text aloud through M1K3's voice (and animate the avatar). Optional "
+                    + "emotion: happy, sad, angry, surprised, love, thinking, excited, sleepy, neutral. "
+                    + "Pass wait:true to return only after playback finishes (useful before listen); "
+                    + "default returns as speech starts.",
                 inputSchema: [
                     "type": "object",
                     "properties": [
                         "text": ["type": "string", "description": "what to say"],
                         "emotion": ["type": "string", "description": "avatar emotion while speaking (optional)"],
+                        "wait": ["type": "boolean", "description": "return after playback completes (default false)"],
                     ],
                     "required": ["text"],
                 ]
@@ -86,8 +115,9 @@ public func makeVoiceToolDefinitions(handlers: VoiceToolHandlers) -> [MCPToolDef
             handler: { args in
                 let text = stringArg(args, "text")?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
                 guard !text.isEmpty else { throw MCPVoiceError("speak requires non-empty text") }
-                try await handlers.speak(text, stringArg(args, "emotion"))
-                return "Speaking."
+                let wait = boolArg(args, "wait") ?? false
+                try await handlers.speak(text, stringArg(args, "emotion"), wait)
+                return wait ? "Spoken." : "Speaking."
             }
         ),
         MCPToolDefinition(
@@ -111,14 +141,18 @@ public func makeVoiceToolDefinitions(handlers: VoiceToolHandlers) -> [MCPToolDef
                 let status = await handlers.status()
                 // Stable key order — clients parse this; dictionaries don't sort.
                 return """
-                {"provider":"\(status.providerName)","tier":"\(status.tier)","speaking":\(status.isSpeaking)}
+                {"provider":"\(status.providerName)","tier":"\(status.tier)",\
+                "brain":"\(status.brain)","speaking":\(status.isSpeaking),\
+                "in_conversation":\(status.inConversation),"mic_in_use":\(status.micInUse)}
                 """
             }
         ),
         MCPToolDefinition(
             tool: Tool(
                 name: "listen",
-                description: "Listen on M1K3's microphone and return the transcript once the speaker pauses (or the timeout passes). This is how you hear the user.",
+                description: "Listen on M1K3's microphone and return the transcript once the speaker "
+                    + "pauses (or the timeout passes). Waits for any in-progress speech to finish "
+                    + "before opening the mic. This is how you hear the user.",
                 inputSchema: [
                     "type": "object",
                     "properties": [

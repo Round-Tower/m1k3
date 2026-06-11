@@ -326,13 +326,13 @@ public final class ChatSession {
     /// Fold a streamed chunk into the accumulated answer. A chunk that extends
     /// the current text is a cumulative snapshot (replace); anything else is a
     /// delta (append). Handles both provider contracts with one rule.
-    static func fold(_ current: String, _ chunk: String) -> String {
+    nonisolated static func fold(_ current: String, _ chunk: String) -> String {
         chunk.hasPrefix(current) ? chunk : current + chunk
     }
 
     /// Injected sources + what the model retrieved itself, deduped by chunk
     /// (injection order first, so the UI's source rows stay stable).
-    static func mergeSources(_ injected: [ChunkHit], _ collected: [ChunkHit]) -> [ChunkHit] {
+    nonisolated static func mergeSources(_ injected: [ChunkHit], _ collected: [ChunkHit]) -> [ChunkHit] {
         var seen = Set<UUID>()
         return (injected + collected).filter { seen.insert($0.chunkID).inserted }
     }
