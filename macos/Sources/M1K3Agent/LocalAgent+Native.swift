@@ -89,11 +89,28 @@ extension LocalAgent {
             try Task.checkCancellation()
             onEvent?(.thinking(iteration: iteration))
             transcript.append(contentsOf: pendingMessages)
-            let (turn, remainder) = try await sendThroughGate(
-                session: session,
-                messages: pendingMessages,
-                onReasoningToken: onReasoningToken
-            )
+            let turn: ToolTurn
+            let remainder: String
+            do {
+                (turn, remainder) = try await sendThroughGate(
+                    session: session,
+                    messages: pendingMessages,
+                    onReasoningToken: onReasoningToken
+                )
+            } catch is CancellationError {
+                throw CancellationError()
+            } catch {
+                // Evidence always: a generation/render failure mid-loop must
+                // never discard observations already gathered. (Live case:
+                // Qwen3.5's chat template rejects a tool-result-only delta —
+                // "No user query found in messages" — AFTER a web_search
+                // succeeded.) Conclude EMPTY with the trace intact so the
+                // responder synthesises over the gathered facts; only a failure
+                // with nothing gathered escapes to plain RAG.
+                guard reasoningTrace.contains(where: { !($0.observation ?? "").isEmpty }) else { throw error }
+                logEvidenceRescue(error: error, steps: reasoningTrace.count)
+                return concluded("", usedTools, iteration + 1)
+            }
             pendingMessages = []
 
             switch turn {

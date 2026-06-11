@@ -37,6 +37,15 @@ extension LocalAgent {
         M1K3Log.agentLoop.notice("iteration cap (\(cap)) reached — synthesising a final answer")
     }
 
+    func logEvidenceRescue(error: any Error, steps: Int) {
+        let reason = String(describing: error)
+        M1K3Log.agentLoop.error("""
+        generation failed mid-loop but \(steps) trace step(s) were gathered — \
+        concluding empty so the evidence is synthesised, not discarded \
+        (\(reason, privacy: .public))
+        """)
+    }
+
     func logThought(_ thought: String, iteration: Int, start: ContinuousClock.Instant) {
         let took = Self.elapsed(since: start)
         M1K3Log.agentLoop.debug("""

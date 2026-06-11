@@ -105,6 +105,41 @@ private final class EventLog: @unchecked Sendable {
     }
 }
 
+private struct ScriptedGenerationFailure: Error {}
+
+/// Runs one tool, then FAILS its next generation — the live shape of Qwen3.5's
+/// chat template rejecting a tool-result-only delta ("No user query found in
+/// messages") AFTER a web_search succeeded. With `failImmediately`, throws on
+/// the very first send (nothing gathered yet).
+private final class FailAfterToolProvider: ToolCallingProvider, @unchecked Sendable {
+    let name = "fail-after-tool"
+    let isAvailable = true
+    let supportsToolCalls = true
+    private let failImmediately: Bool
+    private let lock = NSLock()
+    private var index = 0
+
+    init(failImmediately: Bool = false) {
+        self.failImmediately = failImmediately
+    }
+
+    func continueToolTurn(messages _: [ToolMessage], tools _: [ToolDefinition]) async throws -> ToolTurn {
+        try lock.withLock {
+            defer { index += 1 }
+            if failImmediately || index > 0 { throw ScriptedGenerationFailure() }
+            return .toolCalls([ParsedToolCall(name: "search", arguments: ["query": .string("iran us war")])])
+        }
+    }
+
+    func generate(prompt _: String) async throws -> String {
+        "CONCLUSION: x"
+    }
+
+    func generateStreaming(prompt _: String) -> AsyncStream<String> {
+        AsyncStream { $0.finish() }
+    }
+}
+
 // MARK: - Helpers
 
 private func call(_ name: String, _ args: [String: JSONValue]) -> ToolTurn {
@@ -281,6 +316,36 @@ struct NativeToolCallingTests {
         #expect(result.conclusion == "react-fallback") // came from generate(), not continueToolTurn
         #expect(provider.continueCallCount == 0)
         #expect(provider.generateCallCount >= 1)
+    }
+
+    @Test("evidence always: a generation failure AFTER a tool ran concludes empty with the trace intact")
+    func evidenceSurvivesMidLoopFailure() async throws {
+        // web_search succeeds, then the next generation throws (Qwen template).
+        // The loop must NOT propagate the throw — it concludes empty so the
+        // responder synthesises over the gathered observations instead of
+        // discarding them to plain RAG.
+        let provider = FailAfterToolProvider()
+        let tool = RecordingTool()
+        let agent = LocalAgent(inferenceProvider: provider, tools: [tool])
+
+        let result = try await agent.run(goal: "Iran US war latest news")
+
+        #expect(tool.executionCount == 1)
+        #expect(result.conclusion.isEmpty) // empty → responder's gathered-evidence fallback fires
+        #expect(result.toolsUsed == ["search"])
+        #expect(result.reasoningTrace.contains { $0.observation?.contains("got[query=iran us war]") == true })
+    }
+
+    @Test("a generation failure BEFORE any tool ran propagates so plain RAG can answer")
+    func failureWithoutEvidencePropagates() async {
+        // Nothing gathered yet → there's nothing to rescue; the throw must
+        // escape so the responder falls back to plain RAG.
+        let provider = FailAfterToolProvider(failImmediately: true)
+        let agent = LocalAgent(inferenceProvider: provider, tools: [RecordingTool()])
+
+        await #expect(throws: ScriptedGenerationFailure.self) {
+            try await agent.run(goal: "x")
+        }
     }
 
     @Test("emits thinking + actionStarted events on the native path")
