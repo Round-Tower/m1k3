@@ -8,6 +8,8 @@
 //
 //  Signed: Kev + claude-opus-4-8, 2026-06-06, Confidence 0.8, Prior: Unknown
 
+import M1K3Chat
+import M1K3Inference
 import M1K3Voice
 import SwiftUI
 
@@ -15,6 +17,8 @@ struct SettingsView: View {
     @Environment(AppEnvironment.self) private var env
     @AppStorage(ReadingMode.storageKey) private var readingMode: ReadingMode = .standard
     @AppStorage(AppEnvironment.webSearchEnabledKey) private var webSearchEnabled = true
+    @AppStorage(AppEnvironment.thinkingModeKey) private var thinkingMode = ThinkingMode.auto.rawValue
+    @State private var profileDraft = ""
 
     var body: some View {
         @Bindable var env = env
@@ -168,6 +172,24 @@ struct SettingsView: View {
                         .font(.caption).foregroundStyle(.secondary)
                 }
 
+                aboutYouSection
+
+                Section {
+                    Picker("Reasoning", selection: $thinkingMode) {
+                        Text("Auto").tag(ThinkingMode.auto.rawValue)
+                        Text("Always think").tag(ThinkingMode.always.rawValue)
+                        Text("Fast answers").tag(ThinkingMode.fast.rawValue)
+                    }
+                    .pickerStyle(.segmented)
+                } header: {
+                    Text("Reasoning")
+                } footer: {
+                    Text("Reasoning models think out loud before answering — great for "
+                        + "hard questions, slow for small talk. Auto skips the thinking "
+                        + "on casual turns and keeps it for grounded or analytic ones.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+
                 Section {
                     Picker("Reading mode", selection: $readingMode) {
                         ForEach(ReadingMode.allCases) { mode in
@@ -232,11 +254,44 @@ struct SettingsView: View {
         }
     }
 
+    /// The consent surface for the persona's About-the-user block: fully
+    /// visible, editable, clearable. (Own property — inlining it tipped the
+    /// Form expression over the type-checker's budget.)
+    private var aboutYouSection: some View {
+        Section {
+            TextField(
+                "Nothing yet — tell M1K3 who you are",
+                text: $profileDraft,
+                axis: .vertical
+            )
+            .lineLimit(2 ... 5)
+            .onSubmit { env.saveUserProfile(profileDraft) }
+            HStack {
+                Button("Save") { env.saveUserProfile(profileDraft) }
+                    .buttonStyle(.glass)
+                    .disabled(profileDraft == (M1K3Persona.userProfile ?? ""))
+                Button("Clear", role: .destructive) {
+                    profileDraft = ""
+                    env.saveUserProfile(nil)
+                }
+                .buttonStyle(.glass)
+                .disabled((M1K3Persona.userProfile ?? "").isEmpty)
+            }
+        } header: {
+            Text("About you")
+        } footer: {
+            Text("What M1K3 knows about you — it rides every conversation's "
+                + "system prompt. Stored on this Mac only, never retrieved or "
+                + "cited, yours to edit or clear.")
+                .font(.caption).foregroundStyle(.secondary)
+        }
+        .onAppear { profileDraft = M1K3Persona.userProfile ?? "" }
+    }
+
     /// Shows the MLX Gemma weight download as a real progress bar while it
     /// streams (~1GB on first use), or the failure, so selecting MLX never looks
     /// like a silent hang. Renders nothing when idle or ready.
-    @ViewBuilder
-    private var modelLoadRow: some View {
+    @ViewBuilder private var modelLoadRow: some View {
         switch env.modelLoad {
         case let .downloading(fraction):
             HStack(spacing: 8) {

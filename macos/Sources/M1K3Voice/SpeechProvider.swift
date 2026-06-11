@@ -11,6 +11,8 @@
 //  the request-shaping logic is testable without audio hardware.
 //
 //  Signed: Kev + claude-opus-4-8, 2026-06-06, Confidence 0.85, Prior: Unknown
+//  Review: Kev + claude-fable-5, 2026-06-11 — added SpeechProviderWithWordTiming
+//  (onTimelineReady/onWordSpoken), the karaoke seam. Confidence 0.9.
 
 import Foundation
 
@@ -79,4 +81,21 @@ public protocol SpeechProviderWithLifecycle: SpeechProvider, AnyObject {
     var onSpeakingStarted: (@Sendable () -> Void)? { get set }
     /// Invoked on the main thread when synthesis finishes or is stopped.
     var onSpeakingEnded: (@Sendable () -> Void)? { get set }
+}
+
+/// A speech backend that can additionally report WORD-level timing — the seam
+/// the karaoke reading view hangs off. Push-based because the Built-in tier is
+/// irreducibly push (AVSpeech delegate events); a separate sub-protocol so
+/// existing conformers and test fakes compile untouched.
+public protocol SpeechProviderWithWordTiming: SpeechProviderWithLifecycle {
+    /// The utterance's timeline as soon as (and whenever) it is known — grows
+    /// per synthesized chunk on the Kokoro path; fires once on the Apple
+    /// offline-render path; never fires on the live Built-in path (no
+    /// durations exist up-front there — only `onWordSpoken` does). Main thread.
+    /// When a timeline exists the UI must display `timeline.text` — ranges are
+    /// meaningless against any other string.
+    var onTimelineReady: (@Sendable (SpokenWordTimeline) -> Void)? { get set }
+    /// The word currently being heard, as UTF-16 offsets into the utterance
+    /// text. Fires on word CHANGE (~3/s), on the main thread.
+    var onWordSpoken: (@Sendable (Range<Int>) -> Void)? { get set }
 }

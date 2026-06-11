@@ -22,39 +22,110 @@
 
 import Foundation
 import M1K3Inference
+import Synchronization
 
 extension LocalAgent {
-    /// Structured loop for a tool-calling provider. Hands the provider the
-    /// transcript + tool list each turn; executes any returned calls; threads
-    /// the model's call and each result back as role-tagged messages.
+    /// Structured loop for a tool-calling provider. One `ToolTurnSession` per
+    /// turn: the session retains the conversation (for MLX, a live KV cache —
+    /// iteration ≥2 prefills only the new tool results, not the whole
+    /// transcript), so the agent sends only the DELTA messages each iteration.
+    /// The think phase of every generation streams live through
+    /// `onReasoningToken` (it renders in the reasoning disclosure); post-think
+    /// text is gated until the turn's outcome is known.
     func runNative(
         provider: any ToolCallingProvider,
         goal: String,
         grounding: String?,
+        thinkingEnabled: Bool = true,
         onEvent: (@Sendable (AgentLoopEvent) -> Void)?,
-        onConclusionToken: (@Sendable (String) -> Void)?
+        onConclusionToken: (@Sendable (String) -> Void)?,
+        onReasoningToken: (@Sendable (String) -> Void)?
+    ) async throws -> AgentResult {
+        let toolDefinitions = tools.values.map(\.toolDefinition)
+        let session = try await provider.makeToolTurnSession(
+            tools: toolDefinitions,
+            options: ToolTurnOptions(thinkingEnabled: thinkingEnabled)
+        )
+        do {
+            let result = try await runNativeLoop(
+                session: session,
+                goal: goal,
+                grounding: grounding,
+                onEvent: onEvent,
+                onConclusionToken: onConclusionToken,
+                onReasoningToken: onReasoningToken
+            )
+            await session.finish()
+            return result
+        } catch {
+            await session.finish()
+            throw error
+        }
+    }
+
+    private func runNativeLoop(
+        session: any ToolTurnSession,
+        goal: String,
+        grounding: String?,
+        onEvent: (@Sendable (AgentLoopEvent) -> Void)?,
+        onConclusionToken: (@Sendable (String) -> Void)?,
+        onReasoningToken: (@Sendable (String) -> Void)?
     ) async throws -> AgentResult {
         var usedTools = Set<String>()
         var executedActions = Set<String>()
-        let toolDefinitions = tools.values.map(\.toolDefinition)
-        var transcript: [ToolMessage] = [.user(Self.buildNativeGoal(goal: goal, grounding: grounding))]
+        // The trace/rescue record — the SESSION owns the model-side state, so
+        // this array is never re-sent; only the per-iteration delta is.
+        var transcript: [ToolMessage] = []
+        // Persona first (the chat template's system turn), then the goal —
+        // identity is standing, the goal is this turn's.
+        var pendingMessages: [ToolMessage] = [
+            .system(M1K3Persona.systemPrompt),
+            .user(Self.buildNativeGoal(goal: goal, grounding: grounding)),
+        ]
 
         logRunStart(goal: goal, grounding: grounding)
 
         for iteration in 0 ..< maxIterations {
             try Task.checkCancellation()
             onEvent?(.thinking(iteration: iteration))
-            let turn = try await provider.continueToolTurn(messages: transcript, tools: toolDefinitions)
+            transcript.append(contentsOf: pendingMessages)
+            let turn: ToolTurn
+            let remainder: String
+            do {
+                (turn, remainder) = try await sendThroughGate(
+                    session: session,
+                    messages: pendingMessages,
+                    onReasoningToken: onReasoningToken
+                )
+            } catch is CancellationError {
+                throw CancellationError()
+            } catch {
+                // Evidence always: a generation/render failure mid-loop must
+                // never discard observations already gathered. (Live case:
+                // Qwen3.5's chat template rejects a tool-result-only delta —
+                // "No user query found in messages" — AFTER a web_search
+                // succeeded.) Conclude EMPTY with the trace intact so the
+                // responder synthesises over the gathered facts; only a failure
+                // with nothing gathered escapes to plain RAG.
+                guard reasoningTrace.contains(where: { !($0.observation ?? "").isEmpty }) else { throw error }
+                logEvidenceRescue(error: error, steps: reasoningTrace.count)
+                return concluded("", usedTools, iteration + 1)
+            }
+            pendingMessages = []
 
             switch turn {
             case let .text(answer):
-                if let onConclusionToken, !answer.isEmpty { onConclusionToken(answer) }
+                if let onConclusionToken, !remainder.isEmpty { onConclusionToken(remainder) }
                 reasoningTrace.append(ReasoningStep(iteration: iteration, thought: answer))
-                return concluded(answer, usedTools, iteration + 1)
+                // A pure-think turn (nothing after the reasoning) concludes
+                // empty, so the caller's fallback synthesis still produces a
+                // real answer instead of re-showing the chain-of-thought.
+                return concluded(remainder.isEmpty ? "" : answer, usedTools, iteration + 1)
 
             case let .toolCalls(calls) where calls.isEmpty:
-                // A turn with neither text nor calls: record it and move on
-                // rather than re-sending an identical transcript forever.
+                // Neither text nor calls: steer instead of regenerating over an
+                // unchanged conversation (an empty delta has nothing to render).
+                pendingMessages = [.user("Reply with your final answer, or call one of the tools.")]
                 transcript.append(.assistant(text: nil, toolCalls: []))
 
             case let .toolCalls(calls):
@@ -74,14 +145,38 @@ extension LocalAgent {
                         observation: observation
                     ))
                     transcript.append(.toolResult(name: parsedCall.name, output: observation))
+                    pendingMessages.append(.toolResult(name: parsedCall.name, output: observation))
                 }
             }
         }
 
-        // Iteration cap reached — withdraw the tools and ask for a plain answer.
+        // Iteration cap reached — ask for a plain answer over what was gathered.
         logCapReached()
-        let finalAnswer = try await synthesizeNativeConclusion(provider: provider, transcript: transcript)
+        let finalAnswer = try await synthesizeNativeConclusion(
+            session: session,
+            transcript: transcript,
+            onConclusionToken: onConclusionToken,
+            onReasoningToken: onReasoningToken
+        )
         return concluded(finalAnswer, usedTools, maxIterations)
+    }
+
+    /// One session send with the think-gate applied: think-phase tokens stream
+    /// live to `onReasoningToken`; the post-think remainder is returned for the
+    /// caller to flush (`.text`) or drop (`.toolCalls`).
+    private func sendThroughGate(
+        session: any ToolTurnSession,
+        messages: [ToolMessage],
+        onReasoningToken: (@Sendable (String) -> Void)?
+    ) async throws -> (turn: ToolTurn, remainder: String) {
+        let gate = Mutex(ThinkStreamGate())
+        let turn = try await session.send(messages) { token in
+            let live = gate.withLock { $0.feed(token) }
+            if !live.isEmpty { onReasoningToken?(live) }
+        }
+        let remainder = gate.withLock { $0.flushRemainder() }
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return (turn, remainder)
     }
 
     /// Execute one structured tool call through the shared dispatch core,
@@ -111,23 +206,31 @@ extension LocalAgent {
         return observation
     }
 
-    /// Final answer when the loop hits its cap: re-ask with the tools withdrawn
-    /// so the model must answer in prose; if it stubbornly calls anyway, fall
-    /// back to the gathered observations (so evidence is never discarded).
+    /// Final answer when the loop hits its cap: instruct the model to answer in
+    /// prose over the same session (the tools stay rendered in its context —
+    /// the instruction, not withdrawal, does the steering now); if it calls
+    /// anyway or only thinks, fall back to the gathered observations so
+    /// evidence is never discarded.
     private func synthesizeNativeConclusion(
-        provider: any ToolCallingProvider,
-        transcript: [ToolMessage]
+        session: any ToolTurnSession,
+        transcript: [ToolMessage],
+        onConclusionToken: (@Sendable (String) -> Void)?,
+        onReasoningToken: (@Sendable (String) -> Void)?
     ) async throws -> String {
-        var messages = transcript
-        messages.append(.user(
+        let instruction = ToolMessage.user(
             "You have reached the maximum number of steps. Based on the information "
                 + "gathered, answer the user directly in plain language. Do not call any more tools."
-        ))
-        let turn = try await provider.continueToolTurn(messages: messages, tools: [])
+        )
+        let (turn, remainder) = try await sendThroughGate(
+            session: session,
+            messages: [instruction],
+            onReasoningToken: onReasoningToken
+        )
         switch turn {
-        case let .text(answer):
+        case let .text(answer) where !remainder.isEmpty:
+            onConclusionToken?(remainder)
             return answer
-        case .toolCalls:
+        case .text, .toolCalls:
             return Self.gatheredObservations(from: transcript)
         }
     }
@@ -143,13 +246,13 @@ extension LocalAgent {
     }
 
     /// The opening user turn: goal + optional grounding, with NO ReAct
-    /// scaffolding — tools are supplied structurally, not described in prose.
+    /// scaffolding — tools are supplied structurally, identity lives in the
+    /// system turn (M1K3Persona), so this carries only the turn's task.
     static func buildNativeGoal(goal: String, grounding: String?) -> String {
         let groundingBlock = grounding.map { "\n\nContext:\n\($0)" } ?? ""
         return """
-        You are M1K3, a local assistant. Use the available tools when they help \
-        answer the user's request. When you have enough information, reply with \
-        your final answer in plain language.
+        Use the available tools when they help answer the user's request. When \
+        you have enough information, reply with your final answer in plain language.
 
         Goal: \(goal)\(groundingBlock)
         """

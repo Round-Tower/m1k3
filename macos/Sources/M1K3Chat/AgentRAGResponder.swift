@@ -37,6 +37,12 @@ public struct AgentRAGResponder: RAGResponding, Sendable {
     private let toolsProvider: @Sendable () -> [any AgentTool]
     private let topK: Int
     private let maxIterations: Int
+    /// Hits the model retrieved itself via search_knowledge — drained after
+    /// the stream and merged into the turn's sources (see `collectedSources`).
+    private let sourceCollector: ToolSourceCollector?
+    /// The user's reasoning preference, read fresh each turn (Settings picker:
+    /// Auto / Always think / Fast answers) — same per-turn pattern as tools.
+    private let thinkingModeProvider: @Sendable () -> ThinkingMode
 
     public init(
         store: KnowledgeStore,
@@ -44,7 +50,9 @@ public struct AgentRAGResponder: RAGResponding, Sendable {
         provider: any InferenceProvider,
         toolsProvider: @escaping @Sendable () -> [any AgentTool],
         topK: Int = 5,
-        maxIterations: Int = 3
+        maxIterations: Int = 3,
+        sourceCollector: ToolSourceCollector? = nil,
+        thinkingModeProvider: @escaping @Sendable () -> ThinkingMode = { .auto }
     ) {
         self.store = store
         self.embedder = embedder
@@ -52,6 +60,8 @@ public struct AgentRAGResponder: RAGResponding, Sendable {
         self.toolsProvider = toolsProvider
         self.topK = topK
         self.maxIterations = maxIterations
+        self.sourceCollector = sourceCollector
+        self.thinkingModeProvider = thinkingModeProvider
     }
 
     /// Fixed tool list — convenience for tests and simple callers.
@@ -69,13 +79,32 @@ public struct AgentRAGResponder: RAGResponding, Sendable {
         )
     }
 
+    /// History-free entry point (tests, simple callers): same turn, no replay.
+    /// Implemented explicitly — relying on the protocol's cross-defaults here
+    /// would recurse, since this type's real implementation is the history one.
     public func answerStreaming(
         _ question: String,
         onActivity: @escaping @Sendable (ResponderActivity) -> Void
     ) async throws -> (sources: [ChunkHit], stream: AsyncStream<String>) {
+        try await answerStreaming(question, history: [], onActivity: onActivity)
+    }
+
+    public func answerStreaming(
+        _ question: String,
+        history: [ChatTurn],
+        onActivity: @escaping @Sendable (ResponderActivity) -> Void
+    ) async throws -> (sources: [ChunkHit], stream: AsyncStream<String>) {
         onActivity(.retrieving)
+        // Stale tool hits from an aborted prior turn must not leak in.
+        _ = sourceCollector?.drain()
         let queryVector = try await embedder.embed(question)
-        let chunks = try store.searchHybrid(query: question, queryVector: queryVector, limit: topK)
+        let retrieved = try store.searchHybrid(query: question, queryVector: queryVector, limit: topK)
+        // Gate on relevance: top-K ALWAYS returns something, even for "what
+        // model are you?" — weak hits pollute the prompt and derail small
+        // models. Below threshold nothing is injected; the model can still
+        // retrieve on its own terms via search_knowledge.
+        let chunks = GroundingGate.filter(retrieved)
+        Self.logGateDecision(retrieved: retrieved, kept: chunks)
         // Resolve the tool list once per turn; the routing rules must match
         // what's actually callable (no advertising a disabled web_search).
         let tools = toolsProvider()
@@ -85,6 +114,7 @@ public struct AgentRAGResponder: RAGResponding, Sendable {
                 await runAgentTurn(
                     question: question,
                     chunks: chunks,
+                    history: history,
                     tools: tools,
                     onActivity: onActivity,
                     continuation: continuation
@@ -100,11 +130,18 @@ public struct AgentRAGResponder: RAGResponding, Sendable {
     private func runAgentTurn(
         question: String,
         chunks: [ChunkHit],
+        history: [ChatTurn],
         tools: [any AgentTool],
         onActivity: @escaping @Sendable (ResponderActivity) -> Void,
         continuation: AsyncStream<String>.Continuation
     ) async {
-        let grounding = Self.grounding(chunks: chunks, toolNames: Set(tools.map(\.name)))
+        // Match the loop LocalAgent will actually run (same capability check),
+        // so the native path never sees the ReAct format scaffold.
+        let style: Self.PromptStyle =
+            (provider as? ToolCallingProvider)?.supportsToolCalls == true ? .native : .react
+        let grounding = Self.grounding(
+            chunks: chunks, toolNames: Set(tools.map(\.name)), history: history, style: style
+        )
         Self.logTurnStart(chunks: chunks, tools: tools, grounding: grounding)
         // Fresh agent per turn — its reasoning trace must not bleed across
         // turns, and the tool list reflects current settings.
@@ -114,14 +151,29 @@ public struct AgentRAGResponder: RAGResponding, Sendable {
             maxIterations: maxIterations,
             concludesOnUnstructuredThought: true
         )
+        // Per-turn reasoning budget: casual asks skip the think phase
+        // entirely (instant answers); grounded/analytic asks keep it.
+        let thinkingEnabled = ThinkingPolicy.shouldThink(
+            question: question,
+            hasGroundedKnowledge: !chunks.isEmpty,
+            mode: thinkingModeProvider()
+        )
         let emittedLive = Mutex(false)
         do {
             let result = try await agent.run(
                 goal: question,
                 context: grounding,
+                thinkingEnabled: thinkingEnabled,
                 onEvent: { Self.forward($0, to: onActivity) },
                 onConclusionToken: { token in
                     emittedLive.withLock { $0 = true }
+                    continuation.yield(token)
+                },
+                // Chain-of-thought streams into the same chat stream — the
+                // chat-side splitter routes it to the reasoning disclosure.
+                // Deliberately does NOT set emittedLive: reasoning alone is
+                // not an answer, so the empty-conclusion fallback still fires.
+                onReasoningToken: { token in
                     continuation.yield(token)
                 }
             )
@@ -148,6 +200,31 @@ public struct AgentRAGResponder: RAGResponding, Sendable {
             await streamFallback(question: question, chunks: chunks, into: continuation)
             continuation.finish()
         }
+    }
+
+    /// Sources the model gathered itself via search_knowledge this turn —
+    /// merged into the message's sources (and the citation allow-list) by
+    /// ChatSession once the stream completes.
+    public func collectedSources() -> [ChunkHit] {
+        sourceCollector?.drain() ?? []
+    }
+
+    /// One line per retrieved hit with both relevance signals, so the gate
+    /// thresholds can be tuned on real queries from the unified log.
+    private static func logGateDecision(retrieved: [ChunkHit], kept: [ChunkHit]) {
+        let keptIDs = Set(kept.map(\.chunkID))
+        for hit in retrieved {
+            let similarity = hit.similarity.map { String(format: "%.3f", $0) } ?? "–"
+            let fused = hit.rrfScore.map { String(format: "%.4f", $0) } ?? "–"
+            let verdict = keptIDs.contains(hit.chunkID) ? "kept" : "gated"
+            let title = LogPreview.preview(hit.itemTitle, max: 60)
+            log.debug(
+                "gate \(verdict, privacy: .public): sim=\(similarity, privacy: .public) rrf=\(fused, privacy: .public) [\(title, privacy: .public)]"
+            )
+        }
+        let retrievedCount = retrieved.count
+        let keptCount = kept.count
+        log.info("grounding gate: kept \(keptCount)/\(retrievedCount)")
     }
 
     /// Map agent-loop events to UI activity.
@@ -248,12 +325,33 @@ public struct AgentRAGResponder: RAGResponding, Sendable {
         """
     }
 
+    /// Which loop the prompt is feeding. The ReAct floor NEEDS its format
+    /// scaffold (CONCLUSION:/call budget); the native loop speaks structured
+    /// calls, and feeding it the ReAct scaffold makes reasoning models burn
+    /// their think budget obeying a format they never emit (seen live on
+    /// Qwen3.5-9B agonising over "CONCLUSION:" for a casual greeting).
+    enum PromptStyle {
+        case react
+        case native
+    }
+
     /// The grounding handed to the agent: the retrieved knowledge (with the
     /// same citation labels the validator expects) + tight behavioral rules
     /// tuned for small models. The tool-routing lines match what's actually
     /// callable — never advertise a disabled web_search (and never imply
     /// search_knowledge can reach the live world; the ⌘R weather bug).
-    static func grounding(chunks: [ChunkHit], toolNames: Set<String>) -> String {
+    static func grounding(
+        chunks: [ChunkHit], toolNames: Set<String>, history: [ChatTurn] = [],
+        style: PromptStyle = .react
+    ) -> String {
+        let body = groundingBody(chunks: chunks, toolNames: toolNames, style: style)
+        guard let replay = HistoryWindow.render(history) else { return body }
+        return "\(replay)\n\n\(body)"
+    }
+
+    private static func groundingBody(
+        chunks: [ChunkHit], toolNames: Set<String>, style: PromptStyle
+    ) -> String {
         let hasWebSearch = toolNames.contains("web_search")
         var routing = hasWebSearch
             ? "- For current or external information — weather, news, prices, "
@@ -267,17 +365,37 @@ public struct AgentRAGResponder: RAGResponding, Sendable {
                 + "(like an actual forecast), run fetch_page on the most "
                 + "relevant result URL, then conclude from the page text."
         }
-        let rules = """
-        RULES:
-        - If the KNOWLEDGE already answers the question, reply IMMEDIATELY \
-        starting with "CONCLUSION:" — do not use tools.
-        - Cite knowledge sources inline with citation tokens like \
-        [Title §heading]; never invent citations.
-        - Use at most two tool calls, never repeating one with the same argument.
-        \(routing)
-        """
+        let rules = switch style {
+        case .react:
+            """
+            RULES:
+            - If the KNOWLEDGE already answers the question, reply IMMEDIATELY \
+            starting with "CONCLUSION:" — do not use tools.
+            - Cite knowledge sources inline with citation tokens like \
+            [Title §heading]; never invent citations.
+            - Use at most two tool calls, never repeating one with the same argument.
+            \(routing)
+            """
+        case .native:
+            """
+            RULES:
+            - Pure small talk — greetings, banter — needs no tools or knowledge; just reply. \
+            A question about the current world is NOT small talk, even phrased casually.
+            - If the KNOWLEDGE above answers the question, answer from it directly.
+            - Cite knowledge sources inline with citation tokens like \
+            [Title §heading]; never invent citations.
+            - Never repeat a tool call with the same argument.
+            \(routing)
+            """
+        }
         guard !chunks.isEmpty else {
-            return "No stored knowledge matched this question.\n\n\(rules)"
+            let hint = toolNames.contains("search_knowledge")
+                ? "No stored knowledge was injected — the user's documents are "
+                + "NOT in this context. If the question could concern their "
+                + "stored documents, calls, or notes, call search_knowledge; "
+                + "otherwise answer directly."
+                : "No stored knowledge matched this question."
+            return "\(hint)\n\n\(rules)"
         }
         let knowledge = chunks.enumerated().map { index, hit in
             "\(index + 1). \(ChatPromptBuilder.citationLabel(for: hit))\n\(hit.content)"

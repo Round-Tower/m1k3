@@ -13,6 +13,7 @@ import M1K3Agent
 import M1K3Inference
 import M1K3Knowledge
 @testable import M1K3KnowledgeTools
+import Synchronization
 import Testing
 
 // MARK: - Scripted provider (mirrors the agent test double)
@@ -91,6 +92,47 @@ struct SearchKnowledgeToolTests {
         let result = try await tool.execute(input: ["query": "seal"])
         // Two numbered lines only.
         #expect(result.output.split(separator: "\n").count == 2)
+    }
+
+    @Test("with an embedder the search is hybrid and hits reach the collector")
+    func hybridWithCollector() async throws {
+        let store = try KnowledgeStore()
+        let embedder = HashingEmbeddingService()
+        let id = UUID()
+        let chunks = [
+            KnowledgeChunk(itemID: id, ordinal: 0, heading: "3.2 Seals", content: "The hydraulic seal on the conveyor failed under load."),
+            KnowledgeChunk(itemID: id, ordinal: 1, heading: "4.1 Safety", content: "Operators must wear gloves near the press."),
+        ]
+        let embeddings = try await embedder.embedBatch(chunks.map(\.content))
+        try store.index(
+            item: KnowledgeItem(id: id, kind: .document, title: "Plant Notes"),
+            chunks: chunks,
+            embeddings: embeddings
+        )
+
+        let collected = Mutex<[ChunkHit]>([])
+        let tool = SearchKnowledgeTool(
+            store: store,
+            embedder: embedder,
+            onHits: { hits in collected.withLock { $0.append(contentsOf: hits) } }
+        )
+        let result = try await tool.execute(input: ["query": "hydraulic seal"])
+
+        #expect(result.output.contains("Plant Notes"))
+        let hits = collected.withLock { $0 }
+        #expect(!hits.isEmpty)
+        #expect(hits.allSatisfy { $0.itemTitle == "Plant Notes" })
+    }
+
+    @Test("a no-result search reports nothing to the collector")
+    func noResultsNothingCollected() async throws {
+        let collected = Mutex<[ChunkHit]>([])
+        let tool = try SearchKnowledgeTool(
+            store: storeWithNotes(),
+            onHits: { hits in collected.withLock { $0.append(contentsOf: hits) } }
+        )
+        _ = try await tool.execute(input: ["query": "spaceship"])
+        #expect(collected.withLock { $0 }.isEmpty)
     }
 
     @Test("END TO END: agent searches the real store and concludes from it")

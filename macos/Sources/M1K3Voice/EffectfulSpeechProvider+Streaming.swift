@@ -1,0 +1,246 @@
+//
+//  EffectfulSpeechProvider+Streaming.swift
+//  M1K3Voice
+//
+//  Chunked playback with word timing: PCM chunks (Kokoro sentences, or the
+//  Apple render as one chunk) are scheduled progressively onto the ONE player
+//  session, so speech starts after the first sentence instead of the whole
+//  answer. Each chunk's timeline anchors into a global utterance timeline at
+//  schedule time (UtteranceTimelineAccumulator — estimation drift resets at
+//  every chunk join), and a ~33 ms clock polls the player's sample position,
+//  firing onWordSpoken only on word CHANGE (~3 events/s reach the UI).
+//
+//  The timeline maths is pure + unit-tested; this file is the thin
+//  AVFoundation glue around it — verify-by-launch, per the main file's rule.
+//
+//  Signed: Kev + claude-fable-5, 2026-06-11, Confidence 0.7 (probe-verified
+//  playerTime semantics; scheduling/cancel paths verify-at-⌘R). Prior:
+//  Kev + claude-sonnet-4-6 (EffectfulSpeechProvider.swift).
+//
+
+import AVFoundation
+import Foundation
+
+/// One piece of an utterance's audio plus (optionally) its word timing.
+/// `timeline` times are relative to the CHUNK's start; ranges index the full
+/// utterance text.
+public struct TimedPCMChunk: Sendable {
+    public let samples: [Float]
+    public let timeline: SpokenWordTimeline?
+
+    public init(samples: [Float], timeline: SpokenWordTimeline?) {
+        self.samples = samples
+        self.timeline = timeline
+    }
+}
+
+public extension AsyncThrowingStream where Element == TimedPCMChunk, Failure == Error {
+    /// A finished one-chunk stream — the degenerate case for pre-rendered audio.
+    static func single(_ chunk: TimedPCMChunk) -> Self {
+        AsyncThrowingStream { continuation in
+            continuation.yield(chunk)
+            continuation.finish()
+        }
+    }
+}
+
+/// Builds the Apple path's exact timeline from offline-render word onsets:
+/// each word runs from its onset to the next word's onset (the last to the end
+/// of the audio).
+enum AppleWordTiming {
+    static func timeline(
+        text: String,
+        onsets: [WordOnset],
+        totalSamples: Int,
+        sampleRate: Double
+    ) -> SpokenWordTimeline {
+        let totalDuration = Double(totalSamples) / sampleRate
+        let words = onsets.enumerated().map { index, onset -> SpokenWord in
+            let start = Double(onset.sampleOffset) / sampleRate
+            let end = index + 1 < onsets.count
+                ? Double(onsets[index + 1].sampleOffset) / sampleRate
+                : totalDuration
+            return SpokenWord(textRange: onset.textRange, start: start, duration: max(end - start, 0))
+        }
+        return SpokenWordTimeline(text: text, words: words, totalDuration: totalDuration)
+    }
+}
+
+public extension EffectfulSpeechProvider {
+    /// Play a stream of PCM chunks as ONE utterance through the effect chain:
+    /// buffers schedule as chunks arrive, lifecycle fires once at each end,
+    /// word timing flows out through `onTimelineReady`/`onWordSpoken`.
+    ///
+    /// A mid-stream synthesis error ends the utterance gracefully — whatever is
+    /// scheduled finishes playing. Returns `false` when no audio was ever
+    /// scheduled (the caller should fall back); lifecycle stays silent then.
+    @MainActor
+    @discardableResult
+    func speak(stream: AsyncThrowingStream<TimedPCMChunk, Error>, sampleRate: Double) async -> Bool {
+        if await isSpeaking() { await stop() }
+        guard let format = AVAudioFormat(
+            commonFormat: .pcmFormatFloat32, sampleRate: sampleRate, channels: 1, interleaved: false
+        ) else { return false }
+
+        let session = StreamingPlaybackSession(
+            player: player,
+            sampleRate: sampleRate,
+            onTimeline: { [weak self] in self?.onTimelineReady?($0) },
+            onWord: { [weak self] in self?.onWordSpoken?($0) }
+        )
+        streamingSession = session
+
+        var started = false
+        do {
+            for try await chunk in stream {
+                guard !session.isCancelled else { break }
+                guard !chunk.samples.isEmpty else { continue }
+                let processed = chain.process(chunk.samples, sampleRate: sampleRate)
+                do { try configureEngineIfNeeded(format: format) } catch { break }
+                if !started {
+                    started = true
+                    onSpeakingStarted?()
+                }
+                session.schedule(samples: processed, timeline: chunk.timeline, format: format)
+                player.play() // no-op while already playing; restarts after engine reconfig
+            }
+        } catch {
+            // Synthesis failed mid-utterance — keep what's already scheduled.
+        }
+        session.markStreamEnded()
+        if started { await session.awaitCompletion() }
+        if streamingSession === session { streamingSession = nil }
+        if started { onSpeakingEnded?() }
+        return started
+    }
+}
+
+/// Per-utterance state for one chunked playback: pending-buffer accounting, the
+/// growing global timeline, and the word clock. Main-actor-only — every
+/// mutation (schedule, buffer completion, cancel, clock tick) hops here, so no
+/// locks. Created by speak(stream:); cancelled by stop().
+@MainActor
+final class StreamingPlaybackSession {
+    private let player: AVAudioPlayerNode
+    private let sampleRate: Double
+    private let onTimeline: (SpokenWordTimeline) -> Void
+    private let onWord: (Range<Int>) -> Void
+
+    private var accumulator: UtteranceTimelineAccumulator?
+    private var pendingBuffers = 0
+    private var streamEnded = false
+    private var completion: CheckedContinuation<Void, Never>?
+    private var clockTask: Task<Void, Never>?
+    private var lastWordIndex: Int?
+    private(set) var isCancelled = false
+
+    init(
+        player: AVAudioPlayerNode,
+        sampleRate: Double,
+        onTimeline: @escaping (SpokenWordTimeline) -> Void,
+        onWord: @escaping (Range<Int>) -> Void
+    ) {
+        self.player = player
+        self.sampleRate = sampleRate
+        self.onTimeline = onTimeline
+        self.onWord = onWord
+    }
+
+    func schedule(samples: [Float], timeline: SpokenWordTimeline?, format: AVAudioFormat) {
+        guard let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: AVAudioFrameCount(samples.count))
+        else { return }
+        buffer.frameLength = AVAudioFrameCount(samples.count)
+        if let channel = buffer.floatChannelData {
+            samples.withUnsafeBufferPointer { source in
+                if let base = source.baseAddress {
+                    channel[0].update(from: base, count: samples.count)
+                }
+            }
+        }
+
+        if let timeline {
+            // Anchor at schedule time: back-to-back chunks queue at the scheduled
+            // boundary; after a dry gap the player's clock has run on, so the
+            // accumulator re-anchors at NOW (probe-verified player behavior).
+            var anchored = accumulator ?? UtteranceTimelineAccumulator(text: timeline.text, sampleRate: sampleRate)
+            anchored.append(chunk: timeline, sampleCount: samples.count, playerSampleNow: playerSampleNow())
+            accumulator = anchored
+            onTimeline(anchored.global)
+        }
+
+        pendingBuffers += 1
+        player.scheduleBuffer(buffer, at: nil, options: [], completionCallbackType: .dataPlayedBack) { [weak self] _ in
+            Task { @MainActor in self?.bufferCompleted() }
+        }
+        startClockIfNeeded()
+    }
+
+    func markStreamEnded() {
+        streamEnded = true
+        finishIfDone()
+    }
+
+    /// Suspends until the last buffer plays back (or the session is cancelled).
+    func awaitCompletion() async {
+        if isCancelled || (streamEnded && pendingBuffers <= 0) { return }
+        await withCheckedContinuation { completion = $0 }
+    }
+
+    /// From stop(): buffers are killed (their .dataPlayedBack never fires after
+    /// player.stop()), so resume the wait directly.
+    func cancel() {
+        isCancelled = true
+        complete()
+    }
+
+    private func bufferCompleted() {
+        pendingBuffers -= 1
+        finishIfDone()
+    }
+
+    private func finishIfDone() {
+        guard streamEnded, pendingBuffers <= 0 else { return }
+        complete()
+    }
+
+    private func complete() {
+        // Halt the node: a drained player otherwise keeps "playing" forever
+        // (probe-verified), leaving isSpeaking() stuck true — the next speak()
+        // would fire a spurious ended event and inherit a stale clock. At
+        // natural completion nothing is queued; after stop() this is a no-op.
+        player.stop()
+        clockTask?.cancel()
+        clockTask = nil
+        completion?.resume()
+        completion = nil
+    }
+
+    // MARK: - Word clock
+
+    private func startClockIfNeeded() {
+        guard clockTask == nil else { return }
+        clockTask = Task { [weak self] in
+            while !Task.isCancelled {
+                self?.tick()
+                try? await Task.sleep(for: .milliseconds(33))
+            }
+        }
+    }
+
+    private func tick() {
+        guard let accumulator, let sample = playerSampleNow() else { return }
+        // playerTime can read slightly negative right after play() — clamp.
+        let seconds = Double(max(sample, 0)) / sampleRate
+        guard let index = accumulator.global.wordIndex(at: seconds), index != lastWordIndex else { return }
+        lastWordIndex = index
+        onWord(accumulator.global.words[index].textRange)
+    }
+
+    private func playerSampleNow() -> Int64? {
+        guard player.isPlaying,
+              let nodeTime = player.lastRenderTime,
+              let playerTime = player.playerTime(forNodeTime: nodeTime)
+        else { return nil }
+        return playerTime.sampleTime
+    }
+}

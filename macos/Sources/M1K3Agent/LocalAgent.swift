@@ -100,8 +100,10 @@ public actor LocalAgent {
     public func run(
         goal: String,
         context groundingContext: String? = nil,
+        thinkingEnabled: Bool = true,
         onEvent: (@Sendable (AgentLoopEvent) -> Void)? = nil,
-        onConclusionToken: (@Sendable (String) -> Void)? = nil
+        onConclusionToken: (@Sendable (String) -> Void)? = nil,
+        onReasoningToken: (@Sendable (String) -> Void)? = nil
     ) async throws -> AgentResult {
         reasoningTrace.removeAll()
 
@@ -118,8 +120,10 @@ public actor LocalAgent {
                 provider: toolProvider,
                 goal: goal,
                 grounding: groundingContext,
+                thinkingEnabled: thinkingEnabled,
                 onEvent: onEvent,
-                onConclusionToken: onConclusionToken
+                onConclusionToken: onConclusionToken,
+                onReasoningToken: onReasoningToken
             )
         }
 

@@ -98,6 +98,19 @@ struct KnowledgeStoreTests {
         #expect(hits.first?.content.contains("revenue") == true)
     }
 
+    @Test("hybrid hits carry the vector similarity for relevance gating")
+    func hybridCarriesSimilarity() async throws {
+        let f = try Fixture()
+        try await f.ingest()
+        let q = try await f.embedder.embed("hydraulic seal load")
+        let hits = try f.store.searchHybrid(query: "hydraulic seal", queryVector: q)
+        // The top hit scored in BOTH signals; RRF keeps the FTS instance, so
+        // the similarity must be backfilled from the vector ranking.
+        let top = try #require(hits.first)
+        #expect(top.similarity != nil)
+        #expect(top.rrfScore != nil)
+    }
+
     @Test("text-only index (no embeddings) still serves FTS")
     func textOnly() throws {
         let store = try KnowledgeStore()

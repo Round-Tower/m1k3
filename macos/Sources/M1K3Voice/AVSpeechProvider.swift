@@ -13,11 +13,14 @@
 //  They're read from `nonisolated` delegate methods and written on a provider swap
 //  (SwappableSpeechProvider); even though AVFoundation delivers on the main queue,
 //  a torn read across the @unchecked surface is now ruled out by an NSLock.
+//  Review: Kev + claude-fable-5, 2026-06-11 — adopted SpeechProviderWithWordTiming:
+//  willSpeakRangeOfSpeechString → onWordSpoken (exact live word ranges).
+//  Confidence 0.85.
 
 import AVFoundation
 import Foundation
 
-public final class AVSpeechProvider: NSObject, SpeechProviderWithLifecycle, @unchecked Sendable {
+public final class AVSpeechProvider: NSObject, SpeechProviderWithWordTiming, @unchecked Sendable {
     public let name = "av-speech"
 
     private let synthesizer = AVSpeechSynthesizer()
@@ -25,6 +28,8 @@ public final class AVSpeechProvider: NSObject, SpeechProviderWithLifecycle, @unc
     private let callbackLock = NSLock()
     private var _onSpeakingStarted: (@Sendable () -> Void)?
     private var _onSpeakingEnded: (@Sendable () -> Void)?
+    private var _onTimelineReady: (@Sendable (SpokenWordTimeline) -> Void)?
+    private var _onWordSpoken: (@Sendable (Range<Int>) -> Void)?
 
     /// Called on the main thread when synthesis starts. Set by AppEnvironment to
     /// drive the avatar into the .speaking activity state. Lock-guarded: read from
@@ -39,6 +44,21 @@ public final class AVSpeechProvider: NSObject, SpeechProviderWithLifecycle, @unc
     public var onSpeakingEnded: (@Sendable () -> Void)? {
         get { callbackLock.withLock { _onSpeakingEnded } }
         set { callbackLock.withLock { _onSpeakingEnded = newValue } }
+    }
+
+    /// Never fires on this live path — AVSpeech exposes no durations up-front,
+    /// only the as-it-speaks word ranges below. Stored so the façade can still
+    /// forward it uniformly.
+    public var onTimelineReady: (@Sendable (SpokenWordTimeline) -> Void)? {
+        get { callbackLock.withLock { _onTimelineReady } }
+        set { callbackLock.withLock { _onTimelineReady = newValue } }
+    }
+
+    /// Exact word timing for free: AVSpeech announces each word as it speaks it
+    /// (willSpeakRangeOfSpeechString). Lock-guarded like the lifecycle pair.
+    public var onWordSpoken: (@Sendable (Range<Int>) -> Void)? {
+        get { callbackLock.withLock { _onWordSpoken } }
+        set { callbackLock.withLock { _onWordSpoken = newValue } }
     }
 
     override public init() {
@@ -102,5 +122,15 @@ extension AVSpeechProvider: AVSpeechSynthesizerDelegate {
     ) {
         let callback = onSpeakingEnded
         Task { @MainActor in callback?() }
+    }
+
+    public nonisolated func speechSynthesizer(
+        _: AVSpeechSynthesizer,
+        willSpeakRangeOfSpeechString characterRange: NSRange,
+        utterance _: AVSpeechUtterance
+    ) {
+        let callback = onWordSpoken
+        let range = characterRange.location ..< characterRange.location + characterRange.length
+        Task { @MainActor in callback?(range) }
     }
 }

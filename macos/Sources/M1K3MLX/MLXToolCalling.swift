@@ -24,6 +24,10 @@
 import Foundation
 import M1K3Inference
 import MLXLMCommon
+import os
+import Synchronization
+
+private let mlxToolLog = Logger(subsystem: "dev.murphysig.M1K3", category: "mlx-load")
 
 /// Pure, testable bridges between the M1K3 tool-calling seam and mlx-swift-lm.
 enum MLXToolMapping {
@@ -59,6 +63,8 @@ enum MLXToolMapping {
     /// model's own dialect so the model sees its prior calls in trained form.
     static func chatMessage(from message: ToolMessage, format: ToolCallFormat = .gemma) -> Chat.Message {
         switch message {
+        case let .system(text):
+            return .system(text)
         case let .user(text):
             return .user(text)
         case let .toolResult(_, output):
@@ -200,6 +206,8 @@ extension MLXGemmaProvider: ToolCallingProvider {
         let container = try await ensureLoaded()
         let format = resolvedToolCallFormat ?? .gemma
         let parameters = generateParameters
+        let prefixNeeded = thinkPrefixNeeded
+        let thinkingContext = thinkingAdditionalContext
         // An agent turn runs several generations back-to-back; reclaim after
         // each so their peaks don't compound in the process-global MLX cache.
         defer { MLXMemoryBudget.reclaim(label: "toolTurn") }
@@ -207,7 +215,11 @@ extension MLXGemmaProvider: ToolCallingProvider {
         return try await container.perform { context in
             let chat = messages.map { MLXToolMapping.chatMessage(from: $0, format: format) }
             let specs = tools.map(MLXToolMapping.toolSpec(from:))
-            let userInput = UserInput(chat: chat, tools: specs.isEmpty ? nil : specs)
+            let userInput = UserInput(
+                chat: chat,
+                tools: specs.isEmpty ? nil : specs,
+                additionalContext: thinkingContext
+            )
             let input = try await context.processor.prepare(input: userInput)
 
             let stream = try MLXLMCommon.generate(input: input, parameters: parameters, context: context)
@@ -219,16 +231,202 @@ extension MLXGemmaProvider: ToolCallingProvider {
                     text += piece
                 case let .toolCall(libraryCall):
                     calls.append(MLXToolMapping.parsedToolCall(from: libraryCall))
-                case .info:
-                    break
+                case let .info(info):
+                    logGenerationInfo(info, label: "toolTurn")
                 @unknown default:
                     break
                 }
             }
             if calls.isEmpty {
-                return ToolTurn.text(text.trimmingCharacters(in: .whitespacesAndNewlines))
+                let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+                return ToolTurn.text(Self.normaliseThinkPrefix(trimmed, preOpened: prefixNeeded))
             }
             return ToolTurn.toolCalls(calls)
         }
+    }
+
+    /// The REAL session: one KV cache for the whole agent turn. Iteration ≥2
+    /// renders and prefills only the new tool-result messages — the prompt,
+    /// grounding, tool specs, and every prior generation are already in the
+    /// cache (upstream ChatSession's delta-render pattern, with our loop in
+    /// control).
+    public func makeToolTurnSession(
+        tools: [ToolDefinition],
+        options: ToolTurnOptions
+    ) async throws -> any ToolTurnSession {
+        let container = try await ensureLoaded()
+        let specs = tools.map(MLXToolMapping.toolSpec(from:))
+        let normalizedSpecs = specs.isEmpty ? nil : specs
+        // Persona (and tools — they render in the SAME system block) prefilled
+        // once per (model × tools × persona); this turn starts from a copy.
+        // (enable_thinking only touches the generation suffix, template-probe
+        // verified — the cached prefix is identical either way.)
+        let seed = await personaPrefixSnapshot(
+            container: container,
+            specs: normalizedSpecs,
+            toolNames: tools.map(\.name)
+        )
+        // Per-turn thinking: a fast turn renders the EMPTY think pair into the
+        // generation prompt and skips the synthetic <think> opener.
+        let fastTurn = !options.thinkingEnabled && supportsThinkingToggle
+        return MLXToolTurnSession(
+            container: container,
+            parameters: generateParameters,
+            format: resolvedToolCallFormat ?? .gemma,
+            specs: normalizedSpecs,
+            thinkingContext: fastTurn ? ["enable_thinking": false] : thinkingAdditionalContext,
+            prefixNeeded: fastTurn ? false : thinkPrefixNeeded,
+            seed: seed
+        )
+    }
+}
+
+/// Per-turn MLX session: a live `[KVCache]` shared across the turn's
+/// generations. `@unchecked Sendable`: the agent loop sends strictly serially,
+/// state hands off through a Mutex, and the cache arrays are evaluated by the
+/// generation loop before the next send (the same cross-isolation contract
+/// upstream ChatSession relies on).
+final class MLXToolTurnSession: ToolTurnSession, @unchecked Sendable {
+    private let container: ModelContainer
+    private let parameters: GenerateParameters
+    private let format: ToolCallFormat
+    private let specs: [ToolSpec]?
+    private let thinkingContext: [String: any Sendable]?
+    private let prefixNeeded: Bool
+
+    /// Serial-use contract (why @unchecked is sound): the agent loop awaits
+    /// each `send` before the next, so these are only ever touched one send at
+    /// a time, inside `container.perform`'s isolation. A Mutex can't hold a
+    /// non-Sendable KVCache without tripping region isolation on the way out.
+    private var kvCache: [KVCache]?
+    private var sentTools = false
+    /// True when the session was seeded with a persona-prefix copy: the
+    /// system turn AND tool specs are already in the cache, so incoming
+    /// `.system` messages are dropped and tools are never re-rendered.
+    private let personaBaked: Bool
+    /// The full conversation, for the fresh-cache re-render fallback when a
+    /// chat template rejects a tool-result-only delta (Qwen3.5).
+    private var transcript = ToolTurnTranscript()
+
+    init(
+        container: ModelContainer,
+        parameters: GenerateParameters,
+        format: ToolCallFormat,
+        specs: [ToolSpec]?,
+        thinkingContext: [String: any Sendable]?,
+        prefixNeeded: Bool,
+        seed: PersonaPrefixSnapshot? = nil
+    ) {
+        self.container = container
+        self.parameters = parameters
+        self.format = format
+        self.specs = specs
+        self.thinkingContext = thinkingContext
+        self.prefixNeeded = prefixNeeded
+        kvCache = seed?.cache
+        personaBaked = seed != nil
+        sentTools = seed != nil
+    }
+
+    func send(
+        _ messages: [ToolMessage],
+        onToken: @escaping @Sendable (String) -> Void
+    ) async throws -> ToolTurn {
+        let format = format
+        let parameters = parameters
+        let prefixNeeded = prefixNeeded
+        let thinkingContext = thinkingContext
+        // Qwen3.5's template pre-opens <think> — surface the opener so live
+        // splitting engages from the generation's first real token.
+        if prefixNeeded { onToken("<think>") }
+
+        return try await container.perform { context in
+            self.transcript.recordSent(messages)
+
+            let input: LMInput
+            let cache: [KVCache]
+            do {
+                // Fast path: render only this send's delta against the retained
+                // KV cache. A seeded session already holds the system turn, so
+                // the agent's leading .system must not render twice.
+                let outgoing = self.personaBaked
+                    ? messages.filter { message in
+                        if case .system = message { return false }
+                        return true
+                    }
+                    : messages
+                let chat = outgoing.map { MLXToolMapping.chatMessage(from: $0, format: format) }
+                // Tool specs render into the chat template once, on the first
+                // send — they live in the cache afterwards (or in the seed).
+                let userInput = UserInput(
+                    chat: chat,
+                    tools: self.sentTools ? nil : self.specs,
+                    additionalContext: thinkingContext
+                )
+                input = try await context.processor.prepare(input: userInput)
+                cache = self.kvCache ?? context.model.newCache(parameters: parameters)
+            } catch is CancellationError {
+                throw CancellationError()
+            } catch {
+                // Recovery: some chat templates re-validate the WHOLE message
+                // array on every render and reject a tool-result-only delta
+                // (Qwen3.5: "No user query found in messages"). Re-render the
+                // FULL conversation — system, user goal, every assistant call,
+                // every tool result — into a FRESH cache, which always carries
+                // the user query. Costs one prefill; fires only on the throw.
+                self.logFullRenderRecovery(error: error)
+                let full = self.transcript.full.map { MLXToolMapping.chatMessage(from: $0, format: format) }
+                let userInput = UserInput(chat: full, tools: self.specs, additionalContext: thinkingContext)
+                input = try await context.processor.prepare(input: userInput)
+                cache = context.model.newCache(parameters: parameters)
+            }
+            self.kvCache = cache
+            self.sentTools = true
+
+            let stream = try MLXLMCommon.generate(
+                input: input, cache: cache, parameters: parameters, context: context
+            )
+            var text = ""
+            var calls: [ParsedToolCall] = []
+            for await event in stream {
+                switch event {
+                case let .chunk(piece):
+                    text += piece
+                    onToken(piece)
+                case let .toolCall(libraryCall):
+                    calls.append(MLXToolMapping.parsedToolCall(from: libraryCall))
+                case let .info(info):
+                    logGenerationInfo(info, label: "toolTurnSession")
+                @unknown default:
+                    break
+                }
+            }
+            let turn: ToolTurn
+            if calls.isEmpty {
+                let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+                turn = .text(MLXGemmaProvider.normaliseThinkPrefix(trimmed, preOpened: prefixNeeded))
+            } else {
+                turn = .toolCalls(calls)
+            }
+            self.transcript.recordGenerated(turn)
+            return turn
+        }
+    }
+
+    /// Param-only (the Logger interpolation is an autoclosure; swiftformat
+    /// strips the `self.` the compiler would need on a member).
+    private func logFullRenderRecovery(error: any Error) {
+        let reason = String(describing: error)
+        mlxToolLog.error(
+            "tool-turn delta render rejected — re-rendering full transcript into a fresh cache (\(reason, privacy: .public))"
+        )
+    }
+
+    /// Turn over: drop the cache and hand the pooled Metal buffers back —
+    /// the per-TURN reclaim (per-generation would thrash the pool between
+    /// iterations that are about to reuse it).
+    func finish() async {
+        kvCache = nil
+        MLXMemoryBudget.reclaim(label: "toolTurnSession")
     }
 }

@@ -39,6 +39,12 @@ enum SelfTest {
         try? Data().write(to: URL(fileURLWithPath: outputPath))
     }
 
+    /// Whole milliseconds in a Duration, for the TTFT probe lines.
+    private static func milliseconds(_ duration: Duration) -> Int {
+        let parts = duration.components
+        return Int(parts.seconds * 1000) + Int(parts.attoseconds / 1_000_000_000_000_000)
+    }
+
     /// Append a line to the report file immediately so progress survives an
     /// interrupted run.
     private static func emit(_ line: String) {
@@ -130,10 +136,183 @@ enum SelfTest {
                     emit(MLXMemoryBudget.snapshotDescription(label: "memloop gen \(index)"))
                 }
             }
+
+            // 3c. Optional TTFT probe (M1K3_SELFTEST_TTFT=1): wall-clock time
+            // to first streamed token for a short prompt and a grounded-size
+            // prompt — the A/B harness for prefill-cost changes. (Per-stage
+            // prefill/decode metrics also land in the unified log, category
+            // "ttft".)
+            if ProcessInfo.processInfo.environment["M1K3_SELFTEST_TTFT"] == "1" {
+                let grounded = String(
+                    repeating: "KNOWLEDGE: conveyor belts run on rollers; hydraulic seals retain fluid under pressure; "
+                        + "maintenance intervals follow load cycles. ",
+                    count: 40
+                ) + "\nIn one short sentence, what is a hydraulic seal?"
+                let probes: [(String, String)] = [
+                    ("short", "In one short sentence, what is a hydraulic seal?"),
+                    ("grounded", grounded),
+                ]
+                for (label, prompt) in probes {
+                    let clock = ContinuousClock()
+                    let start = clock.now
+                    var firstToken: Duration?
+                    var characters = 0
+                    for await chunk in llm.generateStreaming(prompt: prompt) {
+                        // The synthetic <think> opener is emitted before any
+                        // real generation — don't let it fake the first token.
+                        if firstToken == nil, !chunk.isEmpty, chunk != "<think>" {
+                            firstToken = clock.now - start
+                        }
+                        characters += chunk.count
+                    }
+                    let total = clock.now - start
+                    let firstMS = firstToken.map { milliseconds($0) } ?? -1
+                    emit("ttft \(label): first=\(firstMS)ms total=\(milliseconds(total))ms chars=\(characters)")
+                }
+            }
+
+            await runKVPersistProbeIfRequested(llm: llm)
         } catch {
             emit("✗ MLX generate stage: \(error)")
         }
 
+        // 4. Optional per-model eval suite (M1K3_SELFTEST_EVAL=1): the same
+        //    behavioral checklist against every brain — or any ad-hoc list via
+        //    M1K3_SELFTEST_EVAL_MODELS=id,id. Promotion gate for new models.
+        if ProcessInfo.processInfo.environment["M1K3_SELFTEST_EVAL"] == "1" {
+            let models = ProcessInfo.processInfo.environment["M1K3_SELFTEST_EVAL_MODELS"]
+                .map { $0.split(separator: ",").map { String($0).trimmingCharacters(in: .whitespaces) } }
+                ?? BrainTier.allCases.compactMap(\.mlxModelID)
+            for modelID in models {
+                emit("• eval \(modelID)…")
+                let report = await evalModel(modelID)
+                emit(report.rendered)
+            }
+        }
+
         emit("=== END SELF-TEST ===")
+    }
+
+    /// 3d. Optional prompt-cache persistence probe (M1K3_SELFTEST_KVPERSIST=1):
+    /// persona-prefix KV → disk → reload → generate from the reloaded cache.
+    /// The prototype gate for persisting PersonaPrefixCache across launches.
+    private static func runKVPersistProbeIfRequested(llm: MLXGemmaProvider) async {
+        guard ProcessInfo.processInfo.environment["M1K3_SELFTEST_KVPERSIST"] == "1" else { return }
+        emit(await llm.promptCacheRoundTripProbe(
+            directory: FileManager.default.temporaryDirectory
+        ))
+    }
+
+    /// One model through the behavioral checklist. Self-contained on purpose:
+    /// the reasoning-family detection reads the output itself (the provider's
+    /// synthetic <think> opener IS the contract being checked), so a new model
+    /// needs no eval-side configuration at all.
+    private static func evalModel(_ modelID: String) async -> ModelEvalReport {
+        var records: [ModelEvalRecord] = []
+        let provider = MLXGemmaProvider(modelID: modelID, maxTokens: 1024)
+
+        // Check 1+2: generates a usable answer; reasoning families emit a
+        // well-formed think pair (the Qwen3.5 lone-close bug class).
+        do {
+            let raw = try await provider.generate(
+                prompt: "Reply with exactly the word OK and nothing else."
+            )
+            let answer = ModelEvalReport.strippingThink(raw)
+            let generated = answer.localizedCaseInsensitiveContains("ok")
+            records.append(ModelEvalRecord(
+                check: "generates",
+                outcome: generated ? .pass : .fail,
+                detail: generated ? "\(raw.count) chars" : "answer: \(answer.prefix(60))"
+            ))
+            if raw.hasPrefix("<think>") {
+                let verdict = ThinkContract.verdict(raw: raw)
+                records.append(ModelEvalRecord(
+                    check: "think contract",
+                    outcome: verdict.outcome,
+                    detail: verdict.detail
+                ))
+            } else {
+                records.append(ModelEvalRecord(
+                    check: "think contract", outcome: .skip, detail: "not a reasoning family"
+                ))
+            }
+        } catch {
+            records.append(ModelEvalRecord(
+                check: "generates", outcome: .fail, detail: String(describing: error).prefix(80) + ""
+            ))
+            return ModelEvalReport(modelID: modelID, records: records)
+        }
+
+        // Check 3: the native tool-call dialect actually round-trips — the
+        // model SEES the tool (template renders it) and the library PARSES the
+        // call (the Gemma-3n silent-drop + missing-parser bug class).
+        if provider.supportsToolCalls {
+            do {
+                let datetime = ToolDefinition(
+                    name: "datetime",
+                    description: "Get the current date and time on this Mac.",
+                    parameters: []
+                )
+                let turn = try await provider.continueToolTurn(
+                    messages: [
+                        .system(M1K3Persona.systemPrompt),
+                        .user("What time is it right now? Use the datetime tool to find out."),
+                    ],
+                    tools: [datetime]
+                )
+                switch turn {
+                case let .toolCalls(calls) where calls.contains(where: { $0.name == "datetime" }):
+                    records.append(ModelEvalRecord(
+                        check: "native tool call", outcome: .pass, detail: "datetime called"
+                    ))
+                case let .toolCalls(calls):
+                    records.append(ModelEvalRecord(
+                        check: "native tool call", outcome: .fail,
+                        detail: "called \(calls.map(\.name).joined(separator: ",")) instead"
+                    ))
+                case let .text(text):
+                    records.append(ModelEvalRecord(
+                        check: "native tool call", outcome: .fail,
+                        detail: "no call — answered: \(ModelEvalReport.strippingThink(text).prefix(60))"
+                    ))
+                }
+            } catch {
+                records.append(ModelEvalRecord(
+                    check: "native tool call", outcome: .fail,
+                    detail: String(describing: error).prefix(80) + ""
+                ))
+            }
+        } else {
+            records.append(ModelEvalRecord(
+                check: "native tool call", outcome: .skip,
+                detail: "ReAct floor — no native dialect at this pin"
+            ))
+        }
+
+        // Check 4: needle recall across a few-thousand-token prompt — the only
+        // check that exercises a LONG KV cache (8-bit quantized on allow-listed
+        // families, rotation backstop elsewhere). Short prompts cannot catch
+        // cache-quality loss.
+        records.append(await evalLongContextRecall(provider: provider))
+
+        return ModelEvalReport(modelID: modelID, records: records)
+    }
+
+    private static func evalLongContextRecall(provider: MLXGemmaProvider) async -> ModelEvalRecord {
+        do {
+            let raw = try await provider.generate(prompt: LongContextRecall.prompt())
+            let answer = ModelEvalReport.strippingThink(raw)
+            let recalled = LongContextRecall.passes(answer)
+            return ModelEvalRecord(
+                check: "long-context recall",
+                outcome: recalled ? .pass : .fail,
+                detail: recalled ? "needle recalled" : "answer: \(answer.prefix(60))"
+            )
+        } catch {
+            return ModelEvalRecord(
+                check: "long-context recall", outcome: .fail,
+                detail: String(describing: error).prefix(80) + ""
+            )
+        }
     }
 }

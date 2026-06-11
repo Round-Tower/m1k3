@@ -397,11 +397,25 @@ public final class KnowledgeStore: @unchecked Sendable {
         // Pull a wider candidate set from each signal before fusing.
         let ftsHits = try searchFTS(query: query, limit: limit * 2)
         let vectorHits = try searchVector(queryVector: queryVector, limit: limit * 2)
-        let fused = ReciprocalRankFusion.fuse(
+        let fused = ReciprocalRankFusion.fuseScored(
             rankings: [ftsHits, vectorHits],
             key: { $0.chunkID }
         )
-        return Array(fused.prefix(limit))
+        // Fusion keeps the FIRST-seen instance (FTS), which has no similarity —
+        // backfill it from the vector ranking, and stamp the fused score, so
+        // downstream relevance gating has both signals on every hit.
+        let similarityByChunk = Dictionary(
+            vectorHits.compactMap { hit in hit.similarity.map { (hit.chunkID, $0) } },
+            uniquingKeysWith: { first, _ in first }
+        )
+        return fused.prefix(limit).map { item, score in
+            var hit = item
+            hit.rrfScore = score
+            if hit.similarity == nil {
+                hit.similarity = similarityByChunk[hit.chunkID]
+            }
+            return hit
+        }
     }
 
     // MARK: - Row mapping

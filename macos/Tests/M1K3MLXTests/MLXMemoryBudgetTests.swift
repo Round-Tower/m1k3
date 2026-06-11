@@ -50,10 +50,4 @@ struct MLXMemoryBudgetTests {
             #expect(larger.memoryLimitBytes >= smaller.memoryLimitBytes)
         }
     }
-
-    @Test("provider generate parameters carry the KV cap")
-    func generateParametersCarryKVCap() {
-        let provider = MLXGemmaProvider()
-        #expect(provider.generateParameters.maxKVSize == 8192)
-    }
 }

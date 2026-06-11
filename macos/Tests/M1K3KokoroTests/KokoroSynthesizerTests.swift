@@ -52,6 +52,42 @@ struct KokoroSynthesizerTests {
         let pcm = try await synth.synthesize(text: "   ")
         #expect(pcm.isEmpty)
     }
+
+    @Test("long text is chunked, never truncated — duration scales with length")
+    func longTextNotTruncated() async throws {
+        guard staged else { return } // skipped in CI
+        let sentence = "The quick brown fox jumps over the lazy dog near the quiet river bank. "
+        let short = String(repeating: sentence, count: 2)
+        let long = String(repeating: sentence, count: 12) // far beyond 510 phoneme tokens
+
+        let synth = KokoroSynthesizer(modelDirectory: modelDir, voice: "bm_daniel")
+        let shortPCM = try await synth.synthesize(text: short)
+
+        var chunkCount = 0
+        var longSamples = 0
+        var lastRangeStart = -1
+        var timelineWordCount = 0
+        for try await chunk in synth.synthesizeStream(text: long) {
+            chunkCount += 1
+            longSamples += chunk.samples.count
+            timelineWordCount += chunk.timeline.words.count
+            #expect(chunk.timeline.text == long)
+            // Word ranges advance monotonically across chunks (full-string offsets).
+            if let first = chunk.timeline.words.first {
+                #expect(first.textRange.lowerBound > lastRangeStart)
+                lastRangeStart = first.textRange.lowerBound
+            }
+        }
+
+        #expect(chunkCount > 1) // the old path produced exactly one capped buffer
+        // 6× the text must yield well over 3× the audio (the truncation bug capped it
+        // near-constant regardless of input length).
+        #expect(longSamples > shortPCM.count * 3)
+        // Every word of every repetition is timed — derive the per-sentence
+        // count from the string so editing the fixture can't silently miscount.
+        let wordsPerSentence = sentence.split(separator: " ").count
+        #expect(timelineWordCount == 12 * wordsPerSentence)
+    }
 }
 
 private func writeWav(_ samples: [Float], sampleRate: Int, to path: String) {

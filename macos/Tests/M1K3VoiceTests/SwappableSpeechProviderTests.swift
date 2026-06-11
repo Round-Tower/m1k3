@@ -59,8 +59,31 @@ private final class LifecycleSpeechProvider: SpeechProviderWithLifecycle, @unche
     }
 }
 
+/// A word-timing-reporting fake whose callbacks can be invoked by the test.
+private final class WordTimingSpeechProvider: SpeechProviderWithWordTiming, @unchecked Sendable {
+    let name = "word-timing-fake"
+    var isAvailable: Bool {
+        true
+    }
+
+    var onSpeakingStarted: (@Sendable () -> Void)?
+    var onSpeakingEnded: (@Sendable () -> Void)?
+    var onTimelineReady: (@Sendable (SpokenWordTimeline) -> Void)?
+    var onWordSpoken: (@Sendable (Range<Int>) -> Void)?
+
+    func speak(_: SpeechUtterance) async {}
+    func stop() async {}
+    func isSpeaking() async -> Bool {
+        false
+    }
+}
+
 private final class Box: @unchecked Sendable {
     var value = false
+}
+
+private final class RangeBox: @unchecked Sendable {
+    var range: Range<Int>?
 }
 
 // MARK: - Tests
@@ -125,5 +148,47 @@ struct SwappableSpeechProviderTests {
         #expect(second.onSpeakingEnded != nil)
         second.onSpeakingEnded?()
         #expect(box.value == true)
+    }
+
+    @Test("word-timing callbacks forward to a timing-capable provider")
+    func wordTimingForwarded() {
+        let timing = WordTimingSpeechProvider()
+        let swappable = SwappableSpeechProvider(timing)
+        let rangeBox = RangeBox()
+        let timelineBox = Box()
+
+        swappable.onWordSpoken = { rangeBox.range = $0 }
+        swappable.onTimelineReady = { _ in timelineBox.value = true }
+
+        timing.onWordSpoken?(3 ..< 8)
+        timing.onTimelineReady?(SpokenWordTimeline(text: "", words: [], totalDuration: 0))
+        #expect(rangeBox.range == 3 ..< 8)
+        #expect(timelineBox.value == true)
+    }
+
+    @Test("word-timing callbacks are re-applied after a swap")
+    func wordTimingReappliedAfterSwap() {
+        let first = WordTimingSpeechProvider()
+        let second = WordTimingSpeechProvider()
+        let swappable = SwappableSpeechProvider(first)
+        let rangeBox = RangeBox()
+
+        swappable.onWordSpoken = { rangeBox.range = $0 }
+        swappable.setProvider(second)
+
+        #expect(second.onWordSpoken != nil)
+        second.onWordSpoken?(0 ..< 2)
+        #expect(rangeBox.range == 0 ..< 2)
+    }
+
+    @Test("a lifecycle-only provider is untouched by timing callbacks")
+    func lifecycleOnlyProviderUnaffected() {
+        let lifecycle = LifecycleSpeechProvider()
+        let swappable = SwappableSpeechProvider(lifecycle)
+        // Setting timing callbacks on the façade must not crash or mis-route
+        // when the active provider reports no word timing.
+        swappable.onWordSpoken = { _ in }
+        swappable.onTimelineReady = { _ in }
+        #expect(swappable.onWordSpoken != nil)
     }
 }

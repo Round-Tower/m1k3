@@ -54,4 +54,36 @@ struct ReasoningSplitTests {
         #expect(result.reasoning == "just reasoning")
         #expect(result.answer == "")
     }
+
+    // Qwen3.5's chat template PRE-OPENS <think> in the generation prompt, so the
+    // model's output contains only the CLOSING tag. Everything before a lone
+    // </think> is reasoning.
+
+    @Test("a lone closing tag treats the prefix as reasoning (Qwen3.5 template)")
+    func loneClose() {
+        let result = ReasoningSplit.split("I should check what model I am.</think>I am M1K3.")
+        #expect(result.reasoning == "I should check what model I am.")
+        #expect(result.answer == "I am M1K3.")
+    }
+
+    @Test("a lone closing tag with surrounding whitespace trims both parts")
+    func loneCloseWhitespace() {
+        let result = ReasoningSplit.split("\n thinking hard \n</think>\n\nThe answer.\n")
+        #expect(result.reasoning == "thinking hard")
+        #expect(result.answer == "The answer.")
+    }
+
+    @Test("a bare closing tag alone yields no reasoning and an empty answer")
+    func loneCloseOnly() {
+        let result = ReasoningSplit.split("</think>")
+        #expect(result.reasoning == nil)
+        #expect(result.answer == "")
+    }
+
+    @Test("a closing tag AFTER a matched pair stays in the answer")
+    func closeAfterMatchedPair() {
+        let result = ReasoningSplit.split("<think>plan</think>answer mentions </think> literally")
+        #expect(result.reasoning == "plan")
+        #expect(result.answer == "answer mentions </think> literally")
+    }
 }

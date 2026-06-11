@@ -29,6 +29,7 @@
 //  helpers rather than rewriting the proven ReAct path).
 
 import Foundation
+import Synchronization
 
 /// A JSON value as it arrives from a model's native tool-call output. Tool-call
 /// arguments are genuinely typed (numbers, bools, nested objects), so the WIRE
@@ -124,6 +125,9 @@ public enum ToolTurn: Sendable, Equatable {
 /// template (system/user/assistant/tool roles). This is the durable contract
 /// that survives whether the adapter is stateless-renders-array or stateful.
 public enum ToolMessage: Sendable, Equatable {
+    /// The standing persona/instructions, rendered into the chat template's
+    /// system turn. Sent once, at the start of a turn's transcript.
+    case system(String)
     /// The opening instruction + goal (and any grounding context).
     case user(String)
     /// What the model produced last turn — free text and/or the tool calls it
@@ -131,6 +135,44 @@ public enum ToolMessage: Sendable, Equatable {
     case assistant(text: String?, toolCalls: [ParsedToolCall])
     /// The observation from executing one tool call, role-tagged as a result.
     case toolResult(name: String, output: String)
+}
+
+/// Per-turn options for a tool session. Extend here rather than growing the
+/// protocol signature again.
+public struct ToolTurnOptions: Sendable, Equatable {
+    /// Whether the model may spend a reasoning phase this turn. Providers
+    /// whose template has no thinking switch ignore it.
+    public let thinkingEnabled: Bool
+
+    public init(thinkingEnabled: Bool = true) {
+        self.thinkingEnabled = thinkingEnabled
+    }
+
+    public static let `default` = ToolTurnOptions()
+}
+
+/// A stateful conversation with a tool-capable model for ONE agent turn. The
+/// caller sends only the NEW messages each iteration — the session retains
+/// everything prior (for MLX that's a live KV cache, so iteration N prefills
+/// only the new tool results instead of re-prefilling the whole transcript).
+///
+/// Contract: for a `.text` outcome the session must have delivered the FULL
+/// turn text through `onToken` (chunked or in one piece) — the agent's live
+/// streaming gate derives what is still unemitted from that stream.
+public protocol ToolTurnSession: AnyObject, Sendable {
+    /// Append `messages` to the conversation and generate the model's next
+    /// turn, streaming raw text through `onToken` as it is produced.
+    func send(
+        _ messages: [ToolMessage],
+        onToken: @escaping @Sendable (String) -> Void
+    ) async throws -> ToolTurn
+
+    /// The turn is over: release per-turn resources (KV cache, pooled buffers).
+    func finish() async
+}
+
+public extension ToolTurnSession {
+    func finish() async {}
 }
 
 /// Capability refinement: an `InferenceProvider` that speaks its model's NATIVE
@@ -147,6 +189,15 @@ public protocol ToolCallingProvider: InferenceProvider {
     /// Continue the conversation: given the transcript so far and the available
     /// tools, return the model's next turn (final text, or tool calls to run).
     func continueToolTurn(messages: [ToolMessage], tools: [ToolDefinition]) async throws -> ToolTurn
+
+    /// Open a session for one agent turn. The default adapter re-renders the
+    /// whole transcript through `continueToolTurn` per send (behaviourally
+    /// identical to the pre-session loop); providers with real session state
+    /// (a KV cache) override to make iteration ≥2 prefill only the delta.
+    func makeToolTurnSession(
+        tools: [ToolDefinition],
+        options: ToolTurnOptions
+    ) async throws -> any ToolTurnSession
 }
 
 public extension ToolCallingProvider {
@@ -154,5 +205,82 @@ public extension ToolCallingProvider {
     /// to reflect their current backing model.
     var supportsToolCalls: Bool {
         true
+    }
+
+    func makeToolTurnSession(
+        tools: [ToolDefinition],
+        options _: ToolTurnOptions
+    ) async throws -> any ToolTurnSession {
+        StatelessToolTurnSession(provider: self, tools: tools)
+    }
+
+    /// Convenience: default options.
+    func makeToolTurnSession(tools: [ToolDefinition]) async throws -> any ToolTurnSession {
+        try await makeToolTurnSession(tools: tools, options: .default)
+    }
+}
+
+/// The default session: tracks the transcript internally and re-renders the
+/// whole of it through `continueToolTurn` each send — no cache, no behaviour
+/// change from the pre-session loop. `@unchecked Sendable`: the transcript is
+/// Mutex-guarded; the agent loop uses a session strictly serially anyway.
+final class StatelessToolTurnSession: ToolTurnSession, @unchecked Sendable {
+    private let provider: any ToolCallingProvider
+    private let tools: [ToolDefinition]
+    private let transcript = Mutex<[ToolMessage]>([])
+
+    init(provider: any ToolCallingProvider, tools: [ToolDefinition]) {
+        self.provider = provider
+        self.tools = tools
+    }
+
+    func send(
+        _ messages: [ToolMessage],
+        onToken: @escaping @Sendable (String) -> Void
+    ) async throws -> ToolTurn {
+        let snapshot = transcript.withLock { current in
+            current.append(contentsOf: messages)
+            return current
+        }
+        let turn = try await provider.continueToolTurn(messages: snapshot, tools: tools)
+        switch turn {
+        case let .text(answer):
+            transcript.withLock { $0.append(.assistant(text: answer, toolCalls: [])) }
+            if !answer.isEmpty { onToken(answer) }
+        case let .toolCalls(calls):
+            transcript.withLock { $0.append(.assistant(text: nil, toolCalls: calls)) }
+        }
+        return turn
+    }
+}
+
+/// Accumulates a tool turn's FULL conversation — every message sent to the
+/// model plus every turn it generated — so a session can re-render the whole
+/// thing into a fresh cache when delta-rendering fails. Some chat templates
+/// re-validate the entire message array on every render and reject a
+/// tool-result-only delta (Qwen3.5: "No user query found in messages"); the
+/// full transcript always carries the user query and the assistant tool-call
+/// turns, so a clean re-render succeeds. Pure + ordered: the sent-then-
+/// generated interleaving must reproduce a valid conversation.
+public struct ToolTurnTranscript: Sendable {
+    public private(set) var full: [ToolMessage] = []
+
+    public init() {}
+
+    /// The messages the agent just sent (recorded RAW — `.system` included, so
+    /// a fresh re-render gets the persona back even when the delta path drops it).
+    public mutating func recordSent(_ messages: [ToolMessage]) {
+        full.append(contentsOf: messages)
+    }
+
+    /// The turn the model just produced, as the assistant message that turn
+    /// represents — so the next re-render shows the model its own prior calls.
+    public mutating func recordGenerated(_ turn: ToolTurn) {
+        switch turn {
+        case let .text(answer):
+            full.append(.assistant(text: answer, toolCalls: []))
+        case let .toolCalls(calls):
+            full.append(.assistant(text: nil, toolCalls: calls))
+        }
     }
 }

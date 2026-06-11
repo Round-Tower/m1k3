@@ -41,6 +41,21 @@ public protocol RAGResponding: Sendable {
         _ question: String,
         onActivity: @escaping @Sendable (ResponderActivity) -> Void
     ) async throws -> (sources: [ChunkHit], stream: AsyncStream<String>)
+
+    /// As above, with a capped replay of recent turns so follow-up questions
+    /// carry their context ("and in Fahrenheit?"). Responders that don't use
+    /// history fall through to the history-free variant.
+    func answerStreaming(
+        _ question: String,
+        history: [ChatTurn],
+        onActivity: @escaping @Sendable (ResponderActivity) -> Void
+    ) async throws -> (sources: [ChunkHit], stream: AsyncStream<String>)
+
+    /// Sources gathered DURING the turn by tools the model called (e.g.
+    /// search_knowledge). Read ONCE after the stream completes — they merge
+    /// into the message's sources and the citation validator's allow-list.
+    /// Defaults to empty for responders without tools.
+    func collectedSources() -> [ChunkHit]
 }
 
 public extension RAGResponding {
@@ -55,6 +70,18 @@ public extension RAGResponding {
         onActivity _: @escaping @Sendable (ResponderActivity) -> Void
     ) async throws -> (sources: [ChunkHit], stream: AsyncStream<String>) {
         try await answerStreaming(question)
+    }
+
+    func answerStreaming(
+        _ question: String,
+        history _: [ChatTurn],
+        onActivity: @escaping @Sendable (ResponderActivity) -> Void
+    ) async throws -> (sources: [ChunkHit], stream: AsyncStream<String>) {
+        try await answerStreaming(question, onActivity: onActivity)
+    }
+
+    func collectedSources() -> [ChunkHit] {
+        []
     }
 }
 
@@ -152,6 +179,14 @@ public final class ChatSession {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, !isResponding else { return }
 
+        // Capture the replayable history BEFORE this turn joins the transcript:
+        // completed turns only, answer text only (reasoning/sources never leave
+        // the message). HistoryWindow caps how much of it reaches the prompt.
+        let history = messages.compactMap { message -> ChatTurn? in
+            guard case .complete = message.status, !message.text.isEmpty else { return nil }
+            return ChatTurn(role: message.role == .user ? .user : .assistant, text: message.text)
+        }
+
         messages.append(ChatMessage(role: .user, text: trimmed, status: .complete))
         let assistantID = UUID()
         messages.append(ChatMessage(id: assistantID, role: .assistant, text: "", status: .streaming))
@@ -162,6 +197,7 @@ public final class ChatSession {
         do {
             let (sources, stream) = try await responder.answerStreaming(
                 trimmed,
+                history: history,
                 onActivity: { [weak self] activity in
                     Task { @MainActor in
                         self?.update(assistantID) {
@@ -171,21 +207,32 @@ public final class ChatSession {
                 }
             )
             update(assistantID) { $0.sources = sources }
+            // Route chunks to reasoning vs answer LIVE, so chain-of-thought
+            // streams into the disclosure as it happens instead of flashing
+            // raw <think> text in the bubble until the stream ends.
+            var splitter = StreamingReasoningSplitter()
             for await chunk in stream {
+                splitter.feed(chunk)
+                let liveAnswer = splitter.answer
+                let liveReasoning = splitter.reasoning
                 update(assistantID) {
-                    $0.text = Self.fold($0.text, chunk)
+                    $0.text = liveAnswer
+                    $0.reasoning = liveReasoning.isEmpty ? nil : liveReasoning
                     // Real tokens replace the activity label.
                     $0.activityLabel = nil
                 }
             }
-            // Now the full text is in hand. First peel off any reasoning-model
-            // chain-of-thought so it's surfaced separately, not buried in the
-            // answer; then strip invented citations from the ANSWER and record
-            // the validated ones.
-            let finalText = messages.first { $0.id == assistantID }?.text ?? ""
-            let (reasoning, answer) = ReasoningSplit.split(finalText)
-            let validation = await CitationValidator.validate(responseText: answer, against: sources)
+            splitter.finish()
+            // Now the full text is in hand. Re-split the RAW stream as the
+            // final authority (the live splitter only drives rendering), then
+            // strip invented citations from the ANSWER and record the
+            // validated ones. The allow-list covers BOTH the injected sources
+            // and whatever the model retrieved itself via search_knowledge.
+            let (reasoning, answer) = ReasoningSplit.split(splitter.raw)
+            let mergedSources = Self.mergeSources(sources, responder.collectedSources())
+            let validation = await CitationValidator.validate(responseText: answer, against: mergedSources)
             update(assistantID) {
+                $0.sources = mergedSources
                 // Flatten model markdown + tidy whitespace once the full text
                 // is in hand (ReadingText renders plain text).
                 $0.text = MessageTextPolish.polish(validation.cleanedText)
@@ -217,6 +264,13 @@ public final class ChatSession {
     /// delta (append). Handles both provider contracts with one rule.
     static func fold(_ current: String, _ chunk: String) -> String {
         chunk.hasPrefix(current) ? chunk : current + chunk
+    }
+
+    /// Injected sources + what the model retrieved itself, deduped by chunk
+    /// (injection order first, so the UI's source rows stay stable).
+    static func mergeSources(_ injected: [ChunkHit], _ collected: [ChunkHit]) -> [ChunkHit] {
+        var seen = Set<UUID>()
+        return (injected + collected).filter { seen.insert($0.chunkID).inserted }
     }
 
     private func update(_ id: UUID, _ mutate: (inout ChatMessage) -> Void) {

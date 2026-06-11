@@ -69,4 +69,17 @@ extension SwappableInferenceProvider: ToolCallingProvider {
         }
         return try await toolProvider.continueToolTurn(messages: messages, tools: tools)
     }
+
+    /// Forward session creation to the ACTIVE provider so its real session
+    /// (e.g. MLX's KV-cache session) is reached — falling through to the
+    /// stateless default here would silently lose the per-turn cache reuse.
+    public func makeToolTurnSession(
+        tools: [ToolDefinition],
+        options: ToolTurnOptions
+    ) async throws -> any ToolTurnSession {
+        guard let toolProvider = active as? ToolCallingProvider else {
+            throw InferenceError.generationFailed("active backend does not support tool calls")
+        }
+        return try await toolProvider.makeToolTurnSession(tools: tools, options: options)
+    }
 }

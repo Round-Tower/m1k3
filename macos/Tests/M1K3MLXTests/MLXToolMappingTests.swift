@@ -51,6 +51,13 @@ struct MLXChatMessageTests {
         #expect(message.content == "hello")
     }
 
+    @Test("a system message maps to the system role (the persona's seat)")
+    func systemRole() {
+        let message = MLXToolMapping.chatMessage(from: .system("You are M1K3."))
+        #expect(message.role == .system)
+        #expect(message.content == "You are M1K3.")
+    }
+
     @Test("a tool result maps to the tool role")
     func toolRole() {
         let message = MLXToolMapping.chatMessage(from: .toolResult(name: "search", output: "found it"))
@@ -142,6 +149,32 @@ struct MLXToolFormatResolutionTests {
         #expect(MLXGemmaProvider(modelID: "mlx-community/gemma-3-1b-it-qat-4bit").supportsToolCalls)
         #expect(MLXGemmaProvider(modelID: "mlx-community/Qwen3-1.7B-4bit").supportsToolCalls)
         #expect(!MLXGemmaProvider(modelID: "some/unknown-model").supportsToolCalls)
+    }
+}
+
+struct MLXThinkTemplateTests {
+    @Test("qwen3.5 templates pre-open <think> — the output needs a synthetic opener")
+    func qwen35PreOpensThink() {
+        #expect(MLXGemmaProvider.templatePreOpensThink(for: .init(id: "mlx-community/Qwen3.5-2B-4bit")))
+        #expect(MLXGemmaProvider.templatePreOpensThink(for: .init(id: "mlx-community/Qwen3.5-9B-4bit")))
+        #expect(MLXGemmaProvider.templatePreOpensThink(for: .init(id: "mlx-community/qwen3_5-instruct")))
+    }
+
+    @Test("qwen3 and non-reasoning families do NOT pre-open think")
+    func othersDoNot() {
+        #expect(!MLXGemmaProvider.templatePreOpensThink(for: .init(id: "mlx-community/Qwen3-1.7B-4bit")))
+        #expect(!MLXGemmaProvider.templatePreOpensThink(for: .init(id: "mlx-community/gemma-4-e4b-it-4bit")))
+        #expect(!MLXGemmaProvider.templatePreOpensThink(for: .init(id: "meta/Llama-3.2-1B")))
+    }
+
+    @Test("the synthetic opener is added once and never duplicated")
+    func normalisePrefix() {
+        #expect(MLXGemmaProvider.normaliseThinkPrefix("plan</think>answer", preOpened: true)
+            == "<think>plan</think>answer")
+        #expect(MLXGemmaProvider.normaliseThinkPrefix("<think>plan</think>answer", preOpened: true)
+            == "<think>plan</think>answer")
+        #expect(MLXGemmaProvider.normaliseThinkPrefix("plain answer", preOpened: false)
+            == "plain answer")
     }
 }
 

@@ -126,7 +126,9 @@ extension LocalAgent {
         let groundingBlock = grounding.map { "\n\nContext:\n\($0)" } ?? ""
 
         return """
-        You are M1K3, a local assistant. Your goal: \(goal)\(groundingBlock)
+        \(M1K3Persona.systemPrompt)
+
+        Your goal: \(goal)\(groundingBlock)
 
         Available Tools:
         \(toolDescriptions)

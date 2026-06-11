@@ -20,13 +20,17 @@
 //  AVAudioPlayerNode) — every caller, the onboarding flow, and the seam are unchanged.
 //
 //  Signed: Kev + claude-sonnet-4-6, 2026-06-08, Confidence 0.55, Prior: Unknown
+//  Review: Kev + claude-fable-5, 2026-06-11 — neural path now STREAMS chunks to
+//  the renderer (speak(stream:)) with word timelines; Apple fallback only when
+//  nothing was spoken at all; word-timing callbacks forwarded like lifecycle.
+//  Confidence 0.8.
 
 import Foundation
 import M1K3Inference
 import M1K3Voice
 import os
 
-public final class KokoroSpeechProvider: SpeechProviderWithLifecycle, ModelPreloading, @unchecked Sendable {
+public final class KokoroSpeechProvider: SpeechProviderWithWordTiming, ModelPreloading, @unchecked Sendable {
     public let name = "kokoro"
 
     private static let log = Logger(subsystem: "dev.m1k3.kokoro", category: "voice")
@@ -101,22 +105,44 @@ public final class KokoroSpeechProvider: SpeechProviderWithLifecycle, ModelPrelo
         set { renderer.onSpeakingEnded = newValue }
     }
 
+    public var onTimelineReady: (@Sendable (SpokenWordTimeline) -> Void)? {
+        get { renderer.onTimelineReady }
+        set { renderer.onTimelineReady = newValue }
+    }
+
+    public var onWordSpoken: (@Sendable (Range<Int>) -> Void)? {
+        get { renderer.onWordSpoken }
+        set { renderer.onWordSpoken = newValue }
+    }
+
     // MARK: - Synthesis
 
-    /// Neural path: text → G2P → ONNX (kokoro-v1.0.onnx) → mono PCM @ 24 kHz → the
-    /// renderer's effect chain + playback. Falls back to the effect-processed Apple
-    /// voice on any failure (model not staged, all-OOV text, ORT error) so M1K3 is
-    /// never silent.
+    /// Neural path: text → sentence chunks → G2P → ONNX (kokoro-v1.0.onnx) → mono
+    /// PCM @ 24 kHz streamed to the renderer chunk-by-chunk, each with its word
+    /// timeline — playback starts after the first sentence, long answers are never
+    /// truncated, and the karaoke highlight tracks the audio. Falls back to the
+    /// effect-processed Apple voice when nothing was spoken at all (model not
+    /// staged, all-OOV text, ORT error before the first chunk); a mid-utterance
+    /// failure ends the utterance with what was already scheduled instead of
+    /// re-speaking it all in the fallback voice.
     private func synthesize(_ utterance: SpeechUtterance) async {
-        do {
-            let pcm = try await synthesizer.synthesize(text: utterance.text)
-            guard !pcm.isEmpty else {
-                await renderer.speak(utterance) // nothing phonemized → Apple fallback
-                return
+        let chunks = synthesizer.synthesizeStream(text: utterance.text)
+        let timed = AsyncThrowingStream<TimedPCMChunk, Error> { continuation in
+            let task = Task {
+                do {
+                    for try await chunk in chunks {
+                        continuation.yield(TimedPCMChunk(samples: chunk.samples, timeline: chunk.timeline))
+                    }
+                    continuation.finish()
+                } catch {
+                    continuation.finish(throwing: error)
+                }
             }
-            await renderer.speak(rawPCM: pcm, sampleRate: KokoroSynthesizer.sampleRate)
-        } catch {
-            await renderer.speak(utterance)
+            continuation.onTermination = { _ in task.cancel() }
+        }
+        let spoke = await renderer.speak(stream: timed, sampleRate: KokoroSynthesizer.sampleRate)
+        if !spoke {
+            await renderer.speak(utterance) // nothing phonemized/synthesized → Apple fallback
         }
     }
 

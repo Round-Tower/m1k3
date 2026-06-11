@@ -19,6 +19,7 @@
 import Foundation
 @testable import M1K3Agent
 import M1K3Inference
+import Synchronization
 import Testing
 
 // MARK: - Test doubles
@@ -101,6 +102,41 @@ private final class EventLog: @unchecked Sendable {
     private(set) var events: [AgentLoopEvent] = []
     func record(_ event: AgentLoopEvent) {
         lock.withLock { events.append(event) }
+    }
+}
+
+private struct ScriptedGenerationFailure: Error {}
+
+/// Runs one tool, then FAILS its next generation — the live shape of Qwen3.5's
+/// chat template rejecting a tool-result-only delta ("No user query found in
+/// messages") AFTER a web_search succeeded. With `failImmediately`, throws on
+/// the very first send (nothing gathered yet).
+private final class FailAfterToolProvider: ToolCallingProvider, @unchecked Sendable {
+    let name = "fail-after-tool"
+    let isAvailable = true
+    let supportsToolCalls = true
+    private let failImmediately: Bool
+    private let lock = NSLock()
+    private var index = 0
+
+    init(failImmediately: Bool = false) {
+        self.failImmediately = failImmediately
+    }
+
+    func continueToolTurn(messages _: [ToolMessage], tools _: [ToolDefinition]) async throws -> ToolTurn {
+        try lock.withLock {
+            defer { index += 1 }
+            if failImmediately || index > 0 { throw ScriptedGenerationFailure() }
+            return .toolCalls([ParsedToolCall(name: "search", arguments: ["query": .string("iran us war")])])
+        }
+    }
+
+    func generate(prompt _: String) async throws -> String {
+        "CONCLUSION: x"
+    }
+
+    func generateStreaming(prompt _: String) -> AsyncStream<String> {
+        AsyncStream { $0.finish() }
     }
 }
 
@@ -208,12 +244,57 @@ struct NativeToolCallingTests {
         #expect(observation.contains("search"))
     }
 
-    @Test("at the iteration cap, synthesises a final answer with tools withdrawn")
+    @Test("think phase routes to onReasoningToken; the answer to onConclusionToken")
+    func thinkRoutesToReasoningChannel() async throws {
+        let provider = FakeToolCallingProvider { _, _, _ in
+            .text("<think>checking the weather</think>It's sunny.")
+        }
+        let agent = LocalAgent(inferenceProvider: provider, tools: [RecordingTool()])
+        let reasoning = Mutex("")
+        let conclusion = Mutex("")
+
+        let result = try await agent.run(
+            goal: "x",
+            onConclusionToken: { token in conclusion.withLock { $0 += token } },
+            onReasoningToken: { token in reasoning.withLock { $0 += token } }
+        )
+
+        #expect(reasoning.withLock { $0 } == "<think>checking the weather</think>")
+        #expect(conclusion.withLock { $0 } == "It's sunny.")
+        #expect(result.conclusion == "<think>checking the weather</think>It's sunny.")
+    }
+
+    @Test("a pure-think turn concludes empty so callers can fall back")
+    func pureThinkConcludesEmpty() async throws {
+        let provider = FakeToolCallingProvider { _, _, _ in
+            .text("<think>endless pondering, no answer</think>")
+        }
+        let agent = LocalAgent(inferenceProvider: provider, tools: [RecordingTool()])
+        let conclusion = Mutex("")
+
+        let result = try await agent.run(
+            goal: "x",
+            onConclusionToken: { token in conclusion.withLock { $0 += token } }
+        )
+
+        #expect(result.conclusion.isEmpty)
+        #expect(conclusion.withLock { $0 }.isEmpty)
+    }
+
+    @Test("at the iteration cap, synthesises a final answer on instruction")
     func iterationCapSynthesis() async throws {
-        // Always calls a tool while tools are offered; answers once tools are
-        // withdrawn (the cap synthesis call passes an empty tool list).
-        let provider = FakeToolCallingProvider { _, _, tools in
-            tools.isEmpty ? .text("synthesised from gathered facts") : call("search", ["query": .string("x")])
+        // Always calls a tool until the cap-synthesis INSTRUCTION arrives (the
+        // session keeps tools rendered; the instruction does the steering now).
+        let provider = FakeToolCallingProvider { _, messages, _ in
+            let instructed = messages.contains { message in
+                if case let .user(text) = message {
+                    return text.contains("maximum number of steps")
+                }
+                return false
+            }
+            return instructed
+                ? .text("synthesised from gathered facts")
+                : call("search", ["query": .string("x")])
         }
         let agent = LocalAgent(inferenceProvider: provider, tools: [RecordingTool()], maxIterations: 3)
 
@@ -235,6 +316,36 @@ struct NativeToolCallingTests {
         #expect(result.conclusion == "react-fallback") // came from generate(), not continueToolTurn
         #expect(provider.continueCallCount == 0)
         #expect(provider.generateCallCount >= 1)
+    }
+
+    @Test("evidence always: a generation failure AFTER a tool ran concludes empty with the trace intact")
+    func evidenceSurvivesMidLoopFailure() async throws {
+        // web_search succeeds, then the next generation throws (Qwen template).
+        // The loop must NOT propagate the throw — it concludes empty so the
+        // responder synthesises over the gathered observations instead of
+        // discarding them to plain RAG.
+        let provider = FailAfterToolProvider()
+        let tool = RecordingTool()
+        let agent = LocalAgent(inferenceProvider: provider, tools: [tool])
+
+        let result = try await agent.run(goal: "Iran US war latest news")
+
+        #expect(tool.executionCount == 1)
+        #expect(result.conclusion.isEmpty) // empty → responder's gathered-evidence fallback fires
+        #expect(result.toolsUsed == ["search"])
+        #expect(result.reasoningTrace.contains { $0.observation?.contains("got[query=iran us war]") == true })
+    }
+
+    @Test("a generation failure BEFORE any tool ran propagates so plain RAG can answer")
+    func failureWithoutEvidencePropagates() async {
+        // Nothing gathered yet → there's nothing to rescue; the throw must
+        // escape so the responder falls back to plain RAG.
+        let provider = FailAfterToolProvider(failImmediately: true)
+        let agent = LocalAgent(inferenceProvider: provider, tools: [RecordingTool()])
+
+        await #expect(throws: ScriptedGenerationFailure.self) {
+            try await agent.run(goal: "x")
+        }
     }
 
     @Test("emits thinking + actionStarted events on the native path")

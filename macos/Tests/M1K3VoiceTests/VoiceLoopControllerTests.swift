@@ -1,0 +1,221 @@
+import Foundation
+import M1K3Voice
+import Testing
+
+/// Behavior tests for the voice-loop driver with closure fakes: the full
+/// hands-free beat (listen → turn → speak → re-listen), the silence endpoint,
+/// barge-in, exit-mid-turn, and error paths. Time-based bits use tiny
+/// thresholds so the tests run in milliseconds.
+@MainActor
+struct VoiceLoopControllerTests {
+    /// Scriptable dependency recorder.
+    @MainActor
+    final class Harness {
+        var listenStarts = 0
+        var stopListens = 0
+        var turns: [String] = []
+        var spoken: [String] = []
+        var stopSpeaks = 0
+        var continuation: AsyncStream<TranscriptSegment>.Continuation?
+        var turnResult: Result<String, VoiceTurnFailure> = .success("the answer")
+        /// When set, runTurn suspends until the gate task completes.
+        var turnGate: CheckedContinuation<Void, Never>?
+        var holdTurn = false
+        var listenThrows = false
+
+        func dependencies() -> VoiceLoopController.Dependencies {
+            VoiceLoopController.Dependencies(
+                startListening: {
+                    self.listenStarts += 1
+                    if self.listenThrows { throw VoiceTurnFailure(message: "no mic") }
+                    return AsyncStream { self.continuation = $0 }
+                },
+                stopListening: {
+                    self.stopListens += 1
+                    self.continuation?.finish()
+                    self.continuation = nil
+                },
+                runTurn: { question in
+                    self.turns.append(question)
+                    if self.holdTurn {
+                        await withCheckedContinuation { self.turnGate = $0 }
+                    }
+                    return self.turnResult
+                },
+                speak: { self.spoken.append($0) },
+                stopSpeaking: { self.stopSpeaks += 1 }
+            )
+        }
+    }
+
+    private func makeController(_ harness: Harness) -> VoiceLoopController {
+        VoiceLoopController(
+            dependencies: harness.dependencies(),
+            silence: .milliseconds(50),
+            echoGrace: .zero,
+            endpointTick: .milliseconds(10)
+        )
+    }
+
+    /// Poll until `condition` holds (5ms steps, ~1s budget).
+    private func waitUntil(_ condition: () -> Bool) async {
+        for _ in 0 ..< 200 {
+            if condition() { return }
+            try? await Task.sleep(for: .milliseconds(5))
+        }
+    }
+
+    // MARK: - The hands-free beat
+
+    @Test("listen → finality → turn → speak → speech end → re-listen")
+    func fullBeat() async {
+        let harness = Harness()
+        let controller = makeController(harness)
+
+        controller.begin()
+        await waitUntil { harness.continuation != nil }
+        #expect(harness.listenStarts == 1)
+
+        harness.continuation?.yield(TranscriptSegment(text: "what's", isFinal: false))
+        await waitUntil { controller.state == .listening(partial: "what's") }
+        harness.continuation?.yield(TranscriptSegment(text: "what's the time", isFinal: true))
+        harness.continuation?.finish()
+
+        await waitUntil { !harness.spoken.isEmpty }
+        #expect(harness.turns == ["what's the time"])
+        #expect(harness.spoken == ["the answer"])
+        #expect(controller.state == .speaking(answer: "the answer"))
+
+        controller.speechDidEnd()
+        await waitUntil { harness.listenStarts == 2 }
+        #expect(harness.listenStarts == 2)
+        #expect(controller.state == .listening(partial: ""))
+    }
+
+    @Test("a stalled partial endpoints by silence — no finality needed")
+    func silenceEndpoint() async {
+        let harness = Harness()
+        let controller = makeController(harness)
+
+        controller.begin()
+        await waitUntil { harness.continuation != nil }
+        harness.continuation?.yield(TranscriptSegment(text: "hello there", isFinal: false))
+        // No more segments, no finality: the endpointer must close the listen.
+        await waitUntil { !harness.turns.isEmpty }
+        #expect(harness.turns == ["hello there"])
+        #expect(harness.stopListens >= 1)
+    }
+
+    // MARK: - Empty listens
+
+    @Test("two empty listens park the loop in idle")
+    func emptyListensPark() async {
+        let harness = Harness()
+        let controller = makeController(harness)
+
+        controller.begin()
+        await waitUntil { harness.continuation != nil }
+        harness.continuation?.finish() // nothing said
+
+        await waitUntil { harness.listenStarts == 2 }
+        await waitUntil { harness.continuation != nil }
+        harness.continuation?.finish() // nothing again
+
+        await waitUntil { controller.state == .idle }
+        #expect(controller.state == .idle)
+        #expect(harness.listenStarts == 2)
+        #expect(harness.turns.isEmpty)
+    }
+
+    // MARK: - Barge-in
+
+    @Test("interrupt while speaking stops speech and re-listens; the stale end is ignored")
+    func bargeIn() async {
+        let harness = Harness()
+        let controller = makeController(harness)
+
+        controller.begin()
+        await waitUntil { harness.continuation != nil }
+        harness.continuation?.yield(TranscriptSegment(text: "hi", isFinal: true))
+        harness.continuation?.finish()
+        await waitUntil { !harness.spoken.isEmpty }
+
+        controller.interrupt()
+        await waitUntil { harness.listenStarts == 2 }
+        #expect(harness.stopSpeaks == 1)
+        #expect(controller.state == .listening(partial: ""))
+
+        // stop() makes the provider fire onSpeakingEnded → stale speechFinished.
+        controller.speechDidEnd()
+        try? await Task.sleep(for: .milliseconds(30))
+        #expect(harness.listenStarts == 2) // no third listen
+    }
+
+    // MARK: - Exit
+
+    @Test("exit mid-turn: the turn completes but is never spoken")
+    func exitMidTurn() async {
+        let harness = Harness()
+        harness.holdTurn = true
+        let controller = makeController(harness)
+
+        controller.begin()
+        await waitUntil { harness.continuation != nil }
+        harness.continuation?.yield(TranscriptSegment(text: "deep question", isFinal: true))
+        harness.continuation?.finish()
+        await waitUntil { !harness.turns.isEmpty }
+
+        controller.exit()
+        #expect(controller.state == .ended)
+
+        // The held turn now completes — into the void.
+        harness.turnGate?.resume()
+        try? await Task.sleep(for: .milliseconds(30))
+        #expect(harness.spoken.isEmpty)
+        #expect(controller.state == .ended)
+    }
+
+    // MARK: - Errors
+
+    @Test("a failed turn parks in idle and surfaces the error")
+    func turnFailure() async {
+        let harness = Harness()
+        harness.turnResult = .failure(VoiceTurnFailure(message: "brain offline"))
+        let controller = makeController(harness)
+
+        controller.begin()
+        await waitUntil { harness.continuation != nil }
+        harness.continuation?.yield(TranscriptSegment(text: "hello", isFinal: true))
+        harness.continuation?.finish()
+
+        await waitUntil { controller.state == .idle }
+        #expect(controller.lastError == "brain offline")
+        #expect(harness.spoken.isEmpty)
+    }
+
+    @Test("a mic that fails to start parks in idle with the error")
+    func micFailure() async {
+        let harness = Harness()
+        harness.listenThrows = true
+        let controller = makeController(harness)
+
+        controller.begin()
+        await waitUntil { controller.state == .idle && controller.lastError != nil }
+        #expect(controller.state == .idle)
+        #expect(controller.lastError != nil)
+    }
+
+    @Test("begin clears the previous error")
+    func beginClearsError() async {
+        let harness = Harness()
+        harness.listenThrows = true
+        let controller = makeController(harness)
+        controller.begin()
+        await waitUntil { controller.lastError != nil }
+
+        harness.listenThrows = false
+        controller.begin()
+        await waitUntil { harness.listenStarts == 2 }
+        #expect(controller.lastError == nil)
+    }
+}

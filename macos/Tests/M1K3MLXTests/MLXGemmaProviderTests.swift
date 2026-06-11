@@ -11,6 +11,7 @@
 import Foundation
 import M1K3Inference
 @testable import M1K3MLX
+import MLXLMCommon
 import Testing
 
 struct MLXGemmaProviderTests {
@@ -19,6 +20,46 @@ struct MLXGemmaProviderTests {
         let provider: any InferenceProvider = MLXGemmaProvider()
         #expect(provider.name == "mlx-gemma")
         #expect(provider.isAvailable)
+    }
+
+    @Test("KV quantization is allow-listed per family — raw cache.update families are excluded")
+    func kvQuantizationFamilyResolution() {
+        // Safe: attention routes through upstream's attentionWithCacheUpdate
+        // dispatcher, which handles QuantizedKVCache via updateQuantized.
+        #expect(MLXGemmaProvider.supportsQuantizedKVCache(
+            for: ModelConfiguration(id: "mlx-community/Qwen3.5-2B-4bit")
+        ))
+        #expect(MLXGemmaProvider.supportsQuantizedKVCache(
+            for: ModelConfiguration(id: "mlx-community/Qwen3.5-9B-4bit")
+        ))
+        #expect(MLXGemmaProvider.supportsQuantizedKVCache(
+            for: ModelConfiguration(id: "mlx-community/gemma-3-1b-it-qat-4bit")
+        ))
+        // Unsafe: Gemma3nText/Gemma4Text call cache.update(keys:values:) raw,
+        // which is an upstream fatalError on a quantized cache.
+        #expect(!MLXGemmaProvider.supportsQuantizedKVCache(
+            for: ModelConfiguration(id: "mlx-community/gemma-4-e4b-it-4bit")
+        ))
+        #expect(!MLXGemmaProvider.supportsQuantizedKVCache(
+            for: ModelConfiguration(id: "mlx-community/gemma-3n-E4B-it-lm-4bit")
+        ))
+        // Unknown families default to NOT quantizing — crash-safe over fast.
+        #expect(!MLXGemmaProvider.supportsQuantizedKVCache(
+            for: ModelConfiguration(id: "some/unknown-model")
+        ))
+    }
+
+    @Test("quantizing families carry kvBits; excluded families keep the rotation cap")
+    func generateParametersPerFamily() {
+        let qwen = MLXGemmaProvider(configuration: ModelConfiguration(id: "mlx-community/Qwen3.5-2B-4bit"))
+        #expect(qwen.generateParameters.kvBits == 8)
+        #expect(qwen.generateParameters.kvGroupSize == 64)
+        #expect(qwen.generateParameters.quantizedKVStart == 0)
+        #expect(qwen.generateParameters.maxKVSize == nil)
+
+        let gemma4 = MLXGemmaProvider(configuration: ModelConfiguration(id: "mlx-community/gemma-4-e4b-it-4bit"))
+        #expect(gemma4.generateParameters.kvBits == nil)
+        #expect(gemma4.generateParameters.maxKVSize == 8192)
     }
 
     @Test(

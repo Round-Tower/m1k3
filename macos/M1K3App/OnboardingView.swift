@@ -13,6 +13,7 @@
 //  Signed: Kev + claude-sonnet-4-6, 2026-06-08, Confidence 0.8,
 //  Prior: Kev + claude-opus-4-8 2026-06-08 (single-step brain-only version)
 
+import M1K3Avatar
 import M1K3Inference
 import M1K3Voice
 import SwiftUI
@@ -21,10 +22,12 @@ struct OnboardingView: View {
     @Environment(AppEnvironment.self) private var env
     let onComplete: () -> Void
 
-    private enum Step { case brain, voice, speech }
+    private enum Step { case you, brain, voice, speech }
     private enum VoiceEngine { case apple, whisperKit }
 
-    @State private var step: Step = .brain
+    @State private var step: Step = .you
+    @State private var userName = ""
+    @State private var userNotes = ""
     @State private var selectedBrain: BrainTier = .recommendedForThisMac
     @State private var isWakingBrain = false
     @State private var selectedVoice: VoiceEngine = .apple
@@ -35,35 +38,53 @@ struct OnboardingView: View {
     private let recommended = BrainTier.recommendedForThisMac
 
     var body: some View {
-        VStack(spacing: 24) {
-            switch step {
-            case .brain:
-                header(
-                    glyph: "brain.head.profile.fill",
-                    title: "M1K3",
-                    subtitle: "Your local intelligence machine. Choose a brain — it runs entirely on this Mac."
-                )
-                if isWakingBrain { brainAwakening } else { brainPicker }
-            case .voice:
-                header(
-                    glyph: "waveform",
-                    title: "Voice",
-                    subtitle: "Tap the mic to dictate. Apple Speech works now; WhisperKit is a higher-accuracy upgrade."
-                )
-                if isDownloadingWhisper { voiceDownload } else { voicePicker }
-            case .speech:
-                header(
-                    glyph: "speaker.wave.3.fill",
-                    title: "Speech",
-                    subtitle: "How M1K3 sounds when it speaks. Built-in is instant; "
-                        + "M1K3 Voice is a richer, on-device voice with its own character."
-                )
-                if isDownloadingVoice { speechDownload } else { speechPicker }
+        // ScrollView: the four brain cards (plus header and button) outgrow
+        // the window on smaller screens — the download button must never be
+        // clipped behind a resize.
+        ScrollView {
+            VStack(spacing: 24) {
+                switch step {
+                case .you:
+                    header(
+                        glyph: "person.crop.circle",
+                        title: "Hello",
+                        subtitle: "I'm M1K3 — everything you tell me stays on this Mac. Who am I talking to?"
+                    )
+                    youStep
+                case .brain:
+                    header(
+                        glyph: "brain.head.profile.fill",
+                        title: "M1K3",
+                        subtitle: "Your local intelligence machine. Choose a brain — it runs entirely on this Mac."
+                    )
+                    if isWakingBrain { brainAwakening } else { brainPicker }
+                case .voice:
+                    header(
+                        glyph: "waveform",
+                        title: "Voice",
+                        subtitle: "Tap the mic to dictate. Apple Speech works now; WhisperKit is a higher-accuracy upgrade."
+                    )
+                    if isDownloadingWhisper { voiceDownload } else { voicePicker }
+                case .speech:
+                    header(
+                        glyph: "speaker.wave.3.fill",
+                        title: "Speech",
+                        subtitle: "How M1K3 sounds when it speaks. Built-in is instant; "
+                            + "M1K3 Voice is a richer, on-device voice with its own character."
+                    )
+                    if isDownloadingVoice { speechDownload } else { speechPicker }
+                }
             }
+            .padding(32)
+            .frame(maxWidth: .infinity)
         }
-        .padding(32)
         .frame(minWidth: 580, minHeight: 640)
         .glassBackdrop()
+        .onAppear { env.avatar.setEmotion(emotion(for: step)) }
+        .onChange(of: step) { _, newStep in
+            env.avatar.setEmotion(emotion(for: newStep))
+        }
+        .onDisappear { env.avatar.resetToIdle() }
         .onChange(of: env.modelLoad) { _, state in
             if case .ready = state, isWakingBrain {
                 isWakingBrain = false
@@ -83,12 +104,15 @@ struct OnboardingView: View {
 
     // MARK: - Shared header
 
-    private func header(glyph: String, title: String, subtitle: String) -> some View {
+    /// The LIVE pixel face is the hero — M1K3 is present from the first
+    /// screen, not represented by a static glyph. (`glyph` is kept in the
+    /// step call sites' spirit via the per-step EMOTION instead.)
+    private func header(glyph _: String, title: String, subtitle: String) -> some View {
         VStack(spacing: 8) {
-            Image(systemName: glyph)
-                .font(.system(size: 40, weight: .semibold))
-                .foregroundStyle(.tint)
+            AvatarView(controller: env.avatar)
+                .frame(width: 260, height: 150)
                 .padding(.bottom, 4)
+                .accessibilityHidden(true)
             Text(title)
                 .font(.pixel(40))
                 .kerning(2)
@@ -97,6 +121,17 @@ struct OnboardingView: View {
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: 460)
+        }
+    }
+
+    /// The face reacts to where you are in the flow — meeting you, choosing
+    /// a brain, listening, speaking.
+    private func emotion(for step: Step) -> AvatarEmotion {
+        switch step {
+        case .you: .happy
+        case .brain: .thinking
+        case .voice: .surprised
+        case .speech: .excited
         }
     }
 }
@@ -109,6 +144,53 @@ struct OnboardingView: View {
 // @State directly — private members of a same-file extension are visible to `body`.
 
 private extension OnboardingView {
+    // MARK: - You step
+
+    /// Who M1K3 is talking to — seeds the persona's About-the-user block
+    /// (knowledge_meta `user.profile`, on this Mac only, visible in Settings).
+    /// Skippable: anonymity is a fine answer to a privacy-first assistant.
+    var youStep: some View {
+        VStack(spacing: 16) {
+            VStack(alignment: .leading, spacing: 10) {
+                TextField("Your name", text: $userName)
+                    .textFieldStyle(.roundedBorder)
+                    .font(.title3)
+                TextField(
+                    "Anything M1K3 should know about you? (optional)",
+                    text: $userNotes,
+                    axis: .vertical
+                )
+                .textFieldStyle(.roundedBorder)
+                .lineLimit(3 ... 5)
+            }
+            .frame(maxWidth: 440)
+
+            Button {
+                let profile = [
+                    userName.isEmpty ? nil : "Name: \(userName).",
+                    userNotes.isEmpty ? nil : userNotes,
+                ].compactMap(\.self).joined(separator: " ")
+                env.saveUserProfile(profile)
+                step = .brain
+            } label: {
+                Text("Nice to meet you →")
+                    .font(.headline)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 6)
+            }
+            .buttonStyle(.glassProminent)
+            .disabled(userName.trimmingCharacters(in: .whitespaces).isEmpty)
+            .frame(maxWidth: 440)
+
+            Button("Skip — stay anonymous") { step = .brain }
+                .buttonStyle(.glass)
+
+            Text("Stored on this Mac only. View, edit or clear it any time in Settings.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+    }
+
     // MARK: - Brain step
 
     var brainPicker: some View {
