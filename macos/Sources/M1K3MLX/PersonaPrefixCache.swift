@@ -59,10 +59,12 @@ final class PersonaPrefixCache: @unchecked Sendable {
     /// the slot is empty or keyed to a different render.
     func snapshot(for requested: PersonaCacheKey) -> PersonaPrefixSnapshot? {
         // Grab the refs under the lock, copy OUTSIDE it: KVCache.copy()
-        // materialises new Metal-backed arrays per layer, and holding the
-        // lock for that would block store/invalidate (brain-switch path)
-        // for the whole copy. The retained arrays are never mutated after store, so
-        // copying from it lock-free is safe.
+        // materialises new Metal-backed arrays per layer (a pure read of the
+        // source), and holding the lock for that would block store/invalidate
+        // (brain-switch path) for the whole copy. Lock-free safety rests on
+        // TWO guarantees: ARC — `held` keeps the snapshotted array alive even
+        // if a concurrent store/invalidate reassigns `retained` mid-copy —
+        // and immutability: the retained arrays are never mutated after store.
         lock.lock()
         let held: (cache: [KVCache], tokens: Int)? = {
             guard requested == key, let retained else { return nil }

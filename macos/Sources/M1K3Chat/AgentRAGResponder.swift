@@ -447,6 +447,10 @@ enum WebSourceExtractor {
 }
 
 private extension String {
+    /// Known trade-off: a URL legitimately ENDING in a balanced `)`/`]`
+    /// (Wikipedia "…_(disambiguation)") gets over-trimmed. Acceptable —
+    /// sentence punctuation dominates DDG observations, and these are
+    /// display/citation URLs, never fetch targets.
     func trimmedOfTrailingPunctuation() -> String {
         var trimmed = Substring(self)
         while let last = trimmed.last, ".,;:)]»'\"".contains(last) {
