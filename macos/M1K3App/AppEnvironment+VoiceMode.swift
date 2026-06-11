@@ -51,9 +51,19 @@ extension AppEnvironment {
 
     /// Speak text via the TTS provider. The onSpeakingStarted/Ended delegate
     /// callbacks drive avatar .speaking → .idle; no manual state change needed here.
+    ///
+    /// Text is sanitized for speech (URLs → hosts, citation tokens and the
+    /// Web-sources block dropped) BEFORE the providers see it, so every
+    /// downstream word timeline is built against the same string the karaoke
+    /// view displays.
     func speak(_ text: String) async {
-        speechHighlight.beginUtterance(text: text)
-        await speech.speak(text)
+        let polished = SpeechTextPolish.polish(text)
+        // A message that is ONLY a sources block polishes to empty; never hand
+        // providers "" — the voice loop waits on a speechDidEnd that would
+        // not arrive.
+        let spoken = polished.isEmpty ? text : polished
+        speechHighlight.beginUtterance(text: spoken)
+        await speech.speak(spoken)
     }
 
     func stopSpeaking() async {
