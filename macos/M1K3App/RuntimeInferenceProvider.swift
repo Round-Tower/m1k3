@@ -68,3 +68,21 @@ final class RuntimeInferenceProvider: InferenceProvider, @unchecked Sendable {
         active.generateStreaming(prompt: prompt)
     }
 }
+
+// MARK: - Native tool calling (Phase 12c)
+
+/// Forwards tool-calling to the selected backend. When MLX (Lil/Big) is active
+/// the agent runs the native loop; when AFM is active (no conformance until
+/// Phase 12b) `supportsToolCalls` is false and the agent uses the ReAct floor.
+extension RuntimeInferenceProvider: ToolCallingProvider {
+    var supportsToolCalls: Bool {
+        (active as? ToolCallingProvider)?.supportsToolCalls ?? false
+    }
+
+    func continueToolTurn(messages: [ToolMessage], tools: [ToolDefinition]) async throws -> ToolTurn {
+        guard let toolProvider = active as? ToolCallingProvider else {
+            throw InferenceError.generationFailed("active backend does not support tool calls")
+        }
+        return try await toolProvider.continueToolTurn(messages: messages, tools: tools)
+    }
+}

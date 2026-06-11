@@ -22,6 +22,7 @@ struct MessageView: View {
     let onSpeak: (String) -> Void
 
     @State private var showSources = false
+    @State private var showReasoning = false
 
     var body: some View {
         switch message.role {
@@ -41,6 +42,9 @@ struct MessageView: View {
                 }
                 VStack(alignment: .leading, spacing: 8) {
                     assistantBody
+                    if let reasoning = message.reasoning, !reasoning.isEmpty {
+                        reasoningDisclosure(reasoning)
+                    }
                     if !message.sources.isEmpty {
                         sourcesDisclosure
                     }
@@ -117,6 +121,22 @@ struct MessageView: View {
         .padding(.vertical, 12)
         .frame(maxWidth: .infinity, alignment: .leading)
         .glassEffect(.regular, in: .rect(cornerRadius: 18))
+    }
+
+    /// The model's chain-of-thought, surfaced (collapsed by default) for
+    /// transparency — the answer stays clean, the reasoning is one tap away.
+    private func reasoningDisclosure(_ reasoning: String) -> some View {
+        DisclosureGroup(isExpanded: $showReasoning) {
+            ReadingText(reasoning)
+                .foregroundStyle(.secondary)
+                .padding(.top, 4)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        } label: {
+            Label("Model reasoning", systemImage: "brain")
+                .font(.caption.weight(.medium))
+                .foregroundStyle(.secondary)
+        }
+        .padding(.horizontal, 6)
     }
 
     private var sourcesDisclosure: some View {

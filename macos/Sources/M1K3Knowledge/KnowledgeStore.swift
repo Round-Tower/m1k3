@@ -66,7 +66,46 @@ public final class KnowledgeStore: @unchecked Sendable {
                 t.column("embedding", .blob).notNull()
             }
         }
+        // Store-level metadata (e.g. which embedder fingerprint produced the
+        // stored vectors). Tiny key-value table so future markers don't need
+        // their own migrations.
+        migrator.registerMigration("v2-meta") { db in
+            try db.create(table: "knowledge_meta") { t in
+                t.column("key", .text).primaryKey()
+                t.column("value", .text).notNull()
+            }
+        }
         try migrator.migrate(dbQueue)
+    }
+
+    // MARK: - Meta
+
+    /// The meta key recording which embedder fingerprint produced the stored
+    /// vectors (see `EmbedderReindexPolicy`).
+    public static let embedderFingerprintKey = "embedder.fingerprint"
+
+    public func meta(key: String) throws -> String? {
+        try dbQueue.read { db in
+            try String.fetchOne(
+                db, sql: "SELECT value FROM knowledge_meta WHERE key = ?", arguments: [key]
+            )
+        }
+    }
+
+    public func setMeta(key: String, value: String) throws {
+        try dbQueue.write { db in
+            try Self.upsertMeta(db, key: key, value: value)
+        }
+    }
+
+    private static func upsertMeta(_ db: Database, key: String, value: String) throws {
+        try db.execute(
+            sql: """
+            INSERT INTO knowledge_meta (key, value) VALUES (?, ?)
+            ON CONFLICT(key) DO UPDATE SET value = excluded.value
+            """,
+            arguments: [key, value]
+        )
     }
 
     // MARK: - Indexing
@@ -130,8 +169,15 @@ public final class KnowledgeStore: @unchecked Sendable {
     /// in one pass. Use when switching embedders (e.g. Hashing fallback → MLX):
     /// the stored vectors define the search space, so a half-migrated store would
     /// compare incompatible vectors. Returns the number of chunks re-embedded.
+    ///
+    /// Pass `fingerprint` to record the new vectors' provenance in the same
+    /// write transaction (atomically: the marker can never claim vectors that
+    /// weren't written).
     @discardableResult
-    public func reindexEmbeddings(using embedder: any EmbeddingService) async throws -> Int {
+    public func reindexEmbeddings(
+        using embedder: any EmbeddingService,
+        fingerprint: String? = nil
+    ) async throws -> Int {
         // Snapshot (chunkID, itemID, content) for every chunk first, so the async
         // embed happens outside any DB transaction.
         let rows: [(chunkID: UUID, itemID: UUID, content: String)] = try await dbQueue.read { db in
@@ -161,6 +207,9 @@ public final class KnowledgeStore: @unchecked Sendable {
                     """,
                     arguments: [row.chunkID.uuidString, row.itemID.uuidString, VectorMath.serialize(vector)]
                 )
+            }
+            if let fingerprint {
+                try Self.upsertMeta(db, key: Self.embedderFingerprintKey, value: fingerprint)
             }
         }
         return rows.count

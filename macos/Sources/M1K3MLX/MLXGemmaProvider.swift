@@ -41,6 +41,11 @@ import Foundation
 import M1K3Inference
 import MLXLLM
 import MLXLMCommon
+import os
+
+/// Model-load diagnostics. File-scope so the load closure (which runs off the
+/// provider's isolation) can log retries without capturing `self`.
+private let mlxLoadLog = Logger(subsystem: "dev.murphysig.M1K3", category: "mlx-load")
 
 /// `@unchecked Sendable`: model loading is coalesced through a `SingleFlightLoader`
 /// actor and the loaded `ModelContainer` is itself an isolation actor; everything
@@ -48,31 +53,82 @@ import MLXLMCommon
 public final class MLXGemmaProvider: InferenceProvider, ModelPreloading, @unchecked Sendable {
     public let name: String
 
-    private let generateParameters: GenerateParameters
+    let generateParameters: GenerateParameters
     private let loader: SingleFlightLoader<ModelContainer>
+    /// The native tool-call dialect for this model, resolved at init from the
+    /// model family (Gemma → .gemma, Qwen/Llama → .json, …). nil means "no known
+    /// dialect" → `supportsToolCalls` is false and the agent uses the ReAct floor.
+    let resolvedToolCallFormat: ToolCallFormat?
 
     public init(
         configuration: ModelConfiguration = LLMRegistry.gemma3_1B_qat_4bit,
-        maxTokens: Int = 512,
+        // A generous ceiling, NOT a target — the model stops at EOS naturally, so
+        // this is free for short replies. Reasoning models (Qwen3) spend hundreds
+        // of tokens in <think> before the tool call / answer; the old 512 cap cut
+        // them off mid-thought (no call, empty answer). 4096 leaves room to think,
+        // act, AND answer across an agent iteration.
+        maxTokens: Int = 4096,
         name: String = "mlx-gemma"
     ) {
         var params = GenerateParameters()
         params.maxTokens = maxTokens
+        // Hard-bound KV-cache growth (the cache rotates past this) so a long
+        // agent transcript can't balloon memory without limit. 8192 leaves the
+        // full 4096-token think-act-answer budget PLUS grounding/tools without
+        // ever rotating the prompt out mid-generation.
+        params.maxKVSize = 8192
         generateParameters = params
         self.name = name
+
+        // Resolve the model's native tool-call dialect and bake it into the
+        // configuration. `ToolCallFormat.infer` matches model_type == "gemma"
+        // EXACTLY, so Gemma-3/3n (and Qwen) would silently fall back to .json
+        // and never parse — we set the format explicitly per model family.
+        let resolved = Self.resolveToolCallFormat(for: configuration)
+        resolvedToolCallFormat = resolved
+        let loadConfiguration: ModelConfiguration = {
+            var config = configuration
+            if let resolved { config.toolCallFormat = resolved }
+            return config
+        }()
+
         // Single-flight the container load so a Settings preload racing the first
         // generate share ONE ~1GB download instead of each kicking off their own.
+        // Retry on transient network failures: a HuggingFace CDN timeout would
+        // otherwise kill the turn, but the download is resumable so each retry
+        // continues the cached partial rather than restarting.
         loader = SingleFlightLoader { progress in
-            try await LLMModelFactory.shared.loadContainer(configuration: configuration) { prog in
-                progress(prog.fractionCompleted)
-            }
+            try await withRetry(
+                onRetry: { attempt, error in
+                    let reason = error.localizedDescription
+                    mlxLoadLog.notice(
+                        "model load attempt \(attempt) failed (\(reason, privacy: .public)); retrying"
+                    )
+                },
+                operation: {
+                    try await LLMModelFactory.shared.loadContainer(
+                        from: HubApiDownloader.llmDefault,
+                        using: TransformersTokenizerLoader(),
+                        configuration: loadConfiguration
+                    ) { prog in
+                        progress(prog.fractionCompleted)
+                    }
+                }
+            )
         }
     }
 
     /// Convenience: point at any HuggingFace model id (e.g. a locally-cached
     /// model) without the caller importing MLXLLM's ModelConfiguration.
-    public convenience init(modelID: String, maxTokens: Int = 512, name: String = "mlx-gemma") {
-        self.init(configuration: ModelConfiguration(id: modelID), maxTokens: maxTokens, name: name)
+    /// Uses the upstream registry entry when one exists — that carries model
+    /// metadata a bare id misses (Gemma 4 needs extraEOSTokens ["<turn|>"]);
+    /// unknown ids fall back to a plain configuration.
+    public convenience init(modelID: String, maxTokens: Int = 4096, name: String = "mlx-gemma") {
+        self.init(
+            configuration: LLMRegistry.shared.configuration(id: modelID),
+            maxTokens: maxTokens,
+            name: name
+        )
     }
 
     /// True on this target by construction: macOS 26 / Apple Silicon always has
@@ -91,6 +147,9 @@ public final class MLXGemmaProvider: InferenceProvider, ModelPreloading, @unchec
 
     public func generate(prompt: String) async throws -> String {
         let container = try await ensureLoaded()
+        // Return cached Metal buffers after every generation — without this the
+        // process-global MLX cache holds each generation's peak forever.
+        defer { MLXMemoryBudget.reclaim(label: "generate") }
         let session = ChatSession(container, generateParameters: generateParameters)
         return try await session.respond(to: prompt)
     }
@@ -98,6 +157,9 @@ public final class MLXGemmaProvider: InferenceProvider, ModelPreloading, @unchec
     public func generateStreaming(prompt: String) -> AsyncStream<String> {
         AsyncStream { continuation in
             let task = Task {
+                // Runs on every exit — completion, error, and cancellation via
+                // onTermination (cancel makes the stream loop throw into catch).
+                defer { MLXMemoryBudget.reclaim(label: "generateStreaming") }
                 do {
                     let container = try await ensureLoaded()
                     let session = ChatSession(container, generateParameters: generateParameters)
@@ -115,9 +177,35 @@ public final class MLXGemmaProvider: InferenceProvider, ModelPreloading, @unchec
         }
     }
 
-    private func ensureLoaded(
+    func ensureLoaded(
         progress: @escaping @Sendable (Double) -> Void = { _ in }
     ) async throws -> ModelContainer {
-        try await loader.value(progress: progress)
+        // Bound the process-global Metal cache BEFORE any MLX work can run.
+        MLXMemoryBudget.applyOnce()
+        return try await loader.value(progress: progress)
+    }
+
+    /// Self-test diagnostics: how the chat template renders for `prompt` on
+    /// this model — token count, the rendered text, and EOS metadata. Used by
+    /// the headless self-test to debug template/tokenizer regressions; not a
+    /// production code path.
+    public func templateDebugDescription(prompt: String) async -> String {
+        do {
+            let container = try await ensureLoaded()
+            return try await container.perform { context in
+                let noTools: [[String: any Sendable]]? = nil
+                let noContext: [String: any Sendable]? = nil
+                let ids = try context.tokenizer.applyChatTemplate(
+                    messages: [["role": "user", "content": prompt]],
+                    tools: noTools,
+                    additionalContext: noContext
+                )
+                let rendered = context.tokenizer.decode(tokenIds: ids, skipSpecialTokens: false)
+                let eos = context.tokenizer.eosToken ?? "nil"
+                return "ids=\(ids.count) eos=\(eos) rendered=[\(rendered.suffix(160))]"
+            }
+        } catch {
+            return "template debug failed: \(error)"
+        }
     }
 }

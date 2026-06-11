@@ -36,6 +36,10 @@ final class SwappableEmbeddingService: EmbeddingService, @unchecked Sendable {
         active.dimension
     }
 
+    var fingerprint: String {
+        active.fingerprint
+    }
+
     func embed(_ text: String) async throws -> [Float] {
         try await active.embed(text)
     }

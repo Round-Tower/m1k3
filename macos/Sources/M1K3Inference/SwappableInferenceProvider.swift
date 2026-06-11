@@ -49,3 +49,24 @@ public final class SwappableInferenceProvider: InferenceProvider, @unchecked Sen
         active.generateStreaming(prompt: prompt)
     }
 }
+
+// MARK: - Native tool calling (Phase 12c)
+
+/// Forwards the tool-calling capability to the current backing provider. Both
+/// MLX slots (Lil = Qwen, Big = Gemma) conform, so when the swappable backs a
+/// tool-capable model the agent gets the native loop; the runtime flag tracks
+/// whichever model is currently set (a swap re-points it transparently).
+extension SwappableInferenceProvider: ToolCallingProvider {
+    public var supportsToolCalls: Bool {
+        (active as? ToolCallingProvider)?.supportsToolCalls ?? false
+    }
+
+    public func continueToolTurn(messages: [ToolMessage], tools: [ToolDefinition]) async throws -> ToolTurn {
+        guard let toolProvider = active as? ToolCallingProvider else {
+            // Unreachable in practice: LocalAgent only calls this after reading
+            // supportsToolCalls == true. Defensive — surface rather than hang.
+            throw InferenceError.generationFailed("active backend does not support tool calls")
+        }
+        return try await toolProvider.continueToolTurn(messages: messages, tools: tools)
+    }
+}

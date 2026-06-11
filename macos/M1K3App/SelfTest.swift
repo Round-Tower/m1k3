@@ -101,6 +101,35 @@ enum SelfTest {
             let llm = MLXGemmaProvider(modelID: modelID, maxTokens: 48)
             let answer = try await llm.generate(prompt: "In one short sentence, what is a hydraulic seal?")
             emit("✓ MLX generate: \(answer.trimmingCharacters(in: .whitespacesAndNewlines).prefix(180))")
+
+            // Raw-output diagnostics (M1K3_SELFTEST_DEBUG=1): when an answer
+            // comes back empty, show what the model ACTUALLY returned and how
+            // the chat template rendered — distinguishes "model emitted EOS
+            // immediately" from "detokenizer produced nothing".
+            if ProcessInfo.processInfo.environment["M1K3_SELFTEST_DEBUG"] == "1" {
+                emit("debug raw answer: count=\(answer.count) [\(answer.prefix(300))]")
+                let debug = await llm.templateDebugDescription(
+                    prompt: "In one short sentence, what is a hydraulic seal?"
+                )
+                emit("debug template: \(debug)")
+            }
+
+            // 3b. Optional memory loop (M1K3_SELFTEST_MEMLOOP=N): N more
+            // generations with a footprint snapshot after each. An agent turn
+            // runs generations back-to-back, so a growing footprint here is
+            // exactly the unbounded-Metal-cache pathology; a flat one means the
+            // budget holds.
+            if let loops = ProcessInfo.processInfo.environment["M1K3_SELFTEST_MEMLOOP"]
+                .flatMap(Int.init), loops > 0
+            {
+                emit(MLXMemoryBudget.snapshotDescription(label: "memloop start"))
+                for index in 1 ... loops {
+                    _ = try await llm.generate(
+                        prompt: "In two sentences, explain fact #\(index) about industrial conveyor maintenance."
+                    )
+                    emit(MLXMemoryBudget.snapshotDescription(label: "memloop gen \(index)"))
+                }
+            }
         } catch {
             emit("✗ MLX generate stage: \(error)")
         }

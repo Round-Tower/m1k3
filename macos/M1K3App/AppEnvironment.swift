@@ -38,8 +38,10 @@ import Observation
 /// up in the heavy-dependency session.
 enum RuntimeOption: String, CaseIterable, Identifiable {
     case appleFoundationModels = "Apple Foundation Models"
-    case mlxGemma = "MLX Gemma 3"
-    case liteRTGemma = "LiteRT Gemma 3"
+    // Model-neutral label: the MLX slot now serves whichever brain is chosen
+    // (Qwen3.5 Lil/Huge, Gemma 4 Big) — not display-persisted, safe to rename.
+    case mlxGemma = "MLX (local model)"
+    case liteRTGemma = "LiteRT Gemma"
 
     var id: String {
         rawValue
@@ -53,7 +55,7 @@ enum RuntimeOption: String, CaseIterable, Identifiable {
     var subtitle: String {
         switch self {
         case .appleFoundationModels: "On-device, cheap & fast. The MVP brain."
-        case .mlxGemma: "Metal in-process Gemma 3 (1B, 4-bit). Downloads on first use."
+        case .mlxGemma: "Metal in-process local model (4-bit). Downloads on first use."
         case .liteRTGemma: "LiteRT-LM Gemma. Spike — not yet wired."
         }
     }
@@ -217,6 +219,11 @@ final class AppEnvironment {
     }
 
     init() throws {
+        // Bound the process-global MLX Metal cache before ANY MLX work (the
+        // embedder below may be the first) — without it the cache grows to the
+        // session's peak and never shrinks (~16GB footprint on easy queries).
+        MLXMemoryBudget.applyOnce()
+
         let url = try Self.storeURL()
         store = try KnowledgeStore(path: url.path)
 
@@ -264,10 +271,9 @@ final class AppEnvironment {
 
         // TTS seam: Built-in Apple voice wrapped in a swappable façade so the
         // premium Kokoro tier can drop in without rebuilding any caller.
-        let builtin = AVSpeechProvider()
-        builtinSpeech = builtin
+        builtinSpeech = AVSpeechProvider()
         kokoro = KokoroSpeechProvider()
-        speech = SwappableSpeechProvider(builtin)
+        speech = SwappableSpeechProvider(builtinSpeech)
         selectedVoiceTier = UserDefaults.standard.string(forKey: Self.selectedVoiceTierKey)
             .flatMap(VoiceTier.init(rawValue:)) ?? .builtin
 
@@ -275,9 +281,8 @@ final class AppEnvironment {
         // its model loads), Apple Speech as the always-on fallback. So dictation
         // works on Apple Speech day one and upgrades to WhisperKit on demand.
         let whisperDownloadBase = url.deletingLastPathComponent()
-        let whisper = WhisperKitProvider(downloadBase: whisperDownloadBase)
-        whisperKit = whisper
-        transcription = TranscriptionRouter(providers: [whisper, AppleSpeechTranscriber()])
+        whisperKit = WhisperKitProvider(downloadBase: whisperDownloadBase)
+        transcription = TranscriptionRouter(providers: [whisperKit, AppleSpeechTranscriber()])
         batchTranscriber = WhisperKitBatchTranscriber(downloadBase: whisperDownloadBase)
 
         ingester = DocumentIngester(store: store, embedder: embedder)
@@ -292,6 +297,7 @@ final class AppEnvironment {
         callSummarizer = SummarizationPipeline(quickProvider: afm, deepProvider: runtimeProvider)
 
         refreshCounts()
+        Task { await self.reindexIfEmbedderChanged() }
 
         // Wire avatar ↔ speech after all stored properties are initialized.
         speech.onSpeakingStarted = { [weak self] in
@@ -479,7 +485,9 @@ final class AppEnvironment {
             : HashingEmbeddingService()
         embedder.setEmbedder(newEmbedder)
         do {
-            let count = try await store.reindexEmbeddings(using: newEmbedder)
+            let count = try await store.reindexEmbeddings(
+                using: newEmbedder, fingerprint: newEmbedder.fingerprint
+            )
             usingMLXEmbeddings = useMLX
             UserDefaults.standard.set(useMLX, forKey: Self.embedderPrefersMLXKey)
             let label = useMLX ? "MLX bge_small" : "Hashing"
@@ -629,6 +637,40 @@ extension AppEnvironment {
     /// Whether the on-device model is actually available on this machine.
     var providerAvailable: Bool {
         provider.isAvailable
+    }
+
+    /// Re-embed the store when the running embedder's vector space doesn't
+    /// match the one that produced the stored vectors — e.g. after an mlx-swift
+    /// bump changes the embedding kernels. Background, one-time; the Settings
+    /// progress row (isReindexing/embeddingStatus) reports it. FTS keeps
+    /// serving mid-reindex; vector ranks are briefly mixed-space, acceptable
+    /// for a minutes-long one-time migration.
+    func reindexIfEmbedderChanged() async {
+        let current = embedder.fingerprint
+        let stored = (try? store.meta(key: KnowledgeStore.embedderFingerprintKey)) ?? nil
+        let vectorCount = (try? store.embeddingCount()) ?? 0
+        guard EmbedderReindexPolicy.needsReindex(
+            stored: stored, current: current, embeddingCount: vectorCount
+        ) else {
+            // Adopt the marker on fresh/empty stores so the next comparison
+            // is against a real value.
+            if stored != current {
+                try? store.setMeta(key: KnowledgeStore.embedderFingerprintKey, value: current)
+            }
+            return
+        }
+        guard !isReindexing else { return }
+        isReindexing = true
+        embeddingStatus = "Updating the index for the new embedder…"
+        defer { isReindexing = false }
+        do {
+            let count = try await store.reindexEmbeddings(using: embedder, fingerprint: current)
+            embeddingStatus = "Reindexed \(count) chunk\(count == 1 ? "" : "s") for the new embedder."
+        } catch {
+            // Reindex writes atomically — the store still matches the stored
+            // marker, so the next launch retries.
+            embeddingStatus = "Couldn’t update the index: \(error.localizedDescription)"
+        }
     }
 
     /// Build the encrypted call store. Falls back to an in-memory (non-persistent)

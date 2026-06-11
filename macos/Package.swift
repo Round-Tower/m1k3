@@ -38,7 +38,17 @@ let package = Package(
         // On-device embeddings + Gemma generation on Apple Silicon (Metal).
         // Same package family the prior knowledge-server project ships MLXEmbedders from; isolated to the
         // M1K3MLX target so the heavy Metal build never touches the core tests.
-        .package(url: "https://github.com/ml-explore/mlx-swift-lm.git", from: "2.29.0"),
+        // upToNextMinor deliberately: 3.x majors AND minors have carried API +
+        // mlx-swift kernel changes (kernel change = embedder re-index); bumps
+        // are probe-first, on purpose (see HuggingFaceBridge.swift).
+        .package(url: "https://github.com/ml-explore/mlx-swift-lm.git", .upToNextMinor(from: "3.31.3")),
+        // Downloader/Tokenizer for the MLX stack. 3.x removed the built-in HF
+        // client; the official adapter packages (swift-tokenizers-mlx) clash
+        // with WhisperKit's swift-transformers (duplicate `Tokenizers` target),
+        // so M1K3 bridges the small Downloader/TokenizerLoader protocols to
+        // swift-transformers directly — the SAME library WhisperKit already
+        // pins, and the same HubApi the 2.x line used (cache layout preserved).
+        .package(url: "https://github.com/huggingface/swift-transformers", .upToNextMinor(from: "1.1.6")),
         // Official MCP Swift SDK — the M1K3MCP stdio server exposes M1K3's
         // knowledge to Claude Desktop/Code as MCP tools.
         .package(url: "https://github.com/modelcontextprotocol/swift-sdk.git", from: "0.7.0"),
@@ -156,12 +166,18 @@ let package = Package(
                 .product(name: "MLXEmbedders", package: "mlx-swift-lm"),
                 .product(name: "MLXLLM", package: "mlx-swift-lm"),
                 .product(name: "MLXLMCommon", package: "mlx-swift-lm"),
+                .product(name: "Transformers", package: "swift-transformers"),
             ],
             path: "Sources/M1K3MLX"
         ),
         .testTarget(
             name: "M1K3MLXTests",
-            dependencies: ["M1K3MLX", "M1K3Knowledge", "M1K3Inference"],
+            dependencies: [
+                "M1K3MLX",
+                "M1K3Knowledge",
+                "M1K3Inference",
+                .product(name: "Transformers", package: "swift-transformers"),
+            ],
             path: "Tests/M1K3MLXTests"
         ),
         // MCP server library: knowledge-tool handlers (pure, testable) + the
