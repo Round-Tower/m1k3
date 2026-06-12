@@ -102,6 +102,12 @@ struct SettingsView: View {
                                 .font(.caption.monospacedDigit())
                                 .foregroundStyle(.secondary)
                         }
+                    case .preparing:
+                        VStack(alignment: .leading, spacing: 4) {
+                            ProgressView() // indeterminate — load has no honest fraction
+                            Text(env.whisperLoad.label(modelName: "WhisperKit"))
+                                .font(.caption).foregroundStyle(.secondary)
+                        }
                     case .ready:
                         Label("WhisperKit ready", systemImage: "checkmark.circle.fill")
                             .symbolRenderingMode(.hierarchical)
@@ -196,7 +202,9 @@ struct SettingsView: View {
                 } footer: {
                     Text("Reasoning models think out loud before answering — great for "
                         + "hard questions, slow for small talk. Auto skips the thinking "
-                        + "on casual turns and keeps it for grounded or analytic ones.")
+                        + "on casual turns and keeps it for grounded or analytic ones. "
+                        + "Voice mode has its own thinking toggle (the brain button) "
+                        + "and ignores this setting while active.")
                         .font(.caption).foregroundStyle(.secondary)
                 }
 
@@ -376,6 +384,12 @@ struct SettingsView: View {
                     .frame(maxWidth: 160)
                 Text(env.modelLoad.label(modelName: env.downloadingBrainName))
                     .font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+            }
+        case .preparing:
+            HStack(spacing: 8) {
+                ProgressView().controlSize(.small) // indeterminate
+                Text(env.modelLoad.label(modelName: env.downloadingBrainName))
+                    .font(.caption).foregroundStyle(.secondary)
             }
         case .failed:
             Label(env.modelLoad.label(modelName: env.downloadingBrainName), systemImage: "exclamationmark.triangle")

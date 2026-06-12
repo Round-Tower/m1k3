@@ -36,6 +36,7 @@ import M1K3MLX
 import M1K3Voice
 import M1K3WhisperKit
 import Observation
+import os
 
 /// The inference backends the runtime picker offers. Only Apple Foundation
 /// Models is wired for the MVP; MLX / LiteRT Gemma are reserved slots that light
@@ -104,6 +105,9 @@ final class AppEnvironment {
     /// Gemma). Rebuilt when the brain changes; held directly so the onboarding /
     /// picker can warm it and stream download progress to the UI.
     private var currentMLXProvider: MLXGemmaProvider
+    /// "Is this brain's weights already on disk?" — drives the onboarding card's
+    /// "On disk · ready" hint instead of dangling a download the user already did.
+    private let brainInventory = LocalModelInventory()
     /// The single MLX slot behind `RuntimeOption.mlxGemma` in the façade; re-pointed
     /// at `currentMLXProvider` whenever the brain switches between Lil and Big, so
     /// the swap is seen without rebuilding the RAGResponder.
@@ -169,6 +173,16 @@ final class AppEnvironment {
     nonisolated static let thinkingModeKey = "thinkingMode"
     /// Whether the user has made a voice-output choice (onboarding speech step).
     static let hasChosenVoiceKey = "hasChosenVoice"
+    /// One-shot: the call-encryption key has been migrated to Touch-ID protection.
+    /// Guards the (prompt-triggering) reassert so it runs once, not every launch.
+    static let callKeyProtectionMigratedKey = "calls.keyProtectionMigrated"
+    /// Call-subsystem diagnostics — pairs with StereoCallRecorder's trail so a full
+    /// record→transcribe QA pass is one `log stream` predicate.
+    private static let callLog = Logger(subsystem: "dev.murphysig.M1K3", category: "calls")
+    /// The user has upgraded voice input to WhisperKit — restored on launch so it
+    /// auto-loads instead of silently reverting to Apple Speech (guarded by the
+    /// model being on disk, never a silent re-download).
+    static let whisperEnabledKey = "transcription.whisperEnabled"
 
     /// The chosen brain (Mini / Lil / Big). Restored on launch, persisted on change.
     private(set) var selectedBrain: BrainTier = .mini
@@ -352,6 +366,13 @@ final class AppEnvironment {
         if selectedVoiceTier == .m1k3Voice, kokoro.isModelStaged {
             Task { await prepareM1K3Voice() }
         }
+
+        // Restore WhisperKit voice input the same way — only if the user upgraded to
+        // it AND the model is on disk (else stay on Apple Speech rather than trigger
+        // a silent ~142 MB re-download).
+        if UserDefaults.standard.bool(forKey: Self.whisperEnabledKey), whisperKit.isModelDownloaded {
+            Task { await enableWhisperKit() }
+        }
     }
 
     /// Ingest a user-selected / dropped file (PDF or text) into the store.
@@ -423,23 +444,30 @@ final class AppEnvironment {
     func enableWhisperKit() async {
         guard !isPreparingWhisper else { return }
         isPreparingWhisper = true
-        whisperLoad = .progress(0)
+        // WhisperKit's init bundles download + CoreML compile opaquely (it reports
+        // only 0.05 then 1.0), so there's no honest fraction to show — an
+        // indeterminate "Preparing…" spinner, never a bar stuck at 5% mislabelled as
+        // a download. (Wiring WhisperKit's modelStateCallback for real download
+        // progress on a fresh fetch is a follow-up.)
+        whisperLoad = .preparing
         do {
-            try await whisperKit.prepareModel { fraction in
-                // Guard against a late progress hop overwriting .ready — same race
-                // fixed in preloadGemma (the .downloading check is the fence).
-                Task { @MainActor in
-                    if case .downloading = self.whisperLoad {
-                        self.whisperLoad = .progress(fraction)
-                    }
-                }
-            }
+            try await whisperKit.prepareModel { _ in }
             isPreparingWhisper = false
             whisperLoad = .ready
+            // Remember the upgrade so the next launch auto-loads WhisperKit instead
+            // of silently dropping back to Apple Speech.
+            UserDefaults.standard.set(true, forKey: Self.whisperEnabledKey)
         } catch {
             isPreparingWhisper = false
             whisperLoad = .failed(message: error.localizedDescription)
         }
+    }
+
+    /// Whether a downloaded-tier brain's weights are already on disk. Mini (Apple
+    /// Foundation Models) has nothing to download, so it's never "downloaded" here.
+    func isBrainDownloaded(_ tier: BrainTier) -> Bool {
+        guard let modelID = tier.mlxModelID else { return false }
+        return brainInventory.isInstalled(modelID: modelID)
     }
 
     /// Choose a brain: persist it, re-point the active provider, and (for Lil/Big)
@@ -607,6 +635,7 @@ final class AppEnvironment {
 
     /// Log a consent affirmation, then start recording.
     func affirmConsentAndRecord(scope: ConsentScope) async {
+        Self.callLog.notice("consent affirmed (scope=\(String(describing: scope), privacy: .public))")
         consentGate.affirm(scope: scope, at: Date())
         await startRecording()
     }
@@ -620,10 +649,12 @@ final class AppEnvironment {
         do {
             let stereo = try await recorder.start()
             isRecording = true
+            Self.callLog.notice("recording started (stereo=\(stereo, privacy: .public))")
             lastCallStatus = stereo
                 ? "Recording… (both sides — speakers will be separated)"
                 : "Recording… (mic only — grant Screen Recording to capture the other side)"
         } catch {
+            Self.callLog.error("start failed: \(error, privacy: .public)")
             lastCallStatus = "Couldn’t start recording: \(error.localizedDescription)"
         }
     }
@@ -638,12 +669,15 @@ final class AppEnvironment {
         isRecording = false
         lastRecordingURL = url
         guard let url else {
+            Self.callLog.error("stop: nothing recorded")
             lastCallStatus = "Nothing was recorded."
             return
         }
         if batchTranscriber.isAvailable {
+            Self.callLog.notice("stop: recorded \(url.lastPathComponent, privacy: .public) → transcribing")
             Task { await processRecording(url: url) }
         } else {
+            Self.callLog.notice("stop: recorded \(url.lastPathComponent, privacy: .public) → parked (transcription model not enabled)")
             lastCallStatus = "Recorded — enable call transcription in Settings to process it."
         }
     }
@@ -730,15 +764,27 @@ extension AppEnvironment {
     /// calls feature rather than crashing the app.
     static func makeCallPersistence(at url: URL) -> any CallPersistence {
         do {
-            // The call-encryption key is gated behind Touch ID (password fallback).
-            // Read once here, at call-store construction → one biometric prompt per
-            // launch. reassertProtection() upgrades a key written before this gate
-            // existed, in place, so already-encrypted calls stay decryptable.
+            // The call-encryption key is gated behind Touch ID (login-password
+            // fallback) via a .userPresence Keychain access control, read once here
+            // at call-store construction → one biometric prompt per launch.
             let provider = StoredKeyProvider(store: KeychainKeyStore(protection: .userPresence))
-            try provider.reassertProtection()
+            // One-time, flag-guarded migration: a key written before this gate
+            // existed is unprotected; reassert upgrades it IN PLACE (same bytes, so
+            // existing encrypted calls stay decryptable). Guarded because reassert
+            // reads the key — against an already-protected item that read would itself
+            // fire Touch ID, so running it every launch means TWO prompts. Once only.
+            let defaults = UserDefaults.standard
+            if !defaults.bool(forKey: callKeyProtectionMigratedKey) {
+                try provider.reassertProtection()
+                defaults.set(true, forKey: callKeyProtectionMigratedKey)
+            }
             let key = try provider.symmetricKey()
             return try GRDBCallPersistence(path: url.path, coder: EncryptedCallCoder(key: key))
         } catch {
+            // A key failure degrades calls to a non-persistent store rather than
+            // crashing the app. Log it — an otherwise silently-inert calls feature is
+            // undiagnosable (a dismissed Touch ID lands here as .userCancelled).
+            callLog.error("call store fell back to non-persistent: \(error, privacy: .public)")
             return (try? GRDBCallPersistence()) ?? NullCallPersistence()
         }
     }

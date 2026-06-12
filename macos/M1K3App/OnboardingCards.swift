@@ -22,6 +22,9 @@ struct BrainCard: View {
     /// True when this Mac is below the tier's memory floor — the card shows
     /// but can't be chosen (honest about why, no silent hiding).
     var isLocked = false
+    /// True when the tier's weights are already on disk — the card says "ready"
+    /// instead of dangling a download the user has already done.
+    var isDownloaded = false
     let onTap: () -> Void
 
     var body: some View {
@@ -85,6 +88,8 @@ struct BrainCard: View {
 
     private var sizeLabel: String {
         guard let megabytes = tier.approxDownloadMB else { return "Built-in · no download" }
+        // Already fetched → say so, and don't imply another download is pending.
+        if isDownloaded { return "On disk · ready" }
         var label = if megabytes >= 1000 {
             String(format: "~%.1f GB · one-time download", Double(megabytes) / 1000)
         } else {

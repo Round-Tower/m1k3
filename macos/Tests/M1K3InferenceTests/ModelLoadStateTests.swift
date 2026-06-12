@@ -37,6 +37,16 @@ struct ModelLoadStateTests {
         #expect(!ModelLoadState.failed(message: "x").isActive)
     }
 
+    @Test("preparing is active, indeterminate, and labelled as prep — not a download")
+    func preparing() {
+        // For a model that's on disk but still loading (e.g. WhisperKit's opaque
+        // CoreML compile), there's no honest fraction — show a spinner, and DON'T
+        // say "Downloading" (the lie that read as a re-download).
+        #expect(ModelLoadState.preparing.isActive) // the row still shows
+        #expect(ModelLoadState.preparing.fraction == nil) // → indeterminate bar
+        #expect(ModelLoadState.preparing.label(modelName: "WhisperKit") == "Preparing WhisperKit…")
+    }
+
     @Test("failure carries its message")
     func failureMessage() {
         let state = ModelLoadState.failed(message: "no network")
