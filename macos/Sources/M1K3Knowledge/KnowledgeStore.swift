@@ -75,6 +75,13 @@ public final class KnowledgeStore: @unchecked Sendable {
                 t.column("value", .text).notNull()
             }
         }
+        // Provenance for memory items: who wrote it ("user" | "distilled").
+        // Nullable, no backfill — documents/calls legitimately have no source.
+        migrator.registerMigration("v3-source") { db in
+            try db.alter(table: "knowledge_items") { t in
+                t.add(column: "source", .text)
+            }
+        }
         try migrator.migrate(dbQueue)
     }
 
@@ -328,6 +335,7 @@ public final class KnowledgeStore: @unchecked Sendable {
             kind: KnowledgeKind(rawValue: row["kind"] ?? "note"),
             title: row["title"] ?? "",
             sourceRef: row["source_ref"],
+            source: (row["source"] as String?).map(KnowledgeSource.init(rawValue:)),
             createdAt: Date(timeIntervalSince1970: row["created_at"] ?? 0)
         )
     }
