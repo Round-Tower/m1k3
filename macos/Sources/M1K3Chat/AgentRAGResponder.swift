@@ -108,9 +108,10 @@ public struct AgentRAGResponder: RAGResponding, Sendable {
         // Gate on relevance: top-K ALWAYS returns something, even for "what
         // model are you?" — weak hits pollute the prompt and derail small
         // models. Below threshold nothing is injected; the model can still
-        // retrieve on its own terms via search_knowledge.
-        let chunks = GroundingGate.filter(retrieved)
-        Self.logGateDecision(retrieved: retrieved, kept: chunks)
+        // retrieve on its own terms via search_knowledge. Memory hits clear
+        // their own (lower) bar and feed a separate uncited prompt block.
+        let (chunks, memories) = GroundingGate.partition(retrieved)
+        Self.logGateDecision(retrieved: retrieved, kept: chunks + memories)
         // Resolve the tool list once per turn; the routing rules must match
         // what's actually callable (no advertising a disabled web_search).
         let tools = toolsProvider()
@@ -120,6 +121,7 @@ public struct AgentRAGResponder: RAGResponding, Sendable {
                 await runAgentTurn(
                     question: question,
                     chunks: chunks,
+                    memories: memories,
                     history: history,
                     tools: tools,
                     onActivity: onActivity,
@@ -132,7 +134,8 @@ public struct AgentRAGResponder: RAGResponding, Sendable {
             // iteration cap. Terminating the stream cancels the turn.
             continuation.onTermination = { _ in turnTask.cancel() }
         }
-        return (chunks, stream)
+        // Memory hits ride along as sources so the UI shows their provenance.
+        return (chunks + memories, stream)
     }
 
     /// One full agent turn into `continuation`: run the loop (conclusion tail
@@ -141,6 +144,7 @@ public struct AgentRAGResponder: RAGResponding, Sendable {
     private func runAgentTurn(
         question: String,
         chunks: [ChunkHit],
+        memories: [ChunkHit],
         history: [ChatTurn],
         tools: [any AgentTool],
         onActivity: @escaping @Sendable (ResponderActivity) -> Void,
@@ -151,7 +155,8 @@ public struct AgentRAGResponder: RAGResponding, Sendable {
         let style: Self.PromptStyle =
             (provider as? ToolCallingProvider)?.supportsToolCalls == true ? .native : .react
         let grounding = Self.grounding(
-            chunks: chunks, toolNames: Set(tools.map(\.name)), history: history, style: style
+            chunks: chunks, memories: memories, toolNames: Set(tools.map(\.name)),
+            history: history, style: style
         )
         Self.logTurnStart(chunks: chunks, tools: tools, grounding: grounding)
         // Fresh agent per turn — its reasoning trace must not bleed across
@@ -352,16 +357,28 @@ public struct AgentRAGResponder: RAGResponding, Sendable {
     /// callable — never advertise a disabled web_search (and never imply
     /// search_knowledge can reach the live world; the ⌘R weather bug).
     static func grounding(
-        chunks: [ChunkHit], toolNames: Set<String>, history: [ChatTurn] = [],
-        style: PromptStyle = .react
+        chunks: [ChunkHit], memories: [ChunkHit] = [], toolNames: Set<String>,
+        history: [ChatTurn] = [], style: PromptStyle = .react
     ) -> String {
-        let body = groundingBody(chunks: chunks, toolNames: toolNames, style: style)
+        let body = groundingBody(
+            chunks: chunks, memories: memories, toolNames: toolNames, style: style
+        )
         guard let replay = HistoryWindow.render(history) else { return body }
         return "\(replay)\n\n\(body)"
     }
 
+    /// The uncited personal-facts block: memories aren't sources to cite,
+    /// they're things M1K3 simply knows about the user. Sits between
+    /// KNOWLEDGE and RULES; absent when no memory cleared the gate.
+    private static func memoryBlock(_ memories: [ChunkHit]) -> String? {
+        guard !memories.isEmpty else { return nil }
+        let facts = memories.map { "- \($0.content)" }.joined(separator: "\n")
+        return "WHAT I KNOW ABOUT YOU (remembered from past conversations — "
+            + "use naturally, do not cite):\n\(facts)"
+    }
+
     private static func groundingBody(
-        chunks: [ChunkHit], toolNames: Set<String>, style: PromptStyle
+        chunks: [ChunkHit], memories: [ChunkHit], toolNames: Set<String>, style: PromptStyle
     ) -> String {
         let hasWebSearch = toolNames.contains("web_search")
         var routing = hasWebSearch
@@ -399,19 +416,23 @@ public struct AgentRAGResponder: RAGResponding, Sendable {
             \(routing)
             """
         }
-        guard !chunks.isEmpty else {
-            let hint = toolNames.contains("search_knowledge")
+        let head: String
+        if chunks.isEmpty {
+            head = toolNames.contains("search_knowledge")
                 ? "No stored knowledge was injected — the user's documents are "
                 + "NOT in this context. If the question could concern their "
                 + "stored documents, calls, or notes, call search_knowledge; "
                 + "otherwise answer directly."
                 : "No stored knowledge matched this question."
-            return "\(hint)\n\n\(rules)"
+        } else {
+            let knowledge = chunks.enumerated().map { index, hit in
+                "\(index + 1). \(ChatPromptBuilder.citationLabel(for: hit))\n\(hit.content)"
+            }.joined(separator: "\n\n")
+            head = "KNOWLEDGE (the user's own documents, calls, notes):\n\(knowledge)"
         }
-        let knowledge = chunks.enumerated().map { index, hit in
-            "\(index + 1). \(ChatPromptBuilder.citationLabel(for: hit))\n\(hit.content)"
-        }.joined(separator: "\n\n")
-        return "KNOWLEDGE (the user's own documents, calls, notes):\n\(knowledge)\n\n\(rules)"
+        return [head, memoryBlock(memories), rules]
+            .compactMap { $0 }
+            .joined(separator: "\n\n")
     }
 
     /// Deterministic provenance for web answers — extracted from the trace,
