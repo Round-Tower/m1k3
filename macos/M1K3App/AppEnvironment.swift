@@ -147,6 +147,20 @@ final class AppEnvironment {
     /// The avatar companion state — driven by this environment at each transition
     /// (listening → thinking → generating → speaking → idle).
     private(set) var avatar = AvatarController()
+    /// UI earcons. Lazy so `isSpeaking` can read the live avatar state (an
+    /// earcon must never step on M1K3's voice). Enabled from the persisted
+    /// preference; the Settings toggle updates `isEnabled` live. Not observed —
+    /// nothing in the UI reacts to the player object (lazy needs a stored prop,
+    /// which @Observable's rewrite would otherwise forbid).
+    @ObservationIgnored private(set) lazy var soundEffects: SoundEffectPlayer = .bundled(
+        isEnabled: Self.soundEffectsEnabledDefault,
+        isSpeaking: { [weak self] in
+            guard let self else { return false }
+            if case .speaking = avatar.state.activity { return true }
+            return false
+        }
+    )
+
     /// Word-highlight state for speech playback (the karaoke reading view).
     let speechHighlight = SpeechHighlight()
     /// Voice-first mode's conversation loop — non-nil while the mode is active.
@@ -417,6 +431,11 @@ final class AppEnvironment {
         }
         await chat.send(text)
         advance.cancel()
+        // A failed turn earns the error earcon (the gate mutes it if M1K3 is
+        // mid-speech, which a failure here never is).
+        if case .failed = chat.messages.last?.status {
+            soundEffects.play(.error)
+        }
         // Only reset to idle if the avatar isn't already in a speaking state
         // (e.g. auto-TTS path sets .speaking before we return here).
         if case .speaking = avatar.state.activity { return }

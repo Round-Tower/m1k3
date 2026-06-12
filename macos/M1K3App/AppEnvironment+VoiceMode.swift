@@ -33,6 +33,18 @@ extension AppEnvironment {
     /// reads it. The pixel face stays M1K3's default everywhere else.
     nonisolated static let voiceCompanionKey = "voiceMode.companion"
 
+    /// UI earcons (error / memory-saved / voice-mode-enter) — ON by default,
+    /// switchable in Settings. Absent key reads as enabled.
+    static let soundEffectsEnabledKey = "soundEffects.enabled"
+
+    /// The persisted earcon preference (absent key = ON). Drives the lazy
+    /// `soundEffects` player's initial enabled state.
+    static var soundEffectsEnabledDefault: Bool {
+        let defaults = UserDefaults.standard
+        return defaults.object(forKey: soundEffectsEnabledKey) == nil
+            || defaults.bool(forKey: soundEffectsEnabledKey)
+    }
+
     /// One-time wiring (from init): speech lifecycle drives the avatar's speaking
     /// state, and the word-timing callbacks feed the karaoke highlight. Lives here
     /// (with speak/stopSpeaking) so the swap façade re-applies everything onto
@@ -102,6 +114,7 @@ extension AppEnvironment {
     func enterVoiceMode() {
         guard voiceLoop == nil, !chat.isResponding, !isListening else { return }
         UserDefaults.standard.set(true, forKey: Self.voiceModeActiveKey)
+        soundEffects.play(.voiceEnter) // M1K3 materialising
         let controller = VoiceLoopController(dependencies: makeVoiceLoopDependencies())
         voiceLoop = controller
         controller.begin()

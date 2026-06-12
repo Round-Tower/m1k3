@@ -235,6 +235,10 @@ final class MCPHostController {
             source: .user
         )
         env.refreshCounts()
+        // A genuinely-new memory earns the save earcon; a dedup retry stays silent.
+        if !result.wasDeduped {
+            env.soundEffects.play(.save)
+        }
         let dedup = result.wasDeduped ? " (already remembered)" : ""
         return "Remembered “\(title)”\(dedup)."
     }

@@ -19,6 +19,7 @@ struct SettingsView: View {
     @AppStorage(ReadingMode.storageKey) private var readingMode: ReadingMode = .standard
     @AppStorage(AppEnvironment.webSearchEnabledKey) private var webSearchEnabled = true
     @AppStorage(AppEnvironment.memoryAutoCaptureKey) private var memoryAutoCapture = true
+    @AppStorage(AppEnvironment.soundEffectsEnabledKey) private var soundEffectsEnabled = true
     @State private var showMemories = false
     @AppStorage(AppEnvironment.thinkingModeKey) private var thinkingMode = ThinkingMode.auto.rawValue
     @AppStorage(AppEnvironment.voiceCompanionKey) private var voiceCompanion = ""
@@ -138,6 +139,20 @@ struct SettingsView: View {
                 }
 
                 companionSection
+
+                Section {
+                    Toggle("Sound effects", isOn: $soundEffectsEnabled)
+                        .onChange(of: soundEffectsEnabled) { _, on in
+                            env.soundEffects.isEnabled = on
+                        }
+                } header: {
+                    Text("Sound effects")
+                } footer: {
+                    Text("Short earcons for a few moments — an error, a memory saved, "
+                        + "voice mode waking up. They never play over M1K3's voice. "
+                        + "On-device only.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
 
                 Section {
                     if env.isTranscribingCall {
