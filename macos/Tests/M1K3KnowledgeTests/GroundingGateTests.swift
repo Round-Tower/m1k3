@@ -148,10 +148,11 @@ struct GroundingGateTests {
         #expect(knowledge.map(\.content) == GroundingGate.filter(hits).map(\.content))
     }
 
-    @Test("memoryThreshold is provisional 0.60 and below chunkThreshold")
+    @Test("memoryThreshold is 0.54 (MEMEVAL 2026-06-12) and below chunkThreshold")
     func memoryThresholdPinned() {
-        // Replaced from MEMEVAL distribution data — update this pin with it.
-        #expect(GroundingGate.memoryThreshold == 0.60)
+        // Set from the on-device MEMEVAL distribution: recall-first on the
+        // overlap (see GroundingGate doc comment for the measured frontier).
+        #expect(GroundingGate.memoryThreshold == 0.54)
         #expect(GroundingGate.memoryThreshold < GroundingGate.chunkThreshold)
     }
 }

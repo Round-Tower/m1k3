@@ -42,11 +42,15 @@ public enum GroundingGate {
     }
 
     /// Minimum cosine similarity for a MEMORY hit. Memories are 5–40-token
-    /// atomic facts; query-to-short-fact pairs sit lower in BGE's cone than
-    /// query-to-chunk, so they get their own bar. PROVISIONAL 0.60 — replace
-    /// from the M1K3_SELFTEST_MEMEVAL distribution (positives vs negatives)
-    /// before trusting recall quality.
-    public static let memoryThreshold: Float = 0.60
+    /// atomic facts; query-to-short-fact pairs sit LOWER in BGE's cone than
+    /// query-to-chunk — measured via M1K3_SELFTEST_MEMEVAL (2026-06-12, real
+    /// BGE on device): positives 0.547–0.856 (median 0.651), negatives
+    /// 0.281–0.556 (median 0.427). The classes overlap — no clean cut exists.
+    /// 0.54 keeps 22/22 true recalls and admits 1/11 negatives; 0.60 lost
+    /// 5/22 user-given facts. Recall wins the asymmetry: a memory miss breaks
+    /// the "I'll remember" promise, a false positive is one short bullet.
+    /// Per-query normalisation is the upgrade path if stray bullets annoy.
+    public static let memoryThreshold: Float = 0.54
 
     /// Split gated hits for the two prompt blocks: `.memory` hits (cleared
     /// `memoryThreshold`) feed the WHAT-I-KNOW-ABOUT-YOU block; everything
