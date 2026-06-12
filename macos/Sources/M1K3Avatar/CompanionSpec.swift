@@ -78,13 +78,13 @@ public struct CompanionSpec: Equatable, Sendable, Identifiable {
         clips: ["Survey", "Walk", "Run"]
     )
 
-    /// Second candidate — the Quaternius dialect's reference companion (full clip
-    /// set, already Quick-Look QA'd in the probe). Adding more is a list change.
+    /// Companion #2 — the Quaternius dialect's reference companion. Clips are
+    /// exactly the gait-mapped set (bundled == emittable, no dead assets).
     public static let gecko = CompanionSpec(
         id: "Gecko",
         displayName: "Gecko",
         dialect: .quaternius,
-        clips: ["Idle_A", "Idle_B", "Walk", "Run", "Jump", "Fear", "Sit", "Clicked"]
+        clips: ["Idle_A", "Idle_B", "Walk", "Jump", "Fear"]
     )
 
     /// Every known companion. The voice-mode picker self-limits to the subset that

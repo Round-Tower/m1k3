@@ -102,10 +102,13 @@ struct CompanionTests {
         #expect(CompanionSpec.named("Wolpertinger") == nil)
     }
 
-    @Test("only companions with bundled assets report installed (v1 ships Fox only)")
+    @Test("shipped companions report installed; their whole clip set is bundled")
     func installedReflectsBundle() {
-        #expect(CompanionAssets.isInstalled(.fox)) // Fox USDZs are bundled
-        #expect(!CompanionAssets.isInstalled(.gecko)) // Gecko is a spec, not yet bundled
+        for spec in [CompanionSpec.fox, .gecko] {
+            #expect(CompanionAssets.isInstalled(spec))
+            // Every declared clip is actually on disk (so no gait silently dead-ends).
+            #expect(CompanionAssets.clipURLs(for: spec).count == spec.clips.count, "\(spec.id) missing clips")
+        }
     }
 
     // MARK: - Crossfade
