@@ -34,6 +34,22 @@ public struct StoredKeyProvider: Sendable {
         return key
     }
 
+    /// Rewrite the stored key under the store's CURRENT protection policy, without
+    /// changing its bytes. This upgrades a key written before biometric protection
+    /// was added (plain `kSecAttrAccessible`) to a Touch-ID-gated item in place, so
+    /// existing encrypted calls stay decryptable. A no-op when no key exists — it
+    /// must never mint a key just to protect it (that would rotate one we simply
+    /// hadn't read yet).
+    ///
+    /// The key bytes never change, so this is safe to call more than once — but it
+    /// is NOT free to repeat: against a biometric store every call reads (one Touch
+    /// ID prompt) and rewrites the item. Run it ONCE, behind a migration flag, not
+    /// on every launch.
+    public func reassertProtection() throws {
+        guard let data = try store.data(forAccount: account) else { return }
+        try store.setData(data, forAccount: account)
+    }
+
     /// Forget the stored key. The next `symmetricKey()` generates a fresh one —
     /// which makes any data encrypted under the old key unrecoverable, so this is
     /// a deliberate "burn it" / rotation primitive, not routine.
