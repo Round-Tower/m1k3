@@ -517,9 +517,10 @@ final class AppEnvironment {
         }
     }
 
-    /// All indexed items, newest first, for the document manager.
-    func documents() -> [KnowledgeItem] {
-        ((try? store.allItems()) ?? []).sorted { $0.createdAt > $1.createdAt }
+    /// All indexed items, newest first, for the document manager — or one
+    /// kind's slice (the memories surface passes `.memory`).
+    func documents(kind: KnowledgeKind? = nil) -> [KnowledgeItem] {
+        ((try? store.allItems(kind: kind)) ?? []).sorted { $0.createdAt > $1.createdAt }
     }
 
     /// Chunk count for one item (shown in the document list).

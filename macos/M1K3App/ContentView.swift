@@ -21,6 +21,7 @@ struct ContentView: View {
 
     @State private var draft = ""
     @State private var showDocuments = false
+    @State private var showMemories = false
     @State private var showCalls = false
     @State private var showHistory = false
     @State private var showImporter = false
@@ -64,6 +65,9 @@ struct ContentView: View {
         .toolbar { toolbarContent }
         .sheet(isPresented: $showDocuments) {
             DocumentsView().environment(env)
+        }
+        .sheet(isPresented: $showMemories) {
+            MemoriesView().environment(env)
         }
         .sheet(isPresented: $showCalls) {
             CallsView().environment(env)
@@ -321,6 +325,9 @@ struct ContentView: View {
             }
             Button { showDocuments = true } label: {
                 Label("Documents", systemImage: "books.vertical")
+            }
+            Button { showMemories = true } label: {
+                Label("Memories", systemImage: "brain")
             }
             Button { showCalls = true } label: {
                 Label("Calls", systemImage: "phone.bubble")
