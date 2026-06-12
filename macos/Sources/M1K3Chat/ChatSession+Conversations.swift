@@ -29,6 +29,8 @@ public extension ChatSession {
     /// archive or a turn is in flight.
     func startNewConversation() {
         guard !isResponding, !messages.isEmpty else { return }
+        // The conversation is being left — distill its undistilled turns.
+        scheduleDistillationIfNeeded()
         beginConversation(id: UUID(), messages: [], title: nil)
     }
 
@@ -38,6 +40,8 @@ public extension ChatSession {
         guard !isResponding, id != activeConversationID, let history else { return }
         guard let loaded = (try? history.loadMessages(id: id)) ?? nil else { return }
         let title = ((try? history.list()) ?? []).first { $0.id == id }?.title
+        // Leaving the current conversation — same exit semantics as New chat.
+        scheduleDistillationIfNeeded()
         beginConversation(id: id, messages: loaded, title: title)
     }
 

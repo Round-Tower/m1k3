@@ -174,18 +174,37 @@ public final class ChatSession {
     /// same-module extension and needs the seams.
     let history: (any ChatHistoryPersisting)?
     let titler: (any ConversationTitling)?
+    /// nil = memory auto-capture not wired (feature off, tests unaffected).
+    let distillation: MemoryDistillationCoordinator?
+    /// Read fresh at every trigger — the Settings toggle applies immediately
+    /// (the thinkingModeProvider pattern).
+    let autoCaptureEnabled: @Sendable () -> Bool
     /// Test hook — `await titlingTask?.value` makes fire-and-forget titling
     /// deterministic in tests.
     private(set) var titlingTask: Task<Void, Never>?
+    /// Test hook, same contract as titlingTask. Single-flight: a skipped
+    /// trigger is caught at the next exit because the watermark didn't move.
+    private(set) var distillationTask: Task<Void, Never>?
+
+    /// Launch catch-up waits this long so it never contends with the user's
+    /// first turn for the model.
+    nonisolated static let launchCatchUpDelay: Duration = .seconds(5)
+    /// A monster legacy transcript distills at most this many recent turns
+    /// (DEFAULT-0 watermarks mean old conversations distill once, in full).
+    nonisolated static let maxDistillationTurns = 40
 
     public init(
         responder: any RAGResponding,
         history: (any ChatHistoryPersisting)? = nil,
-        titler: (any ConversationTitling)? = nil
+        titler: (any ConversationTitling)? = nil,
+        distillation: MemoryDistillationCoordinator? = nil,
+        autoCaptureEnabled: @escaping @Sendable () -> Bool = { true }
     ) {
         self.responder = responder
         self.history = history
         self.titler = titler
+        self.distillation = distillation
+        self.autoCaptureEnabled = autoCaptureEnabled
         // Relaunch restores the most recent conversation — the same feel the
         // single-transcript file gave, now one of many.
         if let history,
@@ -195,6 +214,16 @@ public final class ChatSession {
             messages = restored
             activeConversationID = recent.id
             activeTitle = recent.title
+        }
+        // Launch catch-up: a quit-without-switching leaves undistilled turns
+        // behind; distill the restored conversation's backlog now (delayed —
+        // never racing the user's first turn). App-quit-time distillation was
+        // rejected: a fire-and-forget task racing termination loses silently.
+        if distillation != nil, !messages.isEmpty {
+            Task { [weak self] in
+                try? await Task.sleep(for: Self.launchCatchUpDelay)
+                self?.scheduleDistillationIfNeeded()
+            }
         }
     }
 
@@ -320,6 +349,35 @@ public final class ChatSession {
                 self.activeTitle = title
             }
             self.historyRevision += 1
+        }
+    }
+
+    /// Fire-and-forget memory distillation over the transcript content the
+    /// watermark hasn't covered. Called at conversation EXIT (new/switch,
+    /// BEFORE the swap) and by the launch catch-up — never per turn, never on
+    /// delete (deletion is discard intent). The titling blueprint throughout:
+    /// id + count captured at spawn, defer cleanup, task exposed for tests.
+    /// Watermark advances ONLY on success (a throw leaves the slice for the
+    /// next trigger to retry).
+    func scheduleDistillationIfNeeded() {
+        guard let history, let distillation, autoCaptureEnabled() else { return }
+        guard distillationTask == nil, !isResponding else { return }
+        let conversationID = activeConversationID
+        let snapshotCount = messages.count
+        let watermark = (try? history.distilledWatermark(id: conversationID)) ?? 0
+        guard watermark < snapshotCount else { return }
+        let fresh = messages[min(watermark, snapshotCount)...].compactMap { message -> ChatTurn? in
+            guard case .complete = message.status, !message.text.isEmpty else { return nil }
+            return ChatTurn(role: message.role == .user ? .user : .assistant, text: message.text)
+        }
+        // At least one full new exchange — never distill a lone dangling turn.
+        guard fresh.contains(where: { $0.role == .user }),
+              fresh.contains(where: { $0.role == .assistant }) else { return }
+        let turns = Array(fresh.suffix(Self.maxDistillationTurns))
+        distillationTask = Task { [weak self] in
+            defer { self?.distillationTask = nil }
+            guard (try? await distillation.distillAndStore(turns: turns)) != nil else { return }
+            try? history.setDistilledWatermark(id: conversationID, count: snapshotCount)
         }
     }
 
