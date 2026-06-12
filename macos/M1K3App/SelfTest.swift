@@ -184,19 +184,7 @@ enum SelfTest {
             emit("✗ MLX generate stage: \(error)")
         }
 
-        // 4. Optional per-model eval suite (M1K3_SELFTEST_EVAL=1): the same
-        //    behavioral checklist against every brain — or any ad-hoc list via
-        //    M1K3_SELFTEST_EVAL_MODELS=id,id. Promotion gate for new models.
-        if ProcessInfo.processInfo.environment["M1K3_SELFTEST_EVAL"] == "1" {
-            let models = ProcessInfo.processInfo.environment["M1K3_SELFTEST_EVAL_MODELS"]
-                .map { $0.split(separator: ",").map { String($0).trimmingCharacters(in: .whitespaces) } }
-                ?? BrainTier.allCases.compactMap(\.mlxModelID)
-            for modelID in models {
-                emit("• eval \(modelID)…")
-                let report = await evalModel(modelID)
-                emit(report.rendered)
-            }
-        }
+        await runEvalSuiteIfRequested()
 
         // 5. Optional memory-threshold eval (M1K3_SELFTEST_MEMEVAL=1): embed
         //    the fixture pairs with the REAL BGE embedder and report the
@@ -208,6 +196,21 @@ enum SelfTest {
         }
 
         emit("=== END SELF-TEST ===")
+    }
+
+    /// 4. Optional per-model eval suite (M1K3_SELFTEST_EVAL=1): the same
+    /// behavioral checklist against every brain — or any ad-hoc list via
+    /// M1K3_SELFTEST_EVAL_MODELS=id,id. Promotion gate for new models.
+    private static func runEvalSuiteIfRequested() async {
+        guard ProcessInfo.processInfo.environment["M1K3_SELFTEST_EVAL"] == "1" else { return }
+        let models = ProcessInfo.processInfo.environment["M1K3_SELFTEST_EVAL_MODELS"]
+            .map { $0.split(separator: ",").map { String($0).trimmingCharacters(in: .whitespaces) } }
+            ?? BrainTier.allCases.compactMap(\.mlxModelID)
+        for modelID in models {
+            emit("• eval \(modelID)…")
+            let report = await evalModel(modelID)
+            emit(report.rendered)
+        }
     }
 
     /// 5. The MEMEVAL pass: one cosine per fixture pair, positives then
