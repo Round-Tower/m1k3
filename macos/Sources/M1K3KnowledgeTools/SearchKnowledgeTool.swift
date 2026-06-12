@@ -8,14 +8,21 @@
 //
 //  With an embedder this is full HYBRID search (FTS + vector, RRF-fused) —
 //  the same retrieval the implicit grounding uses, but on the MODEL's terms:
-//  it decides when to search and what to ask. Results are deliberately NOT
-//  relevance-gated (the model judges what it asked for); the hits it saw are
-//  reported through `onHits` so they join the turn's sources and the citation
-//  validator's allow-list. Without an embedder it degrades to FTS (self-test).
+//  it decides when to search and what to ask. Results pass the SAME relevance
+//  floor as implicit grounding (GroundingGate, kind-aware): top-K always
+//  returns *something*, and a small model treats whatever comes back as ground
+//  truth — ungated nearest-neighbour garbage was the confabulation fuel for
+//  off-store questions. When nothing clears the bar the tool says so honestly
+//  instead. The hits the model actually saw are reported through `onHits` so
+//  they join the turn's sources and the citation validator's allow-list.
+//  Without an embedder it degrades to FTS (self-test).
 //
 //  Signed: Kev + claude-opus-4-8, 2026-06-06, Confidence 0.85, Prior: Unknown
 //  Review: Kev + claude-fable-5, 2026-06-10, Confidence 0.85 — hybrid search +
 //  hit collection for the model-decides retrieval redesign.
+//  Review: Kev + claude-fable-5, 2026-06-12, Confidence 0.85 — relevance floor
+//  + honest abstention; replaces the deliberately-ungated stance (sound for a
+//  strong model, wrong for a confabulating 2B).
 
 import Foundation
 import M1K3Agent
@@ -51,19 +58,30 @@ public struct SearchKnowledgeTool: AgentTool {
         guard !query.isEmpty else {
             return ToolResult(output: "Error: empty query.")
         }
-        // Deliberately UNGATED (asymmetric with GroundingGate's 0.62 cosine
-        // bar on implicit injection): the model chose to search with its own
-        // query, so it judges the relevance of what comes back — the gate
-        // exists to police what the model never asked for.
+        // Same floor as implicit grounding, against the MODEL's query instead
+        // of the user's: a better-crafted query earns better cosines, but
+        // sub-floor nearest neighbours are noise no matter who asked. When
+        // nothing clears the bar, abstain honestly — handing a small model
+        // top-K garbage is how off-store questions become confabulation.
         let hits: [ChunkHit]
         if let embedder {
             let queryVector = try await embedder.embed(query)
-            hits = try store.searchHybrid(query: query, queryVector: queryVector, limit: limit)
+            hits = try GroundingGate.relevant(
+                store.searchHybrid(query: query, queryVector: queryVector, limit: limit)
+            )
+            guard !hits.isEmpty else {
+                return ToolResult(output: "Nothing relevant in stored knowledge for \"\(query)\" "
+                    + "— the user's documents don't cover this. Do not search again for it; "
+                    + "if the answer isn't already in this conversation, say it isn't in "
+                    + "the stored knowledge.")
+            }
         } else {
+            // FTS-only fallback (no embedder, self-test): no vector scores
+            // exist, so no floor can apply.
             hits = try store.searchFTS(query: query, limit: limit)
-        }
-        guard !hits.isEmpty else {
-            return ToolResult(output: "No results for \"\(query)\".")
+            guard !hits.isEmpty else {
+                return ToolResult(output: "No results for \"\(query)\".")
+            }
         }
         onHits?(hits)
         let body = hits.enumerated().map { index, hit -> String in

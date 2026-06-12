@@ -49,6 +49,19 @@ struct CitationValidatorChunksTests {
         #expect(!result.cleanedText.contains("  "))
     }
 
+    @Test("title-case deviations from the model don't strip a real citation")
+    func caseInsensitiveAgainstChunks() async {
+        // The model was shown "[Plant Notes §3.2 Seals]"; echoing it upper-cased
+        // is a casing deviation, not a hallucination — stripping it would
+        // remove a CORRECT grounding affordance.
+        let chunks = [hit("Plant Notes", "3.2 Seals")]
+        let result = await CitationValidator.validate(
+            responseText: "See [PLANT NOTES §3.2 SEALS].", against: chunks
+        )
+        #expect(result.stripped.isEmpty)
+        #expect(result.validated.count == 1)
+    }
+
     @Test("a citation cited twice is reported once and removed everywhere")
     func deduplicatesRepeatedCitation() async {
         let result = await CitationValidator.validate(

@@ -37,14 +37,14 @@ struct GroundingGateTests {
             hit("borderline", similarity: 0.64),
             hit("noise", similarity: 0.58),
         ]
-        let kept = GroundingGate.filter(hits)
+        let kept = GroundingGate.relevant(hits)
         #expect(kept.map(\.content) == ["relevant", "borderline"])
     }
 
     @Test("when no hit is topical, nothing is injected at all")
     func allWeakInjectsNothing() {
         let hits = [hit("noise a", similarity: 0.57), hit("noise b", similarity: 0.49)]
-        #expect(GroundingGate.filter(hits).isEmpty)
+        #expect(GroundingGate.relevant(hits).isEmpty)
     }
 
     @Test("an FTS-only hit (no vector score) is never injected — even beside a topical hit")
@@ -55,15 +55,15 @@ struct GroundingGateTests {
         // vector hit must NOT flood the prompt with all the keyword noise (the
         // ⌘R weather bug: 7KB of grounding for "what's the weather in Cork").
         let beside = [hit("vector match", similarity: 0.74), hit("fts only", similarity: nil)]
-        #expect(GroundingGate.filter(beside).map(\.content) == ["vector match"])
+        #expect(GroundingGate.relevant(beside).map(\.content) == ["vector match"])
 
         let alone = [hit("fts only", similarity: nil)]
-        #expect(GroundingGate.filter(alone).isEmpty)
+        #expect(GroundingGate.relevant(alone).isEmpty)
     }
 
     @Test("an empty retrieval stays empty")
     func emptyStaysEmpty() {
-        #expect(GroundingGate.filter([]).isEmpty)
+        #expect(GroundingGate.relevant([]).isEmpty)
     }
 
     @Test("the threshold boundary is inclusive: exactly 0.62 passes, just below is gated")
@@ -72,10 +72,10 @@ struct GroundingGateTests {
         // (or >= flipping to >) should fail here, not at ⌘R.
         let exactlyAt = hit("at threshold", similarity: GroundingGate.chunkThreshold)
         let justBelow = hit("below threshold", similarity: GroundingGate.chunkThreshold - 0.001)
-        #expect(GroundingGate.filter([exactlyAt]).count == 1)
-        #expect(GroundingGate.filter([justBelow]).isEmpty)
+        #expect(GroundingGate.relevant([exactlyAt]).count == 1)
+        #expect(GroundingGate.relevant([justBelow]).isEmpty)
         // A passing sibling never carries a below-threshold hit through.
-        #expect(GroundingGate.filter([exactlyAt, justBelow]).map(\.content) == ["at threshold"])
+        #expect(GroundingGate.relevant([exactlyAt, justBelow]).map(\.content) == ["at threshold"])
         #expect(GroundingGate.chunkThreshold == 0.62)
     }
 
@@ -136,8 +136,8 @@ struct GroundingGateTests {
         #expect(memories.isEmpty)
     }
 
-    @Test("with no memory hits, partition.knowledge ≡ filter — the legacy pin")
-    func partitionMatchesFilterWithoutMemories() {
+    @Test("with no memory hits, partition.knowledge ≡ relevant — the legacy pin")
+    func partitionMatchesRelevantWithoutMemories() {
         let hits = [
             hit("relevant", similarity: 0.78),
             hit("noise", similarity: 0.58),
@@ -145,7 +145,44 @@ struct GroundingGateTests {
         ]
         let (knowledge, memories) = GroundingGate.partition(hits)
         #expect(memories.isEmpty)
-        #expect(knowledge.map(\.content) == GroundingGate.filter(hits).map(\.content))
+        #expect(knowledge.map(\.content) == GroundingGate.relevant(hits).map(\.content))
+    }
+
+    // MARK: - Kind-aware relevance (the explicit search_knowledge floor)
+
+    @Test("relevant keeps retrieval order and holds each hit to its kind's bar")
+    func relevantIsKindAwareAndOrdered() {
+        // A similarity in the band between the two thresholds: a memory at
+        // that score is relevant, a document is not — same contract as
+        // partition, but as one order-preserving list for the tool path.
+        let band = (GroundingGate.memoryThreshold + GroundingGate.chunkThreshold) / 2
+        let hits = [
+            hit("topical doc", similarity: 0.78),
+            memoryHit("memory in band", similarity: band),
+            hit("doc in band", similarity: band),
+            hit("fts only", similarity: nil),
+        ]
+        #expect(GroundingGate.relevant(hits).map(\.content) == ["topical doc", "memory in band"])
+    }
+
+    @Test("relevant and partition agree — one predicate, two views")
+    func relevantMatchesPartition() {
+        let hits = [
+            hit("doc", similarity: 0.7),
+            memoryHit("mem", similarity: 0.6),
+            hit("weak doc", similarity: 0.5),
+            memoryHit("weak mem", similarity: 0.4),
+            hit("fts only", similarity: nil),
+        ]
+        let (knowledge, memories) = GroundingGate.partition(hits)
+        let relevant = GroundingGate.relevant(hits)
+        #expect(relevant.count == knowledge.count + memories.count)
+        #expect(relevant.map(\.content) == ["doc", "mem"])
+    }
+
+    @Test("relevant of nothing is nothing")
+    func relevantEmptyStaysEmpty() {
+        #expect(GroundingGate.relevant([]).isEmpty)
     }
 
     @Test("memoryThreshold is 0.54 (MEMEVAL 2026-06-12) and below chunkThreshold")

@@ -36,6 +36,9 @@
 //  load unlocked, so a Settings preload racing the first generate could both pass
 //  the nil-check and download the container twice. The loader coalesces them into
 //  one load (proven Metal-free in SingleFlightLoaderTests).
+//  Review: Kev + claude-fable-5, 2026-06-12, Confidence 0.8 — repetitionPenalty
+//  1.1 / repetitionContextSize 64 as the degenerate-loop guard (values pinned
+//  in tests; effect on think-phase + FACT-line distillation is verify-at-⌘R).
 
 import Foundation
 import M1K3Inference
@@ -114,6 +117,15 @@ public final class MLXGemmaProvider: InferenceProvider, ModelPreloading, @unchec
     ) {
         var params = GenerateParameters()
         params.maxTokens = maxTokens
+        // Degenerate-loop guard: penalise tokens repeated within the recent
+        // window so a confabulating small model can't lock into a verbatim
+        // loop. 1.1 is the widely-used mild setting; heavier (≥1.2) measurably
+        // distorts tool-call JSON and citation tokens. 64 tokens of context
+        // (default is 20) reaches sentence-length loops; true mid-generation
+        // loop DETECTION is deferred until per-token cancellation exists —
+        // without it a detector could watch a loop but not stop it.
+        params.repetitionPenalty = 1.1
+        params.repetitionContextSize = 64
         if Self.supportsQuantizedKVCache(for: configuration) {
             // 8-bit quantized KV: halves per-token KV memory and, since decode is
             // memory-bandwidth-bound, speeds long transcripts. Replaces the

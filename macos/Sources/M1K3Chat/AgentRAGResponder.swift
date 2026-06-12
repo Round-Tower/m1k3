@@ -18,6 +18,10 @@
 //  Context: tools are injected by the app layer (M1K3Chat does not link
 //  M1K3AgentTools); web_search is only in the list when the user's setting
 //  allows it.
+//  Review: Kev + claude-fable-5, 2026-06-12, Confidence 0.85 — RULES line in
+//  both styles routing self-questions (configuration/design/abilities) to the
+//  persona instead of document search; the soft fix for meta-question
+//  confabulation, taken over a pre-generation router (brittle both ways).
 
 import Foundation
 import M1K3Agent
@@ -402,6 +406,8 @@ public struct AgentRAGResponder: RAGResponding, Sendable {
             - Cite knowledge sources inline with citation tokens like \
             [Title §heading]; never invent citations.
             - Use at most two tool calls, never repeating one with the same argument.
+            - Questions about yourself — your configuration, design, or abilities — \
+            are answered from your persona; never search stored documents for them.
             \(routing)
             """
         case .native:
@@ -413,6 +419,8 @@ public struct AgentRAGResponder: RAGResponding, Sendable {
             - Cite knowledge sources inline with citation tokens like \
             [Title §heading]; never invent citations.
             - Never repeat a tool call with the same argument.
+            - Questions about yourself — your configuration, design, or abilities — \
+            are answered from your persona; never search stored documents for them.
             \(routing)
             """
         }

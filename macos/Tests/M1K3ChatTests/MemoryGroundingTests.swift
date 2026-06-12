@@ -70,7 +70,12 @@ private func memHit(_ content: String) -> ChunkHit {
 }
 
 struct MemoryGroundingTests {
-    // MARK: - Byte-identical pins (no memories → pre-memory output, verbatim)
+    // MARK: - Byte-identical pins (no memories → grounding output, verbatim)
+
+    //
+    // Captured from the pre-memory implementation 2026-06-12; the self-question
+    // rule was added deliberately the same day (meta-question confabulation
+    // fix). Any OTHER drift is accidental and should fail here.
 
     @Test("react grounding with chunks and no memories is byte-identical to the pre-memory output")
     func reactPinnedVerbatim() {
@@ -85,6 +90,8 @@ struct MemoryGroundingTests {
         - Cite knowledge sources inline with citation tokens like \
         [Title §heading]; never invent citations.
         - Use at most two tool calls, never repeating one with the same argument.
+        - Questions about yourself — your configuration, design, or abilities — \
+        are answered from your persona; never search stored documents for them.
         - For current or external information — weather, news, prices, \
         anything happening now — use web_search. search_knowledge only \
         finds documents already stored on this Mac.
@@ -113,6 +120,8 @@ struct MemoryGroundingTests {
         - Cite knowledge sources inline with citation tokens like \
         [Title §heading]; never invent citations.
         - Never repeat a tool call with the same argument.
+        - Questions about yourself — your configuration, design, or abilities — \
+        are answered from your persona; never search stored documents for them.
         - For current or external information — weather, news, prices, \
         anything happening now — use web_search. search_knowledge only \
         finds documents already stored on this Mac.

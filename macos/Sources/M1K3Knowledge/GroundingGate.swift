@@ -16,6 +16,10 @@
 //  Signed: Kev + claude-fable-5, 2026-06-10, Confidence 0.8 (thresholds are
 //  empirical starting points for bge-small — tune via the responder score
 //  logs at ⌘R and update the constants). Prior: Unknown
+//  Review: Kev + claude-fable-5, 2026-06-12, Confidence 0.9 — kind-aware
+//  `relevant` (one order-preserving list for the explicit search floor) +
+//  shared `clears` predicate; removed the dead public `filter` (kind-unaware,
+//  zero production callers — a divergence trap beside `relevant`).
 //
 
 import Foundation
@@ -28,18 +32,6 @@ public enum GroundingGate {
     /// "Yo mike, what's up?"). Tune from the per-hit responder logs; per-query
     /// normalisation is the upgrade path if a fixed floor keeps misfiring.
     public static let chunkThreshold: Float = 0.62
-
-    /// Filter retrieved hits down to the ones worth injecting: a hit must clear
-    /// the cosine bar ON ITS OWN. An FTS-only hit (no vector score) appeared
-    /// only in the keyword ranking, never the vector top-K — lexical
-    /// coincidence, not relevance — so it is dropped, NOT carried in on a
-    /// topical sibling. (Letting it ride along flooded a "what's the weather in
-    /// Cork" prompt with 7KB of keyword-matched noise that drowned the
-    /// web_search routing — the ⌘R weather bug.) When nothing clears the bar,
-    /// nothing is injected and the model retrieves on its own via search_knowledge.
-    public static func filter(_ hits: [ChunkHit]) -> [ChunkHit] {
-        hits.filter { ($0.similarity ?? 0) >= chunkThreshold }
-    }
 
     /// Minimum cosine similarity for a MEMORY hit. Memories are 5–40-token
     /// atomic facts; query-to-short-fact pairs sit LOWER in BGE's cone than
@@ -54,20 +46,40 @@ public enum GroundingGate {
 
     /// Split gated hits for the two prompt blocks: `.memory` hits (cleared
     /// `memoryThreshold`) feed the WHAT-I-KNOW-ABOUT-YOU block; everything
-    /// else (cleared `chunkThreshold`) feeds KNOWLEDGE exactly as `filter`
+    /// else (cleared `chunkThreshold`) feeds KNOWLEDGE exactly as `relevant`
     /// would. FTS-only hits (nil similarity) are dropped from BOTH — the
     /// no-keyword-flood rule doesn't care what kind the noise is.
     public static func partition(_ hits: [ChunkHit]) -> (knowledge: [ChunkHit], memories: [ChunkHit]) {
         var knowledge: [ChunkHit] = []
         var memories: [ChunkHit] = []
-        for hit in hits {
-            guard let similarity = hit.similarity else { continue }
+        for hit in hits where clears(hit) {
             if hit.kind == .memory {
-                if similarity >= memoryThreshold { memories.append(hit) }
-            } else if similarity >= chunkThreshold {
+                memories.append(hit)
+            } else {
                 knowledge.append(hit)
             }
         }
         return (knowledge, memories)
+    }
+
+    /// The same kind-aware bar as `partition`, kept as ONE order-preserving
+    /// list — the relevance floor for the explicit search_knowledge path,
+    /// where the model needs the fused ranking, not the two prompt blocks.
+    /// A hit must clear its bar ON ITS OWN: an FTS-only hit (no vector score)
+    /// appeared only in the keyword ranking, never the vector top-K — lexical
+    /// coincidence, not relevance — so it is dropped, NOT carried in on a
+    /// topical sibling. (Letting it ride along flooded a "what's the weather
+    /// in Cork" prompt with 7KB of keyword-matched noise that drowned the
+    /// web_search routing — the ⌘R weather bug.)
+    public static func relevant(_ hits: [ChunkHit]) -> [ChunkHit] {
+        hits.filter(clears)
+    }
+
+    /// The single relevance predicate behind `relevant` and `partition`:
+    /// memories clear `memoryThreshold`, everything else `chunkThreshold`;
+    /// an FTS-only hit (nil similarity) never clears.
+    private static func clears(_ hit: ChunkHit) -> Bool {
+        guard let similarity = hit.similarity else { return false }
+        return similarity >= (hit.kind == .memory ? memoryThreshold : chunkThreshold)
     }
 }

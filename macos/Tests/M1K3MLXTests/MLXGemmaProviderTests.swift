@@ -49,6 +49,17 @@ struct MLXGemmaProviderTests {
         ))
     }
 
+    @Test("repetition penalty is mild and windowed — the degenerate-loop guard")
+    func repetitionPenaltyPinned() {
+        // 1.1 with a 64-token window suppresses verbatim loops without
+        // distorting tool-call JSON or citation tokens (each repeats little
+        // within 64 tokens). A silent edit toward ≥1.2 — where structured
+        // output measurably degrades — should fail here, not at ⌘R.
+        let provider = MLXGemmaProvider()
+        #expect(provider.generateParameters.repetitionPenalty == 1.1)
+        #expect(provider.generateParameters.repetitionContextSize == 64)
+    }
+
     @Test("quantizing families carry kvBits; excluded families keep the rotation cap")
     func generateParametersPerFamily() {
         let qwen = MLXGemmaProvider(configuration: ModelConfiguration(id: "mlx-community/Qwen3.5-2B-4bit"))
