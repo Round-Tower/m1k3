@@ -198,7 +198,52 @@ enum SelfTest {
             }
         }
 
+        // 5. Optional memory-threshold eval (M1K3_SELFTEST_MEMEVAL=1): embed
+        //    the fixture pairs with the REAL BGE embedder and report the
+        //    query→short-fact cosine distributions — the data that sets
+        //    GroundingGate.memoryThreshold (the chunk bar was tuned on a
+        //    different distribution; short facts sit lower in the cone).
+        if ProcessInfo.processInfo.environment["M1K3_SELFTEST_MEMEVAL"] == "1" {
+            await runMemoryThresholdEval()
+        }
+
         emit("=== END SELF-TEST ===")
+    }
+
+    /// 5. The MEMEVAL pass: one cosine per fixture pair, positives then
+    /// negatives, then the distribution summary + suggested threshold. Each
+    /// line lands in the OUT file as it's measured (interrupt-safe).
+    private static func runMemoryThresholdEval() async {
+        emit("• memeval: embedding \(MemoryEvalFixtures.positives.count) positive + "
+            + "\(MemoryEvalFixtures.negatives.count) negative pairs…")
+        do {
+            let embedder = MLXEmbeddingService()
+            let positiveScores = try await score(
+                pairs: MemoryEvalFixtures.positives, label: "pos", embedder: embedder
+            )
+            let negativeScores = try await score(
+                pairs: MemoryEvalFixtures.negatives, label: "neg", embedder: embedder
+            )
+            emit(MemoryEvalReport.render(positives: positiveScores, negatives: negativeScores))
+        } catch {
+            emit("✗ memeval: \(error)")
+        }
+    }
+
+    /// Cosine per pair, emitted as measured so a crash mid-run loses nothing.
+    private static func score(
+        pairs: [MemoryEvalFixtures.Pair], label: String, embedder: MLXEmbeddingService
+    ) async throws -> [Float] {
+        let memoryVectors = try await embedder.embedBatch(pairs.map(\.memory))
+        let queryVectors = try await embedder.embedBatch(pairs.map(\.query))
+        var scores: [Float] = []
+        for (index, pair) in pairs.enumerated() {
+            let cosine = VectorMath.cosineSimilarity(queryVectors[index], memoryVectors[index])
+            scores.append(cosine)
+            let preview = String(pair.memory.prefix(40))
+            emit(String(format: "memeval %@: %.3f [%@]", label, cosine, preview))
+        }
+        return scores
     }
 
     /// 3d. Optional prompt-cache persistence probe (M1K3_SELFTEST_KVPERSIST=1):
