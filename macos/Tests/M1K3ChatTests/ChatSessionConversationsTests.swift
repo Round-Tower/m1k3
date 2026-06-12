@@ -69,6 +69,21 @@ private final class InMemoryHistoryStore: ChatHistoryPersisting, @unchecked Send
         return rows.removeValue(forKey: id) != nil
     }
 
+    private var watermarks: [UUID: Int] = [:]
+
+    func distilledWatermark(id: UUID) throws -> Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return watermarks[id] ?? 0
+    }
+
+    func setDistilledWatermark(id: UUID, count: Int) throws {
+        lock.lock()
+        defer { lock.unlock() }
+        guard rows[id] != nil else { return }
+        watermarks[id] = count
+    }
+
     /// Test seeding helper.
     func seed(id: UUID, title: String?, updatedAt: Date, messages: [ChatMessage]) {
         lock.lock()

@@ -46,6 +46,14 @@ public protocol ChatHistoryPersisting: Sendable {
     func setTitle(id: UUID, title: String) throws
     @discardableResult
     func delete(id: UUID) throws -> Bool
+    /// How many leading transcript messages the memory distiller has already
+    /// processed (0 = never distilled; unknown id reads 0). NO protocol
+    /// default on purpose: a silent no-op conformer would invisibly break
+    /// double-distill protection.
+    func distilledWatermark(id: UUID) throws -> Int
+    /// Advance the watermark after a successful distillation. No-op for
+    /// unknown ids (the setTitle precedent — distillation races deletion).
+    func setDistilledWatermark(id: UUID, count: Int) throws
 }
 
 public final class GRDBChatHistoryStore: ChatHistoryPersisting, @unchecked Sendable {
@@ -66,6 +74,15 @@ public final class GRDBChatHistoryStore: ChatHistoryPersisting, @unchecked Senda
                 table.column("created_at", .double).notNull()
                 table.column("updated_at", .double).notNull().indexed()
                 table.column("payload", .blob).notNull() // JSONEncoder([ChatMessage])
+            }
+        }
+        // Memory-distillation watermark: leading messages already distilled.
+        // Per-conversation state lives here (not knowledge_meta) so it dies
+        // with its row on delete. DEFAULT 0 = legacy conversations distill
+        // their history once at first exit (bootstraps memory).
+        migrator.registerMigration("v2-distilled") { db in
+            try db.alter(table: "conversations") { table in
+                table.add(column: "distilled_count", .integer).notNull().defaults(to: 0)
             }
         }
         try migrator.migrate(dbQueue)
@@ -131,6 +148,25 @@ public final class GRDBChatHistoryStore: ChatHistoryPersisting, @unchecked Senda
         try dbQueue.write { db in
             try db.execute(sql: "DELETE FROM conversations WHERE id = ?", arguments: [id.uuidString])
             return db.changesCount > 0
+        }
+    }
+
+    public func distilledWatermark(id: UUID) throws -> Int {
+        try dbQueue.read { db in
+            try Int.fetchOne(
+                db,
+                sql: "SELECT distilled_count FROM conversations WHERE id = ?",
+                arguments: [id.uuidString]
+            ) ?? 0
+        }
+    }
+
+    public func setDistilledWatermark(id: UUID, count: Int) throws {
+        try dbQueue.write { db in
+            try db.execute(
+                sql: "UPDATE conversations SET distilled_count = ? WHERE id = ?",
+                arguments: [count, id.uuidString]
+            )
         }
     }
 }

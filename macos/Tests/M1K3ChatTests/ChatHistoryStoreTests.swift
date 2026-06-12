@@ -126,4 +126,61 @@ struct ChatHistoryStoreTests {
         #expect(try reopened.list().first?.title == "Persisted")
         #expect(try reopened.loadMessages(id: id)?.count == 3)
     }
+
+    // MARK: - Distillation watermark
+
+    @Test("a fresh conversation's watermark is 0")
+    func freshWatermarkIsZero() throws {
+        let store = try GRDBChatHistoryStore()
+        let id = UUID()
+        try store.save(id: id, messages: sampleMessages(), updatedAt: Date())
+        #expect(try store.distilledWatermark(id: id) == 0)
+    }
+
+    @Test("the watermark round-trips")
+    func watermarkRoundTrips() throws {
+        let store = try GRDBChatHistoryStore()
+        let id = UUID()
+        try store.save(id: id, messages: sampleMessages(), updatedAt: Date())
+        try store.setDistilledWatermark(id: id, count: 3)
+        #expect(try store.distilledWatermark(id: id) == 3)
+    }
+
+    @Test("setting the watermark for an unknown id is a no-op (the setTitle precedent)")
+    func unknownIDNoOps() throws {
+        let store = try GRDBChatHistoryStore()
+        try store.setDistilledWatermark(id: UUID(), count: 5)
+        #expect(try store.list().isEmpty)
+        // Reading an unknown id reports 0 — nothing distilled, honestly.
+        #expect(try store.distilledWatermark(id: UUID()) == 0)
+    }
+
+    @Test("save's upsert does NOT reset the watermark — the no-double-distill pin")
+    func saveDoesNotResetWatermark() throws {
+        let store = try GRDBChatHistoryStore()
+        let id = UUID()
+        try store.save(id: id, messages: sampleMessages(), updatedAt: Date())
+        try store.setDistilledWatermark(id: id, count: 2)
+        // A later turn re-saves the conversation payload…
+        try store.save(id: id, messages: sampleMessages(), updatedAt: Date().addingTimeInterval(60))
+        // …and the watermark must survive, or every turn re-distills history.
+        #expect(try store.distilledWatermark(id: id) == 2)
+    }
+
+    @Test("watermark persists across instances (file-backed)")
+    func watermarkPersists() throws {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("m1k3-watermark-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let path = dir.appendingPathComponent("history.sqlite").path
+        let id = UUID()
+        do {
+            let store = try GRDBChatHistoryStore(path: path)
+            try store.save(id: id, messages: sampleMessages(), updatedAt: Date())
+            try store.setDistilledWatermark(id: id, count: 4)
+        }
+        let reopened = try GRDBChatHistoryStore(path: path)
+        #expect(try reopened.distilledWatermark(id: id) == 4)
+    }
 }
