@@ -203,3 +203,7 @@ bundletool-all-*.jar
 !/.claude/project-memory.md
 # Archived project-memory blocks travel too (split off when the live file grows).
 !/.claude/project-memory-archive-*.md
+# Project skills are repo tooling (like the tracked agents/ + commands/) — they
+# document this codebase's pipelines, so they travel with it.
+!/.claude/skills/
+!/.claude/skills/**
