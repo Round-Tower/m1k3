@@ -66,9 +66,10 @@ public func makeIntelligenceToolDefinitions(handlers: IntelligenceToolHandlers) 
         MCPToolDefinition(
             tool: Tool(
                 name: "remember",
-                description: "Store text in M1K3's permanent, searchable knowledge store (the same one "
-                    + "search_knowledge reads). Use it to give M1K3 durable memory: notes, summaries, "
-                    + "decisions, documents. Survives every session.",
+                description: "Store text in M1K3's memory — it becomes part of what M1K3 knows, "
+                    + "searchable in every future conversation (the same store search_knowledge "
+                    + "reads). Use it for durable facts, notes, summaries, decisions. "
+                    + "Survives every session.",
                 inputSchema: [
                     "type": "object",
                     "properties": [

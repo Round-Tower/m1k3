@@ -225,10 +225,12 @@ final class MCPHostController {
     }
 
     private func rememberText(title: String, text: String) async throws -> String {
-        let result = try await env.ingester.ingest(title: title, text: text)
+        let result = try await env.ingester.ingest(
+            title: title, text: text, kind: .memory, source: .user
+        )
         env.refreshCounts()
-        let dedup = result.wasDeduped ? " (already indexed)" : ""
-        return "Indexed “\(title)” — \(result.chunkCount) chunks\(dedup)."
+        let dedup = result.wasDeduped ? " (already remembered)" : ""
+        return "Remembered “\(title)”\(dedup)."
     }
 
     /// Pull-model transcription for the `listen` tool: open the active STT

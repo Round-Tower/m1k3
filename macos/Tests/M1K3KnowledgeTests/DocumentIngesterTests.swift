@@ -108,4 +108,43 @@ struct DocumentIngesterTests {
         #expect(item.kind == .document)
         #expect(try store.searchFTS(query: "conveyor").isEmpty == false)
     }
+
+    // MARK: - Memory kind (provenance, not size)
+
+    @Test("ingest with kind/source stamps the item — the memory write path")
+    func ingestMemoryKind() async throws {
+        let store = try KnowledgeStore()
+        let ingester = DocumentIngester(store: store)
+        let result = try await ingester.ingest(
+            title: "Kev's sister",
+            text: "Kev's sister is called Aoife.",
+            kind: .memory,
+            source: .user
+        )
+        let item = try #require(try store.item(id: result.itemID))
+        #expect(item.kind == .memory)
+        #expect(item.source == .user)
+        // The residency loop: remembered facts stay searchable.
+        #expect(try store.searchFTS(query: "Aoife").isEmpty == false)
+    }
+
+    @Test("default ingest is unchanged — .document, source nil (legacy pin)")
+    func defaultKindUnchanged() async throws {
+        let store = try KnowledgeStore()
+        let ingester = DocumentIngester(store: store)
+        let result = try await ingester.ingest(title: "Note", text: "Plain document text.")
+        let item = try #require(try store.item(id: result.itemID))
+        #expect(item.kind == .document)
+        #expect(item.source == nil)
+    }
+
+    @Test("a short memory fact lands as exactly one chunk")
+    func shortMemoryIsOneChunk() async throws {
+        let store = try KnowledgeStore()
+        let ingester = DocumentIngester(store: store)
+        let result = try await ingester.ingest(
+            title: "Units", text: "Prefers metric units.", kind: .memory, source: .distilled
+        )
+        #expect(result.chunkCount == 1)
+    }
 }
