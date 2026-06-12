@@ -119,17 +119,23 @@ public func makeKnowledgeToolDefinitions(store: KnowledgeStore) -> [MCPToolDefin
         MCPToolDefinition(
             tool: Tool(
                 name: "get_document",
-                description: "Fetch the full text of one indexed item by its id (from list_documents).",
+                description: "Fetch the text of one indexed item by its id (from list_documents). "
+                    + "Returns up to ~6000 characters per call; for longer items, a footer gives the "
+                    + "offset to resume from — call again with that offset to page through.",
                 inputSchema: [
                     "type": "object",
                     "properties": [
                         "id": ["type": "string", "description": "the document id (UUID)"],
+                        "offset": [
+                            "type": "integer",
+                            "description": "character offset to start from (default 0; see the resume footer)",
+                        ],
                     ],
                     "required": ["id"],
                 ]
             ),
             handler: { args in
-                try tools.getDocument(idString: stringArg(args, "id") ?? "")
+                try tools.getDocument(idString: stringArg(args, "id") ?? "", offset: intArg(args, "offset") ?? 0)
             }
         ),
     ]

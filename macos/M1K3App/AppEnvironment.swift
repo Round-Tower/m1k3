@@ -740,56 +740,6 @@ extension AppEnvironment {
         try fileManager.createDirectory(at: dir, withIntermediateDirectories: true)
         return dir.appendingPathComponent("knowledge.sqlite")
     }
-
-    /// The tool-calling chat responder: every turn runs the agent loop with
-    /// retrieve-first grounding, plus web search / datetime / system status /
-    /// a second knowledge lookup as tools. The tool list is built fresh each
-    /// turn so the Settings web-search toggle applies immediately — disabled
-    /// means the model never even sees the tool.
-    nonisolated static func makeAgentResponder(
-        store: KnowledgeStore,
-        embedder: any EmbeddingService,
-        provider: any InferenceProvider
-    ) -> any RAGResponding {
-        // Hits the model retrieves itself (search_knowledge) flow through the
-        // collector into the turn's sources + the citation allow-list.
-        let sourceCollector = ToolSourceCollector()
-        return AgentRAGResponder(
-            store: store,
-            embedder: embedder,
-            provider: provider,
-            toolsProvider: {
-                var tools: [any AgentTool] = [
-                    DateTimeTool(),
-                    SystemStatusTool(),
-                    SearchKnowledgeTool(
-                        store: store,
-                        embedder: embedder,
-                        onHits: { hits in sourceCollector.record(hits) }
-                    ),
-                ]
-                let defaults = UserDefaults.standard
-                let webAllowed = defaults.object(forKey: Self.webSearchEnabledKey) == nil
-                    || defaults.bool(forKey: Self.webSearchEnabledKey)
-                if webAllowed {
-                    tools.insert(FetchPageTool(), at: 0)
-                    tools.insert(WebSearchTool(), at: 0)
-                }
-                return tools
-            },
-            sourceCollector: sourceCollector,
-            thinkingModeProvider: {
-                let stored = UserDefaults.standard.string(forKey: Self.thinkingModeKey)
-                    .flatMap(ThinkingMode.init(rawValue:)) ?? .auto
-                // Voice mode maps Auto → fast replies (latency IS the UX in a
-                // spoken loop); an explicit Always is respected.
-                if stored == .auto, UserDefaults.standard.bool(forKey: Self.voiceModeActiveKey) {
-                    return .fast
-                }
-                return stored
-            }
-        )
-    }
 }
 
 // MARK: - Recorded-call transcription

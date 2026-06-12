@@ -48,7 +48,8 @@ private func makeHandlers(
                 brain: "Huge M1K3",
                 isSpeaking: false,
                 inConversation: true,
-                micInUse: false
+                micInUse: false,
+                answering: true
             )
         },
         listen: { timeout in
@@ -136,6 +137,7 @@ struct VoiceMCPToolsTests {
         #expect(decoded["speaking"] as? Bool == false)
         #expect(decoded["in_conversation"] as? Bool == true)
         #expect(decoded["mic_in_use"] as? Bool == false)
+        #expect(decoded["answering"] as? Bool == true)
     }
 
     @Test("listen defaults the timeout and returns the transcript")

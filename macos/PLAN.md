@@ -85,6 +85,67 @@ active provider conforms, today's ReAct loop otherwise. Same `AgentTool` executi
 activity/logging/citation pipeline either way — the loop semantics (repeat-guard, iteration cap,
 observation rescue) are dialect-independent and stay shared.
 
+---
+
+## Update — 2026-06-12: MCP polish shipped (5 test-report fixes) → async `ask_m1k3` is the next ceiling
+
+**Shipped (TDD, 849 tests / 150 suites green, app builds):** the five findings from the
+2026-06-11 live MCP test loop —
+- **`ask_m1k3` deadline** (`AsyncTimeout.swift` — `withTimeout`): a runaway/slow generation no
+  longer wedges the single-flight lock for minutes. Races the ask against a 120s deadline in a
+  task group; on expiry it **cancels the generation** (propagates via the response stream's
+  `onTermination` → `turnTask.cancel()` → `LocalAgent`'s per-iteration `checkCancellation`), the
+  lock releases, and the caller gets an honest "took too long, try again."
+- **`get_voice_status` exposes `answering`** — an in-flight ask is now visible (was reporting
+  `in_conversation:false` mid-ask).
+- **`get_document`**: explicit "indexed by title only" note for chunkless items (no more bare
+  header); **6000-char window + `offset` paging** with a resume footer (was an unbounded firehose).
+- **`ask_m1k3` Sources**: deduped + relevance-ranked in `HeadlessAsk` (presentation-only; the
+  shared `GroundingGate` is untouched).
+
+**Correction to the record:** the project-memory note "mcp swift-sdk Server processes requests
+SERIALLY (0.12.1)" is **inaccurate**. `Server.swift:235` dispatches each request in its own task
+("separate task to avoid blocking the receive loop") and `LocalMCPHTTPServer` is one task per
+connection with actor reentrancy across the `handleRequest` await — so requests **interleave**.
+The `answering` field is genuinely live-pollable mid-ask.
+
+**Next (deferred — the async ceiling for long answers):** the deadline is a *backstop*; it cancels
+**legitimately-long** answers at 120s. Two principled upgrades, in scope order:
+1. **Async job model (fire-and-forget + poll)** — `ask_m1k3` spawns a detached `Task`, returns a
+   ticket immediately (`{"ask_id", "status":"thinking"}`); a new `get_ask_result(id)` tool polls →
+   `thinking` / grounded answer / `failed`. The single-flight lock lives on **the job**, not the
+   HTTP request, so long answers **complete** instead of being cancelled and no connection is held
+   for minutes. Same pattern `speak`'s fire-and-forget already uses. **Cost: two-call ergonomics**
+   for the visiting agent — don't pay it pre-emptively; build only if 120s actually bites at ⌘R.
+   Interim mitigation: bump the deadline to ~180s.
+2. **Streaming transport + MCP progress notifications** — the *one-call-with-liveness* answer. The
+   SDK already supports it (`ProgressNotification`, `progressToken` in `CallTool._meta`,
+   `Tools.swift:366`), but pushing notifications needs an **open back-channel**; our
+   `StatelessHTTPServerTransport` is `Connection: close`, one request per connection
+   (`LocalMCPHTTPServer.swift:100`) — nothing to push down. Requires an SSE/streamable-HTTP
+   transport. Largest scope; revisit if/when multi-client v2 lands (it needs the same plumbing).
+
+**Empty-answer arc (live test, 2026-06-12):** the small brain (Lil/Qwen3.5-2B) returned
+fast-but-empty (`emptyAnswer`) even on trivial asks. Traced to TWO compounding bugs:
+- **SHIPPED — the floor:** `HeadlessAsk` no longer throws on an empty turn; it degrades to an honest
+  message (`emptyAnswerMessage(didReason:)`) so a visiting agent never sees a bare "Error:
+  emptyAnswer". The mechanism is `ReasoningSplit` correctly reducing a think-with-no-conclusion
+  stream to "" — common on the 2B, rare on the 9B (same pipeline, weaker model).
+- **DEFERRED — the root:** the empty-conclusion fallback (`AgentRAGResponder.streamFallback`) calls
+  the **bare** `provider.generateStreaming`, which has no thinking parameter and so uses the
+  provider's construction-time `thinkingEnabled: true` (`AppEnvironment.swift:276`) — re-opening
+  Qwen's pre-opened `<think>` (`MLXGemmaProvider.swift:243`) **regardless of the turn's fast-mode**.
+  So a fast turn's rescue path re-thinks (defeating fast-mode) AND a weak model thinking-without-
+  answering manufactures the very empty the fallback exists to prevent. Fix: thread `thinkingEnabled`
+  into the fallback generation (the bare `generateStreaming` seam can't carry it today — needs a
+  thinking-aware streaming entry, or a no-think provider for the ask path). Touches shared streaming;
+  verify-by-launch.
+
+**Also carried from the test loop:** CitationValidator is ALL-CAPS-only (mixed-case titles pass
+unvalidated — `HeadlessAskTests` comment); multi-client MCP (Stateful-per-session v2);
+`GroundingGate.chunkThreshold` per-query normalisation (the off-topic-but-above-0.62 citation noise
+this polish only *presentation*-fixed, not retrieval-fixed).
+
 ## Architecture
 
 A new SwiftUI app `M1K3.app` (macOS 26), composed of focused local SwiftPM packages. Business logic lives in testable packages (TDD); the app target is a thin shell. Proven files are **vendored** from the internal prior projects into M1K3 packages (not cross-repo path deps — the prior knowledge-server project's core drags in Hummingbird/InternalServerKit we don't need), each carrying a MurphySig review documenting the port.

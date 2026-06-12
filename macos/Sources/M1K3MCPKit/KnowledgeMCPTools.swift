@@ -40,19 +40,48 @@ struct KnowledgeMCPTools {
         }.joined(separator: "\n")
     }
 
-    /// Full text of one item by id, chunk by chunk.
-    func getDocument(idString: String) throws -> String {
+    /// Default character window per `get_document` call. Generous enough for a
+    /// whole short paper, bounded so a multi-megabyte item can't flood a
+    /// visiting agent's context in one shot (test-report F5 — the firehose).
+    static let defaultMaxChars = 6000
+
+    /// Full text of one item by id, chunk by chunk, windowed.
+    ///
+    /// Returns at most `maxChars` characters starting at `offset`; when more
+    /// remains, a footer tells the caller the exact `offset` to resume from, so
+    /// a long document is paged, never silently truncated. A chunkless item
+    /// (indexed by title only — e.g. a failed text extract) gets an explicit
+    /// note instead of a bare header (test-report F3).
+    func getDocument(idString: String, maxChars: Int = defaultMaxChars, offset: Int = 0) throws -> String {
         guard let id = UUID(uuidString: idString.trimmingCharacters(in: .whitespacesAndNewlines)) else {
             return "Error: “\(idString)” is not a valid document id."
         }
         guard let item = try store.item(id: id) else {
             return "No document found with id \(id.uuidString)."
         }
+        let header = "# \(item.title)  [\(item.kind.rawValue)]"
         let chunks = try store.chunks(forItem: id)
         let body: String = chunks.map { chunk -> String in
             let heading: String = chunk.heading.map { "## \($0)\n" } ?? ""
             return "\(heading)\(chunk.content)"
         }.joined(separator: "\n\n")
-        return "# \(item.title)  [\(item.kind.rawValue)]\n\n\(body)"
+        guard !body.isEmpty else {
+            return "\(header)\n\n(No readable text — this item was indexed by title only, "
+                + "with no extractable body content. Nothing to return.)"
+        }
+
+        let total = body.count
+        let window = max(1, maxChars)
+        let start = max(0, min(offset, total))
+        let slice = String(body.dropFirst(start).prefix(window))
+        let end = start + slice.count
+        var out = "\(header)\n\n\(slice)"
+        if end < total {
+            out += "\n\n[… \(total - end) more characters. "
+                + "Call get_document again with offset:\(end) to continue.]"
+        } else if start > 0 {
+            out += "\n\n[— end of document —]"
+        }
+        return out
     }
 }

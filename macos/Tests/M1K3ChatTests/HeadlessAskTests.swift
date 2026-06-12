@@ -13,10 +13,10 @@ import Foundation
 import M1K3Knowledge
 import Testing
 
-private func hit(title: String, heading: String?) -> ChunkHit {
+private func hit(title: String, heading: String?, similarity: Float? = nil) -> ChunkHit {
     ChunkHit(
         chunkID: UUID(), itemID: UUID(), itemTitle: title, kind: .document,
-        heading: heading, content: "chunk content for \(title)"
+        heading: heading, content: "chunk content for \(title)", similarity: similarity
     )
 }
 
@@ -98,6 +98,31 @@ struct HeadlessAskTests {
         #expect(answer.contains("Safety Manual"))
     }
 
+    @Test("the Sources block dedupes repeats and ranks by relevance")
+    func sourcesDedupedAndRanked() async throws {
+        // Mirrors the live Rosenblatt noise: the same item listed several times
+        // plus lower-similarity off-topic chunks (test-report F4).
+        let strong = hit(title: "Rosenblatt 1958", heading: nil, similarity: 0.81)
+        let strongDupe = hit(title: "Rosenblatt 1958", heading: nil, similarity: 0.79)
+        let strongHeading = hit(title: "Rosenblatt 1958", heading: "Phases", similarity: 0.74)
+        let weak = hit(title: "Scaling Laws", heading: "2.3", similarity: 0.63)
+        let responder = StreamResponder(
+            sources: [weak, strong, strongDupe, strongHeading], chunks: ["Answer."]
+        )
+        let answer = try await HeadlessAsk.answer("q", using: responder)
+        let block = try #require(answer.components(separatedBy: "Sources:\n").last)
+        let lines = block.split(separator: "\n").map(String.init)
+        // The two identical "Rosenblatt 1958" (no heading) collapse to one.
+        #expect(lines == [
+            "— Rosenblatt 1958",
+            "— Rosenblatt 1958 §Phases",
+            "— Scaling Laws §2.3",
+        ])
+        // Most-relevant leads; the weak off-topic chunk sinks to the bottom.
+        #expect(lines.first == "— Rosenblatt 1958")
+        #expect(lines.last == "— Scaling Laws §2.3")
+    }
+
     @Test("no sources means no Sources block")
     func noSourcesBlock() async throws {
         let responder = StreamResponder(chunks: ["Just an answer."])
@@ -105,12 +130,26 @@ struct HeadlessAskTests {
         #expect(!answer.contains("Sources:"))
     }
 
-    @Test("an empty answer throws rather than returning silence")
-    func emptyAnswerThrows() async {
+    @Test("a think-only turn degrades to an honest message, not a hard error")
+    func emptyAfterReasoningDegrades() async throws {
+        // The smaller brains routinely reason without emitting a conclusion;
+        // ReasoningSplit then reduces the turn to empty. The MCP visitor must
+        // get a graceful answer, not "Error: emptyAnswer" (test-report F1 floor).
         let responder = StreamResponder(chunks: ["<think>only thinking, no answer</think>"])
-        await #expect(throws: HeadlessAskError.self) {
-            _ = try await HeadlessAsk.answer("q", using: responder)
-        }
+        let answer = try await HeadlessAsk.answer("q", using: responder)
+        #expect(!answer.isEmpty)
+        #expect(!answer.contains("<think>"))
+        #expect(!answer.contains("Sources:"))
+        // The reasoned-but-no-answer wording (vs the silent-empty one).
+        #expect(answer.lowercased().contains("clear answer"))
+    }
+
+    @Test("a wholly empty turn still returns a message rather than silence")
+    func emptyWithoutReasoningDegrades() async throws {
+        let responder = StreamResponder(chunks: ["   "])
+        let answer = try await HeadlessAsk.answer("q", using: responder)
+        #expect(!answer.isEmpty)
+        #expect(!answer.contains("Sources:"))
     }
 
     @Test("responder failures propagate")

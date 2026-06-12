@@ -38,6 +38,11 @@ final class MCPHostController {
     /// One ask_m1k3 at a time — a second concurrent generation on the same
     /// MLX provider is undefined territory.
     private var askInFlight = false
+    /// Ceiling on a single ask_m1k3 generation. Legit answers run tens of
+    /// seconds even on the big brains; past this the generation is cancelled
+    /// and the single-flight lock released, so one runaway question can't wedge
+    /// the tool for the whole session (test-report F1 — observed ~5-min wedge).
+    nonisolated static let askDeadlineSeconds: Double = 120
 
     private(set) var isRunning = false
     private(set) var statusText: String?
@@ -163,7 +168,8 @@ final class MCPHostController {
             brain: env.selectedBrain.displayName,
             isSpeaking: speaking,
             inConversation: env.voiceLoop != nil || env.chat.isResponding,
-            micInUse: env.voiceLoop != nil || env.isListening || env.isRecording
+            micInUse: env.voiceLoop != nil || env.isListening || env.isRecording,
+            answering: askInFlight
         )
     }
 
@@ -173,8 +179,13 @@ final class MCPHostController {
     /// is a draining read, so sharing the chat UI's responder would race a
     /// live turn. Same store/embedder/provider, fresh per server start.
     private func makeIntelligenceHandlers() -> IntelligenceToolHandlers {
+        // Fast mode: ask_m1k3 grounds-and-cites for a visiting agent; the think
+        // phase is what pushes synthesis past the deadline on these small local
+        // brains (test-report follow-up). Deep reasoning over private data is the
+        // async-job-model's job (PLAN 2026-06-12), not this blocking call's.
         let askResponder = AppEnvironment.makeAgentResponder(
-            store: env.store, embedder: env.embedder, provider: env.provider
+            store: env.store, embedder: env.embedder, provider: env.provider,
+            forcedThinkingMode: .fast
         )
         return IntelligenceToolHandlers(
             ask: { [weak self] question in
@@ -199,7 +210,18 @@ final class MCPHostController {
         defer { askInFlight = false }
         env.avatar.setActivity(.thinking)
         defer { env.avatar.resetToIdle() }
-        return try await HeadlessAsk.answer(question, using: responder)
+        do {
+            return try await withTimeout(seconds: Self.askDeadlineSeconds) {
+                try await HeadlessAsk.answer(question, using: responder)
+            }
+        } catch is TimeoutError {
+            // Deadline hit: the generation is cancelled and the lock is already
+            // releasing (defer) — tell the caller honestly rather than hang.
+            throw MCPVoiceError(
+                "M1K3 took too long to answer (over \(Int(Self.askDeadlineSeconds))s) and stopped. "
+                    + "Try a more specific question, or ask again."
+            )
+        }
     }
 
     private func rememberText(title: String, text: String) async throws -> String {

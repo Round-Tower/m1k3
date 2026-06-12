@@ -37,6 +37,11 @@ public struct VoiceStatus: Sendable, Equatable {
     public let inConversation: Bool
     /// The lock that gates `listen`: dictation, call recording, or voice mode.
     public let micInUse: Bool
+    /// True while an `ask_m1k3` call is generating. Distinct from
+    /// `inConversation` (the chat UI / voice loop): an MCP ask is single-flight,
+    /// and a second one bounces — so a visiting agent can poll this instead of
+    /// discovering the lock by hitting an error (test-report F2).
+    public let answering: Bool
 
     public init(
         providerName: String,
@@ -44,7 +49,8 @@ public struct VoiceStatus: Sendable, Equatable {
         brain: String = "",
         isSpeaking: Bool,
         inConversation: Bool = false,
-        micInUse: Bool = false
+        micInUse: Bool = false,
+        answering: Bool = false
     ) {
         self.providerName = providerName
         self.tier = tier
@@ -52,6 +58,7 @@ public struct VoiceStatus: Sendable, Equatable {
         self.isSpeaking = isSpeaking
         self.inConversation = inConversation
         self.micInUse = micInUse
+        self.answering = answering
     }
 }
 
@@ -134,7 +141,9 @@ public func makeVoiceToolDefinitions(handlers: VoiceToolHandlers) -> [MCPToolDef
         MCPToolDefinition(
             tool: Tool(
                 name: "get_voice_status",
-                description: "Current TTS provider, voice tier, and whether M1K3 is speaking.",
+                description: "Current TTS provider, voice tier, active brain, and the busy flags: "
+                    + "whether M1K3 is speaking, in a conversation, using its mic, or already "
+                    + "answering an ask_m1k3 call.",
                 inputSchema: ["type": "object", "properties": [:]]
             ),
             handler: { _ in
@@ -143,7 +152,8 @@ public func makeVoiceToolDefinitions(handlers: VoiceToolHandlers) -> [MCPToolDef
                 return """
                 {"provider":"\(status.providerName)","tier":"\(status.tier)",\
                 "brain":"\(status.brain)","speaking":\(status.isSpeaking),\
-                "in_conversation":\(status.inConversation),"mic_in_use":\(status.micInUse)}
+                "in_conversation":\(status.inConversation),"mic_in_use":\(status.micInUse),\
+                "answering":\(status.answering)}
                 """
             }
         ),
