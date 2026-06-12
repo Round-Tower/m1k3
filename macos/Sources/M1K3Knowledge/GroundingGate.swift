@@ -40,4 +40,30 @@ public enum GroundingGate {
     public static func filter(_ hits: [ChunkHit]) -> [ChunkHit] {
         hits.filter { ($0.similarity ?? 0) >= chunkThreshold }
     }
+
+    /// Minimum cosine similarity for a MEMORY hit. Memories are 5–40-token
+    /// atomic facts; query-to-short-fact pairs sit lower in BGE's cone than
+    /// query-to-chunk, so they get their own bar. PROVISIONAL 0.60 — replace
+    /// from the M1K3_SELFTEST_MEMEVAL distribution (positives vs negatives)
+    /// before trusting recall quality.
+    public static let memoryThreshold: Float = 0.60
+
+    /// Split gated hits for the two prompt blocks: `.memory` hits (cleared
+    /// `memoryThreshold`) feed the WHAT-I-KNOW-ABOUT-YOU block; everything
+    /// else (cleared `chunkThreshold`) feeds KNOWLEDGE exactly as `filter`
+    /// would. FTS-only hits (nil similarity) are dropped from BOTH — the
+    /// no-keyword-flood rule doesn't care what kind the noise is.
+    public static func partition(_ hits: [ChunkHit]) -> (knowledge: [ChunkHit], memories: [ChunkHit]) {
+        var knowledge: [ChunkHit] = []
+        var memories: [ChunkHit] = []
+        for hit in hits {
+            guard let similarity = hit.similarity else { continue }
+            if hit.kind == .memory {
+                if similarity >= memoryThreshold { memories.append(hit) }
+            } else if similarity >= chunkThreshold {
+                knowledge.append(hit)
+            }
+        }
+        return (knowledge, memories)
+    }
 }

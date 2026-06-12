@@ -78,4 +78,80 @@ struct GroundingGateTests {
         #expect(GroundingGate.filter([exactlyAt, justBelow]).map(\.content) == ["at threshold"])
         #expect(GroundingGate.chunkThreshold == 0.62)
     }
+
+    // MARK: - Memory partition
+
+    private func memoryHit(_ content: String, similarity: Float?) -> ChunkHit {
+        ChunkHit(
+            chunkID: UUID(),
+            itemID: UUID(),
+            itemTitle: "Memory",
+            kind: .memory,
+            heading: nil,
+            content: content,
+            similarity: similarity,
+            rrfScore: 0.016
+        )
+    }
+
+    @Test("partition routes memory hits to memories, the rest to knowledge")
+    func partitionRoutesByKind() {
+        let hits = [
+            hit("doc fact", similarity: 0.78),
+            memoryHit("sister is Aoife", similarity: 0.75),
+        ]
+        let (knowledge, memories) = GroundingGate.partition(hits)
+        #expect(knowledge.map(\.content) == ["doc fact"])
+        #expect(memories.map(\.content) == ["sister is Aoife"])
+    }
+
+    @Test("memory hits clear a LOWER bar — short facts sit lower in BGE's cone")
+    func memoryBandKept() {
+        // A similarity in the band between memoryThreshold and chunkThreshold:
+        // kept as a memory, dropped as a document.
+        let band = (GroundingGate.memoryThreshold + GroundingGate.chunkThreshold) / 2
+        let (knowledge, memories) = GroundingGate.partition([
+            hit("doc in band", similarity: band),
+            memoryHit("memory in band", similarity: band),
+        ])
+        #expect(knowledge.isEmpty)
+        #expect(memories.map(\.content) == ["memory in band"])
+    }
+
+    @Test("a memory below memoryThreshold is dropped")
+    func memoryBelowBarDropped() {
+        let below = GroundingGate.memoryThreshold - 0.001
+        let (_, memories) = GroundingGate.partition([memoryHit("too weak", similarity: below)])
+        #expect(memories.isEmpty)
+        // Boundary is inclusive, same contract as the chunk gate.
+        let (_, kept) = GroundingGate.partition(
+            [memoryHit("at bar", similarity: GroundingGate.memoryThreshold)]
+        )
+        #expect(kept.count == 1)
+    }
+
+    @Test("FTS-only memories are dropped — the no-keyword-flood rule holds for memory too")
+    func ftsOnlyMemoryDropped() {
+        let (_, memories) = GroundingGate.partition([memoryHit("fts only", similarity: nil)])
+        #expect(memories.isEmpty)
+    }
+
+    @Test("with no memory hits, partition.knowledge ≡ filter — the legacy pin")
+    func partitionMatchesFilterWithoutMemories() {
+        let hits = [
+            hit("relevant", similarity: 0.78),
+            hit("noise", similarity: 0.58),
+            hit("fts only", similarity: nil),
+        ]
+        let (knowledge, memories) = GroundingGate.partition(hits)
+        #expect(memories.isEmpty)
+        #expect(knowledge.map(\.content) == GroundingGate.filter(hits).map(\.content))
+    }
+
+    @Test("memoryThreshold is provisional 0.60 and below chunkThreshold")
+    func memoryThresholdPinned() {
+        // Replaced from MEMEVAL distribution data — update this pin with it.
+        #expect(GroundingGate.memoryThreshold == 0.60)
+        #expect(GroundingGate.memoryThreshold < GroundingGate.chunkThreshold)
+    }
 }
