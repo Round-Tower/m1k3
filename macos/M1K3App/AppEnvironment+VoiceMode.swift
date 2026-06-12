@@ -7,8 +7,9 @@
 //  its idle-reset would fight the loop's avatar ownership) and reads the
 //  answer off `chat.messages.last`. The mic closure caches the provider
 //  instance it started (mirroring `dictationProvider`) so stop hits the same
-//  engine. While the mode is active, an Auto reasoning setting maps to fast
-//  replies via `voiceModeActiveKey` (consulted in thinkingModeProvider).
+//  engine. While the mode is active, the in-mode brain toggle replaces the
+//  global Reasoning setting entirely — off (default) forces fast even over an
+//  explicit Always, on yields auto (see VoiceThinkingPolicy).
 //
 //  Signed: Kev + claude-fable-5, 2026-06-11, Confidence 0.8 (adapter glue over
 //  test-pinned loop + seams; verify-at-⌘R for the full beat). Prior: Unknown.
@@ -18,8 +19,14 @@ import Foundation
 import M1K3Voice
 
 extension AppEnvironment {
-    /// Transient flag consulted by thinkingModeProvider (Auto → fast in voice mode).
+    /// Transient flag consulted by thinkingModeProvider (voice mode swaps the
+    /// global Reasoning setting for the in-mode thinking toggle).
     nonisolated static let voiceModeActiveKey = "voiceMode.active"
+
+    /// Persisted voice-mode thinking toggle (default off = fast replies).
+    /// While voice mode is active this REPLACES the Settings Reasoning picker
+    /// (see VoiceThinkingPolicy). VoiceModeView's brain button writes it.
+    nonisolated static let voiceModeThinkingKey = "voiceMode.thinking"
 
     /// Persisted voice-mode avatar choice. Empty string (default) = the pixel face;
     /// otherwise a CompanionSpec id (e.g. "Fox"). The picker writes it; VoiceModeView

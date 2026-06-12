@@ -119,14 +119,16 @@ extension AppEnvironment {
             thinkingModeProvider: {
                 // A forced mode (MCP ask_m1k3 → .fast) bypasses Settings entirely.
                 if let forcedThinkingMode { return forcedThinkingMode }
-                let stored = UserDefaults.standard.string(forKey: Self.thinkingModeKey)
+                let defaults = UserDefaults.standard
+                let stored = defaults.string(forKey: Self.thinkingModeKey)
                     .flatMap(ThinkingMode.init(rawValue:)) ?? .auto
-                // Voice mode maps Auto → fast replies (latency IS the UX in a
-                // spoken loop); an explicit Always is respected.
-                if stored == .auto, UserDefaults.standard.bool(forKey: Self.voiceModeActiveKey) {
-                    return .fast
-                }
-                return stored
+                // Voice mode swaps Settings for its own in-mode toggle
+                // (default off → fast; read per turn, so flips apply next turn).
+                return VoiceThinkingPolicy.effectiveMode(
+                    stored: stored,
+                    voiceModeActive: defaults.bool(forKey: Self.voiceModeActiveKey),
+                    voiceThinkingEnabled: defaults.bool(forKey: Self.voiceModeThinkingKey)
+                )
             }
         )
     }
