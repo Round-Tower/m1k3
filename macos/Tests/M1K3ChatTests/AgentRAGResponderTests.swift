@@ -108,7 +108,13 @@ struct AgentRAGResponderTests {
             store: store, embedder: embedder, provider: provider, tools: []
         )
 
-        let (sources, stream) = try await responder.answerStreaming("What failed on the conveyor?")
+        // Query overlaps the doc enough to clear the gate under the HASHING
+        // fake (bag-of-words TF cosine ≈0.80) — this is a plumbing test
+        // (sources → grounded prompt → one generation), not a threshold test;
+        // the real-BGE floor is pinned in GroundingGateTests.
+        let (sources, stream) = try await responder.answerStreaming(
+            "What hydraulic seal failed on the conveyor under load?"
+        )
         #expect(sources.first?.content.contains("hydraulic seal") == true)
 
         let answer = await collect(stream)
@@ -119,7 +125,7 @@ struct AgentRAGResponderTests {
         #expect(firstPrompt.contains("KNOWLEDGE"))
         #expect(firstPrompt.contains("hydraulic seal"))
         #expect(firstPrompt.contains("[Plant Notes §3.2 Seals]"))
-        #expect(firstPrompt.contains("What failed on the conveyor?"))
+        #expect(firstPrompt.contains("What hydraulic seal failed on the conveyor under load?"))
         // The behavioral rules made it in.
         #expect(firstPrompt.contains("CONCLUSION:"))
         // Exactly one generation — same cost as plain RAG for the common case.

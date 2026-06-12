@@ -20,6 +20,11 @@
 //  `relevant` (one order-preserving list for the explicit search floor) +
 //  shared `clears` predicate; removed the dead public `filter` (kind-unaware,
 //  zero production callers — a divergence trap beside `relevant`).
+//  Review: Kev + claude-opus-4-8, 2026-06-12, Confidence 0.85 — chunkThreshold
+//  0.62 → 0.68 from a live MCP gate-log measurement (off-domain noise ceiling
+//  ~0.63, in-domain floor 0.736; the old 0.62 sat in the noise and leaked a
+//  CoT chunk as a "source" for a sourdough query). memoryThreshold left at
+//  0.54 (MEMEVAL-governed overlap). verify-at-⌘R on the live MCP loop.
 //
 
 import Foundation
@@ -27,11 +32,21 @@ import Foundation
 public enum GroundingGate {
     /// Minimum cosine similarity for a chunk to be injected. BGE-family
     /// embeddings live in a NARROW cosine cone — unrelated pairs commonly
-    /// score 0.55–0.7, topical ≈0.72+ — so a "generous" floor passes
+    /// score 0.55–0.7, topical ≈0.74+ — so a "generous" floor passes
     /// everything (proven live 2026-06-10: 0.45 injected arxiv chunks for
-    /// "Yo mike, what's up?"). Tune from the per-hit responder logs; per-query
-    /// normalisation is the upgrade path if a fixed floor keeps misfiring.
-    public static let chunkThreshold: Float = 0.62
+    /// "Yo mike, what's up?").
+    ///
+    /// 0.68 from a live MCP measurement (2026-06-12, real BGE on device,
+    /// `ask_m1k3` gate logs): OFF-domain queries vs the ML-paper corpus —
+    /// sourdough 0.629, apple-pruning 0.610, JS-frontend 0.630 — peaked at
+    /// ~0.63 (a flat noise band, no standout); the IN-domain "attention"
+    /// query floored at 0.736 (a tight high cluster). 0.62 sat INSIDE the
+    /// noise — sourdough's 0.629 chunk squeaked through and got cited as a
+    /// source for bread. 0.68 is the maximal-margin centre of the [0.63, 0.74]
+    /// dead zone: garbage gated, real hits kept. The "flat pack = no real
+    /// match" margin heuristic and a MEMEVAL-style CHUNKEVAL sweep are the
+    /// durable upgrade paths if a fixed floor keeps misfiring.
+    public static let chunkThreshold: Float = 0.68
 
     /// Minimum cosine similarity for a MEMORY hit. Memories are 5–40-token
     /// atomic facts; query-to-short-fact pairs sit LOWER in BGE's cone than

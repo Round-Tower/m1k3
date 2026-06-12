@@ -29,16 +29,21 @@ struct GroundingGateTests {
         )
     }
 
-    @Test("topical hits pass; weak hits are dropped")
+    @Test("topical hits pass; noise-band hits are dropped")
     func dropsWeakHits() {
-        // BGE's narrow cosine cone: unrelated content still scores ~0.55-0.7.
+        // BGE's narrow cosine cone: genuinely UNRELATED content still scores
+        // high — measured live 2026-06-12, off-domain queries (sourdough,
+        // apple-pruning, JS-frontend) vs the ML-paper corpus peaked at
+        // 0.61–0.63. Real topical hits start ~0.74. The floor sits in the dead
+        // zone between, so a 0.64 "borderline" is NOISE, not signal.
         let hits = [
             hit("relevant", similarity: 0.78),
-            hit("borderline", similarity: 0.64),
+            hit("topical", similarity: 0.74),
+            hit("noise ceiling", similarity: 0.63),
             hit("noise", similarity: 0.58),
         ]
         let kept = GroundingGate.relevant(hits)
-        #expect(kept.map(\.content) == ["relevant", "borderline"])
+        #expect(kept.map(\.content) == ["relevant", "topical"])
     }
 
     @Test("when no hit is topical, nothing is injected at all")
@@ -66,7 +71,7 @@ struct GroundingGateTests {
         #expect(GroundingGate.relevant([]).isEmpty)
     }
 
-    @Test("the threshold boundary is inclusive: exactly 0.62 passes, just below is gated")
+    @Test("the threshold boundary is inclusive: exactly 0.68 passes, just below is gated")
     func thresholdBoundary() {
         // Pins the CONSTANT, not just the ordering — a silent threshold edit
         // (or >= flipping to >) should fail here, not at ⌘R.
@@ -76,7 +81,18 @@ struct GroundingGateTests {
         #expect(GroundingGate.relevant([justBelow]).isEmpty)
         // A passing sibling never carries a below-threshold hit through.
         #expect(GroundingGate.relevant([exactlyAt, justBelow]).map(\.content) == ["at threshold"])
-        #expect(GroundingGate.chunkThreshold == 0.62)
+        #expect(GroundingGate.chunkThreshold == 0.68)
+    }
+
+    @Test("the chunk floor sits in the measured dead zone between noise and signal")
+    func floorInDeadZone() {
+        // Live MCP measurement 2026-06-12 (real BGE on device): off-domain
+        // queries (sourdough 0.629, apple-pruning 0.610, JS-frontend 0.630) vs
+        // the ML-paper corpus topped out at ~0.63; the in-domain "attention"
+        // query floored at 0.736. The floor must clear the noise ceiling and
+        // stay below the signal floor — the whole confabulation fix.
+        #expect(GroundingGate.chunkThreshold > 0.63)
+        #expect(GroundingGate.chunkThreshold < 0.736)
     }
 
     // MARK: - Memory partition

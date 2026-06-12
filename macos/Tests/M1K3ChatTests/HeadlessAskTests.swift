@@ -20,6 +20,13 @@ private func hit(title: String, heading: String?, similarity: Float? = nil) -> C
     )
 }
 
+private func memoryHit(_ content: String, similarity: Float? = nil) -> ChunkHit {
+    ChunkHit(
+        chunkID: UUID(), itemID: UUID(), itemTitle: content, kind: .memory,
+        heading: nil, content: content, similarity: similarity
+    )
+}
+
 private struct StreamResponder: RAGResponding {
     var sources: [ChunkHit] = []
     var chunks: [String]
@@ -121,6 +128,30 @@ struct HeadlessAskTests {
         // Most-relevant leads; the weak off-topic chunk sinks to the bottom.
         #expect(lines.first == "— Rosenblatt 1958")
         #expect(lines.last == "— Scaling Laws §2.3")
+    }
+
+    @Test("memories never appear in the Sources block — ambient context, not citations")
+    func memoriesExcludedFromSources() async throws {
+        // Live MCP leak 2026-06-12: an apple-pruning query injected the memory
+        // "The user has a Mac." (0.588, over memoryThreshold) and it rendered
+        // as a SOURCE for tree pruning. Memories are "use naturally, do not
+        // cite" by contract (AgentRAGResponder.memoryBlock) — they must never
+        // surface in the citation footer, however they cleared the gate.
+        let doc = hit(title: "Plant Notes", heading: "Seals", similarity: 0.8)
+        let memory = memoryHit("The user has a Mac.", similarity: 0.59)
+        let responder = StreamResponder(sources: [doc, memory], chunks: ["Answer."])
+        let answer = try await HeadlessAsk.answer("q", using: responder)
+        #expect(answer.contains("Plant Notes §Seals"))
+        #expect(!answer.contains("The user has a Mac"))
+    }
+
+    @Test("a memory-only turn produces no Sources block at all")
+    func memoryOnlySourcesSuppressed() async throws {
+        let memory = memoryHit("The user has a gecko.", similarity: 0.6)
+        let responder = StreamResponder(sources: [memory], chunks: ["Answer."])
+        let answer = try await HeadlessAsk.answer("q", using: responder)
+        #expect(!answer.contains("Sources:"))
+        #expect(!answer.contains("gecko"))
     }
 
     @Test("no sources means no Sources block")

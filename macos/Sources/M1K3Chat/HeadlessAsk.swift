@@ -14,6 +14,10 @@
 //  Signed: Kev + claude-fable-5, 2026-06-11, Confidence 0.9 (contract
 //  test-pinned against delta/cumulative/reasoning/citation fakes).
 //  Prior: the MCP test report 2026-06-11 (F5).
+//  Review: Kev + claude-opus-4-8, 2026-06-12, Confidence 0.9 — exclude
+//  `.memory` hits from the Sources footer (they're "do not cite" ambient
+//  context; a promiscuous short-fact embedding was rendering as a citation
+//  source for unrelated queries). Validator allow-list unchanged.
 //
 
 import Foundation
@@ -37,8 +41,15 @@ public enum HeadlessAsk {
         // reduces the turn to empty. Degrade with an honest message instead of
         // throwing; a visiting agent should never see a bare "Error: emptyAnswer".
         guard !polished.isEmpty else { return emptyAnswerMessage(didReason: reasoning != nil) }
-        guard !merged.isEmpty else { return polished }
-        let lines = sourceLines(merged)
+        // Memories are ambient context ("use naturally, do not cite" —
+        // AgentRAGResponder.memoryBlock), never citation sources. However they
+        // cleared the gate (a promiscuous short-fact embedding can match an
+        // unrelated query — live: "The user has a Mac." rode an apple-pruning
+        // turn), they must not surface in the citation footer. The validator
+        // allow-list keeps the full `merged` — memories are inert there.
+        let citable = merged.filter { $0.kind != .memory }
+        guard !citable.isEmpty else { return polished }
+        let lines = sourceLines(citable)
         return polished + "\n\nSources:\n" + lines.joined(separator: "\n")
     }
 
