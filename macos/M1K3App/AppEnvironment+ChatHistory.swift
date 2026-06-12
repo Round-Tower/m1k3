@@ -22,6 +22,41 @@ import M1K3Knowledge
 import M1K3KnowledgeTools
 
 extension AppEnvironment {
+    /// Memory auto-capture consent (Settings "Learn from conversations").
+    /// Default ON: everything is local, every memory visible and deletable
+    /// in MemoriesView — the webSearchEnabledKey default-true read pattern.
+    nonisolated static let memoryAutoCaptureKey = "memoryAutoCapture"
+
+    nonisolated static func memoryAutoCaptureEnabled() -> Bool {
+        let defaults = UserDefaults.standard
+        return defaults.object(forKey: memoryAutoCaptureKey) == nil
+            || defaults.bool(forKey: memoryAutoCaptureKey)
+    }
+
+    /// The distillation stack: AFM-first under NEUTRAL instructions (the
+    /// distiller must not speak as M1K3 — judge-not-the-defendant), falling
+    /// back to the shared runtime provider. The fallback path carries the
+    /// persona (a second MLX instance would double model memory); the
+    /// FACT:-only parser is the defence there.
+    nonisolated static func makeMemoryDistillation(
+        store: KnowledgeStore,
+        embedder: any EmbeddingService,
+        ingester: DocumentIngester,
+        fallback: any InferenceProvider
+    ) -> MemoryDistillationCoordinator {
+        MemoryDistillationCoordinator(
+            distiller: ProviderMemoryDistiller(
+                primary: AppleFoundationModelsProvider(
+                    instructions: { MemoryDistillationPrompt.instructions }
+                ),
+                fallback: fallback
+            ),
+            ingester: ingester,
+            store: store,
+            embedder: embedder
+        )
+    }
+
     /// Build the conversation store and run the one-shot legacy-transcript
     /// migration BEFORE ChatSession init reads it (resume-most-recent must see
     /// the import). nil on store failure → chat degrades to non-persistent,

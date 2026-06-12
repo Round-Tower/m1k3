@@ -18,6 +18,8 @@ struct SettingsView: View {
     @Environment(AppEnvironment.self) private var env
     @AppStorage(ReadingMode.storageKey) private var readingMode: ReadingMode = .standard
     @AppStorage(AppEnvironment.webSearchEnabledKey) private var webSearchEnabled = true
+    @AppStorage(AppEnvironment.memoryAutoCaptureKey) private var memoryAutoCapture = true
+    @State private var showMemories = false
     @AppStorage(AppEnvironment.thinkingModeKey) private var thinkingMode = ThinkingMode.auto.rawValue
     @AppStorage(AppEnvironment.voiceCompanionKey) private var voiceCompanion = ""
     @State private var profileDraft = ""
@@ -180,6 +182,8 @@ struct SettingsView: View {
 
                 aboutYouSection
 
+                memorySection
+
                 Section {
                     Picker("Reasoning", selection: $thinkingMode) {
                         Text("Auto").tag(ThinkingMode.auto.rawValue)
@@ -338,6 +342,26 @@ struct SettingsView: View {
                 .font(.caption).foregroundStyle(.secondary)
         }
         .onAppear { profileDraft = M1K3Persona.userProfile ?? "" }
+    }
+
+    /// Memory auto-capture consent + the door to the review/forget surface.
+    /// (Own property — the Form is at the type-checker budget.)
+    private var memorySection: some View {
+        Section {
+            Toggle("Learn from conversations", isOn: $memoryAutoCapture)
+            Button("View memories…") { showMemories = true }
+                .buttonStyle(.glass)
+        } header: {
+            Text("Memories")
+        } footer: {
+            Text("When a conversation ends, M1K3 extracts durable facts about "
+                + "you — preferences, decisions, people — into its memory. "
+                + "Fully on-device. You can review and delete every memory.")
+                .font(.caption).foregroundStyle(.secondary)
+        }
+        .sheet(isPresented: $showMemories) {
+            MemoriesView().environment(env)
+        }
     }
 
     /// Shows the MLX Gemma weight download as a real progress bar while it

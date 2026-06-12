@@ -304,7 +304,8 @@ final class AppEnvironment {
         transcription = TranscriptionRouter(providers: [whisperKit, AppleSpeechTranscriber()])
         batchTranscriber = WhisperKitBatchTranscriber(downloadBase: whisperDownloadBase)
 
-        ingester = DocumentIngester(store: store, embedder: embedder)
+        let documentIngester = DocumentIngester(store: store, embedder: embedder)
+        ingester = documentIngester
         // Multi-conversation history (GRDB) + auto-titling via the routed
         // provider; the legacy transcript.json imports once (factory runs the
         // migrator BEFORE init so resume-most-recent finds the import).
@@ -312,7 +313,14 @@ final class AppEnvironment {
         chat = ChatSession(
             responder: responder,
             history: chatHistory,
-            titler: ProviderConversationTitler(provider: runtimeProvider)
+            titler: ProviderConversationTitler(provider: runtimeProvider),
+            distillation: Self.makeMemoryDistillation(
+                store: store,
+                embedder: swappable,
+                ingester: documentIngester,
+                fallback: runtimeProvider
+            ),
+            autoCaptureEnabled: { Self.memoryAutoCaptureEnabled() }
         )
 
         // Calls: encrypted-at-rest store (key from the Keychain), indexed into the
@@ -722,7 +730,13 @@ extension AppEnvironment {
     /// calls feature rather than crashing the app.
     static func makeCallPersistence(at url: URL) -> any CallPersistence {
         do {
-            let key = try StoredKeyProvider(store: KeychainKeyStore()).symmetricKey()
+            // The call-encryption key is gated behind Touch ID (password fallback).
+            // Read once here, at call-store construction → one biometric prompt per
+            // launch. reassertProtection() upgrades a key written before this gate
+            // existed, in place, so already-encrypted calls stay decryptable.
+            let provider = StoredKeyProvider(store: KeychainKeyStore(protection: .userPresence))
+            try provider.reassertProtection()
+            let key = try provider.symmetricKey()
             return try GRDBCallPersistence(path: url.path, coder: EncryptedCallCoder(key: key))
         } catch {
             return (try? GRDBCallPersistence()) ?? NullCallPersistence()
