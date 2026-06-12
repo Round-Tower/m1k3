@@ -9,6 +9,7 @@
 //
 //  Signed: Kev + claude-opus-4-8, 2026-06-06, Confidence 0.8, Prior: Unknown
 
+import Foundation
 import M1K3Voice
 @testable import M1K3WhisperKit
 import Testing
@@ -30,6 +31,21 @@ struct WhisperKitProviderTests {
         #expect(throws: WhisperKitProviderError.self) {
             _ = try WhisperKitProvider().startListening()
         }
+    }
+
+    @Test("isModelDownloaded reflects the CoreML bundle on disk — the launch-restore guard")
+    func modelDownloadedDetection() throws {
+        let base = FileManager.default.temporaryDirectory
+            .appendingPathComponent("m1k3-wk-\(UUID().uuidString)", isDirectory: true)
+        let provider = WhisperKitProvider(model: "base.en", downloadBase: base)
+        #expect(provider.isModelDownloaded == false) // nothing on disk yet
+
+        // Lay down the bundle WhisperKit would create for this variant.
+        let bundle = base
+            .appendingPathComponent("models/argmaxinc/whisperkit-coreml/openai_whisper-base.en")
+            .appendingPathComponent("AudioEncoder.mlmodelc")
+        try FileManager.default.createDirectory(at: bundle, withIntermediateDirectories: true)
+        #expect(provider.isModelDownloaded) // present → safe to auto-load, no re-download
     }
 
     @Test("conforms to TranscriptionProvider and slots into a router")

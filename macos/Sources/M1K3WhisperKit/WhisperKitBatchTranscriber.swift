@@ -105,9 +105,7 @@ public final class WhisperKitBatchTranscriber: BatchTranscriptionProvider, @unch
     /// non-speech marker (`[BLANK_AUDIO]`, `[Music]`) as empty. Brackets embedded in
     /// real speech (`words [pause] more`) are preserved.
     private static func clean(_ raw: String) -> String {
-        let stripped = raw
-            .replacingOccurrences(of: "<\\|[^|]*\\|>", with: "", options: .regularExpression)
-            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let stripped = WhisperTranscriptText.stripSpecialTokens(raw)
         if stripped.range(of: "^\\[[^\\[\\]]*\\]$", options: .regularExpression) != nil {
             return ""
         }
