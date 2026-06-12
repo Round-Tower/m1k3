@@ -225,8 +225,14 @@ final class MCPHostController {
     }
 
     private func rememberText(title: String, text: String) async throws -> String {
+        // Same content identity as the distiller: remembering identical text
+        // twice (agents retry!) collapses to one row instead of duplicating.
         let result = try await env.ingester.ingest(
-            title: title, text: text, kind: .memory, source: .user
+            title: title,
+            text: text,
+            sourceRef: MemoryDistillationCoordinator.factSourceRef(text),
+            kind: .memory,
+            source: .user
         )
         env.refreshCounts()
         let dedup = result.wasDeduped ? " (already remembered)" : ""

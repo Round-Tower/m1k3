@@ -81,15 +81,20 @@ public struct MemoryDistillationCoordinator: Sendable {
 
     private func isSemanticDuplicate(_ fact: String) async throws -> Bool {
         guard let vector = try? await embedder.embed(fact) else { return false }
-        let near = try store.searchVector(queryVector: vector, limit: 5)
+        // limit 20, not 5: searchVector ranks across ALL kinds, and a stack of
+        // similar document chunks would crowd a true memory duplicate out of a
+        // narrow top-K before the kind filter ever saw it.
+        let near = try store.searchVector(queryVector: vector, limit: 20)
         return near.contains {
             $0.kind == .memory && ($0.similarity ?? 0) >= Self.semanticDedupeThreshold
         }
     }
 
     /// Stable identity for the exact-dedupe layer: hash of the normalized
-    /// fact, so capitalisation/punctuation variants collapse.
-    static func factSourceRef(_ fact: String) -> String {
+    /// fact, so capitalisation/punctuation variants collapse. Public — the
+    /// MCP `remember` path uses the same identity so an agent remembering
+    /// the same text twice collapses to one row.
+    public static func factSourceRef(_ fact: String) -> String {
         let normalized = MemoryFactNormalizer.normalize(fact)
         let digest = SHA256.hash(data: Data(normalized.utf8))
         let hex = digest.map { String(format: "%02x", $0) }.joined()

@@ -210,4 +210,17 @@ struct ProviderMemoryDistillerTests {
         let facts = try await distiller.distill(turns: turns([("a", "b")]))
         #expect(facts.isEmpty)
     }
+
+    @Test("cancellation rethrows immediately — the fallback is never consulted")
+    func cancellationNeverFallsBack() async {
+        // A cancelled distillation must not burn a fallback generation; the
+        // caller's watermark stays put and the next exit retries.
+        let distiller = ProviderMemoryDistiller(
+            primary: FakeProvider(name: "afm", isAvailable: true, result: .failure(CancellationError())),
+            fallback: FakeProvider(name: "mlx", isAvailable: true, result: .success("FACT: must never appear."))
+        )
+        await #expect(throws: CancellationError.self) {
+            try await distiller.distill(turns: turns([("a", "b")]))
+        }
+    }
 }

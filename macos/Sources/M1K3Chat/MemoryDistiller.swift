@@ -156,6 +156,9 @@ public struct ProviderMemoryDistiller: MemoryDistilling {
                     return facts
                 }
                 // Off-format output: give the fallback a chance.
+            } catch is CancellationError {
+                // The turn was cancelled — never burn a fallback generation.
+                throw CancellationError()
             } catch {
                 // Primary generation failed: the fallback is the retry.
             }
