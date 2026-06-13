@@ -339,6 +339,42 @@ struct AgentRAGResponderTests {
         #expect(rules.contains("never invent citations"))
     }
 
+    @Test("with lookup_fact available, the rules route uncertain encyclopedic facts to it")
+    func rulesRouteFactsToLookup() {
+        let rules = AgentRAGResponder.grounding(
+            chunks: [groundingChunk()],
+            toolNames: ["lookup_fact", "web_search", "search_knowledge"],
+            style: .native
+        )
+        #expect(rules.contains("lookup_fact"))
+        #expect(rules.contains("cite its Source"))
+        // No lookup_fact tool → no nudge for it (don't advertise a missing tool).
+        let noLookup = AgentRAGResponder.grounding(
+            chunks: [groundingChunk()], toolNames: ["search_knowledge"], style: .native
+        )
+        #expect(!noLookup.contains("lookup_fact"))
+        // Discriminant is the TOOL, not web being on: web_search present but no
+        // lookup_fact → still no nudge.
+        let webOnly = AgentRAGResponder.grounding(
+            chunks: [groundingChunk()], toolNames: ["web_search"], style: .native
+        )
+        #expect(!webOnly.contains("lookup_fact"))
+    }
+
+    @Test("the rules tell the model to answer with uncertainty when a lookup fails")
+    func rulesUncertaintyOnToolFailure() {
+        let native = AgentRAGResponder.grounding(
+            chunks: [groundingChunk()], toolNames: ["web_search"], style: .native
+        )
+        #expect(native.contains("empty or fails"))
+        #expect(native.contains("explicit uncertainty"))
+        let react = AgentRAGResponder.grounding(
+            chunks: [groundingChunk()], toolNames: ["web_search"], style: .react
+        )
+        #expect(react.contains("empty or fails"))
+        #expect(react.contains("explicit uncertainty"))
+    }
+
     @Test("react-path rules keep the CONCLUSION: scaffold (the floor's format contract)")
     func reactRulesKeepScaffold() {
         let rules = AgentRAGResponder.grounding(

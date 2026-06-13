@@ -38,7 +38,7 @@ public struct WebSearchTool: AgentTool {
     private let fetcher: any HTTPFetching
     private let maxResults: Int
 
-    public init(fetcher: any HTTPFetching = URLSessionHTTPFetcher(), maxResults: Int = 5) {
+    public init(fetcher: any HTTPFetching = RetryingHTTPFetcher.production, maxResults: Int = 5) {
         self.fetcher = fetcher
         self.maxResults = maxResults
     }
@@ -83,7 +83,14 @@ public struct WebSearchTool: AgentTool {
         if !instant.isEmpty { return .results(instant) }
 
         let fallback = try await fetch(liteURL(for: query))
-        let html = String(data: fallback.data, encoding: .utf8) ?? ""
+        // A throttle status (202/429/503) is a rate-limit even when the body
+        // carries no challenge markers — don't depend on the HTML string-match alone.
+        if HTTPStatus.classify(fallback.response.statusCode) == .transient {
+            return .rateLimited
+        }
+        let html = BodyDecoder.decode(
+            fallback.data, contentType: fallback.response.value(forHTTPHeaderField: "Content-Type")
+        )
         let results = DuckDuckGoHTMLParser.parse(html: html)
         Self.log.debug("""
         lite fallback: HTTP \(fallback.response.statusCode), \(html.count) bytes → \

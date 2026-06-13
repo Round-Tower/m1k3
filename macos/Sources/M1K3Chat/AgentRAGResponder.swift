@@ -413,6 +413,11 @@ public struct AgentRAGResponder: RAGResponding, Sendable {
                 + "(like an actual forecast), run fetch_page on the most "
                 + "relevant result URL, then conclude from the page text."
         }
+        if toolNames.contains("lookup_fact") {
+            routing += "\n- For an established fact about a person, place, concept, "
+                + "or historical event you are not fully sure of, call lookup_fact "
+                + "and cite its Source — don't answer from memory and risk a confident mistake."
+        }
         let rules = switch style {
         case .react:
             """
@@ -423,6 +428,8 @@ public struct AgentRAGResponder: RAGResponding, Sendable {
             [Title §heading]; never invent citations.
             - Never present a fact, figure, or date you can't ground or verify \
             as certain; if you're unsure, say so plainly. Honesty beats a confident guess.
+            - If a search or lookup comes back empty or fails, answer with explicit \
+            uncertainty — name what you couldn't confirm — rather than presenting a guess as fact.
             - Use at most two tool calls, never repeating one with the same argument.
             - Questions about yourself — your configuration, design, or abilities — \
             are answered from your persona; never search stored documents for them.
@@ -438,6 +445,8 @@ public struct AgentRAGResponder: RAGResponding, Sendable {
             [Title §heading]; never invent citations.
             - Never present a fact, figure, or date you can't ground or verify \
             as certain; if you're unsure, say so plainly. Honesty beats a confident guess.
+            - If a search or lookup comes back empty or fails, answer with explicit \
+            uncertainty — name what you couldn't confirm — rather than presenting a guess as fact.
             - Never repeat a tool call with the same argument.
             - Questions about yourself — your configuration, design, or abilities — \
             are answered from your persona; never search stored documents for them.
