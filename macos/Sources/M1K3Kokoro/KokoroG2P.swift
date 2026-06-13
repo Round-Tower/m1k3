@@ -208,9 +208,90 @@ public struct KokoroG2P: Sendable {
         }
         let raw = run.text.lowercased()
         if let hit = lookup(raw) { return hit }
+        if let inflected = inflectedTokens(raw) { return inflected }
         if let compound = compoundTokens(raw) { return compound }
         if shouldSpellOut(run.text) { return spellOutTokens(run.text, extraWords: []) }
         return nil
+    }
+
+    // MARK: - Inflection fallback (the "plays" fix)
+
+    // The spike dictionary (web2-derived) carries base forms and many "-ing"
+    // forms but NOT "-s"/"-es" plurals/3rd-person or "-ed" pasts — so they were
+    // silently dropped. We resolve the BASE (dictionary or compound-split) and
+    // append the correct suffix phoneme. Token ids are the bundled Kokoro en-GB
+    // vocab (extracted by probing the real dict): the allomorphy is real, not a
+    // guess. A CMUdict-derived dictionary is the proper long-term fix; this is
+    // the safety net that also covers any future OOV inflection.
+    private static let phonemeZ = 68 // /z/
+    private static let phonemeS = 61 // /s/
+    private static let phonemeIz = [102, 68] // /ɪz/
+    private static let phonemeD = 46 // /d/
+    private static let phonemeT = 62 // /t/
+    private static let phonemeId = [102, 46] // /ɪd/
+    /// Stem-final phonemes that take the syllabic plural /ɪz/: s z ʃ ʒ (tʃ ends ʃ, dʒ ends ʒ).
+    private static let sibilantFinals: Set<Int> = [61, 68, 131, 147]
+    /// Voiceless non-sibilant stem finals (take /s/ for plural): p t k f θ.
+    private static let voicelessForPlural: Set<Int> = [58, 62, 53, 48, 119]
+    /// Voiceless stem finals (take /t/ for past, excluding t itself): p k f θ s ʃ.
+    private static let voicelessForPast: Set<Int> = [58, 53, 48, 119, 61, 131]
+    /// Stem finals that take the syllabic past /ɪd/: t d.
+    private static let tdFinals: Set<Int> = [62, 46]
+
+    /// Speak an OOV inflected form by resolving its base and appending the
+    /// suffix phoneme the dictionary lacked. One contiguous span (one karaoke word).
+    private func inflectedTokens(_ word: String) -> [Int]? {
+        let chars = Array(word)
+        guard chars.count > 2 else { return nil }
+
+        // "-ies" plural of a -y word: tries → try, babies → baby.
+        if word.hasSuffix("ies"), chars.count > 3,
+           let base = resolveBase(String(chars.dropLast(3)) + "y")
+        {
+            return base + pluralSuffix(after: base.last)
+        }
+        // Sibilant "-es": kisses → kiss, washes → wash, boxes → box (syllabic /ɪz/).
+        if word.hasSuffix("es"), chars.count > 3,
+           let base = resolveBase(String(chars.dropLast(2))),
+           Self.sibilantFinals.contains(base.last ?? -1)
+        {
+            return base + Self.phonemeIz
+        }
+        // General "-s": plays → play, cats → cat, makes → make.
+        if word.hasSuffix("s"), let base = resolveBase(String(chars.dropLast(1))) {
+            return base + pluralSuffix(after: base.last)
+        }
+        // "-ed": play+ed → play, bake+d → bake (silent e). Prefer the longer base.
+        if word.hasSuffix("ed"), chars.count > 3 {
+            let candidate = [String(chars.dropLast(2)), String(chars.dropLast(1))]
+                .compactMap { stem in resolveBase(stem).map { (stem.count, $0) } }
+                .max { $0.0 < $1.0 }
+            if let base = candidate?.1 {
+                return base + pastSuffix(after: base.last)
+            }
+        }
+        return nil
+    }
+
+    /// Base tokens via the dictionary, falling back to a compound split (so
+    /// "keyboards" = key+board, then +/z/). nil for stems too short to be real.
+    private func resolveBase(_ stem: String) -> [Int]? {
+        guard stem.count >= 2 else { return nil }
+        return lookup(stem) ?? compoundTokens(stem)
+    }
+
+    private func pluralSuffix(after last: Int?) -> [Int] {
+        guard let last else { return [Self.phonemeZ] }
+        if Self.sibilantFinals.contains(last) { return Self.phonemeIz } // /ɪz/
+        if Self.voicelessForPlural.contains(last) { return [Self.phonemeS] } // /s/
+        return [Self.phonemeZ] // /z/
+    }
+
+    private func pastSuffix(after last: Int?) -> [Int] {
+        guard let last else { return [Self.phonemeD] }
+        if Self.tdFinals.contains(last) { return Self.phonemeId } // /ɪd/
+        if Self.voicelessForPast.contains(last) { return [Self.phonemeT] } // /t/
+        return [Self.phonemeD] // /d/
     }
 
     /// Compound fallback: an OOV word that fully decomposes into KNOWN dictionary

@@ -46,4 +46,18 @@ struct KokoroG2PBundledTests {
         #expect(result.words.count == 1)
         #expect(!result.words[0].tokenRange.isEmpty)
     }
+
+    @Test("OOV inflected forms speak against the real dictionary — the 'plays' fix")
+    func bundledInflections() throws {
+        let g2p = try KokoroG2P.bundled()
+        // The spike dict has bases + "-ing" but NOT "-s"/"-ed" — every one of
+        // these used to be silently dropped from speech. Each must now produce
+        // a non-empty, single-word span.
+        for word in ["plays", "games", "cats", "runs", "makes", "words", "wanted", "walked", "played"] {
+            let result = g2p.annotatedTokens(word)
+            #expect(!result.tokens.isEmpty, "\(word) is still silent")
+            #expect(result.words.count == 1)
+            #expect(!result.words[0].tokenRange.isEmpty, "\(word) has an empty token span")
+        }
+    }
 }

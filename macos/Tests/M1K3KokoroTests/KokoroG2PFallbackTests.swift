@@ -18,6 +18,10 @@ struct KokoroG2PFallbackTests {
         "one": [46], "zero": [47],
         // Compound-split fixtures: known sub-words, none a single dict entry combined.
         "grand": [60, 61], "master": [62, 63], "key": [64], "board": [65],
+        // Inflection fixtures: bases whose FINAL token sets the allomorph.
+        // 70/84 = arbitrary voiced finals; 62=/t/, 53=/k/ voiceless; 61=/s/ sibilant.
+        "play": [70], "cat": [80, 62], "kiss": [81, 61],
+        "want": [82, 62], "walk": [83, 53], "rain": [84], "try": [85],
     ]
 
     private func g2p() -> KokoroG2P {
@@ -141,6 +145,64 @@ struct KokoroG2PFallbackTests {
         // "ask" would be a-s-k via single-letter keys if unguarded; the ≥3-char
         // minimum blocks that, and "ask" isn't a real sub-word split → silent.
         #expect(g2p().phonemeTokens("ask").isEmpty)
+    }
+
+    // MARK: - Inflection (the "plays" fix): OOV -s/-es/-ies/-ed forms
+
+    @Test("plural -s appends voiced /z/ on a voiced stem")
+    func pluralVoiced() {
+        // "plays" = play[70] + /z/(68); ONE karaoke word over the whole text.
+        let result = g2p().annotatedTokens("plays")
+        #expect(result.tokens == [70, 68])
+        #expect(result.words == [G2PWord(textRange: 0 ..< 5, tokenRange: 0 ..< 2)])
+    }
+
+    @Test("plural -s appends voiceless /s/ on a voiceless stem")
+    func pluralVoiceless() {
+        // "cats" = cat[80,62 /t/] + /s/(61) — not the lazy /z/.
+        #expect(g2p().phonemeTokens("cats") == [80, 62, 61])
+    }
+
+    @Test("plural -es appends syllabic /ɪz/ on a sibilant stem")
+    func pluralSibilant() {
+        // "kisses" = kiss[81,61 /s/] + /ɪz/([102,68]).
+        #expect(g2p().phonemeTokens("kisses") == [81, 61, 102, 68])
+    }
+
+    @Test("plural -ies restores the -y base")
+    func pluralIes() {
+        // "tries" = try[85] + /z/(68).
+        #expect(g2p().phonemeTokens("tries") == [85, 68])
+    }
+
+    @Test("past -ed appends syllabic /ɪd/ after t or d")
+    func pastTd() {
+        // "wanted" = want[82,62 /t/] + /ɪd/([102,46]).
+        #expect(g2p().phonemeTokens("wanted") == [82, 62, 102, 46])
+    }
+
+    @Test("past -ed appends voiceless /t/ on a voiceless stem")
+    func pastVoiceless() {
+        // "walked" = walk[83,53 /k/] + /t/(62).
+        #expect(g2p().phonemeTokens("walked") == [83, 53, 62])
+    }
+
+    @Test("past -ed appends voiced /d/ on a voiced stem")
+    func pastVoiced() {
+        // "rained" = rain[84] + /d/(46).
+        #expect(g2p().phonemeTokens("rained") == [84, 46])
+    }
+
+    @Test("a compound plural composes split + inflection")
+    func compoundPlural() {
+        // "keyboards" = key[64] + board[65] (compound), then + /z/(68).
+        #expect(g2p().phonemeTokens("keyboards") == [64, 16, 65, 68])
+    }
+
+    @Test("a genuinely OOV word ending in s with no resolvable base stays silent")
+    func unresolvableSStaysSilent() {
+        // "blorps" — "blorp" isn't a dict word or a compound → silent, no guess.
+        #expect(g2p().phonemeTokens("blorps").isEmpty)
     }
 
     @Test("long all-caps words are not spelled out")
