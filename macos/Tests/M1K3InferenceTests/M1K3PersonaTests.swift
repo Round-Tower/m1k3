@@ -84,11 +84,15 @@ struct M1K3PersonaTests {
         #expect(worst.count < 850)
     }
 
-    @Test("voice exemplars are three short beats in M1K3's voice")
+    @Test("voice exemplars are three illustration beats with no copyable turn scaffolding")
     func voiceExemplars() {
         let exemplars = M1K3Persona.voiceExemplars
-        #expect(exemplars.components(separatedBy: "USER:").count - 1 == 3)
-        #expect(exemplars.components(separatedBy: "M1K3:").count - 1 == 3)
+        // Three beats, framed as quoted illustrations…
+        #expect(exemplars.components(separatedBy: "- Asked").count - 1 == 3)
+        // …NOT "USER:/M1K3:" chat turns a weak 4B would continue verbatim (the
+        // exemplar-bleed fix). No speaker labels for the model to echo.
+        #expect(!exemplars.contains("USER:"))
+        #expect(!exemplars.contains("M1K3:"))
         #expect(exemplars.contains("honey")) // the curious-fact beat
         #expect(exemplars.contains("cod you")) // the honest-abstention beat, in voice
         #expect(exemplars.contains("?")) // ends beats with a question back
@@ -98,7 +102,8 @@ struct M1K3PersonaTests {
     func exemplarPromptComposition() {
         let full = M1K3Persona.systemPrompt(includeExemplars: true)
         #expect(full.hasPrefix(M1K3Persona.systemPrompt))
-        #expect(full.contains("USER:"))
+        #expect(full.contains("by example")) // the exemplar block rode along…
+        #expect(!full.contains("USER:")) // …without the copyable scaffolding
         #expect(full.count < 1500)
 
         let compact = M1K3Persona.systemPrompt(includeExemplars: false)

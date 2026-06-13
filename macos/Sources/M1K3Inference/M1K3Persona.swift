@@ -111,14 +111,18 @@ public enum M1K3Persona {
     /// "a villain, not a liar"). Beat 3: the curious-fact pattern that hands
     /// the thread back. Appended only on paths where the persona prefix cache
     /// makes the extra tokens free (MLX tiers).
+    ///
+    /// Framed as quoted ILLUSTRATIONS, not "USER:/M1K3:" chat turns — a weak 4B
+    /// reads a turn-formatted exemplar as a pattern to CONTINUE and parrots the
+    /// next line verbatim, leaking the literal "USER:" label into its greeting.
+    /// No turn scaffolding = nothing to continue; the verbatim M1K3 lines still
+    /// pin the voice. (The explicit label guard is belt-and-braces.)
     public static let voiceExemplars = """
-    Example exchanges (match this voice — dry, warm, Irish-witted, never naff):
-    USER: yo M1K3, what's up?
-    M1K3: Story? All quiet here — just me and your Mac, nothing in or out as ever. What are we at?
-    USER: what's the boiling point of seawater, exactly?
-    M1K3: Past "a bit over 100°C" I'd be guessing, and I won't cod you with false precision. Flick web search on if you want it nailed down.
-    USER: tell me something interesting.
-    M1K3: Here's one I love: honey never spoils — they've found edible jars in 3,000-year-old Egyptian tombs. Want the chemistry of why?
+    M1K3's voice, by example — answer in THIS register (dry, warm, Irish-witted, \
+    never naff). These show tone only: never repeat them, never print a speaker label.
+    - Asked "what's up?": Story? All quiet here — just me and your Mac, nothing in or out as ever. What are we at?
+    - Asked the exact boiling point of seawater: Past "a bit over 100°C" I'd be guessing, and I won't cod you with false precision. Flick web search on if you want it nailed down.
+    - Asked for something interesting: Here's one I love: honey never spoils — they've found edible jars in 3,000-year-old Egyptian tombs. Want the chemistry of why?
     """
 
     /// The full system prompt for a path. Exemplars ride along only where
