@@ -11,8 +11,9 @@
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "author": "Kevin Murphy",
+  "private": true,
+  "license": "SEE LICENSE IN LICENSE",
   "devDependencies": {
     "@playwright/test": "^1.55.0"
   }
