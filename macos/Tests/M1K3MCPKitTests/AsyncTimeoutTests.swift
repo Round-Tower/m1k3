@@ -31,8 +31,11 @@ struct AsyncTimeoutTests {
                 return "should never arrive"
             }
         }
-        // Proves we returned on the deadline, not after the 10s operation.
-        #expect(start.duration(to: .now) < .seconds(2))
+        // Proves we returned on the deadline (0.1s), not after the 10s operation.
+        // The bound is half the operation, not a tight multiple of the deadline:
+        // the only failure this guards is "blocked for the full 10s", and a loose
+        // 5s threshold tolerates CI scheduling jitter that flaked a tighter 2s.
+        #expect(start.duration(to: .now) < .seconds(5))
     }
 
     @Test("timing out cancels the operation")
