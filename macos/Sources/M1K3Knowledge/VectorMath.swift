@@ -38,6 +38,18 @@ public enum VectorMath {
         return dotProduct / denominator
     }
 
+    /// Return `vector` scaled to unit L2 length, preserving direction. A
+    /// zero-length (or empty) vector is returned unchanged — never NaN.
+    public static func l2Normalized(_ vector: [Float]) -> [Float] {
+        var sumSquares: Float = 0
+        for value in vector {
+            sumSquares += value * value
+        }
+        let norm = sqrt(sumSquares)
+        guard norm > 0 else { return vector }
+        return vector.map { $0 / norm }
+    }
+
     /// Serialize a Float vector to Data (little-endian, 4 bytes per element).
     /// 768-dim vector → 3072 bytes.
     public static func serialize(_ vector: [Float]) -> Data {

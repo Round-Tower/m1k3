@@ -23,6 +23,7 @@ import M1K3Chat
 import M1K3Inference
 import M1K3Knowledge
 import M1K3MLX
+import MLXEmbedders
 
 enum SelfTest {
     static var isRequested: Bool {
@@ -87,13 +88,13 @@ enum SelfTest {
             emit("✗ store/AFM stage: \(error)")
         }
 
-        // 2. MLX bge_small embedding (Metal).
-        emit("• loading MLX bge_small (downloads on first use)…")
+        // 2. MLX Qwen3-Embedding (Metal).
+        emit("• loading MLX Qwen3-Embedding (downloads on first use)…")
         do {
             let mlx = MLXEmbeddingService()
             let v = try await mlx.embed("hydraulic seal conveyor")
             let norm = v.reduce(Float(0)) { $0 + $1 * $1 }.squareRoot()
-            emit("✓ MLX bge_small embed: dim=\(v.count) ‖v‖=\(String(format: "%.3f", norm))")
+            emit("✓ MLX Qwen3-Embedding embed: dim=\(v.count) ‖v‖=\(String(format: "%.3f", norm))")
         } catch {
             emit("✗ MLX embed stage: \(error)")
         }
@@ -195,6 +196,15 @@ enum SelfTest {
             await runMemoryThresholdEval()
         }
 
+        // 6. Optional A/B separation eval (M1K3_SELFTEST_ABSEP=1): embed the
+        //    in/off-domain fixtures with BOTH the old bge-small and the new
+        //    qwen3-embed-512 and report which separates the classes wider.
+        //    This is what justifies the embedder swap — measured, not trusted —
+        //    and feeds the GroundingGate threshold re-tune.
+        if ProcessInfo.processInfo.environment["M1K3_SELFTEST_ABSEP"] == "1" {
+            await runSeparationEval()
+        }
+
         emit("=== END SELF-TEST ===")
     }
 
@@ -245,6 +255,49 @@ enum SelfTest {
             scores.append(cosine)
             let preview = String(pair.memory.prefix(40))
             emit(String(format: "memeval %@: %.3f [%@]", label, cosine, preview))
+        }
+        return scores
+    }
+
+    /// 6. The ABSEP pass: in/off-domain query→document cosines for the OLD
+    /// (bge-small-384) and NEW (qwen3-embed-512) embedder, then the
+    /// head-to-head margin verdict. The candidate must separate the classes at
+    /// least as wide as bge, else the swap isn't justified (the ABSEP gate).
+    private static func runSeparationEval() async {
+        emit("• absep: \(SeparationEvalFixtures.inDomain.count) in-domain + "
+            + "\(SeparationEvalFixtures.offDomain.count) off-domain pairs, bge-small-384 vs qwen3-embed-512…")
+        do {
+            // Old embedder stood up explicitly beside the new default — the init
+            // params survived the default change precisely for this.
+            let bge = MLXEmbeddingService(configuration: EmbedderRegistry.bge_small, dimension: 384)
+            let candidate = MLXEmbeddingService() // new default = qwen3-embed-512
+
+            let bgeIn = try await scoreSeparation(pairs: SeparationEvalFixtures.inDomain, label: "bge in", embedder: bge)
+            let bgeOff = try await scoreSeparation(pairs: SeparationEvalFixtures.offDomain, label: "bge off", embedder: bge)
+            let candIn = try await scoreSeparation(pairs: SeparationEvalFixtures.inDomain, label: "qwen3 in", embedder: candidate)
+            let candOff = try await scoreSeparation(pairs: SeparationEvalFixtures.offDomain, label: "qwen3 off", embedder: candidate)
+
+            let bgeResult = SeparationEvalReport.Result(label: "bge-small-384", inDomain: bgeIn, offDomain: bgeOff)
+            let candidateResult = SeparationEvalReport.Result(label: "qwen3-embed-512", inDomain: candIn, offDomain: candOff)
+            // candidate second → the head-to-head verdict describes it vs bge.
+            emit(SeparationEvalReport.render([bgeResult, candidateResult]))
+        } catch {
+            emit("✗ absep: \(error)")
+        }
+    }
+
+    /// Cosine per (query, document) pair, emitted as measured so a crash
+    /// mid-run loses nothing.
+    private static func scoreSeparation(
+        pairs: [SeparationEvalFixtures.Pair], label: String, embedder: MLXEmbeddingService
+    ) async throws -> [Float] {
+        let queryVectors = try await embedder.embedBatch(pairs.map(\.query))
+        let docVectors = try await embedder.embedBatch(pairs.map(\.document))
+        var scores: [Float] = []
+        for (index, pair) in pairs.enumerated() {
+            let cosine = VectorMath.cosineSimilarity(queryVectors[index], docVectors[index])
+            scores.append(cosine)
+            emit(String(format: "absep %@: %.3f [%@]", label, cosine, String(pair.query.prefix(40))))
         }
         return scores
     }

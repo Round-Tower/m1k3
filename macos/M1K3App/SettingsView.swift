@@ -55,7 +55,7 @@ struct SettingsView: View {
 
                 Section {
                     LabeledContent("Mode",
-                                   value: env.usingMLXEmbeddings ? "MLX bge_small (semantic)" : "Hashing (offline)")
+                                   value: env.usingMLXEmbeddings ? "MLX Qwen3-Embedding (semantic)" : "Hashing (offline)")
                     if env.isReindexing {
                         HStack(spacing: 8) {
                             ProgressView().controlSize(.small)

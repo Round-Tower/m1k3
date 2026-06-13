@@ -562,7 +562,7 @@ final class AppEnvironment {
             )
             usingMLXEmbeddings = useMLX
             UserDefaults.standard.set(useMLX, forKey: Self.embedderPrefersMLXKey)
-            let label = useMLX ? "MLX bge_small" : "Hashing"
+            let label = useMLX ? "MLX Qwen3-Embedding" : "Hashing"
             embeddingStatus = "Reindexed \(count) chunk\(count == 1 ? "" : "s") with \(label)."
         } catch {
             // Reindex writes atomically, so the store still matches the previous

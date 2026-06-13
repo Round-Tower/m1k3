@@ -66,4 +66,26 @@ struct VectorMathTests {
         let v = [Float](repeating: 0.5, count: 768)
         #expect(VectorMath.serialize(v).count == 3072)
     }
+
+    @Test("l2Normalized scales a vector to unit length, preserving direction")
+    func l2NormalizedUnitLength() {
+        let out = VectorMath.l2Normalized([3, 4]) // norm 5
+        #expect(abs(out[0] - 0.6) < 1e-6 && abs(out[1] - 0.8) < 1e-6)
+        let norm = sqrt(out.reduce(Float(0)) { $0 + $1 * $1 })
+        #expect(abs(norm - 1.0) < 1e-6)
+        // direction unchanged: cosine with the original is 1.0
+        #expect(abs(VectorMath.cosineSimilarity(out, [3, 4]) - 1.0) < 1e-5)
+    }
+
+    @Test("l2Normalized returns zeros (not NaN) for a zero vector")
+    func l2NormalizedZeroGuard() {
+        let out = VectorMath.l2Normalized([0, 0, 0])
+        #expect(out == [0, 0, 0])
+        #expect(out.allSatisfy { !$0.isNaN })
+    }
+
+    @Test("l2Normalized of an empty vector is empty")
+    func l2NormalizedEmpty() {
+        #expect(VectorMath.l2Normalized([]).isEmpty)
+    }
 }
