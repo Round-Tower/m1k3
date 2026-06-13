@@ -133,6 +133,31 @@ struct StreamingReasoningSplitterTests {
         #expect(splitter.answer == "answer")
     }
 
+    // gemma-4 (Big) channel format: `<|channel>thought … <channel|>`. The live
+    // splitter must route it the same way it routes <think>, or the thought
+    // trace streams raw into the bubble (the Big-leak bug).
+
+    @Test("a gemma-4 channel block routes to reasoning live, the rest to the answer")
+    func channelBlock() {
+        let splitter = run(["<|channel>thought\n", "analyze the request", "\n<channel|>", "Hey, what's up?"])
+        #expect(splitter.reasoning == "analyze the request")
+        #expect(splitter.answer == "Hey, what's up?")
+    }
+
+    @Test("channel tags split across chunk boundaries are still caught")
+    func channelSplitTags() {
+        let splitter = run(["<|chan", "nel>thought\nplan", " here\n<chan", "nel|>the answer"])
+        #expect(splitter.reasoning == "plan here")
+        #expect(splitter.answer == "the answer")
+    }
+
+    @Test("an unclosed channel block keeps everything in reasoning (mid-stream)")
+    func channelUnclosed() {
+        let splitter = run(["<|channel>thought\nThinking Process:\n1. Analyze."])
+        #expect(splitter.reasoning == "Thinking Process:\n1. Analyze.")
+        #expect(splitter.answer == "")
+    }
+
     @Test("finish() agrees with ReasoningSplit.split(raw) — the two authorities cannot drift")
     func agreesWithPostStreamSplit() {
         // ChatSession streams via this splitter but treats ReasoningSplit over
@@ -145,6 +170,9 @@ struct StreamingReasoningSplitterTests {
             ["reasoning only</think>", " then answer"], // Qwen3.5 lone close
             ["<think>one</think>mid<think>two</think>end"],
             ["<think>unclosed thought"],
+            ["<|channel>thought\nplan\n<channel|>the answer"], // gemma-4 channel
+            ["reasoning only<channel|>", " then answer"], // gemma-4 lone close
+            ["<|channel>thought\nunclosed channel thought"],
         ]
         for chunks in streams {
             let splitter = run(chunks)

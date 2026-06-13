@@ -47,8 +47,11 @@ struct StreamingReasoningSplitter {
     /// join with a blank line (matches ReasoningSplit's joined output).
     private var pendingReasoningSeparator = false
 
-    private static let openTag = "<think>"
-    private static let closeTag = "</think>"
+    // Both reasoning formats we recognise, shared with ReasoningSplit so the
+    // live and post-stream authorities can't drift: Qwen `<think>…</think>` and
+    // gemma-4 `<|channel>thought … <channel|>`.
+    private static let openTags = ReasoningSplit.openTags
+    private static let closeTags = ReasoningSplit.closeTags
 
     /// Feed one raw stream chunk (delta or cumulative snapshot).
     mutating func feed(_ chunk: String) {
@@ -83,28 +86,32 @@ struct StreamingReasoningSplitter {
             switch mode {
             case .scanning:
                 buffer = String(buffer.drop(while: \.isWhitespace))
-                if buffer.hasPrefix(Self.openTag) {
-                    buffer.removeFirst(Self.openTag.count)
+                if let matched = Self.openTags.first(where: { buffer.hasPrefix($0) }) {
+                    buffer.removeFirst(matched.count)
                     mode = .reasoning
                     advanced = true
-                } else if !buffer.isEmpty, !Self.openTag.hasPrefix(buffer) {
+                } else if !buffer.isEmpty, !Self.openTags.contains(where: { $0.hasPrefix(buffer) }) {
                     mode = .answerWatching
                     advanced = true
                 }
 
             case .reasoning:
-                if let close = buffer.range(of: Self.closeTag) {
+                if let close = Self.earliest(of: Self.closeTags, in: buffer) {
                     appendReasoning(String(buffer[..<close.lowerBound]))
+                    // The block closed: trim trailing whitespace so the live view
+                    // matches the post-stream authority (gemma-4 emits "\n" right
+                    // before <channel|>; a later block re-adds its own separator).
+                    reasoning = trimTrailingWhitespace(reasoning)
                     buffer = String(buffer[close.upperBound...])
                     mode = .answer
                     advanced = true
                 } else {
-                    appendReasoning(takeAllButHoldback(guarding: [Self.closeTag]))
+                    appendReasoning(takeAllButHoldback(guarding: Self.closeTags))
                 }
 
             case .answerWatching:
-                let close = buffer.range(of: Self.closeTag)
-                let open = buffer.range(of: Self.openTag)
+                let close = Self.earliest(of: Self.closeTags, in: buffer)
+                let open = Self.earliest(of: Self.openTags, in: buffer)
                 if let close, Self.comesFirst(close, before: open) {
                     // Lone close with no open: the template opened the block
                     // for us — everything emitted so far was reasoning.
@@ -121,30 +128,43 @@ struct StreamingReasoningSplitter {
                     mode = .reasoning
                     advanced = true
                 } else {
-                    appendAnswer(takeAllButHoldback(guarding: [Self.closeTag, Self.openTag]))
+                    appendAnswer(takeAllButHoldback(guarding: Self.closeTags + Self.openTags))
                 }
 
             case .answer:
-                if let open = buffer.range(of: Self.openTag) {
+                if let open = Self.earliest(of: Self.openTags, in: buffer) {
                     appendAnswer(String(buffer[..<open.lowerBound]))
                     buffer = String(buffer[open.upperBound...])
                     beginReasoningBlock()
                     mode = .reasoning
                     advanced = true
                 } else {
-                    appendAnswer(takeAllButHoldback(guarding: [Self.openTag]))
+                    appendAnswer(takeAllButHoldback(guarding: Self.openTags))
                 }
             }
         }
     }
 
     /// True when `close` precedes `open` (or there is no open at all) — the
-    /// lone-`</think>` rule, without a force-unwrap at the call site.
+    /// lone-close rule, without a force-unwrap at the call site.
     private static func comesFirst(
         _ close: Range<String.Index>, before open: Range<String.Index>?
     ) -> Bool {
         guard let open else { return true }
         return close.lowerBound < open.lowerBound
+    }
+
+    /// The earliest occurrence of ANY of `tags` in `text` (soonest start wins).
+    /// Mirrors ReasoningSplit.earliestRange so live and post-stream agree.
+    private static func earliest(of tags: [String], in text: String) -> Range<String.Index>? {
+        var best: Range<String.Index>?
+        for tag in tags {
+            guard let r = text.range(of: tag) else { continue }
+            if best == nil || r.lowerBound < best!.lowerBound {
+                best = r
+            }
+        }
+        return best
     }
 
     /// Drain the buffer except the longest tail that could still be the start

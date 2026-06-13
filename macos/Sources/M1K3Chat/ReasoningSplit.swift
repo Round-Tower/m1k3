@@ -2,22 +2,35 @@
 //  ReasoningSplit.swift
 //  M1K3Chat
 //
-//  Reasoning models (Qwen3 and friends) emit their chain-of-thought inside
-//  <think>…</think> before the answer. We separate that reasoning from the
-//  answer so the bubble shows a clean reply while the thinking is surfaced
-//  one tap away — transparency without clutter.
+//  Reasoning models emit their chain-of-thought before the answer, in one of two
+//  formats we know about:
+//    • Qwen3 and friends: `<think>…</think>`
+//    • gemma-4 (Big): `<|channel>thought … <channel|>` (asymmetric markers — the
+//      pipe flips sides; its chat_template's strip_thinking macro removes exactly
+//      this). Without this the whole thought channel leaks into the bubble.
+//  We separate the reasoning from the answer so the bubble shows a clean reply
+//  while the thinking is surfaced one tap away — transparency without clutter.
 //
-//  Signed: Kev + claude-opus-4-8, 2026-06-10, Confidence 0.9, Prior: Unknown
+//  Review: Kev + claude-opus-4-8, 2026-06-13, Confidence 0.9 — generalised from a
+//  single `<think>` pair to a set of open/close tag pairs to also strip gemma-4's
+//  channel-format reasoning (Big leaked its full thought trace into the UI).
+//  Prior: Kev + claude-opus-4-8, 2026-06-10 (this file)
 
 import Foundation
 
 enum ReasoningSplit {
-    /// Separate `<think>…</think>` chain-of-thought from the answer. Returns the
-    /// joined reasoning (nil if none) and the answer with the think blocks
-    /// removed. An unclosed `<think>` (a stream cut mid-thought) treats the rest
-    /// as reasoning; a lone `</think>` with no opening tag (Qwen3.5's chat
-    /// template pre-opens `<think>` in the prompt, so the model emits only the
-    /// close) treats the prefix as reasoning. Both parts are whitespace-trimmed.
+    /// Open/close tag pairs we recognise as a reasoning block, longest-first so a
+    /// channel open is matched before any accidental substring. Shared with the
+    /// streaming splitter so live and post-stream views agree.
+    static let openTags = ["<|channel>thought", "<think>"]
+    static let closeTags = ["<channel|>", "</think>"]
+
+    /// Separate chain-of-thought from the answer. Returns the joined reasoning
+    /// (nil if none) and the answer with the think blocks removed. An unclosed
+    /// open tag (a stream cut mid-thought) treats the rest as reasoning; a lone
+    /// close with no opening tag (the chat template pre-opens the block in the
+    /// prompt, so the model emits only the close) treats the prefix as reasoning.
+    /// Both parts are whitespace-trimmed.
     static func split(_ text: String) -> (reasoning: String?, answer: String) {
         var reasoningParts: [String] = []
         var answer = ""
@@ -26,8 +39,8 @@ enum ReasoningSplit {
         // Lone closing tag first: the close appears before any open (or with no
         // open at all) → everything up to it is reasoning the template opened
         // for us. Later tags are then handled by the normal pair loop.
-        if let close = remaining.range(of: "</think>") {
-            let open = remaining.range(of: "<think>")
+        if let close = earliestRange(of: closeTags, in: remaining) {
+            let open = earliestRange(of: openTags, in: remaining)
             let closeComesFirst = open.map { close.lowerBound < $0.lowerBound } ?? true
             if closeComesFirst {
                 reasoningParts.append(String(remaining[..<close.lowerBound]))
@@ -35,10 +48,10 @@ enum ReasoningSplit {
             }
         }
 
-        while let open = remaining.range(of: "<think>") {
+        while let open = earliestRange(of: openTags, in: remaining) {
             answer += remaining[..<open.lowerBound]
             let afterOpen = remaining[open.upperBound...]
-            if let close = afterOpen.range(of: "</think>") {
+            if let close = earliestRange(of: closeTags, in: afterOpen) {
                 reasoningParts.append(String(afterOpen[..<close.lowerBound]))
                 remaining = afterOpen[close.upperBound...]
             } else {
@@ -58,5 +71,18 @@ enum ReasoningSplit {
             reasoning.isEmpty ? nil : reasoning,
             answer.trimmingCharacters(in: .whitespacesAndNewlines)
         )
+    }
+
+    /// The earliest occurrence of ANY of `tags` in `text` — the tag whose match
+    /// starts soonest wins (ties broken by tag order, longest-first).
+    static func earliestRange(of tags: [String], in text: Substring) -> Range<String.Index>? {
+        var earliest: Range<String.Index>?
+        for tag in tags {
+            guard let r = text.range(of: tag) else { continue }
+            if earliest == nil || r.lowerBound < earliest!.lowerBound {
+                earliest = r
+            }
+        }
+        return earliest
     }
 }
