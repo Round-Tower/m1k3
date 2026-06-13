@@ -12,6 +12,10 @@
 //  Signed: Kev + claude-opus-4-8, 2026-06-08, Confidence 0.9, Prior: Unknown
 //  Review: Kev + claude-fable-5, 2026-06-10 — four tiers (Gemma 4 era):
 //  Lil → Qwen3.5-2B, Big → Gemma-4-E4B, new Huge gated to 32GB+.
+//  Review: Kev + claude-opus-4-8, 2026-06-13 — Lil promoted Qwen3.5-2B → 4B:
+//  the 2B-4bit ignored grounding and confabulated (greeted instead of answering,
+//  invented facts on empty gate); 4B clears the reliability floor, same family
+//  (xmlFunction tool-calls, pre-open-think) so it's a drop-in id swap.
 
 @testable import M1K3Inference
 import Testing
@@ -49,7 +53,7 @@ struct BrainTierTests {
 
     @Test("the MLX tiers point at the Gemma 4-era models")
     func mlxTierModels() {
-        #expect(BrainTier.lil.mlxModelID == "mlx-community/Qwen3.5-2B-4bit")
+        #expect(BrainTier.lil.mlxModelID == "mlx-community/Qwen3.5-4B-4bit")
         #expect(BrainTier.big.mlxModelID == "mlx-community/gemma-4-e4b-it-4bit")
         // Gate B fallback: gemma-4-12B's `gemma4_unified` arch is unregistered
         // in mlx-swift-lm 3.31.3 (won't load) — Qwen3.5-9B until upstream does.
