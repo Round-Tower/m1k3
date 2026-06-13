@@ -421,6 +421,8 @@ public struct AgentRAGResponder: RAGResponding, Sendable {
             starting with "CONCLUSION:" — do not use tools.
             - Cite knowledge sources inline with citation tokens like \
             [Title §heading]; never invent citations.
+            - Never present a fact, figure, or date you can't ground or verify \
+            as certain; if you're unsure, say so plainly. Honesty beats a confident guess.
             - Use at most two tool calls, never repeating one with the same argument.
             - Questions about yourself — your configuration, design, or abilities — \
             are answered from your persona; never search stored documents for them.
@@ -434,6 +436,8 @@ public struct AgentRAGResponder: RAGResponding, Sendable {
             - If the KNOWLEDGE above answers the question, answer from it directly.
             - Cite knowledge sources inline with citation tokens like \
             [Title §heading]; never invent citations.
+            - Never present a fact, figure, or date you can't ground or verify \
+            as certain; if you're unsure, say so plainly. Honesty beats a confident guess.
             - Never repeat a tool call with the same argument.
             - Questions about yourself — your configuration, design, or abilities — \
             are answered from your persona; never search stored documents for them.
@@ -446,7 +450,8 @@ public struct AgentRAGResponder: RAGResponding, Sendable {
                 ? "No stored knowledge was injected — the user's documents are "
                 + "NOT in this context. If the question could concern their "
                 + "stored documents, calls, or notes, call search_knowledge; "
-                + "otherwise answer directly."
+                + "otherwise answer from what you genuinely know — and if you "
+                + "don't, say so plainly rather than guessing."
                 : "No stored knowledge matched this question."
         } else {
             let knowledge = chunks.enumerated().map { index, hit in

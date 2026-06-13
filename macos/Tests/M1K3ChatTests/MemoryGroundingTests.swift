@@ -9,6 +9,11 @@
 //  move by a single character.
 //
 //  Signed: Kev + claude-fable-5, 2026-06-12, Confidence 0.9, Prior: Unknown
+//  Review: Kev + claude-opus-4-8, 2026-06-13 — verbatim pins moved DELIBERATELY:
+//  added an anti-fabrication RULE (both styles) and replaced the empty-grounding
+//  "answer directly" licence with honest abstention, killing the off-store
+//  confabulation (live sourdough/honey). The intent is also pinned by content
+//  tests below so the wording can evolve without losing the guard.
 
 import Foundation
 import M1K3Agent
@@ -89,6 +94,8 @@ struct MemoryGroundingTests {
         starting with "CONCLUSION:" — do not use tools.
         - Cite knowledge sources inline with citation tokens like \
         [Title §heading]; never invent citations.
+        - Never present a fact, figure, or date you can't ground or verify \
+        as certain; if you're unsure, say so plainly. Honesty beats a confident guess.
         - Use at most two tool calls, never repeating one with the same argument.
         - Questions about yourself — your configuration, design, or abilities — \
         are answered from your persona; never search stored documents for them.
@@ -111,7 +118,8 @@ struct MemoryGroundingTests {
         No stored knowledge was injected — the user's documents are \
         NOT in this context. If the question could concern their \
         stored documents, calls, or notes, call search_knowledge; \
-        otherwise answer directly.
+        otherwise answer from what you genuinely know — and if you \
+        don't, say so plainly rather than guessing.
 
         RULES:
         - Pure small talk — greetings, banter — needs no tools or knowledge; just reply. \
@@ -119,6 +127,8 @@ struct MemoryGroundingTests {
         - If the KNOWLEDGE above answers the question, answer from it directly.
         - Cite knowledge sources inline with citation tokens like \
         [Title §heading]; never invent citations.
+        - Never present a fact, figure, or date you can't ground or verify \
+        as certain; if you're unsure, say so plainly. Honesty beats a confident guess.
         - Never repeat a tool call with the same argument.
         - Questions about yourself — your configuration, design, or abilities — \
         are answered from your persona; never search stored documents for them.
@@ -133,6 +143,31 @@ struct MemoryGroundingTests {
             chunks: [], toolNames: allTools, style: .native
         )
         #expect(actual == expected)
+    }
+
+    // MARK: - Anti-confabulation on empty grounding
+
+    //
+    // The off-store hole (2026-06-13): with nothing gated in, the empty head used
+    // to say "answer directly", which a model reads as licence to invent (the live
+    // sourdough/honey confabulation). Empty grounding must instead bias toward
+    // honest abstention while still allowing small talk.
+
+    @Test("both styles carry the anti-fabrication rule")
+    func antiFabricationRulePresent() {
+        for style in [AgentRAGResponder.PromptStyle.react, .native] {
+            let out = AgentRAGResponder.grounding(chunks: [docHit()], toolNames: allTools, style: style)
+            #expect(out.contains("Never present a fact, figure, or date you can't ground or verify"))
+        }
+    }
+
+    @Test("empty grounding asks for honesty, not a bare answer-directly licence")
+    func emptyGroundingDiscouragesGuessing() {
+        let out = AgentRAGResponder.grounding(chunks: [], toolNames: allTools, style: .native)
+        // The old confabulation licence is gone…
+        #expect(!out.contains("otherwise answer directly."))
+        // …replaced by an explicit say-so-if-you-don't-know instruction.
+        #expect(out.contains("say so plainly rather than guessing"))
     }
 
     // MARK: - The memory block
