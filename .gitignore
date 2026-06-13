@@ -195,6 +195,8 @@ bundletool-all-*.jar
 !docs/**/*.png
 # Launch site is self-contained (no CDN): its og card + favicons must travel.
 !site/**/*.png
+# Brand/icon assets (app-icon iconset + previews, labyrinth marks) must travel.
+!assets/**/*.png
 # Icon Composer app-icon layer images must travel with the repo (actool needs them).
 !macos/M1K3.icon/Assets/**
 !app/3d/**/*.png
