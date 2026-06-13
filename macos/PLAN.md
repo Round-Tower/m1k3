@@ -146,6 +146,72 @@ unvalidated — `HeadlessAskTests` comment); multi-client MCP (Stateful-per-sess
 `GroundingGate.chunkThreshold` per-query normalisation (the off-topic-but-above-0.62 citation noise
 this polish only *presentation*-fixed, not retrieval-fixed).
 
+## Update — 2026-06-13: PR #20 MERGED to master + access-readiness pass (the repo goes invitation-only)
+
+**The convergence the whole branch was building toward landed.** `feat/polish-setlist`
+(55 commits, +76k/−15.7k, 235 files — the entire arc since the last master merge:
+privacy/sandbox hardening, companions, in-app MCP, memory architecture, voice-first,
+embeddings swap, persona) is **merged to master** (merge commit `fba01c5f`, 2026-06-13).
+CI green; pr-reviewer verdict MERGE-READY, no blockers.
+
+**Worked P0→P5 one by one (an "access-readiness" sprint — prepping the repo to be shared
+invitation-only):**
+- **P0 — privacy hygiene (`1a8318f8`):** the repo was tracking **private runtime data** — the
+  personal `databases/m1k3_conversations.duckdb(.wal)`, `.m1k3_session.json`, and generated
+  test reports (which embed absolute paths). Untracked all 14 (kept on disk) + sealed
+  `.gitignore`. Anonymized `/Users/kevinmurphy` across 10 tracked docs → `$M1K3_ROOT`/`$HOME`
+  via `scripts/sweep_hardcoded_paths.sh`; two FUNCTIONAL files got real (not placeholder) fixes:
+  `.mcp.json` `PYTHONPATH` → `"."` (cwd is repo root — the absolute path was leaky AND unneeded),
+  `tests/python/test_tts_content_parsing.py` derives root from `__file__`.
+- **P1 — CI de-flake (`c301acc1`):** `AsyncTimeoutTests` "throws TimeoutError, fast" flaked
+  (deadline 0.1s, op 10s, but a secondary wall-clock guard demanded `elapsed < 2s`; CI jitter hit
+  2.81s — same branch alternated pass/fail). The `#expect(throws:)` already proves the deadline
+  fired; the timing line only guards "didn't block 10s". Bound 2s → **5s** (half the op; ~50×
+  deadline headroom). Green.
+- **P2 — access/legal (`5d1b70df`):** committed the proprietary **LICENSE** + **ACCESS.md** +
+  **ACCESS_AGREEMENT.md** (the README claimed "invitation-only" but the enforcing terms were
+  untracked); reconciled stray `package.json` license fields (root ISC, unified-suite MIT →
+  `"SEE LICENSE IN LICENSE"` + `private:true`).
+- **P3 — launch artifacts (`73604bc7` + `fc283cfd`):** `marketing/` growth plan, `assets/`
+  (app-icon + labyrinth icons), `make site`; Quaternius (CC0) credit for the Gecko/Inkfish/Colobus
+  companions the site ships.
+- **P4 — persona exemplar-bleed (`1a57eaa0`):** the 4B parroted the `voiceExemplars` verbatim,
+  leaking the literal `USER:` label into greetings — because they were formatted as `USER:/M1K3:`
+  chat turns (a pattern the weak model *continues*). Reframed as quoted illustrations
+  (`- Asked X: <M1K3 line>`, no turn scaffolding) + a "never print a speaker label" guard; tests
+  pinned in lockstep. Behavioural no-bleed is verify-by-feel at ⌘R.
+- **P5 — merge** (above).
+
+**Decisions / gotchas (do NOT rediscover):**
+- **History scrub DEFERRED to a dedicated post-merge op (Kev's call).** The conversation DB is gone
+  from HEAD but still in **git history** — and it was introduced way back in **master's** history
+  (`075ce65b`), so a complete scrub is a full-repo `git filter-repo` rewrite of master + ~9 local /
+  ~15 remote branches (incl. the unpushed `fix/gemma-embeddings`), then force-push. Doing it mid-sprint
+  would orphan in-flight work; the plan is to scrub AFTER #20 is merged (✅) AND `fix/gemma-embeddings`
+  lands, then re-clone. **This is the one real privacy item still owed before any invite.**
+- **`sweep_hardcoded_paths.sh` used bash-4 `mapfile`** → "command not found" on stock macOS (bash 3.2).
+  Rewrote to a `while-read` loop. (Pattern: any committed `.sh` must run on /bin/bash 3.2.)
+- **The `.gitignore` global `*.png` trap struck again** — `git add assets/` would have silently dropped
+  all 19 icon PNGs. Added `!assets/**/*.png`. (Same family as the `site/**` and `.claude/skills`
+  re-include traps; always `git diff --cached --name-only | grep png` after staging image assets.)
+- **Merging to master is permission-gated** — the harness blocks `gh pr merge` to the default branch
+  without explicit user authorization (correct guardrail; do not work around it with a raw `git push`).
+
+**Carry-forward (P4 tail — still owed, blocked on hardware / Xcode-closed / data tasks):**
+- threshold re-tune (`GroundingGate.chunkThreshold`/`memoryThreshold` are bge-era provisionals — owed an
+  ABSEP/MEMEVAL re-measure on the new Qwen3 embedder) · file-length extractions
+  (`KnowledgeStore+Search.swift` at 511 lines, AppEnvironment, AvatarView — need Xcode-closed xcodegen) ·
+  `MLXGemmaProvider→MLXBrainProvider` rename (misnomer; loads Qwen too) · notifications quick-win ·
+  CMUdict dict swap (proper TTS fix) · Phase 3 memory (consolidation/recency/contradiction) ·
+  malformed citation leak on Lil-4B (`§3 * 10 = 30`) · Mini agent-loop timeout profiling · idle-fan/GPU.
+- **Launch infra (Kev's):** point `m1k3.app` at a host, deploy `site/`, 301 the alts; signed `.dmg`
+  (blocks Homebrew cask); MCP registry submissions; demo video.
+
+<!-- Signed: Kev + claude-opus-4-8, 2026-06-13, Confidence 0.9 — P0–P5 access-readiness sprint;
+     PR #20 merged to master (fba01c5f), CI green, pr-reviewer MERGE-READY; all 7 session commits
+     pushed + on master. History scrub correctly deferred (full-repo rewrite, would orphan in-flight
+     work). Persona no-bleed is verify-by-feel at ⌘R. Prior: Kev + claude-fable-5 (this file). -->
+
 ## Architecture
 
 A new SwiftUI app `M1K3.app` (macOS 26), composed of focused local SwiftPM packages. Business logic lives in testable packages (TDD); the app target is a thin shell. Proven files are **vendored** from the internal prior projects into M1K3 packages (not cross-repo path deps — the prior knowledge-server project's core drags in Hummingbird/InternalServerKit we don't need), each carrying a MurphySig review documenting the port.
