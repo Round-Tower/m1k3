@@ -26,3 +26,6 @@ when clicked. Camera has mouse parallax + scroll drift.
 Attribution: the Fox is the glTF sample asset — model by PixelMannen (CC0),
 rigging/animation by tomkranis (CC-BY 4.0). Credited in the site footer.
 https://github.com/KhronosGroup/glTF-Sample-Assets/tree/main/Models/Fox
+
+The other companions — Gecko, Inkfish, Colobus — are by Quaternius (CC0, public
+domain; no attribution legally required, credited as courtesy). https://quaternius.com
