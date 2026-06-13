@@ -9,7 +9,7 @@
 ### Current Implementation
 
 #### Animation Speed Formula
-**Location:** `/Users/kevinmurphy/Development/m1k3/app/composeApp/src/commonMain/kotlin/app/m1k3/ai/assistant/avatar/Avatar3DEngine.kt`
+**Location:** `$M1K3_ROOT/app/composeApp/src/commonMain/kotlin/app/m1k3/ai/assistant/avatar/Avatar3DEngine.kt`
 
 ```kotlin
 fun getAnimationSpeed(intensity: Float): Float {
@@ -23,7 +23,7 @@ fun getAnimationSpeed(intensity: Float): Float {
 - intensity = 1.0 → 1.5x speed (very fast)
 
 #### Where Speed is Applied
-**Location:** `/Users/kevinmurphy/Development/m1k3/app/composeApp/src/androidMain/kotlin/app/m1k3/ai/assistant/avatar/Avatar3DView.android.kt`
+**Location:** `$M1K3_ROOT/app/composeApp/src/androidMain/kotlin/app/m1k3/ai/assistant/avatar/Avatar3DView.android.kt`
 
 ```kotlin
 // Line 228: Initial animation playback

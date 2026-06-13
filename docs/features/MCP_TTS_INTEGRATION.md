@@ -25,8 +25,8 @@ This integration allows Claude Code to speak responses using M1K3's intelligent 
 The MCP server is already configured and ready to use!
 
 ### Configuration Files:
-- **MCP Server**: `/Users/kevinmurphy/Development/m1k3/mcp_tts_server.py`
-- **Configuration**: `/Users/kevinmurphy/Development/m1k3/.mcp.json`
+- **MCP Server**: `$M1K3_ROOT/mcp_tts_server.py`
+- **Configuration**: `$M1K3_ROOT/.mcp.json`
 - **Settings**: `.claude/settings.local.json` (enableAllProjectMcpServers: true)
 
 ## How to Use

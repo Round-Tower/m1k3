@@ -209,3 +209,17 @@ bundletool-all-*.jar
 # document this codebase's pipelines, so they travel with it.
 !/.claude/skills/
 !/.claude/skills/**
+
+# --- Private runtime data: must NEVER be committed (access-readiness) ---
+# Personal conversation history / vector store
+databases/
+*.duckdb
+*.duckdb.wal
+*.sqlite
+*.sqlite3
+# Local session state (machine/runtime status)
+.m1k3_session.json
+# Generated test reports (embed absolute local paths)
+tests/unified-suite/output/
+scripts/test_report.json
+data/test-results/

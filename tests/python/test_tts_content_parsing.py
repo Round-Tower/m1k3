@@ -3,8 +3,11 @@
 Test TTS content parsing to understand where content is being lost
 """
 
+import os
 import sys
-sys.path.append('/Users/kevinmurphy/Development/m1k3')
+
+# Repo root is two levels up from tests/python/ — portable, no hardcoded home path.
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
 
 from src.utils.model_output_parser import parse_model_output
 
@@ -29,7 +32,7 @@ def test_content_parsing():
     # Parse the content
     parsed_content = parse_model_output(sample_response)
     
-    print(f"📊 Parsing Results:")
+    print("📊 Parsing Results:")
     print(f"Number of segments: {len(parsed_content.segments)}")
     print(f"Has content: {parsed_content.has_content}")
     print(f"Needs clarification: {parsed_content.needs_clarification}")
@@ -46,7 +49,7 @@ def test_content_parsing():
         total_parsed_length += len(segment.text)
         print()
     
-    print(f"📈 Summary:")
+    print("📈 Summary:")
     print(f"Total parsed content length: {total_parsed_length} chars")
     print(f"Original length: {len(sample_response)} chars")
     print(f"Content preservation: {(total_parsed_length / len(sample_response)) * 100:.1f}%")

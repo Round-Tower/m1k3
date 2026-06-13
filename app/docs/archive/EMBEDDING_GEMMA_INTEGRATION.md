@@ -68,7 +68,7 @@ CREATE TABLE MemoryMetadata (
 The export script converts the HuggingFace model to ONNX format with quantization:
 
 ```bash
-cd /Users/kevinmurphy/Development/m1k3/app
+cd $M1K3_ROOT/app
 
 # Install Python dependencies
 pip install transformers onnx onnxruntime optimum[exporters] torch

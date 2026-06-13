@@ -100,7 +100,7 @@ print('Qwen2.5-1.5B downloaded!')
 ### **For Best Reasoning Now:**
 ```bash
 # Download Qwen2.5-1.5B-Instruct (most balanced)
-cd /Users/kevinmurphy/Development/m1k3
+cd $M1K3_ROOT
 python -c "
 from transformers import AutoTokenizer, AutoModelForCausalLM
 import torch

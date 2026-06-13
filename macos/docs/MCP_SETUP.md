@@ -41,9 +41,9 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
 {
   "mcpServers": {
     "m1k3": {
-      "command": "/Users/kevinmurphy/Development/m1k3/macos/.build/release/M1K3MCP",
+      "command": "$M1K3_ROOT/macos/.build/release/M1K3MCP",
       "env": {
-        "M1K3_STORE_PATH": "/Users/kevinmurphy/Library/Containers/dev.murphysig.M1K3/Data/Library/Application Support/M1K3/knowledge.sqlite"
+        "M1K3_STORE_PATH": "$HOME/Library/Containers/dev.murphysig.M1K3/Data/Library/Application Support/M1K3/knowledge.sqlite"
       }
     }
   }

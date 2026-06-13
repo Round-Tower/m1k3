@@ -69,7 +69,7 @@ RAG system used placeholder keyword matching, returning irrelevant results:
 
 **Savings:** **-72.4 MB** (80% reduction from 90 MB)
 
-**Location:** `/Users/kevinmurphy/Development/m1k3/app/models/minilm-optimized/option3/`
+**Location:** `$M1K3_ROOT/app/models/minilm-optimized/option3/`
 
 **Next Steps:**
 - Copy to `assets/models/minilm/`

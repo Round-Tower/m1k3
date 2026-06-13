@@ -4,7 +4,7 @@
 
 M1K3 today exists as a Python desktop CLI + MCP servers and a Kotlin Multiplatform mobile app (Android shipping, iOS a shell). **There is no Mac-native app.** This plan builds one: a native SwiftUI macOS app that is M1K3's first-class desktop surface — a local, private AI companion with live voice, a knowledge graph, document memory, an embedded agent, and an MCP server so Claude (and other agents) can pull from it.
 
-The strategic unlock from exploration: we are **not** building this from scratch. `the prior knowledge-server project` (`/Users/kevinmurphy/Development/the prior knowledge-server project`) and `the internal call-pipeline project` contain production, eval-gated **Swift** IP for almost every requirement. The MVP is mostly *lift, generalise, and reskin behind a native shell* — not greenfield.
+The strategic unlock from exploration: we are **not** building this from scratch. `the prior knowledge-server project` (`$HOME/Development/the prior knowledge-server project`) and `the internal call-pipeline project` contain production, eval-gated **Swift** IP for almost every requirement. The MVP is mostly *lift, generalise, and reskin behind a native shell* — not greenfield.
 
 **Key decisions (from Kev, 2026-06-06):**
 - **LLM runtime:** keep options open — build **both** an MLX-Swift (Gemma 4) and a **LiteRT-LM (Gemma 4)** backend behind one provider protocol, so we can compare support/capability. **Apple Foundation Models** handles cheap/basic turns. Embeddings stay on MLX-Swift (already proven in the prior knowledge-server project).
