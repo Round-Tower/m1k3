@@ -36,6 +36,7 @@ import M1K3MLX
 import M1K3Voice
 import M1K3WhisperKit
 import Observation
+import os
 
 /// The inference backends the runtime picker offers. Only Apple Foundation
 /// Models is wired for the MVP; MLX / LiteRT Gemma are reserved slots that light
@@ -84,8 +85,8 @@ final class AppEnvironment {
     let speech: SwappableSpeechProvider
     let chat: ChatSession
 
-    private let embedder: SwappableEmbeddingService
-    private let ingester: DocumentIngester
+    let embedder: SwappableEmbeddingService // internal: MCPHostController builds a dedicated responder
+    let ingester: DocumentIngester // internal: the MCP remember tool ingests through it
     private let runtimeSelection: RuntimeSelectionBox
     /// Call intelligence: encrypted-at-rest persistence + indexing into the SAME
     /// knowledge graph as documents (so calls are RAG-searchable) + two-stage
@@ -104,6 +105,9 @@ final class AppEnvironment {
     /// Gemma). Rebuilt when the brain changes; held directly so the onboarding /
     /// picker can warm it and stream download progress to the UI.
     private var currentMLXProvider: MLXGemmaProvider
+    /// "Is this brain's weights already on disk?" — drives the onboarding card's
+    /// "On disk · ready" hint instead of dangling a download the user already did.
+    private let brainInventory = LocalModelInventory()
     /// The single MLX slot behind `RuntimeOption.mlxGemma` in the façade; re-pointed
     /// at `currentMLXProvider` whenever the brain switches between Lil and Big, so
     /// the swap is seen without rebuilding the RAGResponder.
@@ -143,15 +147,34 @@ final class AppEnvironment {
     /// The avatar companion state — driven by this environment at each transition
     /// (listening → thinking → generating → speaking → idle).
     private(set) var avatar = AvatarController()
+    /// UI earcons. Lazy so `isSpeaking` can read the live avatar state (an
+    /// earcon must never step on M1K3's voice). Enabled from the persisted
+    /// preference; the Settings toggle updates `isEnabled` live. Not observed —
+    /// nothing in the UI reacts to the player object (lazy needs a stored prop,
+    /// which @Observable's rewrite would otherwise forbid).
+    @ObservationIgnored private(set) lazy var soundEffects: SoundEffectPlayer = .bundled(
+        isEnabled: Self.soundEffectsEnabledDefault,
+        isSpeaking: { [weak self] in
+            guard let self else { return false }
+            if case .speaking = avatar.state.activity { return true }
+            return false
+        }
+    )
+
     /// Word-highlight state for speech playback (the karaoke reading view).
     let speechHighlight = SpeechHighlight()
     /// Voice-first mode's conversation loop — non-nil while the mode is active.
     /// Written ONLY by enterVoiceMode/exitVoiceMode (AppEnvironment+VoiceMode.swift;
     /// internal because private(set) is file-scoped).
     var voiceLoop: VoiceLoopController?
+    /// In-process MCP server lifecycle + voice tool glue (MCPHostController.swift).
+    /// Set once at init tail (needs self for the handler closures).
+    private(set) var mcpHost: MCPHostController!
 
-    private static let embedderPrefersMLXKey = "embedder.prefersMLX"
-    static let selectedBrainKey = "selectedBrain"
+    /// Statics merged onto shared lines where sensible: the class body rides the
+    /// type_body_length ceiling, and @Observable ignores statics (unlike stored
+    /// instance vars, which CANNOT share a declaration line under the macro).
+    private static let embedderPrefersMLXKey = "embedder.prefersMLX"; static let selectedBrainKey = "selectedBrain"
     /// Whether the user has completed brain selection — gates the onboarding flow.
     static let hasChosenBrainKey = "hasChosenBrain"
     static let selectedVoiceTierKey = "selectedVoiceTier"
@@ -164,6 +187,16 @@ final class AppEnvironment {
     nonisolated static let thinkingModeKey = "thinkingMode"
     /// Whether the user has made a voice-output choice (onboarding speech step).
     static let hasChosenVoiceKey = "hasChosenVoice"
+    /// One-shot: the call-encryption key has been migrated to Touch-ID protection.
+    /// Guards the (prompt-triggering) reassert so it runs once, not every launch.
+    static let callKeyProtectionMigratedKey = "calls.keyProtectionMigrated"
+    /// Call-subsystem diagnostics — pairs with StereoCallRecorder's trail so a full
+    /// record→transcribe QA pass is one `log stream` predicate.
+    private static let callLog = Logger(subsystem: "dev.murphysig.M1K3", category: "calls")
+    /// The user has upgraded voice input to WhisperKit — restored on launch so it
+    /// auto-loads instead of silently reverting to Apple Speech (guarded by the
+    /// model being on disk, never a silent re-download).
+    static let whisperEnabledKey = "transcription.whisperEnabled"
 
     /// The chosen brain (Mini / Lil / Big). Restored on launch, persisted on change.
     private(set) var selectedBrain: BrainTier = .mini
@@ -299,9 +332,24 @@ final class AppEnvironment {
         transcription = TranscriptionRouter(providers: [whisperKit, AppleSpeechTranscriber()])
         batchTranscriber = WhisperKitBatchTranscriber(downloadBase: whisperDownloadBase)
 
-        ingester = DocumentIngester(store: store, embedder: embedder)
-        let transcriptURL = url.deletingLastPathComponent().appendingPathComponent("transcript.json")
-        chat = ChatSession(responder: responder, transcript: ChatTranscriptStore(url: transcriptURL))
+        let documentIngester = DocumentIngester(store: store, embedder: embedder)
+        ingester = documentIngester
+        // Multi-conversation history (GRDB) + auto-titling via the routed
+        // provider; the legacy transcript.json imports once (factory runs the
+        // migrator BEFORE init so resume-most-recent finds the import).
+        let chatHistory = Self.makeChatHistoryStore(in: url.deletingLastPathComponent())
+        chat = ChatSession(
+            responder: responder,
+            history: chatHistory,
+            titler: ProviderConversationTitler(provider: runtimeProvider),
+            distillation: Self.makeMemoryDistillation(
+                store: store,
+                embedder: swappable,
+                ingester: documentIngester,
+                fallback: runtimeProvider
+            ),
+            autoCaptureEnabled: { Self.memoryAutoCaptureEnabled() }
+        )
 
         // Calls: encrypted-at-rest store (key from the Keychain), indexed into the
         // same knowledge graph, summarised by AFM (quick) + the active runtime (deep).
@@ -317,6 +365,8 @@ final class AppEnvironment {
         // initialized (see the Voice output extension).
         wireSpeechCallbacks()
         Self.resetVoiceModeFlagAtLaunch()
+        mcpHost = MCPHostController(environment: self)
+        mcpHost.startIfEnabled()
 
         // Warm a restored MLX brain (Lil/Big) on launch so it's ready to answer;
         // Mini (Apple) needs nothing. Setting selectedRuntime drives the existing
@@ -329,6 +379,13 @@ final class AppEnvironment {
         // a silent ~354 MB re-download on launch.
         if selectedVoiceTier == .m1k3Voice, kokoro.isModelStaged {
             Task { await prepareM1K3Voice() }
+        }
+
+        // Restore WhisperKit voice input the same way — only if the user upgraded to
+        // it AND the model is on disk (else stay on Apple Speech rather than trigger
+        // a silent ~142 MB re-download).
+        if UserDefaults.standard.bool(forKey: Self.whisperEnabledKey), whisperKit.isModelDownloaded {
+            Task { await enableWhisperKit() }
         }
     }
 
@@ -374,6 +431,11 @@ final class AppEnvironment {
         }
         await chat.send(text)
         advance.cancel()
+        // A failed turn earns the error earcon (the gate mutes it if M1K3 is
+        // mid-speech, which a failure here never is).
+        if case .failed = chat.messages.last?.status {
+            soundEffects.play(.error)
+        }
         // Only reset to idle if the avatar isn't already in a speaking state
         // (e.g. auto-TTS path sets .speaking before we return here).
         if case .speaking = avatar.state.activity { return }
@@ -401,23 +463,30 @@ final class AppEnvironment {
     func enableWhisperKit() async {
         guard !isPreparingWhisper else { return }
         isPreparingWhisper = true
-        whisperLoad = .progress(0)
+        // WhisperKit's init bundles download + CoreML compile opaquely (it reports
+        // only 0.05 then 1.0), so there's no honest fraction to show — an
+        // indeterminate "Preparing…" spinner, never a bar stuck at 5% mislabelled as
+        // a download. (Wiring WhisperKit's modelStateCallback for real download
+        // progress on a fresh fetch is a follow-up.)
+        whisperLoad = .preparing
         do {
-            try await whisperKit.prepareModel { fraction in
-                // Guard against a late progress hop overwriting .ready — same race
-                // fixed in preloadGemma (the .downloading check is the fence).
-                Task { @MainActor in
-                    if case .downloading = self.whisperLoad {
-                        self.whisperLoad = .progress(fraction)
-                    }
-                }
-            }
+            try await whisperKit.prepareModel { _ in }
             isPreparingWhisper = false
             whisperLoad = .ready
+            // Remember the upgrade so the next launch auto-loads WhisperKit instead
+            // of silently dropping back to Apple Speech.
+            UserDefaults.standard.set(true, forKey: Self.whisperEnabledKey)
         } catch {
             isPreparingWhisper = false
             whisperLoad = .failed(message: error.localizedDescription)
         }
+    }
+
+    /// Whether a downloaded-tier brain's weights are already on disk. Mini (Apple
+    /// Foundation Models) has nothing to download, so it's never "downloaded" here.
+    func isBrainDownloaded(_ tier: BrainTier) -> Bool {
+        guard let modelID = tier.mlxModelID else { return false }
+        return brainInventory.isInstalled(modelID: modelID)
     }
 
     /// Choose a brain: persist it, re-point the active provider, and (for Lil/Big)
@@ -493,7 +562,7 @@ final class AppEnvironment {
             )
             usingMLXEmbeddings = useMLX
             UserDefaults.standard.set(useMLX, forKey: Self.embedderPrefersMLXKey)
-            let label = useMLX ? "MLX bge_small" : "Hashing"
+            let label = useMLX ? "MLX Qwen3-Embedding" : "Hashing"
             embeddingStatus = "Reindexed \(count) chunk\(count == 1 ? "" : "s") with \(label)."
         } catch {
             // Reindex writes atomically, so the store still matches the previous
@@ -503,9 +572,10 @@ final class AppEnvironment {
         }
     }
 
-    /// All indexed items, newest first, for the document manager.
-    func documents() -> [KnowledgeItem] {
-        ((try? store.allItems()) ?? []).sorted { $0.createdAt > $1.createdAt }
+    /// All indexed items, newest first, for the document manager — or one
+    /// kind's slice (the memories surface passes `.memory`).
+    func documents(kind: KnowledgeKind? = nil) -> [KnowledgeItem] {
+        ((try? store.allItems(kind: kind)) ?? []).sorted { $0.createdAt > $1.createdAt }
     }
 
     /// Chunk count for one item (shown in the document list).
@@ -584,6 +654,7 @@ final class AppEnvironment {
 
     /// Log a consent affirmation, then start recording.
     func affirmConsentAndRecord(scope: ConsentScope) async {
+        Self.callLog.notice("consent affirmed (scope=\(String(describing: scope), privacy: .public))")
         consentGate.affirm(scope: scope, at: Date())
         await startRecording()
     }
@@ -597,10 +668,12 @@ final class AppEnvironment {
         do {
             let stereo = try await recorder.start()
             isRecording = true
+            Self.callLog.notice("recording started (stereo=\(stereo, privacy: .public))")
             lastCallStatus = stereo
                 ? "Recording… (both sides — speakers will be separated)"
                 : "Recording… (mic only — grant Screen Recording to capture the other side)"
         } catch {
+            Self.callLog.error("start failed: \(error, privacy: .public)")
             lastCallStatus = "Couldn’t start recording: \(error.localizedDescription)"
         }
     }
@@ -615,17 +688,20 @@ final class AppEnvironment {
         isRecording = false
         lastRecordingURL = url
         guard let url else {
+            Self.callLog.error("stop: nothing recorded")
             lastCallStatus = "Nothing was recorded."
             return
         }
         if batchTranscriber.isAvailable {
+            Self.callLog.notice("stop: recorded \(url.lastPathComponent, privacy: .public) → transcribing")
             Task { await processRecording(url: url) }
         } else {
+            Self.callLog.notice("stop: recorded \(url.lastPathComponent, privacy: .public) → parked (transcription model not enabled)")
             lastCallStatus = "Recorded — enable call transcription in Settings to process it."
         }
     }
 
-    private func refreshCounts() {
+    func refreshCounts() { // internal: MCP remember tool refreshes after ingest
         indexedItemCount = (try? store.itemCount()) ?? indexedItemCount
         callCount = (try? callPersistence.loadAll().count) ?? callCount
     }
@@ -707,9 +783,27 @@ extension AppEnvironment {
     /// calls feature rather than crashing the app.
     static func makeCallPersistence(at url: URL) -> any CallPersistence {
         do {
-            let key = try StoredKeyProvider(store: KeychainKeyStore()).symmetricKey()
+            // The call-encryption key is gated behind Touch ID (login-password
+            // fallback) via a .userPresence Keychain access control, read once here
+            // at call-store construction → one biometric prompt per launch.
+            let provider = StoredKeyProvider(store: KeychainKeyStore(protection: .userPresence))
+            // One-time, flag-guarded migration: a key written before this gate
+            // existed is unprotected; reassert upgrades it IN PLACE (same bytes, so
+            // existing encrypted calls stay decryptable). Guarded because reassert
+            // reads the key — against an already-protected item that read would itself
+            // fire Touch ID, so running it every launch means TWO prompts. Once only.
+            let defaults = UserDefaults.standard
+            if !defaults.bool(forKey: callKeyProtectionMigratedKey) {
+                try provider.reassertProtection()
+                defaults.set(true, forKey: callKeyProtectionMigratedKey)
+            }
+            let key = try provider.symmetricKey()
             return try GRDBCallPersistence(path: url.path, coder: EncryptedCallCoder(key: key))
         } catch {
+            // A key failure degrades calls to a non-persistent store rather than
+            // crashing the app. Log it — an otherwise silently-inert calls feature is
+            // undiagnosable (a dismissed Touch ID lands here as .userCancelled).
+            callLog.error("call store fell back to non-persistent: \(error, privacy: .public)")
             return (try? GRDBCallPersistence()) ?? NullCallPersistence()
         }
     }
@@ -725,56 +819,6 @@ extension AppEnvironment {
         let dir = base.appendingPathComponent("M1K3", isDirectory: true)
         try fileManager.createDirectory(at: dir, withIntermediateDirectories: true)
         return dir.appendingPathComponent("knowledge.sqlite")
-    }
-
-    /// The tool-calling chat responder: every turn runs the agent loop with
-    /// retrieve-first grounding, plus web search / datetime / system status /
-    /// a second knowledge lookup as tools. The tool list is built fresh each
-    /// turn so the Settings web-search toggle applies immediately — disabled
-    /// means the model never even sees the tool.
-    nonisolated static func makeAgentResponder(
-        store: KnowledgeStore,
-        embedder: any EmbeddingService,
-        provider: any InferenceProvider
-    ) -> any RAGResponding {
-        // Hits the model retrieves itself (search_knowledge) flow through the
-        // collector into the turn's sources + the citation allow-list.
-        let sourceCollector = ToolSourceCollector()
-        return AgentRAGResponder(
-            store: store,
-            embedder: embedder,
-            provider: provider,
-            toolsProvider: {
-                var tools: [any AgentTool] = [
-                    DateTimeTool(),
-                    SystemStatusTool(),
-                    SearchKnowledgeTool(
-                        store: store,
-                        embedder: embedder,
-                        onHits: { hits in sourceCollector.record(hits) }
-                    ),
-                ]
-                let defaults = UserDefaults.standard
-                let webAllowed = defaults.object(forKey: Self.webSearchEnabledKey) == nil
-                    || defaults.bool(forKey: Self.webSearchEnabledKey)
-                if webAllowed {
-                    tools.insert(FetchPageTool(), at: 0)
-                    tools.insert(WebSearchTool(), at: 0)
-                }
-                return tools
-            },
-            sourceCollector: sourceCollector,
-            thinkingModeProvider: {
-                let stored = UserDefaults.standard.string(forKey: Self.thinkingModeKey)
-                    .flatMap(ThinkingMode.init(rawValue:)) ?? .auto
-                // Voice mode maps Auto → fast replies (latency IS the UX in a
-                // spoken loop); an explicit Always is respected.
-                if stored == .auto, UserDefaults.standard.bool(forKey: Self.voiceModeActiveKey) {
-                    return .fast
-                }
-                return stored
-            }
-        )
     }
 }
 

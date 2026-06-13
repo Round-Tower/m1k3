@@ -20,7 +20,15 @@ import FoundationModels
 public struct AppleFoundationModelsProvider: InferenceProvider {
     public let name = "apple-foundation-models"
 
-    public init() {}
+    /// System instructions for every session this provider opens, evaluated
+    /// fresh per call (the persona tracks profile edits). Defaults to the
+    /// persona; secondary jobs (the memory distiller, future judges) pass
+    /// neutral instructions so they don't speak as M1K3.
+    private let instructions: @Sendable () -> String
+
+    public init(instructions: @escaping @Sendable () -> String = { M1K3Persona.systemPrompt }) {
+        self.instructions = instructions
+    }
 
     public var isAvailable: Bool {
         switch SystemLanguageModel.default.availability {
@@ -32,16 +40,16 @@ public struct AppleFoundationModelsProvider: InferenceProvider {
     }
 
     public func generate(prompt: String) async throws -> String {
-        let session = LanguageModelSession(instructions: M1K3Persona.systemPrompt)
+        let session = LanguageModelSession(instructions: instructions())
         let response = try await session.respond(to: prompt)
         return response.content
     }
 
     public func generateStreaming(prompt: String) -> AsyncStream<String> {
         AsyncStream { continuation in
-            let task = Task {
+            let task = Task { [instructions] in
                 do {
-                    let session = LanguageModelSession(instructions: M1K3Persona.systemPrompt)
+                    let session = LanguageModelSession(instructions: instructions())
                     let stream = session.streamResponse(to: prompt)
                     for try await snapshot in stream {
                         continuation.yield(snapshot.content)

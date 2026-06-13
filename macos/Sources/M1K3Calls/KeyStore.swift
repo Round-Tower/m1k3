@@ -20,6 +20,10 @@ public protocol KeyStore: Sendable {
 
 public enum KeyStoreError: Error, Sendable, Equatable {
     case unexpectedStatus(OSStatus)
+    case accessControlUnavailable
+    /// The user dismissed the biometric (Touch ID) sheet. Distinct from a real
+    /// failure so the caller can tell "couldn't unlock" from "wouldn't unlock."
+    case userCancelled
 }
 
 /// Keychain-backed secret storage (generic-password items). Device-only and only
@@ -27,40 +31,107 @@ public enum KeyStoreError: Error, Sendable, Equatable {
 /// privacy-first stance. Thin OS adapter: verified by launching the app, not by
 /// `swift test` (the logic that uses it is tested via the in-memory fake).
 public struct KeychainKeyStore: KeyStore {
-    private let service: String
+    /// How the OS guards the item at rest.
+    public enum Protection: Sendable {
+        /// Readable after first device unlock, no user interaction. The original
+        /// behaviour — used where the secret must be available unattended.
+        case afterFirstUnlock
+        /// Gated behind the user's presence: Touch ID, with the login password as
+        /// the system fallback. Reading the item presents the system biometric
+        /// sheet automatically (the access control is what triggers it). Device-
+        /// only, never synced. This is what protects the call-encryption key.
+        case userPresence
+    }
 
-    public init(service: String = "dev.murphysig.M1K3") {
+    private let service: String
+    private let protection: Protection
+
+    public init(service: String = "dev.murphysig.M1K3", protection: Protection = .afterFirstUnlock) {
         self.service = service
+        self.protection = protection
     }
 
     public func data(forAccount account: String) throws -> Data? {
         var query = baseQuery(account)
         query[kSecReturnData] = kCFBooleanTrue
         query[kSecMatchLimit] = kSecMatchLimitOne
+        // For a `.userPresence` item this read is what surfaces the Touch ID sheet
+        // (the item's access control drives it) — no LAContext needed for the
+        // once-per-launch read the call store performs.
 
         var item: CFTypeRef?
         let status = SecItemCopyMatching(query as CFDictionary, &item)
         switch status {
         case errSecSuccess: return item as? Data
         case errSecItemNotFound: return nil
+        case errSecUserCanceled: throw KeyStoreError.userCancelled
         default: throw KeyStoreError.unexpectedStatus(status)
         }
     }
 
     public func setData(_ data: Data, forAccount account: String) throws {
-        // Upsert: update an existing item, else add a new one.
-        let update = SecItemUpdate(
-            baseQuery(account) as CFDictionary,
-            [kSecValueData: data] as CFDictionary
-        )
-        if update == errSecSuccess { return }
-        guard update == errSecItemNotFound else { throw KeyStoreError.unexpectedStatus(update) }
+        switch protection {
+        case .afterFirstUnlock:
+            // Upsert: update an existing item, else add a new one.
+            let update = SecItemUpdate(
+                baseQuery(account) as CFDictionary,
+                [kSecValueData: data] as CFDictionary
+            )
+            if update == errSecSuccess { return }
+            guard update == errSecItemNotFound else { throw KeyStoreError.unexpectedStatus(update) }
 
-        var add = baseQuery(account)
-        add[kSecValueData] = data
-        add[kSecAttrAccessible] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
-        let addStatus = SecItemAdd(add as CFDictionary, nil)
-        guard addStatus == errSecSuccess else { throw KeyStoreError.unexpectedStatus(addStatus) }
+            var item = baseQuery(account)
+            item[kSecValueData] = data
+            item[kSecAttrAccessible] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+            try insert(item)
+
+        case .userPresence:
+            // SecItemUpdate can't add/replace an access control, so a biometric
+            // write is delete-then-add. Deleting a `.userPresence` item does NOT
+            // prompt (only reads do), so re-protecting an existing key is silent.
+            //
+            // Build the access control BEFORE the destructive delete — if it can't
+            // be created we must not have already thrown away the existing key. And
+            // if the add fails after the delete (the one window where the key bytes
+            // would be lost, taking every encrypted call with them), roll back by
+            // re-storing under the unprotected policy. Better an unprotected key
+            // than an unrecoverable one; the next launch re-attempts the upgrade.
+            let control = try userPresenceAccessControl()
+            try removeData(forAccount: account)
+            var item = baseQuery(account)
+            item[kSecValueData] = data
+            item[kSecAttrAccessControl] = control
+            do {
+                try insert(item)
+            } catch {
+                var fallback = baseQuery(account)
+                fallback[kSecValueData] = data
+                fallback[kSecAttrAccessible] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+                try? insert(fallback)
+                throw error
+            }
+        }
+    }
+
+    private func insert(_ item: [CFString: Any]) throws {
+        let status = SecItemAdd(item as CFDictionary, nil)
+        guard status == errSecSuccess else { throw KeyStoreError.unexpectedStatus(status) }
+    }
+
+    /// `.userPresence` = biometry (Touch ID) OR device passcode fallback, on this
+    /// device only. The access control the OS enforces on every read of the item.
+    private func userPresenceAccessControl() throws -> SecAccessControl {
+        var error: Unmanaged<CFError>?
+        guard let control = SecAccessControlCreateWithFlags(
+            nil,
+            kSecAttrAccessibleWhenUnlockedThisDeviceOnly,
+            .userPresence,
+            &error
+        ) else {
+            error?.release() // own + free the CFError on the failure path
+            throw KeyStoreError.accessControlUnavailable
+        }
+        return control
     }
 
     public func removeData(forAccount account: String) throws {

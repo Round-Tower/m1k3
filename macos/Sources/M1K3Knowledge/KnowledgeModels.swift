@@ -26,6 +26,22 @@ public struct KnowledgeKind: RawRepresentable, Hashable, Sendable, Codable {
     public static let document = KnowledgeKind(rawValue: "document")
     public static let call = KnowledgeKind(rawValue: "call")
     public static let note = KnowledgeKind(rawValue: "note")
+    public static let memory = KnowledgeKind(rawValue: "memory")
+}
+
+/// Who wrote a knowledge item — the provenance half of the memory consent
+/// story (Settings shows "you told me" vs "I noticed"). Open string-backed
+/// like KnowledgeKind so new writers don't require a schema change.
+public struct KnowledgeSource: RawRepresentable, Hashable, Sendable, Codable {
+    public let rawValue: String
+    public init(rawValue: String) {
+        self.rawValue = rawValue
+    }
+
+    /// The user wrote it explicitly (the `remember` tool, manual entry).
+    public static let user = KnowledgeSource(rawValue: "user")
+    /// The background distillation loop extracted it from a conversation.
+    public static let distilled = KnowledgeSource(rawValue: "distilled")
 }
 
 /// A unit of knowledge the assistant can retrieve over.
@@ -36,6 +52,8 @@ public struct KnowledgeItem: Identifiable, Equatable, Sendable, Codable {
     /// Optional stable external identity (file sha256, call UUID, URL) used for
     /// dedupe. Two ingests of the same source collapse on this.
     public var sourceRef: String?
+    /// Who wrote it (nil for legacy items and ordinary document ingests).
+    public var source: KnowledgeSource?
     public var createdAt: Date
 
     public init(
@@ -43,12 +61,14 @@ public struct KnowledgeItem: Identifiable, Equatable, Sendable, Codable {
         kind: KnowledgeKind,
         title: String,
         sourceRef: String? = nil,
+        source: KnowledgeSource? = nil,
         createdAt: Date = Date()
     ) {
         self.id = id
         self.kind = kind
         self.title = title
         self.sourceRef = sourceRef
+        self.source = source
         self.createdAt = createdAt
     }
 }
@@ -123,10 +143,11 @@ struct ItemRecord: Codable, FetchableRecord, PersistableRecord {
     var kind: String
     var title: String
     var sourceRef: String?
+    var source: String?
     var createdAt: Double
 
     enum CodingKeys: String, CodingKey {
-        case id, kind, title
+        case id, kind, title, source
         case sourceRef = "source_ref"
         case createdAt = "created_at"
     }
@@ -136,6 +157,7 @@ struct ItemRecord: Codable, FetchableRecord, PersistableRecord {
         kind = item.kind.rawValue
         title = item.title
         sourceRef = item.sourceRef
+        source = item.source?.rawValue
         createdAt = item.createdAt.timeIntervalSince1970
     }
 }

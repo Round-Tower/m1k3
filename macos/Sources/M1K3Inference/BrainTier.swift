@@ -10,7 +10,7 @@
 //  selection gate + persistence are `swift test`-able; AppEnvironment maps
 //  `.backing` to a concrete provider.
 //
-//  Model mapping (2026-06-10, mlx-swift-lm 3.31.3): Lil = Qwen3.5-2B,
+//  Model mapping (2026-06-13, mlx-swift-lm 3.31.3): Lil = Qwen3.5-4B,
 //  Big = Gemma-4-E4B (the gemma-3n-E4B successor). Huge = Qwen3.5-9B — the
 //  intended gemma-4-12B uses a `gemma4_unified` arch that 3.31.3 cannot load
 //  (probe-verified, Gate B); swap the id once upstream registers it.
@@ -19,6 +19,10 @@
 //  Review: Kev + claude-fable-5, 2026-06-10 — Gemma 4 era: four tiers, new
 //  RAM thresholds (Big is ~7GB at inference now → recommended floor 24GB),
 //  Huge selectable at 32GB+, recommended at 48GB+.
+//  Review: Kev + claude-opus-4-8, 2026-06-13 — Lil 2B → 4B. The 2B-4bit was
+//  below the floor for grounded generation + tool use (ignored good sources,
+//  confabulated on an empty gate); 4B is the same Qwen3.5 family so tool-call
+//  format (xmlFunction) + pre-open-think resolve unchanged. ~3GB, still fits 16GB.
 
 import Foundation
 
@@ -93,7 +97,7 @@ public enum BrainTier: String, CaseIterable, Identifiable, Sendable {
     public var backing: BrainBacking {
         switch self {
         case .mini: .appleFoundationModels
-        case .lil: .mlx(modelID: "mlx-community/Qwen3.5-2B-4bit")
+        case .lil: .mlx(modelID: "mlx-community/Qwen3.5-4B-4bit")
         case .big: .mlx(modelID: "mlx-community/gemma-4-e4b-it-4bit")
         // Gate B fallback — gemma-4-12B-it-4bit once mlx-swift-lm registers
         // its `gemma4_unified` arch (unloadable at 3.31.3).
@@ -113,7 +117,7 @@ public enum BrainTier: String, CaseIterable, Identifiable, Sendable {
     public var approxDownloadMB: Int? {
         switch self {
         case .mini: nil
-        case .lil: 1750
+        case .lil: 2900
         case .big: 5250
         case .huge: 5970
         }

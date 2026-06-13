@@ -21,6 +21,22 @@ public enum ThinkingMode: String, CaseIterable, Sendable {
     case fast
 }
 
+/// Voice mode's own brain switch. While the spoken loop is active the in-mode
+/// toggle REPLACES the Settings preference — latency is the UX there, so off
+/// (the default) forces fast even over an explicit Always, and on yields auto
+/// so the per-turn heuristics still skip the think phase on small talk.
+/// Outside voice mode the toggle is inert and the stored setting governs.
+public enum VoiceThinkingPolicy {
+    public static func effectiveMode(
+        stored: ThinkingMode,
+        voiceModeActive: Bool,
+        voiceThinkingEnabled: Bool
+    ) -> ThinkingMode {
+        guard voiceModeActive else { return stored }
+        return voiceThinkingEnabled ? .auto : .fast
+    }
+}
+
 enum ThinkingPolicy {
     /// Words at or above which a question earns the think phase regardless
     /// of other signals.

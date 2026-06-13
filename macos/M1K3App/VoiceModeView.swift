@@ -21,10 +21,16 @@ import SwiftUI
 
 struct VoiceModeView: View {
     @Environment(AppEnvironment.self) private var env
+    /// Persisted voice-mode avatar: "" (default) = the pixel face, else a companion id.
+    @AppStorage(AppEnvironment.voiceCompanionKey) private var voiceCompanion = ""
+    /// Voice mode's own brain switch — replaces the Settings Reasoning picker
+    /// while the loop is active. Off (default) = fast replies; flips apply
+    /// from the next turn (the provider reads it per turn).
+    @AppStorage(AppEnvironment.voiceModeThinkingKey) private var voiceThinking = false
 
     var body: some View {
         VStack(spacing: 12) {
-            AvatarView(controller: env.avatar)
+            avatar
                 .frame(maxWidth: 420, maxHeight: 260)
                 .padding(.top, 12)
 
@@ -48,6 +54,20 @@ struct VoiceModeView: View {
         }
         .onChange(of: env.chat.messages.last?.text) {
             bumpToGeneratingIfStreaming()
+        }
+    }
+
+    // MARK: - Avatar (pixel face by default; opt-in companion)
+
+    /// The voice-mode hero: the pixel face unless the user opted into a companion
+    /// that's actually installed. An unknown or uninstalled id falls back to the
+    /// pixel face, so a stale setting can never blank the hero.
+    @ViewBuilder
+    private var avatar: some View {
+        if let companion = CompanionSpec.named(voiceCompanion), CompanionAssets.isInstalled(companion) {
+            CompanionAvatarView(controller: env.avatar, companion: companion)
+        } else {
+            AvatarView(controller: env.avatar)
         }
     }
 
@@ -123,6 +143,24 @@ struct VoiceModeView: View {
             .tint(isListening ? .red : nil)
             .help(isListening ? "Stop listening" : "Start listening")
             .accessibilityLabel(isListening ? "Mute microphone" : "Start listening")
+
+            Button {
+                voiceThinking.toggle()
+            } label: {
+                Image(systemName: "brain")
+                    .imageScale(.large)
+                    .fontWeight(.semibold)
+                    .frame(width: 24, height: 24)
+            }
+            .buttonStyle(.glass)
+            .buttonBorderShape(.circle)
+            .tint(voiceThinking ? .purple : nil)
+            .help(voiceThinking
+                ? "Thinking on — deeper answers, slower. Applies next turn"
+                : "Thinking off — fast replies. Applies next turn")
+            .accessibilityLabel("Thinking")
+            .accessibilityValue(voiceThinking ? "On" : "Off")
+            .accessibilityAddTraits(.isToggle)
 
             Button {
                 env.exitVoiceMode()

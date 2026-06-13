@@ -67,6 +67,45 @@ struct KnowledgeMCPToolsTests {
         #expect(try tools.getDocument(idString: UUID().uuidString).contains("No document found"))
     }
 
+    @Test("get_document on a title-only item explains the empty body instead of a bare header")
+    func getEmptyBody() async throws {
+        let store = try await seededStore()
+        // A chunkless item — how McCulloch-Pitts got in: indexed, listed, no
+        // extractable text (test-report F3).
+        let item = KnowledgeItem(kind: .document, title: "Title Only Doc")
+        try store.index(item: item, chunks: [])
+        let tools = KnowledgeMCPTools(store: store)
+        let out = try tools.getDocument(idString: item.id.uuidString)
+        #expect(out.contains("# Title Only Doc"))
+        #expect(out.lowercased().contains("title only"))
+        #expect(out.lowercased().contains("no readable text"))
+    }
+
+    @Test("get_document caps long output and points at the resume offset")
+    func getPaged() async throws {
+        let store = try await seededStore()
+        // Body (chunk content) is 1000 chars: 500 A's then 500 B's. Offsets are
+        // into the body, not the rendered header.
+        let big = String(repeating: "A", count: 500) + String(repeating: "B", count: 500)
+        let item = KnowledgeItem(kind: .document, title: "Big Doc")
+        let chunk = KnowledgeChunk(itemID: item.id, ordinal: 0, heading: nil, content: big)
+        try store.index(item: item, chunks: [chunk])
+        let tools = KnowledgeMCPTools(store: store)
+
+        // First page: first 400 chars (all A's), with a resume footer at offset 400.
+        let page1 = try tools.getDocument(idString: item.id.uuidString, maxChars: 400)
+        #expect(page1.contains("# Big Doc"))
+        #expect(page1.contains("600 more characters"))
+        #expect(page1.contains("offset:400"))
+        #expect(!page1.contains("BBBBB")) // the B tail hasn't been reached yet
+
+        // Resuming at offset 400 reaches the B tail and ends cleanly.
+        let page2 = try tools.getDocument(idString: item.id.uuidString, maxChars: 600, offset: 400)
+        #expect(page2.contains("BBBBB"))
+        #expect(page2.contains("end of document"))
+        #expect(!page2.contains("more characters"))
+    }
+
     @Test("resolveStorePath honours the env override")
     func storePathOverride() {
         let path = resolveStorePath(environment: ["M1K3_STORE_PATH": "/tmp/custom.sqlite"])

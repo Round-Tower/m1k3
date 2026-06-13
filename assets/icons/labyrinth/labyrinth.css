@@ -1,0 +1,143 @@
+/* ============================================================
+   M1K3 Labyrinth — 間 (Ma) animation module
+   ------------------------------------------------------------
+   The labyrinth is implied, not enumerated. The space between
+   the strokes is part of the mark; animations never crowd it.
+
+   Custom properties (set on :root or any ancestor):
+     --m1k3-color:     stroke colour          (default currentColor)
+     --m1k3-duration:  base animation speed  (default 3.2s)
+     --m1k3-ease:      timing function       (default cubic-bezier(.4,0,.2,1))
+   ============================================================ */
+
+.m1k3-labyrinth {
+  --m1k3-color:    currentColor;
+  --m1k3-duration: 3.2s;
+  --m1k3-ease:     cubic-bezier(.4, 0, .2, 1);
+
+  color: var(--m1k3-color);
+  display: inline-block;
+  overflow: visible;
+}
+
+.m1k3-labyrinth .m1k3-wall,
+.m1k3-labyrinth .m1k3-core {
+  transform-origin: center;
+  transform-box: view-box;
+  will-change: transform, stroke-dashoffset, stroke-opacity;
+}
+
+/* ---------- draw-in ---------- */
+.m1k3-labyrinth.is-drawing .m1k3-wall {
+  stroke-dasharray: 2000;
+  stroke-dashoffset: 2000;
+  animation: m1k3-draw 1.6s var(--m1k3-ease) forwards;
+}
+.m1k3-labyrinth.is-drawing .m1k3-wall-0 { animation-delay: 0.00s; }
+.m1k3-labyrinth.is-drawing .m1k3-wall-1 { animation-delay: 0.12s; }
+.m1k3-labyrinth.is-drawing .m1k3-wall-2 { animation-delay: 0.24s; }
+.m1k3-labyrinth.is-drawing .m1k3-wall-3 { animation-delay: 0.36s; }
+.m1k3-labyrinth.is-drawing .m1k3-wall-4 { animation-delay: 0.48s; }
+.m1k3-labyrinth.is-drawing .m1k3-wall-5 { animation-delay: 0.60s; }
+.m1k3-labyrinth.is-drawing .m1k3-core {
+  transform: scale(0);
+  opacity: 0;
+  animation: m1k3-core-in 0.6s var(--m1k3-ease) 1.0s forwards;
+}
+
+@keyframes m1k3-draw  { to { stroke-dashoffset: 0; } }
+@keyframes m1k3-core-in {
+  0%   { transform: scale(0); opacity: 0; }
+  70%  { transform: scale(1.15); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+/* ---------- idle — a single slow breath ---------- */
+.m1k3-labyrinth.is-idle > g {
+  animation: m1k3-breathe calc(var(--m1k3-duration) * 2)
+             var(--m1k3-ease) infinite;
+  transform-origin: center; transform-box: view-box;
+}
+@keyframes m1k3-breathe {
+  0%, 100% { transform: scale(1);     opacity: 0.92; }
+  50%      { transform: scale(1.012); opacity: 1;    }
+}
+
+/* ---------- thinking — rings drift in opposite directions ---------- */
+.m1k3-labyrinth.is-thinking .m1k3-wall {
+  animation: m1k3-spin var(--m1k3-duration) linear infinite;
+}
+.m1k3-labyrinth.is-thinking .m1k3-wall-0 { animation-duration: 24s; }
+.m1k3-labyrinth.is-thinking .m1k3-wall-1 { animation-duration: 16s; animation-direction: reverse; }
+.m1k3-labyrinth.is-thinking .m1k3-wall-2 { animation-duration: 11s; }
+.m1k3-labyrinth.is-thinking .m1k3-wall-3 { animation-duration:  8s; animation-direction: reverse; }
+.m1k3-labyrinth.is-thinking .m1k3-wall-4 { animation-duration:  6s; }
+.m1k3-labyrinth.is-thinking .m1k3-wall-5 { animation-duration:  4.5s; animation-direction: reverse; }
+.m1k3-labyrinth.is-thinking .m1k3-core {
+  animation: m1k3-core-pulse 1.8s var(--m1k3-ease) infinite;
+}
+@keyframes m1k3-spin { to { transform: rotate(360deg); } }
+@keyframes m1k3-core-pulse {
+  0%, 100% { opacity: 0.6; transform: scale(0.95); }
+  50%      { opacity: 1;   transform: scale(1.1);  }
+}
+
+/* ---------- listening — outer ring softly expands ---------- */
+.m1k3-labyrinth.is-listening .m1k3-wall-0 {
+  animation: m1k3-listen 2.8s var(--m1k3-ease) infinite;
+}
+.m1k3-labyrinth.is-listening .m1k3-core {
+  animation: m1k3-core-pulse 2.0s var(--m1k3-ease) infinite;
+}
+@keyframes m1k3-listen {
+  0%, 100% { stroke-opacity: 0.55; transform: scale(1); }
+  50%      { stroke-opacity: 1;    transform: scale(1.025); }
+}
+
+/* ---------- speaking — ripple travels centre → out ---------- */
+.m1k3-labyrinth.is-speaking .m1k3-wall {
+  animation: m1k3-ripple 1.6s var(--m1k3-ease) infinite;
+}
+.m1k3-labyrinth.is-speaking .m1k3-wall-5 { animation-delay: 0.00s; }
+.m1k3-labyrinth.is-speaking .m1k3-wall-4 { animation-delay: 0.10s; }
+.m1k3-labyrinth.is-speaking .m1k3-wall-3 { animation-delay: 0.20s; }
+.m1k3-labyrinth.is-speaking .m1k3-wall-2 { animation-delay: 0.30s; }
+.m1k3-labyrinth.is-speaking .m1k3-wall-1 { animation-delay: 0.40s; }
+.m1k3-labyrinth.is-speaking .m1k3-wall-0 { animation-delay: 0.50s; }
+.m1k3-labyrinth.is-speaking .m1k3-core {
+  animation: m1k3-core-pulse 0.6s var(--m1k3-ease) infinite;
+}
+@keyframes m1k3-ripple {
+  0%, 70%, 100% { stroke-opacity: 0.4; }
+  15%           { stroke-opacity: 1; }
+}
+
+/* ---------- error — shake + red ---------- */
+.m1k3-labyrinth.is-error {
+  --m1k3-color: #ff5a5a;
+  animation: m1k3-shake 0.4s var(--m1k3-ease) 2;
+}
+@keyframes m1k3-shake {
+  0%, 100% { transform: translateX(0); }
+  25%      { transform: translateX(-3px) rotate(-1deg); }
+  75%      { transform: translateX( 3px) rotate( 1deg); }
+}
+
+/* ---------- emotion palettes ---------- */
+.m1k3-emotion-neutral { --m1k3-color: #e8eaf0; }
+.m1k3-emotion-calm    { --m1k3-color: #7cc4ff; }
+.m1k3-emotion-focus   { --m1k3-color: #a78bfa; }
+.m1k3-emotion-happy   { --m1k3-color: #ffd166; }
+.m1k3-emotion-warm    { --m1k3-color: #ff9f7c; }
+.m1k3-emotion-curious { --m1k3-color: #7ce0b6; }
+.m1k3-emotion-sad     { --m1k3-color: #708aa3; }
+
+/* ---------- reduced motion ---------- */
+@media (prefers-reduced-motion: reduce) {
+  .m1k3-labyrinth * {
+    animation: none !important;
+    transition: none !important;
+  }
+  .m1k3-labyrinth.is-drawing .m1k3-wall { stroke-dashoffset: 0; }
+  .m1k3-labyrinth.is-drawing .m1k3-core { transform: scale(1); opacity: 1; }
+}

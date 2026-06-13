@@ -32,6 +32,9 @@ let package = Package(
         .library(name: "M1K3Calls", targets: ["M1K3Calls"]),
         .library(name: "M1K3Avatar", targets: ["M1K3Avatar"]),
         .library(name: "M1K3Kokoro", targets: ["M1K3Kokoro"]),
+        // Exported for the app's in-process MCP host (the stdio executable
+        // reaches the target directly; the app needs the product).
+        .library(name: "M1K3MCPKit", targets: ["M1K3MCPKit"]),
     ],
     dependencies: [
         .package(url: "https://github.com/groue/GRDB.swift.git", from: "7.0.0"),
@@ -134,7 +137,12 @@ let package = Package(
         // M1K3Agent for the always-on tool-calling responder (AgentRAGResponder).
         .target(
             name: "M1K3Chat",
-            dependencies: ["M1K3Knowledge", "M1K3Inference", "M1K3Agent"],
+            dependencies: [
+                "M1K3Knowledge", "M1K3Inference", "M1K3Agent",
+                // Multi-conversation chat history (GRDBChatHistoryStore) —
+                // M1K3Knowledge already links GRDB, so zero new build weight.
+                .product(name: "GRDB", package: "GRDB.swift"),
+            ],
             path: "Sources/M1K3Chat"
         ),
         .testTarget(
@@ -252,7 +260,11 @@ let package = Package(
         // RealityKit/SwiftUI are system frameworks — no third-party dep.
         .target(
             name: "M1K3Avatar",
-            path: "Sources/M1K3Avatar"
+            path: "Sources/M1K3Avatar",
+            // Per-clip companion USDZs (Fox v1; more are a folder + spec). Copied
+            // verbatim — RealityKit loads them via Bundle.module at the app layer.
+            // SoundEffects: short UI earcons (AVAudioPlayer via Bundle.module).
+            resources: [.copy("Companions"), .copy("SoundEffects")]
         ),
         .testTarget(
             name: "M1K3AvatarTests",

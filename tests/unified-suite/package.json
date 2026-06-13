@@ -78,6 +78,7 @@
     "performance",
     "reporting"
   ],
-  "author": "M1K3 Team",
-  "license": "MIT"
+  "author": "Kevin Murphy",
+  "private": true,
+  "license": "SEE LICENSE IN LICENSE"
 }

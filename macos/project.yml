@@ -25,7 +25,16 @@ settings:
     SWIFT_VERSION: "6.2"
     MARKETING_VERSION: "0.1.0"
     CURRENT_PROJECT_VERSION: "1"
-    DEVELOPMENT_TEAM: ""
+    # A STABLE signing identity is load-bearing, not cosmetic: macOS keys both the
+    # Keychain ACL and TCC (microphone / Speech) grants to the app's code-signing
+    # identity. An empty team here makes every `xcodegen generate` fall back to bare
+    # ad-hoc linker-signing, whose cdhash changes each build — so the app looks
+    # brand-new every launch: the Keychain re-prompts for the password and Speech
+    # authorization silently fails (transcripts capture nothing). Pinning the Round
+    # Tower team gives one consistent identity → grants persist, entitlements +
+    # sandbox actually apply.
+    # Signed: Kev + claude-opus-4-8, 2026-06-12, Confidence 0.9, Prior: Unknown
+    DEVELOPMENT_TEAM: "76DJH43A4P"
     CODE_SIGN_STYLE: Automatic
 
 packages:
@@ -69,6 +78,8 @@ targets:
         product: M1K3Avatar
       - package: M1K3
         product: M1K3Kokoro
+      - package: M1K3
+        product: M1K3MCPKit
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: dev.murphysig.M1K3

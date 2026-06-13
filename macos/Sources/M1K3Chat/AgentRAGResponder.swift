@@ -18,6 +18,14 @@
 //  Context: tools are injected by the app layer (M1K3Chat does not link
 //  M1K3AgentTools); web_search is only in the list when the user's setting
 //  allows it.
+//  Review: Kev + claude-fable-5, 2026-06-12, Confidence 0.85 — RULES line in
+//  both styles routing self-questions (configuration/design/abilities) to the
+//  persona instead of document search; the soft fix for meta-question
+//  confabulation, taken over a pre-generation router (brittle both ways).
+//  Review: Kev + claude-opus-4-8, 2026-06-13, Confidence 0.9 — retrieval now
+//  uses store.searchGrounding (two-lane doc+memory budgets, memoryTopK) so the
+//  document corpus can't crowd memory recall out of a single top-K. Fixes the
+//  live open-chat miss (M1K3 forgot the user's own city). verify-at-⌘R.
 
 import Foundation
 import M1K3Agent
@@ -36,6 +44,9 @@ public struct AgentRAGResponder: RAGResponding, Sendable {
     /// visible to the model.
     private let toolsProvider: @Sendable () -> [any AgentTool]
     private let topK: Int
+    /// Memories get their OWN retrieval budget (see `KnowledgeStore.searchGrounding`)
+    /// so document volume can't crowd them out of recall.
+    private let memoryTopK: Int
     private let maxIterations: Int
     /// Hits the model retrieved itself via search_knowledge — drained after
     /// the stream and merged into the turn's sources (see `collectedSources`).
@@ -50,6 +61,7 @@ public struct AgentRAGResponder: RAGResponding, Sendable {
         provider: any InferenceProvider,
         toolsProvider: @escaping @Sendable () -> [any AgentTool],
         topK: Int = 5,
+        memoryTopK: Int = 5,
         maxIterations: Int = 3,
         sourceCollector: ToolSourceCollector? = nil,
         thinkingModeProvider: @escaping @Sendable () -> ThinkingMode = { .auto }
@@ -59,6 +71,7 @@ public struct AgentRAGResponder: RAGResponding, Sendable {
         self.provider = provider
         self.toolsProvider = toolsProvider
         self.topK = topK
+        self.memoryTopK = memoryTopK
         self.maxIterations = maxIterations
         self.sourceCollector = sourceCollector
         self.thinkingModeProvider = thinkingModeProvider
@@ -104,13 +117,21 @@ public struct AgentRAGResponder: RAGResponding, Sendable {
         // Stale tool hits from an aborted prior turn must not leak in.
         _ = sourceCollector?.drain()
         let queryVector = try await embedder.embed(question)
-        let retrieved = try store.searchHybrid(query: question, queryVector: queryVector, limit: topK)
-        // Gate on relevance: top-K ALWAYS returns something, even for "what
+        // Two-lane retrieval: documents and memories get SEPARATE top-K budgets
+        // so the larger document corpus can't crowd short memory facts out of a
+        // single ranking (the open-chat recall miss — M1K3 forgot the user's
+        // own city when the query leaned even slightly documentary).
+        let retrieved = try store.searchGrounding(
+            query: question, queryVector: queryVector,
+            documentLimit: topK, memoryLimit: memoryTopK
+        )
+        // Gate on relevance: each lane ALWAYS returns something, even for "what
         // model are you?" — weak hits pollute the prompt and derail small
         // models. Below threshold nothing is injected; the model can still
-        // retrieve on its own terms via search_knowledge.
-        let chunks = GroundingGate.filter(retrieved)
-        Self.logGateDecision(retrieved: retrieved, kept: chunks)
+        // retrieve on its own terms via search_knowledge. Memory hits clear
+        // their own (lower) bar and feed a separate uncited prompt block.
+        let (chunks, memories) = GroundingGate.partition(retrieved)
+        Self.logGateDecision(retrieved: retrieved, kept: chunks + memories)
         // Resolve the tool list once per turn; the routing rules must match
         // what's actually callable (no advertising a disabled web_search).
         let tools = toolsProvider()
@@ -120,6 +141,7 @@ public struct AgentRAGResponder: RAGResponding, Sendable {
                 await runAgentTurn(
                     question: question,
                     chunks: chunks,
+                    memories: memories,
                     history: history,
                     tools: tools,
                     onActivity: onActivity,
@@ -132,7 +154,8 @@ public struct AgentRAGResponder: RAGResponding, Sendable {
             // iteration cap. Terminating the stream cancels the turn.
             continuation.onTermination = { _ in turnTask.cancel() }
         }
-        return (chunks, stream)
+        // Memory hits ride along as sources so the UI shows their provenance.
+        return (chunks + memories, stream)
     }
 
     /// One full agent turn into `continuation`: run the loop (conclusion tail
@@ -141,6 +164,7 @@ public struct AgentRAGResponder: RAGResponding, Sendable {
     private func runAgentTurn(
         question: String,
         chunks: [ChunkHit],
+        memories: [ChunkHit],
         history: [ChatTurn],
         tools: [any AgentTool],
         onActivity: @escaping @Sendable (ResponderActivity) -> Void,
@@ -151,7 +175,8 @@ public struct AgentRAGResponder: RAGResponding, Sendable {
         let style: Self.PromptStyle =
             (provider as? ToolCallingProvider)?.supportsToolCalls == true ? .native : .react
         let grounding = Self.grounding(
-            chunks: chunks, toolNames: Set(tools.map(\.name)), history: history, style: style
+            chunks: chunks, memories: memories, toolNames: Set(tools.map(\.name)),
+            history: history, style: style
         )
         Self.logTurnStart(chunks: chunks, tools: tools, grounding: grounding)
         // Fresh agent per turn — its reasoning trace must not bleed across
@@ -352,16 +377,28 @@ public struct AgentRAGResponder: RAGResponding, Sendable {
     /// callable — never advertise a disabled web_search (and never imply
     /// search_knowledge can reach the live world; the ⌘R weather bug).
     static func grounding(
-        chunks: [ChunkHit], toolNames: Set<String>, history: [ChatTurn] = [],
-        style: PromptStyle = .react
+        chunks: [ChunkHit], memories: [ChunkHit] = [], toolNames: Set<String>,
+        history: [ChatTurn] = [], style: PromptStyle = .react
     ) -> String {
-        let body = groundingBody(chunks: chunks, toolNames: toolNames, style: style)
+        let body = groundingBody(
+            chunks: chunks, memories: memories, toolNames: toolNames, style: style
+        )
         guard let replay = HistoryWindow.render(history) else { return body }
         return "\(replay)\n\n\(body)"
     }
 
+    /// The uncited personal-facts block: memories aren't sources to cite,
+    /// they're things M1K3 simply knows about the user. Sits between
+    /// KNOWLEDGE and RULES; absent when no memory cleared the gate.
+    private static func memoryBlock(_ memories: [ChunkHit]) -> String? {
+        guard !memories.isEmpty else { return nil }
+        let facts = memories.map { "- \($0.content)" }.joined(separator: "\n")
+        return "WHAT I KNOW ABOUT YOU (remembered from past conversations — "
+            + "use naturally, do not cite):\n\(facts)"
+    }
+
     private static func groundingBody(
-        chunks: [ChunkHit], toolNames: Set<String>, style: PromptStyle
+        chunks: [ChunkHit], memories: [ChunkHit], toolNames: Set<String>, style: PromptStyle
     ) -> String {
         let hasWebSearch = toolNames.contains("web_search")
         var routing = hasWebSearch
@@ -384,7 +421,11 @@ public struct AgentRAGResponder: RAGResponding, Sendable {
             starting with "CONCLUSION:" — do not use tools.
             - Cite knowledge sources inline with citation tokens like \
             [Title §heading]; never invent citations.
+            - Never present a fact, figure, or date you can't ground or verify \
+            as certain; if you're unsure, say so plainly. Honesty beats a confident guess.
             - Use at most two tool calls, never repeating one with the same argument.
+            - Questions about yourself — your configuration, design, or abilities — \
+            are answered from your persona; never search stored documents for them.
             \(routing)
             """
         case .native:
@@ -395,23 +436,32 @@ public struct AgentRAGResponder: RAGResponding, Sendable {
             - If the KNOWLEDGE above answers the question, answer from it directly.
             - Cite knowledge sources inline with citation tokens like \
             [Title §heading]; never invent citations.
+            - Never present a fact, figure, or date you can't ground or verify \
+            as certain; if you're unsure, say so plainly. Honesty beats a confident guess.
             - Never repeat a tool call with the same argument.
+            - Questions about yourself — your configuration, design, or abilities — \
+            are answered from your persona; never search stored documents for them.
             \(routing)
             """
         }
-        guard !chunks.isEmpty else {
-            let hint = toolNames.contains("search_knowledge")
+        let head: String
+        if chunks.isEmpty {
+            head = toolNames.contains("search_knowledge")
                 ? "No stored knowledge was injected — the user's documents are "
                 + "NOT in this context. If the question could concern their "
                 + "stored documents, calls, or notes, call search_knowledge; "
-                + "otherwise answer directly."
+                + "otherwise answer from what you genuinely know — and if you "
+                + "don't, say so plainly rather than guessing."
                 : "No stored knowledge matched this question."
-            return "\(hint)\n\n\(rules)"
+        } else {
+            let knowledge = chunks.enumerated().map { index, hit in
+                "\(index + 1). \(ChatPromptBuilder.citationLabel(for: hit))\n\(hit.content)"
+            }.joined(separator: "\n\n")
+            head = "KNOWLEDGE (the user's own documents, calls, notes):\n\(knowledge)"
         }
-        let knowledge = chunks.enumerated().map { index, hit in
-            "\(index + 1). \(ChatPromptBuilder.citationLabel(for: hit))\n\(hit.content)"
-        }.joined(separator: "\n\n")
-        return "KNOWLEDGE (the user's own documents, calls, notes):\n\(knowledge)\n\n\(rules)"
+        return [head, memoryBlock(memories), rules]
+            .compactMap { $0 }
+            .joined(separator: "\n\n")
     }
 
     /// Deterministic provenance for web answers — extracted from the trace,

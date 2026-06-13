@@ -45,6 +45,9 @@ public final class WhisperKitProvider: TranscriptionProvider, @unchecked Sendabl
     /// reads.
     private let loader: SingleFlightLoader<LoadedWhisperKit>
 
+    private let model: String
+    private let downloadBase: URL?
+
     /// - Parameter model: WhisperKit variant. `base.en` balances size (~142MB)
     ///   and accuracy; `tiny.en` (~75MB) downloads faster, `small.en` is sharper.
     /// - Parameter downloadBase: Root URL for model storage. Pass the app's
@@ -52,12 +55,27 @@ public final class WhisperKitProvider: TranscriptionProvider, @unchecked Sendabl
     ///   rather than the HuggingFace cache default (which can produce broken partial
     ///   downloads in sandboxed apps).
     public init(model: String = "base.en", downloadBase: URL? = nil) {
+        self.model = model
+        self.downloadBase = downloadBase
         loader = SingleFlightLoader { progress in
             progress(0.05)
             let config = WhisperKitConfig(model: model, verbose: false, prewarm: true, load: true)
             config.downloadBase = downloadBase
             return try LoadedWhisperKit(kit: await WhisperKit(config))
         }
+    }
+
+    /// Whether the model's CoreML bundle is already on disk — the guard for
+    /// auto-loading on launch WITHOUT risking a silent ~142MB re-download (mirrors
+    /// Kokoro's `isModelStaged`). WhisperKit lays weights down at
+    /// `<base>/models/argmaxinc/whisperkit-coreml/openai_whisper-<variant>/`; the
+    /// AudioEncoder bundle's presence is the "complete, not half-fetched" signal.
+    public var isModelDownloaded: Bool {
+        guard let downloadBase else { return false }
+        let bundle = downloadBase
+            .appendingPathComponent("models/argmaxinc/whisperkit-coreml/openai_whisper-\(model)")
+            .appendingPathComponent("AudioEncoder.mlmodelc")
+        return FileManager.default.fileExists(atPath: bundle.path)
     }
 
     /// Available only on Apple Silicon once a model has been loaded. Until then
@@ -94,9 +112,11 @@ public final class WhisperKitProvider: TranscriptionProvider, @unchecked Sendabl
             }
 
             // Yield cumulative text whenever WhisperKit's running transcription grows.
+            // Strip WhisperKit's `<|…|>` control/timestamp tokens — the batch path
+            // always did; the live path was leaking them straight into the UI.
             let onState: AudioStreamTranscriberCallback = { [weak self] _, newState in
                 guard let self else { return }
-                let text = newState.currentText.trimmingCharacters(in: .whitespacesAndNewlines)
+                let text = WhisperTranscriptText.stripSpecialTokens(newState.currentText)
                 guard !text.isEmpty, text != "Waiting for speech..." else { return }
                 self.lock.withLock { self.lastText = text }
                 continuation.yield(TranscriptSegment(text: text, isFinal: false))
@@ -109,7 +129,9 @@ public final class WhisperKitProvider: TranscriptionProvider, @unchecked Sendabl
                 textDecoder: kit.textDecoder,
                 tokenizer: tokenizer,
                 audioProcessor: kit.audioProcessor,
-                decodingOptions: DecodingOptions(),
+                // skipSpecialTokens defaults to false → tokens in the text; turn it on
+                // (the stripper above is the belt-and-braces backstop).
+                decodingOptions: DecodingOptions(skipSpecialTokens: true),
                 stateChangeCallback: onState
             )
             lock.withLock { self.streamer = streamer }

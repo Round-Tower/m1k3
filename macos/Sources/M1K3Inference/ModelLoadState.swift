@@ -23,6 +23,10 @@ import Foundation
 public enum ModelLoadState: Sendable, Equatable {
     case idle
     case downloading(fraction: Double)
+    /// On disk but still loading, with no honest fraction to show — e.g. WhisperKit
+    /// compiling its CoreML models. Renders an indeterminate spinner, never a stuck
+    /// bar, and is NOT labelled "downloading" (which read as a phantom re-download).
+    case preparing
     case ready
     case failed(message: String)
 
@@ -38,10 +42,13 @@ public enum ModelLoadState: Sendable, Equatable {
         return nil
     }
 
-    /// True only while a download is in flight — the cue to show the progress row.
+    /// True while a load is in flight (downloading or preparing) — the cue to show
+    /// the progress row.
     public var isActive: Bool {
-        if case .downloading = self { return true }
-        return false
+        switch self {
+        case .downloading, .preparing: true
+        case .idle, .ready, .failed: false
+        }
     }
 
     /// A plain, audio-friendly status line for the UI. `modelName` is the
@@ -52,6 +59,8 @@ public enum ModelLoadState: Sendable, Equatable {
             return ""
         case let .downloading(fraction):
             return "Downloading \(modelName)… \(percent(fraction))%"
+        case .preparing:
+            return "Preparing \(modelName)…"
         case .ready:
             return "\(modelName) ready"
         case let .failed(message):

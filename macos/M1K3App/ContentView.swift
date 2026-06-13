@@ -21,7 +21,9 @@ struct ContentView: View {
 
     @State private var draft = ""
     @State private var showDocuments = false
+    @State private var showMemories = false
     @State private var showCalls = false
+    @State private var showHistory = false
     @State private var showImporter = false
     @State private var showConsentDialog = false
     @State private var isDropTargeted = false
@@ -44,13 +46,14 @@ struct ContentView: View {
         .animation(.easeInOut(duration: 0.3), value: env.isVoiceModeActive)
         .frame(minWidth: 600, minHeight: 520)
         .background {
-            // Ambient drifting orbs while capturing audio (recording / dictation),
-            // fading in over the glass. Sits above the window glass, behind content.
-            if isCapturingAudio {
+            // Ambient drifting orbs while capturing audio (recording / dictation)
+            // or throughout voice-first mode, fading in over the glass. Sits
+            // above the window glass, behind content.
+            if showsAmbientBackdrop {
                 AudioCaptureBackdrop().transition(.opacity)
             }
         }
-        .animation(.easeInOut(duration: 0.45), value: isCapturingAudio)
+        .animation(.easeInOut(duration: 0.45), value: showsAmbientBackdrop)
         .glassBackdrop()
         .dropDestination(for: URL.self) { urls, _ in
             for url in urls {
@@ -63,8 +66,14 @@ struct ContentView: View {
         .sheet(isPresented: $showDocuments) {
             DocumentsView().environment(env)
         }
+        .sheet(isPresented: $showMemories) {
+            MemoriesView().environment(env)
+        }
         .sheet(isPresented: $showCalls) {
             CallsView().environment(env)
+        }
+        .sheet(isPresented: $showHistory) {
+            HistoryView().environment(env)
         }
         .confirmationDialog("Record this call?", isPresented: $showConsentDialog, titleVisibility: .visible) {
             Button("Record once") { Task { await env.affirmConsentAndRecord(scope: .once) } }
@@ -198,10 +207,12 @@ struct ContentView: View {
         !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !env.chat.isResponding
     }
 
-    /// True while M1K3 is capturing audio — dictation or a call recording — the cue
-    /// for the ambient animated backdrop.
-    private var isCapturingAudio: Bool {
-        env.isListening || env.isRecording
+    /// Cue for the ambient animated backdrop: audio capture (dictation / call
+    /// recording) or the WHOLE of voice-first mode. The mode is one continuous
+    /// audio conversation — gating per phase would fade the orbs out every time
+    /// M1K3 starts speaking, which reads as the app going dead mid-sentence.
+    private var showsAmbientBackdrop: Bool {
+        env.isListening || env.isRecording || env.isVoiceModeActive
     }
 
     /// One spoken label for the toolbar status pill — the colour-coded dots carry
@@ -291,10 +302,15 @@ struct ContentView: View {
     /// The chat-surface actions — hidden while voice mode owns the window.
     private var chatToolbarItems: some View {
         Group {
-            Button { env.chat.clear() } label: {
+            Button { env.chat.startNewConversation() } label: {
                 Label("New chat", systemImage: "square.and.pencil")
             }
+            .help("Start a fresh conversation — this one stays in History")
             .disabled(env.chat.messages.isEmpty || env.chat.isResponding)
+            Button { showHistory = true } label: {
+                Label("History", systemImage: "clock.arrow.circlepath")
+            }
+            .help("Browse and switch between past conversations")
             Button {
                 withAnimation(.spring(duration: 0.35)) { showAvatar.toggle() }
             } label: {
@@ -309,6 +325,9 @@ struct ContentView: View {
             }
             Button { showDocuments = true } label: {
                 Label("Documents", systemImage: "books.vertical")
+            }
+            Button { showMemories = true } label: {
+                Label("Memories", systemImage: "brain")
             }
             Button { showCalls = true } label: {
                 Label("Calls", systemImage: "phone.bubble")

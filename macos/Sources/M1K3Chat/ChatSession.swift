@@ -160,14 +160,70 @@ public final class ChatSession {
     public private(set) var messages: [ChatMessage] = []
     public private(set) var isResponding = false
 
-    private let responder: any RAGResponding
-    private let transcript: ChatTranscriptStore?
+    /// The conversation the transcript belongs to. Rows are created LAZILY —
+    /// only `send` writes — so empty conversations never reach the store.
+    public private(set) var activeConversationID = UUID()
+    /// nil until auto-titled (UI shows "New chat").
+    public private(set) var activeTitle: String?
+    /// Bumped on every persist/title/delete — the history drawer reads this
+    /// observable counter to re-fetch summaries (the CallsView callCount trick).
+    public private(set) var historyRevision = 0
 
-    public init(responder: any RAGResponding, transcript: ChatTranscriptStore? = nil) {
+    private let responder: any RAGResponding
+    /// Internal (not private): ChatSession+Conversations.swift is a cross-file
+    /// same-module extension and needs the seams.
+    let history: (any ChatHistoryPersisting)?
+    let titler: (any ConversationTitling)?
+    /// nil = memory auto-capture not wired (feature off, tests unaffected).
+    let distillation: MemoryDistillationCoordinator?
+    /// Read fresh at every trigger — the Settings toggle applies immediately
+    /// (the thinkingModeProvider pattern).
+    let autoCaptureEnabled: @Sendable () -> Bool
+    /// Test hook — `await titlingTask?.value` makes fire-and-forget titling
+    /// deterministic in tests.
+    private(set) var titlingTask: Task<Void, Never>?
+    /// Test hook, same contract as titlingTask. Single-flight: a skipped
+    /// trigger is caught at the next exit because the watermark didn't move.
+    private(set) var distillationTask: Task<Void, Never>?
+
+    /// Launch catch-up waits this long so it never contends with the user's
+    /// first turn for the model.
+    nonisolated static let launchCatchUpDelay: Duration = .seconds(5)
+    /// A monster legacy transcript distills at most this many recent turns
+    /// (DEFAULT-0 watermarks mean old conversations distill once, in full).
+    nonisolated static let maxDistillationTurns = 40
+
+    public init(
+        responder: any RAGResponding,
+        history: (any ChatHistoryPersisting)? = nil,
+        titler: (any ConversationTitling)? = nil,
+        distillation: MemoryDistillationCoordinator? = nil,
+        autoCaptureEnabled: @escaping @Sendable () -> Bool = { true }
+    ) {
         self.responder = responder
-        self.transcript = transcript
-        if let transcript {
-            messages = transcript.load()
+        self.history = history
+        self.titler = titler
+        self.distillation = distillation
+        self.autoCaptureEnabled = autoCaptureEnabled
+        // Relaunch restores the most recent conversation — the same feel the
+        // single-transcript file gave, now one of many.
+        if let history,
+           let recent = try? history.list().first,
+           let restored = try? history.loadMessages(id: recent.id)
+        {
+            messages = restored
+            activeConversationID = recent.id
+            activeTitle = recent.title
+        }
+        // Launch catch-up: a quit-without-switching leaves undistilled turns
+        // behind; distill the restored conversation's backlog now (delayed —
+        // never racing the user's first turn). App-quit-time distillation was
+        // rejected: a fire-and-forget task racing termination loses silently.
+        if distillation != nil, !messages.isEmpty {
+            Task { [weak self] in
+                try? await Task.sleep(for: Self.launchCatchUpDelay)
+                self?.scheduleDistillationIfNeeded()
+            }
         }
     }
 
@@ -248,25 +304,93 @@ public final class ChatSession {
                 }
             }
         }
-        transcript?.save(messages)
+        persistActiveConversation()
+        scheduleTitlingIfNeeded(question: trimmed)
     }
 
-    /// Clear the transcript (and its persisted file).
-    public func clear() {
-        messages = []
-        transcript?.save([])
+    /// Save the live transcript to the active conversation's row and tell the
+    /// drawer to refresh. Lazy row creation happens here — nowhere else writes.
+    func persistActiveConversation() {
+        guard let history else { return }
+        try? history.save(id: activeConversationID, messages: messages, updatedAt: Date())
+        historyRevision += 1
+    }
+
+    /// The one mutation point ChatSession+Conversations routes through —
+    /// private(set) setters are file-scoped, so the cross-file extension
+    /// cannot (and must not) touch the stored properties directly.
+    func setActiveConversation(id: UUID, messages: [ChatMessage], title: String?) {
+        self.messages = messages
+        activeConversationID = id
+        activeTitle = title
+    }
+
+    func noteHistoryChanged() {
+        historyRevision += 1
+    }
+
+    /// Fire-and-forget auto-titling after a successful exchange of an untitled
+    /// conversation. Never blocks send; failure or garbage output just means
+    /// "retry after the next exchange". The conversation id is captured at
+    /// spawn so a title resolving after a switch/new lands on the RIGHT row.
+    private func scheduleTitlingIfNeeded(question: String) {
+        guard let history, let titler, activeTitle == nil, titlingTask == nil else { return }
+        guard let answer = messages.last, answer.role == .assistant,
+              case .complete = answer.status, !answer.text.isEmpty else { return }
+        let conversationID = activeConversationID
+        let answerText = answer.text
+        titlingTask = Task { [weak self] in
+            defer { self?.titlingTask = nil }
+            guard let raw = try? await titler.title(forUser: question, assistant: answerText),
+                  let title = TitleSanitizer.sanitize(raw) else { return }
+            try? history.setTitle(id: conversationID, title: title)
+            guard let self else { return }
+            if self.activeConversationID == conversationID {
+                self.activeTitle = title
+            }
+            self.historyRevision += 1
+        }
+    }
+
+    /// Fire-and-forget memory distillation over the transcript content the
+    /// watermark hasn't covered. Called at conversation EXIT (new/switch,
+    /// BEFORE the swap) and by the launch catch-up — never per turn, never on
+    /// delete (deletion is discard intent). The titling blueprint throughout:
+    /// id + count captured at spawn, defer cleanup, task exposed for tests.
+    /// Watermark advances ONLY on success (a throw leaves the slice for the
+    /// next trigger to retry).
+    func scheduleDistillationIfNeeded() {
+        guard let history, let distillation, autoCaptureEnabled() else { return }
+        guard distillationTask == nil, !isResponding else { return }
+        let conversationID = activeConversationID
+        let snapshotCount = messages.count
+        let watermark = (try? history.distilledWatermark(id: conversationID)) ?? 0
+        guard watermark < snapshotCount else { return }
+        let fresh = messages[min(watermark, snapshotCount)...].compactMap { message -> ChatTurn? in
+            guard case .complete = message.status, !message.text.isEmpty else { return nil }
+            return ChatTurn(role: message.role == .user ? .user : .assistant, text: message.text)
+        }
+        // At least one full new exchange — never distill a lone dangling turn.
+        guard fresh.contains(where: { $0.role == .user }),
+              fresh.contains(where: { $0.role == .assistant }) else { return }
+        let turns = Array(fresh.suffix(Self.maxDistillationTurns))
+        distillationTask = Task { [weak self] in
+            defer { self?.distillationTask = nil }
+            guard (try? await distillation.distillAndStore(turns: turns)) != nil else { return }
+            try? history.setDistilledWatermark(id: conversationID, count: snapshotCount)
+        }
     }
 
     /// Fold a streamed chunk into the accumulated answer. A chunk that extends
     /// the current text is a cumulative snapshot (replace); anything else is a
     /// delta (append). Handles both provider contracts with one rule.
-    static func fold(_ current: String, _ chunk: String) -> String {
+    nonisolated static func fold(_ current: String, _ chunk: String) -> String {
         chunk.hasPrefix(current) ? chunk : current + chunk
     }
 
     /// Injected sources + what the model retrieved itself, deduped by chunk
     /// (injection order first, so the UI's source rows stay stable).
-    static func mergeSources(_ injected: [ChunkHit], _ collected: [ChunkHit]) -> [ChunkHit] {
+    nonisolated static func mergeSources(_ injected: [ChunkHit], _ collected: [ChunkHit]) -> [ChunkHit] {
         var seen = Set<UUID>()
         return (injected + collected).filter { seen.insert($0.chunkID).inserted }
     }

@@ -7,8 +7,9 @@
 //  its idle-reset would fight the loop's avatar ownership) and reads the
 //  answer off `chat.messages.last`. The mic closure caches the provider
 //  instance it started (mirroring `dictationProvider`) so stop hits the same
-//  engine. While the mode is active, an Auto reasoning setting maps to fast
-//  replies via `voiceModeActiveKey` (consulted in thinkingModeProvider).
+//  engine. While the mode is active, the in-mode brain toggle replaces the
+//  global Reasoning setting entirely — off (default) forces fast even over an
+//  explicit Always, on yields auto (see VoiceThinkingPolicy).
 //
 //  Signed: Kev + claude-fable-5, 2026-06-11, Confidence 0.8 (adapter glue over
 //  test-pinned loop + seams; verify-at-⌘R for the full beat). Prior: Unknown.
@@ -18,8 +19,31 @@ import Foundation
 import M1K3Voice
 
 extension AppEnvironment {
-    /// Transient flag consulted by thinkingModeProvider (Auto → fast in voice mode).
+    /// Transient flag consulted by thinkingModeProvider (voice mode swaps the
+    /// global Reasoning setting for the in-mode thinking toggle).
     nonisolated static let voiceModeActiveKey = "voiceMode.active"
+
+    /// Persisted voice-mode thinking toggle (default off = fast replies).
+    /// While voice mode is active this REPLACES the Settings Reasoning picker
+    /// (see VoiceThinkingPolicy). VoiceModeView's brain button writes it.
+    nonisolated static let voiceModeThinkingKey = "voiceMode.thinking"
+
+    /// Persisted voice-mode avatar choice. Empty string (default) = the pixel face;
+    /// otherwise a CompanionSpec id (e.g. "Fox"). The picker writes it; VoiceModeView
+    /// reads it. The pixel face stays M1K3's default everywhere else.
+    nonisolated static let voiceCompanionKey = "voiceMode.companion"
+
+    /// UI earcons (error / memory-saved / voice-mode-enter) — ON by default,
+    /// switchable in Settings. Absent key reads as enabled.
+    static let soundEffectsEnabledKey = "soundEffects.enabled"
+
+    /// The persisted earcon preference (absent key = ON). Drives the lazy
+    /// `soundEffects` player's initial enabled state.
+    static var soundEffectsEnabledDefault: Bool {
+        let defaults = UserDefaults.standard
+        return defaults.object(forKey: soundEffectsEnabledKey) == nil
+            || defaults.bool(forKey: soundEffectsEnabledKey)
+    }
 
     /// One-time wiring (from init): speech lifecycle drives the avatar's speaking
     /// state, and the word-timing callbacks feed the karaoke highlight. Lives here
@@ -51,9 +75,19 @@ extension AppEnvironment {
 
     /// Speak text via the TTS provider. The onSpeakingStarted/Ended delegate
     /// callbacks drive avatar .speaking → .idle; no manual state change needed here.
+    ///
+    /// Text is sanitized for speech (URLs → hosts, citation tokens and the
+    /// Web-sources block dropped) BEFORE the providers see it, so every
+    /// downstream word timeline is built against the same string the karaoke
+    /// view displays.
     func speak(_ text: String) async {
-        speechHighlight.beginUtterance(text: text)
-        await speech.speak(text)
+        let polished = SpeechTextPolish.polish(text)
+        // A message that is ONLY a sources block polishes to empty; never hand
+        // providers "" — the voice loop waits on a speechDidEnd that would
+        // not arrive.
+        let spoken = polished.isEmpty ? text : polished
+        speechHighlight.beginUtterance(text: spoken)
+        await speech.speak(spoken)
     }
 
     func stopSpeaking() async {
@@ -80,6 +114,7 @@ extension AppEnvironment {
     func enterVoiceMode() {
         guard voiceLoop == nil, !chat.isResponding, !isListening else { return }
         UserDefaults.standard.set(true, forKey: Self.voiceModeActiveKey)
+        soundEffects.play(.voiceEnter) // M1K3 materialising
         let controller = VoiceLoopController(dependencies: makeVoiceLoopDependencies())
         voiceLoop = controller
         controller.begin()

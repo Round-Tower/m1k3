@@ -40,6 +40,24 @@ private final class ScriptedProvider: InferenceProvider, @unchecked Sendable {
     }
 }
 
+// MARK: - Scripted embedder (exact cosine control for the relevance floor)
+
+/// Maps known strings to fixed unit vectors so tests choose each hit's cosine
+/// similarity precisely; unknown strings embed to a zero vector (cosine 0).
+private struct ScriptedEmbedder: EmbeddingService {
+    let dimension = 2
+    let fingerprint = "test/scripted/1"
+    let vectors: [String: [Float]]
+
+    func embed(_ text: String) async throws -> [Float] {
+        vectors[text] ?? [0, 0]
+    }
+
+    func isAvailable() async -> Bool {
+        true
+    }
+}
+
 // MARK: - Fixture
 
 private func storeWithNotes() throws -> KnowledgeStore {
@@ -94,14 +112,20 @@ struct SearchKnowledgeToolTests {
         #expect(result.output.split(separator: "\n").count == 2)
     }
 
-    @Test("with an embedder the search is hybrid and hits reach the collector")
+    @Test("with an embedder the search is hybrid, floored, and kept hits reach the collector")
     func hybridWithCollector() async throws {
         let store = try KnowledgeStore()
-        let embedder = HashingEmbeddingService()
+        let sealContent = "The hydraulic seal on the conveyor failed under load."
+        let gloveContent = "Operators must wear gloves near the press."
+        let embedder = ScriptedEmbedder(vectors: [
+            "hydraulic seal": [1, 0],
+            sealContent: [1, 0], // cosine 1.0 — relevant
+            gloveContent: [0, 1], // cosine 0.0 — nearest-neighbour noise
+        ])
         let id = UUID()
         let chunks = [
-            KnowledgeChunk(itemID: id, ordinal: 0, heading: "3.2 Seals", content: "The hydraulic seal on the conveyor failed under load."),
-            KnowledgeChunk(itemID: id, ordinal: 1, heading: "4.1 Safety", content: "Operators must wear gloves near the press."),
+            KnowledgeChunk(itemID: id, ordinal: 0, heading: "3.2 Seals", content: sealContent),
+            KnowledgeChunk(itemID: id, ordinal: 1, heading: "4.1 Safety", content: gloveContent),
         ]
         let embeddings = try await embedder.embedBatch(chunks.map(\.content))
         try store.index(
@@ -119,9 +143,97 @@ struct SearchKnowledgeToolTests {
         let result = try await tool.execute(input: ["query": "hydraulic seal"])
 
         #expect(result.output.contains("Plant Notes"))
+        #expect(result.output.contains("§3.2 Seals"))
+        // The orthogonal chunk rode the vector top-K but fails the floor —
+        // it must not reach the model or the citation allow-list.
+        #expect(!result.output.contains("gloves"))
         let hits = collected.withLock { $0 }
-        #expect(!hits.isEmpty)
-        #expect(hits.allSatisfy { $0.itemTitle == "Plant Notes" })
+        #expect(hits.map(\.heading) == ["3.2 Seals"])
+    }
+
+    @Test("when nothing clears the floor the tool abstains instead of returning top-K garbage")
+    func irrelevantHitsAbstain() async throws {
+        let store = try KnowledgeStore()
+        let content = "The hydraulic seal on the conveyor failed under load."
+        let embedder = ScriptedEmbedder(vectors: [
+            "my configuration": [0, 1],
+            content: [1, 0], // cosine 0 vs the query — pure nearest-neighbour
+        ])
+        let id = UUID()
+        let chunks = [KnowledgeChunk(itemID: id, ordinal: 0, content: content)]
+        try store.index(
+            item: KnowledgeItem(id: id, kind: .document, title: "Plant Notes"),
+            chunks: chunks,
+            embeddings: await embedder.embedBatch(chunks.map(\.content))
+        )
+
+        let collected = Mutex<[ChunkHit]>([])
+        let tool = SearchKnowledgeTool(
+            store: store,
+            embedder: embedder,
+            onHits: { hits in collected.withLock { $0.append(contentsOf: hits) } }
+        )
+        let result = try await tool.execute(input: ["query": "my configuration"])
+
+        #expect(result.output.contains("Nothing relevant"))
+        #expect(!result.output.contains("hydraulic"))
+        #expect(collected.withLock { $0 }.isEmpty)
+    }
+
+    @Test("a memory clears its lower bar where a document at the same cosine is dropped")
+    func memoryClearsLowerBar() async throws {
+        let store = try KnowledgeStore()
+        // Unit vector at cosine ≈0.58 to [1,0]: between memoryThreshold (0.54)
+        // and chunkThreshold (0.62).
+        let band: [Float] = [0.58, 0.81461]
+        let memoryContent = "Kev's sister is called Aoife."
+        let docContent = "Quarterly throughput rose by four percent."
+        let embedder = ScriptedEmbedder(vectors: [
+            "sister name": [1, 0],
+            memoryContent: band,
+            docContent: band,
+        ])
+
+        let memoryID = UUID()
+        let memoryChunks = [KnowledgeChunk(itemID: memoryID, ordinal: 0, content: memoryContent)]
+        try store.index(
+            item: KnowledgeItem(id: memoryID, kind: .memory, title: "Kev's sister"),
+            chunks: memoryChunks,
+            embeddings: await embedder.embedBatch(memoryChunks.map(\.content))
+        )
+        let docID = UUID()
+        let docChunks = [KnowledgeChunk(itemID: docID, ordinal: 0, content: docContent)]
+        try store.index(
+            item: KnowledgeItem(id: docID, kind: .document, title: "Plant Notes"),
+            chunks: docChunks,
+            embeddings: await embedder.embedBatch(docChunks.map(\.content))
+        )
+
+        let tool = SearchKnowledgeTool(store: store, embedder: embedder)
+        let result = try await tool.execute(input: ["query": "sister name"])
+
+        #expect(result.output.contains("Aoife"))
+        #expect(!result.output.contains("throughput"))
+    }
+
+    @Test("an FTS-only hit (no vector score) does not survive the hybrid floor")
+    func ftsOnlyDroppedInHybrid() async throws {
+        let store = try KnowledgeStore()
+        let id = UUID()
+        let chunks = [KnowledgeChunk(itemID: id, ordinal: 0, content: "hydraulic seal failed")]
+        // Indexed WITHOUT embeddings: any hit is keyword-only, never vector-scored.
+        try store.index(
+            item: KnowledgeItem(id: id, kind: .document, title: "Plant Notes"),
+            chunks: chunks,
+            embeddings: nil
+        )
+
+        let tool = SearchKnowledgeTool(
+            store: store,
+            embedder: ScriptedEmbedder(vectors: ["hydraulic": [1, 0]])
+        )
+        let result = try await tool.execute(input: ["query": "hydraulic"])
+        #expect(result.output.contains("Nothing relevant"))
     }
 
     @Test("a no-result search reports nothing to the collector")

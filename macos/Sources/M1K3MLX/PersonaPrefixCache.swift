@@ -34,10 +34,15 @@ struct PersonaCacheKey: Hashable {
     }
 }
 
-/// One cached prefix + its token length (for prefill-savings logging).
+/// One cached prefix + its token ids (for prefill-savings logging AND
+/// cross-turn reuse: a seeded MLXToolTurnSession needs the exact token
+/// sequence the cache holds to compute a valid common-prefix reuse).
 struct PersonaPrefixSnapshot {
     let cache: [KVCache]
-    let tokenCount: Int
+    let tokenIDs: [Int]
+    var tokenCount: Int {
+        tokenIDs.count
+    }
 }
 
 /// `@unchecked Sendable`: a single NSLock guards the slot; the retained
@@ -53,7 +58,7 @@ final class PersonaPrefixCache: @unchecked Sendable {
     private let lock = NSLock()
     private var key: PersonaCacheKey?
     private var retained: [KVCache]?
-    private var tokenCount = 0
+    private var tokenIDs: [Int] = []
 
     /// A deep, independently-mutable copy of the cached prefix — or nil when
     /// the slot is empty or keyed to a different render.
@@ -66,21 +71,21 @@ final class PersonaPrefixCache: @unchecked Sendable {
         // if a concurrent store/invalidate reassigns `retained` mid-copy —
         // and immutability: the retained arrays are never mutated after store.
         lock.lock()
-        let held: (cache: [KVCache], tokens: Int)? = {
+        let held: (cache: [KVCache], tokens: [Int])? = {
             guard requested == key, let retained else { return nil }
-            return (retained, tokenCount)
+            return (retained, tokenIDs)
         }()
         lock.unlock()
         guard let held else { return nil }
-        return PersonaPrefixSnapshot(cache: held.cache.map { $0.copy() }, tokenCount: held.tokens)
+        return PersonaPrefixSnapshot(cache: held.cache.map { $0.copy() }, tokenIDs: held.tokens)
     }
 
-    func store(_ cache: [KVCache], tokenCount: Int, for newKey: PersonaCacheKey) {
+    func store(_ cache: [KVCache], tokenIDs: [Int], for newKey: PersonaCacheKey) {
         lock.lock()
         defer { lock.unlock() }
         key = newKey
         retained = cache
-        self.tokenCount = tokenCount
+        self.tokenIDs = tokenIDs
     }
 
     /// Drop the slot (persona text changed — e.g. a future profile update —
@@ -90,6 +95,6 @@ final class PersonaPrefixCache: @unchecked Sendable {
         defer { lock.unlock() }
         key = nil
         retained = nil
-        tokenCount = 0
+        tokenIDs = []
     }
 }

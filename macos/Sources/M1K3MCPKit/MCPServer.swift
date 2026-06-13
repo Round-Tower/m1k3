@@ -2,17 +2,22 @@
 //  MCPServer.swift
 //  M1K3MCPKit
 //
-//  The stdio MCP server that exposes M1K3's knowledge to Claude Desktop/Code.
-//  Registers three tools (search_knowledge / list_documents / get_document) over
-//  the same KnowledgeStore the app writes to, and serves them on stdin/stdout.
+//  The M1K3 MCP server, transport-agnostic: the standalone executable serves
+//  the knowledge tools over stdio, the Mac app hosts the same core in-process
+//  over localhost HTTP with voice tools added. Tools come from an injectable
+//  MCPToolRegistry; this file owns the knowledge definitions + server wiring.
 //
 //  Store path (the sandbox wrinkle): the app is App-Sandboxed, so it writes to
-//  its CONTAINER, not bare ~/Library/Application Support. This server is a plain
-//  CLI (unsandboxed) Claude spawns, so it reads the container path directly.
-//  Override with M1K3_STORE_PATH; otherwise it uses the container if present and
-//  falls back to an unsandboxed store.
+//  its CONTAINER, not bare ~/Library/Application Support. The stdio server is a
+//  plain CLI (unsandboxed) Claude spawns, so it reads the container path
+//  directly. Override with M1K3_STORE_PATH; otherwise it uses the container if
+//  present and falls back to an unsandboxed store. The in-app server skips all
+//  of this — it serves the live KnowledgeStore instance.
 //
 //  Signed: Kev + claude-opus-4-8, 2026-06-06, Confidence 0.75, Prior: Unknown
+//  Review: Kev + claude-fable-5, 2026-06-11 — refactored around MCPToolRegistry
+//  for in-process hosting; stdio surface byte-identical (same tools, same
+//  handlers, same store resolution). Confidence 0.9.
 
 import Foundation
 import M1K3Knowledge
@@ -37,94 +42,101 @@ public func resolveStorePath(environment: [String: String] = ProcessInfo.process
     return unsandboxed.appendingPathComponent("knowledge.sqlite").path
 }
 
-/// Build + run the M1K3 MCP server over stdio. Blocks until the transport closes.
-public func runM1K3MCPServer() async throws {
-    let store = try KnowledgeStore(path: resolveStorePath())
-    let tools = KnowledgeMCPTools(store: store)
-
+/// Build an MCP `Server` that lists and dispatches the registry's tools.
+public func makeM1K3Server(
+    registry: MCPToolRegistry,
+    name: String = "m1k3",
+    version: String = "0.1.0"
+) async -> Server {
     let server = Server(
-        name: "m1k3",
-        version: "0.1.0",
+        name: name,
+        version: version,
         capabilities: .init(tools: .init())
     )
-
-    let toolList = makeToolList()
-
+    let tools = registry.tools
     await server.withMethodHandler(ListTools.self) { _ in
-        ListTools.Result(tools: toolList)
+        ListTools.Result(tools: tools)
     }
-
     await server.withMethodHandler(CallTool.self) { params in
-        do {
-            let text: String
-            switch params.name {
-            case "search_knowledge":
-                let query = stringArg(params.arguments, "query") ?? ""
-                let limit = intArg(params.arguments, "limit") ?? 5
-                text = try tools.searchKnowledge(query: query, limit: limit)
-            case "list_documents":
-                text = try tools.listDocuments(limit: intArg(params.arguments, "limit") ?? 100)
-            case "get_document":
-                text = try tools.getDocument(idString: stringArg(params.arguments, "id") ?? "")
-            default:
-                return CallTool.Result(content: [.text(text: "Unknown tool: \(params.name)", annotations: nil, _meta: nil)], isError: true)
-            }
-            return CallTool.Result(content: [.text(text: text, annotations: nil, _meta: nil)])
-        } catch {
-            return CallTool.Result(content: [.text(text: "Error: \(error)", annotations: nil, _meta: nil)], isError: true)
-        }
+        await registry.call(name: params.name, arguments: params.arguments)
     }
+    return server
+}
 
-    try await server.start(transport: StdioTransport())
+/// Serve a registry over any transport. Blocks until the transport closes.
+public func serve(registry: MCPToolRegistry, transport: some Transport) async throws {
+    let server = await makeM1K3Server(registry: registry)
+    try await server.start(transport: transport)
     await server.waitUntilCompleted()
 }
 
-// MARK: - Tool declarations
+/// Build + run the M1K3 MCP server over stdio (the standalone executable).
+public func runM1K3MCPServer() async throws {
+    let store = try KnowledgeStore(path: resolveStorePath())
+    let registry = MCPToolRegistry(makeKnowledgeToolDefinitions(store: store))
+    try await serve(registry: registry, transport: StdioTransport())
+}
 
-private func makeToolList() -> [Tool] {
-    [
-        Tool(
-            name: "search_knowledge",
-            description: "Full-text search over M1K3's stored knowledge (documents, calls, notes). Returns ranked matching chunks.",
-            inputSchema: [
-                "type": "object",
-                "properties": [
-                    "query": ["type": "string", "description": "the text to search for"],
-                    "limit": ["type": "integer", "description": "max results (default 5)"],
-                ],
-                "required": ["query"],
-            ]
+// MARK: - Knowledge tool definitions
+
+/// The three knowledge tools over a KnowledgeStore — the stdio server's whole
+/// surface, and the read-only half of the in-app server's.
+public func makeKnowledgeToolDefinitions(store: KnowledgeStore) -> [MCPToolDefinition] {
+    let tools = KnowledgeMCPTools(store: store)
+    return [
+        MCPToolDefinition(
+            tool: Tool(
+                name: "search_knowledge",
+                description: "Full-text search over M1K3's stored knowledge (documents, calls, notes). Returns ranked matching chunks.",
+                inputSchema: [
+                    "type": "object",
+                    "properties": [
+                        "query": ["type": "string", "description": "the text to search for"],
+                        "limit": ["type": "integer", "description": "max results (default 5)"],
+                    ],
+                    "required": ["query"],
+                ]
+            ),
+            handler: { args in
+                try tools.searchKnowledge(query: stringArg(args, "query") ?? "", limit: intArg(args, "limit") ?? 5)
+            }
         ),
-        Tool(
-            name: "list_documents",
-            description: "List the items M1K3 has indexed, with their ids, kinds, and titles.",
-            inputSchema: [
-                "type": "object",
-                "properties": [
-                    "limit": ["type": "integer", "description": "max items (default 100)"],
-                ],
-            ]
+        MCPToolDefinition(
+            tool: Tool(
+                name: "list_documents",
+                description: "List the items M1K3 has indexed, with their ids, kinds, and titles.",
+                inputSchema: [
+                    "type": "object",
+                    "properties": [
+                        "limit": ["type": "integer", "description": "max items (default 100)"],
+                    ],
+                ]
+            ),
+            handler: { args in
+                try tools.listDocuments(limit: intArg(args, "limit") ?? 100)
+            }
         ),
-        Tool(
-            name: "get_document",
-            description: "Fetch the full text of one indexed item by its id (from list_documents).",
-            inputSchema: [
-                "type": "object",
-                "properties": [
-                    "id": ["type": "string", "description": "the document id (UUID)"],
-                ],
-                "required": ["id"],
-            ]
+        MCPToolDefinition(
+            tool: Tool(
+                name: "get_document",
+                description: "Fetch the text of one indexed item by its id (from list_documents). "
+                    + "Returns up to ~6000 characters per call; for longer items, a footer gives the "
+                    + "offset to resume from — call again with that offset to page through.",
+                inputSchema: [
+                    "type": "object",
+                    "properties": [
+                        "id": ["type": "string", "description": "the document id (UUID)"],
+                        "offset": [
+                            "type": "integer",
+                            "description": "character offset to start from (default 0; see the resume footer)",
+                        ],
+                    ],
+                    "required": ["id"],
+                ]
+            ),
+            handler: { args in
+                try tools.getDocument(idString: stringArg(args, "id") ?? "", offset: intArg(args, "offset") ?? 0)
+            }
         ),
     ]
-}
-
-private func stringArg(_ args: [String: Value]?, _ key: String) -> String? {
-    if case let .string(value)? = args?[key] { return value }
-    return nil
-}
-
-private func intArg(_ args: [String: Value]?, _ key: String) -> Int? {
-    if case let .int(value)? = args?[key] { return value }
-    return nil
 }

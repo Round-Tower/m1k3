@@ -86,4 +86,37 @@ struct ReasoningSplitTests {
         #expect(result.reasoning == "plan")
         #expect(result.answer == "answer mentions </think> literally")
     }
+
+    // gemma-4 (Big) uses a CHANNEL format, not <think>: reasoning is wrapped
+    // `<|channel>thought … <channel|>` (note the asymmetric markers — the pipe
+    // flips sides). The model's chat_template strip_thinking macro removes
+    // exactly this; the splitter must too or the whole thought leaks into the UI.
+
+    @Test("a gemma-4 channel thought block is separated from the answer")
+    func channelBlock() {
+        let result = ReasoningSplit.split("<|channel>thought\nThinking Process: analyze.\n<channel|>It's sunny in Boston.")
+        #expect(result.reasoning == "Thinking Process: analyze.")
+        #expect(result.answer == "It's sunny in Boston.")
+    }
+
+    @Test("an unclosed gemma-4 channel block (stream cut mid-thought) is all reasoning")
+    func channelUnclosed() {
+        let result = ReasoningSplit.split("<|channel>thought\nThinking Process:\n1. Analyze the request.")
+        #expect(result.reasoning == "Thinking Process:\n1. Analyze the request.")
+        #expect(result.answer == "")
+    }
+
+    @Test("a lone gemma-4 channel close treats the prefix as reasoning")
+    func channelLoneClose() {
+        let result = ReasoningSplit.split("I should greet them back.<channel|>Hey! Good to see you.")
+        #expect(result.reasoning == "I should greet them back.")
+        #expect(result.answer == "Hey! Good to see you.")
+    }
+
+    @Test("a channel-only output yields an empty answer")
+    func channelThinkOnly() {
+        let result = ReasoningSplit.split("<|channel>thought\njust reasoning\n<channel|>")
+        #expect(result.reasoning == "just reasoning")
+        #expect(result.answer == "")
+    }
 }

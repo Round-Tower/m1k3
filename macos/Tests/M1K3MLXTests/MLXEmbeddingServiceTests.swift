@@ -23,13 +23,37 @@
 import Foundation
 import M1K3Knowledge
 @testable import M1K3MLX
+import MLXEmbedders
 import Testing
 
 struct MLXEmbeddingServiceTests {
     @Test("conforms to EmbeddingService and reports its dimension")
     func dimensionAndConformance() {
         let service: any EmbeddingService = MLXEmbeddingService()
-        #expect(service.dimension == 384) // bge_small default
+        #expect(service.dimension == 512) // Qwen3-Embedding 1024, MRL-truncated
+    }
+
+    @Test("fingerprint encodes the model AND the truncated dimension")
+    func fingerprintEncodesModelAndDimension() {
+        // The fingerprint drives the store's auto re-index. Encoding the
+        // truncated width means a future MRL dim change (512→256) re-embeds
+        // even though the model id is unchanged — distinct vector spaces.
+        let fp = MLXEmbeddingService().fingerprint
+        #expect(fp.contains("Qwen3-Embedding"))
+        #expect(fp.contains("d512"))
+        #expect(fp.contains(MLXEmbeddingService.kernelTag))
+        // And it must differ from the old bge-small marker so existing stores migrate.
+        #expect(fp != "mlx/BAAI/bge-small-en-v1.5/\(MLXEmbeddingService.kernelTag)")
+    }
+
+    @Test("an explicitly-constructed bge_small still carries its own 384-dim identity")
+    func legacyEmbedderRemainsConstructible() {
+        // The A/B separation harness needs to stand the OLD embedder up beside
+        // the new one — the init params must survive the default change.
+        let bge = MLXEmbeddingService(configuration: EmbedderRegistry.bge_small, dimension: 384)
+        #expect(bge.dimension == 384)
+        #expect(bge.fingerprint.contains("bge-small-en-v1.5"))
+        #expect(bge.fingerprint.contains("d384"))
     }
 
     @Test("kernelTag matches the mlx-swift minor actually pinned in Package.resolved")

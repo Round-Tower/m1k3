@@ -16,6 +16,11 @@
 //
 //  Signed: Kev + claude-opus-4-8, 2026-06-06, Confidence 0.8,
 //  Prior: the prior knowledge-server project SemanticStore + SemanticStore+Documents (Kev)
+//  Review: Kev + claude-opus-4-8, 2026-06-13, Confidence 0.9 — optional `kinds`
+//  filter on searchFTS/searchVector/searchHybrid + two-lane `searchGrounding`
+//  (separate doc/memory budgets) so the document corpus can't crowd short
+//  memory facts out of a single top-K (the open-chat recall miss). Pinned by
+//  KnowledgeStoreGroundingTests; existing callers unaffected (filter defaults nil).
 
 import Foundation
 import GRDB
@@ -73,6 +78,13 @@ public final class KnowledgeStore: @unchecked Sendable {
             try db.create(table: "knowledge_meta") { t in
                 t.column("key", .text).primaryKey()
                 t.column("value", .text).notNull()
+            }
+        }
+        // Provenance for memory items: who wrote it ("user" | "distilled").
+        // Nullable, no backfill — documents/calls legitimately have no source.
+        migrator.registerMigration("v3-source") { db in
+            try db.alter(table: "knowledge_items") { t in
+                t.add(column: "source", .text)
             }
         }
         try migrator.migrate(dbQueue)
@@ -328,6 +340,7 @@ public final class KnowledgeStore: @unchecked Sendable {
             kind: KnowledgeKind(rawValue: row["kind"] ?? "note"),
             title: row["title"] ?? "",
             sourceRef: row["source_ref"],
+            source: (row["source"] as String?).map(KnowledgeSource.init(rawValue:)),
             createdAt: Date(timeIntervalSince1970: row["created_at"] ?? 0)
         )
     }
@@ -336,30 +349,37 @@ public final class KnowledgeStore: @unchecked Sendable {
 
     /// FTS5 BM25 search over chunk text. Each query word is double-quoted to
     /// neutralise FTS5 operators (same sanitisation as the prior knowledge-server project).
-    public func searchFTS(query: String, limit: Int = 10) throws -> [ChunkHit] {
+    public func searchFTS(
+        query: String, limit: Int = 10, kinds: Set<KnowledgeKind>? = nil
+    ) throws -> [ChunkHit] {
         guard let sanitized = Self.sanitizeFTSQuery(query) else { return [] }
         return try dbQueue.read { db in
-            let rows = try Row.fetchAll(
-                db,
-                sql: """
-                SELECT c.id AS chunk_id, c.item_id, c.heading, c.content,
-                       i.title, i.kind
-                FROM knowledge_chunk_fts fts
-                JOIN knowledge_chunks c ON c.id = fts.id
-                JOIN knowledge_items i ON i.id = c.item_id
-                WHERE knowledge_chunk_fts MATCH ?
-                ORDER BY bm25(knowledge_chunk_fts) ASC
-                LIMIT ?
-                """,
-                arguments: [sanitized, limit]
-            )
+            var sql = """
+            SELECT c.id AS chunk_id, c.item_id, c.heading, c.content,
+                   i.title, i.kind
+            FROM knowledge_chunk_fts fts
+            JOIN knowledge_chunks c ON c.id = fts.id
+            JOIN knowledge_items i ON i.id = c.item_id
+            WHERE knowledge_chunk_fts MATCH ?
+            """
+            var args: [DatabaseValueConvertible] = [sanitized]
+            if let kinds, !kinds.isEmpty {
+                let placeholders = kinds.map { _ in "?" }.joined(separator: ", ")
+                sql += "\nAND i.kind IN (\(placeholders))"
+                args += kinds.map(\.rawValue)
+            }
+            sql += "\nORDER BY bm25(knowledge_chunk_fts) ASC\nLIMIT ?"
+            args.append(limit)
+            let rows = try Row.fetchAll(db, sql: sql, arguments: StatementArguments(args))
             return rows.compactMap { Self.hit(from: $0) }
         }
     }
 
     /// Brute-force cosine KNN over stored embeddings. Single read, in-memory
     /// score + sort + prefix — fine for MVP volumes; revisit past ~10k chunks.
-    public func searchVector(queryVector: [Float], limit: Int = 10) throws -> [ChunkHit] {
+    public func searchVector(
+        queryVector: [Float], limit: Int = 10, kinds: Set<KnowledgeKind>? = nil
+    ) throws -> [ChunkHit] {
         let rows = try dbQueue.read { db in
             try Row.fetchAll(
                 db,
@@ -380,6 +400,7 @@ public final class KnowledgeStore: @unchecked Sendable {
             guard let blob: Data = row["embedding"],
                   var hit = Self.hit(from: row, chunkIDColumn: "chunk_id")
             else { continue }
+            if let kinds, !kinds.isEmpty, !kinds.contains(hit.kind) { continue }
             hit.similarity = VectorMath.cosineSimilarity(queryVector, VectorMath.deserialize(blob))
             scored.append(hit)
         }
@@ -392,11 +413,12 @@ public final class KnowledgeStore: @unchecked Sendable {
     public func searchHybrid(
         query: String,
         queryVector: [Float],
-        limit: Int = 10
+        limit: Int = 10,
+        kinds: Set<KnowledgeKind>? = nil
     ) throws -> [ChunkHit] {
         // Pull a wider candidate set from each signal before fusing.
-        let ftsHits = try searchFTS(query: query, limit: limit * 2)
-        let vectorHits = try searchVector(queryVector: queryVector, limit: limit * 2)
+        let ftsHits = try searchFTS(query: query, limit: limit * 2, kinds: kinds)
+        let vectorHits = try searchVector(queryVector: queryVector, limit: limit * 2, kinds: kinds)
         let fused = ReciprocalRankFusion.fuseScored(
             rankings: [ftsHits, vectorHits],
             key: { $0.chunkID }
@@ -416,6 +438,39 @@ public final class KnowledgeStore: @unchecked Sendable {
             }
             return hit
         }
+    }
+
+    /// The non-memory kinds that share the document grounding budget. Memory is
+    /// retrieved on its own lane (see `searchGrounding`) so short atomic facts
+    /// are never crowded out of a single top-K by the larger document corpus.
+    public static let groundingDocumentKinds: Set<KnowledgeKind> = [.document, .call, .note]
+
+    /// Two-lane grounding retrieval: documents and memories ranked + budgeted
+    /// SEPARATELY, then concatenated for the caller to gate by kind.
+    ///
+    /// A single hybrid top-K over the WHOLE store let the document corpus crowd
+    /// short memory facts out entirely (live 2026-06-13: "where am I based and
+    /// what pet do I have" returned 5 document chunks, 0 memories — M1K3 fell
+    /// back to persona chat and couldn't name the user's own city, while the
+    /// tightly-phrased "what city does the user live in?" surfaced Cork at
+    /// 0.728). Memories embed lower (5–40-token facts) and lose a shared budget
+    /// the moment a query leans even slightly documentary. Giving each kind its
+    /// own lane makes recall phrasing-robust.
+    public func searchGrounding(
+        query: String,
+        queryVector: [Float],
+        documentLimit: Int = 5,
+        memoryLimit: Int = 5
+    ) throws -> [ChunkHit] {
+        let documents = try searchHybrid(
+            query: query, queryVector: queryVector,
+            limit: documentLimit, kinds: Self.groundingDocumentKinds
+        )
+        let memories = try searchHybrid(
+            query: query, queryVector: queryVector,
+            limit: memoryLimit, kinds: [.memory]
+        )
+        return documents + memories
     }
 
     // MARK: - Row mapping

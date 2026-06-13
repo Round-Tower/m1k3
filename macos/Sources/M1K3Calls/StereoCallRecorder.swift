@@ -28,6 +28,7 @@
 
 @preconcurrency import AVFoundation
 import Foundation
+import os
 import ScreenCaptureKit
 
 /// Records a stereo call (mic + system audio). `@unchecked Sendable`: mutable
@@ -35,6 +36,9 @@ import ScreenCaptureKit
 public final class StereoCallRecorder: NSObject, @unchecked Sendable {
     /// Common capture format both sources are normalised to before interleaving.
     private static let sampleRate: Double = 48000
+    /// Diagnostic trail for QA — `log stream --predicate 'subsystem == "dev.murphysig.M1K3"'`.
+    /// Metadata only (formats, counts, sizes, errors); never the audio itself.
+    private static let log = Logger(subsystem: "dev.murphysig.M1K3", category: "calls")
 
     private let lock = NSLock()
     private let engine = AVAudioEngine()
@@ -54,16 +58,19 @@ public final class StereoCallRecorder: NSObject, @unchecked Sendable {
     /// - Returns: whether the far-end (system audio) channel is being captured.
     @discardableResult
     public func start() async throws -> Bool {
+        Self.log.notice("start requested")
         _ = await stop() // reset any prior session
 
-        try startMic()
+        try await startMic()
         lock.withLock { recording = true }
 
         do {
             try await startSystemAudio()
+            Self.log.notice("capturing stereo (mic + system audio)")
             return true
         } catch {
             // No screen-recording permission / unsupported → mono mic only.
+            Self.log.notice("system audio unavailable → mono mic only: \(error, privacy: .public)")
             return false
         }
     }
@@ -94,20 +101,53 @@ public final class StereoCallRecorder: NSObject, @unchecked Sendable {
             micConverter = nil
             return result
         }
-        guard !near.isEmpty || !far.isEmpty else { return nil }
-        return try? Self.writeFile(near: near, far: far, sampleRate: Self.sampleRate)
+        Self.log.notice("stopped: near=\(near.count, privacy: .public) far=\(far.count, privacy: .public) samples")
+        guard !near.isEmpty || !far.isEmpty else {
+            Self.log.error("nothing captured — no file written (mic delivered 0 samples)")
+            return nil
+        }
+        let url = try? Self.writeFile(near: near, far: far, sampleRate: Self.sampleRate)
+        if let url {
+            let bytes = (try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? Int) ?? nil
+            Self.log.notice("wrote \(bytes ?? -1, privacy: .public) bytes → \(url.lastPathComponent, privacy: .public)")
+        } else {
+            Self.log.error("writeFile failed despite captured samples")
+        }
+        return url
     }
 
     // MARK: - Mic (near-end, left)
 
-    private func startMic() throws {
+    private func startMic() async throws {
+        // Mic permission must be SETTLED before we touch the inputNode. On the first
+        // launch under a new signing identity the TCC grant isn't established yet, and
+        // `outputFormat(forBus:)` in that state returns a degenerate 0-Hz format.
+        // Handing that to `installTap` invalidates the HAL AudioUnit
+        // (kAudioUnitErr_InvalidElement, -10877) and the recording captures nothing —
+        // so request first, then read the format.
+        guard await Self.micAuthorized() else {
+            Self.log.error("mic permission denied — recording aborted")
+            throw RecorderError.micPermissionDenied
+        }
+
         let input = engine.inputNode
         let inFormat = input.outputFormat(forBus: 0)
+        Self.log.notice("mic input format \(inFormat.sampleRate, privacy: .public)Hz ch=\(inFormat.channelCount, privacy: .public)")
+        // Even with permission granted, refuse a degenerate format rather than crash
+        // the HAL — installTap with a 0-Hz clock is the direct trigger for -10877.
+        guard inFormat.sampleRate > 0 else {
+            Self.log.error("degenerate 0-Hz input format — refusing to install tap (would throw -10877)")
+            throw RecorderError.formatUnavailable
+        }
         guard let target = AVAudioFormat(
             commonFormat: .pcmFormatFloat32,
             sampleRate: Self.sampleRate, channels: 1, interleaved: false
         ) else { throw RecorderError.formatUnavailable }
-        let converter = AVAudioConverter(from: inFormat, to: target)
+        // AVAudioConverter is nil for an invalid format pair; a silently-nil converter
+        // would drop every buffer and yield an empty recording.
+        guard let converter = AVAudioConverter(from: inFormat, to: target) else {
+            throw RecorderError.formatUnavailable
+        }
         lock.withLock { micConverter = converter }
 
         input.installTap(onBus: 0, bufferSize: 4096, format: inFormat) { [weak self] buffer, _ in
@@ -124,6 +164,17 @@ public final class StereoCallRecorder: NSObject, @unchecked Sendable {
         lock.withLock { micConverter }
     }
 
+    /// Microphone authorization (macOS TCC). Requests on first use; the prompt uses
+    /// NSMicrophoneUsageDescription. Returns false if denied/restricted so the caller
+    /// surfaces a readable error instead of recording silence.
+    private static func micAuthorized() async -> Bool {
+        switch AVCaptureDevice.authorizationStatus(for: .audio) {
+        case .authorized: return true
+        case .notDetermined: return await AVCaptureDevice.requestAccess(for: .audio)
+        default: return false
+        }
+    }
+
     // MARK: - System audio (far-end, right)
 
     private func startSystemAudio() async throws {
@@ -136,12 +187,19 @@ public final class StereoCallRecorder: NSObject, @unchecked Sendable {
         config.excludesCurrentProcessAudio = true // don't record our own TTS/output
         config.sampleRate = Int(Self.sampleRate)
         config.channelCount = 1
-        // Minimise the (unused) video path — audio is all we consume.
+        // Audio is all we consume, but SCStream always runs the video pipeline for a
+        // display filter — keep it tiny (2×2) and slow (1 fps) so it costs almost
+        // nothing.
         config.width = 2
         config.height = 2
+        config.minimumFrameInterval = CMTime(value: 1, timescale: 1)
 
         let stream = SCStream(filter: filter, configuration: config, delegate: nil)
         try stream.addStreamOutput(self, type: .audio, sampleHandlerQueue: captureQueue)
+        // Register a sink for the video frames too — the delegate drops them (guards
+        // type == .audio), but WITHOUT a registered .screen output SCStream logs
+        // "stream output NOT found. Dropping frame" for every frame it can't deliver.
+        try stream.addStreamOutput(self, type: .screen, sampleHandlerQueue: captureQueue)
         lock.withLock { self.stream = stream }
         try await stream.startCapture()
     }
@@ -203,9 +261,21 @@ public final class StereoCallRecorder: NSObject, @unchecked Sendable {
         return Array(UnsafeBufferPointer(start: channel, count: Int(out.frameLength)))
     }
 
-    public enum RecorderError: Error, Sendable {
+    public enum RecorderError: Error, Sendable, LocalizedError {
         case formatUnavailable
         case noDisplay
+        case micPermissionDenied
+
+        public var errorDescription: String? {
+            switch self {
+            case .formatUnavailable:
+                String(localized: "The microphone isn’t ready yet — try again in a moment.")
+            case .noDisplay:
+                String(localized: "No display is available to capture system audio.")
+            case .micPermissionDenied:
+                String(localized: "Microphone access is off. Enable it in System Settings → Privacy & Security → Microphone.")
+            }
+        }
     }
 
     /// One-shot holder for the converter's input buffer (Sendable so the input

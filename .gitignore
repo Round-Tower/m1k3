@@ -193,6 +193,10 @@ bundletool-all-*.jar
 *.png
 !app/src/main/res/**/*.png
 !docs/**/*.png
+# Launch site is self-contained (no CDN): its og card + favicons must travel.
+!site/**/*.png
+# Brand/icon assets (app-icon iconset + previews, labyrinth marks) must travel.
+!assets/**/*.png
 # Icon Composer app-icon layer images must travel with the repo (actool needs them).
 !macos/M1K3.icon/Assets/**
 !app/3d/**/*.png
@@ -203,3 +207,21 @@ bundletool-all-*.jar
 !/.claude/project-memory.md
 # Archived project-memory blocks travel too (split off when the live file grows).
 !/.claude/project-memory-archive-*.md
+# Project skills are repo tooling (like the tracked agents/ + commands/) — they
+# document this codebase's pipelines, so they travel with it.
+!/.claude/skills/
+!/.claude/skills/**
+
+# --- Private runtime data: must NEVER be committed (access-readiness) ---
+# Personal conversation history / vector store
+databases/
+*.duckdb
+*.duckdb.wal
+*.sqlite
+*.sqlite3
+# Local session state (machine/runtime status)
+.m1k3_session.json
+# Generated test reports (embed absolute local paths)
+tests/unified-suite/output/
+scripts/test_report.json
+data/test-results/

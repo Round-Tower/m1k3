@@ -54,17 +54,47 @@ struct M1K3PersonaTests {
         #expect(M1K3Persona.systemPrompt.contains("Never invent"))
     }
 
-    @Test("stays short — the persona is prefilled on every turn")
-    func staysShort() {
-        #expect(M1K3Persona.systemPrompt.count < 800)
+    @Test("injects the current month + year to keep the model honest about time")
+    func currentDate() throws {
+        var comps = DateComponents()
+        comps.year = 2026
+        comps.month = 6
+        comps.day = 13
+        let june = try #require(Calendar(identifier: .gregorian).date(from: comps))
+        #expect(M1K3Persona.currentDateLine(june) == "Today's date is June 2026.")
+        // The live prompt carries the real current year so the model can't drift.
+        let year = Calendar.current.component(.year, from: Date())
+        #expect(M1K3Persona.systemPrompt.contains("\(year)"))
     }
 
-    @Test("voice exemplars are two short beats in M1K3's voice")
+    @Test("stays short — the persona is prefilled on every turn (worst-case month)")
+    func staysShort() throws {
+        // The prompt now carries an injected date line; September is the longest
+        // month name, so pin the budget against the worst case (the live getter
+        // uses today's real date, which is never longer).
+        var comps = DateComponents()
+        comps.year = 2026
+        comps.month = 9
+        comps.day = 15
+        let september = try #require(Calendar(identifier: .gregorian).date(from: comps))
+        let worst = M1K3Persona.compose(
+            core: M1K3Persona.corePrompt + "\n" + M1K3Persona.currentDateLine(september),
+            profile: nil
+        )
+        #expect(worst.count < 850)
+    }
+
+    @Test("voice exemplars are three illustration beats with no copyable turn scaffolding")
     func voiceExemplars() {
         let exemplars = M1K3Persona.voiceExemplars
-        #expect(exemplars.components(separatedBy: "USER:").count - 1 == 2)
-        #expect(exemplars.components(separatedBy: "M1K3:").count - 1 == 2)
+        // Three beats, framed as quoted illustrations…
+        #expect(exemplars.components(separatedBy: "- Asked").count - 1 == 3)
+        // …NOT "USER:/M1K3:" chat turns a weak 4B would continue verbatim (the
+        // exemplar-bleed fix). No speaker labels for the model to echo.
+        #expect(!exemplars.contains("USER:"))
+        #expect(!exemplars.contains("M1K3:"))
         #expect(exemplars.contains("honey")) // the curious-fact beat
+        #expect(exemplars.contains("cod you")) // the honest-abstention beat, in voice
         #expect(exemplars.contains("?")) // ends beats with a question back
     }
 
@@ -72,7 +102,8 @@ struct M1K3PersonaTests {
     func exemplarPromptComposition() {
         let full = M1K3Persona.systemPrompt(includeExemplars: true)
         #expect(full.hasPrefix(M1K3Persona.systemPrompt))
-        #expect(full.contains("USER:"))
+        #expect(full.contains("by example")) // the exemplar block rode along…
+        #expect(!full.contains("USER:")) // …without the copyable scaffolding
         #expect(full.count < 1500)
 
         let compact = M1K3Persona.systemPrompt(includeExemplars: false)

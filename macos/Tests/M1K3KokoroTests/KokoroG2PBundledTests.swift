@@ -21,4 +21,43 @@ struct KokoroG2PBundledTests {
         // Contraction coverage (web2 lacks these; added to the generated dict).
         #expect(g2p.phonemeTokens("don't").isEmpty == false)
     }
+
+    @Test("numbers, units, and acronyms are spoken against the real dictionary")
+    func bundledFallbackChain() throws {
+        let g2p = try KokoroG2P.bundled()
+        // Every expansion word (fifteen/celsius/twenty/six…) must resolve in
+        // the shipped dict — this is the line that used to be silently mute.
+        let weather = g2p.annotatedTokens("It is 15°C in 2026.")
+        #expect(weather.words.allSatisfy { !$0.tokenRange.isEmpty })
+        // Mixed alphanumeric spells out (em one kay three), not silence.
+        #expect(g2p.phonemeTokens("M1K3").isEmpty == false)
+        // Percentages and decimals speak too.
+        #expect(g2p.phonemeTokens("3.5% today").isEmpty == false)
+    }
+
+    @Test("compound OOV words split against the real dictionary — the 'grandmaster' fix")
+    func bundledCompoundSplit() throws {
+        let g2p = try KokoroG2P.bundled()
+        // "grandmaster" is not a single dict entry, but grand + master are — it
+        // used to be silently DROPPED from speech (the live TTS skip Kev caught).
+        // Now it speaks as one karaoke word with a non-empty token span.
+        let result = g2p.annotatedTokens("grandmaster")
+        #expect(!result.tokens.isEmpty)
+        #expect(result.words.count == 1)
+        #expect(!result.words[0].tokenRange.isEmpty)
+    }
+
+    @Test("OOV inflected forms speak against the real dictionary — the 'plays' fix")
+    func bundledInflections() throws {
+        let g2p = try KokoroG2P.bundled()
+        // The spike dict has bases + "-ing" but NOT "-s"/"-ed" — every one of
+        // these used to be silently dropped from speech. Each must now produce
+        // a non-empty, single-word span.
+        for word in ["plays", "games", "cats", "runs", "makes", "words", "wanted", "walked", "played"] {
+            let result = g2p.annotatedTokens(word)
+            #expect(!result.tokens.isEmpty, "\(word) is still silent")
+            #expect(result.words.count == 1)
+            #expect(!result.words[0].tokenRange.isEmpty, "\(word) has an empty token span")
+        }
+    }
 }

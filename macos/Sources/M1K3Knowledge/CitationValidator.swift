@@ -18,6 +18,11 @@
 //
 //  Signed: Kev + claude-opus-4-8, 2026-06-06, Confidence 0.85,
 //  Prior: the prior knowledge-server project the internal knowledge-server core/CitationValidator.swift (Kev)
+//  Review: Kev + claude-fable-5, 2026-06-12, Confidence 0.9 — patterns
+//  broadened from single-token ALL-CAPS sources to any-title-before-§
+//  (citationLabel renders titles verbatim, so real citations were invisible
+//  to validation and hallucinated ones leaked); markdown-link lookahead;
+//  case-insensitive chunk comparison so casing deviations aren't stripped.
 
 import Foundation
 
@@ -81,10 +86,15 @@ public enum CitationValidator {
         responseText: String,
         against chunks: [ChunkHit]
     ) async -> Result {
+        // Case-insensitive: the model was SHOWN the exact-case label, but a
+        // casing deviation when echoing it is not a hallucination — stripping
+        // "[PLANT NOTES §…]" because the chunk says "Plant Notes" removes a
+        // correct grounding affordance.
         let result = await validate(responseText: responseText) { citation in
             chunks.contains { chunk in
-                chunk.itemTitle == citation.source
-                    && (chunk.heading?.trimmingCharacters(in: .whitespaces) ?? "") == citation.heading
+                chunk.itemTitle.compare(citation.source, options: .caseInsensitive) == .orderedSame
+                    && (chunk.heading?.trimmingCharacters(in: .whitespaces) ?? "")
+                    .compare(citation.heading, options: .caseInsensitive) == .orderedSame
             }
         }
         // Stripping a citation leaves a gap ("…not  ." / "see  and"); tidy it so the
@@ -120,8 +130,18 @@ public enum CitationValidator {
     /// Extract every bracket- and paren-delimited citation, in document order
     /// (brackets first, then parens — matching the prior knowledge-server project's collection order).
     static func citationHits(in text: String) -> [Hit] {
-        let bracketPattern = #/\[([A-Z][A-Z0-9-]+)\s+§([^\]]+)\]/#
-        let parenPattern = #/\(([A-Z][A-Z0-9-]+)\s+§([^\)]+)\)/#
+        // The § is the discriminator (the same rule SpeechTextPolish strips
+        // by) — titles match VERBATIM as citationLabel renders them, mixed
+        // case and spaces included. The old single-token ALL-CAPS source
+        // ([A-Z][A-Z0-9-]+) couldn't even parse "[Plant Notes §…]", so real
+        // titles bypassed validation and hallucinated citations leaked into
+        // the rendered answer.
+        // The (?!\() lookahead exempts markdown links — "[see §5](url)" is a
+        // link whose text happens to contain §, and stripping its bracket
+        // half would leave "(url)" dangling. A citation followed by paren
+        // PROSE ("[Title §h] (aside)") has a space first, so it still parses.
+        let bracketPattern = #/\[([^\[\]§\n]+?)\s+§([^\]\n]+)\](?!\()/#
+        let parenPattern = #/\(([^()§\n]+?)\s+§([^()\n]+)\)/#
 
         var hits: [Hit] = []
         for match in text.matches(of: bracketPattern) {
@@ -141,7 +161,7 @@ public enum CitationValidator {
         Hit(
             full: String(full),
             citation: Citation(
-                source: String(source),
+                source: source.trimmingCharacters(in: .whitespaces),
                 heading: heading.trimmingCharacters(in: .whitespaces)
             )
         )

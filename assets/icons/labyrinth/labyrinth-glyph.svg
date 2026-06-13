@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128"
+     role="img" aria-label="M1K3 labyrinth" class="m1k3-labyrinth">
+  <g fill="none" stroke="currentColor" stroke-width="9.6"
+     stroke-linecap="round" stroke-linejoin="round">
+    <path class="m1k3-wall m1k3-wall-0" d="M 48.164 109.99 A 48.64 48.64 0 1 1 79.836 109.99"/>
+    <path class="m1k3-wall m1k3-wall-1" d="M 71.439 85.603 A 22.848 22.848 0 1 0 69.14 41.738"/>
+    <path class="m1k3-wall m1k3-wall-2" d="M 58.86 41.738 A 22.848 22.848 0 1 0 56.561 85.603"/>
+    <circle class="m1k3-core" cx="64" cy="64" r="13.44" fill="none"/>
+  </g>
+</svg>

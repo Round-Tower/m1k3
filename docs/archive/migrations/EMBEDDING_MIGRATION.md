@@ -136,7 +136,7 @@ sentence-transformers>=2.2.2  # Vector embeddings for conversation similarity se
 
 **Run Tests**:
 ```bash
-cd /Users/kevinmurphy/Development/m1k3-gemma-embeddings
+cd $M1K3_ROOT-gemma-embeddings
 python test_gemma_embeddings.py
 ```
 
@@ -310,4 +310,4 @@ embedder = ConversationEmbedder(model_name="BAAI/bge-small-en-v1.5")
 **Reviewed**: Pending
 **Approved**: Pending
 **Branch**: `fix/gemma-embeddings`
-**Worktree**: `/Users/kevinmurphy/Development/m1k3-gemma-embeddings`
+**Worktree**: `$M1K3_ROOT-gemma-embeddings`

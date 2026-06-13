@@ -8,6 +8,7 @@
 //
 //  Signed: Kev + claude-opus-4-8, 2026-06-06, Confidence 0.8, Prior: Unknown
 
+import M1K3Avatar
 import M1K3Chat
 import M1K3Inference
 import M1K3Voice
@@ -17,7 +18,11 @@ struct SettingsView: View {
     @Environment(AppEnvironment.self) private var env
     @AppStorage(ReadingMode.storageKey) private var readingMode: ReadingMode = .standard
     @AppStorage(AppEnvironment.webSearchEnabledKey) private var webSearchEnabled = true
+    @AppStorage(AppEnvironment.memoryAutoCaptureKey) private var memoryAutoCapture = true
+    @AppStorage(AppEnvironment.soundEffectsEnabledKey) private var soundEffectsEnabled = true
+    @State private var showMemories = false
     @AppStorage(AppEnvironment.thinkingModeKey) private var thinkingMode = ThinkingMode.auto.rawValue
+    @AppStorage(AppEnvironment.voiceCompanionKey) private var voiceCompanion = ""
     @State private var profileDraft = ""
 
     var body: some View {
@@ -50,7 +55,7 @@ struct SettingsView: View {
 
                 Section {
                     LabeledContent("Mode",
-                                   value: env.usingMLXEmbeddings ? "MLX bge_small (semantic)" : "Hashing (offline)")
+                                   value: env.usingMLXEmbeddings ? "MLX Qwen3-Embedding (semantic)" : "Hashing (offline)")
                     if env.isReindexing {
                         HStack(spacing: 8) {
                             ProgressView().controlSize(.small)
@@ -98,6 +103,12 @@ struct SettingsView: View {
                                 .font(.caption.monospacedDigit())
                                 .foregroundStyle(.secondary)
                         }
+                    case .preparing:
+                        VStack(alignment: .leading, spacing: 4) {
+                            ProgressView() // indeterminate — load has no honest fraction
+                            Text(env.whisperLoad.label(modelName: "WhisperKit"))
+                                .font(.caption).foregroundStyle(.secondary)
+                        }
                     case .ready:
                         Label("WhisperKit ready", systemImage: "checkmark.circle.fill")
                             .symbolRenderingMode(.hierarchical)
@@ -124,6 +135,22 @@ struct SettingsView: View {
                     Text("How M1K3 sounds when it speaks. Built-in is Apple's clear default; "
                         + "M1K3 Voice runs the speech through M1K3's own voice character and "
                         + "downloads the neural voice model for offline use. On-device only.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+
+                companionSection
+
+                Section {
+                    Toggle("Sound effects", isOn: $soundEffectsEnabled)
+                        .onChange(of: soundEffectsEnabled) { _, on in
+                            env.soundEffects.isEnabled = on
+                        }
+                } header: {
+                    Text("Sound effects")
+                } footer: {
+                    Text("Short earcons for a few moments — an error, a memory saved, "
+                        + "voice mode waking up. They never play over M1K3's voice. "
+                        + "On-device only.")
                         .font(.caption).foregroundStyle(.secondary)
                 }
 
@@ -172,7 +199,11 @@ struct SettingsView: View {
                         .font(.caption).foregroundStyle(.secondary)
                 }
 
+                mcpSection
+
                 aboutYouSection
+
+                memorySection
 
                 Section {
                     Picker("Reasoning", selection: $thinkingMode) {
@@ -186,7 +217,9 @@ struct SettingsView: View {
                 } footer: {
                     Text("Reasoning models think out loud before answering — great for "
                         + "hard questions, slow for small talk. Auto skips the thinking "
-                        + "on casual turns and keeps it for grounded or analytic ones.")
+                        + "on casual turns and keeps it for grounded or analytic ones. "
+                        + "Voice mode has its own thinking toggle (the brain button) "
+                        + "and ignores this setting while active.")
                         .font(.caption).foregroundStyle(.secondary)
                 }
 
@@ -254,6 +287,52 @@ struct SettingsView: View {
         }
     }
 
+    /// Voice-mode face: the pixel face (default) or an opt-in 3D companion. Only
+    /// companions with bundled assets are offered. The pixel face stays M1K3's
+    /// face everywhere else — this is just the voice-mode skin. (Own property — the
+    /// Form is at the type-checker budget; see aboutYouSection.)
+    private var companionSection: some View {
+        Section {
+            Picker("Voice companion", selection: $voiceCompanion) {
+                Text("Pixel face").tag("")
+                ForEach(CompanionSpec.all.filter(CompanionAssets.isInstalled)) { spec in
+                    Text(spec.displayName).tag(spec.id)
+                }
+            }
+        } header: {
+            Text("Voice companion")
+        } footer: {
+            Text("Who greets you in voice mode. The pixel face is M1K3 — a companion "
+                + "is an optional skin for full-window voice conversations, and only "
+                + "there. Everywhere else, the pixel face stays.")
+                .font(.caption).foregroundStyle(.secondary)
+        }
+    }
+
+    /// In-process MCP server controls. Own property — the Form expression
+    /// is over the type-checker budget when sections are inlined.
+    private var mcpSection: some View {
+        Section {
+            Toggle("MCP server (HTTP, localhost)", isOn: Binding(
+                get: { env.mcpHost.isEnabled },
+                set: { env.mcpHost.setEnabled($0) }
+            ))
+            if let status = env.mcpHost.statusText {
+                LabeledContent("Status", value: status)
+            }
+        } header: {
+            Text("MCP server")
+        } footer: {
+            Text("Lets Claude (or any MCP client) on THIS Mac use M1K3's "
+                + "knowledge search, voice, and microphone. Loopback only — "
+                + "never reachable from the network. One client at a time. "
+                + "Connect with:  claude mcp add --transport http m1k3 "
+                + "http://127.0.0.1:\(env.mcpHost.port)/mcp")
+                .font(.caption).foregroundStyle(.secondary)
+                .textSelection(.enabled)
+        }
+    }
+
     /// The consent surface for the persona's About-the-user block: fully
     /// visible, editable, clearable. (Own property — inlining it tipped the
     /// Form expression over the type-checker's budget.)
@@ -288,6 +367,26 @@ struct SettingsView: View {
         .onAppear { profileDraft = M1K3Persona.userProfile ?? "" }
     }
 
+    /// Memory auto-capture consent + the door to the review/forget surface.
+    /// (Own property — the Form is at the type-checker budget.)
+    private var memorySection: some View {
+        Section {
+            Toggle("Learn from conversations", isOn: $memoryAutoCapture)
+            Button("View memories…") { showMemories = true }
+                .buttonStyle(.glass)
+        } header: {
+            Text("Memories")
+        } footer: {
+            Text("When a conversation ends, M1K3 extracts durable facts about "
+                + "you — preferences, decisions, people — into its memory. "
+                + "Fully on-device. You can review and delete every memory.")
+                .font(.caption).foregroundStyle(.secondary)
+        }
+        .sheet(isPresented: $showMemories) {
+            MemoriesView().environment(env)
+        }
+    }
+
     /// Shows the MLX Gemma weight download as a real progress bar while it
     /// streams (~1GB on first use), or the failure, so selecting MLX never looks
     /// like a silent hang. Renders nothing when idle or ready.
@@ -300,6 +399,12 @@ struct SettingsView: View {
                     .frame(maxWidth: 160)
                 Text(env.modelLoad.label(modelName: env.downloadingBrainName))
                     .font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+            }
+        case .preparing:
+            HStack(spacing: 8) {
+                ProgressView().controlSize(.small) // indeterminate
+                Text(env.modelLoad.label(modelName: env.downloadingBrainName))
+                    .font(.caption).foregroundStyle(.secondary)
             }
         case .failed:
             Label(env.modelLoad.label(modelName: env.downloadingBrainName), systemImage: "exclamationmark.triangle")

@@ -68,6 +68,28 @@ struct StoredKeyProviderTests {
         #expect(bytes(a) != bytes(b))
     }
 
+    @Test("reassertProtection rewrites an existing key without changing its bytes")
+    func reassertKeepsKey() throws {
+        let store = InMemoryKeyStore()
+        let provider = StoredKeyProvider(store: store, account: "k")
+        let original = try provider.symmetricKey()
+        try provider.reassertProtection()
+        // Same bytes, still present — the call-encryption key survives an in-place
+        // protection upgrade, so already-encrypted calls stay decryptable.
+        #expect(try bytes(provider.symmetricKey()) == bytes(original))
+        #expect(try store.data(forAccount: "k") != nil)
+    }
+
+    @Test("reassertProtection is a no-op when no key exists (never creates one)")
+    func reassertNoOpWhenEmpty() throws {
+        let store = InMemoryKeyStore()
+        let provider = StoredKeyProvider(store: store, account: "k")
+        try provider.reassertProtection()
+        // Distinct from symmetricKey(): reassert must not mint a key just to
+        // protect it — otherwise it would rotate away a key we simply hadn't read.
+        #expect(try store.data(forAccount: "k") == nil)
+    }
+
     @Test("reset forgets the key so the next use generates a fresh one")
     func resetRotates() throws {
         let store = InMemoryKeyStore()

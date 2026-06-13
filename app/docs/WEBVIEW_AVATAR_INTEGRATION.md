@@ -181,7 +181,7 @@ window.webkit.messageHandlers.avatarBridge.postMessage({
 
 #### 1. Build and Install (Android)
 ```bash
-cd /Users/kevinmurphy/Development/m1k3/app
+cd $M1K3_ROOT/app
 
 # Bundle web assets (auto-runs with build)
 ./gradlew :composeApp:copyWebAvatarToAndroid

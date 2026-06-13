@@ -1,0 +1,394 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>M1K3 — Labyrinth Icon Family</title>
+<link rel="stylesheet" href="labyrinth.css">
+<style>
+  :root {
+    --bg: #0a0d12; --panel: #10151c; --panel-2: #151b24;
+    --line: #1f2833; --fg: #e8eaf0; --muted: #7a8396; --accent: #a78bfa;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg);
+    font: 14px/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    padding: 40px 32px 80px; }
+  h1 { font-size: 28px; font-weight: 600; letter-spacing: -0.02em; margin: 0 0 8px; }
+  .lead { color: var(--muted); max-width: 60ch; margin: 0 0 48px; }
+  h2 { font-size: 13px; font-weight: 600; text-transform: uppercase;
+    letter-spacing: 0.12em; color: var(--muted);
+    margin: 48px 0 16px; padding-bottom: 8px; border-bottom: 1px solid var(--line); }
+  .row { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+    padding: 24px; display: flex; flex-direction: column; align-items: center; gap: 16px; }
+  .card .label { font-size: 12px; color: var(--muted); text-align: center; }
+  .card .label strong { display: block; color: var(--fg); font-size: 14px; font-weight: 600; margin-bottom: 2px; }
+  .swatch { display: grid; place-items: center; }
+  .swatch.large { width: 192px; height: 192px; }
+  .sizes-row { display: flex; align-items: flex-end; gap: 28px;
+    padding: 32px; background: var(--panel); border: 1px solid var(--line);
+    border-radius: 12px; flex-wrap: wrap; }
+  .size-item { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+  .size-item .px { font-size: 11px; color: var(--muted); font-family: ui-monospace, "SF Mono", monospace; }
+  .controls { position: sticky; top: 0;
+    background: color-mix(in oklab, var(--bg) 92%, transparent);
+    backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+    padding: 16px 0; margin-bottom: 24px; border-bottom: 1px solid var(--line);
+    z-index: 10; display: flex; gap: 8px; flex-wrap: wrap; }
+  button { background: var(--panel-2); color: var(--fg); border: 1px solid var(--line);
+    padding: 8px 14px; border-radius: 8px; font: inherit; cursor: pointer;
+    transition: border-color .15s ease, background .15s ease; }
+  button:hover { border-color: var(--accent); }
+  button.active { background: color-mix(in oklab, var(--accent) 20%, transparent);
+    border-color: var(--accent); color: var(--fg); }
+  .code-block { background: var(--panel-2); border: 1px solid var(--line);
+    border-radius: 8px; padding: 16px;
+    font: 12px/1.6 ui-monospace, "SF Mono", monospace;
+    color: #c8d2de; overflow-x: auto; margin: 16px 0; white-space: pre; }
+  .code-block .k { color: #a78bfa; } .code-block .s { color: #7cc4ff; } .code-block .c { color: #7a8396; }
+  footer { margin-top: 80px; padding-top: 32px; border-top: 1px solid var(--line);
+    color: var(--muted); font-size: 12px; }
+</style>
+</head>
+<body>
+
+<h1>M1K3 Labyrinth — Icon Family</h1>
+<p class="lead">
+  間 (Ma) interpretation of the classical labyrinth, bold edition. Thick
+  confident strokes against generous silence. One doorway at the bottom, one
+  crossing at the top of the innermost ring, a small ring-void at centre —
+  the rest is breathing room.
+</p>
+
+<div class="controls">
+  <button data-state="is-drawing" class="active">draw-in</button>
+  <button data-state="is-idle">idle</button>
+  <button data-state="is-thinking">thinking</button>
+  <button data-state="is-listening">listening</button>
+  <button data-state="is-speaking">speaking</button>
+  <button data-state="is-error">error</button>
+  <button data-state="">static</button>
+</div>
+
+<h2>Four variants, same pattern</h2>
+<div class="row" id="variants">
+      <div class="card">
+        <div class="swatch large"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400"
+     role="img" aria-label="M1K3 labyrinth" class="m1k3-labyrinth " style="width:192px;height:192px;display:block">
+  <g fill="none" stroke="currentColor" stroke-width="13.6"
+     stroke-linecap="round" stroke-linejoin="round">
+    <path class="m1k3-wall m1k3-wall-0" d="M 165.902 360.416 A 164 164 0 1 1 234.098 360.416"/>
+    <path class="m1k3-wall m1k3-wall-1" d="M 174.177 321.489 A 124.203 124.203 0 1 1 225.823 321.489"/>
+    <path class="m1k3-wall m1k3-wall-2" d="M 182.451 282.561 A 84.405 84.405 0 1 1 217.549 282.561"/>
+    <path class="m1k3-wall m1k3-wall-3" d="M 209.275 243.633 A 44.608 44.608 0 1 0 207.746 156.07"/>
+    <path class="m1k3-wall m1k3-wall-4" d="M 192.254 156.07 A 44.608 44.608 0 1 0 190.725 243.633"/>
+    <circle class="m1k3-core" cx="200" cy="200" r="26.24" fill="none"/>
+  </g>
+</svg>
+</div>
+        <div class="label"><strong>labyrinth-classical</strong>4 rings · hero · 256 px+</div>
+      </div>
+      <div class="card">
+        <div class="swatch large"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256"
+     role="img" aria-label="M1K3 labyrinth" class="m1k3-labyrinth " style="width:192px;height:192px;display:block">
+  <g fill="none" stroke="currentColor" stroke-width="12.288"
+     stroke-linecap="round" stroke-linejoin="round">
+    <path class="m1k3-wall m1k3-wall-0" d="M 101.497 226.911 A 102.4 102.4 0 1 1 154.503 226.911"/>
+    <path class="m1k3-wall m1k3-wall-1" d="M 110.964 191.58 A 65.823 65.823 0 1 1 145.036 191.58"/>
+    <path class="m1k3-wall m1k3-wall-2" d="M 135.569 156.249 A 29.245 29.245 0 1 0 133.58 99.292"/>
+    <path class="m1k3-wall m1k3-wall-3" d="M 122.42 99.292 A 29.245 29.245 0 1 0 120.431 156.249"/>
+    <circle class="m1k3-core" cx="128" cy="128" r="17.203" fill="none"/>
+  </g>
+</svg>
+</div>
+        <div class="label"><strong>labyrinth-mid</strong>3 rings · avatar · 64–256 px</div>
+      </div>
+      <div class="card">
+        <div class="swatch large"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128"
+     role="img" aria-label="M1K3 labyrinth" class="m1k3-labyrinth " style="width:192px;height:192px;display:block">
+  <g fill="none" stroke="currentColor" stroke-width="9.6"
+     stroke-linecap="round" stroke-linejoin="round">
+    <path class="m1k3-wall m1k3-wall-0" d="M 48.164 109.99 A 48.64 48.64 0 1 1 79.836 109.99"/>
+    <path class="m1k3-wall m1k3-wall-1" d="M 71.439 85.603 A 22.848 22.848 0 1 0 69.14 41.738"/>
+    <path class="m1k3-wall m1k3-wall-2" d="M 58.86 41.738 A 22.848 22.848 0 1 0 56.561 85.603"/>
+    <circle class="m1k3-core" cx="64" cy="64" r="13.44" fill="none"/>
+  </g>
+</svg>
+</div>
+        <div class="label"><strong>labyrinth-glyph</strong>2 rings · UI · 24–64 px</div>
+      </div>
+      <div class="card">
+        <div class="swatch large"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"
+     role="img" aria-label="M1K3 labyrinth" class="m1k3-labyrinth " style="width:192px;height:192px;display:block">
+  <g fill="none" stroke="currentColor" stroke-width="8.32"
+     stroke-linecap="round" stroke-linejoin="round">
+    <path class="m1k3-wall m1k3-wall-0" d="M 21.9 52.708 A 23.04 23.04 0 1 1 42.1 52.708"/>
+  </g>
+</svg>
+</div>
+        <div class="label"><strong>labyrinth-mark</strong>enso · favicon · 16–24 px</div>
+      </div>
+</div>
+
+<h2>Scale test — real pixel sizes</h2>
+<div class="sizes-row" id="scale-row">
+      <div class="size-item">
+        <div class="swatch" style="width:16px;height:16px"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"
+     role="img" aria-label="M1K3 labyrinth" class="m1k3-labyrinth " style="width:16px;height:16px;display:block">
+  <g fill="none" stroke="currentColor" stroke-width="8.32"
+     stroke-linecap="round" stroke-linejoin="round">
+    <path class="m1k3-wall m1k3-wall-0" d="M 21.9 52.708 A 23.04 23.04 0 1 1 42.1 52.708"/>
+  </g>
+</svg>
+</div>
+        <span class="px">16 px · mark</span>
+      </div>
+      <div class="size-item">
+        <div class="swatch" style="width:24px;height:24px"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"
+     role="img" aria-label="M1K3 labyrinth" class="m1k3-labyrinth " style="width:24px;height:24px;display:block">
+  <g fill="none" stroke="currentColor" stroke-width="8.32"
+     stroke-linecap="round" stroke-linejoin="round">
+    <path class="m1k3-wall m1k3-wall-0" d="M 21.9 52.708 A 23.04 23.04 0 1 1 42.1 52.708"/>
+  </g>
+</svg>
+</div>
+        <span class="px">24 px · mark</span>
+      </div>
+      <div class="size-item">
+        <div class="swatch" style="width:32px;height:32px"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128"
+     role="img" aria-label="M1K3 labyrinth" class="m1k3-labyrinth " style="width:32px;height:32px;display:block">
+  <g fill="none" stroke="currentColor" stroke-width="9.6"
+     stroke-linecap="round" stroke-linejoin="round">
+    <path class="m1k3-wall m1k3-wall-0" d="M 48.164 109.99 A 48.64 48.64 0 1 1 79.836 109.99"/>
+    <path class="m1k3-wall m1k3-wall-1" d="M 71.439 85.603 A 22.848 22.848 0 1 0 69.14 41.738"/>
+    <path class="m1k3-wall m1k3-wall-2" d="M 58.86 41.738 A 22.848 22.848 0 1 0 56.561 85.603"/>
+    <circle class="m1k3-core" cx="64" cy="64" r="13.44" fill="none"/>
+  </g>
+</svg>
+</div>
+        <span class="px">32 px · glyph</span>
+      </div>
+      <div class="size-item">
+        <div class="swatch" style="width:48px;height:48px"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128"
+     role="img" aria-label="M1K3 labyrinth" class="m1k3-labyrinth " style="width:48px;height:48px;display:block">
+  <g fill="none" stroke="currentColor" stroke-width="9.6"
+     stroke-linecap="round" stroke-linejoin="round">
+    <path class="m1k3-wall m1k3-wall-0" d="M 48.164 109.99 A 48.64 48.64 0 1 1 79.836 109.99"/>
+    <path class="m1k3-wall m1k3-wall-1" d="M 71.439 85.603 A 22.848 22.848 0 1 0 69.14 41.738"/>
+    <path class="m1k3-wall m1k3-wall-2" d="M 58.86 41.738 A 22.848 22.848 0 1 0 56.561 85.603"/>
+    <circle class="m1k3-core" cx="64" cy="64" r="13.44" fill="none"/>
+  </g>
+</svg>
+</div>
+        <span class="px">48 px · glyph</span>
+      </div>
+      <div class="size-item">
+        <div class="swatch" style="width:64px;height:64px"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256"
+     role="img" aria-label="M1K3 labyrinth" class="m1k3-labyrinth " style="width:64px;height:64px;display:block">
+  <g fill="none" stroke="currentColor" stroke-width="12.288"
+     stroke-linecap="round" stroke-linejoin="round">
+    <path class="m1k3-wall m1k3-wall-0" d="M 101.497 226.911 A 102.4 102.4 0 1 1 154.503 226.911"/>
+    <path class="m1k3-wall m1k3-wall-1" d="M 110.964 191.58 A 65.823 65.823 0 1 1 145.036 191.58"/>
+    <path class="m1k3-wall m1k3-wall-2" d="M 135.569 156.249 A 29.245 29.245 0 1 0 133.58 99.292"/>
+    <path class="m1k3-wall m1k3-wall-3" d="M 122.42 99.292 A 29.245 29.245 0 1 0 120.431 156.249"/>
+    <circle class="m1k3-core" cx="128" cy="128" r="17.203" fill="none"/>
+  </g>
+</svg>
+</div>
+        <span class="px">64 px · mid</span>
+      </div>
+      <div class="size-item">
+        <div class="swatch" style="width:96px;height:96px"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256"
+     role="img" aria-label="M1K3 labyrinth" class="m1k3-labyrinth " style="width:96px;height:96px;display:block">
+  <g fill="none" stroke="currentColor" stroke-width="12.288"
+     stroke-linecap="round" stroke-linejoin="round">
+    <path class="m1k3-wall m1k3-wall-0" d="M 101.497 226.911 A 102.4 102.4 0 1 1 154.503 226.911"/>
+    <path class="m1k3-wall m1k3-wall-1" d="M 110.964 191.58 A 65.823 65.823 0 1 1 145.036 191.58"/>
+    <path class="m1k3-wall m1k3-wall-2" d="M 135.569 156.249 A 29.245 29.245 0 1 0 133.58 99.292"/>
+    <path class="m1k3-wall m1k3-wall-3" d="M 122.42 99.292 A 29.245 29.245 0 1 0 120.431 156.249"/>
+    <circle class="m1k3-core" cx="128" cy="128" r="17.203" fill="none"/>
+  </g>
+</svg>
+</div>
+        <span class="px">96 px · mid</span>
+      </div>
+      <div class="size-item">
+        <div class="swatch" style="width:128px;height:128px"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400"
+     role="img" aria-label="M1K3 labyrinth" class="m1k3-labyrinth " style="width:128px;height:128px;display:block">
+  <g fill="none" stroke="currentColor" stroke-width="13.6"
+     stroke-linecap="round" stroke-linejoin="round">
+    <path class="m1k3-wall m1k3-wall-0" d="M 165.902 360.416 A 164 164 0 1 1 234.098 360.416"/>
+    <path class="m1k3-wall m1k3-wall-1" d="M 174.177 321.489 A 124.203 124.203 0 1 1 225.823 321.489"/>
+    <path class="m1k3-wall m1k3-wall-2" d="M 182.451 282.561 A 84.405 84.405 0 1 1 217.549 282.561"/>
+    <path class="m1k3-wall m1k3-wall-3" d="M 209.275 243.633 A 44.608 44.608 0 1 0 207.746 156.07"/>
+    <path class="m1k3-wall m1k3-wall-4" d="M 192.254 156.07 A 44.608 44.608 0 1 0 190.725 243.633"/>
+    <circle class="m1k3-core" cx="200" cy="200" r="26.24" fill="none"/>
+  </g>
+</svg>
+</div>
+        <span class="px">128 px · classical</span>
+      </div>
+      <div class="size-item">
+        <div class="swatch" style="width:192px;height:192px"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400"
+     role="img" aria-label="M1K3 labyrinth" class="m1k3-labyrinth " style="width:192px;height:192px;display:block">
+  <g fill="none" stroke="currentColor" stroke-width="13.6"
+     stroke-linecap="round" stroke-linejoin="round">
+    <path class="m1k3-wall m1k3-wall-0" d="M 165.902 360.416 A 164 164 0 1 1 234.098 360.416"/>
+    <path class="m1k3-wall m1k3-wall-1" d="M 174.177 321.489 A 124.203 124.203 0 1 1 225.823 321.489"/>
+    <path class="m1k3-wall m1k3-wall-2" d="M 182.451 282.561 A 84.405 84.405 0 1 1 217.549 282.561"/>
+    <path class="m1k3-wall m1k3-wall-3" d="M 209.275 243.633 A 44.608 44.608 0 1 0 207.746 156.07"/>
+    <path class="m1k3-wall m1k3-wall-4" d="M 192.254 156.07 A 44.608 44.608 0 1 0 190.725 243.633"/>
+    <circle class="m1k3-core" cx="200" cy="200" r="26.24" fill="none"/>
+  </g>
+</svg>
+</div>
+        <span class="px">192 px · classical</span>
+      </div>
+</div>
+
+<h2>Emotion colour mappings (mid variant)</h2>
+<div class="row" id="emotion-row">
+      <div class="card">
+        <div class="swatch"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256"
+     role="img" aria-label="M1K3 labyrinth" class="m1k3-labyrinth m1k3-emotion-neutral" style="width:128px;height:128px;display:block">
+  <g fill="none" stroke="currentColor" stroke-width="12.288"
+     stroke-linecap="round" stroke-linejoin="round">
+    <path class="m1k3-wall m1k3-wall-0" d="M 101.497 226.911 A 102.4 102.4 0 1 1 154.503 226.911"/>
+    <path class="m1k3-wall m1k3-wall-1" d="M 110.964 191.58 A 65.823 65.823 0 1 1 145.036 191.58"/>
+    <path class="m1k3-wall m1k3-wall-2" d="M 135.569 156.249 A 29.245 29.245 0 1 0 133.58 99.292"/>
+    <path class="m1k3-wall m1k3-wall-3" d="M 122.42 99.292 A 29.245 29.245 0 1 0 120.431 156.249"/>
+    <circle class="m1k3-core" cx="128" cy="128" r="17.203" fill="none"/>
+  </g>
+</svg>
+</div>
+        <div class="label"><strong>neutral</strong>m1k3-emotion-neutral</div>
+      </div>
+      <div class="card">
+        <div class="swatch"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256"
+     role="img" aria-label="M1K3 labyrinth" class="m1k3-labyrinth m1k3-emotion-calm" style="width:128px;height:128px;display:block">
+  <g fill="none" stroke="currentColor" stroke-width="12.288"
+     stroke-linecap="round" stroke-linejoin="round">
+    <path class="m1k3-wall m1k3-wall-0" d="M 101.497 226.911 A 102.4 102.4 0 1 1 154.503 226.911"/>
+    <path class="m1k3-wall m1k3-wall-1" d="M 110.964 191.58 A 65.823 65.823 0 1 1 145.036 191.58"/>
+    <path class="m1k3-wall m1k3-wall-2" d="M 135.569 156.249 A 29.245 29.245 0 1 0 133.58 99.292"/>
+    <path class="m1k3-wall m1k3-wall-3" d="M 122.42 99.292 A 29.245 29.245 0 1 0 120.431 156.249"/>
+    <circle class="m1k3-core" cx="128" cy="128" r="17.203" fill="none"/>
+  </g>
+</svg>
+</div>
+        <div class="label"><strong>calm</strong>m1k3-emotion-calm</div>
+      </div>
+      <div class="card">
+        <div class="swatch"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256"
+     role="img" aria-label="M1K3 labyrinth" class="m1k3-labyrinth m1k3-emotion-focus" style="width:128px;height:128px;display:block">
+  <g fill="none" stroke="currentColor" stroke-width="12.288"
+     stroke-linecap="round" stroke-linejoin="round">
+    <path class="m1k3-wall m1k3-wall-0" d="M 101.497 226.911 A 102.4 102.4 0 1 1 154.503 226.911"/>
+    <path class="m1k3-wall m1k3-wall-1" d="M 110.964 191.58 A 65.823 65.823 0 1 1 145.036 191.58"/>
+    <path class="m1k3-wall m1k3-wall-2" d="M 135.569 156.249 A 29.245 29.245 0 1 0 133.58 99.292"/>
+    <path class="m1k3-wall m1k3-wall-3" d="M 122.42 99.292 A 29.245 29.245 0 1 0 120.431 156.249"/>
+    <circle class="m1k3-core" cx="128" cy="128" r="17.203" fill="none"/>
+  </g>
+</svg>
+</div>
+        <div class="label"><strong>focus</strong>m1k3-emotion-focus</div>
+      </div>
+      <div class="card">
+        <div class="swatch"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256"
+     role="img" aria-label="M1K3 labyrinth" class="m1k3-labyrinth m1k3-emotion-happy" style="width:128px;height:128px;display:block">
+  <g fill="none" stroke="currentColor" stroke-width="12.288"
+     stroke-linecap="round" stroke-linejoin="round">
+    <path class="m1k3-wall m1k3-wall-0" d="M 101.497 226.911 A 102.4 102.4 0 1 1 154.503 226.911"/>
+    <path class="m1k3-wall m1k3-wall-1" d="M 110.964 191.58 A 65.823 65.823 0 1 1 145.036 191.58"/>
+    <path class="m1k3-wall m1k3-wall-2" d="M 135.569 156.249 A 29.245 29.245 0 1 0 133.58 99.292"/>
+    <path class="m1k3-wall m1k3-wall-3" d="M 122.42 99.292 A 29.245 29.245 0 1 0 120.431 156.249"/>
+    <circle class="m1k3-core" cx="128" cy="128" r="17.203" fill="none"/>
+  </g>
+</svg>
+</div>
+        <div class="label"><strong>happy</strong>m1k3-emotion-happy</div>
+      </div>
+      <div class="card">
+        <div class="swatch"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256"
+     role="img" aria-label="M1K3 labyrinth" class="m1k3-labyrinth m1k3-emotion-warm" style="width:128px;height:128px;display:block">
+  <g fill="none" stroke="currentColor" stroke-width="12.288"
+     stroke-linecap="round" stroke-linejoin="round">
+    <path class="m1k3-wall m1k3-wall-0" d="M 101.497 226.911 A 102.4 102.4 0 1 1 154.503 226.911"/>
+    <path class="m1k3-wall m1k3-wall-1" d="M 110.964 191.58 A 65.823 65.823 0 1 1 145.036 191.58"/>
+    <path class="m1k3-wall m1k3-wall-2" d="M 135.569 156.249 A 29.245 29.245 0 1 0 133.58 99.292"/>
+    <path class="m1k3-wall m1k3-wall-3" d="M 122.42 99.292 A 29.245 29.245 0 1 0 120.431 156.249"/>
+    <circle class="m1k3-core" cx="128" cy="128" r="17.203" fill="none"/>
+  </g>
+</svg>
+</div>
+        <div class="label"><strong>warm</strong>m1k3-emotion-warm</div>
+      </div>
+      <div class="card">
+        <div class="swatch"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256"
+     role="img" aria-label="M1K3 labyrinth" class="m1k3-labyrinth m1k3-emotion-curious" style="width:128px;height:128px;display:block">
+  <g fill="none" stroke="currentColor" stroke-width="12.288"
+     stroke-linecap="round" stroke-linejoin="round">
+    <path class="m1k3-wall m1k3-wall-0" d="M 101.497 226.911 A 102.4 102.4 0 1 1 154.503 226.911"/>
+    <path class="m1k3-wall m1k3-wall-1" d="M 110.964 191.58 A 65.823 65.823 0 1 1 145.036 191.58"/>
+    <path class="m1k3-wall m1k3-wall-2" d="M 135.569 156.249 A 29.245 29.245 0 1 0 133.58 99.292"/>
+    <path class="m1k3-wall m1k3-wall-3" d="M 122.42 99.292 A 29.245 29.245 0 1 0 120.431 156.249"/>
+    <circle class="m1k3-core" cx="128" cy="128" r="17.203" fill="none"/>
+  </g>
+</svg>
+</div>
+        <div class="label"><strong>curious</strong>m1k3-emotion-curious</div>
+      </div>
+      <div class="card">
+        <div class="swatch"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256"
+     role="img" aria-label="M1K3 labyrinth" class="m1k3-labyrinth m1k3-emotion-sad" style="width:128px;height:128px;display:block">
+  <g fill="none" stroke="currentColor" stroke-width="12.288"
+     stroke-linecap="round" stroke-linejoin="round">
+    <path class="m1k3-wall m1k3-wall-0" d="M 101.497 226.911 A 102.4 102.4 0 1 1 154.503 226.911"/>
+    <path class="m1k3-wall m1k3-wall-1" d="M 110.964 191.58 A 65.823 65.823 0 1 1 145.036 191.58"/>
+    <path class="m1k3-wall m1k3-wall-2" d="M 135.569 156.249 A 29.245 29.245 0 1 0 133.58 99.292"/>
+    <path class="m1k3-wall m1k3-wall-3" d="M 122.42 99.292 A 29.245 29.245 0 1 0 120.431 156.249"/>
+    <circle class="m1k3-core" cx="128" cy="128" r="17.203" fill="none"/>
+  </g>
+</svg>
+</div>
+        <div class="label"><strong>sad</strong>m1k3-emotion-sad</div>
+      </div>
+</div>
+
+<h2>Usage</h2>
+<div class="code-block"><span class="c">&lt;!-- Inline SVG in markup, link the stylesheet --&gt;</span>
+<span class="k">&lt;link</span> <span class="s">rel</span>=<span class="s">"stylesheet"</span> <span class="s">href</span>=<span class="s">"labyrinth.css"</span> <span class="k">/&gt;</span>
+
+<span class="k">&lt;svg</span> <span class="s">class</span>=<span class="s">"m1k3-labyrinth is-thinking m1k3-emotion-focus"</span> <span class="s">viewBox</span>=<span class="s">"0 0 256 256"</span><span class="k">&gt;</span>
+  <span class="c">&lt;!-- paste contents of labyrinth-mid.svg here --&gt;</span>
+<span class="k">&lt;/svg&gt;</span>
+
+<span class="c">// Or toggle states from JS:</span>
+<span class="k">const</span> el = document.querySelector(<span class="s">'.m1k3-labyrinth'</span>);
+el.className = <span class="s">'m1k3-labyrinth is-speaking m1k3-emotion-warm'</span>;</div>
+
+<footer>
+  <code>assets/icons/labyrinth/</code> · 間 Ma interpretation · bold edition
+</footer>
+
+<script>
+const STATES = ['is-drawing', 'is-idle', 'is-thinking', 'is-listening', 'is-speaking', 'is-error'];
+function setState(state) {
+  document.querySelectorAll('svg.m1k3-labyrinth').forEach(svg => {
+    STATES.forEach(s => svg.classList.remove(s));
+    void svg.offsetWidth;
+    if (state) svg.classList.add(state);
+  });
+}
+document.querySelectorAll('.controls button').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.controls button').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    setState(btn.dataset.state);
+  });
+});
+setState('is-drawing');
+</script>
+</body>
+</html>

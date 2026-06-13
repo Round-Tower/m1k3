@@ -54,3 +54,8 @@ clean:
 # Quick setup for new users
 setup: install download
 	@echo "✅ M1K3 setup complete! Run 'make run' to start."
+site:
+	@echo "🦊 Serving launch site → http://localhost:8002"
+	@(sleep 1 && open http://localhost:8002) &
+	@python3 -m http.server 8002 --directory site
+.PHONY: site

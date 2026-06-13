@@ -204,12 +204,13 @@ private extension OnboardingView {
                     tier: tier,
                     isSelected: selectedBrain == tier,
                     isRecommended: tier == recommended,
-                    isLocked: !tier.isSelectableOnThisMac
+                    isLocked: !tier.isSelectableOnThisMac,
+                    isDownloaded: env.isBrainDownloaded(tier)
                 ) { selectedBrain = tier }
             }
 
             Button(action: wakeBrain) {
-                Text(selectedBrain.requiresDownload
+                Text(selectedBrain.requiresDownload && !env.isBrainDownloaded(selectedBrain)
                     ? "Download \(selectedBrain.displayName) →"
                     : "Wake up \(selectedBrain.displayName) →")
                     .font(.headline)
@@ -262,7 +263,7 @@ private extension OnboardingView {
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 }
-            case .idle, .ready:
+            case .idle, .ready, .preparing:
                 ProgressView()
             }
 
@@ -349,7 +350,7 @@ private extension OnboardingView {
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 }
-            case .idle, .ready:
+            case .idle, .ready, .preparing:
                 ProgressView()
             }
 
@@ -441,7 +442,7 @@ private extension OnboardingView {
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 }
-            case .idle, .ready:
+            case .idle, .ready, .preparing:
                 ProgressView()
             }
 

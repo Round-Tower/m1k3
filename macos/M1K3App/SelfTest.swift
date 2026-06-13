@@ -23,6 +23,7 @@ import M1K3Chat
 import M1K3Inference
 import M1K3Knowledge
 import M1K3MLX
+import MLXEmbedders
 
 enum SelfTest {
     static var isRequested: Bool {
@@ -87,13 +88,13 @@ enum SelfTest {
             emit("✗ store/AFM stage: \(error)")
         }
 
-        // 2. MLX bge_small embedding (Metal).
-        emit("• loading MLX bge_small (downloads on first use)…")
+        // 2. MLX Qwen3-Embedding (Metal).
+        emit("• loading MLX Qwen3-Embedding (downloads on first use)…")
         do {
             let mlx = MLXEmbeddingService()
             let v = try await mlx.embed("hydraulic seal conveyor")
             let norm = v.reduce(Float(0)) { $0 + $1 * $1 }.squareRoot()
-            emit("✓ MLX bge_small embed: dim=\(v.count) ‖v‖=\(String(format: "%.3f", norm))")
+            emit("✓ MLX Qwen3-Embedding embed: dim=\(v.count) ‖v‖=\(String(format: "%.3f", norm))")
         } catch {
             emit("✗ MLX embed stage: \(error)")
         }
@@ -172,25 +173,133 @@ enum SelfTest {
             }
 
             await runKVPersistProbeIfRequested(llm: llm)
+
+            // 3e. Optional persona-prefix invariant (M1K3_SELFTEST_PREFIX=1):
+            // assert [cached system block] + [delta] == [full render] for this
+            // model, and report the prefill tokens the cache saves. The safety
+            // net for the Qwen two-probe boundary slice — and gemma's prefix too.
+            if ProcessInfo.processInfo.environment["M1K3_SELFTEST_PREFIX"] == "1" {
+                emit(await llm.personaPrefixInvariantProbe())
+            }
         } catch {
             emit("✗ MLX generate stage: \(error)")
         }
 
-        // 4. Optional per-model eval suite (M1K3_SELFTEST_EVAL=1): the same
-        //    behavioral checklist against every brain — or any ad-hoc list via
-        //    M1K3_SELFTEST_EVAL_MODELS=id,id. Promotion gate for new models.
-        if ProcessInfo.processInfo.environment["M1K3_SELFTEST_EVAL"] == "1" {
-            let models = ProcessInfo.processInfo.environment["M1K3_SELFTEST_EVAL_MODELS"]
-                .map { $0.split(separator: ",").map { String($0).trimmingCharacters(in: .whitespaces) } }
-                ?? BrainTier.allCases.compactMap(\.mlxModelID)
-            for modelID in models {
-                emit("• eval \(modelID)…")
-                let report = await evalModel(modelID)
-                emit(report.rendered)
-            }
+        await runEvalSuiteIfRequested()
+
+        // 5. Optional memory-threshold eval (M1K3_SELFTEST_MEMEVAL=1): embed
+        //    the fixture pairs with the REAL BGE embedder and report the
+        //    query→short-fact cosine distributions — the data that sets
+        //    GroundingGate.memoryThreshold (the chunk bar was tuned on a
+        //    different distribution; short facts sit lower in the cone).
+        if ProcessInfo.processInfo.environment["M1K3_SELFTEST_MEMEVAL"] == "1" {
+            await runMemoryThresholdEval()
+        }
+
+        // 6. Optional A/B separation eval (M1K3_SELFTEST_ABSEP=1): embed the
+        //    in/off-domain fixtures with BOTH the old bge-small and the new
+        //    qwen3-embed-512 and report which separates the classes wider.
+        //    This is what justifies the embedder swap — measured, not trusted —
+        //    and feeds the GroundingGate threshold re-tune.
+        if ProcessInfo.processInfo.environment["M1K3_SELFTEST_ABSEP"] == "1" {
+            await runSeparationEval()
         }
 
         emit("=== END SELF-TEST ===")
+    }
+
+    /// 4. Optional per-model eval suite (M1K3_SELFTEST_EVAL=1): the same
+    /// behavioral checklist against every brain — or any ad-hoc list via
+    /// M1K3_SELFTEST_EVAL_MODELS=id,id. Promotion gate for new models.
+    private static func runEvalSuiteIfRequested() async {
+        guard ProcessInfo.processInfo.environment["M1K3_SELFTEST_EVAL"] == "1" else { return }
+        let models = ProcessInfo.processInfo.environment["M1K3_SELFTEST_EVAL_MODELS"]
+            .map { $0.split(separator: ",").map { String($0).trimmingCharacters(in: .whitespaces) } }
+            ?? BrainTier.allCases.compactMap(\.mlxModelID)
+        for modelID in models {
+            emit("• eval \(modelID)…")
+            let report = await evalModel(modelID)
+            emit(report.rendered)
+        }
+    }
+
+    /// 5. The MEMEVAL pass: one cosine per fixture pair, positives then
+    /// negatives, then the distribution summary + suggested threshold. Each
+    /// line lands in the OUT file as it's measured (interrupt-safe).
+    private static func runMemoryThresholdEval() async {
+        emit("• memeval: embedding \(MemoryEvalFixtures.positives.count) positive + "
+            + "\(MemoryEvalFixtures.negatives.count) negative pairs…")
+        do {
+            let embedder = MLXEmbeddingService()
+            let positiveScores = try await score(
+                pairs: MemoryEvalFixtures.positives, label: "pos", embedder: embedder
+            )
+            let negativeScores = try await score(
+                pairs: MemoryEvalFixtures.negatives, label: "neg", embedder: embedder
+            )
+            emit(MemoryEvalReport.render(positives: positiveScores, negatives: negativeScores))
+        } catch {
+            emit("✗ memeval: \(error)")
+        }
+    }
+
+    /// Cosine per pair, emitted as measured so a crash mid-run loses nothing.
+    private static func score(
+        pairs: [MemoryEvalFixtures.Pair], label: String, embedder: MLXEmbeddingService
+    ) async throws -> [Float] {
+        let memoryVectors = try await embedder.embedBatch(pairs.map(\.memory))
+        let queryVectors = try await embedder.embedBatch(pairs.map(\.query))
+        var scores: [Float] = []
+        for (index, pair) in pairs.enumerated() {
+            let cosine = VectorMath.cosineSimilarity(queryVectors[index], memoryVectors[index])
+            scores.append(cosine)
+            let preview = String(pair.memory.prefix(40))
+            emit(String(format: "memeval %@: %.3f [%@]", label, cosine, preview))
+        }
+        return scores
+    }
+
+    /// 6. The ABSEP pass: in/off-domain query→document cosines for the OLD
+    /// (bge-small-384) and NEW (qwen3-embed-512) embedder, then the
+    /// head-to-head margin verdict. The candidate must separate the classes at
+    /// least as wide as bge, else the swap isn't justified (the ABSEP gate).
+    private static func runSeparationEval() async {
+        emit("• absep: \(SeparationEvalFixtures.inDomain.count) in-domain + "
+            + "\(SeparationEvalFixtures.offDomain.count) off-domain pairs, bge-small-384 vs qwen3-embed-512…")
+        do {
+            // Old embedder stood up explicitly beside the new default — the init
+            // params survived the default change precisely for this.
+            let bge = MLXEmbeddingService(configuration: EmbedderRegistry.bge_small, dimension: 384)
+            let candidate = MLXEmbeddingService() // new default = qwen3-embed-512
+
+            let bgeIn = try await scoreSeparation(pairs: SeparationEvalFixtures.inDomain, label: "bge in", embedder: bge)
+            let bgeOff = try await scoreSeparation(pairs: SeparationEvalFixtures.offDomain, label: "bge off", embedder: bge)
+            let candIn = try await scoreSeparation(pairs: SeparationEvalFixtures.inDomain, label: "qwen3 in", embedder: candidate)
+            let candOff = try await scoreSeparation(pairs: SeparationEvalFixtures.offDomain, label: "qwen3 off", embedder: candidate)
+
+            let bgeResult = SeparationEvalReport.Result(label: "bge-small-384", inDomain: bgeIn, offDomain: bgeOff)
+            let candidateResult = SeparationEvalReport.Result(label: "qwen3-embed-512", inDomain: candIn, offDomain: candOff)
+            // candidate second → the head-to-head verdict describes it vs bge.
+            emit(SeparationEvalReport.render([bgeResult, candidateResult]))
+        } catch {
+            emit("✗ absep: \(error)")
+        }
+    }
+
+    /// Cosine per (query, document) pair, emitted as measured so a crash
+    /// mid-run loses nothing.
+    private static func scoreSeparation(
+        pairs: [SeparationEvalFixtures.Pair], label: String, embedder: MLXEmbeddingService
+    ) async throws -> [Float] {
+        let queryVectors = try await embedder.embedBatch(pairs.map(\.query))
+        let docVectors = try await embedder.embedBatch(pairs.map(\.document))
+        var scores: [Float] = []
+        for (index, pair) in pairs.enumerated() {
+            let cosine = VectorMath.cosineSimilarity(queryVectors[index], docVectors[index])
+            scores.append(cosine)
+            emit(String(format: "absep %@: %.3f [%@]", label, cosine, String(pair.query.prefix(40))))
+        }
+        return scores
     }
 
     /// 3d. Optional prompt-cache persistence probe (M1K3_SELFTEST_KVPERSIST=1):

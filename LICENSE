@@ -1,0 +1,121 @@
+M1K3 — PROPRIETARY SOFTWARE LICENSE
+All Rights Reserved
+
+Copyright (c) 2026 Kevin Murphy. All rights reserved.
+
+================================================================================
+1. OWNERSHIP
+================================================================================
+
+This software, including all source code, documentation, designs, models,
+assets, and related materials in this repository (collectively, the "Software"),
+is the exclusive property of Kevin Murphy ("the Owner"). The Software is
+protected by copyright and other intellectual property laws and treaties.
+
+The Software is licensed, not sold. No title or ownership of the Software is
+transferred to any person or entity under this License.
+
+================================================================================
+2. NO GENERAL GRANT
+================================================================================
+
+No rights are granted to the general public. The Software is private and
+confidential. Absent a separate, written grant of access from the Owner, you
+have NO right to access, view, copy, install, use, modify, distribute, sublicense,
+or create derivative works from the Software.
+
+================================================================================
+3. LIMITED ACCESS GRANT (INVITED COLLABORATORS ONLY)
+================================================================================
+
+The Owner may grant specific, named individuals ("Authorized Users") access to
+the Software for the limited purpose of evaluation, review, or collaborative
+development as expressly approved by the Owner. Each Authorized User must accept
+the Access Agreement (see ACCESS_AGREEMENT.md) before access is granted.
+
+Subject to continued compliance with this License and the Access Agreement, an
+Authorized User is granted a personal, non-exclusive, non-transferable,
+non-sublicensable, revocable license to:
+
+  (a) access and view the Software within the repository hosting platform; and
+  (b) clone the Software locally solely to build, run, evaluate, or contribute
+      changes back to the Owner.
+
+This grant does NOT include any right to:
+
+  (i)   use the Software, in whole or in part, for any commercial purpose;
+  (ii)  redistribute, publish, mirror, or disclose the Software or any portion
+        of it to any third party;
+  (iii) incorporate the Software, in whole or in part, into any other product,
+        service, model, or codebase;
+  (iv)  use the Software, its outputs, code, or design to train, fine-tune, or
+        evaluate any machine-learning model; or
+  (v)   remove or alter any copyright, attribution, or provenance notice
+        (including MurphySig signatures).
+
+================================================================================
+4. CONTRIBUTIONS
+================================================================================
+
+Any contribution (code, documentation, designs, or other materials) that an
+Authorized User submits to the Owner is provided to the Owner under a perpetual,
+worldwide, royalty-free, irrevocable assignment of all rights, or — where
+assignment is not permitted by law — the broadest possible exclusive license,
+such that the Owner may use, modify, relicense, and distribute the contribution
+without restriction. Authorized Users represent that they have the right to make
+their contributions and that those contributions are their original work.
+
+================================================================================
+5. CONFIDENTIALITY
+================================================================================
+
+The Software is confidential information of the Owner. Authorized Users must
+keep the Software confidential, must not disclose it to any unauthorized person,
+and must take reasonable measures to protect it from unauthorized access. The
+obligations in this section survive termination of access.
+
+================================================================================
+6. TERMINATION
+================================================================================
+
+The Owner may revoke any access grant at any time, for any reason, with or
+without notice. Upon revocation or termination, the affected person must
+immediately cease all use of the Software and destroy all local copies in their
+possession or control. Sections 1, 4, 5, 7, and 8 survive termination.
+
+================================================================================
+7. NO WARRANTY
+================================================================================
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
+FOR A PARTICULAR PURPOSE, AND NONINFRINGEMENT.
+
+================================================================================
+8. LIMITATION OF LIABILITY
+================================================================================
+
+IN NO EVENT SHALL THE OWNER BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER LIABILITY,
+WHETHER IN AN ACTION OF CONTRACT, TORT, OR OTHERWISE, ARISING FROM, OUT OF, OR IN
+CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+================================================================================
+9. THIRD-PARTY COMPONENTS
+================================================================================
+
+The Software incorporates third-party components that remain governed by their
+own licenses, including but not limited to: llama.cpp (MIT, included as a git
+submodule) and 3D assets under Creative Commons / asset-store terms (see the
+license files within their respective directories, e.g. app/3d/). Nothing in
+this License modifies the terms of those third-party components. The proprietary
+terms above apply only to the Owner's original materials.
+
+================================================================================
+10. GOVERNING LAW
+================================================================================
+
+This License is governed by the laws of Ireland, without regard to conflict-of-
+law principles. Any dispute arising under this License is subject to the
+exclusive jurisdiction of the courts of Ireland.
+
+For access requests or licensing inquiries, contact: kevin@round-tower.ie

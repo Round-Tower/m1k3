@@ -131,7 +131,13 @@ Architecture and current state: [`CLAUDE.md`](./CLAUDE.md).
 Inference, retrieval, and voice run on-device. No telemetry; conversations stay
 on your machine. Network is only used to download models on first run.
 
-## License
+## License & Access
 
-Not yet specified — add a `LICENSE` file before distribution. (`package.json`
-currently declares ISC.)
+**Proprietary — all rights reserved.** M1K3 is a private, invitation-only
+project. There is no general public grant: absent a written grant of access from
+the Owner, you may not access, copy, use, or redistribute the Software. See
+[`LICENSE`](./LICENSE) for the full terms.
+
+If you've been invited (or want to be), start with [`ACCESS.md`](./ACCESS.md)
+for how access works, and [`ACCESS_AGREEMENT.md`](./ACCESS_AGREEMENT.md) for the
+terms every Authorized User accepts.

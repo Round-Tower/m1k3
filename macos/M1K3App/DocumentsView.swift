@@ -102,6 +102,7 @@ private struct DocumentRow: View {
         switch doc.kind {
         case .call: "phone"
         case .note: "note.text"
+        case .memory: "brain"
         default: "doc.text"
         }
     }
