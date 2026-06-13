@@ -22,6 +22,10 @@
 //  both styles routing self-questions (configuration/design/abilities) to the
 //  persona instead of document search; the soft fix for meta-question
 //  confabulation, taken over a pre-generation router (brittle both ways).
+//  Review: Kev + claude-opus-4-8, 2026-06-13, Confidence 0.9 — retrieval now
+//  uses store.searchGrounding (two-lane doc+memory budgets, memoryTopK) so the
+//  document corpus can't crowd memory recall out of a single top-K. Fixes the
+//  live open-chat miss (M1K3 forgot the user's own city). verify-at-⌘R.
 
 import Foundation
 import M1K3Agent
@@ -40,6 +44,9 @@ public struct AgentRAGResponder: RAGResponding, Sendable {
     /// visible to the model.
     private let toolsProvider: @Sendable () -> [any AgentTool]
     private let topK: Int
+    /// Memories get their OWN retrieval budget (see `KnowledgeStore.searchGrounding`)
+    /// so document volume can't crowd them out of recall.
+    private let memoryTopK: Int
     private let maxIterations: Int
     /// Hits the model retrieved itself via search_knowledge — drained after
     /// the stream and merged into the turn's sources (see `collectedSources`).
@@ -54,6 +61,7 @@ public struct AgentRAGResponder: RAGResponding, Sendable {
         provider: any InferenceProvider,
         toolsProvider: @escaping @Sendable () -> [any AgentTool],
         topK: Int = 5,
+        memoryTopK: Int = 5,
         maxIterations: Int = 3,
         sourceCollector: ToolSourceCollector? = nil,
         thinkingModeProvider: @escaping @Sendable () -> ThinkingMode = { .auto }
@@ -63,6 +71,7 @@ public struct AgentRAGResponder: RAGResponding, Sendable {
         self.provider = provider
         self.toolsProvider = toolsProvider
         self.topK = topK
+        self.memoryTopK = memoryTopK
         self.maxIterations = maxIterations
         self.sourceCollector = sourceCollector
         self.thinkingModeProvider = thinkingModeProvider
@@ -108,8 +117,15 @@ public struct AgentRAGResponder: RAGResponding, Sendable {
         // Stale tool hits from an aborted prior turn must not leak in.
         _ = sourceCollector?.drain()
         let queryVector = try await embedder.embed(question)
-        let retrieved = try store.searchHybrid(query: question, queryVector: queryVector, limit: topK)
-        // Gate on relevance: top-K ALWAYS returns something, even for "what
+        // Two-lane retrieval: documents and memories get SEPARATE top-K budgets
+        // so the larger document corpus can't crowd short memory facts out of a
+        // single ranking (the open-chat recall miss — M1K3 forgot the user's
+        // own city when the query leaned even slightly documentary).
+        let retrieved = try store.searchGrounding(
+            query: question, queryVector: queryVector,
+            documentLimit: topK, memoryLimit: memoryTopK
+        )
+        // Gate on relevance: each lane ALWAYS returns something, even for "what
         // model are you?" — weak hits pollute the prompt and derail small
         // models. Below threshold nothing is injected; the model can still
         // retrieve on its own terms via search_knowledge. Memory hits clear
