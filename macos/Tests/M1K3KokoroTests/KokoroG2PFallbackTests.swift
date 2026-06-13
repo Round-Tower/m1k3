@@ -16,6 +16,8 @@ struct KokoroG2PFallbackTests {
         "fahrenheit": [30], "degree": [31],
         "m": [41], "k": [42], "u": [43], "s": [44], "a": [45],
         "one": [46], "zero": [47],
+        // Compound-split fixtures: known sub-words, none a single dict entry combined.
+        "grand": [60, 61], "master": [62, 63], "key": [64], "board": [65],
     ]
 
     private func g2p() -> KokoroG2P {
@@ -105,6 +107,40 @@ struct KokoroG2PFallbackTests {
         // The OOV word stays addressable for timing with an empty token range.
         #expect(result.words.count == 3)
         #expect(result.words[1].tokenRange.isEmpty)
+    }
+
+    // MARK: - Compound split (the "grandmaster" fix)
+
+    @Test("a compound OOV word splits into its known sub-words and is spoken")
+    func compoundSplits() {
+        // "grandmaster" is NOT a dict entry, but grand + master are → speak both,
+        // joined by the space token, as ONE word for karaoke timing.
+        let result = g2p().annotatedTokens("grandmaster")
+        #expect(result.tokens == [60, 61, 16, 62, 63])
+        #expect(result.words == [G2PWord(textRange: 0 ..< 11, tokenRange: 0 ..< 5)])
+    }
+
+    @Test("compound split is case-insensitive and rides a sentence cleanly")
+    func compoundInSentence() {
+        // "aa Keyboard bb" → aa SP key SP board SP bb
+        #expect(g2p().phonemeTokens("aa Keyboard bb") == [101, 16, 64, 16, 65, 16, 102])
+    }
+
+    @Test("a partial segmentation (leftover that isn't a known word) stays silent")
+    func compoundPartialStaysSilent() {
+        // "masterful" = master + "ful" (not in dict) — no COMPLETE split → silent,
+        // not a half-spoken "master".
+        let result = g2p().annotatedTokens("masterful")
+        #expect(result.tokens.isEmpty)
+        #expect(result.words.count == 1)
+        #expect(result.words[0].tokenRange.isEmpty)
+    }
+
+    @Test("single-letter dict keys can't make a compound into letter-soup")
+    func compoundMinSegmentGuard() {
+        // "ask" would be a-s-k via single-letter keys if unguarded; the ≥3-char
+        // minimum blocks that, and "ask" isn't a real sub-word split → silent.
+        #expect(g2p().phonemeTokens("ask").isEmpty)
     }
 
     @Test("long all-caps words are not spelled out")

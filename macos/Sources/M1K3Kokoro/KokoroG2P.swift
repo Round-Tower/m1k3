@@ -208,7 +208,42 @@ public struct KokoroG2P: Sendable {
         }
         let raw = run.text.lowercased()
         if let hit = lookup(raw) { return hit }
+        if let compound = compoundTokens(raw) { return compound }
         if shouldSpellOut(run.text) { return spellOutTokens(run.text, extraWords: []) }
+        return nil
+    }
+
+    /// Compound fallback: an OOV word that fully decomposes into KNOWN dictionary
+    /// words is spoken as those sub-words — "grandmaster" → grand + master. The
+    /// segmentation must be COMPLETE (every character covered) and each piece
+    /// ≥ `minSegment` chars, so single-letter dictionary keys can't turn a word
+    /// into letter-soup and a word that doesn't cleanly decompose stays silent.
+    /// One run still yields one contiguous token span (one karaoke word).
+    private func compoundTokens(_ word: String, minSegment: Int = 3, maxSegments: Int = 3) -> [Int]? {
+        guard let segments = segment(Array(word), minSegment: minSegment, maxSegments: maxSegments),
+              segments.count >= 2
+        else { return nil }
+        return joinedTokens(for: segments)
+    }
+
+    /// Full segmentation of `chars` into dictionary words, longest prefix first
+    /// (so it prefers the fewest, longest pieces). nil if no complete cover
+    /// exists within `maxSegments` using pieces of at least `minSegment` chars.
+    private func segment(_ chars: [Character], minSegment: Int, maxSegments: Int) -> [String]? {
+        if chars.isEmpty { return [] }
+        guard maxSegments > 0 else { return nil }
+        var end = chars.count
+        while end >= minSegment {
+            let prefix = String(chars[0 ..< end])
+            if dictionary[prefix] != nil {
+                let rest = Array(chars[end...])
+                if rest.isEmpty { return [prefix] }
+                if let tail = segment(rest, minSegment: minSegment, maxSegments: maxSegments - 1) {
+                    return [prefix] + tail
+                }
+            }
+            end -= 1
+        }
         return nil
     }
 

@@ -34,4 +34,16 @@ struct KokoroG2PBundledTests {
         // Percentages and decimals speak too.
         #expect(g2p.phonemeTokens("3.5% today").isEmpty == false)
     }
+
+    @Test("compound OOV words split against the real dictionary — the 'grandmaster' fix")
+    func bundledCompoundSplit() throws {
+        let g2p = try KokoroG2P.bundled()
+        // "grandmaster" is not a single dict entry, but grand + master are — it
+        // used to be silently DROPPED from speech (the live TTS skip Kev caught).
+        // Now it speaks as one karaoke word with a non-empty token span.
+        let result = g2p.annotatedTokens("grandmaster")
+        #expect(!result.tokens.isEmpty)
+        #expect(result.words.count == 1)
+        #expect(!result.words[0].tokenRange.isEmpty)
+    }
 }
