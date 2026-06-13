@@ -1,0 +1,27 @@
+# M1K3 for Mac
+
+> M1K3 is a free, open-source, privacy-first AI companion for macOS that runs
+> entirely on-device. Local LLM inference (Gemma via MLX-Swift + Apple
+> Foundation Models), live voice (streaming STT/TTS), a personal knowledge
+> graph with RAG over your documents, consent-gated encrypted call
+> transcription, a local tool-using agent, and an MCP server. Zero bytes of
+> user data leave the Mac. Requires Apple Silicon and macOS 26 Tahoe. Native
+> SwiftUI (Liquid Glass), not Electron. Made by Round Tower, Ireland.
+
+Key facts:
+- Privacy: all inference, embeddings, voice, and storage are on-device; the
+  optional web-search tool is off by default
+- Models: Gemma (MLX-Swift, Metal) and Apple Foundation Models, hot-swappable
+- Storage: app-sandboxed, GRDB, encrypted with a Keychain-held key
+- MCP server tools: search_knowledge, list_documents, get_document (stdio)
+- License/source: open source, https://github.com/Round-Tower/m1k3
+
+## Docs
+
+- [Repository and build-from-source](https://github.com/Round-Tower/m1k3): monorepo; the Mac app lives in macos/
+- [macOS app plan](https://github.com/Round-Tower/m1k3/blob/main/macos/PLAN.md): architecture and roadmap
+
+## Optional
+
+- [Launch site](https://m1k3.app/): product overview and FAQ
+- [Round Tower](https://round-tower.ie): the company behind M1K3

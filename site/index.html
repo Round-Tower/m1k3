@@ -1,0 +1,891 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>M1K3 for Mac — Your AI. Your Mac. Nothing leaves.</title>
+<meta name="description" content="M1K3 is a fully on-device AI companion for macOS. Local inference, live voice, a knowledge graph, encrypted call memory, and an MCP server. Zero bytes leave your Mac." />
+<meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" />
+<!-- NOTE: canonical domain: m1k3.app (m1k3.ai + m1k3.bot 301-redirect here) (also in sitemap.xml, robots.txt, llms.txt) -->
+<link rel="canonical" href="https://m1k3.app/" />
+<link rel="icon" href="favicon.svg" type="image/svg+xml" />
+<link rel="icon" href="icon-192.png" type="image/png" sizes="192x192" />
+<link rel="mask-icon" href="favicon.svg" color="#ffffff" />
+<link rel="apple-touch-icon" href="apple-touch-icon.png" />
+<link rel="manifest" href="site.webmanifest" />
+<meta name="theme-color" content="#050505" />
+<meta property="og:site_name" content="M1K3" />
+<meta property="og:locale" content="en_IE" />
+<meta property="og:title" content="M1K3 for Mac — Your AI. Your Mac. Nothing leaves." />
+<meta property="og:description" content="Privacy-first local AI. On-device inference, voice, knowledge graph, MCP. Nothing leaves your Mac." />
+<meta property="og:type" content="website" />
+<meta property="og:url" content="https://m1k3.app/" />
+<meta property="og:image" content="https://m1k3.app/og.png" />
+<meta property="og:image:width" content="1200" />
+<meta property="og:image:height" content="630" />
+<meta property="og:image:alt" content="M1K3 for Mac — 'Your AI. Your Mac. Nothing leaves.' A wireframe fox on a dark CRT grid; a private, on-device AI companion for macOS." />
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:title" content="M1K3 for Mac — Your AI. Your Mac. Nothing leaves." />
+<meta name="twitter:description" content="Privacy-first local AI for macOS. Zero bytes leave your Mac." />
+<meta name="twitter:image" content="https://m1k3.app/og.png" />
+<meta name="twitter:image:alt" content="M1K3 for Mac — 'Your AI. Your Mac. Nothing leaves.' A wireframe fox on a dark CRT grid." />
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "name": "M1K3 for Mac",
+  "operatingSystem": "macOS 26",
+  "applicationCategory": "UtilitiesApplication",
+  "description": "A privacy-first AI companion that runs entirely on-device on Apple Silicon Macs: local LLM inference (MLX, Gemma 4, Qwen 3.5, Apple Foundation Models), live voice, a personal knowledge graph with RAG, encrypted call transcription, a local agent, and an MCP server.",
+  "offers": { "@type": "Offer", "price": "0", "priceCurrency": "EUR" },
+  "url": "https://m1k3.app/",
+  "downloadUrl": "https://github.com/Round-Tower/m1k3",
+  "author": { "@type": "Organization", "name": "Round Tower", "url": "https://round-tower.ie", "sameAs": ["https://github.com/Round-Tower"] },
+  "sameAs": ["https://github.com/Round-Tower/m1k3"],
+  "dateModified": "2026-06-13"
+}
+</script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "mainEntity": [
+    { "@type": "Question", "name": "Does M1K3 send my data to a server?",
+      "acceptedAnswer": { "@type": "Answer", "text": "No. M1K3 runs entirely on your Mac: inference, voice, embeddings, and storage are all on-device. Zero bytes of your conversations, documents, or calls are sent to any server. The optional web-search tool is off by default and clearly toggled." } },
+    { "@type": "Question", "name": "What AI models does M1K3 run?",
+      "acceptedAnswer": { "@type": "Answer", "text": "M1K3 runs Google Gemma 4 and Qwen 3.5 locally via MLX-Swift on Apple Silicon — three brain sizes, from a fast 2B to a deep-reasoning 9B — with Apple Foundation Models handling fast turns. You can hot-swap runtimes in Settings mid-conversation." } },
+    { "@type": "Question", "name": "Which Macs does M1K3 support?",
+      "acceptedAnswer": { "@type": "Answer", "text": "M1K3 requires an Apple Silicon Mac running macOS 26 Tahoe. It is a native SwiftUI app with Metal-accelerated inference, not an Electron wrapper." } },
+    { "@type": "Question", "name": "How is M1K3 different from Ollama or ChatGPT?",
+      "acceptedAnswer": { "@type": "Answer", "text": "Ollama is a local model server; ChatGPT is a cloud service. M1K3 is a complete on-device AI companion: local models plus live voice, a personal knowledge graph over your documents, encrypted call memory, an agent with tools, and an MCP server, in one sandboxed native Mac app." } },
+    { "@type": "Question", "name": "Can Claude or other AI agents use my M1K3 knowledge?",
+      "acceptedAnswer": { "@type": "Answer", "text": "Yes. M1K3 ships an MCP (Model Context Protocol) server exposing search_knowledge, list_documents, and get_document, so Claude and other MCP clients can query your local knowledge base, locally." } },
+    { "@type": "Question", "name": "Is M1K3 free and open source?",
+      "acceptedAnswer": { "@type": "Answer", "text": "Yes. M1K3 is free and open source, developed by Round Tower in Ireland. You can build it from source on GitHub today or join the launch list for the packaged app." } }
+  ]
+}
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=VT323&family=IBM+Plex+Mono:wght@300;400;500&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bg: #050505;
+    --bg-2: #0a0a0a;
+    --bg-3: #101010;
+    --ink: #e8e8e8;
+    --ink-bright: #ffffff;
+    --ink-dim: #8a8a8a;
+    --ink-faint: #4a4a4a;
+    --line: rgba(232,232,232,0.10);
+    --glow: 0 0 2px #fff, 0 0 12px rgba(255,255,255,0.35);
+    --glow-soft: 0 0 24px rgba(255,255,255,0.08);
+    --pixel: 'VT323', monospace;
+    --mono: 'IBM Plex Mono', monospace;
+    --sans: 'Inter', -apple-system, sans-serif;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--sans);
+    font-weight: 300;
+    line-height: 1.6;
+    overflow-x: hidden;
+    -webkit-font-smoothing: antialiased;
+  }
+  ::selection { background: var(--ink); color: var(--bg); }
+
+  /* ---------- CRT atmosphere (subtle) ---------- */
+  .scanlines {
+    position: fixed; inset: 0; pointer-events: none; z-index: 50;
+    background: repeating-linear-gradient(0deg, rgba(255,255,255,0.018) 0px, rgba(255,255,255,0.018) 1px, transparent 1px, transparent 3px);
+    mix-blend-mode: overlay;
+  }
+  .vignette {
+    position: fixed; inset: 0; pointer-events: none; z-index: 49;
+    background: radial-gradient(ellipse at center, transparent 55%, rgba(0,0,0,0.5) 100%);
+  }
+
+  /* ---------- Type ---------- */
+  .px { font-family: var(--pixel); letter-spacing: 0.02em; }
+  .mn { font-family: var(--mono); }
+  .label {
+    font-family: var(--mono); font-size: 11px; font-weight: 400;
+    letter-spacing: 0.28em; text-transform: uppercase; color: var(--ink-dim);
+  }
+  h1, h2, h3 { font-weight: 400; color: var(--ink-bright); }
+
+  /* ---------- Nav ---------- */
+  nav {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 18px 40px;
+    background: linear-gradient(to bottom, rgba(5,5,5,0.85), transparent);
+    backdrop-filter: blur(2px);
+  }
+  .wordmark { font-family: var(--pixel); font-size: 28px; color: var(--ink-bright); text-decoration: none; text-shadow: var(--glow); }
+  .wordmark .cursor { animation: blink 1.1s step-end infinite; }
+  nav .links { display: flex; gap: 32px; align-items: center; }
+  nav .links a {
+    font-family: var(--mono); font-size: 12px; letter-spacing: 0.12em;
+    color: var(--ink-dim); text-decoration: none; text-transform: uppercase;
+    transition: color .25s, text-shadow .25s;
+  }
+  nav .links a:hover { color: var(--ink-bright); text-shadow: var(--glow); }
+  @keyframes blink { 50% { opacity: 0; } }
+
+  /* ---------- Hero ---------- */
+  .hero { position: relative; height: 100vh; min-height: 640px; display: flex; align-items: flex-end; }
+  #stage { position: absolute; inset: 0; }
+  #stage canvas { display: block; }
+  .hero-copy {
+    position: relative; z-index: 10; width: 100%;
+    padding: 0 40px 9vh; max-width: 1200px; margin: 0 auto;
+    pointer-events: none;
+  }
+  .hero-copy > * { pointer-events: auto; }
+  .boot {
+    font-family: var(--mono); font-size: 12px; color: var(--ink-dim);
+    letter-spacing: 0.08em; margin-bottom: 22px; min-height: 18px; white-space: pre;
+  }
+  .boot .ok { color: var(--ink-bright); }
+  h1.headline {
+    font-family: var(--pixel);
+    font-size: clamp(56px, 9vw, 128px);
+    line-height: 0.92;
+    text-shadow: var(--glow-soft);
+    margin-bottom: 20px;
+  }
+  h1 .dim { color: var(--ink-faint); }
+  .sub {
+    font-size: clamp(16px, 1.6vw, 20px); color: var(--ink-dim);
+    max-width: 560px; margin-bottom: 38px;
+  }
+  .sub strong { color: var(--ink); font-weight: 500; }
+  .cta-row { display: flex; gap: 16px; flex-wrap: wrap; align-items: center; }
+  .btn {
+    font-family: var(--mono); font-size: 13px; letter-spacing: 0.14em; text-transform: uppercase;
+    padding: 16px 30px; text-decoration: none; transition: all .25s ease;
+    border: 1px solid var(--ink); position: relative;
+  }
+  .btn-primary { background: var(--ink); color: #000; font-weight: 500; }
+  .btn-primary:hover { background: var(--ink-bright); box-shadow: 0 0 30px rgba(255,255,255,0.35); }
+  .btn-ghost { color: var(--ink); border-color: var(--line); }
+  .btn-ghost:hover { border-color: var(--ink); text-shadow: var(--glow); }
+  .hero-meta { font-family: var(--mono); font-size: 11px; color: var(--ink-faint); letter-spacing: 0.1em; margin-top: 22px; }
+  .scroll-hint {
+    position: absolute; bottom: 28px; right: 40px; z-index: 10;
+    font-family: var(--mono); font-size: 10px; letter-spacing: 0.3em; color: var(--ink-faint);
+    writing-mode: vertical-rl; text-transform: uppercase;
+    animation: drift 2.6s ease-in-out infinite;
+  }
+  @keyframes drift { 50% { transform: translateY(8px); opacity: .5; } }
+
+  /* ---------- Sections ---------- */
+  section { position: relative; padding: 120px 40px; max-width: 1200px; margin: 0 auto; }
+  .rule { border: 0; border-top: 1px solid var(--line); max-width: 1200px; margin: 0 auto; }
+  .sec-head { margin-bottom: 64px; }
+  .sec-head h2 { font-family: var(--pixel); font-size: clamp(36px, 5vw, 64px); line-height: 1; margin-top: 14px; }
+  .sec-head p { color: var(--ink-dim); max-width: 620px; margin-top: 16px; font-size: 17px; }
+
+  /* privacy band */
+  .band {
+    max-width: none; padding: 0; margin: 0;
+  }
+  .band-inner {
+    max-width: 1200px; margin: 0 auto; padding: 88px 40px;
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 40px;
+  }
+  .stat .num {
+    font-family: var(--pixel); font-size: clamp(48px, 6vw, 80px);
+    color: var(--ink-bright); line-height: 1; text-shadow: var(--glow-soft);
+  }
+  .stat .desc { font-family: var(--mono); font-size: 12px; color: var(--ink-dim); letter-spacing: 0.08em; margin-top: 10px; line-height: 1.7; }
+
+  /* features */
+  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; background: var(--line); border: 1px solid var(--line); }
+  .cell {
+    background: var(--bg); padding: 40px 32px; transition: background .3s;
+    position: relative; overflow: hidden;
+  }
+  .cell:hover { background: var(--bg-3); }
+  .cell:hover .cell-icon { text-shadow: var(--glow); color: var(--ink-bright); }
+  .cell-icon { font-family: var(--pixel); font-size: 30px; color: var(--ink-dim); transition: all .3s; }
+  .cell h3 { font-size: 17px; font-weight: 500; margin: 18px 0 10px; }
+  .cell p { font-size: 14px; color: var(--ink-dim); line-height: 1.7; }
+  .cell .tag { font-family: var(--mono); font-size: 10px; letter-spacing: 0.18em; color: var(--ink-faint); text-transform: uppercase; display: block; margin-top: 16px; }
+
+  /* native section */
+  .native { display: grid; grid-template-columns: 1.1fr 1fr; gap: 72px; align-items: center; }
+  .term {
+    border: 1px solid var(--line); background: var(--bg-2);
+    font-family: var(--mono); font-size: 13px; line-height: 1.9;
+    box-shadow: var(--glow-soft);
+  }
+  .term-bar { display: flex; gap: 7px; padding: 12px 16px; border-bottom: 1px solid var(--line); }
+  .term-bar span { width: 10px; height: 10px; border-radius: 50%; border: 1px solid var(--ink-faint); }
+  .term-body { padding: 22px 24px; color: var(--ink-dim); }
+  .term-body .p { color: var(--ink-bright); }
+  .term-body .c { color: var(--ink-faint); }
+  .native ul { list-style: none; margin-top: 28px; }
+  .native li {
+    padding: 14px 0; border-bottom: 1px solid var(--line);
+    display: flex; justify-content: space-between; gap: 24px; font-size: 15px;
+  }
+  .native li span:last-child { font-family: var(--mono); font-size: 12px; color: var(--ink-dim); white-space: nowrap; }
+
+  /* footer cta */
+  .final { text-align: center; padding: 160px 40px; }
+  .final h2 { font-family: var(--pixel); font-size: clamp(44px, 7vw, 96px); line-height: 0.95; text-shadow: var(--glow-soft); }
+  .final p { color: var(--ink-dim); margin: 24px auto 44px; max-width: 480px; }
+  footer {
+    border-top: 1px solid var(--line);
+    padding: 36px 40px; display: flex; justify-content: space-between; align-items: center;
+    font-family: var(--mono); font-size: 11px; color: var(--ink-faint); letter-spacing: 0.1em;
+    max-width: 1200px; margin: 0 auto;
+  }
+  footer a { color: var(--ink-dim); text-decoration: none; }
+  footer a:hover { color: var(--ink-bright); }
+  /* privacy-respecting share: native Web Share API, copy-link fallback. No third parties. */
+  .share-link {
+    font: inherit; letter-spacing: inherit; text-transform: inherit;
+    color: var(--ink-dim); background: none; border: 0; padding: 0;
+    cursor: pointer; transition: color .25s, text-shadow .25s;
+  }
+  .share-link:hover { color: var(--ink-bright); text-shadow: var(--glow); }
+  .share-link.copied { color: var(--ink-bright); text-shadow: var(--glow); }
+
+  /* faq */
+  .faq-list { border-top: 1px solid var(--line); }
+  .faq-list details { border-bottom: 1px solid var(--line); }
+  .faq-list summary {
+    cursor: pointer; list-style: none; padding: 22px 0;
+    font-size: 17px; font-weight: 500; color: var(--ink);
+    display: flex; justify-content: space-between; align-items: center; gap: 24px;
+    transition: color .25s;
+  }
+  .faq-list summary::-webkit-details-marker { display: none; }
+  .faq-list summary::after { content: '+'; font-family: var(--pixel); font-size: 26px; color: var(--ink-faint); transition: transform .25s, color .25s; }
+  .faq-list details[open] summary::after { transform: rotate(45deg); color: var(--ink-bright); text-shadow: var(--glow); }
+  .faq-list summary:hover { color: var(--ink-bright); }
+  .faq-list details p { padding: 0 0 24px; color: var(--ink-dim); font-size: 15px; max-width: 720px; }
+  .faq-list code { font-family: var(--mono); font-size: 13px; color: var(--ink); }
+
+  /* reveal animation */
+  .reveal { opacity: 0; transform: translateY(28px); transition: opacity .9s cubic-bezier(.2,.6,.2,1), transform .9s cubic-bezier(.2,.6,.2,1); }
+  .reveal.in { opacity: 1; transform: none; }
+
+  /* ---------- CRT power-on (once per load) ----------
+     Two black panels meet at a center scan line, then recede outward —
+     the picture opens from the middle, the way a tube warms up. */
+  #poweron { position: fixed; inset: 0; z-index: 9999; pointer-events: none; }
+  #poweron .blk { position: absolute; left: 0; right: 0; height: 50.5%; background: var(--bg); }
+  #poweron .blk.top { top: 0; transform-origin: top; animation: crtOpen .85s cubic-bezier(.7,.02,.28,1) forwards; }
+  #poweron .blk.bot { bottom: 0; transform-origin: bottom; animation: crtOpen .85s cubic-bezier(.7,.02,.28,1) forwards; }
+  #poweron .scan {
+    position: absolute; left: 0; right: 0; top: 50%; height: 2px;
+    transform: translateY(-50%) scaleX(0); background: #fff;
+    box-shadow: 0 0 14px #fff, 0 0 48px rgba(255,255,255,0.7);
+    animation: crtScan .85s ease forwards;
+  }
+  #poweron .flash { position: absolute; inset: 0; background: #fff; opacity: 0; animation: crtFlash .85s ease forwards; }
+  @keyframes crtOpen  { 0%,16% { transform: scaleY(1); } 78%,100% { transform: scaleY(0); } }
+  @keyframes crtScan  { 0% { transform: translateY(-50%) scaleX(0); opacity: 0; } 11% { transform: translateY(-50%) scaleX(1); opacity: 1; } 38% { opacity: 1; } 70%,100% { transform: translateY(-50%) scaleX(1); opacity: 0; } }
+  @keyframes crtFlash { 0%,44% { opacity: 0; } 56% { opacity: .18; } 100% { opacity: 0; } }
+
+  /* ---------- stat glitch-decode glow (one-shot on reveal) ---------- */
+  .stat .num.lit { animation: numGlow 1.1s ease-out; }
+  @keyframes numGlow {
+    0% { text-shadow: 0 0 2px #fff, 0 0 22px rgba(255,255,255,0.85), 0 0 60px rgba(255,255,255,0.5); }
+    100% { text-shadow: var(--glow-soft); }
+  }
+
+  /* ---------- companion discovery hint ---------- */
+  .companion-hint {
+    position: absolute; z-index: 11; right: max(40px, 7vw); bottom: 24vh;
+    font-family: var(--mono); font-size: 11px; letter-spacing: 0.18em;
+    color: var(--ink-faint); text-align: right; line-height: 1.9;
+    text-transform: uppercase; pointer-events: none; user-select: none;
+    opacity: 0; transition: opacity .8s ease;
+  }
+  .companion-hint.show { opacity: 1; animation: hintPulse 3.2s ease-in-out infinite; }
+  .companion-hint .k { color: var(--ink-dim); }
+  @keyframes hintPulse { 50% { opacity: .45; } }
+
+  /* ---------- wordmark glitch tick ---------- */
+  .wordmark.glitch { animation: wmGlitch .3s steps(6) 1; }
+  @keyframes wmGlitch {
+    0%   { transform: translate(0,0);     clip-path: inset(0 0 0 0); text-shadow: var(--glow); }
+    17%  { transform: translate(-3px,1px); clip-path: inset(0 0 62% 0); text-shadow: 3px 0 rgba(255,255,255,.5), -2px 0 rgba(255,255,255,.3); }
+    34%  { transform: translate(3px,-1px); clip-path: inset(54% 0 8% 0); text-shadow: -3px 0 rgba(255,255,255,.5); }
+    50%  { transform: translate(-2px,0);  clip-path: inset(12% 0 40% 0); }
+    67%  { transform: translate(2px,1px); clip-path: inset(0 0 0 0); opacity: .6; }
+    84%  { transform: translate(-1px,0);  opacity: 1; }
+    100% { transform: translate(0,0);     clip-path: inset(0 0 0 0); text-shadow: var(--glow); }
+  }
+
+  /* honour reduced-motion: kill every added animation, show end-state */
+  @media (prefers-reduced-motion: reduce) {
+    #poweron { display: none; }
+    .stat .num.lit { animation: none; }
+    .companion-hint.show { animation: none; }
+    .wordmark.glitch { animation: none; }
+  }
+
+  @media (max-width: 900px) {
+    nav { padding: 16px 22px; }
+    nav .links a:not(.btn) { display: none; }
+    section { padding: 80px 22px; }
+    .band-inner { grid-template-columns: repeat(2, 1fr); padding: 64px 22px; }
+    .grid { grid-template-columns: 1fr; }
+    .native { grid-template-columns: 1fr; gap: 40px; }
+    .hero-copy { padding: 0 22px 12vh; }
+    .scroll-hint { display: none; }
+    /* keep copy legible where the wireframe companion crosses it */
+    .hero-copy::before {
+      content: ''; position: absolute; inset: -6vh -22px -2vh -22px; z-index: -1;
+      background: linear-gradient(95deg, var(--bg) 22%, rgba(5,5,5,0.78) 52%, rgba(5,5,5,0.35) 74%, transparent 92%);
+      pointer-events: none;
+    }
+    .companion-hint { bottom: 30vh; font-size: 10px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- CRT power-on: painted first so the screen "warms up" before content shows.
+     Pure CSS; removed by script after it plays. Hidden under reduced-motion. -->
+<div id="poweron" aria-hidden="true">
+  <div class="blk top"></div>
+  <div class="blk bot"></div>
+  <div class="scan"></div>
+  <div class="flash"></div>
+</div>
+
+<div class="scanlines"></div>
+<div class="vignette"></div>
+
+<nav>
+  <a class="wordmark" href="#">M1K3<span class="cursor">_</span></a>
+  <div class="links">
+    <a href="#private">Private</a>
+    <a href="#features">Features</a>
+    <a href="#native">Native</a>
+    <a href="#faq">FAQ</a>
+    <a href="https://github.com/Round-Tower/m1k3">GitHub</a>
+    <a class="btn btn-ghost" href="#get" style="padding:10px 18px;">Download</a>
+  </div>
+</nav>
+
+<!-- ================= HERO ================= -->
+<header class="hero">
+  <div id="stage"></div>
+  <div class="hero-copy">
+    <div class="boot" id="boot"></div>
+    <h1 class="headline reveal in">Your AI.<br />Your Mac.<br /><span class="dim" id="rotator">Nothing leaves.</span></h1>
+    <p class="sub reveal in">M1K3 is a native AI companion that runs <strong>entirely on your Mac</strong>. Local models, live voice, a knowledge graph that remembers everything — and a network cable it never asks for.</p>
+    <div class="cta-row reveal in">
+      <a class="btn btn-primary" href="#get">Download for macOS</a>
+      <a class="btn btn-ghost" href="#features">See what's inside</a>
+    </div>
+    <div class="hero-meta">REQUIRES MACOS 26 TAHOE · APPLE SILICON · FREE &amp; OPEN SOURCE</div>
+  </div>
+  <div class="companion-hint" id="companionHint" aria-hidden="true">
+    <span class="k">click</span> · it plays<br /><span class="k">dbl-click</span> · it changes
+  </div>
+  <div class="scroll-hint">scroll</div>
+</header>
+
+<!-- ================= PRIVACY BAND ================= -->
+<hr class="rule" />
+<div class="band" id="private">
+  <div class="band-inner">
+    <div class="stat reveal"><div class="num" data-num="0">0</div><div class="desc">bytes of your data sent to a server. Inference, voice, and memory are all on-device.</div></div>
+    <div class="stat reveal"><div class="num" data-num="100%">100%</div><div class="desc">local model stack — MLX-Swift Gemma 4 + Qwen 3.5 plus Apple Foundation Models, hot-swappable.</div></div>
+    <div class="stat reveal"><div class="num" data-num="1">1</div><div class="desc">place your knowledge lives: an encrypted store on your Mac, keyed from your Keychain.</div></div>
+    <div class="stat reveal"><div class="num" data-num="∞">∞</div><div class="desc">things it remembers. Documents, conversations, calls — searchable forever, by you alone.</div></div>
+  </div>
+</div>
+<hr class="rule" />
+
+<!-- ================= FEATURES ================= -->
+<section id="features">
+  <div class="sec-head reveal">
+    <span class="label">// capabilities</span>
+    <h2>A full AI stack.<br />No cloud attached.</h2>
+    <p>Everything below runs inside one sandboxed app on Apple Silicon. Pull the ethernet cable — M1K3 doesn't notice.</p>
+  </div>
+  <div class="grid">
+    <div class="cell reveal">
+      <div class="cell-icon">▚▚</div>
+      <h3>On-device inference</h3>
+      <p>Gemma 4 and Qwen 3.5 on MLX-Swift with Apple Foundation Models handling fast turns. Pick your runtime in Settings and hot-swap mid-conversation.</p>
+      <span class="tag">mlx-swift · gemma-4 · qwen-3.5 · afm</span>
+    </div>
+    <div class="cell reveal">
+      <div class="cell-icon">◉))</div>
+      <h3>Live voice</h3>
+      <p>Streaming speech recognition and natural speech out, with karaoke-style read-along highlighting. Talk to it like it's in the room — because it is.</p>
+      <span class="tag">whisperkit · streaming stt + tts</span>
+    </div>
+    <div class="cell reveal">
+      <div class="cell-icon">◢◣◥</div>
+      <h3>Knowledge graph</h3>
+      <p>Import documents and M1K3 builds a private knowledge graph with semantic search. Ask questions; get answers grounded in your own files.</p>
+      <span class="tag">rag · bge embeddings · fts</span>
+    </div>
+    <div class="cell reveal">
+      <div class="cell-icon">▶▮▮</div>
+      <h3>Call memory</h3>
+      <p>Consent-gated call recording with on-device transcription, speaker-grouped summaries, and encrypted persistence. Your calls become searchable knowledge.</p>
+      <span class="tag">encrypted · keychain · consent-first</span>
+    </div>
+    <div class="cell reveal">
+      <div class="cell-icon">⌁⌁⌁</div>
+      <h3>An agent that does</h3>
+      <p>A built-in ReAct agent with real tools — web search, page reading, your knowledge base — behind a privacy toggle. Web off means web off.</p>
+      <span class="tag">local agent · tool calls · privacy toggle</span>
+    </div>
+    <div class="cell reveal">
+      <div class="cell-icon">&lt;/&gt;</div>
+      <h3>MCP server</h3>
+      <p>M1K3 exposes your knowledge to Claude and other agents over the Model Context Protocol. Your second brain, available to your other AIs — locally.</p>
+      <span class="tag">mcp · search_knowledge · stdio</span>
+    </div>
+  </div>
+</section>
+
+<hr class="rule" />
+
+<!-- ================= NATIVE ================= -->
+<section id="native">
+  <div class="native">
+    <div class="reveal">
+      <span class="label">// built native</span>
+      <h2 style="font-family:var(--pixel); font-size:clamp(36px,5vw,60px); line-height:1; margin-top:14px;">Mac-native,<br />to the metal.</h2>
+      <p style="color:var(--ink-dim); margin-top:18px; font-size:16px;">Not an Electron wrapper. Not a webview. A SwiftUI app with Liquid Glass, RealityKit avatars, and Metal-accelerated inference — built for macOS Tahoe and nothing else.</p>
+      <ul>
+        <li><span>SwiftUI + Liquid Glass interface</span><span>macOS 26</span></li>
+        <li><span>Metal-accelerated local models</span><span>mlx-swift</span></li>
+        <li><span>3D companion avatar</span><span>realitykit</span></li>
+        <li><span>App-sandboxed, encrypted store</span><span>grdb + keychain</span></li>
+        <li><span>Swift 6.2, strict concurrency</span><span>200+ tests</span></li>
+      </ul>
+    </div>
+    <div class="term reveal">
+      <div class="term-bar"><span></span><span></span><span></span></div>
+      <div class="term-body">
+<span class="c"># everything below happens on this Mac</span><br />
+<span class="p">m1k3 ›</span> summarise yesterday's call with the architect<br />
+<span class="c">⌁ searching knowledge graph… 3 chunks</span><br />
+<span class="c">⌁ gemma-4 · metal · 0 network calls</span><br />
+<br />
+You agreed the retrofit keeps the original<br />
+roofline; planning docs due Friday. Want<br />
+the action list?<br />
+<br />
+<span class="p">m1k3 ›</span> <span class="cursor" style="animation: blink 1.1s step-end infinite;">█</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<hr class="rule" />
+
+<!-- ================= FAQ ================= -->
+<section id="faq">
+  <div class="sec-head reveal">
+    <span class="label">// questions</span>
+    <h2>Straight answers.</h2>
+  </div>
+  <div class="faq-list">
+    <details class="reveal">
+      <summary>Does M1K3 send my data to a server?</summary>
+      <p>No. M1K3 runs entirely on your Mac — inference, voice, embeddings, and storage are all on-device. Zero bytes of your conversations, documents, or calls go to any server. The optional web-search tool is off by default and clearly toggled.</p>
+    </details>
+    <details class="reveal">
+      <summary>What AI models does it run?</summary>
+      <p>Google Gemma locally via MLX-Swift on Apple Silicon, with Apple Foundation Models handling fast turns. Hot-swap runtimes in Settings, mid-conversation.</p>
+    </details>
+    <details class="reveal">
+      <summary>Which Macs are supported?</summary>
+      <p>Apple Silicon Macs on macOS 26 Tahoe. M1K3 is a native SwiftUI app with Metal-accelerated inference — not an Electron wrapper.</p>
+    </details>
+    <details class="reveal">
+      <summary>How is it different from Ollama or ChatGPT?</summary>
+      <p>Ollama is a local model server; ChatGPT is a cloud service. M1K3 is a complete on-device companion: local models <em>plus</em> live voice, a knowledge graph over your documents, encrypted call memory, an agent with tools, and an MCP server — one sandboxed native app.</p>
+    </details>
+    <details class="reveal">
+      <summary>Can Claude use my M1K3 knowledge?</summary>
+      <p>Yes. M1K3 ships an MCP server exposing <code>search_knowledge</code>, <code>list_documents</code>, and <code>get_document</code> — Claude and other MCP clients can query your local knowledge base, locally.</p>
+    </details>
+    <details class="reveal">
+      <summary>Is it free?</summary>
+      <p>Free and open source, made by Round Tower in Ireland. Build from source today, or join the launch list for the packaged app.</p>
+    </details>
+  </div>
+</section>
+
+<hr class="rule" />
+
+<!-- ================= FINAL CTA ================= -->
+<section class="final" id="get">
+  <span class="label reveal">// launching soon</span>
+  <h2 class="reveal" style="margin-top:18px;">Own your AI.</h2>
+  <p class="reveal">M1K3 for Mac is in final testing. Join the launch list and be first to run it — or build it from source today.</p>
+  <div class="cta-row reveal" style="justify-content:center;">
+    <a class="btn btn-primary" href="mailto:hello@round-tower.ie?subject=M1K3%20launch%20list">Join the launch list</a>
+    <a class="btn btn-ghost" href="https://github.com/Round-Tower/m1k3">Build from source</a>
+  </div>
+</section>
+
+<footer>
+  <span>© 2026 <a href="https://round-tower.ie">ROUND TOWER</a> · MADE IN IRELAND · FOX: <a href="https://github.com/KhronosGroup/glTF-Sample-Assets/tree/main/Models/Fox" rel="license">PIXELMANNEN / TOMKRANIS, CC-BY 4.0</a></span>
+  <span><button class="share-link" id="shareBtn" type="button" aria-label="Share M1K3">SHARE ↗</button> · <a href="https://github.com/Round-Tower/m1k3">GITHUB</a> · NO TRACKING ON THIS PAGE, OBVIOUSLY</span>
+</footer>
+
+<!-- ================= SCRIPTS ================= -->
+<!-- Non-module script: boot line + scroll reveals. Deliberately independent of
+     the 3D module so the page degrades gracefully if WebGL/modules fail. -->
+<script>
+  (function () {
+    var bootEl = document.getElementById('boot');
+    var bootLines = '> m1k3 boot — local only\n> models: gemma-4 + qwen3.5 [metal] .. OK\n> network: not required';
+    var bi = 0;
+    (function typeBoot() {
+      if (bi <= bootLines.length) {
+        bootEl.innerHTML = bootLines.slice(0, bi).replace(/OK/g, '<span class="ok">OK</span>') + '<span style="opacity:.7">█</span>';
+        bi++;
+        setTimeout(typeBoot, bootLines[bi - 2] === '\n' ? 220 : 14);
+      } else {
+        bootEl.innerHTML = bootLines.replace(/OK/g, '<span class="ok">OK</span>');
+      }
+    })();
+
+    /* Headline carousel: the third line types-erases through the promises.
+       "Nothing leaves." stays in the static markup (SEO / no-JS) and leads the
+       cycle. Skipped entirely under prefers-reduced-motion. */
+    var rotator = document.getElementById('rotator');
+    var phrases = ['Nothing leaves.', 'No data centers.', 'Eco friendly.', 'Open source.'];
+    var reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (rotator && !reduceMotion) {
+      var pi = 0;
+      var CURSOR = '<span style="opacity:.7">█</span>';
+      function erase(done) {
+        var text = phrases[pi];
+        var n = text.length;
+        (function step() {
+          if (n > 0) {
+            n--;
+            rotator.innerHTML = text.slice(0, n) + CURSOR;
+            setTimeout(step, 26);
+          } else { done(); }
+        })();
+      }
+      function type(done) {
+        var text = phrases[pi];
+        var n = 0;
+        (function step() {
+          if (n <= text.length) {
+            rotator.innerHTML = text.slice(0, n) + (n < text.length ? CURSOR : '');
+            n++;
+            setTimeout(step, 60);
+          } else { done(); }
+        })();
+      }
+      setTimeout(function cycle() {
+        erase(function () {
+          pi = (pi + 1) % phrases.length;
+          type(function () { setTimeout(cycle, 3400); });
+        });
+      }, 4200);
+    }
+
+    /* Stat glitch-decode: scramble settling on the real value, left-to-right,
+       then a one-shot glow. The numbers (0 · 100% · 1 · ∞) are the whole pitch. */
+    function decodeNum(el) {
+      if (!el || el.dataset.decoded) return;
+      el.dataset.decoded = '1';
+      var target = el.getAttribute('data-num') || el.textContent;
+      if (reduceMotion) { el.textContent = target; return; }
+      var pool = '0123456789%/<>#█▚▮∞';
+      var L = target.length, tick = 0, ticks = 11;
+      var iv = setInterval(function () {
+        tick++;
+        var revealed = Math.floor((tick / ticks) * L + 0.0001);
+        var out = '';
+        for (var i = 0; i < L; i++) {
+          out += i < revealed ? target[i] : pool[Math.floor(Math.random() * pool.length)];
+        }
+        el.textContent = out;
+        if (tick >= ticks) { clearInterval(iv); el.textContent = target; el.classList.add('lit'); }
+      }, 42);
+    }
+
+    if ('IntersectionObserver' in window) {
+      var io = new IntersectionObserver(function (es) {
+        es.forEach(function (e) {
+          if (!e.isIntersecting) return;
+          e.target.classList.add('in');
+          var num = e.target.querySelector && e.target.querySelector('.num');
+          if (num) decodeNum(num);
+          io.unobserve(e.target);
+        });
+      }, { threshold: 0.15 });
+      document.querySelectorAll('.reveal').forEach(function (el) { io.observe(el); });
+    } else {
+      document.querySelectorAll('.reveal').forEach(function (el) { el.classList.add('in'); });
+      document.querySelectorAll('.stat .num').forEach(decodeNum);
+    }
+
+    /* CRT power-on: tear the overlay down once it has played (CSS leaves it
+       collapsed/invisible regardless, so this is just housekeeping). */
+    var po = document.getElementById('poweron');
+    if (po) setTimeout(function () { po.remove(); }, 950);
+
+    /* Wordmark glitch tick — a single corrupted frame every ~16–25s. Live CRT. */
+    var wm = document.querySelector('.wordmark');
+    if (wm && !reduceMotion) {
+      (function scheduleGlitch() {
+        setTimeout(function () {
+          wm.classList.add('glitch');
+          setTimeout(function () { wm.classList.remove('glitch'); }, 280);
+          scheduleGlitch();
+        }, 16000 + Math.random() * 9000);
+      })();
+    }
+
+    /* Share: native Web Share API where available (mobile/Safari), otherwise
+       copy the canonical link to the clipboard. Zero third parties — fitting
+       for a "nothing leaves" product. */
+    var shareBtn = document.getElementById('shareBtn');
+    if (shareBtn) {
+      var canonical = document.querySelector('link[rel=canonical]');
+      var shareData = {
+        title: 'M1K3 for Mac',
+        text: 'M1K3 — a private AI companion that runs entirely on your Mac. Nothing leaves.',
+        url: (canonical && canonical.href) || location.href
+      };
+      shareBtn.addEventListener('click', function () {
+        if (navigator.share) {
+          navigator.share(shareData).catch(function () {});
+        } else if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(shareData.url).then(function () {
+            shareBtn.textContent = 'LINK COPIED ✓';
+            shareBtn.classList.add('copied');
+            setTimeout(function () { shareBtn.textContent = 'SHARE ↗'; shareBtn.classList.remove('copied'); }, 2200);
+          }).catch(function () { window.prompt('Copy this link:', shareData.url); });
+        } else {
+          window.prompt('Copy this link:', shareData.url);
+        }
+      });
+    }
+
+    /* Companion hint: surfaces after boot, fades on first interaction (the
+       module script calls __hideCompanionHint) or after a while regardless. */
+    var hint = document.getElementById('companionHint');
+    if (hint) {
+      window.__hideCompanionHint = function () { hint.classList.remove('show'); };
+      setTimeout(function () { hint.classList.add('show'); }, 2600);
+      setTimeout(window.__hideCompanionHint, 12000);
+    }
+  })();
+</script>
+
+<!-- Vendored THREE.js — the launch page for local AI loads zero CDNs for its 3D. -->
+<script type="importmap">
+{ "imports": {
+    "three": "./vendor/three/three.module.js",
+    "three/addons/": "./vendor/three/jsm/"
+} }
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+
+/* ---------- THREE.js hero ---------- */
+const stage = document.getElementById('stage');
+const scene = new THREE.Scene();
+scene.fog = new THREE.FogExp2(0x050505, 0.055);
+
+const camera = new THREE.PerspectiveCamera(38, 1, 0.1, 200);
+camera.position.set(0, 1.6, 9);
+
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+stage.appendChild(renderer.domElement);
+
+function resize() {
+  const w = stage.clientWidth, h = stage.clientHeight;
+  renderer.setSize(w, h);
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+}
+addEventListener('resize', resize);
+
+/* lights — phosphor key + cold rim */
+scene.add(new THREE.AmbientLight(0xffffff, 0.25));
+const key = new THREE.DirectionalLight(0xffffff, 1.6); key.position.set(4, 6, 6); scene.add(key);
+const rim = new THREE.DirectionalLight(0xe8e8e8, 2.2); rim.position.set(-6, 3, -4); scene.add(rim);
+
+/* floor grid — the CRT ground plane */
+const grid = new THREE.GridHelper(80, 80, 0x3a3a3a, 0x161616);
+grid.position.y = 0;
+scene.add(grid);
+
+/* model group */
+const rig = new THREE.Group();
+rig.position.set(2.9, 0, 0);   /* companion stands right of the copy, clear of "leaves." */
+scene.add(rig);
+
+let mixer = null, actions = {}, current = null;
+const clock = new THREE.Clock();
+
+/* phosphor material treatment: dark body + glowing wireframe shell */
+function phosphorise(root) {
+  const shells = [];
+  root.traverse(o => {
+    if (o.isMesh) {
+      o.material = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.55, metalness: 0.25, emissive: 0x0a0a0a });
+      const shell = new THREE.Mesh(o.geometry, new THREE.MeshBasicMaterial({
+        color: 0xe8e8e8, wireframe: true, transparent: true, opacity: 0.16,
+        blending: THREE.AdditiveBlending, depthWrite: false
+      }));
+      shell.skeleton = o.skeleton;
+      if (o.isSkinnedMesh) {
+        const s = new THREE.SkinnedMesh(o.geometry, shell.material);
+        s.bind(o.skeleton, o.bindMatrix);
+        shells.push([o, s]);
+      } else {
+        shells.push([o, shell]);
+      }
+    }
+  });
+  shells.forEach(([host, shell]) => host.parent.add(shell));
+}
+
+function play(name, fade = 0.4) {
+  const next = actions[name];
+  if (!next || next === current) return;
+  next.reset().fadeIn(fade).play();
+  if (current) current.fadeOut(fade);
+  current = next;
+}
+
+/* fallback hero if GLB can't load (e.g. opened via file://) */
+function buildFallback() {
+  const geo = new THREE.IcosahedronGeometry(1.4, 1);
+  const core = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.4, metalness: 0.3 }));
+  const wire = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: 0xe8e8e8, wireframe: true, transparent: true, opacity: 0.35, blending: THREE.AdditiveBlending }));
+  const g = new THREE.Group(); g.add(core, wire); g.position.y = 1.8;
+  rig.add(g);
+  rig.userData.fallback = g;
+}
+
+/* ---------- companions ----------
+   Click: the companion does its trick. Double-click: a different companion
+   answers the call (easter egg — same model lineup as the M1K3 avatar system).
+   Scales chosen so each stands in family with the fox (~2 world units; the
+   gecko deliberately reads smaller). */
+const companions = [
+  { url: './vendor/Fox.glb',     scale: 0.026, idle: 'Survey', trick: 'Run',     trickMs: 1800 },
+  { url: './vendor/Gecko.glb',   scale: 3.0,   idle: 'Idle_A', trick: 'Clicked', trickMs: 1600 },
+  { url: './vendor/Inkfish.glb', scale: 1.3,   idle: 'Idle_A', trick: 'Splash',  trickMs: 1600 },
+  { url: './vendor/Colobus.glb', scale: 2.2,   idle: 'Idle_A', trick: 'Jump',    trickMs: 1600 },
+];
+let companionIdx = 0;
+let spec = companions[0];
+let activeRoot = null;
+const gltfCache = new Map();   /* url → prepared gltf (phosphorised ONCE) */
+
+function setCompanion(index) {
+  spec = companions[index];
+  current = null; mixer = null; actions = {};
+  if (activeRoot) { rig.remove(activeRoot); activeRoot = null; }
+
+  const apply = gltf => {
+    if (spec !== companions[index]) return;   /* a later swap won */
+    activeRoot = gltf.scene;
+    rig.add(activeRoot);
+    mixer = new THREE.AnimationMixer(activeRoot);
+    gltf.animations.forEach(c => { actions[c.name] = mixer.clipAction(c); });
+    play(spec.idle, 0);
+  };
+
+  if (gltfCache.has(spec.url)) { apply(gltfCache.get(spec.url)); return; }
+  new GLTFLoader().load(
+    spec.url,
+    gltf => {
+      gltf.scene.scale.setScalar(spec.scale);
+      gltf.scene.rotation.y = -0.6;
+      phosphorise(gltf.scene);
+      gltfCache.set(spec.url, gltf);
+      apply(gltf);
+    },
+    undefined,
+    () => { if (index === 0) buildFallback(); }
+  );
+}
+setCompanion(0);
+
+/* a little life: occasionally walk a beat, then settle again */
+setInterval(() => { play('Walk'); setTimeout(() => play(spec.idle), 2600); }, 11000);
+
+/* single click = trick (debounced so a double-click doesn't fire it),
+   double-click = next companion */
+renderer.domElement.style.cursor = 'pointer';
+let clickTimer = null;
+renderer.domElement.addEventListener('pointerdown', () => {
+  if (window.__hideCompanionHint) window.__hideCompanionHint();
+}, { once: true });
+renderer.domElement.addEventListener('click', () => {
+  clearTimeout(clickTimer);
+  clickTimer = setTimeout(() => {
+    play(spec.trick);
+    setTimeout(() => play(spec.idle), spec.trickMs);
+  }, 260);
+});
+renderer.domElement.addEventListener('dblclick', () => {
+  clearTimeout(clickTimer);
+  companionIdx = (companionIdx + 1) % companions.length;
+  setCompanion(companionIdx);
+});
+
+/* mouse parallax + scroll-linked camera */
+let mx = 0, my = 0;
+addEventListener('pointermove', e => {
+  mx = (e.clientX / innerWidth - 0.5);
+  my = (e.clientY / innerHeight - 0.5);
+});
+
+function tick() {
+  requestAnimationFrame(tick);
+  const dt = clock.getDelta();
+  const t = clock.elapsedTime;
+  if (mixer) mixer.update(dt);
+
+  const f = rig.userData.fallback;
+  if (f) { f.rotation.y = t * 0.3; f.rotation.x = Math.sin(t * 0.4) * 0.15; }
+
+  const scroll = Math.min(scrollY / innerHeight, 1);
+  camera.position.x = mx * 0.9 + Math.sin(t * 0.12) * 0.25;
+  camera.position.y = 1.6 - my * 0.5 + scroll * 2.2;
+  camera.position.z = 9 + scroll * 3;
+  camera.lookAt(rig.position.x - 1.2, 1.2, 0);
+
+  renderer.render(scene, camera);
+}
+resize();
+tick();
+</script>
+
+<!-- Signed: Kev + claude-opus-4-8, 2026-06-13, Confidence 0.9.
+     Added the "make it sing" pass — CRT power-on, stat glitch-decode, companion
+     discovery hint, wordmark glitch tick, self-hosted favicon, mobile fox scrim.
+     All motion gated on prefers-reduced-motion; zero new network requests.
+     Verified live via Chrome DevTools (desktop + 500px). Prior: Unknown (cowork
+     landing page, no prior signature). -->
+</body>
+</html>
