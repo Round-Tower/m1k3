@@ -25,6 +25,16 @@ struct ThinkStreamGateTests {
         return (live, gate)
     }
 
+    private func feedAllWithAnswer(_ tokens: [String]) -> (live: String, answer: String, gate: ThinkStreamGate) {
+        var gate = ThinkStreamGate()
+        var live = ""
+        var answer = ""
+        for token in tokens {
+            live += gate.feed(token, onAnswerToken: { answer += $0 })
+        }
+        return (live, answer, gate)
+    }
+
     @Test("the think phase streams live, tags included; the answer is held back")
     func thinkStreamsLive() {
         var (live, gate) = feedAll(["<think>", "checking", " tools", "</think>", "It's sunny."])
@@ -68,5 +78,47 @@ struct ThinkStreamGateTests {
         var (live, gate) = feedAll(["</think>just an answer"])
         #expect(live.isEmpty)
         #expect(gate.flushRemainder() == "</think>just an answer")
+    }
+
+    @Test("answer tokens stream live after </think> via the callback")
+    func answerStreamsLive() {
+        var (live, answer, gate) = feedAllWithAnswer(["<think>", "plan", "</think>", "The", " answer."])
+        #expect(live == "<think>plan</think>")
+        #expect(answer == "The answer.")
+        #expect(gate.flushRemainder() == "The answer.")
+    }
+
+    @Test("a non-thinking turn streams to answer via callback")
+    func noThinkAnswer() {
+        var (live, answer, gate) = feedAllWithAnswer(["Plain ", "answer text."])
+        #expect(live.isEmpty)
+        #expect(answer == "Plain answer text.")
+        #expect(gate.flushRemainder() == "Plain answer text.")
+    }
+
+    @Test("answer callback is not invoked for thinking-only turns")
+    func thinkOnlyNoAnswer() {
+        var gate = ThinkStreamGate()
+        var answerFired = false
+        let live = gate.feed("<think>just thinking</think>", onAnswerToken: { _ in answerFired = true })
+        #expect(live == "<think>just thinking</think>")
+        #expect(!answerFired)
+        #expect(gate.flushRemainder().isEmpty)
+    }
+
+    @Test("answer tokens after a split close tag are streamed")
+    func answerAfterSplitClose() {
+        var (live, answer, gate) = feedAllWithAnswer(["<think>p", "lan</th", "ink>It's done."])
+        #expect(live == "<think>plan</think>")
+        #expect(answer == "It's done.")
+        #expect(gate.flushRemainder() == "It's done.")
+    }
+
+    @Test("full answer in one chunk (like StatelessToolTurnSession)")
+    func fullAnswerOneChunk() {
+        var (live, answer, gate) = feedAllWithAnswer(["<think>checking the weather</think>It's sunny."])
+        #expect(live == "<think>checking the weather</think>")
+        #expect(answer == "It's sunny.")
+        #expect(gate.flushRemainder() == "It's sunny.")
     }
 }

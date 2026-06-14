@@ -17,7 +17,7 @@ public protocol HTTPFetching: Sendable {
 public struct URLSessionHTTPFetcher: HTTPFetching {
     private let timeout: TimeInterval
 
-    public init(timeout: TimeInterval = 8) {
+    public init(timeout: TimeInterval = 12) {
         self.timeout = timeout
     }
 

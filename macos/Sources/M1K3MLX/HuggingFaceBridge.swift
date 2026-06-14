@@ -29,8 +29,8 @@ import Tokenizers
 
 /// Multi-GB model fetches were a silent progress fraction — this category says
 /// which model is downloading, how far along, how big on disk, and an ETA.
-///   log stream --predicate 'subsystem == "dev.murphysig.M1K3" AND category == "model-download"'
-private let downloadLog = Logger(subsystem: "dev.murphysig.M1K3", category: "model-download")
+///   log stream --predicate 'subsystem == "app.m1k3" AND category == "model-download"'
+private let downloadLog = Logger(subsystem: "app.m1k3", category: "model-download")
 
 /// Decides which download progress updates become log lines: the first, the
 /// last, every 5% of progress, or every 10s of wall clock — whichever first.

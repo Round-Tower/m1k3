@@ -1,7 +1,7 @@
 {
   "fill" : {
     "linear-gradient" : [
-      "display-p3:0.25344,0.26604,0.27266,1.00000",
+      "display-p3:0.00000,0.00000,0.00000,1.00000",
       "display-p3:0.00000,0.00000,0.00000,1.00000"
     ],
     "orientation" : {
@@ -19,10 +19,26 @@
     {
       "layers" : [
         {
+          "glass" : false,
+          "hidden" : false,
           "image-name" : "M1K3 2.png",
           "name" : "M1K3 2",
           "position" : {
-            "scale" : 0.3,
+            "scale" : 0.25,
+            "translation-in-points" : [
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "blend-mode" : "hard-light",
+          "fill" : "none",
+          "hidden" : true,
+          "image-name" : "83d098d3-4765-428f-9c83-305ee450b4b8.jpeg",
+          "name" : "83d098d3-4765-428f-9c83-305ee450b4b8",
+          "position" : {
+            "scale" : 2,
             "translation-in-points" : [
               0,
               0

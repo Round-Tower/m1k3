@@ -110,6 +110,7 @@ extension AppEnvironment {
                 let webAllowed = defaults.object(forKey: Self.webSearchEnabledKey) == nil
                     || defaults.bool(forKey: Self.webSearchEnabledKey)
                 if webAllowed {
+                    tools.insert(WikipediaTool(), at: 0)
                     tools.insert(FetchPageTool(), at: 0)
                     tools.insert(WebSearchTool(), at: 0)
                 }

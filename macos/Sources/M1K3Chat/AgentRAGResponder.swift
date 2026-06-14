@@ -222,6 +222,7 @@ public struct AgentRAGResponder: RAGResponding, Sendable {
             } else {
                 var tail = streamed ? "" : conclusion
                 tail += Self.webSourcesBlock(for: result)
+                tail += Self.factSourcesBlock(for: result)
                 if !tail.isEmpty {
                     continuation.yield(tail)
                 }
@@ -309,9 +310,9 @@ public struct AgentRAGResponder: RAGResponding, Sendable {
             question: question, chunks: chunks,
             gathered: result.reasoningTrace, into: continuation
         )
-        let webBlock = Self.webSourcesBlock(for: result)
-        if !webBlock.isEmpty {
-            continuation.yield(webBlock)
+        let provenance = Self.webSourcesBlock(for: result) + Self.factSourcesBlock(for: result)
+        if !provenance.isEmpty {
+            continuation.yield(provenance)
         }
     }
 
@@ -413,6 +414,11 @@ public struct AgentRAGResponder: RAGResponding, Sendable {
                 + "(like an actual forecast), run fetch_page on the most "
                 + "relevant result URL, then conclude from the page text."
         }
+        if toolNames.contains("lookup_fact") {
+            routing += "\n- For an established fact about a person, place, concept, "
+                + "or historical event you are not fully sure of, call lookup_fact "
+                + "and cite its Source — don't answer from memory and risk a confident mistake."
+        }
         let rules = switch style {
         case .react:
             """
@@ -423,6 +429,8 @@ public struct AgentRAGResponder: RAGResponding, Sendable {
             [Title §heading]; never invent citations.
             - Never present a fact, figure, or date you can't ground or verify \
             as certain; if you're unsure, say so plainly. Honesty beats a confident guess.
+            - If a search or lookup comes back empty or fails, answer with explicit \
+            uncertainty — name what you couldn't confirm — rather than presenting a guess as fact.
             - Use at most two tool calls, never repeating one with the same argument.
             - Questions about yourself — your configuration, design, or abilities — \
             are answered from your persona; never search stored documents for them.
@@ -438,6 +446,8 @@ public struct AgentRAGResponder: RAGResponding, Sendable {
             [Title §heading]; never invent citations.
             - Never present a fact, figure, or date you can't ground or verify \
             as certain; if you're unsure, say so plainly. Honesty beats a confident guess.
+            - If a search or lookup comes back empty or fails, answer with explicit \
+            uncertainty — name what you couldn't confirm — rather than presenting a guess as fact.
             - Never repeat a tool call with the same argument.
             - Questions about yourself — your configuration, design, or abilities — \
             are answered from your persona; never search stored documents for them.
@@ -462,50 +472,5 @@ public struct AgentRAGResponder: RAGResponding, Sendable {
         return [head, memoryBlock(memories), rules]
             .compactMap { $0 }
             .joined(separator: "\n\n")
-    }
-
-    /// Deterministic provenance for web answers — extracted from the trace,
-    /// not the model, so it can't be hallucinated.
-    private static func webSourcesBlock(for result: AgentResult) -> String {
-        guard result.toolsUsed.contains("web_search") else { return "" }
-        let urls = WebSourceExtractor.urls(from: result.reasoningTrace)
-        guard !urls.isEmpty else { return "" }
-        let lines = urls.prefix(3).map { "• \($0)" }.joined(separator: "\n")
-        return "\n\nWeb sources:\n\(lines)"
-    }
-}
-
-/// Pulls the result URLs out of web_search observations ("Title — https://…").
-enum WebSourceExtractor {
-    static func urls(from trace: [ReasoningStep]) -> [String] {
-        var seen = Set<String>()
-        var ordered: [String] = []
-        for step in trace where step.action?.hasPrefix("web_search(") == true {
-            guard let observation = step.observation else { continue }
-            for match in observation.matches(of: /— (https?:\/\/\S+)/) {
-                // \S+ greedily eats sentence punctuation after the URL
-                // ("… — https://example.com/page." captures the dot) — trim
-                // trailing punctuation that is never meaningful at a URL end.
-                let url = String(match.1).trimmedOfTrailingPunctuation()
-                if seen.insert(url).inserted {
-                    ordered.append(url)
-                }
-            }
-        }
-        return ordered
-    }
-}
-
-private extension String {
-    /// Known trade-off: a URL legitimately ENDING in a balanced `)`/`]`
-    /// (Wikipedia "…_(disambiguation)") gets over-trimmed. Acceptable —
-    /// sentence punctuation dominates DDG observations, and these are
-    /// display/citation URLs, never fetch targets.
-    func trimmedOfTrailingPunctuation() -> String {
-        var trimmed = Substring(self)
-        while let last = trimmed.last, ".,;:)]»'\"".contains(last) {
-            trimmed = trimmed.dropLast()
-        }
-        return String(trimmed)
     }
 }

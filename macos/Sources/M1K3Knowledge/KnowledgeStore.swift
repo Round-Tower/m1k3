@@ -344,12 +344,18 @@ public final class KnowledgeStore: @unchecked Sendable {
             createdAt: Date(timeIntervalSince1970: row["created_at"] ?? 0)
         )
     }
+}
 
-    // MARK: - Search
+// MARK: - Retrieval
 
+/// FTS, vector, hybrid-fusion, and two-lane grounding search. Kept in a
+/// same-file extension so the class body stays under the type_body_length
+/// ceiling — `dbQueue` and the other `private` members stay reachable because a
+/// same-file extension shares the type's private access (no visibility widening).
+public extension KnowledgeStore {
     /// FTS5 BM25 search over chunk text. Each query word is double-quoted to
     /// neutralise FTS5 operators (same sanitisation as the prior knowledge-server project).
-    public func searchFTS(
+    func searchFTS(
         query: String, limit: Int = 10, kinds: Set<KnowledgeKind>? = nil
     ) throws -> [ChunkHit] {
         guard let sanitized = Self.sanitizeFTSQuery(query) else { return [] }
@@ -377,7 +383,7 @@ public final class KnowledgeStore: @unchecked Sendable {
 
     /// Brute-force cosine KNN over stored embeddings. Single read, in-memory
     /// score + sort + prefix — fine for MVP volumes; revisit past ~10k chunks.
-    public func searchVector(
+    func searchVector(
         queryVector: [Float], limit: Int = 10, kinds: Set<KnowledgeKind>? = nil
     ) throws -> [ChunkHit] {
         let rows = try dbQueue.read { db in
@@ -410,7 +416,7 @@ public final class KnowledgeStore: @unchecked Sendable {
 
     /// Hybrid search: fuse FTS and vector rankings with Reciprocal Rank Fusion.
     /// An item strong in both signals ranks above one strong in either alone.
-    public func searchHybrid(
+    func searchHybrid(
         query: String,
         queryVector: [Float],
         limit: Int = 10,
@@ -443,7 +449,7 @@ public final class KnowledgeStore: @unchecked Sendable {
     /// The non-memory kinds that share the document grounding budget. Memory is
     /// retrieved on its own lane (see `searchGrounding`) so short atomic facts
     /// are never crowded out of a single top-K by the larger document corpus.
-    public static let groundingDocumentKinds: Set<KnowledgeKind> = [.document, .call, .note]
+    static let groundingDocumentKinds: Set<KnowledgeKind> = [.document, .call, .note]
 
     /// Two-lane grounding retrieval: documents and memories ranked + budgeted
     /// SEPARATELY, then concatenated for the caller to gate by kind.
@@ -456,7 +462,7 @@ public final class KnowledgeStore: @unchecked Sendable {
     /// 0.728). Memories embed lower (5–40-token facts) and lose a shared budget
     /// the moment a query leans even slightly documentary. Giving each kind its
     /// own lane makes recall phrasing-robust.
-    public func searchGrounding(
+    func searchGrounding(
         query: String,
         queryVector: [Float],
         documentLimit: Int = 5,
@@ -496,7 +502,7 @@ public final class KnowledgeStore: @unchecked Sendable {
     /// Double-quote each whitespace-separated token so FTS5 treats them as
     /// literals (neutralises `*`, `:`, `"`, `-` etc.). Returns nil if the query
     /// has no usable tokens. Ported from the prior knowledge-server project's sanitizeFTSQuery.
-    static func sanitizeFTSQuery(_ query: String) -> String? {
+    internal static func sanitizeFTSQuery(_ query: String) -> String? {
         let tokens = query
             .components(separatedBy: .whitespacesAndNewlines)
             .map { $0.replacingOccurrences(of: "\"", with: "") }

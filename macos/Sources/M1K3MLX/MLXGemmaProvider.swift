@@ -49,14 +49,14 @@ import os
 
 /// Model-load diagnostics. File-scope so the load closure (which runs off the
 /// provider's isolation) can log retries without capturing `self`.
-private let mlxLoadLog = Logger(subsystem: "dev.murphysig.M1K3", category: "mlx-load")
+private let mlxLoadLog = Logger(subsystem: "app.m1k3", category: "mlx-load")
 
 /// Per-generation latency diagnostics: prompt size, prefill time (the real
 /// time-to-first-token driver), and decode throughput. Stream with:
-///   log stream --predicate 'subsystem == "dev.murphysig.M1K3" AND category == "ttft"'
+///   log stream --predicate 'subsystem == "app.m1k3" AND category == "ttft"'
 /// Internal (unlike mlxLoadLog above) BY DESIGN — shared with
 /// MLXToolCalling.swift and the prompt-cache persistence extension.
-let mlxTTFTLog = Logger(subsystem: "dev.murphysig.M1K3", category: "ttft")
+let mlxTTFTLog = Logger(subsystem: "app.m1k3", category: "ttft")
 
 /// Log one generation's completion metrics. Free function taking only params
 /// (the swiftformat↔Logger autoclosure landmine: never interpolate members).

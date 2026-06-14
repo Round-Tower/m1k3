@@ -37,8 +37,9 @@ enum HTMLTextExtractor {
         for pattern in removals {
             work = work.replacingOccurrences(of: pattern, with: " ", options: .regularExpression)
         }
+        // Block boundaries → newlines; td/th too, so adjacent cells don't run together.
         work = work.replacingOccurrences(
-            of: "(?i)</(p|div|h[1-6]|li|tr|section|article|ul|ol|table)>|<br[^>]*>",
+            of: "(?i)</(p|div|h[1-6]|li|tr|td|th|section|article|ul|ol|table)>|<br[^>]*>",
             with: "\n",
             options: .regularExpression
         )
@@ -68,8 +69,14 @@ enum HTMLTextExtractor {
             }
             return String(Character(scalar))
         }
+        // &amp; MUST stay last so a literal "&amp;mdash;" isn't double-decoded.
         let named: [(String, String)] = [
-            ("&nbsp;", " "), ("&quot;", "\""), ("&lt;", "<"), ("&gt;", ">"), ("&amp;", "&"),
+            ("&nbsp;", " "), ("&quot;", "\""), ("&lt;", "<"), ("&gt;", ">"), ("&apos;", "'"),
+            ("&mdash;", "—"), ("&ndash;", "–"), ("&hellip;", "…"), ("&deg;", "°"),
+            ("&trade;", "™"), ("&copy;", "©"), ("&reg;", "®"), ("&euro;", "€"),
+            ("&pound;", "£"), ("&times;", "×"),
+            ("&rsquo;", "'"), ("&lsquo;", "'"), ("&rdquo;", "\""), ("&ldquo;", "\""),
+            ("&amp;", "&"),
         ]
         for (entity, character) in named {
             output = output.replacingOccurrences(of: entity, with: character)
@@ -92,7 +99,7 @@ public struct FetchPageTool: AgentTool {
     private let fetcher: any HTTPFetching
     private let maxCharacters: Int
 
-    public init(fetcher: any HTTPFetching = URLSessionHTTPFetcher(), maxCharacters: Int = 1500) {
+    public init(fetcher: any HTTPFetching = RetryingHTTPFetcher.production, maxCharacters: Int = 1500) {
         self.fetcher = fetcher
         self.maxCharacters = maxCharacters
     }
@@ -115,7 +122,13 @@ public struct FetchPageTool: AgentTool {
 
         do {
             let (data, response) = try await fetcher.fetch(request)
-            let html = String(data: data, encoding: .utf8) ?? ""
+            if HTTPStatus.classify(response.statusCode) != .ok {
+                Self.log.notice("HTTP \(response.statusCode) for \(url.host() ?? "?", privacy: .public)")
+                return ToolResult(output: "Error: the page returned HTTP \(response.statusCode) "
+                    + "— try another result.")
+            }
+            let contentType = response.value(forHTTPHeaderField: "Content-Type")
+            let html = BodyDecoder.decode(data, contentType: contentType)
             let text = HTMLTextExtractor.text(from: html)
             Self.log.info("""
             fetched \(url.host() ?? "?", privacy: .public): HTTP \(response.statusCode), \

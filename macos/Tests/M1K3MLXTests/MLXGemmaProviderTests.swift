@@ -49,6 +49,28 @@ struct MLXGemmaProviderTests {
         ))
     }
 
+    @Test("tool-turn thinking is decided per-turn, never from construction-time state")
+    func toolTurnThinkingIsPerTurn() {
+        // A toggle family: thinking ON ⇒ no enable_thinking suppression + a
+        // pre-opened <think>; thinking OFF ⇒ enable_thinking:false + no pre-open.
+        let thinkOn = MLXGemmaProvider.toolTurnThinkingDecision(turnThinking: true, supportsToggle: true)
+        #expect(thinkOn.context == nil)
+        #expect(thinkOn.prefixNeeded)
+
+        let thinkOff = MLXGemmaProvider.toolTurnThinkingDecision(turnThinking: false, supportsToggle: true)
+        #expect(thinkOff.context?["enable_thinking"] as? Bool == false)
+        #expect(!thinkOff.prefixNeeded)
+
+        // A non-toggle family never suppresses and never pre-opens, either way.
+        let noToggleOn = MLXGemmaProvider.toolTurnThinkingDecision(turnThinking: true, supportsToggle: false)
+        #expect(noToggleOn.context == nil)
+        #expect(!noToggleOn.prefixNeeded)
+
+        let noToggleOff = MLXGemmaProvider.toolTurnThinkingDecision(turnThinking: false, supportsToggle: false)
+        #expect(noToggleOff.context == nil)
+        #expect(!noToggleOff.prefixNeeded)
+    }
+
     @Test("repetition penalty is mild and windowed — the degenerate-loop guard")
     func repetitionPenaltyPinned() {
         // 1.1 with a 64-token window suppresses verbatim loops without

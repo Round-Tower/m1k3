@@ -25,6 +25,12 @@
 //  ~0.63, in-domain floor 0.736; the old 0.62 sat in the noise and leaked a
 //  CoT chunk as a "source" for a sourdough query). memoryThreshold left at
 //  0.54 (MEMEVAL-governed overlap). verify-at-⌘R on the live MCP loop.
+//  Review: Kev + claude-opus-4-8, 2026-06-14, Confidence 0.85 — both bge-era
+//  provisionals RE-TUNED from on-device ABSEP + MEMEVAL on the new
+//  qwen3-embed-512: chunkThreshold 0.68 → 0.51 (dead-zone [0.315, 0.697]
+//  centre, separation doubled vs bge), memoryThreshold 0.54 → 0.39 (recall-
+//  first now that qwen3 dropped the negative ceiling 0.556 → 0.422). See the
+//  per-constant comments for the measured distributions. verify-at-⌘R.
 //
 
 import Foundation
@@ -36,28 +42,38 @@ public enum GroundingGate {
     /// everything (proven live 2026-06-10: 0.45 injected arxiv chunks for
     /// "Yo mike, what's up?").
     ///
-    /// 0.68 from a live MCP measurement (2026-06-12, real BGE on device,
-    /// `ask_m1k3` gate logs): OFF-domain queries vs the ML-paper corpus —
-    /// sourdough 0.629, apple-pruning 0.610, JS-frontend 0.630 — peaked at
-    /// ~0.63 (a flat noise band, no standout); the IN-domain "attention"
-    /// query floored at 0.736 (a tight high cluster). 0.62 sat INSIDE the
-    /// noise — sourdough's 0.629 chunk squeaked through and got cited as a
-    /// source for bread. 0.68 is the maximal-margin centre of the [0.63, 0.74]
-    /// dead zone: garbage gated, real hits kept. The "flat pack = no real
-    /// match" margin heuristic and a MEMEVAL-style CHUNKEVAL sweep are the
-    /// durable upgrade paths if a fixed floor keeps misfiring.
-    public static let chunkThreshold: Float = 0.68
+    /// 0.51 from the ABSEP re-tune (2026-06-14, qwen3-embed-512 on device,
+    /// M1K3_SELFTEST_ABSEP) after the bge-small → Qwen3-Embedding swap: the
+    /// same 2026-06-13 on-device leakers as OFF-domain queries vs the ML-paper
+    /// corpus now score FAR lower — sourdough 0.315, apple-pruning 0.234,
+    /// CSS-div 0.209, JS-frontend 0.270 — a noise ceiling of 0.315; the
+    /// IN-domain queries floored at 0.697. The dead zone is [0.315, 0.697]
+    /// (margin 0.382, vs bge-small's 0.181 on the same fixtures — the swap
+    /// MEASURABLY doubled separation). 0.51 is the maximal-margin centre:
+    /// 0.19 of headroom to BOTH edges. The old bge-era 0.68 sat jammed against
+    /// the in-domain floor (0.697) — still safe, but it gated real hits in the
+    /// 0.51–0.68 band for no precision gain now that off-domain noise tops out
+    /// at 0.315. The "flat pack = no real match" margin heuristic and more
+    /// off-domain fixtures (n=6 here) are the durable upgrade paths.
+    public static let chunkThreshold: Float = 0.51
 
     /// Minimum cosine similarity for a MEMORY hit. Memories are 5–40-token
-    /// atomic facts; query-to-short-fact pairs sit LOWER in BGE's cone than
-    /// query-to-chunk — measured via M1K3_SELFTEST_MEMEVAL (2026-06-12, real
-    /// BGE on device): positives 0.547–0.856 (median 0.651), negatives
-    /// 0.281–0.556 (median 0.427). The classes overlap — no clean cut exists.
-    /// 0.54 keeps 22/22 true recalls and admits 1/11 negatives; 0.60 lost
-    /// 5/22 user-given facts. Recall wins the asymmetry: a memory miss breaks
-    /// the "I'll remember" promise, a false positive is one short bullet.
-    /// Per-query normalisation is the upgrade path if stray bullets annoy.
-    public static let memoryThreshold: Float = 0.54
+    /// atomic facts; query-to-short-fact pairs sit LOWER in the cone than
+    /// query-to-chunk — measured via M1K3_SELFTEST_MEMEVAL (2026-06-14, real
+    /// qwen3-embed-512 on device after the embedder swap): positives
+    /// 0.393–0.790 (median 0.628), negatives 0.148–0.422 (median 0.279). The
+    /// classes overlap in a thin band [0.393, 0.422] — no clean cut — but the
+    /// KEY shift is that qwen3 dropped the NEGATIVE ceiling from bge's 0.556 to
+    /// 0.422 (one anomalous pair; the next-highest negative is 0.340), which is
+    /// what finally makes lowering the bar safe. 0.39 keeps 22/22 true recalls —
+    /// including the two lowest, "Kev lives in Cork" (0.393) and "Kev studied at
+    /// UCC" (0.411), the exact identity-fact class whose live recall-failure
+    /// drove the swap — at the cost of admitting that single 0.422 negative
+    /// (one weak stray bullet). Recall wins the asymmetry: a memory miss breaks
+    /// the "I'll remember" promise, a false positive is one do-not-cite line.
+    /// The zero-FP alternative is 0.43 (20/22 — loses Cork + UCC); recall-first
+    /// chooses 0.39. Per-query normalisation is the upgrade path if strays annoy.
+    public static let memoryThreshold: Float = 0.39
 
     /// Split gated hits for the two prompt blocks: `.memory` hits (cleared
     /// `memoryThreshold`) feed the WHAT-I-KNOW-ABOUT-YOU block; everything

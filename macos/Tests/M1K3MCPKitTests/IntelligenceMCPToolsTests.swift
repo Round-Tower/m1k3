@@ -86,6 +86,42 @@ struct IntelligenceMCPToolsTests {
         #expect(text(result)?.contains("conversation") == true)
     }
 
+    @Test("a brain that outlives the deadline surfaces a clean isError, not a raw transport timeout")
+    func askTimesOut() async {
+        // A generation that never returns in time (the wedge AsyncTimeout kills).
+        let handlers = IntelligenceToolHandlers(
+            ask: { _ in
+                try await Task.sleep(for: .seconds(10))
+                return "should never arrive"
+            },
+            remember: { _, _ in "noop" }
+        )
+        let registry = MCPToolRegistry(
+            makeIntelligenceToolDefinitions(handlers: handlers, askTimeoutSeconds: 0.1)
+        )
+        let start = ContinuousClock.now
+        let result = await registry.call(
+            name: "ask_m1k3",
+            arguments: ["question": .string("why is the sky blue — explain step by step, in great detail?")]
+        )
+        // Returned on the deadline (0.1s), not after the 10s sleep — the lock is freed.
+        #expect(start.duration(to: .now) < .seconds(5))
+        #expect(result.isError == true)
+        #expect(text(result)?.contains("didn't finish") == true)
+    }
+
+    @Test("a fast brain is unaffected by the deadline")
+    func askWithinDeadline() async {
+        let log = CallLog()
+        let registry = MCPToolRegistry(
+            makeIntelligenceToolDefinitions(handlers: makeHandlers(log: log), askTimeoutSeconds: 5)
+        )
+        let result = await registry.call(name: "ask_m1k3", arguments: ["question": .string("what failed?")])
+        #expect(result.isError != true)
+        #expect(text(result) == "Grounded answer [Doc §Heading]")
+        #expect(log.all == ["ask:what failed?"])
+    }
+
     @Test("remember passes title and text through")
     func rememberPassthrough() async {
         let log = CallLog()

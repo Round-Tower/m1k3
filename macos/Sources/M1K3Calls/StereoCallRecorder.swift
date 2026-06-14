@@ -36,9 +36,9 @@ import ScreenCaptureKit
 public final class StereoCallRecorder: NSObject, @unchecked Sendable {
     /// Common capture format both sources are normalised to before interleaving.
     private static let sampleRate: Double = 48000
-    /// Diagnostic trail for QA — `log stream --predicate 'subsystem == "dev.murphysig.M1K3"'`.
+    /// Diagnostic trail for QA — `log stream --predicate 'subsystem == "app.m1k3"'`.
     /// Metadata only (formats, counts, sizes, errors); never the audio itself.
-    private static let log = Logger(subsystem: "dev.murphysig.M1K3", category: "calls")
+    private static let log = Logger(subsystem: "app.m1k3", category: "calls")
 
     private let lock = NSLock()
     private let engine = AVAudioEngine()
@@ -47,7 +47,7 @@ public final class StereoCallRecorder: NSObject, @unchecked Sendable {
     private var farSamples: [Float] = []
     private var recording = false
     private var micConverter: AVAudioConverter?
-    private let captureQueue = DispatchQueue(label: "dev.murphysig.m1k3.stereocapture")
+    private let captureQueue = DispatchQueue(label: "app.m1k3.stereocapture")
 
     public var isRecording: Bool {
         lock.withLock { recording }

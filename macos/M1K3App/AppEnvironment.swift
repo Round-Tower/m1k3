@@ -192,7 +192,7 @@ final class AppEnvironment {
     static let callKeyProtectionMigratedKey = "calls.keyProtectionMigrated"
     /// Call-subsystem diagnostics — pairs with StereoCallRecorder's trail so a full
     /// record→transcribe QA pass is one `log stream` predicate.
-    private static let callLog = Logger(subsystem: "dev.murphysig.M1K3", category: "calls")
+    private static let callLog = Logger(subsystem: "app.m1k3", category: "calls")
     /// The user has upgraded voice input to WhisperKit — restored on launch so it
     /// auto-loads instead of silently reverting to Apple Speech (guarded by the
     /// model being on disk, never a silent re-download).
@@ -419,6 +419,8 @@ final class AppEnvironment {
     /// hands off to ChatSession. The speech delegate handles the speaking→idle
     /// transition if the user taps Speak on the response.
     func send(_ text: String) async {
+        let clock = ContinuousClock()
+        let started = clock.now
         avatar.setActivity(.thinking)
         // After a brief pause (RAG lookup), advance to .generating so Sparrow
         // bounces while the LLM streams. Self-cancelling if the response is fast.
@@ -435,6 +437,10 @@ final class AppEnvironment {
         // mid-speech, which a failure here never is).
         if case .failed = chat.messages.last?.status {
             soundEffects.play(.error)
+        } else {
+            // Successful answer: ping if the user tabbed away during a long think
+            // (opt-in, backgrounded-only — the policy decides). Failures don't ping.
+            await maybeNotifyTurnFinished(duration: clock.now - started)
         }
         // Only reset to idle if the avatar isn't already in a speaking state
         // (e.g. auto-TTS path sets .speaking before we return here).
@@ -644,9 +650,15 @@ final class AppEnvironment {
         if removed { refreshCounts() }
         return removed
     }
+}
 
-    // MARK: - Recording (consent-gated)
+// MARK: - Recording (consent-gated)
 
+//
+// Same-file extension — sees the class's private members (callLog, recorder,
+// consentGate, …) while keeping the class body under type_body_length.
+
+extension AppEnvironment {
     /// Whether recording can start without re-asking for consent.
     var recordingPreAuthorised: Bool {
         consentGate.isPreAuthorised
@@ -776,49 +788,6 @@ extension AppEnvironment {
             // marker, so the next launch retries.
             embeddingStatus = "Couldn’t update the index: \(error.localizedDescription)"
         }
-    }
-
-    /// Build the encrypted call store. Falls back to an in-memory (non-persistent)
-    /// store if the Keychain key can't be obtained, so a key hiccup degrades the
-    /// calls feature rather than crashing the app.
-    static func makeCallPersistence(at url: URL) -> any CallPersistence {
-        do {
-            // The call-encryption key is gated behind Touch ID (login-password
-            // fallback) via a .userPresence Keychain access control, read once here
-            // at call-store construction → one biometric prompt per launch.
-            let provider = StoredKeyProvider(store: KeychainKeyStore(protection: .userPresence))
-            // One-time, flag-guarded migration: a key written before this gate
-            // existed is unprotected; reassert upgrades it IN PLACE (same bytes, so
-            // existing encrypted calls stay decryptable). Guarded because reassert
-            // reads the key — against an already-protected item that read would itself
-            // fire Touch ID, so running it every launch means TWO prompts. Once only.
-            let defaults = UserDefaults.standard
-            if !defaults.bool(forKey: callKeyProtectionMigratedKey) {
-                try provider.reassertProtection()
-                defaults.set(true, forKey: callKeyProtectionMigratedKey)
-            }
-            let key = try provider.symmetricKey()
-            return try GRDBCallPersistence(path: url.path, coder: EncryptedCallCoder(key: key))
-        } catch {
-            // A key failure degrades calls to a non-persistent store rather than
-            // crashing the app. Log it — an otherwise silently-inert calls feature is
-            // undiagnosable (a dismissed Touch ID lands here as .userCancelled).
-            callLog.error("call store fell back to non-persistent: \(error, privacy: .public)")
-            return (try? GRDBCallPersistence()) ?? NullCallPersistence()
-        }
-    }
-
-    static func storeURL() throws -> URL {
-        let fileManager = FileManager.default
-        let base = try fileManager.url(
-            for: .applicationSupportDirectory,
-            in: .userDomainMask,
-            appropriateFor: nil,
-            create: true
-        )
-        let dir = base.appendingPathComponent("M1K3", isDirectory: true)
-        try fileManager.createDirectory(at: dir, withIntermediateDirectories: true)
-        return dir.appendingPathComponent("knowledge.sqlite")
     }
 }
 
@@ -1009,22 +978,5 @@ extension AppEnvironment {
     /// "Hear a sample" affordance.
     func speakSample() async {
         await speech.speak("Hi, I'm M1K3 — your local intelligence, running entirely on this Mac.")
-    }
-}
-
-/// Last-resort no-op store so a (near-impossible) persistence-init failure leaves
-/// the app running with the calls feature simply inert, never crashing.
-private struct NullCallPersistence: CallPersistence {
-    func save(_: CallSession) throws {}
-    func load(id _: UUID) throws -> CallSession? {
-        nil
-    }
-
-    func loadAll() throws -> [CallSession] {
-        []
-    }
-
-    func delete(id _: UUID) throws -> Bool {
-        false
     }
 }

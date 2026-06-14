@@ -107,6 +107,7 @@ kotlin {
             // Fine at current corpus sizes. HNSW would want jvector-base, but
             // io.github.jbellis:jvector-base still isn't on Maven Central as of
             // last check — track there before introducing it.
+            implementation(libs.jvector)
         }
         commonMain.dependencies {
             implementation(compose.runtime)
@@ -181,7 +182,7 @@ android {
     ndkVersion = libs.versions.ndk.get()
 
     defaultConfig {
-        applicationId = "app.m1k3.ai.assistant"
+        applicationId = "app.m1k3"
         minSdk =
             libs.versions.android.minSdk
                 .get()

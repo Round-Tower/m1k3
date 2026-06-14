@@ -225,3 +225,8 @@ databases/
 tests/unified-suite/output/
 scripts/test_report.json
 data/test-results/
+
+# graphify knowledge graph: generated/regenerable (~18M), goes stale on edits.
+# Collaborators run `graphify update .` locally; CLAUDE.md rules are conditional
+# on graphify-out/ existing. The .graphifyignore config + skill ARE tracked.
+graphify-out/

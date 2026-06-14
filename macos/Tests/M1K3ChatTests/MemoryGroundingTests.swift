@@ -80,7 +80,9 @@ struct MemoryGroundingTests {
     //
     // Captured from the pre-memory implementation 2026-06-12; the self-question
     // rule was added deliberately the same day (meta-question confabulation
-    // fix). Any OTHER drift is accidental and should fail here.
+    // fix), and the empty-lookup uncertainty bullet was added deliberately
+    // 2026-06-14 (grounding nudges, 83ff7e37). Any OTHER drift is accidental and
+    // should fail here.
 
     @Test("react grounding with chunks and no memories is byte-identical to the pre-memory output")
     func reactPinnedVerbatim() {
@@ -96,6 +98,8 @@ struct MemoryGroundingTests {
         [Title §heading]; never invent citations.
         - Never present a fact, figure, or date you can't ground or verify \
         as certain; if you're unsure, say so plainly. Honesty beats a confident guess.
+        - If a search or lookup comes back empty or fails, answer with explicit \
+        uncertainty — name what you couldn't confirm — rather than presenting a guess as fact.
         - Use at most two tool calls, never repeating one with the same argument.
         - Questions about yourself — your configuration, design, or abilities — \
         are answered from your persona; never search stored documents for them.
@@ -129,6 +133,8 @@ struct MemoryGroundingTests {
         [Title §heading]; never invent citations.
         - Never present a fact, figure, or date you can't ground or verify \
         as certain; if you're unsure, say so plainly. Honesty beats a confident guess.
+        - If a search or lookup comes back empty or fails, answer with explicit \
+        uncertainty — name what you couldn't confirm — rather than presenting a guess as fact.
         - Never repeat a tool call with the same argument.
         - Questions about yourself — your configuration, design, or abilities — \
         are answered from your persona; never search stored documents for them.

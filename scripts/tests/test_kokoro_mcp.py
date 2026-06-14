@@ -82,7 +82,7 @@ async def test_kokoro_mcp():
 
     # Test voice detection helper
     print("\n🔍 Testing voice detection...")
-    from mcp_tts_server import detect_engine_from_voice
+    from mcp_unified_server import detect_engine_from_voice
 
     test_voices = {
         "bm_daniel": "kokoro",

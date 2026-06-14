@@ -52,7 +52,7 @@ public struct MLXMemoryBudget: Sendable, Equatable {
         )
     }
 
-    private static let log = Logger(subsystem: "dev.murphysig.M1K3", category: "mlx-memory")
+    private static let log = Logger(subsystem: "app.m1k3", category: "mlx-memory")
 
     /// One-shot application of this machine's budget to the process-global MLX
     /// memory state. Thread-safe and idempotent (static-let once token); call
@@ -80,7 +80,7 @@ public struct MLXMemoryBudget: Sendable, Equatable {
     /// Log MLX memory (active/cache/peak) plus the process physical
     /// footprint — the same number Activity Monitor's Memory column reports.
     /// Stream with:
-    /// `log stream --predicate 'subsystem == "dev.murphysig.M1K3" AND category == "mlx-memory"'`
+    /// `log stream --predicate 'subsystem == "app.m1k3" AND category == "mlx-memory"'`
     public static func logSnapshot(label: String) {
         log.notice("\(snapshotDescription(label: label), privacy: .public)")
     }

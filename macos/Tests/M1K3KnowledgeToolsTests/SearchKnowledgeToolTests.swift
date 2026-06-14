@@ -183,9 +183,9 @@ struct SearchKnowledgeToolTests {
     @Test("a memory clears its lower bar where a document at the same cosine is dropped")
     func memoryClearsLowerBar() async throws {
         let store = try KnowledgeStore()
-        // Unit vector at cosine ≈0.58 to [1,0]: between memoryThreshold (0.54)
-        // and chunkThreshold (0.62).
-        let band: [Float] = [0.58, 0.81461]
+        // Unit vector at cosine ≈0.45 to [1,0]: between memoryThreshold (0.39)
+        // and chunkThreshold (0.51) after the 2026-06-14 qwen3 re-tune.
+        let band: [Float] = [0.45, 0.893]
         let memoryContent = "Kev's sister is called Aoife."
         let docContent = "Quarterly throughput rose by four percent."
         let embedder = ScriptedEmbedder(vectors: [
