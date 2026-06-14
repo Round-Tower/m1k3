@@ -419,6 +419,8 @@ final class AppEnvironment {
     /// hands off to ChatSession. The speech delegate handles the speaking→idle
     /// transition if the user taps Speak on the response.
     func send(_ text: String) async {
+        let clock = ContinuousClock()
+        let started = clock.now
         avatar.setActivity(.thinking)
         // After a brief pause (RAG lookup), advance to .generating so Sparrow
         // bounces while the LLM streams. Self-cancelling if the response is fast.
@@ -435,6 +437,10 @@ final class AppEnvironment {
         // mid-speech, which a failure here never is).
         if case .failed = chat.messages.last?.status {
             soundEffects.play(.error)
+        } else {
+            // Successful answer: ping if the user tabbed away during a long think
+            // (opt-in, backgrounded-only — the policy decides). Failures don't ping.
+            await maybeNotifyTurnFinished(duration: clock.now - started)
         }
         // Only reset to idle if the avatar isn't already in a speaking state
         // (e.g. auto-TTS path sets .speaking before we return here).

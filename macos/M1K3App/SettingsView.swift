@@ -20,6 +20,7 @@ struct SettingsView: View {
     @AppStorage(AppEnvironment.webSearchEnabledKey) private var webSearchEnabled = true
     @AppStorage(AppEnvironment.memoryAutoCaptureKey) private var memoryAutoCapture = true
     @AppStorage(AppEnvironment.soundEffectsEnabledKey) private var soundEffectsEnabled = true
+    @AppStorage(AppEnvironment.notifyOnLongTurnKey) private var notifyOnLongTurn = false
     @State private var showMemories = false
     @AppStorage(AppEnvironment.thinkingModeKey) private var thinkingMode = ThinkingMode.auto.rawValue
     @AppStorage(AppEnvironment.voiceCompanionKey) private var voiceCompanion = ""
@@ -155,6 +156,21 @@ struct SettingsView: View {
                 }
 
                 Section {
+                    Toggle("Notify when a long answer is ready", isOn: $notifyOnLongTurn)
+                        .onChange(of: notifyOnLongTurn) { _, on in
+                            Task { await env.setLongTurnNotifications(on) }
+                        }
+                } header: {
+                    Text("Notifications")
+                } footer: {
+                    Text("If you tab away mid-answer, M1K3 pings you when a long reply "
+                        + "is ready — only while the app is in the background. The "
+                        + "notification never includes the reply itself: on-device, "
+                        + "private. Off by default.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+
+                Section {
                     if env.isTranscribingCall {
                         HStack(spacing: 8) {
                             ProgressView().controlSize(.small)
@@ -286,7 +302,13 @@ struct SettingsView: View {
             }
         }
     }
+}
 
+// MARK: - Sections
+
+/// Same-file extension — sees the struct's private @State / @Environment while
+/// keeping the main struct body under SwiftLint's type_body_length ceiling.
+extension SettingsView {
     /// Voice-mode face: the pixel face (default) or an opt-in 3D companion. Only
     /// companions with bundled assets are offered. The pixel face stays M1K3's
     /// face everywhere else — this is just the voice-mode skin. (Own property — the
