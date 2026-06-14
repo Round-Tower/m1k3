@@ -2,5 +2,9 @@ source "https://rubygems.org"
 
 # M1K3 macOS — Fastlane is METADATA-ONLY (App Store Connect text/screenshots +
 # TestFlight "What to Test"). Build/sign/notarize live in tools/release/*.sh.
-gem "fastlane"
+#
+# fastlane is pinned with a floor: unconstrained, Bundler backtracks to the
+# ancient 1.92.0 (2017, no deliver/spaceship) on bleeding-edge Rubies. The floor
+# keeps us on 2.x where the metadata lanes exist. Gemfile.lock pins the exact set.
+gem "fastlane", ">= 2.220"
 gem "dotenv"

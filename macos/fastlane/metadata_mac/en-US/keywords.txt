@@ -1,1 +1,1 @@
-offline,assistant,chatbot,LLM,voice,RAG,notes,PDF,privacy,secure,GPT,transcribe,dictation,journal
+offline,assistant,chatbot,LLM,voice,RAG,notes,PDF,privacy,secure,local,transcribe,dictation,journal

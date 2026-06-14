@@ -62,13 +62,11 @@ private final class TripRecorder: @unchecked Sendable {
     private let lock = NSLock()
     private var counts: [Int] = []
     func record(_ count: Int) {
-        lock.lock(); defer { lock.unlock() }
-        counts.append(count)
+        lock.withLock { counts.append(count) }
     }
 
     var trips: [Int] {
-        lock.lock(); defer { lock.unlock() }
-        return counts
+        lock.withLock { counts }
     }
 }
 
