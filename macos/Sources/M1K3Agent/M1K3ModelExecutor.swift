@@ -28,18 +28,34 @@ import Synchronization
 /// `LanguageModelExecuting`. Stateless across calls beyond the session it holds,
 /// so a caller can reuse one executor for a multi-turn conversation (the session
 /// keeps the KV cache). `respond` runs exactly one turn.
-public struct M1K3ModelExecutor: LanguageModelExecuting {
-    private let session: any ToolTurnSession
+public final class M1K3ModelExecutor: LanguageModelExecuting {
+    private let makeSession: @Sendable () async throws -> any ToolTurnSession
     /// Optional standing system prompt prepended to the turn (persona, etc.). Nil
     /// keeps `respond` a bare single-user-turn — the caller owns transcript policy.
     private let systemPrompt: String?
+    /// The session is created lazily on first `respond` and REUSED across calls, so
+    /// a multi-turn conversation keeps one live KV cache (the reuse win). Mirrors
+    /// Apple's lifecycle: the executor is built synchronously; the async session
+    /// work happens at first request, not at construction.
+    private let cachedSession = Mutex<(any ToolTurnSession)?>(nil)
 
-    public init(session: any ToolTurnSession, systemPrompt: String? = nil) {
-        self.session = session
+    /// Wrap an already-constructed session (tests, or when the caller owns it).
+    public convenience init(session: any ToolTurnSession, systemPrompt: String? = nil) {
+        self.init(systemPrompt: systemPrompt) { session }
+    }
+
+    /// Build a session lazily on first use — the path the real MLX provider takes
+    /// (its `makeToolTurnSession` is `async throws`).
+    public init(
+        systemPrompt: String? = nil,
+        makeSession: @escaping @Sendable () async throws -> any ToolTurnSession
+    ) {
         self.systemPrompt = systemPrompt
+        self.makeSession = makeSession
     }
 
     public func respond(to prompt: String, into channel: GenerationChannel) async throws {
+        let session = try await currentSession()
         var messages: [ToolMessage] = []
         if let systemPrompt { messages.append(.system(systemPrompt)) }
         messages.append(.user(prompt))
@@ -77,6 +93,16 @@ public struct M1K3ModelExecutor: LanguageModelExecuting {
                 channel.appendToolCall(.init(name: call.name, arguments: call.stringArguments))
             }
         }
+    }
+
+    /// Lazily create and cache the session so multi-turn calls reuse one KV cache.
+    /// A conversation drives an executor serially, so a benign double-create on a
+    /// rare concurrent first call is acceptable (last writer wins).
+    private func currentSession() async throws -> any ToolTurnSession {
+        if let existing = cachedSession.withLock({ $0 }) { return existing }
+        let created = try await makeSession()
+        cachedSession.withLock { $0 = created }
+        return created
     }
 
     /// Cheap input-token estimate for usage accounting (~4 chars/token). The real
