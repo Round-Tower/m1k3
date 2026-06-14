@@ -41,6 +41,19 @@ struct ChatPromptBuilderTests {
         #expect(!prompt.contains("KNOWLEDGE:"))
     }
 
+    @Test("empty-knowledge fallback biases to honest abstention, not a confab licence")
+    func emptyContextDiscouragesGuessing() {
+        // This prompt feeds the agent-loop fallback and the plain RAGResponder.
+        // The old "Answer from general knowledge if you can" read as licence to
+        // invent on a weak model — align it with the anti-confab stance the
+        // grounding body carries everywhere else.
+        let prompt = ChatPromptBuilder.build(chunks: [], userMessage: "q")
+        #expect(!prompt.contains("Answer from general knowledge if you can"))
+        // The prompt wraps across lines, so match within a line.
+        #expect(prompt.contains("Answer from what you"))
+        #expect(prompt.contains("say so plainly rather than"))
+    }
+
     @Test("citation label includes heading when present, omits when absent")
     func citationLabel() {
         #expect(ChatPromptBuilder.citationLabel(for: hit("Doc", "1.1 A", "x")) == "[Doc §1.1 A]")
