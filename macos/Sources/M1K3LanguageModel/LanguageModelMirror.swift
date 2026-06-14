@@ -91,8 +91,21 @@ public protocol LanguageModelExecuting: Sendable {
 /// to M1K3's own sink here — keeping the answer stream clean (the `<think>` leak the
 /// naive adapter suffers). See ADR 0001 + scratch spike `ThinkGateChannel.swift`.
 public final class GenerationChannel: @unchecked Sendable {
+    /// A tool the model asked to call — mirrors Apple's `.toolCallDelta`. Kept a
+    /// plain string map so this module stays dependency-free; the executor maps
+    /// M1K3's typed `ParsedToolCall` into one of these at the edge.
+    public struct ToolCallEvent: Sendable, Equatable {
+        public let name: String
+        public let arguments: [String: String]
+        public init(name: String, arguments: [String: String]) {
+            self.name = name
+            self.arguments = arguments
+        }
+    }
+
     public private(set) var answer = ""
     public private(set) var reasoning = ""
+    public private(set) var toolCalls: [ToolCallEvent] = []
     public private(set) var inputTokenCount = 0
 
     public init() {}
@@ -105,6 +118,11 @@ public final class GenerationChannel: @unchecked Sendable {
     /// Reasoning disclosure — M1K3-side; no protocol segment exists for it.
     public func appendReasoning(_ text: String) {
         reasoning += text
+    }
+
+    /// A requested tool call — maps to Apple's `.toolCallDelta`.
+    public func appendToolCall(_ call: ToolCallEvent) {
+        toolCalls.append(call)
     }
 
     /// Token accounting — maps to Apple's `.updateUsage`.

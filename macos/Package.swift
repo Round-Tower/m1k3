@@ -97,7 +97,7 @@ let package = Package(
         // fakes with no model. Knowledge-backed tools wire in at the app layer.
         .target(
             name: "M1K3Agent",
-            dependencies: ["M1K3Inference"],
+            dependencies: ["M1K3Inference", "M1K3LanguageModel"],
             path: "Sources/M1K3Agent"
         ),
         .testTarget(
