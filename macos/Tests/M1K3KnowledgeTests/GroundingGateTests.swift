@@ -31,16 +31,16 @@ struct GroundingGateTests {
 
     @Test("topical hits pass; noise-band hits are dropped")
     func dropsWeakHits() {
-        // BGE's narrow cosine cone: genuinely UNRELATED content still scores
-        // high — measured live 2026-06-12, off-domain queries (sourdough,
-        // apple-pruning, JS-frontend) vs the ML-paper corpus peaked at
-        // 0.61–0.63. Real topical hits start ~0.74. The floor sits in the dead
-        // zone between, so a 0.64 "borderline" is NOISE, not signal.
+        // qwen3-embed-512's WIDE cone (ABSEP 2026-06-14): off-domain queries
+        // (sourdough, apple-pruning, JS-frontend) vs the ML-paper corpus topped
+        // out at 0.315; real topical hits floor ~0.70. The chunk floor (0.51)
+        // sits in the wide dead zone between, so a 0.45 "borderline" is NOISE
+        // and a 0.40 clearly is — neither survives.
         let hits = [
             hit("relevant", similarity: 0.78),
-            hit("topical", similarity: 0.74),
-            hit("noise ceiling", similarity: 0.63),
-            hit("noise", similarity: 0.58),
+            hit("topical", similarity: 0.70),
+            hit("noise ceiling", similarity: 0.45),
+            hit("noise", similarity: 0.40),
         ]
         let kept = GroundingGate.relevant(hits)
         #expect(kept.map(\.content) == ["relevant", "topical"])
@@ -48,7 +48,7 @@ struct GroundingGateTests {
 
     @Test("when no hit is topical, nothing is injected at all")
     func allWeakInjectsNothing() {
-        let hits = [hit("noise a", similarity: 0.57), hit("noise b", similarity: 0.49)]
+        let hits = [hit("noise a", similarity: 0.45), hit("noise b", similarity: 0.32)]
         #expect(GroundingGate.relevant(hits).isEmpty)
     }
 
@@ -71,7 +71,7 @@ struct GroundingGateTests {
         #expect(GroundingGate.relevant([]).isEmpty)
     }
 
-    @Test("the threshold boundary is inclusive: exactly 0.68 passes, just below is gated")
+    @Test("the threshold boundary is inclusive: exactly 0.51 passes, just below is gated")
     func thresholdBoundary() {
         // Pins the CONSTANT, not just the ordering — a silent threshold edit
         // (or >= flipping to >) should fail here, not at ⌘R.
@@ -81,18 +81,18 @@ struct GroundingGateTests {
         #expect(GroundingGate.relevant([justBelow]).isEmpty)
         // A passing sibling never carries a below-threshold hit through.
         #expect(GroundingGate.relevant([exactlyAt, justBelow]).map(\.content) == ["at threshold"])
-        #expect(GroundingGate.chunkThreshold == 0.68)
+        #expect(GroundingGate.chunkThreshold == 0.51)
     }
 
     @Test("the chunk floor sits in the measured dead zone between noise and signal")
     func floorInDeadZone() {
-        // Live MCP measurement 2026-06-12 (real BGE on device): off-domain
-        // queries (sourdough 0.629, apple-pruning 0.610, JS-frontend 0.630) vs
-        // the ML-paper corpus topped out at ~0.63; the in-domain "attention"
-        // query floored at 0.736. The floor must clear the noise ceiling and
-        // stay below the signal floor — the whole confabulation fix.
-        #expect(GroundingGate.chunkThreshold > 0.63)
-        #expect(GroundingGate.chunkThreshold < 0.736)
+        // ABSEP 2026-06-14 (real qwen3-embed-512 on device): off-domain queries
+        // (sourdough 0.315, apple-pruning 0.234, CSS 0.209, JS-frontend 0.270)
+        // vs the ML-paper corpus topped out at 0.315; the in-domain queries
+        // floored at 0.697. The floor must clear the noise ceiling and stay
+        // below the signal floor — the whole confabulation fix.
+        #expect(GroundingGate.chunkThreshold > 0.315)
+        #expect(GroundingGate.chunkThreshold < 0.697)
     }
 
     // MARK: - Memory partition
@@ -186,8 +186,8 @@ struct GroundingGateTests {
         let hits = [
             hit("doc", similarity: 0.7),
             memoryHit("mem", similarity: 0.6),
-            hit("weak doc", similarity: 0.5),
-            memoryHit("weak mem", similarity: 0.4),
+            hit("weak doc", similarity: 0.45),
+            memoryHit("weak mem", similarity: 0.30),
             hit("fts only", similarity: nil),
         ]
         let (knowledge, memories) = GroundingGate.partition(hits)
@@ -201,11 +201,12 @@ struct GroundingGateTests {
         #expect(GroundingGate.relevant([]).isEmpty)
     }
 
-    @Test("memoryThreshold is 0.54 (MEMEVAL 2026-06-12) and below chunkThreshold")
+    @Test("memoryThreshold is 0.39 (MEMEVAL 2026-06-14, qwen3) and below chunkThreshold")
     func memoryThresholdPinned() {
-        // Set from the on-device MEMEVAL distribution: recall-first on the
-        // overlap (see GroundingGate doc comment for the measured frontier).
-        #expect(GroundingGate.memoryThreshold == 0.54)
+        // Set from the on-device qwen3 MEMEVAL distribution: recall-first on the
+        // overlap — 0.39 keeps 22/22 incl. Cork (0.393) and UCC (0.411) for one
+        // weak FP (see GroundingGate doc comment for the measured frontier).
+        #expect(GroundingGate.memoryThreshold == 0.39)
         #expect(GroundingGate.memoryThreshold < GroundingGate.chunkThreshold)
     }
 }
