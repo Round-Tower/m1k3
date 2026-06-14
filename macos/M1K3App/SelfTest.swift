@@ -205,6 +205,15 @@ enum SelfTest {
             await runSeparationEval()
         }
 
+        // 7. Optional chat-quality eval (M1K3_SELFTEST_CHATEVAL=1): run the
+        //    task-kind fixtures against each brain through the REAL providers
+        //    and score them with the pure M1K3Eval scorer — the cross-brain
+        //    matrix that turns "AFM feels weaker at chat" into a number and
+        //    becomes the EscalationLadder policy's evidence.
+        if ChatEvalStage.isRequested {
+            await ChatEvalStage.run(emit: emit)
+        }
+
         emit("=== END SELF-TEST ===")
     }
 
