@@ -289,17 +289,38 @@ extension MLXGemmaProvider: ToolCallingProvider {
             specs: normalizedSpecs,
             toolNames: tools.map(\.name)
         )
-        // Per-turn thinking: a fast turn renders the EMPTY think pair into the
-        // generation prompt and skips the synthetic <think> opener.
-        let fastTurn = !options.thinkingEnabled && supportsThinkingToggle
+        // Per-turn thinking, decided ONLY from this turn's flag + the family's
+        // toggle capability — never the provider's construction-time thinking
+        // state (which would silently override a turn that asked to think).
+        let thinking = Self.toolTurnThinkingDecision(
+            turnThinking: options.thinkingEnabled,
+            supportsToggle: supportsThinkingToggle
+        )
         return MLXToolTurnSession(
             container: container,
             parameters: generateParameters,
             format: format,
             specs: normalizedSpecs,
-            thinkingContext: fastTurn ? ["enable_thinking": false] : thinkingAdditionalContext,
-            prefixNeeded: fastTurn ? false : thinkPrefixNeeded,
+            thinkingContext: thinking.context,
+            prefixNeeded: thinking.prefixNeeded,
             seed: seed
+        )
+    }
+
+    /// Per-turn thinking decision (pure): given the turn's thinking flag and
+    /// whether the family has an `enable_thinking` switch, produce the template
+    /// context + whether to pre-open a synthetic `<think>`. A fast turn renders
+    /// the EMPTY think pair (`enable_thinking:false`) and skips the opener; a
+    /// thinking turn leaves the template default and pre-opens. Independent of
+    /// construction-time `thinkingEnabled` so the in-turn decision wins.
+    static func toolTurnThinkingDecision(
+        turnThinking: Bool,
+        supportsToggle: Bool
+    ) -> (context: [String: any Sendable]?, prefixNeeded: Bool) {
+        let suppressThinking = supportsToggle && !turnThinking
+        return (
+            suppressThinking ? ["enable_thinking": false] : nil,
+            turnThinking && supportsToggle
         )
     }
 }
