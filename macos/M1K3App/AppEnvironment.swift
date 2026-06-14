@@ -644,9 +644,15 @@ final class AppEnvironment {
         if removed { refreshCounts() }
         return removed
     }
+}
 
-    // MARK: - Recording (consent-gated)
+// MARK: - Recording (consent-gated)
 
+//
+// Same-file extension — sees the class's private members (callLog, recorder,
+// consentGate, …) while keeping the class body under type_body_length.
+
+extension AppEnvironment {
     /// Whether recording can start without re-asking for consent.
     var recordingPreAuthorised: Bool {
         consentGate.isPreAuthorised
