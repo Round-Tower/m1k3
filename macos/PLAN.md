@@ -212,6 +212,96 @@ invitation-only):**
      pushed + on master. History scrub correctly deferred (full-repo rewrite, would orphan in-flight
      work). Persona no-bleed is verify-by-feel at ⌘R. Prior: Kev + claude-fable-5 (this file). -->
 
+## Update — 2026-06-14: WWDC26 `LanguageModel` adoption SHIPPED → forward plan (evals enclave · network rungs · FM-on-device)
+
+**Shipped (`feat/wwdc26-languagemodel-bridge`, PR #28, 9 commits, 1101 tests green, app builds):**
+the M1K3-side adoption of Apple's WWDC26 `LanguageModel` protocol as a **conformance bridge, not a
+rebuild** (see **`docs/adr/0001`**). M1K3 had independently built the same shapes a year early; the
+work makes that interop real without losing the tuned MLX path or the `ThinkStreamGate`.
+- **`M1K3LanguageModel`** (pure): mirror of Apple's surface + `EscalationLadder` (consent-gated
+  routing) + `BrainCatalogue`.
+- **`M1K3ModelExecutor`** / **`M1K3Model`** (M1K3Agent): the real-provider executor over
+  `ToolTurnSession` + the live gate (reasoning→`.reasoning`, answer→`.response`), lazily-cached
+  session (multi-turn KV reuse), and the `LanguageModelDescribing` conformance.
+- **`M1K3FoundationModel`** (FM27-gated): the production conformance to Apple's REAL protocol —
+  **type-checked + compiled against the macOS 27 SDK** (Xcode 27 beta), **inert on stable 26.5**.
+- **Live auto-routing** (Path 1): opt-in `brain.autoRoute` Settings toggle → `M1K3BrainRouter` picks
+  the brain per turn. **Policy fix from on-device testing:** the DEFAULT local brain is now M1K3's
+  own tuned MLX (stronger at open chat than AFM); Apple-on-device is opt-in (`preferAppleOnDevice`).
+
+**The honest open edges (none block launch — Tahoe ships on what's above):**
+
+### Edge A — Network rungs reachable (PCC · Claude/Gemini) — *biggest spread in cost*
+Today `BrainRoute.privateCloud/.thirdParty` resolve to the floor (no backends/escalation UI; the
+ladder gates them correctly). Three separable pieces:
+- **PCC — small, real:** `PrivateCloudComputeLanguageModel` **already conforms** in the macOS 27 SDK.
+  Not "build a backend" — wire the existing Apple rung + consent UX; gated on the Xcode-27 build
+  (Edge B). Fits the ethos (Apple-attested, stateless).
+- **Claude/Gemini — large, product-decision-first:** M1K3 has **zero cloud provider**. Each needs an
+  API-client `ToolCallingProvider`, Keychain key management, streaming + tool-call translation, and a
+  **dedicated egress-consent flow** (chat→third-party-cloud is a far bigger privacy step than a web
+  search; it must NOT reuse the web-search toggle). This is the "Share-to-Claude escalation" seed —
+  the deliberate, consented escape hatch from "nothing leaves." Decide *whether/how loud* before eng.
+- **Escalation UI (both):** a per-message "go deeper / ask X" control that sets `userEscalation`
+  (today always `.none`). Small–medium.
+
+### Edge B — Exercise the 2026 conformance on-device — *gated on a macOS 27 RUNTIME, not just the SDK*
+The conformance is `@available(macOS 27)`: compiling under Xcode 27 ≠ running it. On Tahoe (26.4) the
+FM path is unavailable at runtime. Steps: (1) compile the **whole app** under Xcode 27 + `-DM1K3_FM27`
+(risk = heavy deps/MLX under Swift 6.3 — the downloaded **Metal Toolchain** is for this; `M1K3Agent`
+already builds under the beta); (2) wire a FoundationModels response path
+(`LanguageModelSession(model: M1K3FoundationModel(...))`) alongside the existing one; (3) **run it —
+needs macOS 27 on a separate volume / VM / second Mac, never the launch box.** Not launch-critical;
+goes live when macOS 27 does (~autumn). An Xcode-27-built app still runs on Tahoe with the FM path
+gated off.
+
+### Edge C — Model evals in a Swift enclave (Phase 14) — *highest leverage, no beta/OS/cloud, START HERE*
+Turns the routing policy from *by-feel* into *data-driven*, and directly answers the quality gap Kev
+hit by hand ("AFM weaker at open chat" → the floor-default we just shipped, **proven with numbers**).
+
+**Hard constraint (do not design around it):** MLX brains need the **app-bundle metallib to init the
+GPU**, and AFM needs app entitlements — so a *bare* `swift run`/`swift test` CANNOT run the real
+models (the same wall 12c/MEMEVAL/ABSEP hit). The model-running half MUST ride the existing
+**headless-selftest** mechanism (signed Debug build + `open -n --env … "$APP"` → OUT file), exactly
+like `M1K3_SELFTEST_MEMEVAL`/`ABSEP`. The "enclave" is a **SelfTest stage + a pure scoring package**,
+not a standalone CLI.
+
+**Shape (TDD; reuse the MEMEVAL/ABSEP pattern):**
+- **`M1K3Eval` package (pure, plain `swift test`):** `EvalFixture` (prompt + task-kind +
+  expectations), the fixture set, `EvalScorer` (heuristics: refusal, format/`<think>`-leak, length
+  band, latency, citation-validity), `EvalReport` (a markdown table). All deterministic + unit-tested
+  off-device.
+- **`M1K3_SELFTEST_CHATEVAL=1` SelfTest stage:** runs each fixture × each brain (via the real
+  `ToolTurnSession` / `BrainRoute`), captures output + latency, feeds the pure `EvalScorer`, writes
+  the report to `M1K3_SELFTEST_OUT`. Same headless harness as the threshold runs (set
+  `M1K3_SELFTEST_MODEL` per brain so the gen stage uses a cached model).
+- **Fixture kinds:** open-chat · grounded-Q (with a seeded doc) · multi-step reasoning · tool-use
+  (does it call `search_knowledge`?) · refusal/safety. ~5–8 per kind to start.
+
+**Phasing (cheap → rich):**
+1. **P1 — side-by-side + latency (human eyeball, ~one sitting):** run the fixtures × brains, dump
+   outputs next to each other + tokens/latency. Immediately gives the AFM-vs-Lil numbers. *Verify:*
+   a report you can read at a glance that confirms (or refutes) "floor beats AFM at chat."
+2. **P2 — heuristic auto-scores:** the `EvalScorer` metrics above → a pass/score column per fixture.
+   *Verify:* the policy default is justified by an aggregate score, not a feel.
+3. **P3 — LLM-as-judge (optional):** a strong brain (or AFM under a neutral judge prompt, NOT the
+   persona) scores open-chat quality pairwise. *Verify:* judge agreement with hand ranking on a
+   held-out set before trusting it.
+
+**Composes with the ladder:** eval results feed back as the *evidence* for `EscalationLadder` policy
+(default brain, per-task routing later — e.g. route grounded-Q to a fast brain, open-chat to the
+strong one). The `BrainRoute`/`M1K3Model` seams are the clean injection point; no new model wiring.
+
+**New phases:** *13 — LanguageModel bridge (✅ shipped, this update).* *14 — Evals enclave (Edge C
+above).* Edges A/B are tracked here, not yet phased (gated on product decision / macOS-27 runtime).
+
+<!-- Signed: Kev + claude-opus-4-8, 2026-06-14, Confidence 0.9 — WWDC26 LanguageModel adoption shipped
+     (PR #28, ADR 0001, 1101 green, production conformance compiles vs the real macOS 27 SDK). Forward
+     plan: evals enclave (Phase 14) is the START-HERE — cheapest, no beta, makes routing data-driven;
+     the headless-selftest constraint (MLX needs the app bundle) is the load-bearing design fact. PCC
+     is a real SDK rung; Claude/Gemini is a product decision before eng; FM-on-device needs a macOS-27
+     runtime. Prior: Kev + claude-opus-4-8 (this file). -->
+
 ## Architecture
 
 A new SwiftUI app `M1K3.app` (macOS 26), composed of focused local SwiftPM packages. Business logic lives in testable packages (TDD); the app target is a thin shell. Proven files are **vendored** from the internal prior projects into M1K3 packages (not cross-repo path deps — the prior knowledge-server project's core drags in Hummingbird/InternalServerKit we don't need), each carrying a MurphySig review documenting the port.
@@ -351,6 +441,8 @@ SwiftUI, macOS 26, native `.glassEffect` / `GlassEffectContainer` for the real L
       verify-by-launch. The 12d emission check (does Gemma-3n/Qwen actually emit the format on-device) rides ⌘R.
     - **12d — benchmark:** same tool-task set through native vs ReAct per brain tier (call-format compliance rate, latency, wasted iterations) — promote native per-backend only where it wins, exactly like the transcription seam.
     - *Verify:* Big (Gemma) calls `web_search` natively on the weather question with zero format coaching; Mini does the same via FoundationModels tools; a no-tool-support model still answers via ReAct.
+13. **WWDC26 `LanguageModel` bridge** — ✅ **shipped 2026-06-14** (PR #28, ADR 0001; see the 2026-06-14 update). Mirror surface + `EscalationLadder` + `BrainCatalogue` (pure); `M1K3ModelExecutor`/`M1K3Model` (real-provider executor over `ToolTurnSession` + the live gate, KV-reuse cache); `M1K3FoundationModel` (FM27-gated production conformance, compiles vs the real macOS 27 SDK); live opt-in auto-routing with the floor-default policy. *Verify (shipped):* 1101 green; conformance compiles under Xcode 27; auto-route picks the floor by default, Apple-on-device when opted in (`log stream … category == "route"`).
+14. **Evals enclave** (Edge C, the START-HERE) — a pure `M1K3Eval` package (fixtures, `EvalScorer` heuristics, `EvalReport`, TDD off-device) + a `M1K3_SELFTEST_CHATEVAL=1` SelfTest stage that runs fixtures × brains through the real `ToolTurnSession`/`BrainRoute` on the **signed headless app** (MLX needs the app bundle — bare `swift run`/`swift test` can't init the GPU; same harness as MEMEVAL/ABSEP) and scores them. Phased P1 side-by-side+latency → P2 heuristic scores → P3 LLM-judge. Feeds the ladder policy as *evidence*. *Verify:* a report that quantifies the brains per task-kind (the AFM-vs-floor gap, proven).
 
 ---
 

@@ -24,6 +24,8 @@ struct SettingsView: View {
     @State private var showMemories = false
     @AppStorage(AppEnvironment.thinkingModeKey) private var thinkingMode = ThinkingMode.auto.rawValue
     @AppStorage(AppEnvironment.voiceCompanionKey) private var voiceCompanion = ""
+    @AppStorage(AppEnvironment.autoRouteBrainKey) private var autoRouteBrain = false
+    @AppStorage(AppEnvironment.preferAppleOnDeviceKey) private var preferAppleOnDevice = false
     @State private var profileDraft = ""
 
     var body: some View {
@@ -45,11 +47,19 @@ struct SettingsView: View {
                         UserDefaults.standard.set(false, forKey: AppEnvironment.hasChosenBrainKey)
                     }
                     .buttonStyle(.glass)
+                    Toggle("Auto-route (M1K3 picks the brain)", isOn: $autoRouteBrain)
+                        .onChange(of: autoRouteBrain) { _, _ in env.applyAutoRouteIfEnabled() }
+                    if autoRouteBrain {
+                        Toggle("Prefer Apple on-device", isOn: $preferAppleOnDevice)
+                            .onChange(of: preferAppleOnDevice) { _, _ in env.applyAutoRouteIfEnabled() }
+                    }
                 } header: {
                     Text("Brain")
                 } footer: {
                     Text("Mini is Apple's built-in model (instant). Lil and Big are local models "
-                        + "that download once. On-device only — nothing leaves this Mac.")
+                        + "that download once. On-device only — nothing leaves this Mac.\n"
+                        + "Auto-route lets M1K3 pick: its own tuned model by default (stronger at "
+                        + "chat), or Apple on-device if you prefer it.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
