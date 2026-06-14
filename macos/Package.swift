@@ -112,6 +112,7 @@ let package = Package(
         // separately on M1K3Agent.
         .target(
             name: "M1K3LanguageModel",
+            dependencies: [],
             path: "Sources/M1K3LanguageModel"
         ),
         .testTarget(

@@ -96,8 +96,10 @@ public final class M1K3ModelExecutor: LanguageModelExecuting {
     }
 
     /// Lazily create and cache the session so multi-turn calls reuse one KV cache.
-    /// A conversation drives an executor serially, so a benign double-create on a
-    /// rare concurrent first call is acceptable (last writer wins).
+    /// NOT safe for CONCURRENT first calls — callers must drive `respond` serially
+    /// across a conversation's turns (which they do). A concurrent first call would
+    /// `makeSession()` twice (e.g. two parallel MLX weight-loads, one orphaned);
+    /// last writer wins. Serial use makes the double-create impossible in practice.
     private func currentSession() async throws -> any ToolTurnSession {
         if let existing = cachedSession.withLock({ $0 }) { return existing }
         let created = try await makeSession()

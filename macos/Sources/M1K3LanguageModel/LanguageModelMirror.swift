@@ -90,6 +90,12 @@ public protocol LanguageModelExecuting: Sendable {
 /// segment (`Transcript.Segment` = .text/.structure/.image), so reasoning is routed
 /// to M1K3's own sink here — keeping the answer stream clean (the `<think>` leak the
 /// naive adapter suffers). See ADR 0001 + scratch spike `ThinkGateChannel.swift`.
+///
+/// Thread-safety: the mutable properties are UNSYNCHRONIZED. Callers MUST drive a
+/// channel from a single concurrent context — `M1K3ModelExecutor.respond` creates a
+/// fresh channel per turn and never shares it across tasks, which is what makes the
+/// `@unchecked Sendable` conformance sound. The gate's `Mutex` guards the gate, NOT
+/// this channel. Do not pass one channel across concurrent tasks.
 public final class GenerationChannel: @unchecked Sendable {
     /// A tool the model asked to call — mirrors Apple's `.toolCallDelta`. Kept a
     /// plain string map so this module stays dependency-free; the executor maps

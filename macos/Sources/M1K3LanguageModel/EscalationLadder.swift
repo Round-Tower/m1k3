@@ -16,25 +16,25 @@ import Foundation
 
 /// What the user has explicitly opted into for THIS request. `.none` is the default
 /// and keeps everything on-device.
-public enum Escalation: Sendable, Equatable {
+public enum Escalation: Sendable, Equatable, Hashable {
     case none
     case privateCloud
     case thirdParty(String)
 }
 
-/// The inputs the ladder decides from.
+/// The inputs the ladder decides from. Immutable decision inputs (`let`), not state.
 public struct LadderContext: Sendable, Equatable {
     /// Device can run Apple's on-device `SystemLanguageModel`.
-    public var appleIntelligenceAvailable: Bool
+    public let appleIntelligenceAvailable: Bool
     /// Global egress switch (M1K3's existing web-search toggle). Hard gate.
-    public var networkAllowed: Bool
+    public let networkAllowed: Bool
     /// The user's explicit, per-request escalation.
-    public var userEscalation: Escalation
+    public let userEscalation: Escalation
     /// Prefer Apple's on-device model over M1K3's MLX floor for the LOCAL pick.
     /// Default false: M1K3's own tuned brains are the default (on-device testing
     /// found AFM weaker at open chat), so Apple-on-device is an opt-in choice — not
     /// auto-selected just for being available.
-    public var preferAppleOnDevice: Bool
+    public let preferAppleOnDevice: Bool
 
     public init(
         appleIntelligenceAvailable: Bool,

@@ -40,15 +40,16 @@ public enum M1K3BrainRouter {
             preferAppleOnDevice: preferAppleOnDevice
         )
         guard let descriptor = catalogue.route(context) else { return .mlxFloor }
-        switch descriptor.id {
-        case LanguageModelDescriptor.appleOnDevice.id:
-            return .appleOnDevice
-        case LanguageModelDescriptor.privateCloudCompute.id:
+        // Map off the STRUCTURAL flags, not id-strings — so a future on-device rung
+        // (e.g. "apple-on-device-large") routes correctly without a new case. Exhaustive.
+        if descriptor.isLocalFloor { return .mlxFloor }
+        switch descriptor.reach {
+        case .onDevice:
+            return descriptor.requiresAppleIntelligence ? .appleOnDevice : .mlxFloor
+        case .privateCloud:
             return .privateCloud
-        case LanguageModelDescriptor.mlxFloor.id:
-            return .mlxFloor
-        default:
-            return descriptor.reach == .thirdParty ? .thirdParty(descriptor.id) : .mlxFloor
+        case .thirdParty:
+            return .thirdParty(descriptor.id)
         }
     }
 }

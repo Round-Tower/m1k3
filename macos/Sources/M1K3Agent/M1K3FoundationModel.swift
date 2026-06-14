@@ -109,14 +109,21 @@
             if !collected.answer.isEmpty {
                 await channel.send(.response(action: .appendText(collected.answer, tokenCount: 0)))
             }
+            // Rough output estimate (~4 chars/token) — the collect-then-emit path
+            // doesn't tokenise; an estimate beats a misleading zero for debugging.
+            let outputEstimate = (collected.answer.count + collected.reasoning.count) / 4
             let usage = FoundationModels.LanguageModelExecutorGenerationChannel.Usage(
                 input: .init(totalTokenCount: collected.inputTokenCount, cachedTokenCount: 0),
-                output: .init(totalTokenCount: 0, reasoningTokenCount: 0)
+                output: .init(totalTokenCount: outputEstimate, reasoningTokenCount: collected.reasoning.count / 4)
             )
             await channel.send(.response(action: .updateUsage(usage)))
         }
 
         /// Pull the user-authored text out of the request's `Transcript`.
+        /// LIMITATION: extracts user-turn text only — `.response` (prior assistant
+        /// turns) and `.image`/`.structure` segments are dropped. Correct for the
+        /// single-turn brick; the executor owns cross-turn KV reuse via its cached
+        /// session. Extend this when FoundationModels drives a full multi-turn session.
         static func userPrompt(from transcript: FoundationModels.Transcript) -> String {
             var parts: [String] = []
             for entry in transcript {

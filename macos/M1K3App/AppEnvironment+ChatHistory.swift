@@ -24,6 +24,10 @@ import os
 
 extension AppEnvironment {
     private static let routeLog = Logger(subsystem: "app.m1k3", category: "route")
+    /// Reused across sends so a turn doesn't allocate a fresh probe each time; the
+    /// live `isAvailable` read (SystemLanguageModel.availability) stays per-call so a
+    /// mid-session Apple-Intelligence change is honoured.
+    private static let afmAvailabilityProbe = AppleFoundationModelsProvider()
 
     /// Apply the EscalationLadder's brain choice when auto-routing is on (ADR 0001).
     /// A NO-OP when off, so default behaviour is unchanged and the feature is fully
@@ -33,10 +37,14 @@ extension AppEnvironment {
         let defaults = UserDefaults.standard
         guard defaults.bool(forKey: Self.autoRouteBrainKey) else { return }
 
+        // TODO: (ADR 0001 Edge A): replace with a DEDICATED egress-consent key when the
+        // network rungs are wired. The web-search toggle is a provisional proxy only —
+        // third-party cloud escalation (chat → Claude/Gemini) is a far bigger privacy
+        // step than a web search and needs its own per-request consent flow.
         let webAllowed = defaults.object(forKey: Self.webSearchEnabledKey) == nil
             || defaults.bool(forKey: Self.webSearchEnabledKey)
         let route = M1K3BrainRouter.route(
-            appleIntelligenceAvailable: AppleFoundationModelsProvider().isAvailable,
+            appleIntelligenceAvailable: Self.afmAvailabilityProbe.isAvailable,
             networkAllowed: webAllowed,
             preferAppleOnDevice: defaults.bool(forKey: Self.preferAppleOnDeviceKey)
         )
