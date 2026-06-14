@@ -99,3 +99,24 @@ targets:
         NSHumanReadableDescription: "Local, private AI companion."
         NSMicrophoneUsageDescription: "M1K3 uses the microphone for voice input. Audio is transcribed on-device and never leaves your Mac."
         NSSpeechRecognitionUsageDescription: "M1K3 transcribes your speech on-device to let you ask questions by voice. Nothing is sent to Apple or any server."
+
+# A SHARED M1K3 scheme, explicit so xcodegen emits it to xcshareddata/xcschemes/.
+# Without this, Xcode only auto-creates an ephemeral user scheme — invisible to
+# Xcode Cloud (which can build only shared schemes). Because the pbxproj is
+# gitignored, ci_scripts/ci_post_clone.sh regenerates the project (and this
+# scheme) in the cloud, so the Archive→TestFlight workflow can find M1K3.
+schemes:
+  M1K3:
+    build:
+      targets:
+        M1K3: all
+    run:
+      config: Debug
+    test:
+      config: Debug
+    profile:
+      config: Release
+    analyze:
+      config: Debug
+    archive:
+      config: Release
