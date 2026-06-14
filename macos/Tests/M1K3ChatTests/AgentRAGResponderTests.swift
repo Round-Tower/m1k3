@@ -200,6 +200,57 @@ struct AgentRAGResponderTests {
         ])
     }
 
+    @Test("lookup_fact appends a deterministic Wikipedia-sources block")
+    func factSourcesBlock() async throws {
+        let (store, embedder) = try await ingestedStore()
+        let provider = AgentScriptedProvider([
+            "ACTION: lookup_fact(Claude Shannon)",
+            "CONCLUSION: Claude Shannon founded information theory.",
+        ])
+        // Exactly what WikipediaFormatter.format emits: prose then a Source line.
+        let factObservation = """
+        Claude Elwood Shannon was an American mathematician and engineer.
+
+        Source: https://en.wikipedia.org/wiki/Claude_Shannon
+        """
+        let responder = AgentRAGResponder(
+            store: store, embedder: embedder, provider: provider,
+            tools: [FixedTool(name: "lookup_fact", response: factObservation)]
+        )
+
+        let (_, stream) = try await responder.answerStreaming("who founded information theory?")
+        let answer = await collect(stream)
+        #expect(answer.contains("Claude Shannon founded information theory."))
+        #expect(answer.contains("Wikipedia sources:"))
+        #expect(answer.contains("https://en.wikipedia.org/wiki/Claude_Shannon"))
+    }
+
+    @Test("a FAILED lookup_fact contributes no phantom citation")
+    func factSourceFailedLookup() {
+        // "No article" / error observations carry no Source line — the extractor
+        // must surface nothing rather than inventing a citation.
+        let trace = [ReasoningStep(
+            iteration: 0,
+            thought: "",
+            action: "lookup_fact(Blorptastic)",
+            observation: "No Wikipedia article found for \"Blorptastic\"."
+        )]
+        #expect(FactSourceExtractor.urls(from: trace).isEmpty)
+    }
+
+    @Test("Wikipedia source URLs shed trailing sentence punctuation")
+    func factSourceTrailingPunctuation() {
+        let trace = [ReasoningStep(
+            iteration: 0,
+            thought: "",
+            action: "lookup_fact(Alan Turing)",
+            observation: "Some prose.\n\nSource: https://en.wikipedia.org/wiki/Alan_Turing."
+        )]
+        #expect(FactSourceExtractor.urls(from: trace) == [
+            "https://en.wikipedia.org/wiki/Alan_Turing",
+        ])
+    }
+
     @Test("an off-topic query injects NO knowledge and points the model at search_knowledge")
     func gatedQueryInjectsNothing() async throws {
         // The screenshot bug: "what model are you?" must not drag stored
