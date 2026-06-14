@@ -105,7 +105,8 @@ extension LocalAgent {
                 (turn, remainder) = try await sendThroughGate(
                     session: session,
                     messages: pendingMessages,
-                    onReasoningToken: onReasoningToken
+                    onReasoningToken: onReasoningToken,
+                    onConclusionToken: onConclusionToken
                 )
             } catch is CancellationError {
                 throw CancellationError()
@@ -125,11 +126,11 @@ extension LocalAgent {
 
             switch turn {
             case let .text(answer):
-                if let onConclusionToken, !remainder.isEmpty { onConclusionToken(remainder) }
                 reasoningTrace.append(ReasoningStep(iteration: iteration, thought: answer))
                 // A pure-think turn (nothing after the reasoning) concludes
                 // empty, so the caller's fallback synthesis still produces a
                 // real answer instead of re-showing the chain-of-thought.
+                // Answer tokens already streamed live via onConclusionToken.
                 return concluded(remainder.isEmpty ? "" : answer, usedTools, iteration + 1)
 
             case let .toolCalls(calls) where calls.isEmpty:
@@ -175,16 +176,19 @@ extension LocalAgent {
     }
 
     /// One session send with the think-gate applied: think-phase tokens stream
-    /// live to `onReasoningToken`; the post-think remainder is returned for the
-    /// caller to flush (`.text`) or drop (`.toolCalls`).
+    /// live to `onReasoningToken`; post-think tokens stream live to
+    /// `onConclusionToken` while also being buffered. The remainder is returned
+    /// for the caller's `concluded()` call but NOT re-emitted (tokens already
+    /// streamed live).
     private func sendThroughGate(
         session: any ToolTurnSession,
         messages: [ToolMessage],
-        onReasoningToken: (@Sendable (String) -> Void)?
+        onReasoningToken: (@Sendable (String) -> Void)?,
+        onConclusionToken: (@Sendable (String) -> Void)?
     ) async throws -> (turn: ToolTurn, remainder: String) {
         let gate = Mutex(ThinkStreamGate())
         let turn = try await session.send(messages) { token in
-            let live = gate.withLock { $0.feed(token) }
+            let live = gate.withLock { $0.feed(token, onAnswerToken: onConclusionToken) }
             if !live.isEmpty { onReasoningToken?(live) }
         }
         let remainder = gate.withLock { $0.flushRemainder() }
@@ -241,15 +245,14 @@ extension LocalAgent {
         let (turn, remainder) = try await sendThroughGate(
             session: session,
             messages: [instruction],
-            onReasoningToken: onReasoningToken
+            onReasoningToken: onReasoningToken,
+            onConclusionToken: onConclusionToken
         )
         switch turn {
         case let .text(answer) where !remainder.isEmpty:
-            onConclusionToken?(remainder)
-            // Deliberate asymmetry with the main loop's `remainder.isEmpty ?
-            // "" : answer`: the user-visible conclusion already streamed via
-            // onConclusionToken; AgentResult.conclusion carries the RAW text
-            // (see its doc) for the trace/eval consumers.
+            // Answer tokens already streamed live via onConclusionToken in the gate.
+            // AgentResult.conclusion carries the RAW text (see its doc) for the
+            // trace/eval consumers.
             return answer
         case .text, .toolCalls:
             // .text with an EMPTY remainder lands here on purpose: the model

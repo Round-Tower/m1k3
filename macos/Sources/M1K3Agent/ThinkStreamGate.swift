@@ -38,7 +38,10 @@ struct ThinkStreamGate {
 
     /// Feed one streamed token. Returns the text that is safe to surface live
     /// (the think phase, tags included) — empty otherwise.
-    mutating func feed(_ token: String) -> String {
+    /// `onAnswerToken` is called with each answer chunk as it becomes safe to emit
+    /// (post-think text in `.buffering` mode); tokens are still accumulated in
+    /// `buffered` for `flushRemainder()`.
+    mutating func feed(_ token: String, onAnswerToken: ((String) -> Void)? = nil) -> String {
         pending += token
         switch mode {
         case .scanning:
@@ -48,20 +51,22 @@ struct ThinkStreamGate {
             pending = String(pending.drop(while: \.isWhitespace))
             if pending.hasPrefix(Self.openTag) {
                 mode = .live
-                return drainLive()
+                return drainLive(onAnswerToken: onAnswerToken)
             }
             if !pending.isEmpty, !Self.openTag.hasPrefix(pending) {
                 mode = .buffering
                 buffered += pending
+                if !pending.isEmpty { onAnswerToken?(pending) }
                 pending = ""
             }
             return ""
 
         case .live:
-            return drainLive()
+            return drainLive(onAnswerToken: onAnswerToken)
 
         case .buffering:
             buffered += pending
+            if !pending.isEmpty { onAnswerToken?(pending) }
             pending = ""
             return ""
         }
@@ -77,11 +82,15 @@ struct ThinkStreamGate {
     }
 
     /// Emit pending live text up to (and including) the close tag; hold back a
-    /// tail that could still be the start of a split close tag.
-    private mutating func drainLive() -> String {
+    /// tail that could still be the start of a split close tag. When the close tag
+    /// is found, any immediate post-close text is emitted to `onAnswerToken` and
+    /// also buffered for `flushRemainder()`.
+    private mutating func drainLive(onAnswerToken: ((String) -> Void)? = nil) -> String {
         if let close = pending.range(of: Self.closeTag) {
             let emitted = String(pending[..<close.upperBound])
-            buffered += String(pending[close.upperBound...])
+            let postClose = String(pending[close.upperBound...])
+            buffered += postClose
+            if !postClose.isEmpty { onAnswerToken?(postClose) }
             pending = ""
             mode = .buffering
             return emitted
