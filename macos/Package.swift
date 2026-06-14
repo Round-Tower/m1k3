@@ -23,6 +23,7 @@ let package = Package(
         .library(name: "M1K3Knowledge", targets: ["M1K3Knowledge"]),
         .library(name: "M1K3Inference", targets: ["M1K3Inference"]),
         .library(name: "M1K3Agent", targets: ["M1K3Agent"]),
+        .library(name: "M1K3LanguageModel", targets: ["M1K3LanguageModel"]),
         .library(name: "M1K3KnowledgeTools", targets: ["M1K3KnowledgeTools"]),
         .library(name: "M1K3AgentTools", targets: ["M1K3AgentTools"]),
         .library(name: "M1K3Chat", targets: ["M1K3Chat"]),
@@ -103,6 +104,20 @@ let package = Package(
             name: "M1K3AgentTests",
             dependencies: ["M1K3Agent"],
             path: "Tests/M1K3AgentTests"
+        ),
+        // The WWDC26 LanguageModel bridge (ADR 0001). Pure, dependency-free:
+        // a local MIRROR of Apple's FoundationModels surface (retargets to the
+        // real types on macOS 27) + the consent-gated escalation-ladder policy.
+        // Buildable/runnable on Tahoe today; the real-provider executor lands
+        // separately on M1K3Agent.
+        .target(
+            name: "M1K3LanguageModel",
+            path: "Sources/M1K3LanguageModel"
+        ),
+        .testTarget(
+            name: "M1K3LanguageModelTests",
+            dependencies: ["M1K3LanguageModel"],
+            path: "Tests/M1K3LanguageModelTests"
         ),
         // Agent tools backed by the knowledge layer — the bridge that makes the
         // LocalAgent able to actually search M1K3's memory. Depends on both the
