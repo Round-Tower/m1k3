@@ -27,26 +27,36 @@ A cask formula points at the hosted `.dmg` URL + its sha256. Add once m1k3.app
 serves the DMG; `brew install --cask m1k3` then tracks releases. (Formula TODO —
 needs the public download URL first.)
 
-## 2. Mac App Store — **one blocker to clear first**
+## 2. Mac App Store — **entitlements cleared; needs an Apple Distribution cert**
 
-MAS requires sandbox (✅ already on) and rejects two entitlements the app
-currently ships:
+MAS requires sandbox (✅ already on) and rejects two entitlements the *direct*
+build ships:
 
 ```
 com.apple.security.temporary-exception.mach-lookup.global-name → com.apple.audioanalyticsd
 com.apple.security.exception.mach-lookup.global-name           → com.apple.audioanalyticsd
 ```
 
-These exist **only** for the AVSpeechSynthesizer system-voice path. The app also
-ships **Kokoro** (pure on-device ONNX, no mach service). So the MAS build must:
-- gate out the AVSpeechSynthesizer/system-voice option (Kokoro becomes the voice), and
-- drop those two entitlements from a MAS-specific entitlements file.
+`M1K3App/M1K3-MAS.entitlements` is the same set **minus** those two.
 
-Then: an **Apple Distribution** cert (not yet in the keychain — only Developer ID
-is), a separate `ExportOptions.plist` with `method=app-store-connect`, an App
-Store Connect app record + listing (ASO: title/subtitle/keywords — NOT the bundle
-ID), and review. Everything else (network client+server for the loopback MCP, mic,
-screen-recording-via-TCC for calls) is MAS-compatible.
+**Tested 2026-06-14:** the system voice (AVSpeechSynthesizer) speaks fine with the
+re-signed MAS entitlements — the audioanalyticsd exception was over-cautious (the
+note that added it was confidence 0.6). So **no code change, no product compromise:
+MAS keeps both voices** (system + Kokoro). The direct build keeps the exception
+untouched (zero risk to the shipping DMG); only the MAS build drops it.
+
+Remaining to ship on MAS (all phase-2, in order):
+1. **Apple Distribution cert** — not yet in the keychain (only Developer ID is).
+   Get it: Xcode → Settings → Accounts → Manage Certificates → ➕ Apple Distribution,
+   or developer.apple.com → Certificates.
+2. **Build config** — a MAS configuration that uses `M1K3-MAS.entitlements` + an
+   `app-store-connect` export (`ExportOptions-MAS.plist`, ready). Wired + verified
+   once the cert exists (can't sign a MAS archive without it).
+3. **App Store Connect** — app record + listing. ASO lives here: title, subtitle,
+   keyword field (NOT the bundle ID), screenshots, category. Then review.
+
+Everything else (network client+server for the loopback MCP, mic, screen-recording
+via TCC for calls) is MAS-compatible.
 
 ## 3. iOS — **later**
 
