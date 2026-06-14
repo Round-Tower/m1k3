@@ -1,0 +1,6 @@
+# Fastlane generated artifacts
+report.xml
+Preview.html
+*.html
+.env.local
+fastlane/test_output

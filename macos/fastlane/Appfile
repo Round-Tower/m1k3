@@ -1,0 +1,6 @@
+# M1K3 — Fastlane Appfile (metadata-only).
+# APPLE_ID can come from the environment (or a gitignored .env); team + app id
+# are public and pinned here.
+app_identifier("app.m1k3")
+team_id("76DJH43A4P")
+apple_id(ENV["APPLE_ID"] || "kevin@round-tower.ie")

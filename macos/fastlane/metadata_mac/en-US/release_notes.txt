@@ -1,0 +1,1 @@
+First public release of M1K3 — a fully private, on-device AI assistant for Mac.

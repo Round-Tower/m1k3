@@ -1,0 +1,77 @@
+# M1K3 — Fastlane (METADATA-ONLY).
+#
+# Build / archive / sign / notarize live in bash (tools/release/release-macos.sh
+# for the direct DMG, release-mas.sh for the App Store .pkg) — exactly the prior knowledge-server project's
+# split. This file is ONLY the App Store Connect metadata/screenshots/TestFlight
+# API surface, where `deliver` + Spaceship beat bash.
+#
+# Auth: `apple_id` (Appfile) drives an interactive/session login. For CI,
+# prefer an App Store Connect API key — set
+#   APP_STORE_CONNECT_API_KEY_PATH / _KEY_ID / _ISSUER_ID
+# and Fastlane picks it up automatically.
+#
+# MurphySig: Metadata-only Fastlane mirroring the prior knowledge-server project's proven split. Confidence: HIGH.
+# https://murphysig.dev
+
+default_platform(:mac)
+
+APP_ID      = "app.m1k3"
+TEAM_ID     = "76DJH43A4P"
+APPLE_LOGIN = ENV["APPLE_ID"] || "kevin@round-tower.ie"
+META_PATH   = "./metadata_mac"
+SHOTS_PATH  = "./screenshots_mac"
+
+# Update TestFlight "What to Test" on the latest build (deliver doesn't do this).
+def update_what_to_test(bundle_id, what_to_test_path)
+  Spaceship::ConnectAPI.login(APPLE_LOGIN)
+  app = Spaceship::ConnectAPI::App.find(bundle_id)
+  UI.user_error!("App not found: #{bundle_id}") unless app
+
+  what_to_test = File.read(what_to_test_path)
+  builds = app.get_builds(sort: "-uploadedDate", includes: "betaBuildLocalizations")
+  UI.user_error!("No builds for #{bundle_id} — upload one first") unless builds.any?
+
+  build = builds.first
+  loc = (build.beta_build_localizations || []).find { |l| l.locale == "en-US" }
+  if loc
+    loc.update(attributes: { whatsNew: what_to_test })
+    UI.success("Updated 'What to Test' on #{bundle_id} build #{build.version} (#{build.build_number})")
+  else
+    UI.important("No en-US localization on build #{build.version} — set it manually in App Store Connect")
+  end
+end
+
+platform :mac do
+  desc "Upload App Store metadata (text only — no binary, no screenshots)"
+  lane :metadata do
+    deliver(
+      app_identifier: APP_ID, team_id: TEAM_ID, platform: "osx",
+      skip_binary_upload: true, skip_screenshots: true, force: true,
+      metadata_path: META_PATH
+    )
+  end
+
+  desc "Upload App Store screenshots"
+  lane :screenshots do
+    deliver(
+      app_identifier: APP_ID, team_id: TEAM_ID, platform: "osx",
+      skip_binary_upload: true, skip_metadata: true,
+      overwrite_screenshots: true, force: true,
+      screenshots_path: SHOTS_PATH
+    )
+  end
+
+  desc "Upload everything — metadata + screenshots"
+  lane :deliver_all do
+    deliver(
+      app_identifier: APP_ID, team_id: TEAM_ID, platform: "osx",
+      skip_binary_upload: true, overwrite_screenshots: true, force: true,
+      metadata_path: META_PATH, screenshots_path: SHOTS_PATH
+    )
+  end
+
+  desc "Update TestFlight 'What to Test' on the latest build"
+  lane :beta_metadata do
+    update_what_to_test(APP_ID, "#{META_PATH}/en-US/what_to_test.txt")
+  end
+end

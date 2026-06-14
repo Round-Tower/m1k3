@@ -1,0 +1,20 @@
+M1K3 is a private AI assistant that runs entirely on your Mac. No account, no cloud, no telemetry — your conversations, notes, and documents never leave the device.
+
+WHAT IT DOES
+• Chat with a capable on-device language model — fast on Apple Silicon.
+• Talk to it: on-device speech recognition and a natural neural voice.
+• Bring your own knowledge: drop in notes and PDFs and M1K3 answers from them (on-device retrieval).
+• It remembers what matters to you — and you can see and delete every memory.
+• A friendly 3D companion and a pixel face, if you want them.
+
+PRIVATE BY DESIGN
+• Everything runs locally. Inference, search, and voice are all on-device.
+• The only time M1K3 uses the network is to download a model when you ask, or to run a web search you explicitly turn on.
+• No analytics. No tracking. No data collection. You can verify it.
+
+BUILT FOR YOUR MACHINE
+• Optimized for Apple Silicon (Metal/MLX).
+• Multiple model tiers so it runs well from laptops to studios.
+• Connects as a local tool server, so other AI apps can use M1K3's knowledge and voice.
+
+M1K3 is for people who want the usefulness of an AI assistant without handing their life to a server.
