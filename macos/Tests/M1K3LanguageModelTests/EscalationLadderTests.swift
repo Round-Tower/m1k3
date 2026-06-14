@@ -45,10 +45,28 @@ struct EscalationLadderTests {
         #expect(pick?.reach.isOffline == true)
     }
 
-    @Test("new device, offline default → Apple on-device")
-    func newDeviceOfflineApple() {
+    @Test("new device, offline default → M1K3 floor (NOT AFM — the policy default)")
+    func newDeviceOfflineFloorByDefault() {
         let pick = EscalationLadder.select(ctx(ai: true, net: false, esc: .none), from: Fixtures.all)
-        #expect(pick == Fixtures.appleOnDevice)
+        #expect(pick == Fixtures.mlxFloor)
+    }
+
+    @Test("opt in to Apple on-device + capable silicon → Apple on-device")
+    func preferAppleOnDeviceRoutesApple() {
+        let context = LadderContext(
+            appleIntelligenceAvailable: true, networkAllowed: false,
+            userEscalation: .none, preferAppleOnDevice: true
+        )
+        #expect(EscalationLadder.select(context, from: Fixtures.all) == Fixtures.appleOnDevice)
+    }
+
+    @Test("prefer Apple but silicon can't → falls back to the M1K3 floor")
+    func preferAppleButUnavailableUsesFloor() {
+        let context = LadderContext(
+            appleIntelligenceAvailable: false, networkAllowed: false,
+            userEscalation: .none, preferAppleOnDevice: true
+        )
+        #expect(EscalationLadder.select(context, from: Fixtures.all) == Fixtures.mlxFloor)
     }
 
     @Test("network ON but no escalation → still on-device (ethos holds)")
@@ -77,7 +95,7 @@ struct EscalationLadderTests {
             ctx(ai: true, net: false, esc: .thirdParty("claude")), from: Fixtures.all
         )
         #expect(pick?.reach == .onDevice)
-        #expect(pick == Fixtures.appleOnDevice)
+        #expect(pick == Fixtures.mlxFloor)
     }
 
     @Test("missing escalation target falls back to LOCAL, never another network model")

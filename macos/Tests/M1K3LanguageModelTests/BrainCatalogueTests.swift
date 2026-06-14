@@ -37,10 +37,19 @@ struct BrainCatalogueTests {
         #expect(pick?.id == "m1k3-mlx")
     }
 
-    @Test("new device, offline → routes to Apple on-device")
-    func routesAppleOnNewDevice() {
+    @Test("new device, offline → routes to the M1K3 floor by default (not AFM)")
+    func routesFloorByDefaultOnNewDevice() {
         let pick = BrainCatalogue.standard().route(ctx(ai: true, net: false, esc: .none))
-        #expect(pick?.id == "apple-on-device")
+        #expect(pick?.id == "m1k3-mlx")
+    }
+
+    @Test("opt into Apple on-device → routes to it")
+    func routesAppleWhenPreferred() {
+        let context = LadderContext(
+            appleIntelligenceAvailable: true, networkAllowed: false,
+            userEscalation: .none, preferAppleOnDevice: true
+        )
+        #expect(BrainCatalogue.standard().route(context)?.id == "apple-on-device")
     }
 
     @Test("explicit Claude escalation with egress → routes to Claude")

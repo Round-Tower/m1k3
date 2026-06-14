@@ -30,15 +30,22 @@ public struct LadderContext: Sendable, Equatable {
     public var networkAllowed: Bool
     /// The user's explicit, per-request escalation.
     public var userEscalation: Escalation
+    /// Prefer Apple's on-device model over M1K3's MLX floor for the LOCAL pick.
+    /// Default false: M1K3's own tuned brains are the default (on-device testing
+    /// found AFM weaker at open chat), so Apple-on-device is an opt-in choice — not
+    /// auto-selected just for being available.
+    public var preferAppleOnDevice: Bool
 
     public init(
         appleIntelligenceAvailable: Bool,
         networkAllowed: Bool,
-        userEscalation: Escalation
+        userEscalation: Escalation,
+        preferAppleOnDevice: Bool = false
     ) {
         self.appleIntelligenceAvailable = appleIntelligenceAvailable
         self.networkAllowed = networkAllowed
         self.userEscalation = userEscalation
+        self.preferAppleOnDevice = preferAppleOnDevice
     }
 }
 
@@ -57,7 +64,11 @@ public enum EscalationLadder {
         _ context: LadderContext,
         from catalogue: [LanguageModelDescriptor]
     ) -> LanguageModelDescriptor? {
-        let local = bestLocal(in: catalogue, appleIntelligence: context.appleIntelligenceAvailable)
+        let local = bestLocal(
+            in: catalogue,
+            appleIntelligence: context.appleIntelligenceAvailable,
+            preferAppleOnDevice: context.preferAppleOnDevice
+        )
 
         // Egress hard gate: no network model without the switch on.
         guard context.networkAllowed else { return local }
@@ -73,17 +84,21 @@ public enum EscalationLadder {
         }
     }
 
-    /// Best on-device model: prefer Apple's on-device model when available, else the
-    /// declared local floor, else any other on-device model.
+    /// Best on-device model. DEFAULT is M1K3's own tuned floor — it's the product's
+    /// heart and tested stronger at open chat than AFM. Apple's on-device model is
+    /// picked only when the user opts into it AND the silicon supports it.
     private static func bestLocal(
         in catalogue: [LanguageModelDescriptor],
-        appleIntelligence: Bool
+        appleIntelligence: Bool,
+        preferAppleOnDevice: Bool
     ) -> LanguageModelDescriptor? {
         let onDevice = catalogue.filter { $0.reach == .onDevice }
-        if appleIntelligence, let apple = onDevice.first(where: { $0.requiresAppleIntelligence }) {
+        if preferAppleOnDevice, appleIntelligence,
+           let apple = onDevice.first(where: { $0.requiresAppleIntelligence })
+        {
             return apple
         }
-        // Apple model unusable (or absent) → the always-available floor.
+        // The always-available M1K3 floor is the default local brain.
         return onDevice.first { $0.isLocalFloor }
             ?? onDevice.first { !$0.requiresAppleIntelligence }
             ?? onDevice.first
