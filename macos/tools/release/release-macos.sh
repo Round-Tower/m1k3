@@ -101,9 +101,16 @@ hdiutil create -volname "$APP_NAME $VERSION" -srcfolder "$STAGE" \
   -ov -format UDZO "$DMG" >/dev/null
 echo "  → $DMG"
 
-# ── 5. Notarize + staple the DMG ─────────────────────────────────────────────
+# ── 5. Sign + notarize + staple the DMG ──────────────────────────────────────
+# Code-sign the DMG container itself (not just the app inside) with the same
+# Developer ID, so `spctl --assess` passes on the .dmg and it can't be tampered
+# with. Then notarize + staple the signed DMG.
 if [ "$SKIP_NOTARIZE" -eq 0 ]; then
-  echo "▸ [5/6] Notarizing the DMG…"
+  echo "▸ [5/6] Signing + notarizing the DMG…"
+  DEVID="$(security find-identity -p codesigning -v 2>/dev/null \
+            | grep "Developer ID Application.*$TEAM" | head -1 \
+            | sed -E 's/.*"(.*)".*/\1/')"
+  codesign --force --sign "$DEVID" --timestamp "$DMG"
   xcrun notarytool submit "$DMG" --keychain-profile "$NOTARY_PROFILE" --wait
   xcrun stapler staple "$DMG"
 fi
