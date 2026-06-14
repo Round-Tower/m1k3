@@ -16,7 +16,6 @@
 //  UNUserNotificationCenter effect + the permission flow are verify-by-launch).
 //  Prior: Unknown
 
-import AppKit
 import Foundation
 import M1K3Chat
 import os
@@ -82,11 +81,14 @@ extension AppEnvironment {
     }
 
     /// Called at the end of a successful turn: ping only if opted in, backgrounded,
-    /// and the turn ran long enough (the pure policy decides).
-    func maybeNotifyTurnFinished(duration: Duration) async {
+    /// and the turn ran long enough (the pure policy decides). `appActive` is read
+    /// by the @MainActor caller and passed in, so this effect never reaches into
+    /// global AppKit state — the AppKit/main-actor dependency stays explicit at the
+    /// call site rather than hidden inside an async method body.
+    func maybeNotifyTurnFinished(duration: Duration, appActive: Bool) async {
         guard TurnNotificationPolicy.shouldNotify(
             turnDuration: duration,
-            appActive: NSApplication.shared.isActive,
+            appActive: appActive,
             enabled: notifyOnLongTurnEnabled
         ) else { return }
         await TurnNotifier.notifyTurnFinished()

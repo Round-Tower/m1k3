@@ -54,6 +54,24 @@ private struct BoomResponder: RAGResponding {
     }
 }
 
+/// Records canary-trip callbacks so a test can assert the alert path fired
+/// without touching os_log. Reference type so the @Sendable closure can capture
+/// it; the answer is awaited before `trips` is read, so the lock only satisfies
+/// strict concurrency.
+private final class TripRecorder: @unchecked Sendable {
+    private let lock = NSLock()
+    private var counts: [Int] = []
+    func record(_ count: Int) {
+        lock.lock(); defer { lock.unlock() }
+        counts.append(count)
+    }
+
+    var trips: [Int] {
+        lock.lock(); defer { lock.unlock() }
+        return counts
+    }
+}
+
 struct HeadlessAskTests {
     @Test("a delta stream drains into the final answer")
     func deltaStream() async throws {
@@ -188,5 +206,51 @@ struct HeadlessAskTests {
         await #expect(throws: Error.self) {
             _ = try await HeadlessAsk.answer("q", using: BoomResponder())
         }
+    }
+
+    @Test("a canary leaking into the answer body is redacted and trips the guard")
+    func canaryInBodyRedacted() async throws {
+        let canary = "XYZZY-LEAK-CANARY"
+        let recorder = TripRecorder()
+        let responder = StreamResponder(chunks: ["The passphrase is \(canary), oops."])
+        let answer = try await HeadlessAsk.answer(
+            "q", using: responder,
+            canary: CanaryGuard(canaries: [canary]),
+            onCanaryTrip: { recorder.record($0) }
+        )
+        #expect(!answer.contains(canary))
+        #expect(answer.contains("[REDACTED]"))
+        #expect(recorder.trips == [1])
+    }
+
+    @Test("a canary leaking through a Source title is redacted and trips the guard")
+    func canaryInSourceRedacted() async throws {
+        // A quarantined doc could leak its title into the citation footer even
+        // when the body is clean — the guard scans the whole outgoing string.
+        let canary = "PLUGH-LEAK-CANARY"
+        let recorder = TripRecorder()
+        let leakyDoc = hit(title: "Notes \(canary)", heading: nil, similarity: 0.8)
+        let responder = StreamResponder(sources: [leakyDoc], chunks: ["Answer."])
+        let answer = try await HeadlessAsk.answer(
+            "q", using: responder,
+            canary: CanaryGuard(canaries: [canary]),
+            onCanaryTrip: { recorder.record($0) }
+        )
+        #expect(answer.contains("Sources:"))
+        #expect(!answer.contains(canary))
+        #expect(recorder.trips == [1])
+    }
+
+    @Test("an active guard leaves clean output untouched and never fires")
+    func cleanOutputNotTripped() async throws {
+        let recorder = TripRecorder()
+        let responder = StreamResponder(chunks: ["A perfectly clean answer."])
+        let answer = try await HeadlessAsk.answer(
+            "q", using: responder,
+            canary: CanaryGuard(canaries: ["NEVER-PRESENT-CANARY"]),
+            onCanaryTrip: { recorder.record($0) }
+        )
+        #expect(answer.hasPrefix("A perfectly clean answer."))
+        #expect(recorder.trips.isEmpty)
     }
 }

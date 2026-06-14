@@ -22,6 +22,7 @@
 //  property + speechDidEnd routing; voice-mode Auto→fast thinking override;
 //  stale voiceMode.active cleared at launch. Confidence 0.8.
 
+import AppKit
 import Foundation
 import M1K3Agent
 import M1K3AgentTools
@@ -440,7 +441,10 @@ final class AppEnvironment {
         } else {
             // Successful answer: ping if the user tabbed away during a long think
             // (opt-in, backgrounded-only — the policy decides). Failures don't ping.
-            await maybeNotifyTurnFinished(duration: clock.now - started)
+            await maybeNotifyTurnFinished(
+                duration: clock.now - started,
+                appActive: NSApplication.shared.isActive
+            )
         }
         // Only reset to idle if the avatar isn't already in a speaking state
         // (e.g. auto-TTS path sets .speaking before we return here).

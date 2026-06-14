@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- Direct distribution outside the Mac App Store. Signs with the
+         "Developer ID Application: Round Tower Software Studios Ltd" cert.
+         The Mac App Store build uses a DIFFERENT method ("app-store-connect")
+         and an Apple Distribution cert — that's a separate ExportOptions. -->
+    <key>method</key>
+    <string>developer-id</string>
+    <key>teamID</key>
+    <string>76DJH43A4P</string>
+    <key>signingStyle</key>
+    <string>automatic</string>
+    <!-- Hardened runtime is required for notarization; it's already enabled on
+         the target (codesign reports flags=0x10000(runtime)). -->
+</dict>
+</plist>

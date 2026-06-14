@@ -24,7 +24,17 @@ import Foundation
 import M1K3Knowledge
 
 public enum HeadlessAsk {
-    public static func answer(_ question: String, using responder: any RAGResponding) async throws -> String {
+    /// One headless turn. `canary` is the leak tripwire: any honeypot string it
+    /// holds is redacted from the final answer (body + Sources footer) and
+    /// `onCanaryTrip` is called with the match count so the caller can raise a
+    /// loud alert. Defaults make the guard inert, so existing callers are
+    /// unaffected; the MCP path supplies the real guard from non-committed config.
+    public static func answer(
+        _ question: String,
+        using responder: any RAGResponding,
+        canary: CanaryGuard = .disabled,
+        onCanaryTrip: @Sendable (Int) -> Void = { _ in }
+    ) async throws -> String {
         let (injected, stream) = try await responder.answerStreaming(
             question, history: [], onActivity: { _ in }
         )
@@ -48,9 +58,26 @@ public enum HeadlessAsk {
         // turn), they must not surface in the citation footer. The validator
         // allow-list keeps the full `merged` — memories are inert there.
         let citable = merged.filter { $0.kind != .memory }
-        guard !citable.isEmpty else { return polished }
-        let lines = sourceLines(citable)
-        return polished + "\n\nSources:\n" + lines.joined(separator: "\n")
+        let finalText: String
+        if citable.isEmpty {
+            finalText = polished
+        } else {
+            finalText = polished + "\n\nSources:\n" + sourceLines(citable).joined(separator: "\n")
+        }
+        // Leak tripwire: redact any planted honeypot that reached the outgoing
+        // text (body or footer) and raise the alert. Inert unless a real guard
+        // is supplied. The canned empty-answer floor above is a constant, so it
+        // skips the scan.
+        return tripwired(finalText, canary: canary, onCanaryTrip: onCanaryTrip)
+    }
+
+    /// Scan the outgoing answer for honeypot strings; redact + alert if any hit.
+    private static func tripwired(
+        _ text: String, canary: CanaryGuard, onCanaryTrip: @Sendable (Int) -> Void
+    ) -> String {
+        let scan = canary.scan(text)
+        if scan.tripped { onCanaryTrip(scan.count) }
+        return scan.text
     }
 
     /// Honest degradation when the turn yields no answer. `didReason` separates

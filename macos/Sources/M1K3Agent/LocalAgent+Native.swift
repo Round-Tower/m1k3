@@ -188,7 +188,16 @@ extension LocalAgent {
     ) async throws -> (turn: ToolTurn, remainder: String) {
         let gate = Mutex(ThinkStreamGate())
         let turn = try await session.send(messages) { token in
-            let live = gate.withLock { $0.feed(token, onAnswerToken: onConclusionToken) }
+            // Collect answer chunks under the lock, but fire onConclusionToken
+            // OUTSIDE it. The gate's Mutex is os_unfair_lock-backed (non-reentrant),
+            // and onConclusionToken is an external @Sendable sink — re-entering the
+            // gate from it would spin. Today's callers yield to an AsyncStream and
+            // are safe; this keeps a future caller from silently dead-locking.
+            // Order is preserved (answer chunk, then live reasoning) to match the
+            // prior in-feed call.
+            var answer = ""
+            let live = gate.withLock { $0.feed(token, onAnswerToken: { answer += $0 }) }
+            if !answer.isEmpty { onConclusionToken?(answer) }
             if !live.isEmpty { onReasoningToken?(live) }
         }
         let remainder = gate.withLock { $0.flushRemainder() }

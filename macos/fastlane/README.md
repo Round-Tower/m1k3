@@ -1,0 +1,44 @@
+# M1K3 macOS — distribution automation
+
+Three tools, each doing only what it's best at (the prior knowledge-server project's proven split):
+
+| Job | Tool | Where |
+|---|---|---|
+| Build / sign / **notarize** (direct DMG + App Store .pkg) | **bash** | `../tools/release/release-macos.sh`, `release-mas.sh` |
+| **Test + TestFlight + App Store binary** | **Xcode Cloud** | `../ci_scripts/` + a workflow in App Store Connect |
+| **ASO: metadata + screenshots + TestFlight notes** | **Fastlane** (metadata-only) | this folder |
+| PR tests | GitHub Actions | `../../.github/workflows/` (already there) |
+
+## Fastlane (metadata-only)
+
+```bash
+cd macos
+bundle install                      # one-time
+bundle exec fastlane mac metadata       # push name/subtitle/keywords/description
+bundle exec fastlane mac screenshots    # push screenshots_mac/
+bundle exec fastlane mac deliver_all    # both
+bundle exec fastlane mac beta_metadata  # update TestFlight "What to Test"
+```
+
+ASO copy is version-controlled in `metadata_mac/en-US/`. **The keyword field
+(`keywords.txt`) is the real ASO lever** — edit it freely; it's invisible to
+users and re-uploadable any time (unlike the bundle ID, which is neither).
+
+Auth: `apple_id` (Appfile) → interactive/session login. For CI, set an App Store
+Connect API key (`APP_STORE_CONNECT_API_KEY_PATH/_KEY_ID/_ISSUER_ID`) and
+Fastlane uses it automatically — no 2FA prompts.
+
+## Xcode Cloud
+
+The `ci_scripts/` sit next to `M1K3.xcodeproj` so Xcode Cloud finds them.
+`ci_post_clone.sh` runs **`xcodegen generate` first** — M1K3's pbxproj is
+gitignored, so without it Xcode Cloud has no project to build (the one real
+difference from the prior knowledge-server project, which commits its pbxproj).
+
+To turn it on: App Store Connect → your app → **Xcode Cloud** → create a workflow,
+point it at this repo, scheme **M1K3**. Suggested:
+- **Test** workflow on pull requests (runs the M1K3 suite).
+- **Beta** workflow on `master`/tags → Archive → **TestFlight** (distributed natively).
+
+Direct notarized DMGs are *not* an Xcode Cloud thing — those stay in
+`tools/release/release-macos.sh` (run locally or from GitHub Actions on a tag).

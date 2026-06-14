@@ -25,6 +25,7 @@ import M1K3MCPKit
 import M1K3Voice
 import MCP // StatelessHTTPServerTransport (the SDK type the session factory builds)
 import Observation
+import os // Logger — the canary-tripwire alert channel
 
 @MainActor
 @Observable
@@ -32,6 +33,28 @@ final class MCPHostController {
     nonisolated static let enabledKey = "mcpServer.enabled"
     nonisolated static let portKey = "mcpServer.port"
     nonisolated static let defaultPort: UInt16 = 4242
+    /// Leak-tripwire honeypots. Stored in local config only — never in source —
+    /// so the repo never carries the bait:
+    ///   `defaults write app.m1k3 canaryTripwire "the passphrase"`
+    /// Pipe-separate for several (so a honeypot value must not itself contain
+    /// `|`). Unset → an inert guard. Plaintext in the sandboxed container is an
+    /// accepted v1 trade-off — the boundary guarded is the MCP OUTPUT surface,
+    /// not canary storage; migrate to the Keychain if the threat model widens to
+    /// a compromised container read.
+    nonisolated static let canaryKey = "canaryTripwire"
+
+    /// Loud, PERSISTED alert channel (debug/info aren't kept by the log store).
+    /// Logs the match COUNT only — never the canary value, which would re-leak it.
+    private nonisolated static let securityLog = Logger(
+        subsystem: "app.m1k3", category: "security"
+    )
+
+    /// Build the leak guard from local config. Static + nonisolated so the value
+    /// (Sendable) can cross into the @Sendable timeout closure without self.
+    private nonisolated static func canaryGuard() -> CanaryGuard {
+        guard let raw = UserDefaults.standard.string(forKey: canaryKey) else { return .disabled }
+        return CanaryGuard(canaries: raw.split(separator: "|").map(String.init))
+    }
 
     private unowned let env: AppEnvironment
     private var server: LocalMCPHTTPServer?
@@ -210,9 +233,17 @@ final class MCPHostController {
         defer { askInFlight = false }
         env.avatar.setActivity(.thinking)
         defer { env.avatar.resetToIdle() }
+        let tripwire = Self.canaryGuard()
         do {
             return try await withTimeout(seconds: Self.askDeadlineSeconds) {
-                try await HeadlessAsk.answer(question, using: responder)
+                try await HeadlessAsk.answer(
+                    question, using: responder, canary: tripwire,
+                    onCanaryTrip: { count in
+                        Self.securityLog.fault(
+                            "canary tripwire fired in ask_m1k3 output: \(count, privacy: .public) honeypot(s) redacted"
+                        )
+                    }
+                )
             }
         } catch is TimeoutError {
             // Deadline hit: the generation is cancelled and the lock is already

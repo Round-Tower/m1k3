@@ -1,0 +1,6 @@
+source "https://rubygems.org"
+
+# M1K3 macOS — Fastlane is METADATA-ONLY (App Store Connect text/screenshots +
+# TestFlight "What to Test"). Build/sign/notarize live in tools/release/*.sh.
+gem "fastlane"
+gem "dotenv"
