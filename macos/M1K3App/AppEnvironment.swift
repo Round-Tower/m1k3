@@ -198,6 +198,13 @@ final class AppEnvironment {
     /// auto-loads instead of silently reverting to Apple Speech (guarded by the
     /// model being on disk, never a silent re-download).
     static let whisperEnabledKey = "transcription.whisperEnabled"
+    /// Auto-route the brain via the EscalationLadder (ADR 0001) instead of a fixed
+    /// manual pick. Default OFF — opt-in, fully reversible. When on, M1K3 picks the
+    /// brain per its policy (the MLX floor by default; Apple-on-device only if opted in).
+    nonisolated static let autoRouteBrainKey = "brain.autoRoute"
+    /// When auto-routing, prefer Apple's on-device model over the M1K3 floor.
+    /// Default OFF (M1K3's own brains are stronger at open chat).
+    nonisolated static let preferAppleOnDeviceKey = "brain.preferAppleOnDevice"
 
     /// The chosen brain (Mini / Lil / Big). Restored on launch, persisted on change.
     private(set) var selectedBrain: BrainTier = .mini
@@ -420,6 +427,9 @@ final class AppEnvironment {
     /// hands off to ChatSession. The speech delegate handles the speaking→idle
     /// transition if the user taps Speak on the response.
     func send(_ text: String) async {
+        // Auto-routing (opt-in) picks the brain per the ladder before the turn.
+        // No-op when off or when the pick is unchanged, so the default path is intact.
+        applyAutoRouteIfEnabled()
         let clock = ContinuousClock()
         let started = clock.now
         avatar.setActivity(.thinking)

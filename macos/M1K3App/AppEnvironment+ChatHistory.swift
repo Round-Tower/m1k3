@@ -20,8 +20,41 @@ import M1K3Chat
 import M1K3Inference
 import M1K3Knowledge
 import M1K3KnowledgeTools
+import os
 
 extension AppEnvironment {
+    private static let routeLog = Logger(subsystem: "app.m1k3", category: "route")
+
+    /// Apply the EscalationLadder's brain choice when auto-routing is on (ADR 0001).
+    /// A NO-OP when off, so default behaviour is unchanged and the feature is fully
+    /// reversible. Reuses `selectBrain`, so the routed pick drives the same proven
+    /// load/warmup path; only switches when the pick actually changes.
+    func applyAutoRouteIfEnabled() {
+        let defaults = UserDefaults.standard
+        guard defaults.bool(forKey: Self.autoRouteBrainKey) else { return }
+
+        let webAllowed = defaults.object(forKey: Self.webSearchEnabledKey) == nil
+            || defaults.bool(forKey: Self.webSearchEnabledKey)
+        let route = M1K3BrainRouter.route(
+            appleIntelligenceAvailable: AppleFoundationModelsProvider().isAvailable,
+            networkAllowed: webAllowed,
+            preferAppleOnDevice: defaults.bool(forKey: Self.preferAppleOnDeviceKey)
+        )
+
+        let tier: BrainTier
+        switch route {
+        case .appleOnDevice:
+            tier = .mini
+        case .mlxFloor, .privateCloud, .thirdParty:
+            // No network-brain backends are wired yet, so those rungs resolve to the
+            // local MLX floor: keep the current MLX brain, else default to Lil.
+            tier = selectedBrain.mlxModelID != nil ? selectedBrain : .lil
+        }
+        guard tier != selectedBrain else { return }
+        Self.routeLog.info("auto-route → \(tier.rawValue, privacy: .public)")
+        selectBrain(tier)
+    }
+
     /// Memory auto-capture consent (Settings "Learn from conversations").
     /// Default ON: everything is local, every memory visible and deletable
     /// in MemoriesView — the webSearchEnabledKey default-true read pattern.
