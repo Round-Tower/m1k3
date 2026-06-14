@@ -118,8 +118,13 @@ public enum DocumentChunker {
     /// Matches lines like `3.2 Pressure Differential` / `4.1.2 Cleaning`. Anchored
     /// to the whole trimmed line; each level after the first is a SINGLE digit
     /// (tuned for N.N(.N) SOP numbering — rejects paragraph numbers like `2.11`).
+    ///
+    /// The title must be LETTER-LED: a real heading reads "3 Cleaning Procedure",
+    /// whereas a numbered body/math/list line reads "3 * 10 = 30 miles" — leading
+    /// with an operator or digit. Without this, such lines parsed as headings and
+    /// leaked "§3 * 10 = 30 miles…" into the rendered source line.
     static func parseHeading(_ trimmedLine: String) -> String? {
-        let pattern = #/\s*(\d+(?:\.\d){0,3})\s+(.{3,80})/#
+        let pattern = #/\s*(\d+(?:\.\d){0,3})\s+(\p{L}.{2,79})/#
         guard let match = try? pattern.wholeMatch(in: trimmedLine) else { return nil }
         return "\(match.1) \(match.2)"
     }

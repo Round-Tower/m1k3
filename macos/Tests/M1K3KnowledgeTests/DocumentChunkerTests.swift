@@ -59,6 +59,34 @@ struct DocumentChunkerTests {
         #expect(chunks.first?.content.contains("2.11") == true)
     }
 
+    @Test("a numbered math/list body line is NOT a heading (the §3 * 10 = 30 leak)")
+    func numberedMathLineNotHeading() {
+        // parseHeading was `\d+ .{3,80}` — a bare integer + ANY text — so a body
+        // line like "3 * 10 = 30 miles per hour" parsed as a section heading and
+        // leaked "§3 * 10 = 30 miles…" into the rendered source line. A real
+        // heading's title is letter-led; math/list lines lead with an operator.
+        #expect(DocumentChunker.parseHeading("3 * 10 = 30 miles per hour") == nil)
+        #expect(DocumentChunker.parseHeading("2 + 2 equals four") == nil)
+        #expect(DocumentChunker.parseHeading("5 < 10 and 10 > 5") == nil)
+    }
+
+    @Test("a letter-led single-level heading is still recognised")
+    func bareIntegerHeadingStillWorks() {
+        // The fix must not lose legitimate single-level SOP headings.
+        #expect(DocumentChunker.parseHeading("3 Cleaning Procedure") == "3 Cleaning Procedure")
+        #expect(DocumentChunker.parseHeading("4.1.2 Cleaning") == "4.1.2 Cleaning")
+    }
+
+    @Test("a numbered math body line stays in the body, not a heading, end to end")
+    func numberedMathLineStaysBody() {
+        let chunks = DocumentChunker.chunk(pages: [
+            page(1, "1.1 Distance\nThe route is 3 * 10 = 30 miles per hour over the stretch."),
+        ])
+        #expect(chunks.count == 1)
+        #expect(chunks.first?.heading == "1.1 Distance")
+        #expect(chunks.first?.content.contains("3 * 10 = 30 miles") == true)
+    }
+
     @Test("page-number-only lines are dropped")
     func pageNumberLinesDropped() {
         let chunks = DocumentChunker.chunk(pages: [
