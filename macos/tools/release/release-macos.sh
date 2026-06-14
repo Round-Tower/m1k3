@@ -1,0 +1,120 @@
+#!/bin/bash
+# release-macos.sh — build a signed, notarized, stapled M1K3.dmg for DIRECT
+# distribution (outside the Mac App Store). Developer ID + notarytool + hdiutil.
+#
+# The Mac App Store is a SEPARATE pipeline (Apple Distribution cert,
+# app-store-connect export, no audioanalyticsd mach-lookup exception — see
+# the entitlements note). This script is the invite-now / Homebrew-cask path.
+#
+# ONE-TIME SETUP (per machine) — store a notary credential in the keychain:
+#   xcrun notarytool store-credentials "M1K3-notary" \
+#     --apple-id "you@round-tower.ie" --team-id 76DJH43A4P \
+#     --password "<app-specific-password from appleid.apple.com>"
+#
+# Then: macos/tools/release/release-macos.sh [--skip-notarize]
+#
+# bash 3.2-safe (stock macOS). Fails fast; prints what it would sign with.
+set -euo pipefail
+
+SCHEME="M1K3"
+APP_NAME="M1K3"
+TEAM="76DJH43A4P"
+NOTARY_PROFILE="M1K3-notary"
+
+HERE="$(cd "$(dirname "$0")" && pwd)"
+MACOS_DIR="$(cd "$HERE/../.." && pwd)"          # …/macos
+PROJECT="$MACOS_DIR/M1K3.xcodeproj"
+EXPORT_OPTS="$HERE/ExportOptions.plist"
+BUILD="${BUILD_DIR:-/tmp/m1k3-release}"
+ARCHIVE="$BUILD/$APP_NAME.xcarchive"
+EXPORT_DIR="$BUILD/export"
+APP="$EXPORT_DIR/$APP_NAME.app"
+
+SKIP_NOTARIZE=0
+[ "${1:-}" = "--skip-notarize" ] && SKIP_NOTARIZE=1
+
+# Version from project.yml (single source of truth).
+VERSION="$(grep -m1 'MARKETING_VERSION:' "$MACOS_DIR/project.yml" | sed -E 's/.*"([^"]+)".*/\1/')"
+DMG="$BUILD/$APP_NAME-$VERSION.dmg"
+
+beautify() { if command -v xcbeautify >/dev/null 2>&1; then xcbeautify; else cat; fi; }
+
+echo "▸ M1K3 release — v$VERSION  (team $TEAM)"
+echo
+
+# ── Preflight ────────────────────────────────────────────────────────────────
+if ! security find-identity -p codesigning -v 2>/dev/null \
+     | grep -q "Developer ID Application.*$TEAM"; then
+  echo "✗ No 'Developer ID Application' cert for team $TEAM in the keychain."
+  echo "  Get it from developer.apple.com → Certificates, or Xcode → Settings → Accounts → Manage Certificates."
+  exit 1
+fi
+echo "✓ Developer ID Application cert present"
+
+if [ "$SKIP_NOTARIZE" -eq 0 ]; then
+  if ! xcrun notarytool history --keychain-profile "$NOTARY_PROFILE" >/dev/null 2>&1; then
+    echo "✗ Notary profile '$NOTARY_PROFILE' not found. One-time setup:"
+    echo "    xcrun notarytool store-credentials \"$NOTARY_PROFILE\" \\"
+    echo "      --apple-id \"you@round-tower.ie\" --team-id $TEAM --password \"<app-specific-password>\""
+    echo "  (or re-run with --skip-notarize to produce an unnotarized build for local testing)"
+    exit 1
+  fi
+  echo "✓ Notary profile '$NOTARY_PROFILE' present"
+fi
+echo
+
+# ── 1. Archive (Release, Developer ID, hardened runtime) ─────────────────────
+echo "▸ [1/6] Archiving…"
+rm -rf "$ARCHIVE"
+xcodebuild archive \
+  -project "$PROJECT" -scheme "$SCHEME" -configuration Release \
+  -archivePath "$ARCHIVE" -destination 'generic/platform=macOS' \
+  DEVELOPMENT_TEAM="$TEAM" | beautify
+
+# ── 2. Export the signed .app ────────────────────────────────────────────────
+echo "▸ [2/6] Exporting (Developer ID)…"
+rm -rf "$EXPORT_DIR"
+xcodebuild -exportArchive \
+  -archivePath "$ARCHIVE" -exportPath "$EXPORT_DIR" \
+  -exportOptionsPlist "$EXPORT_OPTS" | beautify
+[ -d "$APP" ] || { echo "✗ Export produced no $APP_NAME.app"; exit 1; }
+
+# ── 3. Notarize + staple the .app (offline first-launch) ─────────────────────
+if [ "$SKIP_NOTARIZE" -eq 0 ]; then
+  echo "▸ [3/6] Notarizing the app…"
+  APP_ZIP="$BUILD/$APP_NAME-app.zip"
+  ditto -c -k --keepParent "$APP" "$APP_ZIP"
+  xcrun notarytool submit "$APP_ZIP" --keychain-profile "$NOTARY_PROFILE" --wait
+  xcrun stapler staple "$APP"
+  rm -f "$APP_ZIP"
+else
+  echo "▸ [3/6] Skipping notarize (--skip-notarize)"
+fi
+
+# ── 4. Build the DMG (drag-to-Applications layout) ───────────────────────────
+echo "▸ [4/6] Packaging DMG…"
+STAGE="$BUILD/dmg-stage"
+rm -rf "$STAGE" "$DMG"; mkdir -p "$STAGE"
+cp -R "$APP" "$STAGE/"
+ln -s /Applications "$STAGE/Applications"
+hdiutil create -volname "$APP_NAME $VERSION" -srcfolder "$STAGE" \
+  -ov -format UDZO "$DMG" >/dev/null
+echo "  → $DMG"
+
+# ── 5. Notarize + staple the DMG ─────────────────────────────────────────────
+if [ "$SKIP_NOTARIZE" -eq 0 ]; then
+  echo "▸ [5/6] Notarizing the DMG…"
+  xcrun notarytool submit "$DMG" --keychain-profile "$NOTARY_PROFILE" --wait
+  xcrun stapler staple "$DMG"
+fi
+
+# ── 6. Verify ────────────────────────────────────────────────────────────────
+echo "▸ [6/6] Verifying…"
+codesign --verify --deep --strict --verbose=1 "$APP" 2>&1 | tail -1 || true
+if [ "$SKIP_NOTARIZE" -eq 0 ]; then
+  echo -n "  Gatekeeper (app): "; spctl -a -vv "$APP" 2>&1 | tail -1
+  echo -n "  Staple (dmg):     "; xcrun stapler validate "$DMG" 2>&1 | tail -1
+fi
+echo
+echo "✓ Done → $DMG  ($(du -h "$DMG" | cut -f1))"
+[ "$SKIP_NOTARIZE" -eq 1 ] && echo "  ⚠ Unnotarized — for local testing only; Gatekeeper will block it on other Macs."
