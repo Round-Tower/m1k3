@@ -32,7 +32,7 @@ import MLXLMCommon
 import os
 import Synchronization
 
-private let mlxToolLog = Logger(subsystem: "dev.murphysig.M1K3", category: "mlx-load")
+private let mlxToolLog = Logger(subsystem: "app.m1k3", category: "mlx-load")
 
 /// Pure, testable bridges between the M1K3 tool-calling seam and mlx-swift-lm.
 enum MLXToolMapping {

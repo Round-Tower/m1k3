@@ -192,7 +192,7 @@ final class AppEnvironment {
     static let callKeyProtectionMigratedKey = "calls.keyProtectionMigrated"
     /// Call-subsystem diagnostics — pairs with StereoCallRecorder's trail so a full
     /// record→transcribe QA pass is one `log stream` predicate.
-    private static let callLog = Logger(subsystem: "dev.murphysig.M1K3", category: "calls")
+    private static let callLog = Logger(subsystem: "app.m1k3", category: "calls")
     /// The user has upgraded voice input to WhisperKit — restored on launch so it
     /// auto-loads instead of silently reverting to Apple Speech (guarded by the
     /// model being on disk, never a silent re-download).

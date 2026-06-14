@@ -77,7 +77,7 @@ public extension SoundEffectPlayer {
 /// main actor; verify-at-⌘R.
 @MainActor
 private final class AVAudioEarconPool {
-    private static let log = Logger(subsystem: "dev.murphysig.M1K3", category: "sfx")
+    private static let log = Logger(subsystem: "app.m1k3", category: "sfx")
     private var players: [SoundEffect: AVAudioPlayer] = [:]
 
     init(volume: Float) {

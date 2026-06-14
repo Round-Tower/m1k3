@@ -17,7 +17,7 @@ import Foundation
 import M1K3Calls
 import os
 
-private let callStoreLog = Logger(subsystem: "dev.murphysig.M1K3", category: "calls")
+private let callStoreLog = Logger(subsystem: "app.m1k3", category: "calls")
 
 extension AppEnvironment {
     /// Build the encrypted call store. Falls back to an in-memory (non-persistent)

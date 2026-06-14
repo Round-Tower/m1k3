@@ -18,7 +18,7 @@ public struct StoredKeyProvider: Sendable {
     private let store: any KeyStore
     private let account: String
 
-    public init(store: any KeyStore, account: String = "dev.murphysig.M1K3.call-encryption-key") {
+    public init(store: any KeyStore, account: String = "app.m1k3.call-encryption-key") {
         self.store = store
         self.account = account
     }

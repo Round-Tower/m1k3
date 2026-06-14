@@ -46,7 +46,7 @@ public struct KeychainKeyStore: KeyStore {
     private let service: String
     private let protection: Protection
 
-    public init(service: String = "dev.murphysig.M1K3", protection: Protection = .afterFirstUnlock) {
+    public init(service: String = "app.m1k3", protection: Protection = .afterFirstUnlock) {
         self.service = service
         self.protection = protection
     }

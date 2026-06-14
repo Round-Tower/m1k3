@@ -4,7 +4,7 @@
 //
 //  Unified-logging plumbing for the agent stack. Watch a whole turn live:
 //
-//      log stream --predicate 'subsystem == "dev.murphysig.M1K3"' --level debug
+//      log stream --predicate 'subsystem == "app.m1k3"' --level debug
 //
 //  (or filter the subsystem in Console.app). Content is logged as bounded
 //  one-line PREVIEWS, deliberately `.public` so Kev can actually diagnose his
@@ -19,7 +19,7 @@ import os
 
 /// One subsystem for every M1K3 module, so a single predicate catches all.
 public enum M1K3Log {
-    public static let subsystem = "dev.murphysig.M1K3"
+    public static let subsystem = "app.m1k3"
 
     /// The ReAct loop: thoughts, actions, observations, conclusion paths.
     public static let agentLoop = Logger(subsystem: subsystem, category: "agent-loop")

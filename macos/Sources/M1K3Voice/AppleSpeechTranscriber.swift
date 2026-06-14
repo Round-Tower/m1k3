@@ -29,7 +29,7 @@ import Speech
 public final class AppleSpeechTranscriber: TranscriptionProvider, @unchecked Sendable {
     public let name = "Apple Speech"
 
-    private static let log = Logger(subsystem: "dev.murphysig.M1K3", category: "stt")
+    private static let log = Logger(subsystem: "app.m1k3", category: "stt")
 
     private let locale: Locale
     private let audioEngine = AVAudioEngine()

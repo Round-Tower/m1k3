@@ -15,7 +15,7 @@
 name: M1K3
 
 options:
-  bundleIdPrefix: dev.murphysig
+  bundleIdPrefix: app.m1k3
   createIntermediateGroups: true
   deploymentTarget:
     macOS: "26.0"
@@ -82,7 +82,7 @@ targets:
         product: M1K3MCPKit
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: dev.murphysig.M1K3
+        PRODUCT_BUNDLE_IDENTIFIER: app.m1k3
         PRODUCT_NAME: M1K3
         ASSETCATALOG_COMPILER_APPICON_NAME: M1K3
         GENERATE_INFOPLIST_FILE: YES

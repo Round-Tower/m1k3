@@ -22,7 +22,7 @@ import M1K3Chat
 import os
 import UserNotifications
 
-private let notifyLog = Logger(subsystem: "dev.murphysig.M1K3", category: "notify")
+private let notifyLog = Logger(subsystem: "app.m1k3", category: "notify")
 
 /// Thin wrapper over UNUserNotificationCenter for the long-think ping. The
 /// decision of WHETHER to fire is the pure TurnNotificationPolicy; this is the

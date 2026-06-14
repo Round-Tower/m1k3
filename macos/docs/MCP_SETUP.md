@@ -18,7 +18,7 @@ The app is App-Sandboxed, so it writes inside its container. The server reads
 that path by default, but it's worth setting explicitly:
 
 ```
-M1K3_STORE_PATH=~/Library/Containers/dev.murphysig.M1K3/Data/Library/Application Support/M1K3/knowledge.sqlite
+M1K3_STORE_PATH=~/Library/Containers/app.m1k3/Data/Library/Application Support/M1K3/knowledge.sqlite
 ```
 
 (If you haven't launched the app yet, the store won't exist — the server falls
@@ -30,7 +30,7 @@ ingest something first so there's knowledge to serve.)
 ```bash
 claude mcp add m1k3 \
   ~/Development/m1k3/macos/.build/release/M1K3MCP \
-  --env M1K3_STORE_PATH="$HOME/Library/Containers/dev.murphysig.M1K3/Data/Library/Application Support/M1K3/knowledge.sqlite"
+  --env M1K3_STORE_PATH="$HOME/Library/Containers/app.m1k3/Data/Library/Application Support/M1K3/knowledge.sqlite"
 ```
 
 ## 3b. Register with Claude Desktop
@@ -43,7 +43,7 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
     "m1k3": {
       "command": "$M1K3_ROOT/macos/.build/release/M1K3MCP",
       "env": {
-        "M1K3_STORE_PATH": "$HOME/Library/Containers/dev.murphysig.M1K3/Data/Library/Application Support/M1K3/knowledge.sqlite"
+        "M1K3_STORE_PATH": "$HOME/Library/Containers/app.m1k3/Data/Library/Application Support/M1K3/knowledge.sqlite"
       }
     }
   }

@@ -45,7 +45,7 @@ public struct UserDefaultsConsentStore: ConsentStore, @unchecked Sendable {
     private let defaults: UserDefaults
     private let key: String
 
-    public init(defaults: UserDefaults = .standard, key: String = "dev.murphysig.M1K3.recordingConsent") {
+    public init(defaults: UserDefaults = .standard, key: String = "app.m1k3.recordingConsent") {
         self.defaults = defaults
         self.key = key
     }

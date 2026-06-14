@@ -32,7 +32,7 @@ public func resolveStorePath(environment: [String: String] = ProcessInfo.process
     }
     let home = fm.homeDirectoryForCurrentUser
     let container = home.appendingPathComponent(
-        "Library/Containers/dev.murphysig.M1K3/Data/Library/Application Support/M1K3/knowledge.sqlite"
+        "Library/Containers/app.m1k3/Data/Library/Application Support/M1K3/knowledge.sqlite"
     )
     if fm.fileExists(atPath: container.path) {
         return container.path
