@@ -1,0 +1,131 @@
+//
+//  M1K3FoundationModel.swift
+//  M1K3Agent
+//
+//  The PRODUCTION conformance to Apple's real WWDC26 `LanguageModel` (ADR 0001).
+//  Gated behind `M1K3_FM27` (a COMPILE gate, not a product flag) so the macOS-26.5
+//  CI build — which lacks the 2026 SDK symbols — excludes it entirely. Build with
+//  the Xcode 27 toolchain + `-D M1K3_FM27` to compile it. Product behaviour is
+//  decided by ROUTING (EscalationLadder), never by this flag.
+//
+//  It's a thin adapter: it reuses the tested `M1K3ModelExecutor` (the real
+//  ToolTurnSession + ThinkStreamGate) and translates the gate's reasoning/answer
+//  split onto Apple's two distinct channel events — `.reasoning` and `.response`.
+//  A naive adapter dumps everything into `.response` and leaves `.reasoning` empty;
+//  filling it is M1K3's value-add.
+//
+//  Signed: Kev + claude-opus-4-8, 2026-06-14, Confidence 0.8 (type-checked against
+//  the real macOS 27 SDK; live behaviour is verify-on-device under Xcode 27).
+//  Prior: Kev + claude-opus-4-8
+//
+
+#if M1K3_FM27
+    import Foundation
+    import FoundationModels
+    import M1K3Inference
+    import M1K3LanguageModel
+    import Synchronization
+
+    enum M1K3FoundationError: Error {
+        case unregistered(String)
+    }
+
+    /// Apple keys the executor on its `Configuration` (a Hashable cache key), so the
+    /// non-hashable session factory can't live in the config. This registry resolves a
+    /// model id → the real `M1K3Model` (descriptor + session factory) at executor build.
+    @available(macOS 27.0, *)
+    public enum M1K3FoundationRegistry {
+        private static let models = Mutex<[String: M1K3Model]>([:])
+
+        public static func register(_ model: M1K3Model) {
+            models.withLock { $0[model.descriptor.id] = model }
+        }
+
+        static func resolve(_ id: String) -> M1K3Model? {
+            models.withLock { $0[id] }
+        }
+    }
+
+    /// A M1K3 brain as Apple's real `LanguageModel`. Registers itself so its executor
+    /// can be reconstructed from the (hashable) configuration.
+    @available(macOS 27.0, *)
+    public struct M1K3FoundationModel: FoundationModels.LanguageModel {
+        public typealias Executor = M1K3FoundationExecutor
+
+        let model: M1K3Model
+
+        public init(_ model: M1K3Model) {
+            self.model = model
+            M1K3FoundationRegistry.register(model)
+        }
+
+        public var capabilities: FoundationModels.LanguageModelCapabilities {
+            var caps: [FoundationModels.LanguageModelCapabilities.Capability] = []
+            let declared = model.descriptor.capabilities
+            if declared.contains(.toolCalling) { caps.append(.toolCalling) }
+            if declared.contains(.reasoning) { caps.append(.reasoning) }
+            if declared.contains(.vision) { caps.append(.vision) }
+            if declared.contains(.guidedGeneration) { caps.append(.guidedGeneration) }
+            return FoundationModels.LanguageModelCapabilities(capabilities: caps)
+        }
+
+        public var executorConfiguration: M1K3FoundationExecutor.Configuration {
+            M1K3FoundationExecutor.Configuration(modelID: model.descriptor.id)
+        }
+    }
+
+    @available(macOS 27.0, *)
+    public struct M1K3FoundationExecutor: FoundationModels.LanguageModelExecutor {
+        public struct Configuration: Hashable, Sendable {
+            public let modelID: String
+        }
+
+        public typealias Model = M1K3FoundationModel
+
+        private let inner: any LanguageModelExecuting
+
+        public init(configuration: Configuration) throws {
+            guard let model = M1K3FoundationRegistry.resolve(configuration.modelID) else {
+                throw M1K3FoundationError.unregistered(configuration.modelID)
+            }
+            inner = model.makeExecutor()
+        }
+
+        public func respond(
+            to request: FoundationModels.LanguageModelExecutorGenerationRequest,
+            model _: M1K3FoundationModel,
+            streamingInto channel: FoundationModels.LanguageModelExecutorGenerationChannel
+        ) async throws {
+            let prompt = Self.userPrompt(from: request.transcript)
+
+            // Run M1K3's tuned loop + ThinkStreamGate into the mirror channel (collects
+            // reasoning/answer separately), then fan onto Apple's two event streams.
+            let collected = GenerationChannel()
+            try await inner.respond(to: prompt, into: collected)
+
+            if !collected.reasoning.isEmpty {
+                await channel.send(.reasoning(action: .appendText(collected.reasoning, tokenCount: 0)))
+            }
+            if !collected.answer.isEmpty {
+                await channel.send(.response(action: .appendText(collected.answer, tokenCount: 0)))
+            }
+            let usage = FoundationModels.LanguageModelExecutorGenerationChannel.Usage(
+                input: .init(totalTokenCount: collected.inputTokenCount, cachedTokenCount: 0),
+                output: .init(totalTokenCount: 0, reasoningTokenCount: 0)
+            )
+            await channel.send(.response(action: .updateUsage(usage)))
+        }
+
+        /// Pull the user-authored text out of the request's `Transcript`.
+        static func userPrompt(from transcript: FoundationModels.Transcript) -> String {
+            var parts: [String] = []
+            for entry in transcript {
+                guard case let .prompt(prompt) = entry else { continue }
+                for segment in prompt.segments {
+                    if case let .text(text) = segment { parts.append(text.content) }
+                }
+            }
+            return parts.joined(separator: "\n")
+        }
+    }
+#endif
