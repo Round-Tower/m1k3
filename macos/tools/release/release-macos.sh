@@ -120,6 +120,9 @@ echo "▸ [6/6] Verifying…"
 codesign --verify --deep --strict --verbose=1 "$APP" 2>&1 | tail -1 || true
 if [ "$SKIP_NOTARIZE" -eq 0 ]; then
   echo -n "  Gatekeeper (app): "; spctl -a -vv "$APP" 2>&1 | tail -1
+  # Assert the DMG container itself is notarized-accepted (--type install), not
+  # just the app inside it — this is the whole point of step 5's DMG signing.
+  echo -n "  Gatekeeper (dmg): "; spctl -a -vv --type install "$DMG" 2>&1 | tail -1
   echo -n "  Staple (dmg):     "; xcrun stapler validate "$DMG" 2>&1 | tail -1
 fi
 echo
