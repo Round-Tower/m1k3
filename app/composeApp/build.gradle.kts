@@ -107,6 +107,7 @@ kotlin {
             // Fine at current corpus sizes. HNSW would want jvector-base, but
             // io.github.jbellis:jvector-base still isn't on Maven Central as of
             // last check — track there before introducing it.
+            implementation(libs.jvector)
         }
         commonMain.dependencies {
             implementation(compose.runtime)

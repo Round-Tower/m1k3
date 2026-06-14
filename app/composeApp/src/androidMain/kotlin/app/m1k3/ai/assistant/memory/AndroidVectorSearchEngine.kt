@@ -104,7 +104,7 @@ class AndroidVectorSearchEngine(
         return VectorIndexStats(
             vectorCount = platformStats.vectorCount,
             dimensions = platformStats.dimensions,
-            indexType = "linear"  // VectorSearchManager uses linear search
+            indexType = "hnsw"  // VectorSearchManager uses JVector HNSW
         )
     }
 

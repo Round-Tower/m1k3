@@ -335,8 +335,7 @@ actual val platformModule =
          * rebuild on cold start is fine).
          */
         single<app.m1k3.ai.domain.passages.services.VectorIndex> {
-            app.m1k3.ai.domain.passages.services
-                .LinearScanVectorIndex()
+            app.m1k3.ai.assistant.passages.JVectorIndex()
         }
 
         single<app.m1k3.ai.domain.passages.repositories.PassageRepository> {

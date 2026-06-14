@@ -2,29 +2,19 @@ package app.m1k3.ai.assistant.embedding
 
 import android.content.Context
 import android.util.Log
+import io.github.jbellis.jvector.graph.GraphIndexBuilder
+import io.github.jbellis.jvector.graph.GraphSearcher
+import io.github.jbellis.jvector.vector.VectorSimilarityFunction
+import io.github.jbellis.jvector.vector.types.VectorFloat
+import io.github.jbellis.jvector.graph.OnHeapGraphIndex
+import io.github.jbellis.jvector.graph.RandomAccessVectorValues
+import io.github.jbellis.jvector.vector.VectorizationProvider
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.io.*
-import kotlin.math.min
 
-/**
- * Vector Search Manager - Linear Semantic Search
- *
- * Exact nearest neighbor search using cosine similarity.
- * Optimized for mobile devices with 512-dimensional Embedding Gemma vectors.
- *
- * Architecture:
- * - Algorithm: Linear scan (exact search)
- * - Similarity: Cosine similarity (normalized vectors)
- * - Storage: Persistent index saved to internal storage
- * - Performance: <10ms @ 1K vectors, <100ms @ 10K vectors
- *
- * Note: For >10K vectors, consider integrating HNSW (JVector) for approximate search
- *
- * Privacy: 100% on-device, no network required
- */
 class VectorSearchManager(
     private val context: Context,
     private val dimensions: Int = 512,
@@ -33,7 +23,6 @@ class VectorSearchManager(
     companion object {
         private const val TAG = "VectorSearchManager"
 
-        // Index persistence
         private fun getIndexFile(context: Context, projectId: String) =
             File(context.filesDir, "hnsw_index_$projectId.bin")
 
@@ -45,9 +34,32 @@ class VectorSearchManager(
     private var vectorCount = 0
     private val mutex = Mutex()
 
-    /**
-     * Initialize vector index (load existing or create new)
-     */
+    // JVector HNSW graph integration
+    private var jVectorIndex: OnHeapGraphIndex? = null
+    private var isIndexStale = false
+    private var idToOrdinal = mutableMapOf<String, Int>()
+    private var ordinalToId = mutableMapOf<Int, String>()
+    private val vectorTypeSupport = VectorizationProvider.getInstance().vectorTypeSupport
+
+    class MapVectorValues(
+        private val dimension: Int,
+        private val vectors: Map<Int, VectorFloat<*>>
+    ) : RandomAccessVectorValues {
+        override fun size(): Int = vectors.size
+        override fun dimension(): Int = dimension
+        override fun copy(): RandomAccessVectorValues = this
+        override fun getVector(id: Int): VectorFloat<*> = vectors[id] ?: throw IllegalArgumentException("Missing vector $id")
+        override fun isValueShared(): Boolean = false
+    }
+
+    private fun floatArrayToVectorFloat(array: FloatArray): VectorFloat<*> {
+        val vector = vectorTypeSupport.createFloatVector(array.size)
+        for (i in array.indices) {
+            vector.set(i, array[i])
+        }
+        return vector
+    }
+
     suspend fun initialize(): Result<Unit> = withContext(Dispatchers.IO) {
         mutex.withLock {
             try {
@@ -56,13 +68,13 @@ class VectorSearchManager(
                 val indexFile = getIndexFile(context, projectId)
                 val metadataFile = getMetadataFile(context, projectId)
 
-                if (indexFile.exists() && metadataFile.exists()) {
-                    // Load existing index
+                if (metadataFile.exists()) {
                     loadIndex(indexFile, metadataFile)
                 } else {
-                    // Create new index
                     createNewIndex()
                 }
+
+                buildJVectorGraph()
 
                 Log.d(TAG, "Vector search initialized: $vectorCount vectors loaded")
                 Result.success(Unit)
@@ -74,9 +86,40 @@ class VectorSearchManager(
         }
     }
 
-    /**
-     * Add vector to index
-     */
+    private fun buildJVectorGraph() {
+        if (idToVector.isEmpty()) {
+            jVectorIndex = null
+            isIndexStale = false
+            return
+        }
+
+        idToOrdinal.clear()
+        ordinalToId.clear()
+
+        val vectorsMap = mutableMapOf<Int, VectorFloat<*>>()
+        var ordinal = 0
+        idToVector.forEach { (id, vector) ->
+            idToOrdinal[id] = ordinal
+            ordinalToId[ordinal] = id
+            vectorsMap[ordinal] = floatArrayToVectorFloat(vector)
+            ordinal++
+        }
+
+        val vectorValues = MapVectorValues(dimensions, vectorsMap)
+        val builder = GraphIndexBuilder(
+            vectorValues,
+            VectorSimilarityFunction.COSINE,
+            16,
+            100,
+            1.2f,
+            1.2f
+        )
+
+        jVectorIndex = builder.build(vectorValues)
+        isIndexStale = false
+        Log.d(TAG, "JVector Graph built with ${vectorsMap.size} vectors")
+    }
+
     suspend fun addVector(id: String, vector: FloatArray): Result<Unit> = withContext(Dispatchers.IO) {
         mutex.withLock {
             try {
@@ -84,12 +127,9 @@ class VectorSearchManager(
                     "Vector dimension mismatch: expected $dimensions, got ${vector.size}"
                 }
 
-                // Normalize vector (required for cosine similarity)
-                val normalized = normalizeVector(vector)
-
-                // Add to mapping
-                idToVector[id] = normalized
-                vectorCount++
+                idToVector[id] = normalizeVector(vector)
+                vectorCount = idToVector.size
+                isIndexStale = true
 
                 Log.d(TAG, "Vector added: $id (total: $vectorCount)")
                 Result.success(Unit)
@@ -101,9 +141,6 @@ class VectorSearchManager(
         }
     }
 
-    /**
-     * Add multiple vectors in batch
-     */
     suspend fun addVectorsBatch(vectors: Map<String, FloatArray>): Result<Unit> = withContext(Dispatchers.IO) {
         mutex.withLock {
             try {
@@ -117,6 +154,7 @@ class VectorSearchManager(
                 }
 
                 vectorCount = idToVector.size
+                isIndexStale = true
 
                 Log.d(TAG, "Batch added: ${vectors.size} vectors (total: $vectorCount)")
                 Result.success(Unit)
@@ -128,14 +166,6 @@ class VectorSearchManager(
         }
     }
 
-    /**
-     * Search for similar vectors
-     *
-     * @param queryVector Query embedding
-     * @param k Number of results to return
-     * @param minSimilarity Minimum similarity threshold (0.0 to 1.0)
-     * @return List of (id, similarity) pairs sorted by similarity
-     */
     suspend fun search(
         queryVector: FloatArray,
         k: Int = 10,
@@ -153,14 +183,20 @@ class VectorSearchManager(
 
                 val startTime = System.currentTimeMillis()
 
-                // Normalize query vector
+                if (isIndexStale || jVectorIndex == null) {
+                    buildJVectorGraph()
+                }
+
                 val normalized = normalizeVector(queryVector)
 
-                // Perform linear search
-                val results = linearSearch(normalized, k, minSimilarity)
+                val results = if (jVectorIndex != null) {
+                    jvectorSearch(normalized, k, minSimilarity)
+                } else {
+                    linearSearch(normalized, k, minSimilarity)
+                }
 
                 val duration = System.currentTimeMillis() - startTime
-                Log.d(TAG, "Search completed: ${results.size} results in ${duration}ms")
+                Log.d(TAG, "Search completed: ${results.size} results in ${duration}ms via JVector")
 
                 Result.success(results)
 
@@ -171,14 +207,47 @@ class VectorSearchManager(
         }
     }
 
-    /**
-     * Remove vector from index
-     */
+    private fun jvectorSearch(
+        queryVector: FloatArray,
+        k: Int,
+        minSimilarity: Float
+    ): List<SearchResult> {
+        val currentIndex = jVectorIndex ?: return linearSearch(queryVector, k, minSimilarity)
+
+        val vectorsMap = mutableMapOf<Int, VectorFloat<*>>()
+        idToVector.forEach { (id, vector) ->
+            val ord = idToOrdinal[id] ?: return@forEach
+            vectorsMap[ord] = floatArrayToVectorFloat(vector)
+        }
+        val vectorValues = MapVectorValues(dimensions, vectorsMap)
+
+        val qVec = floatArrayToVectorFloat(queryVector)
+
+        val result = GraphSearcher.search(
+            qVec,
+            k,
+            vectorValues,
+            VectorSimilarityFunction.COSINE,
+            currentIndex,
+            null
+        )
+
+        val hits = result.nodes.mapNotNull { node ->
+            val id = ordinalToId[node.node] ?: return@mapNotNull null
+            if (node.score >= minSimilarity) {
+                SearchResult(id, node.score)
+            } else null
+        }
+
+        return hits.sortedByDescending { it.similarity }
+    }
+
     suspend fun removeVector(id: String): Result<Unit> = withContext(Dispatchers.IO) {
         mutex.withLock {
             try {
                 if (idToVector.remove(id) != null) {
-                    vectorCount--
+                    vectorCount = idToVector.size
+                    isIndexStale = true
                     Log.d(TAG, "Vector removed: $id (remaining: $vectorCount)")
                 }
                 Result.success(Unit)
@@ -189,16 +258,10 @@ class VectorSearchManager(
         }
     }
 
-    /**
-     * Save index to disk
-     */
     suspend fun saveIndex(): Result<Unit> = withContext(Dispatchers.IO) {
         mutex.withLock {
             try {
-                val indexFile = getIndexFile(context, projectId)
                 val metadataFile = getMetadataFile(context, projectId)
-
-                // Save vector mappings
                 ObjectOutputStream(FileOutputStream(metadataFile)).use { oos ->
                     oos.writeObject(idToVector)
                 }
@@ -213,14 +276,13 @@ class VectorSearchManager(
         }
     }
 
-    /**
-     * Clear index and free memory
-     */
     suspend fun clear(): Result<Unit> = withContext(Dispatchers.IO) {
         mutex.withLock {
             try {
                 idToVector.clear()
                 vectorCount = 0
+                isIndexStale = true
+                jVectorIndex = null
 
                 val indexFile = getIndexFile(context, projectId)
                 val metadataFile = getMetadataFile(context, projectId)
@@ -237,26 +299,22 @@ class VectorSearchManager(
         }
     }
 
-    // Private helper methods
-
     private fun createNewIndex() {
         idToVector.clear()
         vectorCount = 0
+        isIndexStale = true
         Log.d(TAG, "Created new empty index")
     }
 
     private fun loadIndex(indexFile: File, metadataFile: File) {
         try {
-            // Load vector mappings
             ObjectInputStream(FileInputStream(metadataFile)).use { ois ->
                 @Suppress("UNCHECKED_CAST")
                 idToVector = ois.readObject() as MutableMap<String, FloatArray>
             }
-
             vectorCount = idToVector.size
-
+            isIndexStale = true
             Log.d(TAG, "Index loaded: $vectorCount vectors")
-
         } catch (e: Exception) {
             Log.w(TAG, "Failed to load index, creating new", e)
             createNewIndex()
@@ -269,17 +327,13 @@ class VectorSearchManager(
         minSimilarity: Float
     ): List<SearchResult> {
         val results = mutableListOf<SearchResult>()
-
         idToVector.forEach { (id, vector) ->
             val similarity = cosineSimilarity(queryVector, vector)
             if (similarity >= minSimilarity) {
                 results.add(SearchResult(id, similarity))
             }
         }
-
-        return results
-            .sortedByDescending { it.similarity }
-            .take(k)
+        return results.sortedByDescending { it.similarity }.take(k)
     }
 
     private fun normalizeVector(vector: FloatArray): FloatArray {
@@ -316,9 +370,6 @@ class VectorSearchManager(
         }
     }
 
-    /**
-     * Get index statistics
-     */
     fun getStats(): VectorSearchStats {
         return VectorSearchStats(
             vectorCount = vectorCount,
@@ -329,17 +380,11 @@ class VectorSearchManager(
     }
 }
 
-/**
- * Search result with ID and similarity score
- */
 data class SearchResult(
     val id: String,
     val similarity: Float
 )
 
-/**
- * Vector search statistics
- */
 data class VectorSearchStats(
     val vectorCount: Int,
     val dimensions: Int,
