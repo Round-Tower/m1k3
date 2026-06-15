@@ -164,6 +164,15 @@ enum ChatEvalStage {
     /// Optional task-kind filter (M1K3_SELFTEST_CHATEVAL_KINDS=tool-use,reasoning)
     /// — nil means every kind. Lets a focused tool-calling run skip the slow
     /// open-chat/reasoning turns.
+    /// Turn-latency ceiling (ms) above which a CORRECT answer still fails the
+    /// "responsive" check — catches AFM's context-overflow auto-loop that
+    /// "passes" only after minutes. Tunable via M1K3_SELFTEST_CHATEVAL_LATENCY_MS;
+    /// default 120s is generous enough not to fail a legitimately slow large
+    /// model, tight enough to flag the multi-minute melts.
+    private static var latencyCeilingMS: Int {
+        SelfTestEnv.value("M1K3_SELFTEST_CHATEVAL_LATENCY_MS").flatMap(Int.init) ?? 120_000
+    }
+
     private static func selectedKinds() -> Set<TaskKind>? {
         guard let raw = SelfTestEnv.value("M1K3_SELFTEST_CHATEVAL_KINDS") else {
             return nil
@@ -207,7 +216,7 @@ enum ChatEvalStage {
             switch fixture.kind {
             case .groundedQ:
                 let observation = try await groundedObservation(fixture, provider: provider, start: start, clock: clock)
-                return ChatEvalScorer.score(fixture: fixture, observation: observation)
+                return ChatEvalScorer.score(fixture: fixture, observation: observation, latencyCeilingMS: latencyCeilingMS)
             case .toolUse:
                 // AFM gets its NATIVE FoundationModels tools by default (the real
                 // capability); M1K3_SELFTEST_CHATEVAL_AFM_REACT=1 forces the old
@@ -222,7 +231,8 @@ enum ChatEvalStage {
                 let raw = try await provider.generate(prompt: fixture.prompt)
                 let ms = milliseconds(clock.now - start)
                 return ChatEvalScorer.score(
-                    fixture: fixture, observation: EvalObservation(rawText: raw, latencyMS: ms)
+                    fixture: fixture, observation: EvalObservation(rawText: raw, latencyMS: ms),
+                    latencyCeilingMS: latencyCeilingMS
                 )
             }
         } catch {
@@ -278,7 +288,7 @@ enum ChatEvalStage {
             toolCalls: toolsUsed,
             latencyMS: milliseconds(clock.now - start)
         )
-        return ChatEvalScorer.score(fixture: fixture, observation: observation)
+        return ChatEvalScorer.score(fixture: fixture, observation: observation, latencyCeilingMS: latencyCeilingMS)
     }
 
     /// Tool-use via AFM's NATIVE FoundationModels tools. The model is handed real
@@ -319,7 +329,7 @@ enum ChatEvalStage {
             toolCalls: toolsUsed,
             latencyMS: milliseconds(clock.now - start)
         )
-        return ChatEvalScorer.score(fixture: fixture, observation: observation)
+        return ChatEvalScorer.score(fixture: fixture, observation: observation, latencyCeilingMS: latencyCeilingMS)
     }
 
     /// Whole milliseconds in a Duration (matches SelfTest's TTFT helper).

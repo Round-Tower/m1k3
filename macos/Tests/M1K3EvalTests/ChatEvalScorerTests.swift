@@ -145,6 +145,38 @@ struct ChatEvalScorerTests {
         #expect(check(justRight, "length band")?.outcome == .pass)
     }
 
+    // MARK: - Latency band
+
+    @Test("no latency check by default (ceiling nil)")
+    func noLatencyCheckByDefault() {
+        let score = ChatEvalScorer.score(
+            fixture: fixture(.toolUse, .init(mustCallTool: "datetime")),
+            observation: EvalObservation(rawText: "ok", toolCalls: ["datetime"], latencyMS: 999_999)
+        )
+        #expect(check(score, "responsive") == nil)
+        #expect(score.passed) // a slow-but-correct turn passes when no ceiling
+    }
+
+    @Test("a turn within the ceiling is responsive; over it fails even if correct")
+    func latencyBand() {
+        let exp = EvalExpectation(mustCallTool: "web_search")
+        let fast = ChatEvalScorer.score(
+            fixture: fixture(.toolUse, exp),
+            observation: EvalObservation(rawText: "ok", toolCalls: ["web_search"], latencyMS: 6000),
+            latencyCeilingMS: 120_000
+        )
+        let melted = ChatEvalScorer.score(
+            fixture: fixture(.toolUse, exp),
+            observation: EvalObservation(rawText: "ok", toolCalls: ["web_search"], latencyMS: 337_000),
+            latencyCeilingMS: 120_000
+        )
+        #expect(check(fast, "responsive")?.outcome == .pass)
+        #expect(check(melted, "responsive")?.outcome == .fail)
+        // The melt selected the right tool but still FAILS overall on latency.
+        #expect(check(melted, "calls web_search")?.outcome == .pass)
+        #expect(!melted.passed)
+    }
+
     // MARK: - Aggregate
 
     @Test("score is the passing fraction of scorable checks")

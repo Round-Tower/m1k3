@@ -151,8 +151,14 @@ public enum RefusalHeuristic {
 public enum ChatEvalScorer {
     /// Score one observation against one fixture. Emits the two always-on
     /// checks (non-empty, no-think-leak) plus one per populated expectation.
+    /// `latencyCeilingMS`: when set, a turn slower than the ceiling FAILS the
+    /// "responsive" check even if it produced the right answer. This is how the
+    /// matrix tells the production truth: a brain that selects the right tool but
+    /// thrashes its internal loop for minutes (AFM's context-overflow auto-loop)
+    /// is not a pass — a 337s "correct" answer is a melt-down, not a success.
+    /// nil = no latency check (the default; existing callers unchanged).
     public static func score(
-        fixture: ChatEvalFixture, observation: EvalObservation
+        fixture: ChatEvalFixture, observation: EvalObservation, latencyCeilingMS: Int? = nil
     ) -> ChatEvalScore {
         let answer = ThinkStripper.strip(observation.rawText)
         let lowered = answer.lowercased()
@@ -245,6 +251,17 @@ public enum ChatEvalScorer {
             ))
         } else if exp.minChars != nil || exp.maxChars != nil {
             checks.append(EvalCheck(name: "length band", outcome: .pass, detail: "\(answer.count) chars"))
+        }
+
+        if let ceiling = latencyCeilingMS {
+            let responsive = observation.latencyMS <= ceiling
+            checks.append(EvalCheck(
+                name: "responsive",
+                outcome: responsive ? .pass : .fail,
+                detail: responsive
+                    ? "\(observation.latencyMS)ms"
+                    : "\(observation.latencyMS)ms > ceiling \(ceiling)ms (loop thrash?)"
+            ))
         }
 
         return ChatEvalScore(
