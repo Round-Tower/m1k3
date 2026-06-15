@@ -292,8 +292,49 @@ not a standalone CLI.
 (default brain, per-task routing later — e.g. route grounded-Q to a fast brain, open-chat to the
 strong one). The `BrainRoute`/`M1K3Model` seams are the clean injection point; no new model wiring.
 
-**New phases:** *13 — LanguageModel bridge (✅ shipped, this update).* *14 — Evals enclave (Edge C
-above).* Edges A/B are tracked here, not yet phased (gated on product decision / macOS-27 runtime).
+### Edge D — AFM-native tool-calling spike (Phase 15) — *NEXT SESSION, off the evals findings*
+The evals enclave (Phase 14) shipped and immediately earned its keep: it proved the **mini** brain
+(Apple Foundation Models) calls tools **0/5** through M1K3's production path (the prompt-ReAct floor in
+`LocalAgent`) but **5/5** when handed Apple's **native** `FoundationModels.Tool`s via
+`LanguageModelSession(tools:)`. So AFM *can* tool-call — the ReAct floor is just the wrong harness for
+it. (Caveat the latency-band check then caught: a native "pass" took **337s** on an open-ended query —
+AFM auto-loops to context-overflow when a tool's output doesn't resolve the query. Selection ≠
+task-completion.)
+
+**Why it's worth a spike (not tier-polish):** this is the **Apple-native tool-calling layer**, and the
+whole Apple-model trajectory rides it — WWDC26's rebuilt AFM (native tools + vision), PCC, and the
+macOS-27 `LanguageModel` bridge already shipped (Phase 13) are the *same bet*. Strategically coherent
+with the offline/Apple-aligned ethos; "time before launch" removes the pressure. (Challenger's
+double-bind — "don't polish the weak tier" — dissolves once it's framed as infra, not mini-polish.)
+
+**The approach — challenger's THIRD PATH, not an Apple-driven loop:** conform
+`AppleFoundationModelsProvider` to `ToolCallingProvider` via **`@Generable` structured output** — the
+model emits a structured `{tool, query}` / `{final_answer}`, `continueToolTurn` returns `.toolCalls`,
+and **`LocalAgent` keeps the loop** (iteration cap, repeat-guard, citation validation, reasoning
+stream — all the machinery already trusted; same dialect-adapter pattern as `MLXToolCalling.swift`). A
+parse-failure falls through to `.text` + the existing fallback, *not* a 7-minute overflow. Strictly
+less code than letting Apple drive (no re-plumbing grounding/citations — they live in
+`AgentRAGResponder` pre-agent + `ChatSession` post-stream, NOT in LocalAgent, so they survive). Only if
+AFM provably *won't* emit parseable structured calls via prompting does the Apple-driven loop earn its
+seat — test the cheap path first.
+
+**Success criterion = the one unknown, tested on the HARD case:** does AFM reliably emit a parseable
+structured tool-request, *and survive non-resolving / empty / multi-step tool results* (the case the
+eval's terminal stubs dodged)? Spike with `web_search` returning links-needing-follow-up and
+`lookup_fact` returning empty. If it melts there, that's the real constraint — found cheaply.
+
+**Shape (TDD where pure, verify-by-launch where it needs AFM):** (1) pure `@Generable` tool-request
+type + a `structured-output → ToolTurn` parser (TDD, off-device — the cheap part that de-risks the
+unknown); (2) the `ToolCallingProvider` conformance behind a flag (default OFF — launch routing
+unchanged); (3) live validation via the `M1K3_SELFTEST_CHATEVAL` harness with non-terminal stubs +
+the latency band. **Launch routing stays agentic → lil+ regardless** — the spike informs post-launch /
+WWDC26, and the evals harness is the durable asset that **re-weighs every future Apple model as it
+ships** (no rebuild — just re-run). New branch: `feat/afm-native-tools-spike`.
+
+**New phases:** *13 — LanguageModel bridge (✅ shipped).* *14 — Evals enclave (Edge C, ✅ shipped —
+`M1K3Eval` package + `M1K3_SELFTEST_CHATEVAL` stage; file-config harness; latency band).* *15 — AFM
+tool-calling spike (Edge D, NEXT).* Edges A/B tracked, not yet phased (product decision / macOS-27
+runtime).
 
 <!-- Signed: Kev + claude-opus-4-8, 2026-06-14, Confidence 0.9 — WWDC26 LanguageModel adoption shipped
      (PR #28, ADR 0001, 1101 green, production conformance compiles vs the real macOS 27 SDK). Forward
@@ -442,7 +483,8 @@ SwiftUI, macOS 26, native `.glassEffect` / `GlassEffectContainer` for the real L
     - **12d — benchmark:** same tool-task set through native vs ReAct per brain tier (call-format compliance rate, latency, wasted iterations) — promote native per-backend only where it wins, exactly like the transcription seam.
     - *Verify:* Big (Gemma) calls `web_search` natively on the weather question with zero format coaching; Mini does the same via FoundationModels tools; a no-tool-support model still answers via ReAct.
 13. **WWDC26 `LanguageModel` bridge** — ✅ **shipped 2026-06-14** (PR #28, ADR 0001; see the 2026-06-14 update). Mirror surface + `EscalationLadder` + `BrainCatalogue` (pure); `M1K3ModelExecutor`/`M1K3Model` (real-provider executor over `ToolTurnSession` + the live gate, KV-reuse cache); `M1K3FoundationModel` (FM27-gated production conformance, compiles vs the real macOS 27 SDK); live opt-in auto-routing with the floor-default policy. *Verify (shipped):* 1101 green; conformance compiles under Xcode 27; auto-route picks the floor by default, Apple-on-device when opted in (`log stream … category == "route"`).
-14. **Evals enclave** (Edge C, the START-HERE) — a pure `M1K3Eval` package (fixtures, `EvalScorer` heuristics, `EvalReport`, TDD off-device) + a `M1K3_SELFTEST_CHATEVAL=1` SelfTest stage that runs fixtures × brains through the real `ToolTurnSession`/`BrainRoute` on the **signed headless app** (MLX needs the app bundle — bare `swift run`/`swift test` can't init the GPU; same harness as MEMEVAL/ABSEP) and scores them. Phased P1 side-by-side+latency → P2 heuristic scores → P3 LLM-judge. Feeds the ladder policy as *evidence*. *Verify:* a report that quantifies the brains per task-kind (the AFM-vs-floor gap, proven).
+14. **Evals enclave** (Edge C) — ✅ **shipped 2026-06-15** (`feat/evals-enclave`, 6 commits). Pure `M1K3Eval` package (`ChatEvalFixtures` across 5 task-kinds · `ChatEvalScorer` heuristics incl. the latency band · `ChatEvalReport` cross-brain matrix; 27 tests TDD off-device) + the `M1K3_SELFTEST_CHATEVAL=1` headless stage (tool-use via `LocalAgent` — AFM ReAct + MLX native + AFM-native A/B). **File-config harness** (`.m1k3-selftest.json`, one-shot) sidesteps the `open --env` LaunchServices flake. *Verified live:* mini = good chat (6/6), agentically unsafe (selects tools then thrashes); lil = the agentic driver (5/5 native). The AFM-vs-floor gap, proven — and it justifies the ladder's agentic→lil+ routing.
+15. **AFM-native tool-calling spike** (Edge D, **NEXT** — `feat/afm-native-tools-spike`) — conform `AppleFoundationModelsProvider` to `ToolCallingProvider` via `@Generable` structured output so `LocalAgent` keeps the loop (challenger's third path, not an Apple-driven loop). Pure parser TDD'd off-device; conformance behind a flag (launch routing unchanged); live-validated via the `M1K3_SELFTEST_CHATEVAL` harness with **non-terminal stubs** (web→links, lookup→empty) + the latency band. *Success criterion:* does AFM emit parseable structured calls AND survive non-resolving results? *Verify:* the harness re-weighs it; agentic→lil+ stays for launch. (Full context in the Edge D block above.)
 
 ---
 
