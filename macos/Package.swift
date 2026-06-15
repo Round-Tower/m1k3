@@ -24,6 +24,7 @@ let package = Package(
         .library(name: "M1K3Inference", targets: ["M1K3Inference"]),
         .library(name: "M1K3Agent", targets: ["M1K3Agent"]),
         .library(name: "M1K3LanguageModel", targets: ["M1K3LanguageModel"]),
+        .library(name: "M1K3Eval", targets: ["M1K3Eval"]),
         .library(name: "M1K3KnowledgeTools", targets: ["M1K3KnowledgeTools"]),
         .library(name: "M1K3AgentTools", targets: ["M1K3AgentTools"]),
         .library(name: "M1K3Chat", targets: ["M1K3Chat"]),
@@ -119,6 +120,21 @@ let package = Package(
             name: "M1K3LanguageModelTests",
             dependencies: ["M1K3LanguageModel"],
             path: "Tests/M1K3LanguageModelTests"
+        ),
+        // The model-evals enclave (Phase 14). PURE, dependency-free: task-kind
+        // fixtures + a deterministic heuristic scorer + the cross-brain report
+        // matrix. Mirrors MemoryEvalFixtures/ModelEval — the scoring is unit-
+        // tested off-device here; the model-running half rides the headless
+        // self-test (M1K3_SELFTEST_CHATEVAL) because MLX needs the .app bundle.
+        .target(
+            name: "M1K3Eval",
+            dependencies: [],
+            path: "Sources/M1K3Eval"
+        ),
+        .testTarget(
+            name: "M1K3EvalTests",
+            dependencies: ["M1K3Eval"],
+            path: "Tests/M1K3EvalTests"
         ),
         // Agent tools backed by the knowledge layer — the bridge that makes the
         // LocalAgent able to actually search M1K3's memory. Depends on both the

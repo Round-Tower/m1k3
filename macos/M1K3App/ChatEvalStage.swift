@@ -1,0 +1,342 @@
+//
+//  ChatEvalStage.swift
+//  M1K3App
+//
+//  The model-running half of the evals enclave (Phase 14). The PURE scoring
+//  lives in M1K3Eval (fixtures, ChatEvalScorer, ChatEvalReport — all unit-
+//  tested off-device); this stage runs each fixture against each real brain
+//  from INSIDE the .app bundle (MLX needs the bundle's metallib, AFM needs the
+//  entitlements — bare `swift test` can't), captures what the brain actually
+//  produced, and feeds it to the pure scorer. Same harness as MEMEVAL/ABSEP.
+//
+//      M1K3_SELFTEST=1 M1K3_SELFTEST_CHATEVAL=1 M1K3.app/Contents/MacOS/M1K3
+//      # narrow: M1K3_SELFTEST_CHATEVAL_BRAINS=mini,lil  M1K3_SELFTEST_CHATEVAL_KINDS=tool-use
+//
+//  Output: the cross-brain matrix (passed/total ⌀latency per task-kind) plus
+//  per-fixture detail, written line-by-line to M1K3_SELFTEST_OUT so an
+//  interrupted run keeps what it measured. The matrix is the evidence the
+//  EscalationLadder policy cites — the AFM-vs-floor gap, in numbers.
+//
+//  Tool-use is scored through the REAL agent path each brain uses in
+//  production: LocalAgent gives AFM (mini) the prompt-ReAct floor and MLX
+//  brains their native dialect, and AgentResult.toolsUsed reads the same either
+//  way — so mini's tool-calling shows up, it isn't skipped.
+//
+//  Signed: Kev + claude-opus-4-8, 2026-06-14, Confidence 0.82 (the runner is
+//  verify-by-launch — its logic cores are the unit-tested M1K3Eval scorer and
+//  the proven RAGResponder/LocalAgent seams; the wiring itself can only be
+//  confirmed on-device). Prior: Unknown
+
+import Foundation
+import FoundationModels
+import M1K3Agent
+import M1K3Chat
+import M1K3Eval
+import M1K3Inference
+import M1K3Knowledge
+import M1K3MLX
+
+/// The single free-text argument every eval tool takes. `@Generable` gives AFM
+/// the schema it needs to populate a native tool call.
+@Generable
+private struct EvalToolArguments {
+    @Guide(description: "The query or input for the tool.")
+    var query: String
+}
+
+/// Thread-safe record of which tools a brain actually invoked during one turn —
+/// shared across the tool instances handed to a single AFM session.
+private final class ToolCallRecorder: @unchecked Sendable {
+    private let lock = NSLock()
+    private var names: [String] = []
+    func record(_ name: String) {
+        lock.withLock { names.append(name) }
+    }
+
+    var captured: [String] {
+        lock.withLock { names }
+    }
+}
+
+/// An AFM-NATIVE tool (FoundationModels.Tool) whose `call` just records that the
+/// model selected it and returns a canned observation — the eval measures tool
+/// SELECTION, not execution. This is the path AFM uses when given real tools via
+/// `LanguageModelSession(tools:)`, as opposed to the prompt-ReAct floor.
+private struct AFMRecordingTool: FoundationModels.Tool {
+    typealias Arguments = EvalToolArguments
+    typealias Output = String
+
+    let name: String
+    let description: String
+    let cannedOutput: String
+    let recorder: ToolCallRecorder
+
+    func call(arguments: EvalToolArguments) async throws -> String {
+        recorder.record(name)
+        // Echo the query so the canned output reads as relevant to THIS request —
+        // a fixed mismatched answer makes AFM auto-loop the tool until its context
+        // window overflows (a 7-minute thrash). A query-aware, terminal result
+        // lets the model conclude after one call.
+        return cannedOutput.replacingOccurrences(of: "{query}", with: arguments.query)
+    }
+}
+
+enum ChatEvalStage {
+    static var isRequested: Bool {
+        SelfTestEnv.value("M1K3_SELFTEST_CHATEVAL") == "1"
+    }
+
+    /// Stand-in tools the tool-use fixtures probe for. The eval measures whether
+    /// the brain SELECTS the right tool — not what the tool returns — so execute
+    /// is a no-op that hands back a plausible canned observation (enough for the
+    /// agent to conclude and stop). Descriptions are faithful so selection is
+    /// realistic: search_knowledge = personal store, lookup_fact = encyclopedic,
+    /// web_search = live web.
+    private struct StubTool: AgentTool {
+        let name: String
+        let description: String
+        let parameters: [ToolParameter]
+        let cannedOutput: String
+
+        init(name: String, description: String, cannedOutput: String) {
+            self.name = name
+            self.description = description
+            parameters = [ToolParameter(name: "query", description: "the input")]
+            self.cannedOutput = cannedOutput
+        }
+
+        func execute(input: [String: String]) async throws -> ToolResult {
+            let query = input["query"] ?? input.values.first ?? ""
+            return ToolResult(output: cannedOutput.replacingOccurrences(of: "{query}", with: query))
+        }
+    }
+
+    /// One spec per probed tool, shared by BOTH tool paths so AFM-native and
+    /// ReAct-floor runs offer the model the exact same palette (only the calling
+    /// convention differs — that's the variable under test).
+    private static let toolSpecs: [(name: String, description: String, canned: String)] = [
+        ("datetime", "Get the current date and time on this Mac.",
+         "It is 12:00 on Saturday 14 June 2026. (Complete — no further lookup needed.)"),
+        ("search_knowledge", "Search the user's OWN saved notes, memories and imported documents.",
+         "Search complete. Found the relevant note for '{query}': the user recorded the answer here. "
+             + "This fully resolves the request — no further search needed."),
+        ("lookup_fact", "Look up an encyclopedic fact from a reference source (Wikipedia).",
+         "Reference lookup complete for '{query}': the fact was found and is given here. No further lookup needed."),
+        ("web_search", "Search the LIVE web for current, up-to-the-minute news and information.",
+         "Web search complete for '{query}': the top current result is given here. No further search needed."),
+    ]
+
+    /// ReAct-floor / native-dialect palette (LocalAgent path — AFM ReAct + MLX).
+    private static let toolPalette: [any AgentTool] = toolSpecs.map {
+        StubTool(name: $0.name, description: $0.description, cannedOutput: $0.canned)
+    }
+
+    /// Run the requested brains across the requested fixtures, emit per-fixture
+    /// detail live, then the headline matrix.
+    static func run(emit: @escaping (String) -> Void) async {
+        let kinds = selectedKinds()
+        let fixtureCount = ChatEvalFixtures.all.filter { kinds?.contains($0.kind) ?? true }.count
+        emit("• chateval: \(fixtureCount) fixture(s) × \(selectedBrains().count) brain(s)"
+            + (kinds.map { " [kinds: \($0.map(\.label).sorted().joined(separator: ","))]" } ?? "") + "…")
+        var runs: [ChatEvalReport.BrainRun] = []
+        for tier in selectedBrains() {
+            emit("• chateval brain \(tier.rawValue) (\(tier.displayName))…")
+            guard let scores = await evalBrain(tier, emit: emit) else {
+                emit("  – \(tier.rawValue): unavailable (skipped)")
+                continue
+            }
+            runs.append(ChatEvalReport.BrainRun(brainID: tier.rawValue, scores: scores))
+        }
+        emit("")
+        emit(ChatEvalReport.matrix(runs))
+    }
+
+    /// Brains to run: M1K3_SELFTEST_CHATEVAL_BRAINS=mini,lil narrows it (a full
+    /// four-brain run loads ~16GB of weights); default is the whole catalogue.
+    private static func selectedBrains() -> [BrainTier] {
+        guard let raw = SelfTestEnv.value("M1K3_SELFTEST_CHATEVAL_BRAINS") else {
+            return BrainTier.allCases
+        }
+        return raw.split(separator: ",")
+            .compactMap { BrainTier(rawValue: String($0).trimmingCharacters(in: .whitespaces)) }
+    }
+
+    /// Turn-latency ceiling (ms) above which a CORRECT answer still fails the
+    /// "responsive" check — catches AFM's context-overflow auto-loop that
+    /// "passes" only after minutes. Tunable via M1K3_SELFTEST_CHATEVAL_LATENCY_MS;
+    /// default 120s is generous enough not to fail a legitimately slow large
+    /// model, tight enough to flag the multi-minute melts.
+    private static var latencyCeilingMS: Int {
+        SelfTestEnv.value("M1K3_SELFTEST_CHATEVAL_LATENCY_MS").flatMap(Int.init) ?? 120_000
+    }
+
+    /// Optional task-kind filter (M1K3_SELFTEST_CHATEVAL_KINDS=tool-use,reasoning)
+    /// — nil means every kind. Lets a focused tool-calling run skip the slow
+    /// open-chat/reasoning turns.
+    private static func selectedKinds() -> Set<TaskKind>? {
+        guard let raw = SelfTestEnv.value("M1K3_SELFTEST_CHATEVAL_KINDS") else {
+            return nil
+        }
+        let kinds = raw.split(separator: ",")
+            .compactMap { TaskKind(rawValue: String($0).trimmingCharacters(in: .whitespaces)) }
+        return kinds.isEmpty ? nil : Set(kinds)
+    }
+
+    private static func evalBrain(
+        _ tier: BrainTier, emit: @escaping (String) -> Void
+    ) async -> [ChatEvalScore]? {
+        let provider: any InferenceProvider
+        switch tier.backing {
+        case .appleFoundationModels:
+            let afm = AppleFoundationModelsProvider()
+            guard afm.isAvailable else { return nil }
+            provider = afm
+        case let .mlx(modelID):
+            // 2048 like the per-model eval: a reasoning brain can spend hundreds
+            // of tokens inside <think> before a one-word answer.
+            provider = MLXGemmaProvider(modelID: modelID, maxTokens: 2048)
+        }
+
+        let kinds = selectedKinds()
+        var scores: [ChatEvalScore] = []
+        for fixture in ChatEvalFixtures.all where kinds?.contains(fixture.kind) ?? true {
+            let score = await runFixture(fixture, provider: provider)
+            emit(score.rendered)
+            scores.append(score)
+        }
+        return scores
+    }
+
+    private static func runFixture(
+        _ fixture: ChatEvalFixture, provider: any InferenceProvider
+    ) async -> ChatEvalScore {
+        let clock = ContinuousClock()
+        let start = clock.now
+        do {
+            switch fixture.kind {
+            case .groundedQ:
+                let observation = try await groundedObservation(fixture, provider: provider, start: start, clock: clock)
+                return ChatEvalScorer.score(fixture: fixture, observation: observation, latencyCeilingMS: latencyCeilingMS)
+            case .toolUse:
+                // AFM gets its NATIVE FoundationModels tools by default (the real
+                // capability); M1K3_SELFTEST_CHATEVAL_AFM_REACT=1 forces the old
+                // prompt-ReAct floor instead, to A/B the two paths on the same
+                // brain. MLX brains always go through LocalAgent (native dialect).
+                let forceReAct = SelfTestEnv.value("M1K3_SELFTEST_CHATEVAL_AFM_REACT") == "1"
+                if provider is AppleFoundationModelsProvider, !forceReAct {
+                    return try await afmNativeToolScore(fixture, start: start, clock: clock)
+                }
+                return try await toolObservationScore(fixture, provider: provider, start: start, clock: clock)
+            case .openChat, .reasoning, .refusal:
+                let raw = try await provider.generate(prompt: fixture.prompt)
+                let ms = milliseconds(clock.now - start)
+                return ChatEvalScorer.score(
+                    fixture: fixture, observation: EvalObservation(rawText: raw, latencyMS: ms),
+                    latencyCeilingMS: latencyCeilingMS
+                )
+            }
+        } catch {
+            return ChatEvalScore(
+                fixtureID: fixture.id, kind: fixture.kind,
+                checks: [EvalCheck(
+                    name: "ran", outcome: .fail,
+                    detail: String(describing: error).prefix(70).description
+                )],
+                latencyMS: milliseconds(clock.now - start)
+            )
+        }
+    }
+
+    /// Grounded-Q: seed the doc into a throwaway store, answer through the real
+    /// RAGResponder (which retrieves, then strips hallucinated citations), and
+    /// read the validated-citation count straight off the response.
+    private static func groundedObservation(
+        _ fixture: ChatEvalFixture, provider: any InferenceProvider,
+        start: ContinuousClock.Instant, clock: ContinuousClock
+    ) async throws -> EvalObservation {
+        // path: nil → GRDB in-memory DatabaseQueue, fresh per fixture. Intentional:
+        // keeps grounded-Q fixtures isolated and writes nothing to the app container.
+        let store = try KnowledgeStore()
+        let embedder = MLXEmbeddingService()
+        let ingester = DocumentIngester(store: store, embedder: embedder)
+        if let doc = fixture.seedDoc {
+            _ = try await ingester.ingest(title: "Notes", text: doc)
+        }
+        let responder = RAGResponder(store: store, embedder: embedder, provider: provider)
+        let response = try await responder.answer(fixture.prompt)
+        return EvalObservation(
+            rawText: response.answer,
+            validCitationCount: response.citations.count,
+            latencyMS: milliseconds(clock.now - start)
+        )
+    }
+
+    /// Tool-use: run the REAL agent loop. LocalAgent routes AFM through the
+    /// prompt-ReAct floor and MLX through its native dialect; AgentResult
+    /// .toolsUsed reads the same either way, so mini's tool-calling is measured,
+    /// not skipped. maxIterations 3 = pick a tool, observe, conclude.
+    private static func toolObservationScore(
+        _ fixture: ChatEvalFixture, provider: any InferenceProvider,
+        start: ContinuousClock.Instant, clock: ContinuousClock
+    ) async throws -> ChatEvalScore {
+        let agent = LocalAgent(inferenceProvider: provider, tools: toolPalette, maxIterations: 3)
+        let result = try await agent.run(goal: fixture.prompt)
+        let toolsUsed = result.toolsUsed
+        let rawText = result.conclusion.isEmpty
+            ? "tools used: \(toolsUsed.joined(separator: ","))"
+            : result.conclusion
+        let observation = EvalObservation(
+            rawText: rawText,
+            toolCalls: toolsUsed,
+            latencyMS: milliseconds(clock.now - start)
+        )
+        return ChatEvalScorer.score(fixture: fixture, observation: observation, latencyCeilingMS: latencyCeilingMS)
+    }
+
+    /// Tool-use via AFM's NATIVE FoundationModels tools. The model is handed real
+    /// `Tool` instances through `LanguageModelSession(tools:)`; the framework
+    /// drives the call loop itself and our tools record which were selected. This
+    /// is the apples-to-apples answer to "can mini call tools when given a proper
+    /// native dialect?" — versus the prompt-ReAct floor it falls back to today.
+    private static func afmNativeToolScore(
+        _ fixture: ChatEvalFixture,
+        start: ContinuousClock.Instant, clock: ContinuousClock
+    ) async throws -> ChatEvalScore {
+        let recorder = ToolCallRecorder()
+        let tools: [any FoundationModels.Tool] = toolSpecs.map {
+            AFMRecordingTool(
+                name: $0.name, description: $0.description,
+                cannedOutput: $0.canned, recorder: recorder
+            )
+        }
+        let session = LanguageModelSession(tools: tools, instructions: M1K3Persona.systemPrompt)
+        // Score on what the model SELECTED even if the session then errors. AFM
+        // auto-loops the tool call internally, and a stub output that doesn't
+        // resolve the query makes it retry until the context window overflows —
+        // but the tool WAS chosen (the recorder caught it). Dropping that to a
+        // blanket "ran: error" would misreport correct selection as a miss, so
+        // we keep the captured calls and tag the failure mode in the text.
+        let answer: String
+        do {
+            answer = try await session.respond(to: fixture.prompt).content
+        } catch {
+            let toolsUsed = recorder.captured
+            guard !toolsUsed.isEmpty else { throw error } // genuine failure, no call made
+            answer = "tools used: \(toolsUsed.joined(separator: ",")) "
+                + "(session error after selection: \(String(describing: error).prefix(40)))"
+        }
+        let toolsUsed = recorder.captured
+        let observation = EvalObservation(
+            rawText: answer.isEmpty ? "tools used: \(toolsUsed.joined(separator: ","))" : answer,
+            toolCalls: toolsUsed,
+            latencyMS: milliseconds(clock.now - start)
+        )
+        return ChatEvalScorer.score(fixture: fixture, observation: observation, latencyCeilingMS: latencyCeilingMS)
+    }
+
+    /// Whole milliseconds in a Duration (matches SelfTest's TTFT helper).
+    private static func milliseconds(_ duration: Duration) -> Int {
+        let parts = duration.components
+        return Int(parts.seconds * 1000) + Int(parts.attoseconds / 1_000_000_000_000_000)
+    }
+}

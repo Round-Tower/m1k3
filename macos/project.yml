@@ -80,6 +80,8 @@ targets:
         product: M1K3Kokoro
       - package: M1K3
         product: M1K3MCPKit
+      - package: M1K3
+        product: M1K3Eval
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: app.m1k3

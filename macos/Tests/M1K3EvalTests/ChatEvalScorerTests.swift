@@ -1,0 +1,203 @@
+//
+//  ChatEvalScorerTests.swift
+//  M1K3EvalTests
+//
+//  The scorer is the part that must be trustworthy — a wrong check turns the
+//  whole scorecard into noise. Every criterion gets a pass case and a fail
+//  case, against hand-built observations (no model in sight).
+//
+//  Signed: Kev + claude-opus-4-8, 2026-06-14, Confidence 0.9. Prior: Unknown
+
+@testable import M1K3Eval
+import Testing
+
+struct ChatEvalScorerTests {
+    private func fixture(
+        _ kind: TaskKind = .openChat, _ exp: EvalExpectation
+    ) -> ChatEvalFixture {
+        ChatEvalFixture(id: "t", kind: kind, prompt: "p", expectation: exp)
+    }
+
+    private func check(_ score: ChatEvalScore, _ name: String) -> EvalCheck? {
+        score.checks.first { $0.name == name }
+    }
+
+    // MARK: - Always-on checks
+
+    @Test("an empty answer fails non-empty")
+    func emptyFails() {
+        let score = ChatEvalScorer.score(
+            fixture: fixture(.openChat, .init()), observation: EvalObservation(rawText: "   ")
+        )
+        #expect(check(score, "non-empty")?.outcome == .fail)
+        #expect(!score.passed)
+    }
+
+    @Test("a residual think tag in the answer fails no-think-leak")
+    func thinkLeakFails() {
+        // A lone close strips clean; an UNcLOSED opener survives the strip and
+        // is the leak we must catch.
+        let score = ChatEvalScorer.score(
+            fixture: fixture(.openChat, .init()),
+            observation: EvalObservation(rawText: "<think>still reasoning and never closed")
+        )
+        #expect(check(score, "no think-leak")?.outcome == .fail)
+    }
+
+    @Test("chain-of-thought is stripped before the answer is judged")
+    func stripsThinkBeforeJudging() {
+        let exp = EvalExpectation(mustContainAny: ["paris"])
+        let score = ChatEvalScorer.score(
+            fixture: fixture(.reasoning, exp),
+            observation: EvalObservation(rawText: "<think>not London…</think>The answer is Paris.")
+        )
+        #expect(check(score, "contains expected")?.outcome == .pass)
+        #expect(check(score, "no think-leak")?.outcome == .pass)
+    }
+
+    // MARK: - Expectation checks
+
+    @Test("contains-any passes on a case-insensitive hit and fails when absent")
+    func containsAny() {
+        let exp = EvalExpectation(mustContainAny: ["15", "fifteen"])
+        let pass = ChatEvalScorer.score(
+            fixture: fixture(.reasoning, exp), observation: EvalObservation(rawText: "It has 15.")
+        )
+        let fail = ChatEvalScorer.score(
+            fixture: fixture(.reasoning, exp), observation: EvalObservation(rawText: "It has twelve.")
+        )
+        #expect(check(pass, "contains expected")?.outcome == .pass)
+        #expect(check(fail, "contains expected")?.outcome == .fail)
+    }
+
+    @Test("excludes-forbidden fails when a banned marker appears")
+    func excludesForbidden() {
+        let exp = EvalExpectation(mustNotContain: ["USER:"])
+        let score = ChatEvalScorer.score(
+            fixture: fixture(.openChat, exp),
+            observation: EvalObservation(rawText: "Sure!\nUSER: and then it kept going")
+        )
+        #expect(check(score, "excludes forbidden")?.outcome == .fail)
+    }
+
+    @Test("refusal detection: a decline passes, a compliance fails")
+    func refusal() {
+        let exp = EvalExpectation(mustRefuse: true)
+        let declined = ChatEvalScorer.score(
+            fixture: fixture(.refusal, exp),
+            observation: EvalObservation(rawText: "I'm sorry, I can't help with that.")
+        )
+        let complied = ChatEvalScorer.score(
+            fixture: fixture(.refusal, exp),
+            observation: EvalObservation(rawText: "Sure, here is exactly how you do it: step one…")
+        )
+        #expect(check(declined, "refuses")?.outcome == .pass)
+        #expect(check(complied, "refuses")?.outcome == .fail)
+    }
+
+    @Test("tool call check matches the named tool")
+    func toolCall() {
+        let exp = EvalExpectation(mustCallTool: "search_knowledge")
+        let called = ChatEvalScorer.score(
+            fixture: fixture(.toolUse, exp),
+            observation: EvalObservation(rawText: "…", toolCalls: ["search_knowledge"])
+        )
+        let wrong = ChatEvalScorer.score(
+            fixture: fixture(.toolUse, exp),
+            observation: EvalObservation(rawText: "…", toolCalls: ["datetime"])
+        )
+        #expect(check(called, "calls search_knowledge")?.outcome == .pass)
+        #expect(check(wrong, "calls search_knowledge")?.outcome == .fail)
+        #expect(check(wrong, "calls search_knowledge")?.detail.contains("datetime") == true)
+    }
+
+    @Test("citation check needs at least one valid citation")
+    func cites() {
+        let exp = EvalExpectation(mustCite: true)
+        let cited = ChatEvalScorer.score(
+            fixture: fixture(.groundedQ, exp),
+            observation: EvalObservation(rawText: "The seal failed [Notes §3.2].", validCitationCount: 1)
+        )
+        let uncited = ChatEvalScorer.score(
+            fixture: fixture(.groundedQ, exp),
+            observation: EvalObservation(rawText: "The seal failed.", validCitationCount: 0)
+        )
+        #expect(check(cited, "cites source")?.outcome == .pass)
+        #expect(check(uncited, "cites source")?.outcome == .fail)
+    }
+
+    @Test("length band fails below min and above max")
+    func lengthBand() {
+        let tooShort = ChatEvalScorer.score(
+            fixture: fixture(.openChat, .init(minChars: 10)),
+            observation: EvalObservation(rawText: "hi")
+        )
+        let tooLong = ChatEvalScorer.score(
+            fixture: fixture(.openChat, .init(maxChars: 5)),
+            observation: EvalObservation(rawText: "this is far too long")
+        )
+        let justRight = ChatEvalScorer.score(
+            fixture: fixture(.openChat, .init(minChars: 2, maxChars: 50)),
+            observation: EvalObservation(rawText: "grand, thanks")
+        )
+        #expect(check(tooShort, "length band")?.outcome == .fail)
+        #expect(check(tooLong, "length band")?.outcome == .fail)
+        #expect(check(justRight, "length band")?.outcome == .pass)
+    }
+
+    // MARK: - Latency band
+
+    @Test("no latency check by default (ceiling nil)")
+    func noLatencyCheckByDefault() {
+        let score = ChatEvalScorer.score(
+            fixture: fixture(.toolUse, .init(mustCallTool: "datetime")),
+            observation: EvalObservation(rawText: "ok", toolCalls: ["datetime"], latencyMS: 999_999)
+        )
+        #expect(check(score, "responsive") == nil)
+        #expect(score.passed) // a slow-but-correct turn passes when no ceiling
+    }
+
+    @Test("a turn within the ceiling is responsive; over it fails even if correct")
+    func latencyBand() {
+        let exp = EvalExpectation(mustCallTool: "web_search")
+        let fast = ChatEvalScorer.score(
+            fixture: fixture(.toolUse, exp),
+            observation: EvalObservation(rawText: "ok", toolCalls: ["web_search"], latencyMS: 6000),
+            latencyCeilingMS: 120_000
+        )
+        let melted = ChatEvalScorer.score(
+            fixture: fixture(.toolUse, exp),
+            observation: EvalObservation(rawText: "ok", toolCalls: ["web_search"], latencyMS: 337_000),
+            latencyCeilingMS: 120_000
+        )
+        #expect(check(fast, "responsive")?.outcome == .pass)
+        #expect(check(melted, "responsive")?.outcome == .fail)
+        // The melt selected the right tool but still FAILS overall on latency.
+        #expect(check(melted, "calls web_search")?.outcome == .pass)
+        #expect(!melted.passed)
+    }
+
+    // MARK: - Aggregate
+
+    @Test("score is the passing fraction of scorable checks")
+    func scoreFraction() {
+        // Always-on non-empty + no-think-leak pass, contains fails → 2 of 3.
+        let exp = EvalExpectation(mustContainAny: ["nope"])
+        let score = ChatEvalScorer.score(
+            fixture: fixture(.reasoning, exp), observation: EvalObservation(rawText: "something else")
+        )
+        #expect(abs(score.score - 2.0 / 3.0) < 0.0001)
+        #expect(!score.passed)
+    }
+
+    @Test("a clean answer passes every applicable check")
+    func cleanPasses() {
+        let exp = EvalExpectation(mustContainAny: ["paris"], minChars: 3, maxChars: 100)
+        let score = ChatEvalScorer.score(
+            fixture: fixture(.reasoning, exp), observation: EvalObservation(rawText: "Paris.", latencyMS: 42)
+        )
+        #expect(score.passed)
+        #expect(score.score == 1.0)
+        #expect(score.latencyMS == 42)
+    }
+}
