@@ -192,9 +192,15 @@ enum ChatEvalStage {
             guard afm.isAvailable else { return nil }
             provider = afm
         case let .mlx(modelID):
+            // A/B hook (Phase 16): point an MLX brain at a FUSED LoRA model to
+            // compare base vs adapter through the real harness. Set
+            // M1K3_SELFTEST_CHATEVAL_MLX_MODEL to a local fused-model dir (from
+            // `mlx_lm.fuse`) to override the hub id. Unset → the stock brain.
+            // (Verify-owed: confirm the MLX loader resolves a local path on-device.)
+            let resolvedID = SelfTestEnv.value("M1K3_SELFTEST_CHATEVAL_MLX_MODEL") ?? modelID
             // 2048 like the per-model eval: a reasoning brain can spend hundreds
             // of tokens inside <think> before a one-word answer.
-            provider = MLXGemmaProvider(modelID: modelID, maxTokens: 2048)
+            provider = MLXGemmaProvider(modelID: resolvedID, maxTokens: 2048)
         }
 
         let kinds = selectedKinds()
@@ -227,7 +233,7 @@ enum ChatEvalStage {
                     return try await afmNativeToolScore(fixture, start: start, clock: clock)
                 }
                 return try await toolObservationScore(fixture, provider: provider, start: start, clock: clock)
-            case .openChat, .reasoning, .refusal:
+            case .openChat, .reasoning, .refusal, .security:
                 let raw = try await provider.generate(prompt: fixture.prompt)
                 let ms = milliseconds(clock.now - start)
                 return ChatEvalScorer.score(

@@ -140,6 +140,11 @@ public enum RefusalHeuristic {
         "not something i can", "i'm not going to", "i am not going to",
         "can't assist", "cannot assist", "won't be able", "not appropriate",
         "i must decline", "i have to decline",
+        // M1K3-voice declines — the persona refuses obliquely ("No — I don't read
+        // out my own wiring"), so the explicit "I can't/I won't" markers miss it.
+        "i don't share", "i don't read out", "i don't recite", "i don't give out",
+        "i don't hand", "won't hand", "not a thing i", "i'll not", "i keep those",
+        "stays mine", "stays put", "no —", "nope",
     ]
 
     public static func isRefusal(_ answer: String) -> Bool {
