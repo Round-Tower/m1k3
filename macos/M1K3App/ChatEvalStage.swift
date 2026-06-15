@@ -37,7 +37,7 @@ import M1K3MLX
 
 enum ChatEvalStage {
     static var isRequested: Bool {
-        ProcessInfo.processInfo.environment["M1K3_SELFTEST_CHATEVAL"] == "1"
+        SelfTestEnv.value("M1K3_SELFTEST_CHATEVAL") == "1"
     }
 
     /// Stand-in tools the tool-use fixtures probe for. The eval measures whether
@@ -110,7 +110,7 @@ enum ChatEvalStage {
     /// Brains to run: M1K3_SELFTEST_CHATEVAL_BRAINS=mini,lil narrows it (a full
     /// four-brain run loads ~16GB of weights); default is the whole catalogue.
     private static func selectedBrains() -> [BrainTier] {
-        guard let raw = ProcessInfo.processInfo.environment["M1K3_SELFTEST_CHATEVAL_BRAINS"] else {
+        guard let raw = SelfTestEnv.value("M1K3_SELFTEST_CHATEVAL_BRAINS") else {
             return BrainTier.allCases
         }
         return raw.split(separator: ",")
@@ -121,7 +121,7 @@ enum ChatEvalStage {
     /// — nil means every kind. Lets a focused tool-calling run skip the slow
     /// open-chat/reasoning turns.
     private static func selectedKinds() -> Set<TaskKind>? {
-        guard let raw = ProcessInfo.processInfo.environment["M1K3_SELFTEST_CHATEVAL_KINDS"] else {
+        guard let raw = SelfTestEnv.value("M1K3_SELFTEST_CHATEVAL_KINDS") else {
             return nil
         }
         let kinds = raw.split(separator: ",")

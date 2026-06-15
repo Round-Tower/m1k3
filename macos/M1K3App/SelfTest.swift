@@ -25,15 +25,54 @@ import M1K3Knowledge
 import M1K3MLX
 import MLXEmbedders
 
+/// Resolves self-test configuration from the environment FIRST, then a JSON
+/// override file in the app's container — so a run can be driven WITHOUT
+/// `open --env`, which silently fails to inject on repeat LaunchServices
+/// launches of the shared `app.m1k3` bundle id (it works once, then boots the
+/// app idle). Drop `~/Library/Containers/app.m1k3/Data/.m1k3-selftest.json` — a
+/// flat `{"M1K3_SELFTEST": "1", …}` map keyed by env-var name — launch the app
+/// normally, and the selftest reads its config off disk. Env always wins when
+/// both are set, so existing `open --env` / Xcode-scheme runs are unchanged.
+///
+/// Signed: Kev + claude-opus-4-8, 2026-06-15, Confidence 0.85 (file fallback
+/// sidesteps the open --env flake end-to-end; env precedence preserves every
+/// existing run path). Prior: Unknown
+enum SelfTestEnv {
+    /// The on-disk override map, loaded once. Keys are env-var names; values are
+    /// coerced to strings (JSON bools → "1"/"0", numbers → their text) so the
+    /// config reads the same as the environment it shadows.
+    static let fileOverrides: [String: String] = {
+        let path = (NSHomeDirectory() as NSString).appendingPathComponent(".m1k3-selftest.json")
+        guard let data = FileManager.default.contents(atPath: path),
+              let object = try? JSONSerialization.jsonObject(with: data),
+              let dictionary = object as? [String: Any]
+        else { return [:] }
+        var resolved: [String: String] = [:]
+        for (key, raw) in dictionary {
+            switch raw {
+            case let bool as Bool: resolved[key] = bool ? "1" : "0"
+            case let string as String: resolved[key] = string
+            default: resolved[key] = "\(raw)"
+            }
+        }
+        return resolved
+    }()
+
+    /// The environment value if present, else the on-disk override, else nil.
+    static func value(_ key: String) -> String? {
+        ProcessInfo.processInfo.environment[key] ?? fileOverrides[key]
+    }
+}
+
 enum SelfTest {
     static var isRequested: Bool {
-        ProcessInfo.processInfo.environment["M1K3_SELFTEST"] == "1"
+        SelfTestEnv.value("M1K3_SELFTEST") == "1"
     }
 
     /// Where the streamed report goes. A bundled GUI .app sends stdio to the
     /// unified log, not an inherited fd — so we write to a file we can read back.
     private static var outputPath: String {
-        ProcessInfo.processInfo.environment["M1K3_SELFTEST_OUT"] ?? "/tmp/m1k3_selftest.log"
+        SelfTestEnv.value("M1K3_SELFTEST_OUT") ?? "/tmp/m1k3_selftest.log"
     }
 
     private static func truncateOutput() {
@@ -101,7 +140,7 @@ enum SelfTest {
 
         // 3. MLX generation (Metal). Uses a (likely cached) small model so the
         //    path is proven without a slow QAT download.
-        let modelID = ProcessInfo.processInfo.environment["M1K3_SELFTEST_MODEL"]
+        let modelID = SelfTestEnv.value("M1K3_SELFTEST_MODEL")
             ?? "mlx-community/Llama-3.2-1B-Instruct-4bit"
         emit("• loading MLX generation model \(modelID)…")
         do {
@@ -113,7 +152,7 @@ enum SelfTest {
             // comes back empty, show what the model ACTUALLY returned and how
             // the chat template rendered — distinguishes "model emitted EOS
             // immediately" from "detokenizer produced nothing".
-            if ProcessInfo.processInfo.environment["M1K3_SELFTEST_DEBUG"] == "1" {
+            if SelfTestEnv.value("M1K3_SELFTEST_DEBUG") == "1" {
                 emit("debug raw answer: count=\(answer.count) [\(answer.prefix(300))]")
                 let debug = await llm.templateDebugDescription(
                     prompt: "In one short sentence, what is a hydraulic seal?"
@@ -126,7 +165,7 @@ enum SelfTest {
             // runs generations back-to-back, so a growing footprint here is
             // exactly the unbounded-Metal-cache pathology; a flat one means the
             // budget holds.
-            if let loops = ProcessInfo.processInfo.environment["M1K3_SELFTEST_MEMLOOP"]
+            if let loops = SelfTestEnv.value("M1K3_SELFTEST_MEMLOOP")
                 .flatMap(Int.init), loops > 0
             {
                 emit(MLXMemoryBudget.snapshotDescription(label: "memloop start"))
@@ -143,7 +182,7 @@ enum SelfTest {
             // prompt — the A/B harness for prefill-cost changes. (Per-stage
             // prefill/decode metrics also land in the unified log, category
             // "ttft".)
-            if ProcessInfo.processInfo.environment["M1K3_SELFTEST_TTFT"] == "1" {
+            if SelfTestEnv.value("M1K3_SELFTEST_TTFT") == "1" {
                 let grounded = String(
                     repeating: "KNOWLEDGE: conveyor belts run on rollers; hydraulic seals retain fluid under pressure; "
                         + "maintenance intervals follow load cycles. ",
@@ -178,7 +217,7 @@ enum SelfTest {
             // assert [cached system block] + [delta] == [full render] for this
             // model, and report the prefill tokens the cache saves. The safety
             // net for the Qwen two-probe boundary slice — and gemma's prefix too.
-            if ProcessInfo.processInfo.environment["M1K3_SELFTEST_PREFIX"] == "1" {
+            if SelfTestEnv.value("M1K3_SELFTEST_PREFIX") == "1" {
                 emit(await llm.personaPrefixInvariantProbe())
             }
         } catch {
@@ -192,7 +231,7 @@ enum SelfTest {
         //    query→short-fact cosine distributions — the data that sets
         //    GroundingGate.memoryThreshold (the chunk bar was tuned on a
         //    different distribution; short facts sit lower in the cone).
-        if ProcessInfo.processInfo.environment["M1K3_SELFTEST_MEMEVAL"] == "1" {
+        if SelfTestEnv.value("M1K3_SELFTEST_MEMEVAL") == "1" {
             await runMemoryThresholdEval()
         }
 
@@ -201,7 +240,7 @@ enum SelfTest {
         //    qwen3-embed-512 and report which separates the classes wider.
         //    This is what justifies the embedder swap — measured, not trusted —
         //    and feeds the GroundingGate threshold re-tune.
-        if ProcessInfo.processInfo.environment["M1K3_SELFTEST_ABSEP"] == "1" {
+        if SelfTestEnv.value("M1K3_SELFTEST_ABSEP") == "1" {
             await runSeparationEval()
         }
 
@@ -221,8 +260,8 @@ enum SelfTest {
     /// behavioral checklist against every brain — or any ad-hoc list via
     /// M1K3_SELFTEST_EVAL_MODELS=id,id. Promotion gate for new models.
     private static func runEvalSuiteIfRequested() async {
-        guard ProcessInfo.processInfo.environment["M1K3_SELFTEST_EVAL"] == "1" else { return }
-        let models = ProcessInfo.processInfo.environment["M1K3_SELFTEST_EVAL_MODELS"]
+        guard SelfTestEnv.value("M1K3_SELFTEST_EVAL") == "1" else { return }
+        let models = SelfTestEnv.value("M1K3_SELFTEST_EVAL_MODELS")
             .map { $0.split(separator: ",").map { String($0).trimmingCharacters(in: .whitespaces) } }
             ?? BrainTier.allCases.compactMap(\.mlxModelID)
         for modelID in models {
@@ -315,7 +354,7 @@ enum SelfTest {
     /// persona-prefix KV → disk → reload → generate from the reloaded cache.
     /// The prototype gate for persisting PersonaPrefixCache across launches.
     private static func runKVPersistProbeIfRequested(llm: MLXGemmaProvider) async {
-        guard ProcessInfo.processInfo.environment["M1K3_SELFTEST_KVPERSIST"] == "1" else { return }
+        guard SelfTestEnv.value("M1K3_SELFTEST_KVPERSIST") == "1" else { return }
         emit(await llm.promptCacheRoundTripProbe(
             directory: FileManager.default.temporaryDirectory
         ))
