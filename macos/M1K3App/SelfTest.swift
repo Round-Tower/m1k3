@@ -43,8 +43,13 @@ enum SelfTestEnv {
     /// config reads the same as the environment it shadows.
     static let fileOverrides: [String: String] = {
         let path = (NSHomeDirectory() as NSString).appendingPathComponent(".m1k3-selftest.json")
-        guard let data = FileManager.default.contents(atPath: path),
-              let object = try? JSONSerialization.jsonObject(with: data),
+        guard let data = FileManager.default.contents(atPath: path) else { return [:] }
+        // One-shot: consume the trigger the moment it's read, so an ordinary
+        // relaunch (or a crash mid-run) never leaves the app selftest-booting.
+        // Drop the file again to run again. Read happens once (cached static),
+        // so deleting now doesn't affect the in-memory config below.
+        try? FileManager.default.removeItem(atPath: path)
+        guard let object = try? JSONSerialization.jsonObject(with: data),
               let dictionary = object as? [String: Any]
         else { return [:] }
         var resolved: [String: String] = [:]

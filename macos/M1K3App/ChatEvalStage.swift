@@ -28,12 +28,54 @@
 //  confirmed on-device). Prior: Unknown
 
 import Foundation
+import FoundationModels
 import M1K3Agent
 import M1K3Chat
 import M1K3Eval
 import M1K3Inference
 import M1K3Knowledge
 import M1K3MLX
+
+/// The single free-text argument every eval tool takes. `@Generable` gives AFM
+/// the schema it needs to populate a native tool call.
+@Generable
+private struct EvalToolArguments {
+    @Guide(description: "The query or input for the tool.")
+    var query: String
+}
+
+/// Thread-safe record of which tools a brain actually invoked during one turn —
+/// shared across the tool instances handed to a single AFM session.
+private final class ToolCallRecorder: @unchecked Sendable {
+    private let lock = NSLock()
+    private var names: [String] = []
+    func record(_ name: String) {
+        lock.withLock { names.append(name) }
+    }
+
+    var captured: [String] {
+        lock.withLock { names }
+    }
+}
+
+/// An AFM-NATIVE tool (FoundationModels.Tool) whose `call` just records that the
+/// model selected it and returns a canned observation — the eval measures tool
+/// SELECTION, not execution. This is the path AFM uses when given real tools via
+/// `LanguageModelSession(tools:)`, as opposed to the prompt-ReAct floor.
+private struct AFMRecordingTool: FoundationModels.Tool {
+    typealias Arguments = EvalToolArguments
+    typealias Output = String
+
+    let name: String
+    let description: String
+    let cannedOutput: String
+    let recorder: ToolCallRecorder
+
+    func call(arguments _: EvalToolArguments) async throws -> String {
+        recorder.record(name)
+        return cannedOutput
+    }
+}
 
 enum ChatEvalStage {
     static var isRequested: Bool {
@@ -64,28 +106,24 @@ enum ChatEvalStage {
         }
     }
 
-    private static let toolPalette: [any AgentTool] = [
-        StubTool(
-            name: "datetime",
-            description: "Get the current date and time on this Mac.",
-            cannedOutput: "It is 12:00 on Saturday 14 June 2026."
-        ),
-        StubTool(
-            name: "search_knowledge",
-            description: "Search the user's OWN saved notes, memories and imported documents.",
-            cannedOutput: "Your notes say you chose GRDB for persistence."
-        ),
-        StubTool(
-            name: "lookup_fact",
-            description: "Look up an encyclopedic fact from a reference source (Wikipedia).",
-            cannedOutput: "Cork was founded in the 6th century."
-        ),
-        StubTool(
-            name: "web_search",
-            description: "Search the LIVE web for current, up-to-the-minute news and information.",
-            cannedOutput: "Top result: Apple unveils new Apple Silicon today."
-        ),
+    /// One spec per probed tool, shared by BOTH tool paths so AFM-native and
+    /// ReAct-floor runs offer the model the exact same palette (only the calling
+    /// convention differs — that's the variable under test).
+    private static let toolSpecs: [(name: String, description: String, canned: String)] = [
+        ("datetime", "Get the current date and time on this Mac.",
+         "It is 12:00 on Saturday 14 June 2026."),
+        ("search_knowledge", "Search the user's OWN saved notes, memories and imported documents.",
+         "Your notes say you chose GRDB for persistence."),
+        ("lookup_fact", "Look up an encyclopedic fact from a reference source (Wikipedia).",
+         "Cork was founded in the 6th century."),
+        ("web_search", "Search the LIVE web for current, up-to-the-minute news and information.",
+         "Top result: Apple unveils new Apple Silicon today."),
     ]
+
+    /// ReAct-floor / native-dialect palette (LocalAgent path — AFM ReAct + MLX).
+    private static let toolPalette: [any AgentTool] = toolSpecs.map {
+        StubTool(name: $0.name, description: $0.description, cannedOutput: $0.canned)
+    }
 
     /// Run the requested brains across the requested fixtures, emit per-fixture
     /// detail live, then the headline matrix.
@@ -165,6 +203,14 @@ enum ChatEvalStage {
                 let observation = try await groundedObservation(fixture, provider: provider, start: start, clock: clock)
                 return ChatEvalScorer.score(fixture: fixture, observation: observation)
             case .toolUse:
+                // AFM gets its NATIVE FoundationModels tools by default (the real
+                // capability); M1K3_SELFTEST_CHATEVAL_AFM_REACT=1 forces the old
+                // prompt-ReAct floor instead, to A/B the two paths on the same
+                // brain. MLX brains always go through LocalAgent (native dialect).
+                let forceReAct = SelfTestEnv.value("M1K3_SELFTEST_CHATEVAL_AFM_REACT") == "1"
+                if provider is AppleFoundationModelsProvider, !forceReAct {
+                    return try await afmNativeToolScore(fixture, start: start, clock: clock)
+                }
                 return try await toolObservationScore(fixture, provider: provider, start: start, clock: clock)
             case .openChat, .reasoning, .refusal:
                 let raw = try await provider.generate(prompt: fixture.prompt)
@@ -223,6 +269,35 @@ enum ChatEvalStage {
             : result.conclusion
         let observation = EvalObservation(
             rawText: rawText,
+            toolCalls: toolsUsed,
+            latencyMS: milliseconds(clock.now - start)
+        )
+        return ChatEvalScorer.score(fixture: fixture, observation: observation)
+    }
+
+    /// Tool-use via AFM's NATIVE FoundationModels tools. The model is handed real
+    /// `Tool` instances through `LanguageModelSession(tools:)`; the framework
+    /// drives the call loop itself and our tools record which were selected. This
+    /// is the apples-to-apples answer to "can mini call tools when given a proper
+    /// native dialect?" — versus the prompt-ReAct floor it falls back to today.
+    private static func afmNativeToolScore(
+        _ fixture: ChatEvalFixture,
+        start: ContinuousClock.Instant, clock: ContinuousClock
+    ) async throws -> ChatEvalScore {
+        let recorder = ToolCallRecorder()
+        let tools: [any FoundationModels.Tool] = toolSpecs.map {
+            AFMRecordingTool(
+                name: $0.name, description: $0.description,
+                cannedOutput: $0.canned, recorder: recorder
+            )
+        }
+        let session = LanguageModelSession(tools: tools, instructions: M1K3Persona.systemPrompt)
+        let response = try await session.respond(to: fixture.prompt)
+        let toolsUsed = recorder.captured
+        let observation = EvalObservation(
+            rawText: response.content.isEmpty
+                ? "tools used: \(toolsUsed.joined(separator: ","))"
+                : response.content,
             toolCalls: toolsUsed,
             latencyMS: milliseconds(clock.now - start)
         )
