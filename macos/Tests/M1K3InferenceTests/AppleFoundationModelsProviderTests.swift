@@ -28,4 +28,22 @@ struct AppleFoundationModelsProviderTests {
         // call resolves against the protocol seam.
         #expect(router.providers.count == 1)
     }
+
+    @Test("native tool-calling is OFF by default — launch routing keeps the ReAct floor")
+    func toolCallingDefaultsOff() {
+        // The default-constructed provider must report no tool support regardless
+        // of host availability, so LocalAgent never hands AFM the native loop
+        // unless the spike is explicitly opted in.
+        #expect(AppleFoundationModelsProvider().supportsToolCalls == false)
+    }
+
+    @Test("opting in gates tool support on host availability, not the flag alone")
+    func toolCallingOptInGatesOnAvailability() {
+        let provider = AppleFoundationModelsProvider(nativeToolCalling: true)
+        // On CI (no Apple Intelligence hardware) both sides are false, so this
+        // asserts false == false — it exercises the AND contract, not the `true`
+        // branch (which needs Apple Intelligence). The point: never claim tool
+        // support on an unavailable host, even with the opt-in flag set.
+        #expect(provider.supportsToolCalls == provider.isAvailable)
+    }
 }
