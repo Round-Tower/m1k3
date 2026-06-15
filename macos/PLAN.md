@@ -333,8 +333,22 @@ ships** (no rebuild — just re-run). New branch: `feat/afm-native-tools-spike`.
 
 **New phases:** *13 — LanguageModel bridge (✅ shipped).* *14 — Evals enclave (Edge C, ✅ shipped —
 `M1K3Eval` package + `M1K3_SELFTEST_CHATEVAL` stage; file-config harness; latency band).* *15 — AFM
-tool-calling spike (Edge D, NEXT).* Edges A/B tracked, not yet phased (product decision / macOS-27
-runtime).
+tool-calling spike (Edge D, ✅ SPIKED — verdict below).* Edges A/B tracked, not yet phased (product
+decision / macOS-27 runtime).
+
+**Phase 15 verdict (2026-06-15, `feat/afm-native-tools-spike`):** The third path WORKS and is SAFE
+but is NOT competitive enough to route agentic work to AFM. The structured `@Generable` path
+(`AppleFoundationModelsProvider: ToolCallingProvider`, one decision per turn under LocalAgent's cap):
+**✅ emits parseable structured calls; ✅ never melts** (worst on-device case 93s = cap×~30s on a
+non-resolving stub, vs the Apple-driven loop's 337s overflow — our owning the loop is the structural
+fix, proven twice); **⚠️ but selection is weak & steering-resistant** (spike 1–2/5 vs Apple-driven
+5/5 on the same tools — the gap is structured-output framing vs native-Tool framing, not the
+descriptions) **and slow per-call** (~20–30s vs MLX ~6s). The tension: structured-output buys loop
+control at the cost of selection; native-Tool framing buys selection at the cost of loop control — an
+agent needs both. **Decision: launch routing stays agentic → lil+ (4B); mini stays the fast
+chat/lookup floor.** Conformance ships behind a default-OFF flag (routing unchanged); the evals
+harness now measures all three AFM paths behind env flags, so WWDC26's rebuilt AFM re-weighs by
+re-running — no rebuild. Full findings: `scratch/afm-native-spike-2026-06-15/FINDINGS.md`.
 
 <!-- Signed: Kev + claude-opus-4-8, 2026-06-14, Confidence 0.9 — WWDC26 LanguageModel adoption shipped
      (PR #28, ADR 0001, 1101 green, production conformance compiles vs the real macOS 27 SDK). Forward
@@ -484,7 +498,7 @@ SwiftUI, macOS 26, native `.glassEffect` / `GlassEffectContainer` for the real L
     - *Verify:* Big (Gemma) calls `web_search` natively on the weather question with zero format coaching; Mini does the same via FoundationModels tools; a no-tool-support model still answers via ReAct.
 13. **WWDC26 `LanguageModel` bridge** — ✅ **shipped 2026-06-14** (PR #28, ADR 0001; see the 2026-06-14 update). Mirror surface + `EscalationLadder` + `BrainCatalogue` (pure); `M1K3ModelExecutor`/`M1K3Model` (real-provider executor over `ToolTurnSession` + the live gate, KV-reuse cache); `M1K3FoundationModel` (FM27-gated production conformance, compiles vs the real macOS 27 SDK); live opt-in auto-routing with the floor-default policy. *Verify (shipped):* 1101 green; conformance compiles under Xcode 27; auto-route picks the floor by default, Apple-on-device when opted in (`log stream … category == "route"`).
 14. **Evals enclave** (Edge C) — ✅ **shipped 2026-06-15** (`feat/evals-enclave`, 6 commits). Pure `M1K3Eval` package (`ChatEvalFixtures` across 5 task-kinds · `ChatEvalScorer` heuristics incl. the latency band · `ChatEvalReport` cross-brain matrix; 27 tests TDD off-device) + the `M1K3_SELFTEST_CHATEVAL=1` headless stage (tool-use via `LocalAgent` — AFM ReAct + MLX native + AFM-native A/B). **File-config harness** (`.m1k3-selftest.json`, one-shot) sidesteps the `open --env` LaunchServices flake. *Verified live:* mini = good chat (6/6), agentically unsafe (selects tools then thrashes); lil = the agentic driver (5/5 native). The AFM-vs-floor gap, proven — and it justifies the ladder's agentic→lil+ routing.
-15. **AFM-native tool-calling spike** (Edge D, **NEXT** — `feat/afm-native-tools-spike`) — conform `AppleFoundationModelsProvider` to `ToolCallingProvider` via `@Generable` structured output so `LocalAgent` keeps the loop (challenger's third path, not an Apple-driven loop). Pure parser TDD'd off-device; conformance behind a flag (launch routing unchanged); live-validated via the `M1K3_SELFTEST_CHATEVAL` harness with **non-terminal stubs** (web→links, lookup→empty) + the latency band. *Success criterion:* does AFM emit parseable structured calls AND survive non-resolving results? *Verify:* the harness re-weighs it; agentic→lil+ stays for launch. (Full context in the Edge D block above.)
+15. **AFM-native tool-calling spike** (Edge D, **✅ SPIKED** — `feat/afm-native-tools-spike`) — conformed `AppleFoundationModelsProvider` to `ToolCallingProvider` via `@Generable` structured output so `LocalAgent` keeps the loop (challenger's third path, not an Apple-driven loop). Pure parser TDD'd off-device (11 tests); conformance behind a default-OFF flag (launch routing unchanged); live-validated via the `M1K3_SELFTEST_CHATEVAL` harness with non-terminal stubs (web→links, lookup→empty) + the latency band. **Success criterion MET:** AFM emits parseable structured calls ✅ and survives non-resolving results with no melt ✅ (≤93s capped vs 337s Apple-driven overflow). **But** selection is weak (spike 1–2/5 vs Apple-driven 5/5) + slow per-call (~20–30s) → **agentic stays lil+; mini = chat/lookup floor.** Full verdict in the Phase-15 block above + `scratch/afm-native-spike-2026-06-15/FINDINGS.md`.
 
 ---
 

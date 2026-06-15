@@ -114,21 +114,70 @@ enum ChatEvalStage {
     /// One spec per probed tool, shared by BOTH tool paths so AFM-native and
     /// ReAct-floor runs offer the model the exact same palette (only the calling
     /// convention differs — that's the variable under test).
-    private static let toolSpecs: [(name: String, description: String, canned: String)] = [
-        ("datetime", "Get the current date and time on this Mac.",
-         "It is 12:00 on Saturday 14 June 2026. (Complete — no further lookup needed.)"),
-        ("search_knowledge", "Search the user's OWN saved notes, memories and imported documents.",
-         "Search complete. Found the relevant note for '{query}': the user recorded the answer here. "
-             + "This fully resolves the request — no further search needed."),
-        ("lookup_fact", "Look up an encyclopedic fact from a reference source (Wikipedia).",
-         "Reference lookup complete for '{query}': the fact was found and is given here. No further lookup needed."),
-        ("web_search", "Search the LIVE web for current, up-to-the-minute news and information.",
-         "Web search complete for '{query}': the top current result is given here. No further search needed."),
+    ///
+    /// `canned` is the TERMINAL output (resolves the query, model concludes after
+    /// one call); `hardCanned` is the NON-RESOLVING output (web → links needing a
+    /// follow-up, lookup/search → empty) for the Phase-15 hard case: does the
+    /// brain survive a result that doesn't answer the question, or auto-loop into
+    /// the context-overflow melt? `datetime` always resolves, so its hard output
+    /// is the same.
+    private struct ToolSpec {
+        let name: String
+        let description: String
+        let canned: String
+        let hardCanned: String
+    }
+
+    private static let toolSpecs: [ToolSpec] = [
+        ToolSpec(
+            name: "datetime", description: "Get the current date and time on this Mac.",
+            canned: "It is 12:00 on Saturday 14 June 2026. (Complete — no further lookup needed.)",
+            hardCanned: "It is 12:00 on Saturday 14 June 2026. (Complete — no further lookup needed.)"
+        ),
+        ToolSpec(
+            name: "search_knowledge",
+            description: "Search the user's OWN saved notes, memories and imported documents.",
+            canned: "Search complete. Found the relevant note for '{query}': the user recorded the answer here. "
+                + "This fully resolves the request — no further search needed.",
+            hardCanned: "No matching notes found for '{query}'. The personal store has nothing on this."
+        ),
+        ToolSpec(
+            name: "lookup_fact", description: "Look up an encyclopedic fact from a reference source (Wikipedia).",
+            canned: "Reference lookup complete for '{query}': the fact was found and is given here. No further lookup needed.",
+            hardCanned: ""
+        ),
+        ToolSpec(
+            name: "web_search", description: "Search the LIVE web for current, up-to-the-minute news and information.",
+            canned: "Web search complete for '{query}': the top current result is given here. No further search needed.",
+            hardCanned: "Top results for '{query}': [1] example.com/a  [2] example.com/b  [3] example.com/c — "
+                + "open a result to read the full answer."
+        ),
     ]
 
+    /// When set, tool stubs return NON-RESOLVING outputs (see `hardCanned`) — the
+    /// Phase-15 hard case. Independent of the path flag so the Apple-driven loop
+    /// can be run on hard stubs too (to capture its melt for contrast).
+    private static var hardStubs: Bool {
+        SelfTestEnv.value("M1K3_SELFTEST_CHATEVAL_HARD_STUBS") == "1"
+    }
+
+    /// THE SPIKE (Phase 15): route AFM tool-use through LocalAgent's native loop
+    /// over our structured @Generable `continueToolTurn`, under LocalAgent's cap.
+    private static var afmNativeTools: Bool {
+        SelfTestEnv.value("M1K3_SELFTEST_CHATEVAL_AFM_NATIVE_TOOLS") == "1"
+    }
+
+    /// Force AFM onto the prompt-ReAct floor (A/B against the other two paths).
+    private static var forceReActFloor: Bool {
+        SelfTestEnv.value("M1K3_SELFTEST_CHATEVAL_AFM_REACT") == "1"
+    }
+
     /// ReAct-floor / native-dialect palette (LocalAgent path — AFM ReAct + MLX).
-    private static let toolPalette: [any AgentTool] = toolSpecs.map {
-        StubTool(name: $0.name, description: $0.description, cannedOutput: $0.canned)
+    private static var toolPalette: [any AgentTool] {
+        toolSpecs.map {
+            StubTool(name: $0.name, description: $0.description,
+                     cannedOutput: hardStubs ? $0.hardCanned : $0.canned)
+        }
     }
 
     /// Run the requested brains across the requested fixtures, emit per-fixture
@@ -188,7 +237,11 @@ enum ChatEvalStage {
         let provider: any InferenceProvider
         switch tier.backing {
         case .appleFoundationModels:
-            let afm = AppleFoundationModelsProvider()
+            // Spike mode (Phase 15): opt the provider INTO native tool-calling so
+            // LocalAgent routes AFM through runNative + our structured @Generable
+            // continueToolTurn (third path), not the prompt-ReAct floor. Off ⇒
+            // supportsToolCalls stays false ⇒ ReAct floor / Apple-driven, unchanged.
+            let afm = AppleFoundationModelsProvider(nativeToolCalling: afmNativeTools)
             guard afm.isAvailable else { return nil }
             provider = afm
         case let .mlx(modelID):
@@ -218,12 +271,19 @@ enum ChatEvalStage {
                 let observation = try await groundedObservation(fixture, provider: provider, start: start, clock: clock)
                 return ChatEvalScorer.score(fixture: fixture, observation: observation, latencyCeilingMS: latencyCeilingMS)
             case .toolUse:
-                // AFM gets its NATIVE FoundationModels tools by default (the real
-                // capability); M1K3_SELFTEST_CHATEVAL_AFM_REACT=1 forces the old
-                // prompt-ReAct floor instead, to A/B the two paths on the same
-                // brain. MLX brains always go through LocalAgent (native dialect).
-                let forceReAct = SelfTestEnv.value("M1K3_SELFTEST_CHATEVAL_AFM_REACT") == "1"
-                if provider is AppleFoundationModelsProvider, !forceReAct {
+                // Three AFM tool paths, selected by env (MLX always goes through
+                // LocalAgent's native dialect):
+                //   • default            → afmNativeToolScore: Apple drives the loop
+                //                          via LanguageModelSession(tools:) — the
+                //                          path that melts (337s) on a non-resolving
+                //                          result, no iteration cap we can inject.
+                //   • AFM_REACT=1        → toolObservationScore on the ReAct floor
+                //                          (supportsToolCalls is false).
+                //   • AFM_NATIVE_TOOLS=1 → THE SPIKE: toolObservationScore, but the
+                //                          provider opted into native tool-calling,
+                //                          so LocalAgent runs our structured
+                //                          @Generable continueToolTurn under ITS cap.
+                if provider is AppleFoundationModelsProvider, !afmNativeTools, !forceReActFloor {
                     return try await afmNativeToolScore(fixture, start: start, clock: clock)
                 }
                 return try await toolObservationScore(fixture, provider: provider, start: start, clock: clock)
@@ -304,7 +364,7 @@ enum ChatEvalStage {
         let tools: [any FoundationModels.Tool] = toolSpecs.map {
             AFMRecordingTool(
                 name: $0.name, description: $0.description,
-                cannedOutput: $0.canned, recorder: recorder
+                cannedOutput: hardStubs ? $0.hardCanned : $0.canned, recorder: recorder
             )
         }
         let session = LanguageModelSession(tools: tools, instructions: M1K3Persona.systemPrompt)
