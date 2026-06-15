@@ -8,14 +8,17 @@
 //
 //  Signed: Kev + claude-opus-4-8, 2026-06-06, Confidence 0.8, Prior: Unknown
 
+import AppKit
 import M1K3Avatar
 import M1K3Chat
 import M1K3Inference
+import M1K3Launch
 import M1K3Voice
 import SwiftUI
 
 struct SettingsView: View {
     @Environment(AppEnvironment.self) private var env
+    @Environment(LaunchAtLogin.self) private var launchAtLogin
     @AppStorage(ReadingMode.storageKey) private var readingMode: ReadingMode = .standard
     @AppStorage(AppEnvironment.webSearchEnabledKey) private var webSearchEnabled = true
     @AppStorage(AppEnvironment.memoryAutoCaptureKey) private var memoryAutoCapture = true
@@ -151,6 +154,8 @@ struct SettingsView: View {
 
                 companionSection
 
+                startupSection
+
                 Section {
                     Toggle("Sound effects", isOn: $soundEffectsEnabled)
                         .onChange(of: soundEffectsEnabled) { _, on in
@@ -282,6 +287,10 @@ struct SettingsView: View {
         }
         .frame(width: 480, height: 520)
         .glassBackdrop()
+        // Re-read the live login-item status each time Settings opens, so a grant
+        // the user just made in System Settings (which we can't observe) is
+        // reflected without them having to toggle it again.
+        .onAppear { launchAtLogin.refresh() }
     }
 
     /// The voice-output tier control: progress while the M1K3 Voice model
@@ -338,6 +347,44 @@ extension SettingsView {
                 + "is an optional skin for full-window voice conversations, and only "
                 + "there. Everywhere else, the pixel face stays.")
                 .font(.caption).foregroundStyle(.secondary)
+        }
+    }
+
+    /// Launch-at-login + the menu-bar companion note. Own property to keep the
+    /// Form body under the type-checker budget (see aboutYouSection). The toggle
+    /// drives the reconcile policy in LaunchAtLogin (idempotent + error-catching);
+    /// requiresApproval / lastError surface inline so a blocked grant isn't silent.
+    private var startupSection: some View {
+        Section {
+            Toggle("Launch M1K3 at login", isOn: Binding(
+                get: { launchAtLogin.isEnabled },
+                set: { launchAtLogin.setEnabled($0) }
+            ))
+            if launchAtLogin.requiresApproval {
+                Button("Approve in System Settings…") { openLoginItemsSettings() }
+                    .buttonStyle(.glass)
+            }
+            if let error = launchAtLogin.lastError {
+                Text(error).font(.caption).foregroundStyle(.red)
+            }
+        } header: {
+            Text("Startup")
+        } footer: {
+            Text("Keep M1K3 in your menu bar and start it automatically when you log "
+                + "in, so it's always a click away. M1K3 stays on-device either way — "
+                + "this only controls when it launches.")
+                .font(.caption).foregroundStyle(.secondary)
+        }
+    }
+
+    /// Open System Settings at Login Items. The deep-link pane id has drifted
+    /// across macOS releases, so if the specific URL won't open we fall back to
+    /// System Settings' root rather than leave the button silently dead.
+    private func openLoginItemsSettings() {
+        let deepLink = URL(string: "x-apple.systempreferences:com.apple.LoginItems-Settings.extension")
+        if let deepLink, NSWorkspace.shared.open(deepLink) { return }
+        if let root = URL(string: "x-apple.systempreferences:") {
+            NSWorkspace.shared.open(root)
         }
     }
 

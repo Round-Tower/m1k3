@@ -8,12 +8,19 @@
 //
 //  Signed: Kev + claude-opus-4-8, 2026-06-06, Confidence 0.8, Prior: Unknown
 
+import M1K3Launch
 import SwiftUI
 
 @main
 struct M1K3App: App {
+    /// Stable id so the menu-bar item can re-open the main window after it's closed.
+    static let mainWindowID = "main"
+
     @State private var env: AppEnvironment?
     @State private var startupError: String?
+    /// Launch-at-login is app-level (not on AppEnvironment) so it works even if
+    /// the store fails to open — the toggle and menu must function regardless.
+    @State private var launchAtLogin = LaunchAtLogin(item: SMAppServiceLoginItem())
     /// First-run gate: show "choose your brain" until a brain has been picked.
     @AppStorage(AppEnvironment.hasChosenBrainKey) private var hasChosenBrain = false
 
@@ -22,7 +29,7 @@ struct M1K3App: App {
     }
 
     var body: some Scene {
-        WindowGroup {
+        WindowGroup(id: Self.mainWindowID) {
             Group {
                 if SelfTest.isRequested {
                     ProgressView("Running self-test…")
@@ -75,13 +82,23 @@ struct M1K3App: App {
         Settings {
             Group {
                 if let env {
-                    SettingsView().environment(env)
+                    SettingsView()
+                        .environment(env)
+                        .environment(launchAtLogin)
                 } else {
                     Text("M1K3 is still waking up…")
                         .foregroundStyle(.secondary)
                         .frame(width: 480, height: 220)
                 }
             }
+        }
+
+        // The always-resident status-bar item. Its presence alone keeps M1K3
+        // running after the window is closed — the menu-bar companion Kev asked
+        // for. `brain` is a stand-in mark; swap for a template brand glyph later.
+        // Signed: Kev + claude-opus-4-8, 2026-06-16, Confidence 0.7, Prior: Unknown
+        MenuBarExtra("M1K3", systemImage: "brain") {
+            MenuBarContent(env: env, launchAtLogin: launchAtLogin)
         }
     }
 }
