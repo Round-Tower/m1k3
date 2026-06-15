@@ -34,6 +34,11 @@ import Foundation
 /// dialect-free `ToolTurn`. Pure: takes scalars (extracted off the decision by
 /// the provider), imports no FoundationModels, returns the agent's own type.
 public enum AFMToolMapping {
+    /// The sole parameter key every current `AgentTool` declares by convention
+    /// (`ToolParameterDefinition`). Named here so the mapping can't silently drift
+    /// from that contract if a future tool adopts a different argument name.
+    static let argumentKey = "query"
+
     /// A final decision (or one with no actionable tool) becomes a text turn; a
     /// named tool becomes a single call carrying the input under `query` (the arg
     /// key every current `AgentTool` declares). `isFinal` wins over a stray tool
@@ -49,7 +54,7 @@ public enum AFMToolMapping {
             return .text(finalAnswer.trimmingCharacters(in: .whitespacesAndNewlines))
         }
         let input = toolInput.trimmingCharacters(in: .whitespacesAndNewlines)
-        return .toolCalls([ParsedToolCall(name: tool, arguments: ["query": .string(input)])])
+        return .toolCalls([ParsedToolCall(name: tool, arguments: [argumentKey: .string(input)])])
     }
 }
 

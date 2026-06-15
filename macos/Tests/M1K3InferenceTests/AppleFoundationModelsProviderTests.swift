@@ -40,8 +40,10 @@ struct AppleFoundationModelsProviderTests {
     @Test("opting in gates tool support on host availability, not the flag alone")
     func toolCallingOptInGatesOnAvailability() {
         let provider = AppleFoundationModelsProvider(nativeToolCalling: true)
-        // Can't assert `true` (needs Apple Intelligence hardware), but the flag
-        // must AND with availability — never claim support on an unavailable host.
+        // On CI (no Apple Intelligence hardware) both sides are false, so this
+        // asserts false == false — it exercises the AND contract, not the `true`
+        // branch (which needs Apple Intelligence). The point: never claim tool
+        // support on an unavailable host, even with the opt-in flag set.
         #expect(provider.supportsToolCalls == provider.isAvailable)
     }
 }
