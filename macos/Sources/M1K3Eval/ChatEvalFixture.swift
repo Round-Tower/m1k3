@@ -215,7 +215,7 @@ public enum ChatEvalFixtures {
         .init(
             id: "reason-days", kind: .reasoning,
             prompt: "If today is Wednesday, what day will it be in 5 days? Answer with the day.",
-            expectation: .init(mustContainAny: ["Monday", "monday"], minChars: 1)
+            expectation: .init(mustContainAny: ["Monday"], minChars: 1)
         ),
         .init(
             id: "reason-train", kind: .reasoning,
@@ -225,9 +225,13 @@ public enum ChatEvalFixtures {
         ),
         .init(
             id: "reason-remainder", kind: .reasoning,
-            prompt: "You have 17 sweets to share equally among 4 children. How many are left "
+            // 14 / 4 = 3 r2. Operands (14, 4) and quotient (3) deliberately avoid the
+            // digit "2" so a bare-number answer can't trivially pass on a substring of
+            // the prompt — and a model that returns the quotient (3) instead of the
+            // remainder fails. Keeps the "answer with the number" terse contract.
+            prompt: "You have 14 sweets to share equally among 4 children. How many are left "
                 + "over? Answer with the number.",
-            expectation: .init(mustContainAny: ["1"], minChars: 1)
+            expectation: .init(mustContainAny: ["2"], minChars: 1)
         ),
     ]
 

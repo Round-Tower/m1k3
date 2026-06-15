@@ -161,9 +161,6 @@ enum ChatEvalStage {
             .compactMap { BrainTier(rawValue: String($0).trimmingCharacters(in: .whitespaces)) }
     }
 
-    /// Optional task-kind filter (M1K3_SELFTEST_CHATEVAL_KINDS=tool-use,reasoning)
-    /// — nil means every kind. Lets a focused tool-calling run skip the slow
-    /// open-chat/reasoning turns.
     /// Turn-latency ceiling (ms) above which a CORRECT answer still fails the
     /// "responsive" check — catches AFM's context-overflow auto-loop that
     /// "passes" only after minutes. Tunable via M1K3_SELFTEST_CHATEVAL_LATENCY_MS;
@@ -173,6 +170,9 @@ enum ChatEvalStage {
         SelfTestEnv.value("M1K3_SELFTEST_CHATEVAL_LATENCY_MS").flatMap(Int.init) ?? 120_000
     }
 
+    /// Optional task-kind filter (M1K3_SELFTEST_CHATEVAL_KINDS=tool-use,reasoning)
+    /// — nil means every kind. Lets a focused tool-calling run skip the slow
+    /// open-chat/reasoning turns.
     private static func selectedKinds() -> Set<TaskKind>? {
         guard let raw = SelfTestEnv.value("M1K3_SELFTEST_CHATEVAL_KINDS") else {
             return nil
@@ -254,7 +254,9 @@ enum ChatEvalStage {
         _ fixture: ChatEvalFixture, provider: any InferenceProvider,
         start: ContinuousClock.Instant, clock: ContinuousClock
     ) async throws -> EvalObservation {
-        let store = try KnowledgeStore() // in-memory
+        // path: nil → GRDB in-memory DatabaseQueue, fresh per fixture. Intentional:
+        // keeps grounded-Q fixtures isolated and writes nothing to the app container.
+        let store = try KnowledgeStore()
         let embedder = MLXEmbeddingService()
         let ingester = DocumentIngester(store: store, embedder: embedder)
         if let doc = fixture.seedDoc {
