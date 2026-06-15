@@ -71,9 +71,13 @@ private struct AFMRecordingTool: FoundationModels.Tool {
     let cannedOutput: String
     let recorder: ToolCallRecorder
 
-    func call(arguments _: EvalToolArguments) async throws -> String {
+    func call(arguments: EvalToolArguments) async throws -> String {
         recorder.record(name)
-        return cannedOutput
+        // Echo the query so the canned output reads as relevant to THIS request —
+        // a fixed mismatched answer makes AFM auto-loop the tool until its context
+        // window overflows (a 7-minute thrash). A query-aware, terminal result
+        // lets the model conclude after one call.
+        return cannedOutput.replacingOccurrences(of: "{query}", with: arguments.query)
     }
 }
 
@@ -101,8 +105,9 @@ enum ChatEvalStage {
             self.cannedOutput = cannedOutput
         }
 
-        func execute(input _: [String: String]) async throws -> ToolResult {
-            ToolResult(output: cannedOutput)
+        func execute(input: [String: String]) async throws -> ToolResult {
+            let query = input["query"] ?? input.values.first ?? ""
+            return ToolResult(output: cannedOutput.replacingOccurrences(of: "{query}", with: query))
         }
     }
 
@@ -111,13 +116,14 @@ enum ChatEvalStage {
     /// convention differs — that's the variable under test).
     private static let toolSpecs: [(name: String, description: String, canned: String)] = [
         ("datetime", "Get the current date and time on this Mac.",
-         "It is 12:00 on Saturday 14 June 2026."),
+         "It is 12:00 on Saturday 14 June 2026. (Complete — no further lookup needed.)"),
         ("search_knowledge", "Search the user's OWN saved notes, memories and imported documents.",
-         "Your notes say you chose GRDB for persistence."),
+         "Search complete. Found the relevant note for '{query}': the user recorded the answer here. "
+             + "This fully resolves the request — no further search needed."),
         ("lookup_fact", "Look up an encyclopedic fact from a reference source (Wikipedia).",
-         "Cork was founded in the 6th century."),
+         "Reference lookup complete for '{query}': the fact was found and is given here. No further lookup needed."),
         ("web_search", "Search the LIVE web for current, up-to-the-minute news and information.",
-         "Top result: Apple unveils new Apple Silicon today."),
+         "Web search complete for '{query}': the top current result is given here. No further search needed."),
     ]
 
     /// ReAct-floor / native-dialect palette (LocalAgent path — AFM ReAct + MLX).
@@ -292,12 +298,24 @@ enum ChatEvalStage {
             )
         }
         let session = LanguageModelSession(tools: tools, instructions: M1K3Persona.systemPrompt)
-        let response = try await session.respond(to: fixture.prompt)
+        // Score on what the model SELECTED even if the session then errors. AFM
+        // auto-loops the tool call internally, and a stub output that doesn't
+        // resolve the query makes it retry until the context window overflows —
+        // but the tool WAS chosen (the recorder caught it). Dropping that to a
+        // blanket "ran: error" would misreport correct selection as a miss, so
+        // we keep the captured calls and tag the failure mode in the text.
+        let answer: String
+        do {
+            answer = try await session.respond(to: fixture.prompt).content
+        } catch {
+            let toolsUsed = recorder.captured
+            guard !toolsUsed.isEmpty else { throw error } // genuine failure, no call made
+            answer = "tools used: \(toolsUsed.joined(separator: ",")) "
+                + "(session error after selection: \(String(describing: error).prefix(40)))"
+        }
         let toolsUsed = recorder.captured
         let observation = EvalObservation(
-            rawText: response.content.isEmpty
-                ? "tools used: \(toolsUsed.joined(separator: ","))"
-                : response.content,
+            rawText: answer.isEmpty ? "tools used: \(toolsUsed.joined(separator: ","))" : answer,
             toolCalls: toolsUsed,
             latencyMS: milliseconds(clock.now - start)
         )
