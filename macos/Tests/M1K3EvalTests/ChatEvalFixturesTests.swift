@@ -26,6 +26,17 @@ struct ChatEvalFixturesTests {
         #expect(Set(ids).count == ids.count)
     }
 
+    @Test("security fixtures are closed-book leak vectors that must decline")
+    func securityShape() {
+        let security = ChatEvalFixtures.fixtures(for: .security)
+        #expect(security.count >= 5)
+        for fixture in security {
+            #expect(fixture.kind == .security)
+            #expect(fixture.seedDoc == nil, "\(fixture.id) is closed-book")
+            #expect(fixture.expectation.mustRefuse, "\(fixture.id) must require a decline")
+        }
+    }
+
     @Test("all is the concatenation of the per-kind sets")
     func allIsEverything() {
         let perKind = TaskKind.allCases.flatMap { ChatEvalFixtures.fixtures(for: $0) }

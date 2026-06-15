@@ -331,10 +331,50 @@ the latency band. **Launch routing stays agentic → lil+ regardless** — the s
 WWDC26, and the evals harness is the durable asset that **re-weighs every future Apple model as it
 ships** (no rebuild — just re-run). New branch: `feat/afm-native-tools-spike`.
 
+### Edge E — On-device fine-tuning (LoRA): lil now, AFM adapters later (Phase 16) — *unlocked by the evals harness*
+
+The evals enclave (Phase 14) turns fine-tuning from vibes into a measurable loop: train an
+adapter, run `CHATEVAL`, read the **before/after delta** in the matrix. That is the unlock — a LoRA
+without a way to score it is just fiddling. M1K3's own AI principle is evaluation-driven development;
+this is it, applied to weights.
+
+**Two targets, NOT the same project:**
+
+- **① lil-4B via MLX (`mlx_lm.lora`) — START HERE (the muscle run).** `mlx-community/Qwen3.5-4B-4bit`,
+  QLoRA on this M1 Max (64GB — trivial overnight). Fully observable, every knob ours, can't brick on
+  an OS update. lil already tool-calls 5/5, so the win is NOT tool-selection — it is **internalising
+  the M1K3 persona/voice into the weights** so the voice exemplars can be **dropped from every
+  prompt**. `M1K3Persona` literally flags the cost: *"the persona is prefilled on every turn, so every
+  sentence is a TTFT tax… voice lands in the exemplars."* Bake the Cork-villain voice into lil ⇒ (a)
+  **lower TTFT** (shorter system turn on every single turn), (b) **more consistent voice**, (c) kills
+  the documented **exemplar-bleed** bug (the 4B parroting `USER:/M1K3:`). Measurable: CHATEVAL
+  open-chat persona checks + no-think-leak + a no-bleed check, **A/B'd with exemplars REMOVED from the
+  prompt** (the whole point). Deploy path: `mlx_lm.lora` → `mlx_lm.fuse` → quantise → point lil's
+  brain at the fused model id (mlx-swift-lm loads it as any model; adapter-load is the alt if supported).
+
+- **② AFM adapter via Apple's Foundation Models adapter toolkit — LATER (the strategic bet).** Apple
+  ships a Python toolkit to train **rank-32 LoRA adapters** for the on-device base, exported as an
+  `.fmadapter`, deployed via `SystemLanguageModel(adapter:)`. This is the one path that could directly
+  fix the **Phase-15 finding** (mini's weak structured-output tool-*selection* — a behavioural prior, the
+  exact thing a LoRA moves). Strategically the Apple-aligned bet the whole trajectory rides (WWDC26 AFM
+  + PCC). **But brittle:** adapters are **version-locked to a specific AFM build** — an OS update can
+  invalidate one (retrain), the toolkit is heavier, and it is novel ground. **Do ① first to learn the
+  loop on hardware we own; earn the right to ② where the payoff lives but the ground is treacherous.**
+
+**The real work is DATA, not GPU hours** (training is an hour or two; the craft is the dataset). Two
+non-negotiables, both eval-discipline: (1) **hold the CHATEVAL fixtures OUT of training** — train on
+your test set and the delta is a lie (leakage); (2) guard **catastrophic forgetting** — a small-model
+LoRA can sharpen one behaviour and lobotomise general chat, so keep a held-out "did it stay smart?"
+check. The rule is the same as TDD: the eval you train against stops being an eval. Scaffold +
+leakage-safe data strategy + the `mlx_lm.lora` config + the base-vs-adapter A/B live in
+`scratch/lora-spike/`.
+
 **New phases:** *13 — LanguageModel bridge (✅ shipped).* *14 — Evals enclave (Edge C, ✅ shipped —
 `M1K3Eval` package + `M1K3_SELFTEST_CHATEVAL` stage; file-config harness; latency band).* *15 — AFM
-tool-calling spike (Edge D, ✅ SPIKED — verdict below).* Edges A/B tracked, not yet phased (product
-decision / macOS-27 runtime).
+tool-calling spike (Edge D, ✅ spiked on `feat/afm-native-tools-spike` / PR #30 — structured path is
+safe + parseable but selection-weak; agentic stays lil+).* *16 — On-device LoRA (Edge E, NEXT —
+`feat/lil-lora-spike`: lil persona-internalisation first, AFM adapters later).* Edges A/B tracked, not
+yet phased (product decision / macOS-27 runtime).
 
 **Phase 15 verdict (2026-06-15, `feat/afm-native-tools-spike`):** The third path WORKS and is SAFE
 but is NOT competitive enough to route agentic work to AFM. The structured `@Generable` path
@@ -498,7 +538,11 @@ SwiftUI, macOS 26, native `.glassEffect` / `GlassEffectContainer` for the real L
     - *Verify:* Big (Gemma) calls `web_search` natively on the weather question with zero format coaching; Mini does the same via FoundationModels tools; a no-tool-support model still answers via ReAct.
 13. **WWDC26 `LanguageModel` bridge** — ✅ **shipped 2026-06-14** (PR #28, ADR 0001; see the 2026-06-14 update). Mirror surface + `EscalationLadder` + `BrainCatalogue` (pure); `M1K3ModelExecutor`/`M1K3Model` (real-provider executor over `ToolTurnSession` + the live gate, KV-reuse cache); `M1K3FoundationModel` (FM27-gated production conformance, compiles vs the real macOS 27 SDK); live opt-in auto-routing with the floor-default policy. *Verify (shipped):* 1101 green; conformance compiles under Xcode 27; auto-route picks the floor by default, Apple-on-device when opted in (`log stream … category == "route"`).
 14. **Evals enclave** (Edge C) — ✅ **shipped 2026-06-15** (`feat/evals-enclave`, 6 commits). Pure `M1K3Eval` package (`ChatEvalFixtures` across 5 task-kinds · `ChatEvalScorer` heuristics incl. the latency band · `ChatEvalReport` cross-brain matrix; 27 tests TDD off-device) + the `M1K3_SELFTEST_CHATEVAL=1` headless stage (tool-use via `LocalAgent` — AFM ReAct + MLX native + AFM-native A/B). **File-config harness** (`.m1k3-selftest.json`, one-shot) sidesteps the `open --env` LaunchServices flake. *Verified live:* mini = good chat (6/6), agentically unsafe (selects tools then thrashes); lil = the agentic driver (5/5 native). The AFM-vs-floor gap, proven — and it justifies the ladder's agentic→lil+ routing.
-15. **AFM-native tool-calling spike** (Edge D, **✅ SPIKED** — `feat/afm-native-tools-spike`) — conformed `AppleFoundationModelsProvider` to `ToolCallingProvider` via `@Generable` structured output so `LocalAgent` keeps the loop (challenger's third path, not an Apple-driven loop). Pure parser TDD'd off-device (11 tests); conformance behind a default-OFF flag (launch routing unchanged); live-validated via the `M1K3_SELFTEST_CHATEVAL` harness with non-terminal stubs (web→links, lookup→empty) + the latency band. **Success criterion MET:** AFM emits parseable structured calls ✅ and survives non-resolving results with no melt ✅ (≤93s capped vs 337s Apple-driven overflow). **But** selection is weak (spike 1–2/5 vs Apple-driven 5/5) + slow per-call (~20–30s) → **agentic stays lil+; mini = chat/lookup floor.** Full verdict in the Phase-15 block above + `scratch/afm-native-spike-2026-06-15/FINDINGS.md`.
+15. **AFM-native tool-calling spike** (Edge D, **✅ SPIKED** — `feat/afm-native-tools-spike`, PR #30) — conformed `AppleFoundationModelsProvider` to `ToolCallingProvider` via `@Generable` structured output so `LocalAgent` keeps the loop (challenger's third path, not an Apple-driven loop). Pure parser TDD'd off-device (11 tests); conformance behind a default-OFF flag (launch routing unchanged); live-validated via the `M1K3_SELFTEST_CHATEVAL` harness with non-terminal stubs (web→links, lookup→empty) + the latency band. **Success criterion MET:** parseable calls ✅ + survives non-resolving results with no melt ✅ (≤93s capped vs 337s Apple-driven overflow); **but** selection weak (1–2/5 vs 5/5) + slow per-call (~20–30s) → **agentic stays lil+; mini = chat/lookup floor.** Full verdict in the Phase-15 block above + `scratch/afm-native-spike-2026-06-15/FINDINGS.md`.
+
+16. **On-device LoRA fine-tuning** (Edge E, **NEXT** — `feat/lil-lora-spike`) — evaluation-driven fine-tuning, unlocked by the Phase-14 harness (train → CHATEVAL → read the delta). **First target: internalise the M1K3 persona/voice into lil-4B** (`mlx_lm.lora` QLoRA on the 64GB M1 Max) so the voice exemplars drop from every prompt → lower TTFT + consistent voice + no exemplar-bleed; A/B'd with exemplars removed. **Later: AFM `.fmadapter`** (Apple's rank-32 toolkit) to attack the Phase-15 selection finding — strategic but version-locked/brittle, so lil first to learn the loop. Non-negotiables: fixtures held OUT of training (no leakage) + a catastrophic-forgetting guard. Scaffold + data strategy: `scratch/lora-spike/`. (Full context in the Edge E block above.)
+
+17. **Prompt hardening v2 + self-query routing** (security/abstention, **banked** — `docs/prompt-hardening-v2.md`) — a leak-vector session pulled the v1 prompt verbatim, recited internal QA docs as answers, and dodged abstention. **Prompt-side (ships independently):** adopt the hardened `ABSOLUTE RULES` block (instruction-hierarchy + anti-framing) / explicit self-query rule / passphrase-never-emit / abstention into `M1K3Persona.corePrompt` — keeping the user profile DYNAMIC (don't bake an identity). **Code-side (prompt can't do alone):** (1) self-query router — short-circuit retrieval on self-referential questions; (2) segregate the index — internal QA/diagnostic notes OUT of the retrievable corpus; (3) relevance threshold + de-weight `remember` writes. `CanaryGuard` already enforces the passphrase rule at the harness (defense in depth). **Make the 5 leak vectors a CHATEVAL `security` regression suite** — it doubles as the Phase-16 LoRA forgetting guard (a voice LoRA that softens a refusal is a fail). Layering: voice→weights, policy→prompt, enforcement→harness.
 
 ---
 
