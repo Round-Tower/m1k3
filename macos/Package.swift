@@ -21,6 +21,7 @@ let package = Package(
     platforms: [.macOS(.v26)],
     products: [
         .library(name: "M1K3Knowledge", targets: ["M1K3Knowledge"]),
+        .library(name: "M1K3Memory", targets: ["M1K3Memory"]),
         .library(name: "M1K3Inference", targets: ["M1K3Inference"]),
         .library(name: "M1K3Agent", targets: ["M1K3Agent"]),
         .library(name: "M1K3LanguageModel", targets: ["M1K3LanguageModel"]),
@@ -82,6 +83,24 @@ let package = Package(
             name: "M1K3KnowledgeTests",
             dependencies: ["M1K3Knowledge"],
             path: "Tests/M1K3KnowledgeTests"
+        ),
+        // The temporal memory graph: atomic facts + typed edges + recursive-CTE
+        // traversal + supersession-over-time. SEPARATE store (own DB file,
+        // consent lifecycle) from the RAG corpus; reuses M1K3Knowledge's proven
+        // VectorMath/RRF/GroundingGate/EmbeddingService primitives. GRDB only —
+        // no graph engine. This is the artifact a later "knows-me" LoRA distils.
+        .target(
+            name: "M1K3Memory",
+            dependencies: [
+                "M1K3Knowledge",
+                .product(name: "GRDB", package: "GRDB.swift"),
+            ],
+            path: "Sources/M1K3Memory"
+        ),
+        .testTarget(
+            name: "M1K3MemoryTests",
+            dependencies: ["M1K3Memory", "M1K3Knowledge"],
+            path: "Tests/M1K3MemoryTests"
         ),
         // Pluggable LLM runtime. The InferenceProvider protocol + router are
         // pure/testable; backends (Apple Foundation Models now, MLX/LiteRT
