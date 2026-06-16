@@ -22,6 +22,7 @@ let package = Package(
     products: [
         .library(name: "M1K3Knowledge", targets: ["M1K3Knowledge"]),
         .library(name: "M1K3Memory", targets: ["M1K3Memory"]),
+        .library(name: "M1K3MemoryViz", targets: ["M1K3MemoryViz"]),
         .library(name: "M1K3Inference", targets: ["M1K3Inference"]),
         .library(name: "M1K3Agent", targets: ["M1K3Agent"]),
         .library(name: "M1K3LanguageModel", targets: ["M1K3LanguageModel"]),
@@ -101,6 +102,20 @@ let package = Package(
             name: "M1K3MemoryTests",
             dependencies: ["M1K3Memory", "M1K3Knowledge"],
             path: "Tests/M1K3MemoryTests"
+        ),
+        // The 3D memory constellation — RealityKit view over the pure
+        // ConstellationModel (layout lives in M1K3Memory). RealityKit/SwiftUI are
+        // system frameworks (no third-party dep), same as M1K3Avatar. The pure
+        // geometry/palette helpers are unit-tested; the RealityView is verify-by-run.
+        .target(
+            name: "M1K3MemoryViz",
+            dependencies: ["M1K3Memory"],
+            path: "Sources/M1K3MemoryViz"
+        ),
+        .testTarget(
+            name: "M1K3MemoryVizTests",
+            dependencies: ["M1K3MemoryViz"],
+            path: "Tests/M1K3MemoryVizTests"
         ),
         // Pluggable LLM runtime. The InferenceProvider protocol + router are
         // pure/testable; backends (Apple Foundation Models now, MLX/LiteRT
