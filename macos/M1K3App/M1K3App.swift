@@ -38,7 +38,10 @@ struct M1K3App: App {
     }
 
     var body: some Scene {
-        WindowGroup(id: Self.mainWindowID) {
+        // A single-instance `Window`, NOT `WindowGroup`: M1K3 is one companion
+        // window, and `openWindow(id:)` from the menu must SUMMON the existing
+        // window — `WindowGroup` would spawn a fresh one on every click.
+        Window("M1K3", id: Self.mainWindowID) {
             Group {
                 if SelfTest.isRequested {
                     ProgressView("Running self-test…")
