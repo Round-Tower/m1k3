@@ -37,8 +37,14 @@ public struct ConstellationView: View {
     public var body: some View {
         RealityView { content in
             content.add(makeCamera())
-            build(into: root)
             content.add(root)
+            sync(into: root, firstBuild: true)
+        } update: { _ in
+            // Re-runs whenever a fresh model arrives (the window polls the store
+            // and hands us a new snapshot as memories accrete). We add only what's
+            // new, so the field GROWS live without tearing down the scene or
+            // resetting the user's drag-spin.
+            sync(into: root, firstBuild: false)
         }
         .background(.black)
         .gesture(spinGesture)
@@ -52,24 +58,31 @@ public struct ConstellationView: View {
         return camera
     }
 
-    private func build(into root: Entity) {
-        var entityByID: [UUID: Entity] = [:]
-
-        // Motes — start collapsed, grow in along the accretion timeline.
+    /// Idempotent reconcile: place any node/edge not already in the scene. Entities
+    /// are named by id so re-running is cheap and additive — the heart of the
+    /// "grows over time" effect. On the first build motes stagger in along the
+    /// accretion timeline; motes added later just pop in.
+    private func sync(into root: Entity, firstBuild: Bool) {
+        let present = Set(root.children.compactMap { UUID(uuidString: $0.name) })
         let growthIndex = Dictionary(
             uniqueKeysWithValues: model.growthOrder.enumerated().map { ($1, $0) }
         )
-        for node in model.nodes {
+        for node in model.nodes where !present.contains(node.id) {
             let mote = makeMote(node)
-            entityByID[node.id] = mote
+            mote.name = node.id.uuidString
             root.addChild(mote)
-            scheduleGrowth(of: mote, fullScale: 1, delay: Double(growthIndex[node.id] ?? 0) * growthStep)
+            let delay = firstBuild ? Double(growthIndex[node.id] ?? 0) * growthStep : 0
+            scheduleGrowth(of: mote, fullScale: 1, delay: delay)
         }
 
-        // Threads — thin bars spanning each surviving edge.
+        // Threads — named by endpoints so each is placed once.
         for edge in model.edges {
+            let name = "edge:\(edge.from.uuidString):\(edge.to.uuidString):\(edge.relation)"
+            guard !root.children.contains(where: { $0.name == name }) else { continue }
             guard let a = model.node(edge.from), let b = model.node(edge.to) else { continue }
-            root.addChild(makeThread(from: a.position * spread, to: b.position * spread))
+            let thread = makeThread(from: a.position * spread, to: b.position * spread)
+            thread.name = name
+            root.addChild(thread)
         }
     }
 

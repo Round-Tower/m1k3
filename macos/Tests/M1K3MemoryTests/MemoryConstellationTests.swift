@@ -90,6 +90,39 @@ struct MemoryConstellationTests {
         #expect(model.growthOrder == [oldest.id, middle.id, newest.id])
     }
 
+    @Test("maxNodes caps to the newest memories, dropping older ones")
+    func maxNodesCapKeepsNewest() {
+        let oldest = mem("oldest", at: 100)
+        let middle = mem("middle", at: 200)
+        let newest = mem("newest", at: 300)
+        let model = ConstellationLayout.build(
+            memories: [oldest, middle, newest], edges: [], maxNodes: 2
+        )
+        let ids = Set(model.nodes.map(\.id))
+        #expect(model.nodes.count == 2)
+        #expect(ids == [middle.id, newest.id]) // the two newest; oldest dropped
+    }
+
+    @Test("an edge to a capped-out node is pruned")
+    func maxNodesPrunesEdgesToDropped() {
+        let oldest = mem("oldest", at: 100)
+        let newest = mem("newest", at: 300)
+        let model = ConstellationLayout.build(
+            memories: [oldest, newest],
+            edges: [MemoryEdge(fromID: oldest.id, toID: newest.id, relation: "x")],
+            maxNodes: 1
+        )
+        #expect(model.nodes.count == 1)
+        #expect(model.edges.isEmpty) // oldest dropped → its edge is dangling → pruned
+    }
+
+    @Test("nil maxNodes keeps everything")
+    func maxNodesNilKeepsAll() {
+        let memories = (1 ... 5).map { mem("m\($0)", at: TimeInterval($0)) }
+        let model = ConstellationLayout.build(memories: memories, edges: [], maxNodes: nil)
+        #expect(model.nodes.count == 5)
+    }
+
     @Test("dangling edges (endpoint not in the node set) are dropped")
     func danglingEdgesDropped() {
         let a = mem("a", at: 1)

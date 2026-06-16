@@ -84,12 +84,23 @@ public enum ConstellationLayout {
     /// The default is tuned for a few hundred motes; the math is O(n²) per
     /// iteration, matching the store's own "fine to thousands" stance.
     public static func build(
-        memories: [Memory],
+        memories allMemories: [Memory],
         edges: [MemoryEdge],
-        iterations: Int = 60
+        iterations: Int = 60,
+        maxNodes: Int? = nil
     ) -> ConstellationModel {
-        guard !memories.isEmpty else {
+        guard !allMemories.isEmpty else {
             return ConstellationModel(nodes: [], edges: [], growthOrder: [])
+        }
+
+        // Cap to the newest `maxNodes` so a large store stays legible (a field of
+        // thousands reads as noise) and the O(n²) layout stays cheap — the live
+        // view shows recent growth, not the whole history. nil = no cap.
+        let memories: [Memory]
+        if let maxNodes, allMemories.count > maxNodes {
+            memories = Array(allMemories.sorted { $0.createdAt > $1.createdAt }.prefix(maxNodes))
+        } else {
+            memories = allMemories
         }
 
         let ids = Set(memories.map(\.id))

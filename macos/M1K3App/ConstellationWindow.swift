@@ -24,6 +24,13 @@ extension M1K3App {
 struct ConstellationWindowContent: View {
     let env: AppEnvironment?
     @State private var model: ConstellationModel?
+    /// Last seen live-memory count — the cheap change signal that gates a relayout.
+    @State private var lastCount = -1
+
+    /// Cap the field so a big store stays legible and the O(n²) layout stays cheap;
+    /// the view shows the newest motes. Poll cadence for "grows over time".
+    private let maxNodes = 300
+    private let refresh: Duration = .seconds(2)
 
     var body: some View {
         Group {
@@ -43,19 +50,31 @@ struct ConstellationWindowContent: View {
         }
         .frame(minWidth: 640, minHeight: 480)
         .navigationTitle("Memory Constellation")
-        .task { rebuild() }
+        .task { await watch() }
     }
 
-    /// Snapshot the live graph and lay it out. Best-effort: a closed/empty store
-    /// just yields an empty constellation, never a crash.
-    private func rebuild() {
+    /// Poll the store while the window is open, relaying out only when the live
+    /// memory count actually changes — so a new `remember` makes a mote appear
+    /// within a couple of seconds, but an idle window does no work.
+    private func watch() async {
+        rebuildIfChanged()
+        while !Task.isCancelled {
+            try? await Task.sleep(for: refresh)
+            rebuildIfChanged()
+        }
+    }
+
+    private func rebuildIfChanged() {
         guard let store = env?.memoryStore else {
-            model = ConstellationLayout.build(memories: [], edges: [])
+            if model == nil { model = ConstellationLayout.build(memories: [], edges: []) }
             return
         }
+        let count = (try? store.liveCount()) ?? 0
+        guard count != lastCount || model == nil else { return }
+        lastCount = count
         let memories = (try? store.allMemories(limit: 2000)) ?? []
         let edges = (try? store.allEdges()) ?? []
-        model = ConstellationLayout.build(memories: memories, edges: edges)
+        model = ConstellationLayout.build(memories: memories, edges: edges, maxNodes: maxNodes)
     }
 }
 
