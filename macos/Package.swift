@@ -37,6 +37,9 @@ let package = Package(
         // Exported for the app's in-process MCP host (the stdio executable
         // reaches the target directly; the app needs the product).
         .library(name: "M1K3MCPKit", targets: ["M1K3MCPKit"]),
+        // Launch-at-login policy (SMAppService seam) for the always-resident
+        // menu-bar companion. Pure controller + thin ServiceManagement adapter.
+        .library(name: "M1K3Launch", targets: ["M1K3Launch"]),
     ],
     dependencies: [
         .package(url: "https://github.com/groue/GRDB.swift.git", from: "7.0.0"),
@@ -241,6 +244,18 @@ let package = Package(
             name: "M1K3MCP",
             dependencies: ["M1K3MCPKit"],
             path: "Sources/M1K3MCP"
+        ),
+        // Launch-at-login. The LaunchAtLogin policy is pure (TDD against a fake);
+        // SMAppServiceLoginItem wraps the system ServiceManagement framework
+        // (no third-party dep) and is verify-by-launch (needs a registered bundle).
+        .target(
+            name: "M1K3Launch",
+            path: "Sources/M1K3Launch"
+        ),
+        .testTarget(
+            name: "M1K3LaunchTests",
+            dependencies: ["M1K3Launch"],
+            path: "Tests/M1K3LaunchTests"
         ),
         // Call intelligence — the model-AGNOSTIC seam (this is the reusable IP, per
         // the challenger pass): batch-transcription + diarization + summarization

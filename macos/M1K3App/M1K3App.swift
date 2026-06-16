@@ -8,21 +8,40 @@
 //
 //  Signed: Kev + claude-opus-4-8, 2026-06-06, Confidence 0.8, Prior: Unknown
 
+import AppKit
+import M1K3Launch
 import SwiftUI
 
 @main
 struct M1K3App: App {
+    /// Stable id so the menu-bar item can re-open the main window after it's closed.
+    static let mainWindowID = "main"
+
+    /// Sets the activation policy (Dock icon vs accessory) before the first
+    /// window appears, so a menu-bar-only launch never flashes a Dock icon.
+    @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
+
     @State private var env: AppEnvironment?
     @State private var startupError: String?
+    /// Launch-at-login is app-level (not on AppEnvironment) so it works even if
+    /// the store fails to open — the toggle and menu must function regardless.
+    @State private var launchAtLogin = LaunchAtLogin(item: SMAppServiceLoginItem())
     /// First-run gate: show "choose your brain" until a brain has been picked.
     @AppStorage(AppEnvironment.hasChosenBrainKey) private var hasChosenBrain = false
+    /// Menu-bar mark (favicon "M" by default) and whether to live in the menu bar
+    /// only (no Dock icon, no window forced open at launch).
+    @AppStorage(MenuBarGlyphStyle.storageKey) private var glyphStyle = MenuBarGlyphStyle.pixelM
+    @AppStorage(StartupPreferences.menuBarOnlyKey) private var menuBarOnly = false
 
     init() {
         BundledFonts.register()
     }
 
     var body: some Scene {
-        WindowGroup {
+        // A single-instance `Window`, NOT `WindowGroup`: M1K3 is one companion
+        // window, and `openWindow(id:)` from the menu must SUMMON the existing
+        // window — `WindowGroup` would spawn a fresh one on every click.
+        Window("M1K3", id: Self.mainWindowID) {
             Group {
                 if SelfTest.isRequested {
                     ProgressView("Running self-test…")
@@ -66,6 +85,12 @@ struct M1K3App: App {
         // uninterrupted to the top. Traffic lights + toolbar actions remain; the
         // app's identity is the conversation, not a chrome label.
         .windowStyle(.hiddenTitleBar)
+        // Menu-bar-only: don't auto-present the window at launch (incl. login) —
+        // M1K3 starts quietly in the bar and the menu's "Open M1K3" summons it.
+        // Routed through StartupVisibility so the decision lives in one tested place.
+        .defaultLaunchBehavior(
+            StartupVisibility(menuBarOnly: menuBarOnly).suppressesLaunchWindow ? .suppressed : .automatic
+        )
 
         // Native macOS Settings scene — opened with ⌘, (or the toolbar gear via
         // SettingsLink), in its own window with the system title bar, instead of
@@ -75,13 +100,40 @@ struct M1K3App: App {
         Settings {
             Group {
                 if let env {
-                    SettingsView().environment(env)
+                    SettingsView()
+                        .environment(env)
+                        .environment(launchAtLogin)
                 } else {
                     Text("M1K3 is still waking up…")
                         .foregroundStyle(.secondary)
                         .frame(width: 480, height: 220)
                 }
             }
+        }
+
+        // The always-resident status-bar item. Its presence alone keeps M1K3
+        // running after the window is closed — the menu-bar companion. A rich glass
+        // popover (ask without opening the window) behind a state-reflective pixel
+        // glyph (calm idle, pulsing while thinking, red while recording, glow while
+        // speaking).
+        // Signed: Kev + claude-opus-4-8, 2026-06-16, Confidence 0.7, Prior: Unknown
+        MenuBarExtra {
+            MenuBarPopover(env: env)
+        } label: {
+            MenuBarLabel(env: env, glyphStyle: glyphStyle)
+        }
+        .menuBarExtraStyle(.window)
+    }
+}
+
+/// Applies the menu-bar-only activation policy before the first window shows, so
+/// no Dock icon flashes on a quiet launch. Read straight from UserDefaults (the
+/// @AppStorage key) — the delegate runs before SwiftUI state is available.
+final class AppDelegate: NSObject, NSApplicationDelegate {
+    func applicationWillFinishLaunching(_: Notification) {
+        let menuBarOnly = UserDefaults.standard.bool(forKey: StartupPreferences.menuBarOnlyKey)
+        if StartupVisibility(menuBarOnly: menuBarOnly).hidesDockIcon {
+            NSApp.setActivationPolicy(.accessory)
         }
     }
 }

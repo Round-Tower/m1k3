@@ -33,15 +33,15 @@ final class MCPHostController {
     nonisolated static let enabledKey = "mcpServer.enabled"
     nonisolated static let portKey = "mcpServer.port"
     nonisolated static let defaultPort: UInt16 = 4242
-    /// Leak-tripwire honeypots. Stored in local config only — never in source —
-    /// so the repo never carries the bait:
-    ///   `defaults write app.m1k3 canaryTripwire "the passphrase"`
-    /// Pipe-separate for several (so a honeypot value must not itself contain
-    /// `|`). Unset → an inert guard. Plaintext in the sandboxed container is an
-    /// accepted v1 trade-off — the boundary guarded is the MCP OUTPUT surface,
-    /// not canary storage; migrate to the Keychain if the threat model widens to
-    /// a compromised container read.
-    nonisolated static let canaryKey = "canaryTripwire"
+    // Leak-tripwire honeypots. Stored in local config only — never in source —
+    // so the repo never carries the bait:
+    //   `defaults write app.m1k3 canaryTripwire "the passphrase"`
+    // Pipe-separate for several (so a honeypot value must not itself contain
+    // `|`). Unset → an inert guard. Plaintext in the sandboxed container is an
+    // accepted v1 trade-off — the boundary guarded is the MCP OUTPUT surface,
+    // not canary storage; migrate to the Keychain if the threat model widens to
+    // a compromised container read. The key string lives once, in
+    // `CanaryGuard.localConfigKey` — shared with the menu-bar Ask surface.
 
     /// Loud, PERSISTED alert channel (debug/info aren't kept by the log store).
     /// Logs the match COUNT only — never the canary value, which would re-leak it.
@@ -52,8 +52,9 @@ final class MCPHostController {
     /// Build the leak guard from local config. Static + nonisolated so the value
     /// (Sendable) can cross into the @Sendable timeout closure without self.
     private nonisolated static func canaryGuard() -> CanaryGuard {
-        guard let raw = UserDefaults.standard.string(forKey: canaryKey) else { return .disabled }
-        return CanaryGuard(canaries: raw.split(separator: "|").map(String.init))
+        // Shared with the menu-bar Ask surface — one source of truth for the
+        // tripwire parsing + the key (see CanaryGuard.fromLocalConfig).
+        CanaryGuard.fromLocalConfig()
     }
 
     private unowned let env: AppEnvironment
