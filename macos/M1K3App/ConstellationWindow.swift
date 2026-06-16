@@ -12,6 +12,7 @@
 //  the viz target; the live look + the "grows over time" feel are Kev's ⌘R).
 //  Prior: Unknown.
 
+import M1K3Knowledge
 import M1K3Memory
 import M1K3MemoryViz
 import SwiftUI
@@ -66,7 +67,9 @@ struct ConstellationWindowContent: View {
 
     private func rebuildIfChanged() {
         guard let store = env?.memoryStore else {
-            if model == nil { model = ConstellationLayout.build(memories: [], edges: []) }
+            // No graph store yet — still seed from the knowledge base so the
+            // window isn't blank.
+            if model == nil { model = buildSeeded(graphMemories: [], edges: []) }
             return
         }
         let count = (try? store.liveCount()) ?? 0
@@ -74,7 +77,27 @@ struct ConstellationWindowContent: View {
         lastCount = count
         let memories = (try? store.allMemories(limit: 2000)) ?? []
         let edges = (try? store.allEdges()) ?? []
-        model = ConstellationLayout.build(memories: memories, edges: edges, maxNodes: maxNodes)
+        model = buildSeeded(graphMemories: memories, edges: edges)
+    }
+
+    /// Lay out the live graph UNIONed with existing `.memory` items from the
+    /// knowledge base — so the constellation shows what M1K3 already knows on
+    /// first open, then grows as the graph store fills (dedup keeps dual-written
+    /// facts from showing twice).
+    private func buildSeeded(graphMemories: [Memory], edges: [MemoryEdge]) -> ConstellationModel {
+        let merged = ConstellationSeed.merge(graph: graphMemories, seeds: knowledgeSeeds())
+        return ConstellationLayout.build(memories: merged, edges: edges, maxNodes: maxNodes)
+    }
+
+    /// Existing memories from the document/knowledge store, mapped to motes.
+    /// They carry no edges (the graph layer is the new store's job) — a scattered
+    /// field that threads itself together as relations accrue.
+    private func knowledgeSeeds() -> [Memory] {
+        guard let knowledge = env?.store else { return [] }
+        let items = (try? knowledge.allItems(kind: .memory, limit: 500)) ?? []
+        return items.map { item in
+            Memory(id: item.id, kind: .note, text: item.title, source: "knowledge", createdAt: item.createdAt)
+        }
     }
 }
 
