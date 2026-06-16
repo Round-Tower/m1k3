@@ -264,13 +264,14 @@ let package = Package(
             name: "M1K3MCPKit",
             dependencies: [
                 "M1K3Knowledge",
+                "M1K3Memory",
                 .product(name: "MCP", package: "swift-sdk"),
             ],
             path: "Sources/M1K3MCPKit"
         ),
         .testTarget(
             name: "M1K3MCPKitTests",
-            dependencies: ["M1K3MCPKit", "M1K3Knowledge"],
+            dependencies: ["M1K3MCPKit", "M1K3Knowledge", "M1K3Memory"],
             path: "Tests/M1K3MCPKitTests"
         ),
         // The thin executable Claude Desktop/Code spawns — just runs the server.
