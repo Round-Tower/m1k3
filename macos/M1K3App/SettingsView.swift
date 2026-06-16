@@ -29,6 +29,8 @@ struct SettingsView: View {
     @AppStorage(AppEnvironment.voiceCompanionKey) private var voiceCompanion = ""
     @AppStorage(AppEnvironment.autoRouteBrainKey) private var autoRouteBrain = false
     @AppStorage(AppEnvironment.preferAppleOnDeviceKey) private var preferAppleOnDevice = false
+    @AppStorage(StartupPreferences.menuBarOnlyKey) private var menuBarOnly = false
+    @AppStorage(MenuBarGlyphStyle.storageKey) private var glyphStyle = MenuBarGlyphStyle.pixelM
     @State private var profileDraft = ""
 
     var body: some View {
@@ -367,12 +369,25 @@ extension SettingsView {
             if let error = launchAtLogin.lastError {
                 Text(error).font(.caption).foregroundStyle(.red)
             }
+            // Live: flip the Dock icon now for instant feedback. The window-at-
+            // launch suppression is applied by defaultLaunchBehavior next launch.
+            Toggle("Show in menu bar only (hide Dock icon)", isOn: $menuBarOnly)
+                .onChange(of: menuBarOnly) { _, on in
+                    NSApp.setActivationPolicy(on ? .accessory : .regular)
+                }
+            Picker("Menu bar icon", selection: $glyphStyle) {
+                ForEach(MenuBarGlyphStyle.allCases) { style in
+                    Label { Text(style.label) } icon: { Image(nsImage: style.image(pointSize: 14)) }
+                        .tag(style)
+                }
+            }
         } header: {
             Text("Startup")
         } footer: {
             Text("Keep M1K3 in your menu bar and start it automatically when you log "
-                + "in, so it's always a click away. M1K3 stays on-device either way — "
-                + "this only controls when it launches.")
+                + "in, so it's always a click away. \"Menu bar only\" hides the Dock "
+                + "icon and starts M1K3 quietly (no window) — open it any time from the "
+                + "menu. M1K3 stays on-device either way.")
                 .font(.caption).foregroundStyle(.secondary)
         }
     }
