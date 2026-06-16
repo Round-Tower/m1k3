@@ -530,6 +530,31 @@ public final class MemoryStore: @unchecked Sendable {
         }
     }
 
+    /// Every edge in the graph, oldest-first — the bulk read the constellation
+    /// view needs to draw threads (recall/`related` only walk from a seed).
+    public func allEdges(limit: Int = 5000) throws -> [MemoryEdge] {
+        try dbQueue.read { db in
+            let rows = try Row.fetchAll(
+                db,
+                sql: """
+                SELECT from_id, to_id, relation, created_at FROM memory_edges
+                ORDER BY created_at ASC LIMIT ?
+                """,
+                arguments: [limit]
+            )
+            return rows.compactMap { row -> MemoryEdge? in
+                guard let from: String = row["from_id"], let fromID = UUID(uuidString: from),
+                      let to: String = row["to_id"], let toID = UUID(uuidString: to)
+                else { return nil }
+                return MemoryEdge(
+                    fromID: fromID, toID: toID,
+                    relation: row["relation"] ?? "",
+                    createdAt: Date(timeIntervalSince1970: row["created_at"] ?? 0)
+                )
+            }
+        }
+    }
+
     // MARK: - Row mapping
 
     private static func memory(from row: Row) -> Memory? {

@@ -235,6 +235,21 @@ struct MemoryStoreGraphTests {
         #expect(twoHop.contains(c.id))
     }
 
+    @Test("allEdges returns every edge, oldest-first")
+    func allEdgesBulkRead() async throws {
+        let f = try Fixture()
+        let a = try await f.remember("a")
+        let b = try await f.remember("b")
+        let c = try await f.remember("c")
+        try f.store.link(MemoryEdge(fromID: a.id, toID: b.id, relation: "first",
+                                    createdAt: Date(timeIntervalSince1970: 10)))
+        try f.store.link(MemoryEdge(fromID: b.id, toID: c.id, relation: "second",
+                                    createdAt: Date(timeIntervalSince1970: 20)))
+        let edges = try f.store.allEdges()
+        #expect(edges.count == 2)
+        #expect(edges.map(\.relation) == ["first", "second"]) // oldest-first
+    }
+
     @Test("related orders nearest hops first and excludes the seed itself")
     func relatedNearestFirstNoSeed() async throws {
         let f = try Fixture()

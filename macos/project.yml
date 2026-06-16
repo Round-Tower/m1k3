@@ -86,6 +86,8 @@ targets:
         product: M1K3Launch
       - package: M1K3
         product: M1K3Memory
+      - package: M1K3
+        product: M1K3MemoryViz
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: app.m1k3
