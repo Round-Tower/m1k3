@@ -171,6 +171,9 @@ final class AppEnvironment {
     /// In-process MCP server lifecycle + voice tool glue (MCPHostController.swift).
     /// Set once at init tail (needs self for the handler closures).
     private(set) var mcpHost: MCPHostController!
+    /// Menu-bar "Ask M1K3" — a headless grounded answer with no chat window.
+    /// Owns its own dedicated responder (MenuBarAsk.swift); set at init tail.
+    private(set) var menuBarAsk: MenuBarAsk!
 
     /// Statics merged onto shared lines where sensible: the class body rides the
     /// type_body_length ceiling, and @Observable ignores statics (unlike stored
@@ -375,6 +378,7 @@ final class AppEnvironment {
         Self.resetVoiceModeFlagAtLaunch()
         mcpHost = MCPHostController(environment: self)
         mcpHost.startIfEnabled()
+        menuBarAsk = MenuBarAsk(environment: self)
 
         // Warm a restored MLX brain (Lil/Big) on launch so it's ready to answer;
         // Mini (Apple) needs nothing. Setting selectedRuntime drives the existing

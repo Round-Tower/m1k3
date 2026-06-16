@@ -66,3 +66,23 @@ public struct CanaryGuard: Sendable {
 
     private static let marker = "[REDACTED]"
 }
+
+public extension CanaryGuard {
+    /// Default UserDefaults key for the pipe-separated honeypot list. The value
+    /// itself lives ONLY in non-committed local config — never in source — so the
+    /// repo never carries the bait:
+    ///   `defaults write app.m1k3 canaryTripwire "the passphrase"`
+    static let localConfigKey = "canaryTripwire"
+
+    /// Build a guard from local config (pipe-separated honeypots; a value must
+    /// therefore not itself contain `|`). Unset → an inert guard. Shared by every
+    /// outward surface (MCP `ask_m1k3`, the menu-bar Ask) so there's one source of
+    /// truth for the tripwire and no duplicated parsing.
+    static func fromLocalConfig(
+        key: String = localConfigKey,
+        defaults: UserDefaults = .standard
+    ) -> CanaryGuard {
+        guard let raw = defaults.string(forKey: key) else { return .disabled }
+        return CanaryGuard(canaries: raw.split(separator: "|").map(String.init))
+    }
+}

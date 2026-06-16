@@ -106,14 +106,17 @@ struct M1K3App: App {
         }
 
         // The always-resident status-bar item. Its presence alone keeps M1K3
-        // running after the window is closed — the menu-bar companion. The mark is
-        // a pixel glyph (favicon "M" by default) drawn as a template image.
+        // running after the window is closed — the menu-bar companion. A rich glass
+        // popover (ask without opening the window) behind a state-reflective pixel
+        // glyph (calm idle, pulsing while thinking, red while recording, glow while
+        // speaking).
         // Signed: Kev + claude-opus-4-8, 2026-06-16, Confidence 0.7, Prior: Unknown
         MenuBarExtra {
-            MenuBarContent(env: env, launchAtLogin: launchAtLogin)
+            MenuBarPopover(env: env)
         } label: {
-            Image(nsImage: glyphStyle.image())
+            MenuBarLabel(env: env, glyphStyle: glyphStyle)
         }
+        .menuBarExtraStyle(.window)
     }
 }
 

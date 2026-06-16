@@ -1,0 +1,77 @@
+//
+//  MenuBarLabel.swift
+//  M1K3App
+//
+//  The status-bar glyph, alive: the pixel mark plus a small indicator that
+//  reflects what M1K3 is doing — a pulsing accent dot while it thinks, a red dot
+//  while recording, a soft glow while speaking, nothing when idle. The DECISION
+//  is the unit-tested `AvatarActivity.glyphTreatment(isRecording:)`; this view
+//  just renders it. Pulse uses `TimelineView` (menu-bar labels don't reliably run
+//  implicit repeating animations); the steady colour is correct even if it doesn't.
+//
+//  Signed: Kev + claude-opus-4-8, 2026-06-16, Confidence 0.7, Prior: Unknown
+
+import Foundation
+import M1K3Avatar
+import SwiftUI
+
+struct MenuBarLabel: View {
+    let env: AppEnvironment?
+    let glyphStyle: MenuBarGlyphStyle
+
+    private var treatment: GlyphTreatment {
+        guard let env else { return .calm }
+        return env.avatar.state.activity.glyphTreatment(isRecording: env.isRecording)
+    }
+
+    var body: some View {
+        let treatment = treatment
+        Image(nsImage: glyphStyle.image())
+            .shadow(
+                color: treatment.dot == .glow ? .glyphDot(treatment.dotColorName) : .clear,
+                radius: treatment.dot == .glow ? 2.5 : 0
+            )
+            .overlay(alignment: .topTrailing) {
+                if treatment.dot == .pulsing || treatment.dot == .recording {
+                    // No offset: stay inside the glyph frame so the dot can't be
+                    // clipped by the menu bar's tight item bounds.
+                    IndicatorDot(color: .glyphDot(treatment.dotColorName), pulses: treatment.pulses)
+                }
+            }
+    }
+}
+
+extension Color {
+    /// Map a `GlyphTreatment.dotColorName` to a Color. Shared by the menu-bar
+    /// label and the popover header so the two stay in lockstep.
+    static func glyphDot(_ name: String?) -> Color {
+        switch name {
+        case "accent": .accentColor
+        case "red": .red
+        default: .secondary
+        }
+    }
+}
+
+/// A tiny status dot. Pulses via a TimelineView (steady colour is the meaning;
+/// the breathe is a best-effort flourish that survives the menu bar's quirks).
+private struct IndicatorDot: View {
+    let color: Color
+    let pulses: Bool
+
+    var body: some View {
+        Group {
+            if pulses {
+                TimelineView(.animation) { context in
+                    let phase = context.date.timeIntervalSinceReferenceDate
+                    Circle()
+                        .fill(color)
+                        .opacity(0.5 + 0.5 * (0.5 + 0.5 * sin(phase * 3)))
+                }
+            } else {
+                Circle().fill(color)
+            }
+        }
+        .frame(width: 4.5, height: 4.5)
+    }
+}
