@@ -84,6 +84,8 @@ targets:
         product: M1K3Eval
       - package: M1K3
         product: M1K3Launch
+      - package: M1K3
+        product: M1K3Memory
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: app.m1k3
