@@ -30,9 +30,11 @@ public enum LoginItemStatus: Sendable, Equatable {
 /// idempotency/error policy lives in `LaunchAtLogin`, not here, so a fake can
 /// drive the policy tests deterministically.
 ///
-/// Call from the main actor: the SMAppService backend talks to the service-
-/// management daemon and is main-thread-only. The sole caller (`LaunchAtLogin`)
-/// is `@MainActor`, which keeps this contract today.
+/// `@MainActor`: the SMAppService backend talks to the service-management daemon
+/// and is main-thread-only. Annotating the protocol type-enforces what was prose
+/// — the sole caller (`LaunchAtLogin`) is already `@MainActor`, so no call site
+/// changes.
+@MainActor
 public protocol LoginItemManaging: Sendable {
     var status: LoginItemStatus { get }
     func register() throws

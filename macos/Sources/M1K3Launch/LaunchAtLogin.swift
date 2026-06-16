@@ -50,17 +50,18 @@ public final class LaunchAtLogin {
     /// always re-read so the UI reflects whatever actually happened.
     public func setEnabled(_ enabled: Bool) {
         lastError = nil
+        let current = item.status
         do {
             if enabled {
                 // .requiresApproval already means registered-and-pending-the-user
                 // in System Settings — re-registering throws "already registered",
                 // so a user re-opening Settings before approving doesn't see a
                 // spurious error. Both "on" states short-circuit.
-                if item.status != .enabled, item.status != .requiresApproval {
+                if current != .enabled, current != .requiresApproval {
                     try item.register()
                 }
             } else {
-                if item.status != .notRegistered { try item.unregister() }
+                if current != .notRegistered { try item.unregister() }
             }
         } catch {
             lastError = error.localizedDescription

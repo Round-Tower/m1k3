@@ -14,10 +14,11 @@ import Foundation
 import Testing
 
 /// In-memory stand-in for SMAppService: counts calls and flips its own status so
-/// the controller's reconcile logic is observable.
-/// @unchecked Sendable: LoginItemManaging requires Sendable, but every mutation
-/// here happens on @MainActor inside the @MainActor test suite — no real races.
-private final class FakeLoginItem: LoginItemManaging, @unchecked Sendable {
+/// the controller's reconcile logic is observable. `@MainActor` to satisfy the
+/// (now main-actor) `LoginItemManaging` protocol — which also makes it Sendable,
+/// so no `@unchecked` needed.
+@MainActor
+private final class FakeLoginItem: LoginItemManaging {
     var status: LoginItemStatus
     var registerCount = 0
     var unregisterCount = 0
@@ -137,6 +138,20 @@ struct LaunchAtLoginTests {
         #expect(sut.isEnabled)
     }
 
+    @Test("notFound disable attempts an unregister and surfaces any failure")
+    func notFoundDisableSurfacesError() {
+        // .notFound != .notRegistered, so disabling tries to unregister; if the
+        // vanished service errors, the user must see it, not a silent swallow.
+        let fake = FakeLoginItem(status: .notFound)
+        fake.unregisterError = StubError(errorDescription: "no such service")
+        let sut = LaunchAtLogin(item: fake)
+
+        sut.setEnabled(false)
+
+        #expect(fake.unregisterCount == 1)
+        #expect(sut.lastError == "no such service")
+    }
+
     @Test("requiresApproval is reflected for the System Settings prompt path")
     func requiresApprovalReflected() {
         let sut = LaunchAtLogin(item: FakeLoginItem(status: .requiresApproval))
@@ -181,5 +196,8 @@ struct LaunchAtLoginTests {
 
         #expect(sut.lastError == nil)
         #expect(sut.isEnabled)
+        // The first attempt threw BEFORE mutating status (still .notRegistered),
+        // so the retry registers again — making the sequence explicit.
+        #expect(fake.registerCount == 2)
     }
 }

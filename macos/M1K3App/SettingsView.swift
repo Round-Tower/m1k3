@@ -373,7 +373,9 @@ extension SettingsView {
             // launch suppression is applied by defaultLaunchBehavior next launch.
             Toggle("Show in menu bar only (hide Dock icon)", isOn: $menuBarOnly)
                 .onChange(of: menuBarOnly) { _, on in
-                    NSApp.setActivationPolicy(on ? .accessory : .regular)
+                    // Same decision gate as the AppDelegate's launch path.
+                    let hidesDock = StartupVisibility(menuBarOnly: on).hidesDockIcon
+                    NSApp.setActivationPolicy(hidesDock ? .accessory : .regular)
                 }
             Picker("Menu bar icon", selection: $glyphStyle) {
                 ForEach(MenuBarGlyphStyle.allCases) { style in

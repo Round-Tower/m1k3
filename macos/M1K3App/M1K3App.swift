@@ -87,7 +87,10 @@ struct M1K3App: App {
         .windowStyle(.hiddenTitleBar)
         // Menu-bar-only: don't auto-present the window at launch (incl. login) —
         // M1K3 starts quietly in the bar and the menu's "Open M1K3" summons it.
-        .defaultLaunchBehavior(menuBarOnly ? .suppressed : .automatic)
+        // Routed through StartupVisibility so the decision lives in one tested place.
+        .defaultLaunchBehavior(
+            StartupVisibility(menuBarOnly: menuBarOnly).suppressesLaunchWindow ? .suppressed : .automatic
+        )
 
         // Native macOS Settings scene — opened with ⌘, (or the toolbar gear via
         // SettingsLink), in its own window with the system title bar, instead of

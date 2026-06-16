@@ -53,9 +53,19 @@ enum MenuBarGlyphStyle: String, CaseIterable, Identifiable {
 
     /// Render the grid to a template NSImage sized to fit `pointSize` (the menu-
     /// bar height). Cells are floored to whole points so pixels stay sharp.
+    /// `@MainActor`: `NSImage.lockFocus()` is main-thread-only. Memoised by
+    /// (style, size) — the same glyph is asked for on every render pass, so the
+    /// drawing context cost is paid once.
+    @MainActor
     func image(pointSize: CGFloat = 16) -> NSImage {
+        let cacheKey = "\(rawValue)@\(pointSize)"
+        if let cached = Self.cache[cacheKey] { return cached }
+
         let rows = grid.count
         let cols = grid.map(\.count).max() ?? 0
+        // Empty grid can't be drawn — lockFocus on a zero-dimension image is
+        // undefined. The hardcoded grids never hit this; guard anyway.
+        guard rows > 0, cols > 0 else { return NSImage() }
         let cell = max(1, (pointSize / CGFloat(max(rows, cols))).rounded(.down))
         let size = NSSize(width: cell * CGFloat(cols), height: cell * CGFloat(rows))
 
@@ -72,6 +82,9 @@ enum MenuBarGlyphStyle: String, CaseIterable, Identifiable {
         }
         image.unlockFocus()
         image.isTemplate = true // let macOS tint for light/dark menu bars
+        Self.cache[cacheKey] = image
         return image
     }
+
+    @MainActor private static var cache: [String: NSImage] = [:]
 }

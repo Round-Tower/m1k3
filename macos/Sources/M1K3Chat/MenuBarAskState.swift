@@ -53,7 +53,7 @@ public enum MenuBarAskDriver {
         )
     }
 
-    static func failureMessage(for error: any Error) -> String {
+    private static func failureMessage(for error: any Error) -> String {
         "Something went wrong — \(error.localizedDescription)"
     }
 }
