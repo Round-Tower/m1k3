@@ -22,7 +22,11 @@ extension M1K3App {
     static let constellationWindowID = "constellation"
 }
 
-struct ConstellationWindowContent: View {
+/// The constellation canvas — polls the store, seeds from the knowledge base,
+/// renders the live field. Frameless so it serves every surface: the window, the
+/// voice-mode hero, the main-window companion. (See ConstellationWindowContent
+/// for the windowed wrapper.)
+struct MemoryConstellationCanvas: View {
     let env: AppEnvironment?
     @State private var model: ConstellationModel?
     /// Last seen live-memory count — the cheap change signal that gates a relayout.
@@ -49,8 +53,6 @@ struct ConstellationWindowContent: View {
                 ProgressView("Mapping memory…")
             }
         }
-        .frame(minWidth: 640, minHeight: 480)
-        .navigationTitle("Memory Constellation")
         .task { await watch() }
     }
 
@@ -98,6 +100,17 @@ struct ConstellationWindowContent: View {
         return items.map { item in
             Memory(id: item.id, kind: .note, text: item.title, source: "knowledge", createdAt: item.createdAt)
         }
+    }
+}
+
+/// The windowed wrapper — the canvas at a window's size, opened from the menu.
+struct ConstellationWindowContent: View {
+    let env: AppEnvironment?
+
+    var body: some View {
+        MemoryConstellationCanvas(env: env)
+            .frame(minWidth: 640, minHeight: 480)
+            .navigationTitle("Memory Constellation")
     }
 }
 

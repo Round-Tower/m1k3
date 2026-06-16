@@ -33,6 +33,11 @@ extension AppEnvironment {
     /// reads it. The pixel face stays M1K3's default everywhere else.
     nonisolated static let voiceCompanionKey = "voiceMode.companion"
 
+    /// Sentinel `voiceCompanion` value selecting the live 3D memory constellation
+    /// as the companion (not a CompanionSpec id — it's procedural, not a USDZ
+    /// creature). Distinct from "" (pixel face) and any spec id.
+    nonisolated static let voiceCompanionConstellation = "memory-constellation"
+
     /// UI earcons (error / memory-saved / voice-mode-enter) — ON by default,
     /// switchable in Settings. Absent key reads as enabled.
     static let soundEffectsEnabledKey = "soundEffects.enabled"

@@ -106,7 +106,7 @@ struct ContentView: View {
     @ViewBuilder
     private var avatarPanel: some View {
         if showAvatar {
-            AvatarView(controller: env.avatar)
+            AvatarSurface(env: env)
                 .frame(height: 200)
                 .padding(.horizontal, 12)
                 .padding(.top, 8)
