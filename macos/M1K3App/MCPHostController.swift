@@ -21,6 +21,7 @@
 import Foundation
 import M1K3Avatar
 import M1K3Chat // HeadlessAsk + RAGResponding (the ask_m1k3 core)
+import M1K3Knowledge // KnowledgeStore — forget_memory deletes the dual-written corpus twin too
 import M1K3MCPKit
 import M1K3Memory // MemoryStore, Memory — the temporal memory graph the new tools expose
 import M1K3Voice
@@ -315,6 +316,8 @@ final class MCPHostController {
     private func memoryToolDefinitions() -> [MCPToolDefinition] {
         let embedder = env.embedder
         let memoryStore = env.memoryStore
+        let knowledgeStore = env.store // forget_memory clears the dual-written corpus twin too
+        let environment = env // captured for the MainActor count refresh after a forget
         let handlers = MemoryToolHandlers(
             recall: { query in
                 guard let memoryStore else { return [] }
@@ -332,6 +335,37 @@ final class MCPHostController {
             stats: {
                 guard let memoryStore else { return MemoryStatsSummary(liveCount: 0) }
                 return try MemoryStatsSummary(liveCount: memoryStore.liveCount())
+            },
+            forget: { query in
+                guard let memoryStore else { return .notConfident(closest: nil) }
+                let vector = try await embedder.embed(query)
+                let hits = try memoryStore.recall(query: query, queryVector: vector, limit: 3)
+                switch ForgetResolver.resolve(hits: hits) {
+                case let .forget(memory):
+                    try memoryStore.forget(id: memory.id)
+                    // Forget the dual-written twin in the document corpus too, matched by
+                    // the SAME content-identity the remember dedup uses — else
+                    // search_knowledge/ask keep a ghost and "forget" is a half-truth
+                    // (this is the consent promise, and the canary's leak surface).
+                    // Indexed `source_ref` lookup, NOT a capped scan — the "no residue"
+                    // claim must hold regardless of how many facts are stored.
+                    // (A superseded predecessor revived by memoryStore.forget keeps its
+                    // own corpus twin — correct: it's live again.)
+                    let ref = MemoryDistillationCoordinator.factSourceRef(memory.text)
+                    if let twinID = try? knowledgeStore.itemID(forSourceRef: ref) {
+                        // Graph delete already committed; if the corpus twin survives a
+                        // write hiccup, log it so "no residue" stays auditable rather
+                        // than a silent half-truth (mirrors the dual-write error channel).
+                        let deleted = (try? knowledgeStore.deleteItem(id: twinID)) ?? false
+                        if !deleted {
+                            Self.securityLog.error("forget_memory: corpus twin NOT deleted (graph delete stood)")
+                        }
+                    }
+                    await MainActor.run { environment.refreshCounts() }
+                    return .forgotten(text: memory.text)
+                case let .notConfident(closest):
+                    return .notConfident(closest: closest?.text)
+                }
             }
         )
         return makeMemoryToolDefinitions(handlers: handlers)

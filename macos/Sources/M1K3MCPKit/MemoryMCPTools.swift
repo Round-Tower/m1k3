@@ -58,15 +58,21 @@ public struct MemoryToolHandlers: Sendable {
     public var related: @Sendable (_ query: String) async throws -> (seed: Memory, neighbours: [Memory])?
     /// A snapshot of the store for `memory_stats`.
     public var stats: @Sendable () async throws -> MemoryStatsSummary
+    /// Forget the best-matching fact for the query — hard-delete from the graph
+    /// AND the document corpus. Returns what happened (irreversible, so it's
+    /// audited): forgotten, or kept because nothing was a confident match.
+    public var forget: @Sendable (_ query: String) async throws -> ForgetOutcome
 
     public init(
         recall: @escaping @Sendable (_ query: String) async throws -> [MemoryHit],
         related: @escaping @Sendable (_ query: String) async throws -> (seed: Memory, neighbours: [Memory])?,
-        stats: @escaping @Sendable () async throws -> MemoryStatsSummary
+        stats: @escaping @Sendable () async throws -> MemoryStatsSummary,
+        forget: @escaping @Sendable (_ query: String) async throws -> ForgetOutcome
     ) {
         self.recall = recall
         self.related = related
         self.stats = stats
+        self.forget = forget
     }
 }
 
@@ -131,6 +137,32 @@ public func makeMemoryToolDefinitions(handlers: MemoryToolHandlers) -> [MCPToolD
                 return "M1K3 remembers \(summary.liveCount) \(noun)."
             }
         ),
+        MCPToolDefinition(
+            tool: Tool(
+                name: "forget_memory",
+                description: "Permanently forget a fact M1K3 remembers — the consent primitive, the "
+                    + "counterpart to remember. Finds the single best-matching memory for the query and "
+                    + "HARD-DELETES it from BOTH the memory graph AND the document corpus (no residue). "
+                    + "Irreversible: when no memory is a confident match it deletes NOTHING and tells you "
+                    + "the closest, so a vague query can't erase the wrong fact. Use recall_memory's exact "
+                    + "wording for a clean hit.",
+                inputSchema: [
+                    "type": "object",
+                    "properties": [
+                        "query": [
+                            "type": "string",
+                            "description": "the fact to forget (use recall_memory's wording for precision)",
+                        ],
+                    ],
+                    "required": ["query"],
+                ]
+            ),
+            handler: { args in
+                let query = stringArg(args, "query")?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+                guard !query.isEmpty else { throw MCPMemoryError("forget_memory requires a non-empty query") }
+                return try formatForget(await handlers.forget(query), query: query)
+            }
+        ),
     ]
 }
 
@@ -156,6 +188,19 @@ private func formatRelated(seed: Memory, neighbours: [Memory], query _: String) 
         }.joined(separator: "\n")
     }
     return out
+}
+
+private func formatForget(_ outcome: ForgetOutcome, query: String) -> String {
+    switch outcome {
+    case let .forgotten(text):
+        return "Forgotten: “\(text)”. It's gone from M1K3's memory — graph and corpus, no residue."
+    case let .notConfident(closest):
+        guard let closest else {
+            return "Nothing matching “\(query)” to forget."
+        }
+        return "Nothing confident enough to forget for “\(query)”. Closest: “\(closest)” — "
+            + "if that's the one, repeat it back word-for-word to forget it."
+    }
 }
 
 /// A coarse, non-numeric-noise similarity hint ("~83% match"). Omitted when the
