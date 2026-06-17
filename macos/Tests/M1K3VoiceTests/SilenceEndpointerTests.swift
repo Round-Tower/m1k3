@@ -54,4 +54,85 @@ struct SilenceEndpointerTests {
         endpointer.ingest(partial: "again", at: start.advanced(by: .seconds(10)))
         #expect(endpointer.shouldEndpoint(at: start.advanced(by: .seconds(11.9))))
     }
+
+    // MARK: - Completeness-aware holding (anti-fragmentation)
+
+    @Test("an incomplete partial waits the longer hold, not the normal silence")
+    func incompletePartialHolds() {
+        var endpointer = SilenceEndpointer(silence: .seconds(1.5), holdSilence: .seconds(3.0))
+        // Trails off on "the" — a dangling article → keep listening past 1.5s.
+        endpointer.ingest(partial: "tell me about the", at: start)
+        #expect(!endpointer.shouldEndpoint(at: start.advanced(by: .seconds(1.5))))
+        #expect(!endpointer.shouldEndpoint(at: start.advanced(by: .seconds(2.9))))
+        #expect(endpointer.shouldEndpoint(at: start.advanced(by: .seconds(3.0))))
+    }
+
+    @Test("a complete partial still endpoints at the normal silence threshold")
+    func completePartialUsesNormalSilence() {
+        var endpointer = SilenceEndpointer(silence: .seconds(1.5), holdSilence: .seconds(3.0))
+        endpointer.ingest(partial: "what's the weather", at: start)
+        #expect(endpointer.shouldEndpoint(at: start.advanced(by: .seconds(1.5))))
+    }
+
+    @Test("maxWait backstops a partial that never stabilises (anti-hang)")
+    func maxWaitBackstop() {
+        var endpointer = SilenceEndpointer(
+            silence: .seconds(1.5), holdSilence: .seconds(3.0), maxWait: .seconds(20)
+        )
+        // A dangling partial that keeps changing every 2s never goes stable for
+        // the 3s hold — without a cap it would never endpoint.
+        var secs = 0.0
+        var text = "so"
+        while secs <= 18.0 {
+            endpointer.ingest(partial: text, at: start.advanced(by: .seconds(secs)))
+            text += " uh" // stays incomplete (filler), but the TEXT changes each tick
+            secs += 2.0
+        }
+        // Last change was at t=18; hold (3s) wouldn't fire until 21s, but maxWait
+        // from first speech (t=0) caps it at 20s.
+        #expect(!endpointer.shouldEndpoint(at: start.advanced(by: .seconds(19.0))))
+        #expect(endpointer.shouldEndpoint(at: start.advanced(by: .seconds(20.0))))
+    }
+
+    @Test("maxWait overrides the longer hold on an incomplete partial")
+    func maxWaitOverridesIncomplete() {
+        var endpointer = SilenceEndpointer(
+            silence: .seconds(1.0), holdSilence: .seconds(3.0), maxWait: .seconds(2.7)
+        )
+        endpointer.ingest(partial: "tell me about the", at: start) // incomplete → would hold 3.0s
+        #expect(!endpointer.shouldEndpoint(at: start.advanced(by: .seconds(2.5))))
+        // maxWait (2.7) fires before the 3.0 hold would.
+        #expect(endpointer.shouldEndpoint(at: start.advanced(by: .seconds(2.7))))
+    }
+
+    @Test("maxWait does NOT cut a user still actively speaking past the cap")
+    func maxWaitProtectsActiveSpeech() {
+        var endpointer = SilenceEndpointer(
+            silence: .seconds(1.5), holdSilence: .seconds(3.0), maxWait: .seconds(20)
+        )
+        // A long, genuine utterance whose partials keep advancing right up to the
+        // cap — the recognizer is NOT stuck, so maxWait must not cut it mid-word.
+        var secs = 0.0
+        var text = "word0"
+        var idx = 0
+        while secs <= 19.9 {
+            endpointer.ingest(partial: text, at: start.advanced(by: .seconds(secs)))
+            idx += 1
+            text += " word\(idx)" // changes each tick, stays a complete-looking clause
+            secs += 0.5
+        }
+        // At t=20 the cap has elapsed but the last change was ~0.1s ago (idle <
+        // silence) → still speaking → no endpoint.
+        #expect(!endpointer.shouldEndpoint(at: start.advanced(by: .seconds(20.0))))
+    }
+
+    @Test("a partial that becomes complete mid-hold switches to the shorter threshold")
+    func transitionToCompleteUsesShorterThreshold() {
+        var endpointer = SilenceEndpointer(silence: .seconds(1.5), holdSilence: .seconds(3.0))
+        endpointer.ingest(partial: "tell me about the", at: start) // incomplete → would hold 3.0s
+        // User completes the thought 2s in:
+        endpointer.ingest(partial: "tell me about the weather", at: start.advanced(by: .seconds(2.0)))
+        #expect(!endpointer.shouldEndpoint(at: start.advanced(by: .seconds(3.4)))) // idle 1.4 < 1.5
+        #expect(endpointer.shouldEndpoint(at: start.advanced(by: .seconds(3.5)))) // idle 1.5 ≥ silence
+    }
 }
