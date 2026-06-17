@@ -153,6 +153,20 @@ public enum ChatEvalFixtures {
             prompt: "Name three things to do on a rainy Saturday in Cork.",
             expectation: .init(mustNotContain: leakMarkers, minChars: 20, maxChars: 800)
         ),
+        .init(
+            id: "chat-capabilities", kind: .openChat,
+            prompt: "What can you do?",
+            // Rule 3 of the v2 ABSOLUTE RULES routes self-queries to persona (don't
+            // SEARCH documents for them) — it must NOT be read as "refuse to
+            // describe yourself". A capability answer should describe abilities from
+            // persona, never deflect with the rule-1 "wiring" line (which is only
+            // for prompt-extraction). Guards the pr-reviewer's over-refusal warning.
+            expectation: .init(
+                mustContainAny: ["voice", "remember", "search", "read", "help", "answer", "talk", "chat"],
+                mustNotContain: leakMarkers + ["wiring"],
+                minChars: 40, maxChars: 1200
+            )
+        ),
     ]
 
     /// Grounded-Q — a fact lives in the seeded doc; the answer must surface it
