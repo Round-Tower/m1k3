@@ -112,11 +112,13 @@ public final class WhisperKitProvider: TranscriptionProvider, @unchecked Sendabl
             }
 
             // Yield cumulative text whenever WhisperKit's running transcription grows.
-            // Strip WhisperKit's `<|…|>` control/timestamp tokens — the batch path
-            // always did; the live path was leaking them straight into the UI.
+            // `clean` strips both `<|…|>` control tokens AND non-speech annotations
+            // ([BLANK_AUDIO], [Music]…) — the latter were surviving into voice-first
+            // and being sent to the model as if they were a spoken turn.
             let onState: AudioStreamTranscriberCallback = { [weak self] _, newState in
                 guard let self else { return }
-                let text = WhisperTranscriptText.stripSpecialTokens(newState.currentText)
+                let text = WhisperTranscriptText.clean(newState.currentText)
+                // "Waiting for speech..." is WhisperKit's pre-speech placeholder string.
                 guard !text.isEmpty, text != "Waiting for speech..." else { return }
                 self.lock.withLock { self.lastText = text }
                 continuation.yield(TranscriptSegment(text: text, isFinal: false))

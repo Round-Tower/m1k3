@@ -95,7 +95,7 @@ public final class WhisperKitBatchTranscriber: BatchTranscriptionProvider, @unch
         from spans: [(start: TimeInterval, text: String)]
     ) -> [CallTranscriptSegment] {
         spans
-            .map { (start: $0.start, text: clean($0.text)) }
+            .map { (start: $0.start, text: cleanSegment($0.text)) }
             .filter { !$0.text.isEmpty }
             .sorted { $0.start < $1.start }
             .map { CallTranscriptSegment(text: $0.text, startTime: $0.start) }
@@ -104,7 +104,12 @@ public final class WhisperKitBatchTranscriber: BatchTranscriptionProvider, @unch
     /// Strip WhisperKit `<|…|>` special tokens, trim, and treat a whole-bracket
     /// non-speech marker (`[BLANK_AUDIO]`, `[Music]`) as empty. Brackets embedded in
     /// real speech (`words [pause] more`) are preserved.
-    private static func clean(_ raw: String) -> String {
+    ///
+    /// Deliberately NARROWER than `WhisperTranscriptText.clean` (which strips every
+    /// `[…]` anywhere): call transcripts can carry meaningful bracketed notation, so
+    /// only a segment that is *entirely* a marker is dropped. The live STT path wants
+    /// the wholesale strip — see `WhisperTranscriptText.clean` for why.
+    private static func cleanSegment(_ raw: String) -> String {
         let stripped = WhisperTranscriptText.stripSpecialTokens(raw)
         if stripped.range(of: "^\\[[^\\[\\]]*\\]$", options: .regularExpression) != nil {
             return ""
