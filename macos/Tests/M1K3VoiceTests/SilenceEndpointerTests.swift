@@ -67,6 +67,20 @@ struct SilenceEndpointerTests {
         #expect(endpointer.shouldEndpoint(at: start.advanced(by: .seconds(3.0))))
     }
 
+    @Test("holdSilence == silence is the permitted boundary: incomplete partials get no extra hold")
+    func equalThresholdsHoldNoLonger() {
+        // The init precondition permits holdSilence >= silence; the equal boundary is
+        // valid and collapses the two thresholds — an incomplete partial endpoints at
+        // the same `silence` as a complete one (no inversion, just no extra hold).
+        var endpointer = SilenceEndpointer(silence: .seconds(1.5), holdSilence: .seconds(1.5))
+        // Fixture relies on the completeness classifier reading a trailing determiner
+        // ("the") as incomplete — the whole point is that even an incomplete partial
+        // gets no longer hold once the thresholds are equal.
+        endpointer.ingest(partial: "tell me about the", at: start)
+        #expect(!endpointer.shouldEndpoint(at: start.advanced(by: .seconds(1.4))))
+        #expect(endpointer.shouldEndpoint(at: start.advanced(by: .seconds(1.5))))
+    }
+
     @Test("a complete partial still endpoints at the normal silence threshold")
     func completePartialUsesNormalSilence() {
         var endpointer = SilenceEndpointer(silence: .seconds(1.5), holdSilence: .seconds(3.0))
@@ -85,7 +99,7 @@ struct SilenceEndpointerTests {
         var text = "so"
         while secs <= 18.0 {
             endpointer.ingest(partial: text, at: start.advanced(by: .seconds(secs)))
-            text += " uh" // stays incomplete (filler), but the TEXT changes each tick
+            text += " uh" // becomes incomplete once "uh" trails it; TEXT keeps changing each tick
             secs += 2.0
         }
         // Last change was at t=18; hold (3s) wouldn't fire until 21s, but maxWait

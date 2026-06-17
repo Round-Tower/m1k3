@@ -55,6 +55,10 @@ public enum ModelReadiness {
         if requiresWeights {
             // Weight-backed: ready ONLY once the load completes. The backend's
             // always-true `isAvailable` must not be mistaken for "weights warm".
+            // `backendAvailable` is deliberately NOT consulted here — MLX reports
+            // `true` by construction, so there is no real "weight-backed but
+            // unavailable" state to map to `.unavailable`; readiness hangs solely
+            // on the load reaching `.ready`. Pinned by `weightsIgnoreAvailability`.
             if case .ready = load { return .ready }
             return .loading(load)
         }

@@ -67,6 +67,19 @@ struct AppReadinessTests {
         #expect(result.isReady)
     }
 
+    @Test("weight-backed backend ignores backendAvailable — only the load state ungates")
+    func weightsIgnoreAvailability() {
+        // Documents the deliberate dead-parameter path: for a weight-backed brain the
+        // backend's own availability is never consulted (MLX reports `true` by
+        // construction), so even backendAvailable=false stays `.loading` until the
+        // weights reach `.ready`. Guards against a future "treat unavailable as
+        // .unavailable here" refactor sneaking in silently.
+        #expect(ModelReadiness.resolve(requiresWeights: true, load: .idle, backendAvailable: false)
+            == .loading(.idle))
+        #expect(ModelReadiness.resolve(requiresWeights: true, load: .ready, backendAvailable: false)
+            == .ready)
+    }
+
     // MARK: - Failure is global, regardless of backend kind
 
     @Test("a failed load is surfaced with its message for either backend kind")
