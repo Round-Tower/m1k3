@@ -41,25 +41,41 @@ public struct ConstellationView: View {
     }
 
     public var body: some View {
-        RealityView { content in
-            root.addChild(field)
-            content.add(root)
-            content.add(camera)
-            sync(into: field, firstBuild: true)
-            frameToFit()
-        } update: { _ in
-            // Re-runs whenever a fresh model arrives (the window polls the store
-            // and hands us a new snapshot as memories accrete). We add only what's
-            // new, so the field GROWS live without tearing down the scene or
-            // resetting the user's drag-spin — then re-frame so new motes stay in view.
-            sync(into: field, firstBuild: false)
-            frameToFit()
+        // TimelineView drives a per-frame tick for the idle animation (breath /
+        // float / slow rotation) — the field feels alive at rest, not a frozen chart.
+        TimelineView(.animation) { timeline in
+            RealityView { content in
+                root.addChild(field)
+                content.add(root)
+                content.add(camera)
+                sync(into: field, firstBuild: true)
+                frameToFit()
+            } update: { _ in
+                // Re-runs each frame (timeline) AND whenever a fresh model arrives.
+                // sync adds only what's new, so the field GROWS live without tearing
+                // down the scene or resetting the drag-spin; then re-frame + breathe.
+                sync(into: field, firstBuild: false)
+                frameToFit()
+                idle(at: timeline.date.timeIntervalSinceReferenceDate)
+            }
+            // No background: render transparent over the app's glass, like the 3D
+            // companions — rounded-clipped to the same card silhouette.
+            .frame(maxWidth: .infinity)
+            .clipShape(RoundedRectangle(cornerRadius: 16))
+            .gesture(spinGesture)
         }
-        // No background: render transparent over the app's glass, like the 3D
-        // companions — rounded-clipped to the same card silhouette.
-        .frame(maxWidth: .infinity)
-        .clipShape(RoundedRectangle(cornerRadius: 16))
-        .gesture(spinGesture)
+    }
+
+    /// Subtle life at rest: a slow rotation about a gently tilted axis, a shallow
+    /// breath (scale pulse), and a soft vertical float. Applied to `field` so it
+    /// composes with the user's drag-spin (on `root`) rather than fighting it.
+    private func idle(at t: TimeInterval) {
+        let time = Float(t)
+        field.orientation = simd_quatf(
+            angle: time * 0.06, axis: simd_normalize(SIMD3<Float>(0.15, 1, 0.05))
+        )
+        field.scale = SIMD3<Float>(repeating: 1 + 0.025 * sin(time * 0.6))
+        field.position.y = 0.06 * sin(time * 0.4)
     }
 
     // MARK: - Scene construction
@@ -69,7 +85,9 @@ public struct ConstellationView: View {
     /// in"). Measured in the field's own space so the drag-spin (on `root`) never
     /// perturbs the fit.
     private func frameToFit() {
-        let bounds = field.visualBounds(relativeTo: root)
+        // Field-local bounds: invariant to the idle rotation/breath on `field`, so
+        // the camera distance stays steady while the field animates.
+        let bounds = field.visualBounds(relativeTo: field)
         let maxDim = max(bounds.extents.x, bounds.extents.y, bounds.extents.z)
         // Camera at ~1.3× the field's extent → everything in frame with margin.
         let distance = max(maxDim * 1.3, 1.5)
