@@ -36,6 +36,9 @@ public struct ConstellationView: View {
     /// Accumulated spin, composed with each drag's delta so a new drag continues
     /// from where the last one ended instead of snapping back to the un-spun pose.
     @State private var storedOrientation = simd_quatf(ix: 0, iy: 0, iz: 0, r: 1)
+    /// Honour the system Reduce Motion preference — freeze the idle breath/float/
+    /// rotation (the field still draws + grows, it just doesn't drift on its own).
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     public init(model: ConstellationModel, growthStep: TimeInterval = 0.08, spread: Float = 1.6) {
         self.model = model
@@ -59,7 +62,9 @@ public struct ConstellationView: View {
                 // down the scene or resetting the drag-spin; then re-frame + breathe.
                 sync(into: field, firstBuild: false)
                 frameToFit()
-                idle(at: timeline.date.timeIntervalSinceReferenceDate)
+                if !reduceMotion {
+                    idle(at: timeline.date.timeIntervalSinceReferenceDate)
+                }
             }
             // No background: render transparent over the app's glass, like the 3D
             // companions — rounded-clipped to the same card silhouette.
