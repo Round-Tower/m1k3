@@ -1,9 +1,16 @@
 # Prompt hardening v2 — banked for implementation
 
-> **Status:** captured 2026-06-15, NOT yet implemented. A prompt-side security +
-> abstention upgrade to `M1K3Persona`, plus three harness/code fixes the prompt
-> can't do alone. Surfaced from a leak-vector test session on Lil; folded into the
-> lil-LoRA work (the trained system prompt already uses the hardened text).
+> **Status:** prompt-side DEPLOYED 2026-06-17 (`M1K3Persona.corePrompt` now carries
+> the full v2 — ABSOLUTE RULES + HONESTY/abstention; pinned by new invariant tests
+> in `M1K3PersonaTests`). Deployed the FULL variant (not the LoRA-paired trimmed)
+> because the persona LoRA isn't live yet. Tool *mechanics* stay in the per-turn
+> `AgentRAGResponder` (availability-aware), so the always-on persona never advertises
+> a toggled-off tool. Surfaced from a leak-vector test session on Lil; the trained
+> lil-LoRA system prompt already uses the hardened text, so this aligns them.
+>
+> **Still open (harness/code, the prompt can't do alone):** see the three fixes below
+> — index segregation (data hygiene), relevance-threshold tuning, and the self-query
+> short-circuit (currently prompt-enforced via rule 3, not yet a code router).
 
 ## Why
 
