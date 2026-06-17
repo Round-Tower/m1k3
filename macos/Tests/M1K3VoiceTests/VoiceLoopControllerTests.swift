@@ -48,10 +48,13 @@ struct VoiceLoopControllerTests {
         }
     }
 
-    private func makeController(_ harness: Harness) -> VoiceLoopController {
+    private func makeController(
+        _ harness: Harness,
+        silence: Duration = .milliseconds(50)
+    ) -> VoiceLoopController {
         VoiceLoopController(
             dependencies: harness.dependencies(),
-            silence: .milliseconds(50),
+            silence: silence,
             echoGrace: .zero,
             endpointTick: .milliseconds(10)
         )
@@ -70,7 +73,10 @@ struct VoiceLoopControllerTests {
     @Test("listen → finality → turn → speak → speech end → re-listen")
     func fullBeat() async {
         let harness = Harness()
-        let controller = makeController(harness)
+        // Long silence so this test exercises the FINALITY path in isolation — the
+        // silence endpoint must not race-fire on the "what's" partial before the
+        // final "what's the time" segment arrives (the CI-load flake).
+        let controller = makeController(harness, silence: .seconds(30))
 
         controller.begin()
         await waitUntil { harness.continuation != nil }
