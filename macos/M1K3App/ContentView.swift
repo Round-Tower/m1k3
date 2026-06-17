@@ -29,6 +29,7 @@ struct ContentView: View {
     @State private var showConsentDialog = false
     @State private var isDropTargeted = false
     @AppStorage("showAvatar") private var showAvatar = true
+    @AppStorage(AppEnvironment.avatarBackgroundKey) private var showAvatarBackground = false
 
     var body: some View {
         Group {
@@ -73,6 +74,16 @@ struct ContentView: View {
             }
         }
         .animation(.easeInOut(duration: 0.45), value: showsAmbientBackdrop)
+        .background {
+            // Opt-in: the avatar as a full-window backdrop behind the glass
+            // bubbles. Standard chat mode only — voice mode has its own hero. It
+            // recedes reactively while you read/type so text stays legible.
+            if showAvatarBackground, !env.isVoiceModeActive {
+                AvatarChatBackground(env: env, isTyping: !draft.isEmpty)
+                    .transition(.opacity)
+            }
+        }
+        .animation(.easeInOut(duration: 0.35), value: showAvatarBackground)
         .glassBackdrop()
         .dropDestination(for: URL.self) { urls, _ in
             for url in urls {
@@ -356,6 +367,15 @@ struct ContentView: View {
                 )
             }
             .help(showAvatar ? "Hide the avatar panel" : "Show the avatar panel")
+            Button {
+                withAnimation(.easeInOut(duration: 0.35)) { showAvatarBackground.toggle() }
+            } label: {
+                Label(
+                    showAvatarBackground ? "Avatar background off" : "Avatar background on",
+                    systemImage: showAvatarBackground ? "rectangle.fill.on.rectangle.fill" : "rectangle.on.rectangle"
+                )
+            }
+            .help(showAvatarBackground ? "Use the avatar as the window background" : "Show the avatar as a full-window background")
             Button { showImporter = true } label: {
                 Label("Import", systemImage: "doc.badge.plus")
             }

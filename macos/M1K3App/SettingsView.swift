@@ -28,6 +28,7 @@ struct SettingsView: View {
     @State private var showMemories = false
     @AppStorage(AppEnvironment.thinkingModeKey) private var thinkingMode = ThinkingMode.auto.rawValue
     @AppStorage(AppEnvironment.voiceCompanionKey) private var voiceCompanion = ""
+    @AppStorage(AppEnvironment.avatarBackgroundKey) private var avatarBackground = false
     @AppStorage(AppEnvironment.autoRouteBrainKey) private var autoRouteBrain = false
     @AppStorage(AppEnvironment.preferAppleOnDeviceKey) private var preferAppleOnDevice = false
     @AppStorage(StartupPreferences.menuBarOnlyKey) private var menuBarOnly = false
@@ -353,12 +354,15 @@ extension SettingsView {
                     Text(spec.displayName).tag(spec.id)
                 }
             }
+            Toggle("Show as window background", isOn: $avatarBackground)
         } header: {
             Text("Companion")
         } footer: {
             Text("M1K3's face in the avatar panel and voice mode. The pixel face is the "
                 + "default; the memory constellation shows your knowledge growing in 3D; "
-                + "or pick a 3D creature. The menu-bar mark stays the pixel M either way.")
+                + "or pick a 3D creature. The menu-bar mark stays the pixel M either way. "
+                + "Show as window background fills the chat behind the bubbles — it recedes "
+                + "while you read or type so text stays legible.")
                 .font(.caption).foregroundStyle(.secondary)
         }
     }
