@@ -44,11 +44,18 @@ struct MessageView: View {
                     assistantBody
                     if let reasoning = message.reasoning, !reasoning.isEmpty {
                         reasoningDisclosure(reasoning)
+                            // Scale + fade the reasoning panel in (anchored at the
+                            // top so it grows downward from the answer, not jumps).
+                            .transition(.scale(scale: 0.96, anchor: .top).combined(with: .opacity))
                     }
                     if !message.sources.isEmpty {
                         sourcesDisclosure
                     }
                 }
+                // Animate the panel's insertion/removal + the live think→answer
+                // collapse. Paired with the ~20Hz stream throttle so it eases, not stutters.
+                .animation(.easeOut(duration: 0.22), value: message.reasoning != nil)
+                .animation(.easeOut(duration: 0.22), value: isThinkingLive)
                 Spacer(minLength: 40)
             }
         }
@@ -76,6 +83,10 @@ struct MessageView: View {
         VStack(alignment: .leading, spacing: 8) {
             if !message.text.isEmpty {
                 ReadingText(message.text)
+                    // Soft cross-fade as streamed text grows — words ease in
+                    // rather than snapping (reads as live, not a teleprinter).
+                    .contentTransition(.opacity)
+                    .animation(.easeOut(duration: 0.18), value: message.text)
             } else if case .streaming = message.status {
                 // While the agent works (thinking, searching the web…) show what
                 // it's doing — the label doubles as the privacy surface for any
@@ -142,6 +153,10 @@ struct MessageView: View {
         )) {
             ReadingText(reasoning)
                 .foregroundStyle(.secondary)
+                // Same gentle fade as the answer, so the chain-of-thought streams
+                // in softly while the disclosure is open.
+                .contentTransition(.opacity)
+                .animation(.easeOut(duration: 0.18), value: reasoning)
                 .padding(.top, 4)
                 .frame(maxWidth: .infinity, alignment: .leading)
         } label: {
