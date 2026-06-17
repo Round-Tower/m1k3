@@ -95,5 +95,34 @@ struct TranscriptAccumulatorTests {
         let acc = TranscriptAccumulator()
         #expect(acc.text.isEmpty)
         #expect(!acc.isFinal)
+        #expect(acc.confidence == nil)
+    }
+
+    @Test("confidence tracks the latest non-empty segment")
+    func confidenceTracksLatest() {
+        var acc = TranscriptAccumulator()
+        acc.ingest(TranscriptSegment(text: "hello", isFinal: false, confidence: 0.4))
+        #expect(acc.confidence == 0.4)
+        acc.ingest(TranscriptSegment(text: "hello there", isFinal: false, confidence: 0.8))
+        #expect(acc.confidence == 0.8)
+    }
+
+    @Test("an empty segment does not wipe captured confidence")
+    func emptyKeepsConfidence() {
+        var acc = TranscriptAccumulator()
+        acc.ingest(TranscriptSegment(text: "hello", isFinal: false, confidence: 0.7))
+        acc.ingest(TranscriptSegment(text: "", isFinal: false, confidence: nil))
+        #expect(acc.text == "hello")
+        #expect(acc.confidence == 0.7)
+    }
+
+    @Test("the final non-empty segment's confidence wins over an interim partial")
+    func finalSegmentConfidenceWins() {
+        // Latest non-empty wins — and the final segment is the latest — so the
+        // sanitizer gates on the settled reading, not a meandering interim one.
+        var acc = TranscriptAccumulator()
+        acc.ingest(TranscriptSegment(text: "thank", isFinal: false, confidence: 0.9))
+        acc.ingest(TranscriptSegment(text: "thank you", isFinal: true, confidence: 0.3))
+        #expect(acc.confidence == 0.3)
     }
 }

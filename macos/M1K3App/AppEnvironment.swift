@@ -948,7 +948,7 @@ extension AppEnvironment {
                     accumulator.ingest(segment)
                     liveTranscript = accumulator.text
                 }
-                await finishDictation(text: accumulator.text)
+                await finishDictation(text: accumulator.text, confidence: accumulator.confidence)
             }
         } catch {
             isListening = false
@@ -964,19 +964,21 @@ extension AppEnvironment {
         dictationProvider?.stopListening()
     }
 
-    private func finishDictation(text: String) async {
+    private func finishDictation(text: String, confidence: Float?) async {
         isListening = false
         liveTranscript = ""
         dictationProvider = nil
         dictationTask = nil
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        // Hygiene-clean the final transcript (repetition / silence hallucinations /
+        // whitespace) before it reaches the model — an all-noise dictation becomes "".
+        let cleaned = TranscriptSanitizer.clean(text, confidence: confidence)
         // Drop a dictated turn that finished before the brain is ready (a slow
         // first model load) rather than firing it at a still-loading backend.
-        guard !trimmed.isEmpty, isReady else {
+        guard !cleaned.isEmpty, isReady else {
             avatar.resetToIdle()
             return
         }
-        await send(trimmed)
+        await send(cleaned)
     }
 }
 

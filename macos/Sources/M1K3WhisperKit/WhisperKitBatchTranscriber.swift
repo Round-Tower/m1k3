@@ -23,6 +23,7 @@
 import Foundation
 import M1K3Calls
 import M1K3Inference
+import M1K3Voice // TranscriptSanitizer (repetition collapse + tidy)
 @preconcurrency import WhisperKit
 
 /// `@unchecked Sendable`: the loaded model is guarded by `lock`; WhisperKit's own
@@ -114,6 +115,8 @@ public final class WhisperKitBatchTranscriber: BatchTranscriptionProvider, @unch
         if stripped.range(of: "^\\[[^\\[\\]]*\\]$", options: .regularExpression) != nil {
             return ""
         }
-        return stripped
+        // Collapse recogniser repetition + tidy whitespace. Pleasantries are KEPT
+        // (dropPleasantries: false) — a spoken "thank you" is genuine call content.
+        return TranscriptSanitizer.clean(stripped, dropPleasantries: false)
     }
 }
