@@ -157,13 +157,11 @@ struct ContentView: View {
                     }
                     .padding(20)
                 }
-                .onChange(of: env.chat.messages.last?.text) {
-                    if let last = env.chat.messages.last?.id {
-                        withAnimation(.easeOut(duration: 0.15)) {
-                            proxy.scrollTo(last, anchor: .bottom)
-                        }
-                    }
-                }
+                .onChange(of: env.chat.messages.last?.text) { followLatest(proxy) }
+                // Follow the live reasoning too — during the think phase `text` is
+                // empty, so without this the auto-expanded reasoning grows off the
+                // bottom edge. Throttled upstream (~20Hz), so the follow eases.
+                .onChange(of: env.chat.messages.last?.reasoning) { followLatest(proxy) }
             }
         }
     }
@@ -299,6 +297,14 @@ struct ContentView: View {
         let text = draft
         draft = ""
         Task { await env.send(text) }
+    }
+
+    /// Keep the newest turn pinned to the bottom as it streams (text or reasoning).
+    private func followLatest(_ proxy: ScrollViewProxy) {
+        guard let last = env.chat.messages.last?.id else { return }
+        withAnimation(.easeOut(duration: 0.15)) {
+            proxy.scrollTo(last, anchor: .bottom)
+        }
     }
 
     // MARK: - Toolbar

@@ -265,8 +265,15 @@ public final class ChatSession {
             // streams into the disclosure as it happens instead of flashing
             // raw <think> text in the bubble until the stream ends.
             var splitter = StreamingReasoningSplitter()
+            // Coalesce token updates to ~display rate: a fast model emits chunks
+            // faster than the eye (or the transcript ForEach) can keep up, and
+            // invalidating @Observable state per token is the visible-reasoning
+            // jank. The settled state is always flushed by the authoritative
+            // update after the loop, so a coalesced-out tail loses nothing.
+            var flushGate = StreamFlushGate()
             for await chunk in stream {
                 splitter.feed(chunk)
+                guard flushGate.shouldFlush(at: .now) else { continue }
                 let liveAnswer = splitter.answer
                 let liveReasoning = splitter.reasoning
                 update(assistantID) {
