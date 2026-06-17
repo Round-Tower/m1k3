@@ -81,7 +81,9 @@ public final class VoiceLoopController {
 
     public init(
         dependencies: Dependencies,
-        silence: Duration = .seconds(1.8),
+        silence: Duration = .seconds(1.6),
+        holdSilence: Duration = .seconds(3.0),
+        maxWait: Duration = .seconds(20),
         echoGrace: Duration = .milliseconds(350),
         endpointTick: Duration = .milliseconds(300)
     ) {
@@ -89,7 +91,7 @@ public final class VoiceLoopController {
         self.silence = silence
         self.echoGrace = echoGrace
         self.endpointTick = endpointTick
-        endpointer = SilenceEndpointer(silence: silence)
+        endpointer = SilenceEndpointer(silence: silence, holdSilence: holdSilence, maxWait: maxWait)
     }
 
     // MARK: - User intents
