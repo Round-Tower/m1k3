@@ -32,4 +32,58 @@ struct WhisperTranscriptTextTests {
     func tokenOnly() {
         #expect(WhisperTranscriptText.stripSpecialTokens("<|startoftranscript|><|endoftext|>") == "")
     }
+
+    // MARK: - clean (downstream: dictation + voice-first)
+
+    @Test("a lone [BLANK_AUDIO] marker cleans to empty")
+    func blankAudioOnly() {
+        // The bug: a silent live listen yielded "[BLANK_AUDIO]" as a turn.
+        #expect(WhisperTranscriptText.clean("[BLANK_AUDIO]") == "")
+    }
+
+    @Test("non-speech markers are case-insensitive and tolerate inner spaces")
+    func markerVariants() {
+        #expect(WhisperTranscriptText.clean("[blank_audio]") == "")
+        #expect(WhisperTranscriptText.clean("[ Silence ]") == "")
+        #expect(WhisperTranscriptText.clean("[Music]") == "")
+        #expect(WhisperTranscriptText.clean("[NOISE]") == "")
+    }
+
+    @Test("a marker embedded in speech is removed but the words survive")
+    func markerEmbedded() {
+        #expect(WhisperTranscriptText.clean("[BLANK_AUDIO] so what time is it") == "so what time is it")
+        #expect(WhisperTranscriptText.clean("hello [BLANK_AUDIO] world") == "hello world")
+    }
+
+    @Test("known parenthetical non-speech annotations are stripped")
+    func parentheticalNonSpeech() {
+        #expect(WhisperTranscriptText.clean("(applause)") == "")
+        #expect(WhisperTranscriptText.clean("(speaking in foreign language)") == "")
+        // `coughs?` in the vocabulary makes the trailing `s` optional.
+        #expect(WhisperTranscriptText.clean("(cough)") == "")
+        #expect(WhisperTranscriptText.clean("(coughs)") == "")
+    }
+
+    @Test("back-to-back markers collapse to empty")
+    func consecutiveMarkers() {
+        // A silent clip can emit several markers in a row — all must vanish.
+        #expect(WhisperTranscriptText.clean("[BLANK_AUDIO] [Music]") == "")
+    }
+
+    @Test("real parenthetical speech is preserved")
+    func parentheticalSpeechKept() {
+        // Only the known non-speech vocabulary is stripped; genuine asides stay.
+        #expect(WhisperTranscriptText.clean("the answer (maybe) is yes") == "the answer (maybe) is yes")
+    }
+
+    @Test("clean also strips control tokens, then collapses whitespace")
+    func cleanStripsTokensToo() {
+        let raw = "<|startoftranscript|><|transcribe|> [BLANK_AUDIO] hello   there"
+        #expect(WhisperTranscriptText.clean(raw) == "hello there")
+    }
+
+    @Test("clean leaves ordinary speech untouched")
+    func cleanLeavesPlainText() {
+        #expect(WhisperTranscriptText.clean("just words") == "just words")
+    }
 }
