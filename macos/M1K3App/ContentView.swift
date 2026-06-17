@@ -28,8 +28,7 @@ struct ContentView: View {
     @State private var showImporter = false
     @State private var showConsentDialog = false
     @State private var isDropTargeted = false
-    @AppStorage("showAvatar") private var showAvatar = true
-    @AppStorage(AppEnvironment.avatarBackgroundKey) private var showAvatarBackground = false
+    @AppStorage(AppEnvironment.avatarDisplayKey) private var avatarDisplay = AvatarDisplay.panel
 
     var body: some View {
         Group {
@@ -43,6 +42,7 @@ struct ContentView: View {
                     inputBar
                 }
                 .transition(.opacity)
+                .animation(.spring(duration: 0.35), value: avatarDisplay)
             }
         }
         .animation(.easeInOut(duration: 0.3), value: env.isVoiceModeActive)
@@ -78,12 +78,12 @@ struct ContentView: View {
             // Opt-in: the avatar as a full-window backdrop behind the glass
             // bubbles. Standard chat mode only — voice mode has its own hero. It
             // recedes reactively while you read/type so text stays legible.
-            if showAvatarBackground, !env.isVoiceModeActive {
+            if avatarDisplay == .background, !env.isVoiceModeActive {
                 AvatarChatBackground(env: env, isTyping: !draft.isEmpty)
                     .transition(.opacity)
             }
         }
-        .animation(.easeInOut(duration: 0.35), value: showAvatarBackground)
+        .animation(.easeInOut(duration: 0.35), value: avatarDisplay)
         .glassBackdrop()
         .dropDestination(for: URL.self) { urls, _ in
             for url in urls {
@@ -135,7 +135,7 @@ struct ContentView: View {
 
     @ViewBuilder
     private var avatarPanel: some View {
-        if showAvatar {
+        if avatarDisplay == .panel {
             AvatarSurface(env: env)
                 .frame(height: 200)
                 .padding(.horizontal, 12)
@@ -358,24 +358,18 @@ struct ContentView: View {
                 Label("History", systemImage: "clock.arrow.circlepath")
             }
             .help("Browse and switch between past conversations")
-            Button {
-                withAnimation(.spring(duration: 0.35)) { showAvatar.toggle() }
+            // One control for the avatar: panel / full-window background / off.
+            Menu {
+                Picker("Avatar", selection: $avatarDisplay) {
+                    ForEach(AvatarDisplay.allCases) { mode in
+                        Label(mode.label, systemImage: mode.systemImage).tag(mode)
+                    }
+                }
+                .pickerStyle(.inline)
             } label: {
-                Label(
-                    showAvatar ? "Hide Sparrow" : "Show Sparrow",
-                    systemImage: showAvatar ? "bird.fill" : "bird"
-                )
+                Label("Avatar", systemImage: avatarDisplay.systemImage)
             }
-            .help(showAvatar ? "Hide the avatar panel" : "Show the avatar panel")
-            Button {
-                withAnimation(.easeInOut(duration: 0.35)) { showAvatarBackground.toggle() }
-            } label: {
-                Label(
-                    showAvatarBackground ? "Avatar background off" : "Avatar background on",
-                    systemImage: showAvatarBackground ? "rectangle.fill.on.rectangle.fill" : "rectangle.on.rectangle"
-                )
-            }
-            .help(showAvatarBackground ? "Use the avatar as the window background" : "Show the avatar as a full-window background")
+            .help("How M1K3's avatar appears: panel, full-window background, or off")
             Button { showImporter = true } label: {
                 Label("Import", systemImage: "doc.badge.plus")
             }
