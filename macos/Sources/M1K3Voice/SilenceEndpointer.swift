@@ -49,6 +49,7 @@ public struct SilenceEndpointer: Sendable {
         holdSilence: Duration = .seconds(3.0),
         maxWait: Duration = .seconds(20)
     ) {
+        // Duration interpolates with its SI suffix, e.g. "3.0 s" / "1.5 s".
         precondition(
             holdSilence >= silence,
             "holdSilence (\(holdSilence)) must be ≥ silence (\(silence)) to extend the listen "

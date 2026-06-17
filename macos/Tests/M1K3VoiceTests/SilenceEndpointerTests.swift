@@ -73,7 +73,10 @@ struct SilenceEndpointerTests {
         // valid and collapses the two thresholds — an incomplete partial endpoints at
         // the same `silence` as a complete one (no inversion, just no extra hold).
         var endpointer = SilenceEndpointer(silence: .seconds(1.5), holdSilence: .seconds(1.5))
-        endpointer.ingest(partial: "tell me about the", at: start) // incomplete (dangling "the")
+        // Fixture relies on the completeness classifier reading a trailing determiner
+        // ("the") as incomplete — the whole point is that even an incomplete partial
+        // gets no longer hold once the thresholds are equal.
+        endpointer.ingest(partial: "tell me about the", at: start)
         #expect(!endpointer.shouldEndpoint(at: start.advanced(by: .seconds(1.4))))
         #expect(endpointer.shouldEndpoint(at: start.advanced(by: .seconds(1.5))))
     }

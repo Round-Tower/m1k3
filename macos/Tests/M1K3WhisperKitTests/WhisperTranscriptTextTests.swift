@@ -73,6 +73,7 @@ struct WhisperTranscriptTextTests {
     @Test("a known parenthetical embedded in speech is removed but the words survive")
     func parentheticalEmbedded() {
         // Symmetry with markerEmbedded: `(applause)` mid-sentence vanishes, words stay.
+        // The strip leaves a double space ("thanks  everyone") which clean() collapses.
         #expect(WhisperTranscriptText.clean("thanks (applause) everyone") == "thanks everyone")
     }
 
