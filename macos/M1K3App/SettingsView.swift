@@ -14,6 +14,7 @@ import M1K3Chat
 import M1K3Inference
 import M1K3Launch
 import M1K3Voice
+import M1K3WhisperKit
 import SwiftUI
 
 struct SettingsView: View {
@@ -100,6 +101,14 @@ struct SettingsView: View {
 
                 Section {
                     LabeledContent("Active engine", value: env.activeTranscriberName)
+                    Picker("Accuracy", selection: Binding(
+                        get: { env.selectedWhisperModel },
+                        set: { env.selectWhisperModel($0) }
+                    )) {
+                        ForEach(WhisperModelVariant.allCases) { variant in
+                            Text("\(variant.displayName) · \(variant.sizeHint)").tag(variant)
+                        }
+                    }
                     switch env.whisperLoad {
                     case .idle, .failed:
                         Button("Enable WhisperKit (downloads model)") {
@@ -136,7 +145,8 @@ struct SettingsView: View {
                 } footer: {
                     Text("Tap the mic in the chat bar to dictate — tap again to send. Apple Speech "
                         + "works out of the box; WhisperKit is higher accuracy after a one-time "
-                        + "model download. On-device only.")
+                        + "model download (Small is the default). Changing the accuracy tier "
+                        + "applies on the next launch. On-device only.")
                         .font(.caption).foregroundStyle(.secondary)
                 }
 

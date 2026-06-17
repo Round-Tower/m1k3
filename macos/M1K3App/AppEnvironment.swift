@@ -134,6 +134,9 @@ final class AppEnvironment {
     /// WhisperKit model-load state — mirrors `modelLoad` for the brain tier.
     private(set) var whisperLoad: ModelLoadState = .idle
     private var isPreparingWhisper = false
+    /// The active WhisperKit accuracy tier (drives the Settings picker). Restored
+    /// in `init`; changing it persists + applies on next launch.
+    private(set) var selectedWhisperModel: WhisperModelVariant = .defaultVariant
 
     /// Voice OUTPUT (TTS). The Built-in Apple voice is the swap-back target;
     /// Kokoro is the premium "M1K3 Voice" tier (downloads on first use).
@@ -201,6 +204,9 @@ final class AppEnvironment {
     /// auto-loads instead of silently reverting to Apple Speech (guarded by the
     /// model being on disk, never a silent re-download).
     static let whisperEnabledKey = "transcription.whisperEnabled"
+    /// The chosen WhisperKit accuracy tier (tiny/base/small). Restored on launch;
+    /// the provider is built from it in `init`, so a change applies on next launch.
+    static let whisperModelKey = "transcription.whisperModel"
     /// Auto-route the brain via the EscalationLadder (ADR 0001) instead of a fixed
     /// manual pick. Default OFF — opt-in, fully reversible. When on, M1K3 picks the
     /// brain per its policy (the MLX floor by default; Apple-on-device only if opted in).
@@ -339,9 +345,13 @@ final class AppEnvironment {
         // its model loads), Apple Speech as the always-on fallback. So dictation
         // works on Apple Speech day one and upgrades to WhisperKit on demand.
         let whisperDownloadBase = url.deletingLastPathComponent()
-        whisperKit = WhisperKitProvider(downloadBase: whisperDownloadBase)
+        let whisperVariant = Self.resolveWhisperVariant(downloadBase: whisperDownloadBase)
+        selectedWhisperModel = whisperVariant
+        whisperKit = WhisperKitProvider(model: whisperVariant.modelID, downloadBase: whisperDownloadBase)
         transcription = TranscriptionRouter(providers: [whisperKit, AppleSpeechTranscriber()])
-        batchTranscriber = WhisperKitBatchTranscriber(downloadBase: whisperDownloadBase)
+        batchTranscriber = WhisperKitBatchTranscriber(
+            model: whisperVariant.modelID, downloadBase: whisperDownloadBase
+        )
 
         let documentIngester = DocumentIngester(store: store, embedder: embedder)
         ingester = documentIngester
@@ -486,6 +496,26 @@ final class AppEnvironment {
     /// The engine voice input would currently use, for the Settings label.
     var activeTranscriberName: String {
         transcription.activeProviderName ?? "Unavailable"
+    }
+
+    /// The WhisperKit tier to build at launch: an explicit pick wins, else keep an
+    /// already-downloaded model rather than silently switch a returning user to the
+    /// new `small.en` default (a fresh ~480 MB download). Pure decision in
+    /// `WhisperModelVariant.resolve`; this just supplies the real on-disk check.
+    private static func resolveWhisperVariant(downloadBase: URL) -> WhisperModelVariant {
+        WhisperModelVariant.resolve(
+            stored: UserDefaults.standard.string(forKey: whisperModelKey),
+            isInstalled: { WhisperKitProvider.isModelDownloaded(model: $0.modelID, downloadBase: downloadBase) }
+        )
+    }
+
+    /// Choose the WhisperKit accuracy tier. Persisted; the provider is built from
+    /// this in `init`, so the change takes effect on the next launch (the live
+    /// router is immutable — a runtime hot-swap is a deliberate future follow-up).
+    func selectWhisperModel(_ variant: WhisperModelVariant) {
+        guard variant != selectedWhisperModel else { return }
+        selectedWhisperModel = variant
+        UserDefaults.standard.set(variant.modelID, forKey: Self.whisperModelKey)
     }
 
     /// Download + load WhisperKit's model so voice input upgrades from Apple

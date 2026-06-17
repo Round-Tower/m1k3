@@ -71,6 +71,12 @@ public final class WhisperKitProvider: TranscriptionProvider, @unchecked Sendabl
     /// `<base>/models/argmaxinc/whisperkit-coreml/openai_whisper-<variant>/`; the
     /// AudioEncoder bundle's presence is the "complete, not half-fetched" signal.
     public var isModelDownloaded: Bool {
+        Self.isModelDownloaded(model: model, downloadBase: downloadBase)
+    }
+
+    /// Static form so launch-migration code can ask "is variant X already on disk?"
+    /// without constructing a provider. Same path contract as the instance read.
+    public static func isModelDownloaded(model: String, downloadBase: URL?) -> Bool {
         guard let downloadBase else { return false }
         let bundle = downloadBase
             .appendingPathComponent("models/argmaxinc/whisperkit-coreml/openai_whisper-\(model)")
@@ -132,8 +138,13 @@ public final class WhisperKitProvider: TranscriptionProvider, @unchecked Sendabl
                 tokenizer: tokenizer,
                 audioProcessor: kit.audioProcessor,
                 // skipSpecialTokens defaults to false → tokens in the text; turn it on
-                // (the stripper above is the belt-and-braces backstop).
-                decodingOptions: DecodingOptions(skipSpecialTokens: true),
+                // (the stripper above is the belt-and-braces backstop). Pin language to
+                // English for the monolingual `.en` models (skip wasted, misfire-prone
+                // detection); a future multilingual variant (no `.en` suffix) gets nil
+                // → auto-detect. Derived from the model id so it stays variant-correct.
+                decodingOptions: DecodingOptions(
+                    language: model.hasSuffix(".en") ? "en" : nil, skipSpecialTokens: true
+                ),
                 stateChangeCallback: onState
             )
             lock.withLock { self.streamer = streamer }
