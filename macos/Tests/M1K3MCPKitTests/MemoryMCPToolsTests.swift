@@ -47,6 +47,19 @@ private func makeHandlers(
         stats: {
             let live = try store.liveCount()
             return MemoryStatsSummary(liveCount: live)
+        },
+        forget: { query in
+            // Mirror the app glue minus the corpus twin: recall, resolve against
+            // the forget floor, hard-delete on a confident match.
+            let vector = try await embedder.embed(query)
+            let hits = try store.recall(query: query, queryVector: vector, limit: 3)
+            switch ForgetResolver.resolve(hits: hits) {
+            case let .forget(memory):
+                try store.forget(id: memory.id)
+                return .forgotten(text: memory.text)
+            case let .notConfident(closest):
+                return .notConfident(closest: closest?.text)
+            }
         }
     )
 }
@@ -67,12 +80,12 @@ private func seededStore(embedder: any EmbeddingService) async throws -> (Memory
 }
 
 struct MemoryMCPToolsTests {
-    @Test("the surface is recall_memory, related_memory, memory_stats")
+    @Test("the surface is recall_memory, related_memory, memory_stats, forget_memory")
     func surface() throws {
         let embedder = HashingEmbeddingService()
         let store = try MemoryStore()
         let registry = MCPToolRegistry(makeMemoryToolDefinitions(handlers: makeHandlers(store: store, embedder: embedder)))
-        #expect(registry.tools.map(\.name) == ["recall_memory", "related_memory", "memory_stats"])
+        #expect(registry.tools.map(\.name) == ["recall_memory", "related_memory", "memory_stats", "forget_memory"])
     }
 
     @Test("recall_memory returns matching facts with a similarity hint")
@@ -139,5 +152,42 @@ struct MemoryMCPToolsTests {
         #expect(result.isError != true)
         let out = try #require(text(result))
         #expect(out.contains("3")) // three seeded live memories
+    }
+
+    @Test("forget_memory hard-deletes a confident match and says what went")
+    func forgetConfident() async throws {
+        let embedder = HashingEmbeddingService()
+        let (store, _, _) = try await seededStore(embedder: embedder)
+        let registry = MCPToolRegistry(makeMemoryToolDefinitions(handlers: makeHandlers(store: store, embedder: embedder)))
+        let result = await registry.call(name: "forget_memory", arguments: ["query": .string("Kev's sister is Aoife.")])
+        #expect(result.isError != true)
+        let out = try #require(text(result))
+        #expect(out.lowercased().contains("forgotten"))
+        #expect(out.contains("Aoife"))
+        // the fact is actually gone from the live store
+        #expect(try store.liveCount() == 2)
+    }
+
+    @Test("forget_memory deletes nothing when nothing is a confident match")
+    func forgetNotConfident() async throws {
+        let embedder = HashingEmbeddingService()
+        let (store, _, _) = try await seededStore(embedder: embedder)
+        let registry = MCPToolRegistry(makeMemoryToolDefinitions(handlers: makeHandlers(store: store, embedder: embedder)))
+        let result = await registry.call(
+            name: "forget_memory",
+            arguments: ["query": .string("the orbital mechanics of Jupiter's moons")]
+        )
+        #expect(result.isError != true)
+        // nothing erased — all three seeded memories survive
+        #expect(try store.liveCount() == 3)
+    }
+
+    @Test("forget_memory with a blank query is an isError")
+    func forgetBlank() async throws {
+        let embedder = HashingEmbeddingService()
+        let store = try MemoryStore()
+        let registry = MCPToolRegistry(makeMemoryToolDefinitions(handlers: makeHandlers(store: store, embedder: embedder)))
+        let result = await registry.call(name: "forget_memory", arguments: ["query": .string("   ")])
+        #expect(result.isError == true)
     }
 }
