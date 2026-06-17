@@ -59,6 +59,13 @@ final class MenuBarAsk {
     func ask(_ rawQuestion: String) async {
         let question = rawQuestion.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !question.isEmpty else { return }
+        guard env.isReady else {
+            state = .failed(
+                question: question,
+                message: "M1K3 is still waking up — try again in a moment."
+            )
+            return
+        }
         guard !isBusy else {
             state = .failed(
                 question: question,

@@ -431,6 +431,12 @@ final class AppEnvironment {
     /// hands off to ChatSession. The speech delegate handles the speaking→idle
     /// transition if the user taps Speak on the response.
     func send(_ text: String) async {
+        // Backstop: never run a turn before the active brain is loaded into memory.
+        // The chat surface already gates this (canSend + the readiness overlay), but
+        // other entry points funnel here too — the menu-bar "Continue in chat", or a
+        // dictation that finishes just as readiness flips — so one guard protects them
+        // all. (The dedicated ask paths — MenuBarAsk, MCP — guard themselves.)
+        guard isReady else { return }
         // Auto-routing (opt-in) picks the brain per the ladder before the turn.
         // No-op when off or when the pick is unchanged, so the default path is intact.
         applyAutoRouteIfEnabled()
@@ -748,6 +754,36 @@ extension AppEnvironment {
         provider.isAvailable
     }
 
+    /// The global "is M1K3 usable yet" signal — the chat surface gates input on
+    /// this. A weight-backed brain (MLX) reports `isAvailable == true` before its
+    /// weights are on disk, so readiness for it hangs on `modelLoad` reaching
+    /// `.ready`, not on availability — otherwise a turn fires against a model that's
+    /// still downloading (the "interacted before ready" latent bugs).
+    var readiness: AppReadiness {
+        ModelReadiness.resolve(
+            requiresWeights: selectedBrain.mlxModelID != nil,
+            load: modelLoad,
+            backendAvailable: providerAvailable
+        )
+    }
+
+    /// True once the active brain is loaded and can serve a turn.
+    var isReady: Bool {
+        readiness.isReady
+    }
+
+    /// Warm the restored brain's model on launch so readiness can reach `.ready`
+    /// without the user having to fire a turn first. Mini (Apple Foundation Models)
+    /// is instant — nothing to warm. An MLX brain restored from defaults is assigned
+    /// directly in `init`, which SKIPS `selectedRuntime`'s didSet (Swift omits
+    /// property observers during initialization), so nothing else kicks the load —
+    /// this is that kick. Idempotent: `preloadGemma`/the SingleFlightLoader no-op
+    /// once the weights are cached.
+    func warmUpSelectedBrainOnLaunch() async {
+        guard selectedBrain.mlxModelID != nil else { return }
+        await preloadGemma()
+    }
+
     /// Launch-time housekeeping off the init path: restore the user profile
     /// into the persona, then the one-time embedder re-index check.
     func runStartupMaintenance() async {
@@ -934,7 +970,9 @@ extension AppEnvironment {
         dictationProvider = nil
         dictationTask = nil
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else {
+        // Drop a dictated turn that finished before the brain is ready (a slow
+        // first model load) rather than firing it at a still-loading backend.
+        guard !trimmed.isEmpty, isReady else {
             avatar.resetToIdle()
             return
         }
