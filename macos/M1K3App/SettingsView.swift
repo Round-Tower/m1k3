@@ -29,6 +29,7 @@ struct SettingsView: View {
     @AppStorage(AppEnvironment.thinkingModeKey) private var thinkingMode = ThinkingMode.auto.rawValue
     @AppStorage(AppEnvironment.voiceCompanionKey) private var voiceCompanion = ""
     @AppStorage(AppEnvironment.avatarDisplayKey) private var avatarDisplay = AvatarDisplay.panel
+    @AppStorage(AppEnvironment.companionPhosphorKey) private var phosphorSkin = false
     @AppStorage(AppEnvironment.autoRouteBrainKey) private var autoRouteBrain = false
     @AppStorage(AppEnvironment.preferAppleOnDeviceKey) private var preferAppleOnDevice = false
     @AppStorage(StartupPreferences.menuBarOnlyKey) private var menuBarOnly = false
@@ -359,6 +360,7 @@ extension SettingsView {
                     Text(mode.label).tag(mode)
                 }
             }
+            Toggle("Phosphor skin (3D creatures)", isOn: $phosphorSkin)
         } header: {
             Text("Companion")
         } footer: {
@@ -366,7 +368,8 @@ extension SettingsView {
                 + "default; the memory constellation shows your knowledge growing in 3D; "
                 + "or pick a 3D creature. The menu-bar mark stays the pixel M either way.\n"
                 + "Display: a panel above the chat, a full-window background (recedes while "
-                + "you read or type so text stays legible), or off.")
+                + "you read or type so text stays legible), or off. Phosphor skin gives a 3D "
+                + "creature a glowing look that shifts with M1K3's state (next load).")
                 .font(.caption).foregroundStyle(.secondary)
         }
     }
