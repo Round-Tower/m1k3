@@ -1,0 +1,63 @@
+//
+//  CompanionShadingStyle.swift
+//  M1K3Avatar
+//
+//  How a 3D companion creature is shaded: its baked textures (off), or one of the
+//  M1K3 surface-shader looks — phosphor (fresnel rim-glow) or cel (toon banding of
+//  the creature's OWN texture). Each glow style maps to a Metal surface-shader
+//  function compiled into the app's metallib (Phosphor.metal); the pure map lives
+//  here so the picker + the render glue share one source of truth and it's
+//  unit-tested off-device.
+//
+//  (A true interior wireframe needs a Blender-baked barycentric attribute — the
+//  code-only fwidth(normal) trick only reads on flat-shaded normals, and our
+//  companions are smoothed, so it's intentionally NOT offered. See PLAN.)
+//
+//  Signed: Kev + claude-opus-4-8, 2026-06-18, Confidence 0.9 (the style→function +
+//  texture-preservation map is pinned by tests; the on-screen look is
+//  verify-at-⌘R). Prior: Kev + claude-opus-4-8 (phosphor #46).
+//
+
+public enum CompanionShadingStyle: String, CaseIterable, Identifiable, Sendable {
+    /// The companion's own baked materials — no shader.
+    case off
+    /// Fresnel rim-glow over a near-black body (the default M1K3 look).
+    case phosphor
+    /// Toon banding of the creature's own texture + ink silhouette.
+    case cel
+
+    public var id: String {
+        rawValue
+    }
+
+    public var displayName: String {
+        switch self {
+        case .off: "Off (textured)"
+        case .phosphor: "Phosphor"
+        case .cel: "Cel"
+        }
+    }
+
+    /// The surface-shader function name in the app's default.metallib, or nil for
+    /// `.off` (keep the baked materials). Must match the `[[visible]]` entry points
+    /// in Phosphor.metal.
+    public var shaderFunctionName: String? {
+        switch self {
+        case .off: nil
+        case .phosphor: "phosphorSurface"
+        case .cel: "celSurface"
+        }
+    }
+
+    /// Whether this style paints an M1K3 shader (vs leaving baked materials).
+    public var usesShader: Bool {
+        shaderFunctionName != nil
+    }
+
+    /// Whether the shader needs the creature's ORIGINAL textures (so the render
+    /// glue builds the CustomMaterial FROM the baked material rather than blank).
+    /// Cel adapts the fur texture; phosphor is a monochrome glow that ignores it.
+    public var usesOriginalTexture: Bool {
+        self == .cel
+    }
+}

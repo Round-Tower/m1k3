@@ -29,7 +29,7 @@ struct SettingsView: View {
     @AppStorage(AppEnvironment.thinkingModeKey) private var thinkingMode = ThinkingMode.auto.rawValue
     @AppStorage(AppEnvironment.voiceCompanionKey) private var voiceCompanion = ""
     @AppStorage(AppEnvironment.avatarDisplayKey) private var avatarDisplay = AvatarDisplay.panel
-    @AppStorage(AppEnvironment.companionPhosphorKey) private var phosphorSkin = false
+    @AppStorage(AppEnvironment.companionShadingKey) private var companionShading = CompanionShadingStyle.off.rawValue
     @AppStorage(AppEnvironment.autoRouteBrainKey) private var autoRouteBrain = false
     @AppStorage(AppEnvironment.preferAppleOnDeviceKey) private var preferAppleOnDevice = false
     @AppStorage(StartupPreferences.menuBarOnlyKey) private var menuBarOnly = false
@@ -360,7 +360,9 @@ extension SettingsView {
                     Text(mode.label).tag(mode)
                 }
             }
-            Toggle("Phosphor skin (3D creatures)", isOn: $phosphorSkin)
+            Picker("3D creature skin", selection: $companionShading) {
+                ForEach(CompanionShadingStyle.allCases) { Text($0.displayName).tag($0.rawValue) }
+            }
         } header: {
             Text("Companion")
         } footer: {
@@ -368,8 +370,9 @@ extension SettingsView {
                 + "default; the memory constellation shows your knowledge growing in 3D; "
                 + "or pick a 3D creature. The menu-bar mark stays the pixel M either way.\n"
                 + "Display: a panel above the chat, a full-window background (recedes while "
-                + "you read or type so text stays legible), or off. Phosphor skin gives a 3D "
-                + "creature a glowing look that shifts with M1K3's state (next load).")
+                + "you read or type so text stays legible), or off. 3D creature skin restyles a "
+                + "creature live: Phosphor (a glowing rim that shifts with M1K3's state) or Cel "
+                + "(a toon banding of the creature's own texture).")
                 .font(.caption).foregroundStyle(.secondary)
         }
     }

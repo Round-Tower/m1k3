@@ -31,9 +31,14 @@ final class CompanionScene {
     var currentClip: String?
     /// Last emotion the fill light was tinted for — guards the per-frame colour write.
     var lastEmotion: AvatarEmotion = .neutral
-    /// Last activity the phosphor skin was tinted for — guards the per-frame
-    /// material rewrite (only re-paint when the state actually changes).
+    /// Last activity the skin was tinted for — guards the per-frame material
+    /// rewrite (only re-paint when the state actually changes).
     var lastActivity: AvatarActivity = .idle
+    /// Last shading style painted — so switching the style picker repaints live.
+    var lastShadingStyle: CompanionShadingStyle = .off
+    /// The creature's baked materials, snapshotted before any shader is applied —
+    /// cel rebuilds FROM these (keeping the fur texture) and Off restores them.
+    var bakedMaterials: [ObjectIdentifier: [any RealityKit.Material]] = [:]
     var built = false
 }
 
@@ -55,10 +60,13 @@ struct CompanionAvatarView: View {
     let controller: AvatarController
     let companion: CompanionSpec
 
-    /// Opt-in phosphor skin (the fresnel rim-glow) over the companion's baked
-    /// textures. Applies on build; toggling takes effect next time the companion
-    /// loads (voice mode rebuilds this view, so it lands quickly).
-    @AppStorage(AppEnvironment.companionPhosphorKey) private var phosphorSkin = false
+    /// Opt-in shading style (phosphor glow / cel toon) over the companion's baked
+    /// textures. Applies on build and switches live when the picker changes.
+    @AppStorage(AppEnvironment.companionShadingKey) private var shadingRaw = CompanionShadingStyle.off.rawValue
+
+    private var shadingStyle: CompanionShadingStyle {
+        CompanionShadingStyle(rawValue: shadingRaw) ?? .off
+    }
 
     @State private var scene = CompanionScene()
 
@@ -116,20 +124,25 @@ struct CompanionAvatarView: View {
         addCamera(to: &content)
         host.playAnimation(idle.repeat(), transitionDuration: 0.3)
 
-        // Opt-in phosphor skin: paint the fresnel rim-glow over the baked
+        // Snapshot the baked materials BEFORE any shader, so cel can adapt the fur
+        // texture and Off can restore it on a live switch.
+        scene.bakedMaterials = PhosphorMaterial.snapshotMaterials(of: host)
+
+        // Opt-in shading style: paint the selected M1K3 shader over the baked
         // materials. Rides the skeletal animation for free (per-fragment shader,
-        // blind to the rig). Falls back silently to baked materials if the shader
-        // can't load — the creature still renders.
+        // blind to the rig). Falls back silently if the shader can't load.
         let activity = controller.state.activity
-        if phosphorSkin {
-            PhosphorMaterial.apply(activity.phosphorTreatment, to: host)
-        }
+        PhosphorMaterial.apply(
+            shadingStyle, treatment: activity.phosphorTreatment,
+            originals: scene.bakedMaterials, to: host
+        )
 
         scene.host = host
         scene.clips = clips
         scene.currentClip = companion.idleClip
         scene.lastEmotion = controller.state.emotion
         scene.lastActivity = activity
+        scene.lastShadingStyle = shadingStyle
         scene.built = true
     }
 
@@ -197,11 +210,17 @@ struct CompanionAvatarView: View {
             scene.lastEmotion = state.emotion
         }
 
-        // Reactive phosphor: shift the rim glow with M1K3's state (calm → speaking
-        // → thinking). Re-paint only on a real change — sync() runs ~30 fps.
-        if phosphorSkin, state.activity != scene.lastActivity, let host = scene.host {
-            PhosphorMaterial.apply(state.activity.phosphorTreatment, to: host)
+        // Reactive shading: shift the glow/tint with M1K3's state, AND repaint live
+        // when the style picker changes (incl. restoring textures on switch to Off).
+        // Re-paint only on a real change — sync() runs ~30 fps.
+        let style = shadingStyle
+        if let host = scene.host, state.activity != scene.lastActivity || style != scene.lastShadingStyle {
+            PhosphorMaterial.apply(
+                style, treatment: state.activity.phosphorTreatment,
+                originals: scene.bakedMaterials, to: host
+            )
             scene.lastActivity = state.activity
+            scene.lastShadingStyle = style
         }
 
         let desired = ClipMapper.clip(for: state, dialect: companion.dialect)
