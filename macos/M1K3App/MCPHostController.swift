@@ -224,6 +224,9 @@ final class MCPHostController {
     }
 
     private func askBrain(_ question: String, responder: any RAGResponding) async throws -> String {
+        guard env.isReady else {
+            throw MCPVoiceError("M1K3 is still loading its model — try again in a moment")
+        }
         guard env.voiceLoop == nil, !env.chat.isResponding else {
             throw MCPVoiceError("M1K3 is in a conversation right now — try again shortly")
         }

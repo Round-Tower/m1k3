@@ -13,6 +13,7 @@
 //  Confidence 0.8.
 
 import M1K3Avatar
+import M1K3Inference
 import SwiftUI
 import UniformTypeIdentifiers
 
@@ -45,6 +46,24 @@ struct ContentView: View {
         }
         .animation(.easeInOut(duration: 0.3), value: env.isVoiceModeActive)
         .frame(minWidth: 600, minHeight: 520)
+        // Global readiness gate: until the active brain is actually loaded into
+        // memory, swallow interaction behind a loading/failure surface — a turn
+        // fired against still-downloading weights is the "interacted before ready"
+        // latent bug. The toolbar (incl. Settings) stays reachable as chrome.
+        .overlay {
+            if !env.isReady {
+                ModelGateView(
+                    readiness: env.readiness,
+                    brainName: env.downloadingBrainName
+                ) { Task { await env.warmUpSelectedBrainOnLaunch() } }
+                    .transition(.opacity)
+            }
+        }
+        .animation(.easeInOut(duration: 0.3), value: env.isReady)
+        // Warm the restored brain on launch so readiness can reach .ready without
+        // the user firing the first turn (init's direct assignment skips the
+        // didSet that would otherwise kick the load). Idempotent.
+        .task { await env.warmUpSelectedBrainOnLaunch() }
         .background {
             // Ambient drifting orbs while capturing audio (recording / dictation)
             // or throughout voice-first mode, fading in over the glass. Sits
@@ -172,6 +191,18 @@ struct ContentView: View {
                         .onSubmit(send)
                 }
 
+                Button { env.chat.startNewConversation() } label: {
+                    Image(systemName: "square.and.pencil")
+                        .imageScale(.large)
+                        .fontWeight(.semibold)
+                        .frame(width: 22, height: 22)
+                }
+                .buttonStyle(.glass)
+                .buttonBorderShape(.circle)
+                .disabled(env.chat.messages.isEmpty || env.chat.isResponding)
+                .help("Start a fresh conversation — this one stays in History")
+                .accessibilityLabel("New chat")
+
                 Button { env.toggleDictation() } label: {
                     Image(systemName: env.isListening ? "mic.fill" : "mic")
                         .imageScale(.large)
@@ -204,7 +235,9 @@ struct ContentView: View {
     }
 
     private var canSend: Bool {
-        !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !env.chat.isResponding
+        !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            && !env.chat.isResponding
+            && env.isReady
     }
 
     /// Cue for the ambient animated backdrop: audio capture (dictation / call
@@ -289,7 +322,8 @@ struct ContentView: View {
                 )
             }
             .keyboardShortcut("v", modifiers: [.command, .shift])
-            .disabled(!env.isVoiceModeActive && (!env.canDictate || env.chat.isResponding || env.isListening))
+            .disabled(!env.isVoiceModeActive
+                && (!env.canDictate || env.chat.isResponding || env.isListening || !env.isReady))
             .help(env.isVoiceModeActive
                 ? "Back to the chat (⌘⇧V)"
                 : "Talk with M1K3 — hands-free conversation (⌘⇧V)")
@@ -302,11 +336,7 @@ struct ContentView: View {
     /// The chat-surface actions — hidden while voice mode owns the window.
     private var chatToolbarItems: some View {
         Group {
-            Button { env.chat.startNewConversation() } label: {
-                Label("New chat", systemImage: "square.and.pencil")
-            }
-            .help("Start a fresh conversation — this one stays in History")
-            .disabled(env.chat.messages.isEmpty || env.chat.isResponding)
+            // New chat lives in the input bar now (next to mic/send) — not here.
             Button { showHistory = true } label: {
                 Label("History", systemImage: "clock.arrow.circlepath")
             }
@@ -380,6 +410,81 @@ private struct DropHintView: View {
             }
             .padding(24)
             .allowsHitTesting(false)
+    }
+}
+
+/// The global readiness gate: shown over the chat surface while the active brain
+/// is still loading, failed to load, or can't run on this Mac. Swallows
+/// interaction so a turn can't be fired before the model is warm. The window
+/// toolbar (Settings) stays reachable as chrome above this overlay.
+private struct ModelGateView: View {
+    let readiness: AppReadiness
+    let brainName: String
+    let retry: () -> Void
+
+    var body: some View {
+        ZStack {
+            Rectangle().fill(.ultraThinMaterial).ignoresSafeArea()
+            card
+                .padding(28)
+                .glassEffect(.regular, in: .rect(cornerRadius: 20))
+                .padding(40)
+        }
+        .contentShape(Rectangle()) // swallow taps to the gated surface beneath
+    }
+
+    @ViewBuilder
+    private var card: some View {
+        switch readiness {
+        case let .loading(state):
+            VStack(spacing: 16) {
+                if let fraction = state.fraction {
+                    ProgressView(value: fraction) {
+                        Label("Waking M1K3", systemImage: "brain")
+                    }
+                    .progressViewStyle(.linear)
+                    .frame(maxWidth: 280)
+                } else {
+                    ProgressView().controlSize(.large)
+                }
+                Text(loadingLabel(state))
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            }
+        case let .failed(message):
+            VStack(spacing: 14) {
+                Label("Couldn’t load \(brainName)", systemImage: "exclamationmark.triangle")
+                    .font(.headline)
+                Text(message)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                HStack(spacing: 12) {
+                    Button("Try again", action: retry)
+                        .buttonStyle(.borderedProminent)
+                    SettingsLink { Text("Open Settings") }
+                }
+            }
+        case .unavailable:
+            VStack(spacing: 14) {
+                Label("\(brainName) isn’t available here", systemImage: "questionmark.circle")
+                    .font(.headline)
+                Text("This Mac can’t run the selected brain. Choose a different one in Settings.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                SettingsLink { Text("Open Settings") }
+            }
+        case .ready:
+            EmptyView() // unreachable: the overlay is only mounted while !env.isReady
+        }
+    }
+
+    /// Prefer the load state's own label (with %); fall back to a plain line when
+    /// it has none (e.g. `.idle`, the instant before warm-up starts).
+    private func loadingLabel(_ state: ModelLoadState) -> String {
+        let label = state.label(modelName: brainName)
+        return label.isEmpty ? "Loading \(brainName)…" : label
     }
 }
 
