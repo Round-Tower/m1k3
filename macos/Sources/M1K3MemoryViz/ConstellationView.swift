@@ -28,8 +28,11 @@ public struct ConstellationView: View {
     /// shrink the motes — the field gets more compact, the stars stay visible.
     private let moteScale: Float = 2.0
 
-    /// Held so the drag gesture can spin the whole field.
+    /// `root` spins (drag); `field` holds the motes/threads and is what we frame;
+    /// the camera dollies to fit the field so all stars stay in view.
     @State private var root = Entity()
+    @State private var field = Entity()
+    @State private var camera = PerspectiveCamera()
 
     public init(model: ConstellationModel, growthStep: TimeInterval = 0.08, spread: Float = 1.6) {
         self.model = model
@@ -39,15 +42,18 @@ public struct ConstellationView: View {
 
     public var body: some View {
         RealityView { content in
-            content.add(makeCamera())
+            root.addChild(field)
             content.add(root)
-            sync(into: root, firstBuild: true)
+            content.add(camera)
+            sync(into: field, firstBuild: true)
+            frameToFit()
         } update: { _ in
             // Re-runs whenever a fresh model arrives (the window polls the store
             // and hands us a new snapshot as memories accrete). We add only what's
             // new, so the field GROWS live without tearing down the scene or
-            // resetting the user's drag-spin.
-            sync(into: root, firstBuild: false)
+            // resetting the user's drag-spin — then re-frame so new motes stay in view.
+            sync(into: field, firstBuild: false)
+            frameToFit()
         }
         // No background: render transparent over the app's glass, like the 3D
         // companions — rounded-clipped to the same card silhouette.
@@ -58,26 +64,31 @@ public struct ConstellationView: View {
 
     // MARK: - Scene construction
 
-    private func makeCamera() -> Entity {
-        let camera = PerspectiveCamera()
-        // Close framing (matches the companion camera) so the field fills the card.
-        camera.look(at: .zero, from: SIMD3<Float>(0, 0, spread * 1.8), relativeTo: nil)
-        return camera
+    /// Dolly the camera so the WHOLE field fits — count-independent framing, so a
+    /// dozen seeds and a few hundred memories both fill the card (fixes "too zoomed
+    /// in"). Measured in the field's own space so the drag-spin (on `root`) never
+    /// perturbs the fit.
+    private func frameToFit() {
+        let bounds = field.visualBounds(relativeTo: root)
+        let maxDim = max(bounds.extents.x, bounds.extents.y, bounds.extents.z)
+        // Camera at ~1.3× the field's extent → everything in frame with margin.
+        let distance = max(maxDim * 1.3, 1.5)
+        camera.look(at: .zero, from: SIMD3<Float>(0, 0, distance), relativeTo: nil)
     }
 
     /// Idempotent reconcile: place any node/edge not already in the scene. Entities
     /// are named by id so re-running is cheap and additive — the heart of the
     /// "grows over time" effect. On the first build motes stagger in along the
     /// accretion timeline; motes added later just pop in.
-    private func sync(into root: Entity, firstBuild: Bool) {
-        let present = Set(root.children.compactMap { UUID(uuidString: $0.name) })
+    private func sync(into container: Entity, firstBuild: Bool) {
+        let present = Set(container.children.compactMap { UUID(uuidString: $0.name) })
         let growthIndex = Dictionary(
             uniqueKeysWithValues: model.growthOrder.enumerated().map { ($1, $0) }
         )
         for node in model.nodes where !present.contains(node.id) {
             let mote = makeMote(node)
             mote.name = node.id.uuidString
-            root.addChild(mote)
+            container.addChild(mote)
             let delay = firstBuild ? Double(growthIndex[node.id] ?? 0) * growthStep : 0
             scheduleGrowth(of: mote, fullScale: 1, delay: delay)
         }
@@ -85,11 +96,11 @@ public struct ConstellationView: View {
         // Threads — named by endpoints so each is placed once.
         for edge in model.edges {
             let name = "edge:\(edge.from.uuidString):\(edge.to.uuidString):\(edge.relation)"
-            guard !root.children.contains(where: { $0.name == name }) else { continue }
+            guard !container.children.contains(where: { $0.name == name }) else { continue }
             guard let a = model.node(edge.from), let b = model.node(edge.to) else { continue }
             let thread = makeThread(from: a.position * spread, to: b.position * spread)
             thread.name = name
-            root.addChild(thread)
+            container.addChild(thread)
         }
     }
 

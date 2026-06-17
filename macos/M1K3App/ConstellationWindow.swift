@@ -88,7 +88,11 @@ struct MemoryConstellationCanvas: View {
     /// facts from showing twice).
     private func buildSeeded(graphMemories: [Memory], edges: [MemoryEdge]) -> ConstellationModel {
         let merged = ConstellationSeed.merge(graph: graphMemories, seeds: knowledgeSeeds())
-        return ConstellationLayout.build(memories: merged, edges: edges, maxNodes: maxNodes)
+        // Union the hard typed edges (supersedes / about-person / …) with soft
+        // topical-affinity edges so the field threads itself even when memories
+        // carry no explicit relations yet (seeds). Degree then drives star size.
+        let affinity = MemoryAffinity.edges(among: merged)
+        return ConstellationLayout.build(memories: merged, edges: edges + affinity, maxNodes: maxNodes)
     }
 
     /// Existing memories from the document/knowledge store, mapped to motes.
