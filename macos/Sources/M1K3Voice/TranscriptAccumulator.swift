@@ -19,13 +19,20 @@ public struct TranscriptAccumulator: Sendable, Equatable {
     public private(set) var text: String = ""
     /// True once a final segment has been ingested.
     public private(set) var isFinal: Bool = false
+    /// The confidence of the latest non-empty segment (nil when the recogniser
+    /// doesn't report one, e.g. WhisperKit) — fed to TranscriptSanitizer so a
+    /// confident pleasantry survives while a no-confidence ghost drops.
+    public private(set) var confidence: Float?
 
     public init() {}
 
     /// Fold one segment in. Cumulative recognisers replace the working text;
     /// empty partials are ignored so a momentary blank doesn't wipe progress.
     public mutating func ingest(_ segment: TranscriptSegment) {
-        if !segment.text.isEmpty { text = segment.text }
+        if !segment.text.isEmpty {
+            text = segment.text
+            confidence = segment.confidence
+        }
         if segment.isFinal { isFinal = true }
     }
 }

@@ -194,8 +194,15 @@ public final class VoiceLoopController {
             // Stream ended (recognizer finality). If a silence endpoint already
             // moved the machine on, this event is stale and dropped there.
             guard !Task.isCancelled else { return }
-            dispatch(.endpointed(accumulator.text))
+            dispatch(.endpointed(sanitizedUtterance()))
         }
+    }
+
+    /// The final transcript, hygiene-cleaned for the model (repetition / silence
+    /// hallucinations / whitespace). An all-noise utterance becomes "" so the
+    /// machine's empty-listen guard parks/re-listens instead of running a ghost turn.
+    private func sanitizedUtterance() -> String {
+        TranscriptSanitizer.clean(accumulator.text, confidence: accumulator.confidence)
     }
 
     private func startEndpointTick() {
@@ -205,7 +212,7 @@ public final class VoiceLoopController {
                 try? await Task.sleep(for: self?.endpointTick ?? .milliseconds(300))
                 guard let self, !Task.isCancelled else { return }
                 if endpointer.shouldEndpoint(at: ContinuousClock.now) {
-                    dispatch(.endpointed(accumulator.text))
+                    dispatch(.endpointed(sanitizedUtterance()))
                     return
                 }
             }
