@@ -28,6 +28,7 @@ struct SettingsView: View {
     @State private var showMemories = false
     @AppStorage(AppEnvironment.thinkingModeKey) private var thinkingMode = ThinkingMode.auto.rawValue
     @AppStorage(AppEnvironment.voiceCompanionKey) private var voiceCompanion = ""
+    @AppStorage(AppEnvironment.companionPhosphorKey) private var phosphorSkin = false
     @AppStorage(AppEnvironment.avatarBackgroundKey) private var avatarBackground = false
     @AppStorage(AppEnvironment.autoRouteBrainKey) private var autoRouteBrain = false
     @AppStorage(AppEnvironment.preferAppleOnDeviceKey) private var preferAppleOnDevice = false
@@ -355,6 +356,7 @@ extension SettingsView {
                 }
             }
             Toggle("Show as window background", isOn: $avatarBackground)
+            Toggle("Phosphor skin (3D creatures)", isOn: $phosphorSkin)
         } header: {
             Text("Companion")
         } footer: {
@@ -362,7 +364,9 @@ extension SettingsView {
                 + "default; the memory constellation shows your knowledge growing in 3D; "
                 + "or pick a 3D creature. The menu-bar mark stays the pixel M either way. "
                 + "Show as window background fills the chat behind the bubbles — it recedes "
-                + "while you read or type so text stays legible.")
+                + "while you read or type so text stays legible. Phosphor skin gives a 3D "
+                + "creature a glowing wireframe-style look that shifts with M1K3's state — "
+                + "turning it on or off takes effect next time the companion loads.")
                 .font(.caption).foregroundStyle(.secondary)
         }
     }

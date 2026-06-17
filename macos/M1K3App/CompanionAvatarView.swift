@@ -31,6 +31,9 @@ final class CompanionScene {
     var currentClip: String?
     /// Last emotion the fill light was tinted for — guards the per-frame colour write.
     var lastEmotion: AvatarEmotion = .neutral
+    /// Last activity the phosphor skin was tinted for — guards the per-frame
+    /// material rewrite (only re-paint when the state actually changes).
+    var lastActivity: AvatarActivity = .idle
     var built = false
 }
 
@@ -51,6 +54,11 @@ final class CompanionScene {
 struct CompanionAvatarView: View {
     let controller: AvatarController
     let companion: CompanionSpec
+
+    /// Opt-in phosphor skin (the fresnel rim-glow) over the companion's baked
+    /// textures. Applies on build; toggling takes effect next time the companion
+    /// loads (voice mode rebuilds this view, so it lands quickly).
+    @AppStorage(AppEnvironment.companionPhosphorKey) private var phosphorSkin = false
 
     @State private var scene = CompanionScene()
 
@@ -108,10 +116,20 @@ struct CompanionAvatarView: View {
         addCamera(to: &content)
         host.playAnimation(idle.repeat(), transitionDuration: 0.3)
 
+        // Opt-in phosphor skin: paint the fresnel rim-glow over the baked
+        // materials. Rides the skeletal animation for free (per-fragment shader,
+        // blind to the rig). Falls back silently to baked materials if the shader
+        // can't load — the creature still renders.
+        let activity = controller.state.activity
+        if phosphorSkin {
+            PhosphorMaterial.apply(activity.phosphorTreatment, to: host)
+        }
+
         scene.host = host
         scene.clips = clips
         scene.currentClip = companion.idleClip
         scene.lastEmotion = controller.state.emotion
+        scene.lastActivity = activity
         scene.built = true
     }
 
@@ -177,6 +195,13 @@ struct CompanionAvatarView: View {
         if state.emotion != scene.lastEmotion {
             scene.fillLight?.light.color = Self.fillColor(for: state.emotion)
             scene.lastEmotion = state.emotion
+        }
+
+        // Reactive phosphor: shift the rim glow with M1K3's state (calm → speaking
+        // → thinking). Re-paint only on a real change — sync() runs ~30 fps.
+        if phosphorSkin, state.activity != scene.lastActivity, let host = scene.host {
+            PhosphorMaterial.apply(state.activity.phosphorTreatment, to: host)
+            scene.lastActivity = state.activity
         }
 
         let desired = ClipMapper.clip(for: state, dialect: companion.dialect)
