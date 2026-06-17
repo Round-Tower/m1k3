@@ -70,6 +70,12 @@ struct WhisperTranscriptTextTests {
         #expect(WhisperTranscriptText.clean("[BLANK_AUDIO] [Music]") == "")
     }
 
+    @Test("a known parenthetical embedded in speech is removed but the words survive")
+    func parentheticalEmbedded() {
+        // Symmetry with markerEmbedded: `(applause)` mid-sentence vanishes, words stay.
+        #expect(WhisperTranscriptText.clean("thanks (applause) everyone") == "thanks everyone")
+    }
+
     @Test("real parenthetical speech is preserved")
     func parentheticalSpeechKept() {
         // Only the known non-speech vocabulary is stripped; genuine asides stay.

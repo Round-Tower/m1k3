@@ -49,6 +49,12 @@ public struct SilenceEndpointer: Sendable {
         holdSilence: Duration = .seconds(3.0),
         maxWait: Duration = .seconds(20)
     ) {
+        precondition(
+            holdSilence >= silence,
+            "holdSilence (\(holdSilence)) must be ≥ silence (\(silence)) to extend the listen "
+                + "window — a shorter hold would endpoint incomplete partials FASTER than "
+                + "complete ones, inverting the intent."
+        )
         self.silence = silence
         self.holdSilence = holdSilence
         self.maxWait = maxWait

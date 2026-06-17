@@ -59,7 +59,8 @@ public enum WhisperTranscriptText {
     /// genuine spoken asides ("the answer (maybe) is yes") survive. NOTE: entries are
     /// interpolated verbatim into the outer regex, so they MAY carry regex
     /// metacharacters on purpose (`coughs?` matches cough/coughs). Escape any literal
-    /// `.`/`(`/`+`/`*` you add, or the alternation will silently misbehave.
+    /// `.`/`(`/`+`/`*`/`|` you add (a literal `|` would silently split the
+    /// alternation), or the alternation will silently misbehave.
     private static let nonSpeechVocabulary = [
         "blank_audio", "silence", "music", "noise", "applause", "laughter",
         "inaudible", "coughs?", "sighs?", "speaking in foreign language",
