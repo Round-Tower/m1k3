@@ -258,6 +258,15 @@ enum SelfTest {
             await ChatEvalStage.run(emit: emit)
         }
 
+        // 8. Optional memory-graph integration eval (M1K3_SELFTEST_MEMGRAPH=1):
+        //    drive the temporal memory store through the life-graph scenario
+        //    against the REAL MLX embedder, including the `semantic` probes that
+        //    only a real embedder can satisfy (paraphrase recall + discrimination)
+        //    — the proof that recall works on MEANING, not just keyword overlap.
+        if MemGraphEvalStage.isRequested {
+            await MemGraphEvalStage.run(emit: emit)
+        }
+
         emit("=== END SELF-TEST ===")
     }
 

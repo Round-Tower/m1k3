@@ -1,0 +1,173 @@
+//
+//  ConstellationWindow.swift
+//  M1K3App
+//
+//  The window + menu command that open the 3D memory constellation. Pulls the
+//  live graph from the store (allMemories + allEdges), builds the pure
+//  ConstellationModel, and hands it to the RealityKit ConstellationView. The
+//  layout/colour/geometry are all tested upstream in M1K3Memory / M1K3MemoryViz;
+//  this is app glue (verify-by-run, like the other windows).
+//
+//  Signed: Kev + claude-opus-4-8, 2026-06-16, Confidence 0.75 (compiles against
+//  the viz target; the live look + the "grows over time" feel are Kev's ⌘R).
+//  Prior: Unknown.
+
+import M1K3Knowledge
+import M1K3Memory
+import M1K3MemoryViz
+import SwiftUI
+
+extension M1K3App {
+    /// Stable id so the menu command summons (not respawns) the constellation.
+    static let constellationWindowID = "constellation"
+}
+
+/// The constellation canvas — polls the store, seeds from the knowledge base,
+/// renders the live field. Frameless so it serves every surface: the window, the
+/// voice-mode hero, the main-window companion. (See ConstellationWindowContent
+/// for the windowed wrapper.)
+struct MemoryConstellationCanvas: View {
+    let env: AppEnvironment?
+    @State private var model: ConstellationModel?
+    /// Last seen store revision — the cheap change signal that gates a relayout.
+    /// `revision` (not a bare count) so a SUPERSESSION (net-zero count) still
+    /// redraws the field on a correction.
+    @State private var lastRevision: MemoryRevision?
+
+    /// Cap the field so a big store stays legible and the O(n²) layout stays cheap;
+    /// the view shows the newest motes. Poll cadence for "grows over time".
+    private let maxNodes = 300
+    private let refresh: Duration = .seconds(2)
+
+    var body: some View {
+        Group {
+            if let model {
+                if model.isEmpty {
+                    ContentUnavailableView(
+                        "No memories yet",
+                        systemImage: "sparkles",
+                        description: Text("As M1K3 remembers things, they appear here as a constellation that grows over time.")
+                    )
+                } else {
+                    ConstellationView(model: model)
+                }
+            } else {
+                ProgressView("Mapping memory…")
+            }
+        }
+        .task { await watch() }
+    }
+
+    /// Poll the store while the window is open, relaying out only when the live
+    /// memory count actually changes — so a new `remember` makes a mote appear
+    /// within a couple of seconds, but an idle window does no work.
+    private func watch() async {
+        await rebuildIfChanged()
+        while !Task.isCancelled {
+            try? await Task.sleep(for: refresh)
+            await rebuildIfChanged()
+        }
+    }
+
+    /// Poll the store and relayout only when its revision actually moves. The
+    /// GRDB reads + the O(n²) layout run on a utility task (the stores are
+    /// `@unchecked Sendable` GRDB handles, captured off the non-Sendable view);
+    /// only the two `@State` mutations hop back to the MainActor. No main-thread IO.
+    private func rebuildIfChanged() async {
+        guard let memoryStore = env?.memoryStore else {
+            // No graph store yet — seed from the knowledge base once so the
+            // window isn't blank (no revision to track on this path).
+            guard model == nil else { return }
+            let knowledge = env?.store
+            let cap = maxNodes
+            model = await Task.detached(priority: .utility) {
+                Self.buildSeeded(graphMemories: [], edges: [], knowledge: knowledge, maxNodes: cap)
+            }.value
+            return
+        }
+        let knowledge = env?.store
+        let previous = lastRevision
+        let alreadyBuilt = model != nil
+        let cap = maxNodes
+
+        let result: (revision: MemoryRevision, model: ConstellationModel)? = await Task.detached(priority: .utility) {
+            let revision = (try? memoryStore.revision())
+                ?? MemoryRevision(memoryCount: 0, edgeCount: 0, latestCreatedAt: 0)
+            // Nothing changed and the field is already drawn → no work.
+            if revision == previous, alreadyBuilt { return nil }
+            let memories = (try? memoryStore.allMemories(limit: 2000)) ?? []
+            let edges = (try? memoryStore.allEdges()) ?? []
+            let model = Self.buildSeeded(
+                graphMemories: memories, edges: edges, knowledge: knowledge, maxNodes: cap
+            )
+            return (revision, model)
+        }.value
+
+        guard let result else { return }
+        lastRevision = result.revision
+        model = result.model
+    }
+
+    /// Lay out the live graph UNIONed with existing `.memory` items from the
+    /// knowledge base — so the constellation shows what M1K3 already knows on
+    /// first open, then grows as the graph store fills (dedup keeps dual-written
+    /// facts from showing twice). Pure + `static` so it runs off the MainActor.
+    private nonisolated static func buildSeeded(
+        graphMemories: [Memory], edges: [MemoryEdge], knowledge: KnowledgeStore?, maxNodes: Int
+    ) -> ConstellationModel {
+        let merged = ConstellationSeed.merge(graph: graphMemories, seeds: knowledgeSeeds(from: knowledge))
+        // Cap to the newest `maxNodes` BEFORE scoring affinity. MemoryAffinity is
+        // O(n²) over the union, but only motes that survive the cap are drawn —
+        // scoring the discarded ones is wasted work AND would thread off-field
+        // motes. `build` re-applies the cap as a cheap no-op safety net.
+        let capped = merged.count > maxNodes
+            ? Array(merged.sorted { $0.createdAt > $1.createdAt }.prefix(maxNodes))
+            : merged
+        // Union the hard typed edges (supersedes / about-person / …) with soft
+        // topical-affinity edges so the field threads itself even when memories
+        // carry no explicit relations yet (seeds). Degree then drives star size.
+        let affinity = MemoryAffinity.edges(among: capped)
+        return ConstellationLayout.build(memories: capped, edges: edges + affinity, maxNodes: maxNodes)
+    }
+
+    /// Existing memories from the document/knowledge store, mapped to motes.
+    /// They carry no edges (the graph layer is the new store's job) — a scattered
+    /// field that threads itself together as relations accrue.
+    private nonisolated static func knowledgeSeeds(from knowledge: KnowledgeStore?) -> [Memory] {
+        guard let knowledge else { return [] }
+        let items = (try? knowledge.allItems(kind: .memory, limit: 500)) ?? []
+        return items.map { item in
+            Memory(id: item.id, kind: .note, text: item.title, source: "knowledge", createdAt: item.createdAt)
+        }
+    }
+}
+
+/// The windowed wrapper — the canvas at a window's size, opened from the menu.
+struct ConstellationWindowContent: View {
+    let env: AppEnvironment?
+
+    var body: some View {
+        MemoryConstellationCanvas(env: env)
+            .frame(minWidth: 640, minHeight: 480)
+            .navigationTitle("Memory Constellation")
+    }
+}
+
+/// Adds "Memory Constellation" to the Window menu.
+struct ConstellationCommands: Commands {
+    var body: some Commands {
+        CommandGroup(after: .windowList) {
+            ConstellationMenuItem()
+        }
+    }
+}
+
+private struct ConstellationMenuItem: View {
+    @Environment(\.openWindow) private var openWindow
+
+    var body: some View {
+        Button("Memory Constellation") {
+            openWindow(id: M1K3App.constellationWindowID)
+        }
+    }
+}

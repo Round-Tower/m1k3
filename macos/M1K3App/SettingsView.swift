@@ -346,18 +346,19 @@ extension SettingsView {
     /// Form is at the type-checker budget; see aboutYouSection.)
     private var companionSection: some View {
         Section {
-            Picker("Voice companion", selection: $voiceCompanion) {
+            Picker("Companion", selection: $voiceCompanion) {
                 Text("Pixel face").tag("")
+                Text("Memory constellation").tag(AppEnvironment.voiceCompanionConstellation)
                 ForEach(CompanionSpec.all.filter(CompanionAssets.isInstalled)) { spec in
                     Text(spec.displayName).tag(spec.id)
                 }
             }
         } header: {
-            Text("Voice companion")
+            Text("Companion")
         } footer: {
-            Text("Who greets you in voice mode. The pixel face is M1K3 — a companion "
-                + "is an optional skin for full-window voice conversations, and only "
-                + "there. Everywhere else, the pixel face stays.")
+            Text("M1K3's face in the avatar panel and voice mode. The pixel face is the "
+                + "default; the memory constellation shows your knowledge growing in 3D; "
+                + "or pick a 3D creature. The menu-bar mark stays the pixel M either way.")
                 .font(.caption).foregroundStyle(.secondary)
         }
     }

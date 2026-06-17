@@ -22,7 +22,6 @@ import SwiftUI
 struct VoiceModeView: View {
     @Environment(AppEnvironment.self) private var env
     /// Persisted voice-mode avatar: "" (default) = the pixel face, else a companion id.
-    @AppStorage(AppEnvironment.voiceCompanionKey) private var voiceCompanion = ""
     /// Voice mode's own brain switch — replaces the Settings Reasoning picker
     /// while the loop is active. Off (default) = fast replies; flips apply
     /// from the next turn (the provider reads it per turn).
@@ -62,13 +61,8 @@ struct VoiceModeView: View {
     /// The voice-mode hero: the pixel face unless the user opted into a companion
     /// that's actually installed. An unknown or uninstalled id falls back to the
     /// pixel face, so a stale setting can never blank the hero.
-    @ViewBuilder
     private var avatar: some View {
-        if let companion = CompanionSpec.named(voiceCompanion), CompanionAssets.isInstalled(companion) {
-            CompanionAvatarView(controller: env.avatar, companion: companion)
-        } else {
-            AvatarView(controller: env.avatar)
-        }
+        AvatarSurface(env: env)
     }
 
     // MARK: - State content

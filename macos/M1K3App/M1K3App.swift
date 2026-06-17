@@ -91,6 +91,15 @@ struct M1K3App: App {
         .defaultLaunchBehavior(
             StartupVisibility(menuBarOnly: menuBarOnly).suppressesLaunchWindow ? .suppressed : .automatic
         )
+        .commands { ConstellationCommands() }
+
+        // The 3D memory constellation — memories as motes, edges as threads, the
+        // field accreting as the store grows. A single-instance Window summoned
+        // from the Window menu; rebuilds its snapshot from the live store each open.
+        Window("Memory Constellation", id: Self.constellationWindowID) {
+            ConstellationWindowContent(env: env)
+        }
+        .windowResizability(.contentSize)
 
         // Native macOS Settings scene — opened with ⌘, (or the toolbar gear via
         // SettingsLink), in its own window with the system title bar, instead of

@@ -33,6 +33,7 @@ import M1K3Inference
 import M1K3Knowledge
 import M1K3KnowledgeTools
 import M1K3Kokoro
+import M1K3Memory
 import M1K3MLX
 import M1K3Voice
 import M1K3WhisperKit
@@ -79,6 +80,11 @@ enum RuntimeOption: String, CaseIterable, Identifiable {
 @Observable
 final class AppEnvironment {
     let store: KnowledgeStore
+    /// The temporal memory GRAPH — atomic facts + typed edges, SEPARATE from the
+    /// RAG document corpus (`store`). The MCP `remember` dual-writes here; the
+    /// recall_memory/related_memory tools read it. Best-effort: a MemoryStore
+    /// hiccup never breaks the existing KnowledgeStore remember path.
+    let memoryStore: MemoryStore?
     let provider: any InferenceProvider
     let responder: any RAGResponding
     /// TTS behind a swappable seam: Built-in (Apple) by default, M1K3 Voice
@@ -290,6 +296,13 @@ final class AppEnvironment {
 
         let url = try Self.storeURL()
         store = try KnowledgeStore(path: url.path)
+
+        // The memory graph lives in its own file alongside knowledge.sqlite
+        // (different lifecycle/consent/sync story — see MemoryStore's design
+        // notes). Best-effort: if it can't open, the app runs unchanged and the
+        // dual-write/recall tools simply stay inert.
+        let memoryURL = url.deletingLastPathComponent().appendingPathComponent("memory.sqlite")
+        memoryStore = try? MemoryStore(path: memoryURL.path)
 
         // Embeddings define the stored vector space, so the choice must persist
         // across launches (Hashing query vectors against MLX-stored vectors would

@@ -22,6 +22,7 @@ import Foundation
 import M1K3Avatar
 import M1K3Chat // HeadlessAsk + RAGResponding (the ask_m1k3 core)
 import M1K3MCPKit
+import M1K3Memory // MemoryStore, Memory — the temporal memory graph the new tools expose
 import M1K3Voice
 import MCP // StatelessHTTPServerTransport (the SDK type the session factory builds)
 import Observation
@@ -104,6 +105,7 @@ final class MCPHostController {
             makeKnowledgeToolDefinitions(store: env.store)
                 + makeVoiceToolDefinitions(handlers: makeVoiceHandlers())
                 + makeIntelligenceToolDefinitions(handlers: makeIntelligenceHandlers())
+                + memoryToolDefinitions()
         )
         let host = LocalMCPHTTPServer(
             port: port,
@@ -274,8 +276,65 @@ final class MCPHostController {
         if !result.wasDeduped {
             env.soundEffects.play(.save)
         }
+        // DUAL-WRITE: also drop the fact into the temporal memory graph. Strictly
+        // additive (the KnowledgeStore path above is unchanged) and best-effort —
+        // a MemoryStore hiccup must never break the proven remember behaviour. The
+        // full migration off KnowledgeStore is a later PR; today this seeds the
+        // graph so recall_memory/related_memory have something to read.
+        if !result.wasDeduped {
+            await dualWriteToMemoryGraph(text: text)
+        }
         let dedup = result.wasDeduped ? " (already remembered)" : ""
         return "Remembered “\(title)”\(dedup)."
+    }
+
+    /// Best-effort write of a remembered fact into the temporal memory graph.
+    /// Embeds via the SAME embedder the recall tools query with, so the vectors
+    /// share a space. Swallows every error — this is a non-fatal companion to the
+    /// KnowledgeStore remember, never a gate on it.
+    private func dualWriteToMemoryGraph(text: String) async {
+        guard let memoryStore = env.memoryStore else { return }
+        do {
+            let vector = try await env.embedder.embed(text)
+            // Title carried into the fact so a recall surfaces the same handle the
+            // visitor used; source marks the provenance half of the consent story.
+            let fact = Memory(kind: .note, text: text, source: "mcp:remember")
+            try memoryStore.remember(fact, embedding: vector)
+        } catch {
+            Self.securityLog.error("memory-graph dual-write skipped: \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
+    // MARK: - Memory-graph tool handlers
+
+    /// recall_memory / related_memory / memory_stats over the temporal memory
+    /// graph. Each closure embeds the query with `env.embedder` (the same space
+    /// the dual-write stores into) and reads the live MemoryStore. Inert when no
+    /// MemoryStore opened (best-effort, like the dual-write) — recall returns
+    /// empty, stats returns zero.
+    private func memoryToolDefinitions() -> [MCPToolDefinition] {
+        let embedder = env.embedder
+        let memoryStore = env.memoryStore
+        let handlers = MemoryToolHandlers(
+            recall: { query in
+                guard let memoryStore else { return [] }
+                let vector = try await embedder.embed(query)
+                return try memoryStore.recall(query: query, queryVector: vector)
+            },
+            related: { query in
+                guard let memoryStore else { return nil }
+                let vector = try await embedder.embed(query)
+                guard let seed = try memoryStore.recall(query: query, queryVector: vector, limit: 1).first else {
+                    return nil
+                }
+                return try (seed.memory, memoryStore.related(to: seed.memory.id))
+            },
+            stats: {
+                guard let memoryStore else { return MemoryStatsSummary(liveCount: 0) }
+                return try MemoryStatsSummary(liveCount: memoryStore.liveCount())
+            }
+        )
+        return makeMemoryToolDefinitions(handlers: handlers)
     }
 
     /// Pull-model transcription for the `listen` tool: open the active STT
