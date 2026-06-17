@@ -21,6 +21,12 @@
 //  wireSpeechCallbacks() (+ word-timing → SpeechHighlight); voiceLoop stored
 //  property + speechDidEnd routing; voice-mode Auto→fast thinking override;
 //  stale voiceMode.active cleared at launch. Confidence 0.8.
+//  Review: Kev + claude-opus-4-8, 2026-06-17, Confidence 0.85 — added the shared
+//  intelligence surface's stored state: `intelligenceResponder` (one lazy,
+//  brain-switch-tracking RAGResponder) + `intelligenceAskInFlight` (one
+//  single-flight lock), both shared by the MCP `ask_m1k3` tool AND the new Ask App
+//  Intent (logic in AppEnvironment+Intelligence.swift). Additive; existing wiring
+//  unchanged.
 
 import AppKit
 import Foundation
@@ -94,6 +100,22 @@ final class AppEnvironment {
 
     let embedder: SwappableEmbeddingService // internal: MCPHostController builds a dedicated responder
     let ingester: DocumentIngester // internal: the MCP remember tool ingests through it
+    /// The intelligence surfaces (MCP `ask_m1k3` AND the Ask App Intent) share ONE
+    /// dedicated responder and ONE single-flight lock: `collectedSources()` is a
+    /// draining read, so two asks on the same provider must never overlap. Built
+    /// lazily on first ask; `provider` is the swappable runtime façade, so brain
+    /// switches track without a rebuild. `.fast` thinking — the synthesis think
+    /// phase is what blew past the deadline on small local brains; the chat window
+    /// is where the fuller answer lives. (See AppEnvironment+Intelligence.swift.)
+    @ObservationIgnored private(set) lazy var intelligenceResponder: any RAGResponding =
+        Self.makeAgentResponder(
+            store: store, embedder: embedder, provider: provider, forcedThinkingMode: .fast
+        )
+    /// True while an `ask_m1k3` / Ask-intent generation is running (shared lock).
+    /// Observation is intentionally suppressed: the VISIBLE "answering" signal is
+    /// carried by the avatar activity (which IS observable); this Bool is read by
+    /// the MCP status poll, so re-triggering SwiftUI on every flip would be noise.
+    @ObservationIgnored var intelligenceAskInFlight = false
     private let runtimeSelection: RuntimeSelectionBox
     /// Call intelligence: encrypted-at-rest persistence + indexing into the SAME
     /// knowledge graph as documents (so calls are RAG-searchable) + two-stage

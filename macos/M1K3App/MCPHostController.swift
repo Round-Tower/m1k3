@@ -17,6 +17,14 @@
 //  layers test-pinned in M1K3MCPKit; this glue is verify-at-⌘R against a real
 //  claude session). Prior: Unknown.
 //
+//  Review: Kev + claude-opus-4-8, 2026-06-17, Confidence 0.85 — extracted the
+//  ask/speak/remember logic (askBrain, beginSpeak, rememberText,
+//  dualWriteToMemoryGraph + the single-flight lock + canary wiring) into the shared
+//  AppEnvironment+Intelligence surface so the App Intents reuse the exact same
+//  core; this controller is now the MCP adapter that delegates to it. Behaviour
+//  preserved (provenance parameterised to "mcp:remember"); dropped the now-unused
+//  `os` + `M1K3Chat` imports.
+//
 
 import Foundation
 import M1K3Avatar
@@ -27,7 +35,6 @@ import M1K3Memory // MemoryStore, Memory — the temporal memory graph the new t
 import M1K3Voice
 import MCP // StatelessHTTPServerTransport (the SDK type the session factory builds)
 import Observation
-import os // Logger — the canary-tripwire alert channel
 
 @MainActor
 @Observable
@@ -43,27 +50,13 @@ final class MCPHostController {
     // accepted v1 trade-off — the boundary guarded is the MCP OUTPUT surface,
     // not canary storage; migrate to the Keychain if the threat model widens to
     // a compromised container read. The key string lives once, in
-    // `CanaryGuard.localConfigKey` — shared with the menu-bar Ask surface.
-
-    /// Loud, PERSISTED alert channel (debug/info aren't kept by the log store).
-    /// Logs the match COUNT only — never the canary value, which would re-leak it.
-    private nonisolated static let securityLog = Logger(
-        subsystem: "app.m1k3", category: "security"
-    )
-
-    /// Build the leak guard from local config. Static + nonisolated so the value
-    /// (Sendable) can cross into the @Sendable timeout closure without self.
-    private nonisolated static func canaryGuard() -> CanaryGuard {
-        // Shared with the menu-bar Ask surface — one source of truth for the
-        // tripwire parsing + the key (see CanaryGuard.fromLocalConfig).
-        CanaryGuard.fromLocalConfig()
-    }
+    // `CanaryGuard.localConfigKey` — shared with the menu-bar Ask + App Intent
+    // surfaces. The ask/speak/remember logic (single-flight, deadline, the canary
+    // wiring, the memory-graph dual-write) lives once in AppEnvironment+Intelligence;
+    // this controller is now just the MCP adapter over it.
 
     private unowned let env: AppEnvironment
     private var server: LocalMCPHTTPServer?
-    /// One ask_m1k3 at a time — a second concurrent generation on the same
-    /// MLX provider is undefined territory.
-    private var askInFlight = false
     /// Ceiling on a single ask_m1k3 generation. Legit answers run tens of
     /// seconds even on the big brains; past this the generation is cancelled
     /// and the single-flight lock released, so one runaway question can't wedge
@@ -151,7 +144,7 @@ final class MCPHostController {
         VoiceToolHandlers(
             speak: { [weak self] text, emotion, wait in
                 guard let self else { throw MCPVoiceError("M1K3 is shutting down") }
-                try await self.beginSpeak(text: text, emotion: emotion, wait: wait)
+                try await self.env.intelligenceSpeak(text: text, emotion: emotion, wait: wait)
             },
             stopSpeaking: { [weak self] in
                 await self?.env.stopSpeaking()
@@ -166,25 +159,6 @@ final class MCPHostController {
         )
     }
 
-    /// `wait: false` fires speech and returns immediately — env.speak awaits
-    /// FULL playback (EffectfulSpeechProvider+Streaming awaitCompletion), and
-    /// the SDK Server is serial, so a blocking speak would starve every status
-    /// poll for the whole utterance (the report's F3-as-observed).
-    private func beginSpeak(text: String, emotion: String?, wait: Bool) async throws {
-        guard env.voiceLoop == nil, !env.chat.isResponding else {
-            throw MCPVoiceError("M1K3 is in a conversation right now — try again shortly")
-        }
-        if let emotion {
-            env.avatar.setEmotion(AvatarEmotion.from(emotion))
-        }
-        if wait {
-            await env.speak(text)
-        } else {
-            let environment = env
-            Task { @MainActor in await environment.speak(text) }
-        }
-    }
-
     private func voiceStatus() async -> VoiceStatus {
         // speaking covers the Kokoro synthesis gap too: the highlight's
         // utterance text is set at utterance start and cleared on end.
@@ -196,114 +170,29 @@ final class MCPHostController {
             isSpeaking: speaking,
             inConversation: env.voiceLoop != nil || env.chat.isResponding,
             micInUse: env.voiceLoop != nil || env.isListening || env.isRecording,
-            answering: askInFlight
+            answering: env.intelligenceAskInFlight
         )
     }
 
     // MARK: - Intelligence tool handlers
 
-    /// ask_m1k3 runs on a DEDICATED responder instance — collectedSources()
-    /// is a draining read, so sharing the chat UI's responder would race a
-    /// live turn. Same store/embedder/provider, fresh per server start.
+    /// The MCP adapter over the shared intelligence surface: ask_m1k3 and remember
+    /// run on AppEnvironment's one dedicated responder + single-flight lock + canary
+    /// + memory-graph dual-write — the same core the App Intents use. See
+    /// AppEnvironment+Intelligence.swift.
     private func makeIntelligenceHandlers() -> IntelligenceToolHandlers {
-        // Fast mode: ask_m1k3 grounds-and-cites for a visiting agent; the think
-        // phase is what pushes synthesis past the deadline on these small local
-        // brains (test-report follow-up). Deep reasoning over private data is the
-        // async-job-model's job (PLAN 2026-06-12), not this blocking call's.
-        let askResponder = AppEnvironment.makeAgentResponder(
-            store: env.store, embedder: env.embedder, provider: env.provider,
-            forcedThinkingMode: .fast
-        )
-        return IntelligenceToolHandlers(
+        IntelligenceToolHandlers(
             ask: { [weak self] question in
                 guard let self else { throw MCPVoiceError("M1K3 is shutting down") }
-                return try await self.askBrain(question, responder: askResponder)
+                return try await self.env.intelligenceAsk(question)
             },
             remember: { [weak self] title, text in
                 guard let self else { throw MCPVoiceError("M1K3 is shutting down") }
-                return try await self.rememberText(title: title, text: text)
-            }
-        )
-    }
-
-    private func askBrain(_ question: String, responder: any RAGResponding) async throws -> String {
-        guard env.isReady else {
-            throw MCPVoiceError("M1K3 is still loading its model — try again in a moment")
-        }
-        guard env.voiceLoop == nil, !env.chat.isResponding else {
-            throw MCPVoiceError("M1K3 is in a conversation right now — try again shortly")
-        }
-        guard !askInFlight else {
-            throw MCPVoiceError("M1K3 is already answering an ask_m1k3 call")
-        }
-        askInFlight = true
-        defer { askInFlight = false }
-        env.avatar.setActivity(.thinking)
-        defer { env.avatar.resetToIdle() }
-        let tripwire = Self.canaryGuard()
-        do {
-            return try await withTimeout(seconds: Self.askDeadlineSeconds) {
-                try await HeadlessAsk.answer(
-                    question, using: responder, canary: tripwire,
-                    onCanaryTrip: { count in
-                        Self.securityLog.fault(
-                            "canary tripwire fired in ask_m1k3 output: \(count, privacy: .public) honeypot(s) redacted"
-                        )
-                    }
+                return try await self.env.intelligenceRemember(
+                    title: title, text: text, provenance: "mcp:remember"
                 )
             }
-        } catch is TimeoutError {
-            // Deadline hit: the generation is cancelled and the lock is already
-            // releasing (defer) — tell the caller honestly rather than hang.
-            throw MCPVoiceError(
-                "M1K3 took too long to answer (over \(Int(Self.askDeadlineSeconds))s) and stopped. "
-                    + "Try a more specific question, or ask again."
-            )
-        }
-    }
-
-    private func rememberText(title: String, text: String) async throws -> String {
-        // Same content identity as the distiller: remembering identical text
-        // twice (agents retry!) collapses to one row instead of duplicating.
-        let result = try await env.ingester.ingest(
-            title: title,
-            text: text,
-            sourceRef: MemoryDistillationCoordinator.factSourceRef(text),
-            kind: .memory,
-            source: .user
         )
-        env.refreshCounts()
-        // A genuinely-new memory earns the save earcon; a dedup retry stays silent.
-        if !result.wasDeduped {
-            env.soundEffects.play(.save)
-        }
-        // DUAL-WRITE: also drop the fact into the temporal memory graph. Strictly
-        // additive (the KnowledgeStore path above is unchanged) and best-effort —
-        // a MemoryStore hiccup must never break the proven remember behaviour. The
-        // full migration off KnowledgeStore is a later PR; today this seeds the
-        // graph so recall_memory/related_memory have something to read.
-        if !result.wasDeduped {
-            await dualWriteToMemoryGraph(text: text)
-        }
-        let dedup = result.wasDeduped ? " (already remembered)" : ""
-        return "Remembered “\(title)”\(dedup)."
-    }
-
-    /// Best-effort write of a remembered fact into the temporal memory graph.
-    /// Embeds via the SAME embedder the recall tools query with, so the vectors
-    /// share a space. Swallows every error — this is a non-fatal companion to the
-    /// KnowledgeStore remember, never a gate on it.
-    private func dualWriteToMemoryGraph(text: String) async {
-        guard let memoryStore = env.memoryStore else { return }
-        do {
-            let vector = try await env.embedder.embed(text)
-            // Title carried into the fact so a recall surfaces the same handle the
-            // visitor used; source marks the provenance half of the consent story.
-            let fact = Memory(kind: .note, text: text, source: "mcp:remember")
-            try memoryStore.remember(fact, embedding: vector)
-        } catch {
-            Self.securityLog.error("memory-graph dual-write skipped: \(error.localizedDescription, privacy: .public)")
-        }
     }
 
     // MARK: - Memory-graph tool handlers

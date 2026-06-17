@@ -3,10 +3,16 @@
 //  M1K3App
 //
 //  Entry point. The composition root (AppEnvironment) opens the on-disk store, so
-//  construction can fail — we build it once in a task and show a clear failure
-//  surface rather than crashing if the container isn't writable.
+//  construction can fail — the AppDelegate builds it once at launch and the Scene
+//  shows a clear failure surface rather than crashing if the container isn't writable.
 //
 //  Signed: Kev + claude-opus-4-8, 2026-06-06, Confidence 0.8, Prior: Unknown
+//  Review: Kev + claude-opus-4-8, 2026-06-17, Confidence 0.85 — moved AppEnvironment
+//  ownership from the main-window `.task` to AppDelegate.applicationDidFinishLaunching
+//  (built + registered + warmed at launch, window-independent), so a background App
+//  Intent launch can reach the warm model with no window. AppDelegate is now
+//  @MainActor + ObservableObject and publishes `environment`/`startupError`; the
+//  Scene reads `appDelegate.environment`. Self-test path unchanged (guarded).
 
 import AppKit
 import M1K3Launch
@@ -19,10 +25,10 @@ struct M1K3App: App {
 
     /// Sets the activation policy (Dock icon vs accessory) before the first
     /// window appears, so a menu-bar-only launch never flashes a Dock icon.
+    /// Owns + publishes the AppEnvironment (built at launch, window-independent) so
+    /// App Intents can reach it; the Scene tracks `appDelegate.environment`.
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
 
-    @State private var env: AppEnvironment?
-    @State private var startupError: String?
     /// Launch-at-login is app-level (not on AppEnvironment) so it works even if
     /// the store fails to open — the toggle and menu must function regardless.
     @State private var launchAtLogin = LaunchAtLogin(item: SMAppServiceLoginItem())
@@ -50,7 +56,7 @@ struct M1K3App: App {
                             await SelfTest.run()
                             exit(0)
                         }
-                } else if let env {
+                } else if let env = appDelegate.environment {
                     if hasChosenBrain {
                         ContentView()
                             .environment(env)
@@ -58,7 +64,7 @@ struct M1K3App: App {
                         OnboardingView { hasChosenBrain = true }
                             .environment(env)
                     }
-                } else if let startupError {
+                } else if let startupError = appDelegate.startupError {
                     StartupFailureView(message: startupError)
                 } else {
                     ProgressView("Waking M1K3…")
@@ -71,14 +77,8 @@ struct M1K3App: App {
             // the desktop and reads correctly in both light and dark — so the old
             // painted-dark / white-sheet mismatch can't happen in either mode.
             // Signed: Kev + claude-opus-4-8, 2026-06-08, Confidence 0.75, Prior: Unknown
-            .task {
-                guard !SelfTest.isRequested, env == nil, startupError == nil else { return }
-                do {
-                    env = try AppEnvironment()
-                } catch {
-                    startupError = error.localizedDescription
-                }
-            }
+            // (AppEnvironment is built at launch by AppDelegate — window-independent,
+            // so a background App Intent launch can reach it.)
         }
         .windowResizability(.contentSize)
         // Hidden title bar: drop the "M1K3" window title so the glass runs
@@ -97,7 +97,7 @@ struct M1K3App: App {
         // field accreting as the store grows. A single-instance Window summoned
         // from the Window menu; rebuilds its snapshot from the live store each open.
         Window("Memory Constellation", id: Self.constellationWindowID) {
-            ConstellationWindowContent(env: env)
+            ConstellationWindowContent(env: appDelegate.environment)
         }
         .windowResizability(.contentSize)
 
@@ -108,7 +108,7 @@ struct M1K3App: App {
         // Signed: Kev + claude-opus-4-8, 2026-06-08, Confidence 0.8, Prior: Unknown
         Settings {
             Group {
-                if let env {
+                if let env = appDelegate.environment {
                     SettingsView()
                         .environment(env)
                         .environment(launchAtLogin)
@@ -127,22 +127,52 @@ struct M1K3App: App {
         // speaking).
         // Signed: Kev + claude-opus-4-8, 2026-06-16, Confidence 0.7, Prior: Unknown
         MenuBarExtra {
-            MenuBarPopover(env: env)
+            MenuBarPopover(env: appDelegate.environment)
         } label: {
-            MenuBarLabel(env: env, glyphStyle: glyphStyle)
+            MenuBarLabel(env: appDelegate.environment, glyphStyle: glyphStyle)
         }
         .menuBarExtraStyle(.window)
     }
 }
 
-/// Applies the menu-bar-only activation policy before the first window shows, so
-/// no Dock icon flashes on a quiet launch. Read straight from UserDefaults (the
-/// @AppStorage key) — the delegate runs before SwiftUI state is available.
-final class AppDelegate: NSObject, NSApplicationDelegate {
+/// Owns the composition root. Two launch jobs:
+///   1. Set the menu-bar-only activation policy BEFORE the first window shows, so
+///      no Dock icon flashes on a quiet launch (read straight from UserDefaults —
+///      the delegate runs before SwiftUI state is available).
+///   2. Build + register + warm the `AppEnvironment` at launch — independent of any
+///      window. M1K3 is menu-bar-resident (launch-at-login), and an App Intent's
+///      perform() runs outside SwiftUI's @Environment, so the environment must
+///      exist (and the brain be warming) even when no window is presented. That's
+///      what makes a quiet, background Siri/Shortcuts ask answer without opening
+///      the app. Published so the Scene tracks it (env nil → "Waking M1K3…").
+@MainActor
+final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
+    @Published private(set) var environment: AppEnvironment?
+    @Published private(set) var startupError: String?
+
     func applicationWillFinishLaunching(_: Notification) {
         let menuBarOnly = UserDefaults.standard.bool(forKey: StartupPreferences.menuBarOnlyKey)
         if StartupVisibility(menuBarOnly: menuBarOnly).hidesDockIcon {
             NSApp.setActivationPolicy(.accessory)
+        }
+    }
+
+    func applicationDidFinishLaunching(_: Notification) {
+        // The self-test path drives its own composition; don't double-build here.
+        guard !SelfTest.isRequested else { return }
+        // Build off the launch beat (async) so first paint isn't blocked, but at
+        // app scope, not window scope — a background intent launch has no window.
+        Task { @MainActor in
+            do {
+                let env = try AppEnvironment()
+                environment = env
+                AppEnvironment.registerShared(env)
+                // Warm the restored brain now so a resident-but-windowless M1K3 can
+                // answer a quiet ask. Idempotent with ContentView's own warm-up.
+                await env.warmUpSelectedBrainOnLaunch()
+            } catch {
+                startupError = error.localizedDescription
+            }
         }
     }
 }
