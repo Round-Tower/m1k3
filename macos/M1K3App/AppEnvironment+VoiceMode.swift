@@ -38,10 +38,10 @@ extension AppEnvironment {
     /// creature). Distinct from "" (pixel face) and any spec id.
     nonisolated static let voiceCompanionConstellation = "memory-constellation"
 
-    /// Opt-in phosphor skin for 3D creature companions (the fresnel rim-glow).
-    /// One source of truth shared by CompanionAvatarView (applies it) and Settings
-    /// (toggles it) — default off; applied at companion build time.
-    nonisolated static let companionPhosphorKey = "companion.phosphorSkin"
+    /// Shading style for 3D creature companions (off / phosphor / cel). Stores a
+    /// `CompanionShadingStyle` rawValue. One source of truth shared by
+    /// CompanionAvatarView (applies it) and Settings (picks it) — default off.
+    nonisolated static let companionShadingKey = "companion.shadingStyle"
 
     /// UI earcons (error / memory-saved / voice-mode-enter) — ON by default,
     /// switchable in Settings. Absent key reads as enabled.

@@ -55,3 +55,48 @@ void phosphorSurface(realitykit::surface_parameters params)
     surface.set_metallic(0.0h);
     surface.set_roughness(1.0h);
 }
+
+// Cel / toon shading — an ADAPTATION of the creature's own texture, not a flat
+// repaint. Samples the original base-colour texture (preserved by building the
+// CustomMaterial from the baked material), posterises it into flat bands, and
+// lights it with quantised N·L + an ink silhouette. Keeps the fox's fur identity
+// while reading unmistakably "toon" — distinct from the phosphor glow. A faint
+// state tint from custom_parameter keeps it shifting with M1K3's mood.
+[[visible]]
+void celSurface(realitykit::surface_parameters params)
+{
+    auto surface = params.surface();
+    auto geometry = params.geometry();
+    auto tex = params.textures();
+
+    constexpr sampler bilinear(coord::normalized, address::repeat, filter::linear, mip_filter::linear);
+    float2 uv = geometry.uv0();
+
+    // The creature's OWN colour (texture × material tint), posterised into bands.
+    half3 albedo = tex.base_color().sample(bilinear, uv).rgb;
+    half3 fur = albedo * half3(params.material_constants().base_color_tint());
+    half3 poster = floor(fur * 4.0h) / 4.0h;
+
+    // Toon lighting: our own key light, N·L quantised into hard steps with an
+    // ambient floor so the shadow side keeps the fur colour, not black.
+    float3 n = normalize(geometry.normal());
+    float3 light = normalize(float3(0.4, 0.6, 0.8));
+    float ndl = saturate(dot(n, light));
+    float toon = max(floor(ndl * 3.0) / 3.0, 0.45);
+
+    // Subtle mood tint (kept low so the fur identity dominates — Kev's ask).
+    // xyz = state tint (PhosphorTreatment.{red,green,blue}); .w (fresnelPower) unused here.
+    // 1.4 lifts the sub-1.0 treatment colours so the 20% tint stays additive, not darkening.
+    half3 state = half3(params.uniforms().custom_parameter().xyz);
+    half3 shaded = mix(poster, poster * state * 1.4h, 0.2h) * half(toon);
+
+    // Ink silhouette: hard black rim at grazing angles. 2.5 tightens the rim;
+    // 0.62 is the threshold past which the grazing edge becomes ink-black.
+    float3 view = normalize(geometry.view_direction());
+    float ink = step(0.62, pow(1.0 - saturate(dot(n, view)), 2.5));
+
+    surface.set_base_color(half3(0.0h));
+    surface.set_emissive_color(mix(shaded, half3(0.0h), half(ink)));
+    surface.set_metallic(0.0h);
+    surface.set_roughness(1.0h);
+}
