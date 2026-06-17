@@ -24,11 +24,14 @@ public struct ConstellationView: View {
     private let growthStep: TimeInterval
     /// World scale applied to the unit-ish layout positions.
     private let spread: Float
+    /// Star size is decoupled from `spread` so tightening the cluster doesn't
+    /// shrink the motes — the field gets more compact, the stars stay visible.
+    private let moteScale: Float = 2.0
 
     /// Held so the drag gesture can spin the whole field.
     @State private var root = Entity()
 
-    public init(model: ConstellationModel, growthStep: TimeInterval = 0.08, spread: Float = 2.5) {
+    public init(model: ConstellationModel, growthStep: TimeInterval = 0.08, spread: Float = 1.6) {
         self.model = model
         self.growthStep = growthStep
         self.spread = spread
@@ -46,7 +49,10 @@ public struct ConstellationView: View {
             // resetting the user's drag-spin.
             sync(into: root, firstBuild: false)
         }
-        .background(.black)
+        // No background: render transparent over the app's glass, like the 3D
+        // companions — rounded-clipped to the same card silhouette.
+        .frame(maxWidth: .infinity)
+        .clipShape(RoundedRectangle(cornerRadius: 16))
         .gesture(spinGesture)
     }
 
@@ -54,7 +60,8 @@ public struct ConstellationView: View {
 
     private func makeCamera() -> Entity {
         let camera = PerspectiveCamera()
-        camera.look(at: .zero, from: SIMD3<Float>(0, 0, spread * 2.6), relativeTo: nil)
+        // Close framing (matches the companion camera) so the field fills the card.
+        camera.look(at: .zero, from: SIMD3<Float>(0, 0, spread * 1.8), relativeTo: nil)
         return camera
     }
 
@@ -87,7 +94,7 @@ public struct ConstellationView: View {
     }
 
     private func makeMote(_ node: ConstellationNode) -> ModelEntity {
-        let mesh = MeshResource.generateSphere(radius: node.radius * spread)
+        let mesh = MeshResource.generateSphere(radius: node.radius * moteScale)
         #if canImport(AppKit)
             let material = UnlitMaterial(
                 color: ConstellationPalette.materialColor(forHue: node.hue, saturation: node.saturation)
