@@ -33,6 +33,9 @@ public struct ConstellationView: View {
     @State private var root = Entity()
     @State private var field = Entity()
     @State private var camera = PerspectiveCamera()
+    /// Accumulated spin, composed with each drag's delta so a new drag continues
+    /// from where the last one ended instead of snapping back to the un-spun pose.
+    @State private var storedOrientation = simd_quatf(ix: 0, iy: 0, iz: 0, r: 1)
 
     public init(model: ConstellationModel, growthStep: TimeInterval = 0.08, spread: Float = 1.6) {
         self.model = model
@@ -111,10 +114,14 @@ public struct ConstellationView: View {
             scheduleGrowth(of: mote, fullScale: 1, delay: delay)
         }
 
-        // Threads — named by endpoints so each is placed once.
+        // Threads — named by endpoints so each is placed once. Pre-compute the
+        // present edge names into a Set (mirrors the node dedup above) so reconcile
+        // is O(edges), not O(edges × children); inserting as we go also dedupes any
+        // repeat within this pass.
+        var presentEdges = Set(container.children.compactMap(\.name).filter { $0.hasPrefix("edge:") })
         for edge in model.edges {
             let name = "edge:\(edge.from.uuidString):\(edge.to.uuidString):\(edge.relation)"
-            guard !container.children.contains(where: { $0.name == name }) else { continue }
+            guard presentEdges.insert(name).inserted else { continue }
             guard let a = model.node(edge.from), let b = model.node(edge.to) else { continue }
             let thread = makeThread(from: a.position * spread, to: b.position * spread)
             thread.name = name
@@ -160,7 +167,12 @@ public struct ConstellationView: View {
             rotation: entity.orientation,
             translation: entity.position
         )
-        DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+        // Structured concurrency over DispatchQueue.main.asyncAfter: keeps the
+        // non-Sendable Entity capture inside a proven @MainActor context (no Swift 6
+        // strict-concurrency warning), and the growth cancels automatically when the
+        // view's task tree tears down.
+        Task { @MainActor [entity] in
+            if delay > 0 { try? await Task.sleep(for: .seconds(delay)) }
             entity.move(to: target, relativeTo: entity.parent, duration: 0.6, timingFunction: .easeOut)
         }
     }
@@ -170,10 +182,18 @@ public struct ConstellationView: View {
     private var spinGesture: some Gesture {
         DragGesture()
             .onChanged { value in
-                let yaw = Float(value.translation.width) * 0.005
-                let pitch = Float(value.translation.height) * 0.005
-                root.orientation = simd_quatf(angle: yaw, axis: SIMD3<Float>(0, 1, 0))
-                    * simd_quatf(angle: pitch, axis: SIMD3<Float>(1, 0, 0))
+                root.orientation = storedOrientation * Self.spinDelta(value.translation)
             }
+            .onEnded { value in
+                storedOrientation *= Self.spinDelta(value.translation)
+            }
+    }
+
+    /// The incremental rotation for a drag translation: yaw about Y, pitch about X.
+    private static func spinDelta(_ translation: CGSize) -> simd_quatf {
+        let yaw = Float(translation.width) * 0.005
+        let pitch = Float(translation.height) * 0.005
+        return simd_quatf(angle: yaw, axis: SIMD3<Float>(0, 1, 0))
+            * simd_quatf(angle: pitch, axis: SIMD3<Float>(1, 0, 0))
     }
 }

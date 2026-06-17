@@ -145,6 +145,21 @@ public struct MemoryEdge: Equatable, Sendable, Codable {
     }
 }
 
+/// A cheap, pollable change-signature of the store. Equatable so a UI (the
+/// constellation) can gate a relayout on "did anything change?" without
+/// re-reading every row each tick.
+public struct MemoryRevision: Equatable, Sendable {
+    public let memoryCount: Int
+    public let edgeCount: Int
+    public let latestCreatedAt: Double
+
+    public init(memoryCount: Int, edgeCount: Int, latestCreatedAt: Double) {
+        self.memoryCount = memoryCount
+        self.edgeCount = edgeCount
+        self.latestCreatedAt = latestCreatedAt
+    }
+}
+
 /// A recall result: the memory plus how it scored.
 public struct MemoryHit: Identifiable, Equatable, Sendable {
     public var id: UUID {
@@ -501,6 +516,26 @@ public final class MemoryStore: @unchecked Sendable {
             try Int.fetchOne(
                 db, sql: "SELECT COUNT(*) FROM memories WHERE superseded_by IS NULL"
             ) ?? 0
+        }
+    }
+
+    /// A cheap change-signal for polling UIs. `liveCount` alone MISSES a
+    /// supersession (an old fact exits live as its corrector enters → net delta
+    /// zero), so we fold in the edge count (a supersedes/link always writes an
+    /// edge) and the newest live timestamp. One aggregate read, no row scan —
+    /// the constellation gates its relayout on this so a correction redraws.
+    public func revision() throws -> MemoryRevision {
+        try dbQueue.read { db in
+            let memoryCount = try Int.fetchOne(
+                db, sql: "SELECT COUNT(*) FROM memories WHERE superseded_by IS NULL"
+            ) ?? 0
+            let edgeCount = try Int.fetchOne(
+                db, sql: "SELECT COUNT(*) FROM memory_edges"
+            ) ?? 0
+            let latest = try Double.fetchOne(
+                db, sql: "SELECT COALESCE(MAX(created_at), 0) FROM memories WHERE superseded_by IS NULL"
+            ) ?? 0
+            return MemoryRevision(memoryCount: memoryCount, edgeCount: edgeCount, latestCreatedAt: latest)
         }
     }
 

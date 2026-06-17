@@ -24,6 +24,17 @@ import Foundation
 import M1K3Memory
 import MCP
 
+/// Errors surfaced by the memory-graph tools. Distinct from `MCPVoiceError` so a
+/// recall/related failure reads honestly in the logs (mirrors the per-domain
+/// error pattern the voice tools use).
+public struct MCPMemoryError: Error, CustomStringConvertible {
+    public let description: String
+
+    public init(_ description: String) {
+        self.description = description
+    }
+}
+
 /// A small summary for `memory_stats` — the "M1K3 remembers N things" number a
 /// visiting agent (or Kev) can poll to watch the graph grow. Kept as a value
 /// type so the app glue can fill it without leaking the store across the seam.
@@ -78,7 +89,7 @@ public func makeMemoryToolDefinitions(handlers: MemoryToolHandlers) -> [MCPToolD
             ),
             handler: { args in
                 let query = stringArg(args, "query")?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-                guard !query.isEmpty else { throw MCPVoiceError("recall_memory requires a non-empty query") }
+                guard !query.isEmpty else { throw MCPMemoryError("recall_memory requires a non-empty query") }
                 let hits = try await handlers.recall(query)
                 return formatRecall(hits, query: query)
             }
@@ -100,7 +111,7 @@ public func makeMemoryToolDefinitions(handlers: MemoryToolHandlers) -> [MCPToolD
             ),
             handler: { args in
                 let query = stringArg(args, "query")?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-                guard !query.isEmpty else { throw MCPVoiceError("related_memory requires a non-empty query") }
+                guard !query.isEmpty else { throw MCPMemoryError("related_memory requires a non-empty query") }
                 guard let result = try await handlers.related(query) else {
                     return "Nothing recalled for “\(query)” — no fact to anchor the graph walk on."
                 }

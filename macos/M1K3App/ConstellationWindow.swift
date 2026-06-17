@@ -29,8 +29,10 @@ extension M1K3App {
 struct MemoryConstellationCanvas: View {
     let env: AppEnvironment?
     @State private var model: ConstellationModel?
-    /// Last seen live-memory count — the cheap change signal that gates a relayout.
-    @State private var lastCount = -1
+    /// Last seen store revision — the cheap change signal that gates a relayout.
+    /// `revision` (not a bare count) so a SUPERSESSION (net-zero count) still
+    /// redraws the field on a correction.
+    @State private var lastRevision: MemoryRevision?
 
     /// Cap the field so a big store stays legible and the O(n²) layout stays cheap;
     /// the view shows the newest motes. Poll cadence for "grows over time".
@@ -60,46 +62,79 @@ struct MemoryConstellationCanvas: View {
     /// memory count actually changes — so a new `remember` makes a mote appear
     /// within a couple of seconds, but an idle window does no work.
     private func watch() async {
-        rebuildIfChanged()
+        await rebuildIfChanged()
         while !Task.isCancelled {
             try? await Task.sleep(for: refresh)
-            rebuildIfChanged()
+            await rebuildIfChanged()
         }
     }
 
-    private func rebuildIfChanged() {
-        guard let store = env?.memoryStore else {
-            // No graph store yet — still seed from the knowledge base so the
-            // window isn't blank.
-            if model == nil { model = buildSeeded(graphMemories: [], edges: []) }
+    /// Poll the store and relayout only when its revision actually moves. The
+    /// GRDB reads + the O(n²) layout run on a utility task (the stores are
+    /// `@unchecked Sendable` GRDB handles, captured off the non-Sendable view);
+    /// only the two `@State` mutations hop back to the MainActor. No main-thread IO.
+    private func rebuildIfChanged() async {
+        guard let memoryStore = env?.memoryStore else {
+            // No graph store yet — seed from the knowledge base once so the
+            // window isn't blank (no revision to track on this path).
+            guard model == nil else { return }
+            let knowledge = env?.store
+            let cap = maxNodes
+            model = await Task.detached(priority: .utility) {
+                Self.buildSeeded(graphMemories: [], edges: [], knowledge: knowledge, maxNodes: cap)
+            }.value
             return
         }
-        let count = (try? store.liveCount()) ?? 0
-        guard count != lastCount || model == nil else { return }
-        lastCount = count
-        let memories = (try? store.allMemories(limit: 2000)) ?? []
-        let edges = (try? store.allEdges()) ?? []
-        model = buildSeeded(graphMemories: memories, edges: edges)
+        let knowledge = env?.store
+        let previous = lastRevision
+        let alreadyBuilt = model != nil
+        let cap = maxNodes
+
+        let result: (revision: MemoryRevision, model: ConstellationModel)? = await Task.detached(priority: .utility) {
+            let revision = (try? memoryStore.revision())
+                ?? MemoryRevision(memoryCount: 0, edgeCount: 0, latestCreatedAt: 0)
+            // Nothing changed and the field is already drawn → no work.
+            if revision == previous, alreadyBuilt { return nil }
+            let memories = (try? memoryStore.allMemories(limit: 2000)) ?? []
+            let edges = (try? memoryStore.allEdges()) ?? []
+            let model = Self.buildSeeded(
+                graphMemories: memories, edges: edges, knowledge: knowledge, maxNodes: cap
+            )
+            return (revision, model)
+        }.value
+
+        guard let result else { return }
+        lastRevision = result.revision
+        model = result.model
     }
 
     /// Lay out the live graph UNIONed with existing `.memory` items from the
     /// knowledge base — so the constellation shows what M1K3 already knows on
     /// first open, then grows as the graph store fills (dedup keeps dual-written
-    /// facts from showing twice).
-    private func buildSeeded(graphMemories: [Memory], edges: [MemoryEdge]) -> ConstellationModel {
-        let merged = ConstellationSeed.merge(graph: graphMemories, seeds: knowledgeSeeds())
+    /// facts from showing twice). Pure + `static` so it runs off the MainActor.
+    private nonisolated static func buildSeeded(
+        graphMemories: [Memory], edges: [MemoryEdge], knowledge: KnowledgeStore?, maxNodes: Int
+    ) -> ConstellationModel {
+        let merged = ConstellationSeed.merge(graph: graphMemories, seeds: knowledgeSeeds(from: knowledge))
+        // Cap to the newest `maxNodes` BEFORE scoring affinity. MemoryAffinity is
+        // O(n²) over the union, but only motes that survive the cap are drawn —
+        // scoring the discarded ones is wasted work AND would thread off-field
+        // motes. `build` re-applies the cap as a cheap no-op safety net.
+        let capped = merged.count > maxNodes
+            ? Array(merged.sorted { $0.createdAt > $1.createdAt }.prefix(maxNodes))
+            : merged
         // Union the hard typed edges (supersedes / about-person / …) with soft
         // topical-affinity edges so the field threads itself even when memories
         // carry no explicit relations yet (seeds). Degree then drives star size.
-        let affinity = MemoryAffinity.edges(among: merged)
-        return ConstellationLayout.build(memories: merged, edges: edges + affinity, maxNodes: maxNodes)
+        let affinity = MemoryAffinity.edges(among: capped)
+        return ConstellationLayout.build(memories: capped, edges: edges + affinity, maxNodes: maxNodes)
     }
 
     /// Existing memories from the document/knowledge store, mapped to motes.
     /// They carry no edges (the graph layer is the new store's job) — a scattered
     /// field that threads itself together as relations accrue.
-    private func knowledgeSeeds() -> [Memory] {
-        guard let knowledge = env?.store else { return [] }
+    private nonisolated static func knowledgeSeeds(from knowledge: KnowledgeStore?) -> [Memory] {
+        guard let knowledge else { return [] }
         let items = (try? knowledge.allItems(kind: .memory, limit: 500)) ?? []
         return items.map { item in
             Memory(id: item.id, kind: .note, text: item.title, source: "knowledge", createdAt: item.createdAt)

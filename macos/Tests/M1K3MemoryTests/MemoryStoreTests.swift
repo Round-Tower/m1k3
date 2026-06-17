@@ -372,3 +372,57 @@ struct MemoryStoreReviewGapTests {
         #expect(liveIDs == [a.id, c.id])
     }
 }
+
+struct MemoryStoreRevisionTests {
+    @Test("revision changes when a memory is added")
+    func revisionBumpsOnAdd() async throws {
+        let f = try Fixture()
+        let before = try f.store.revision()
+        try await f.remember("a")
+        #expect(try f.store.revision() != before)
+    }
+
+    @Test("revision changes on supersession even though liveCount is unchanged")
+    func revisionCatchesSupersession() async throws {
+        let f = try Fixture()
+        let old = try await f.remember("a")
+        try await f.remember("b")
+        let before = try f.store.revision()
+        #expect(try f.store.liveCount() == 2)
+
+        // Correction at the SAME timestamp: net liveCount delta is zero, so a
+        // count-only signal misses it — the new 'supersedes' edge is what the
+        // revision catches (the constellation must redraw on a correction).
+        _ = try await f.remember("a-corrected", supersedes: old.id)
+        #expect(try f.store.liveCount() == 2) // unchanged
+        #expect(try f.store.revision() != before) // but the revision moved
+    }
+
+    @Test("revision changes when a memory is forgotten")
+    func revisionBumpsOnForget() async throws {
+        let f = try Fixture()
+        let m = try await f.remember("ephemeral")
+        let before = try f.store.revision()
+        #expect(try f.store.forget(id: m.id) == true)
+        #expect(try f.store.revision() != before)
+    }
+
+    @Test("revision changes on a bare link — a new thread with no new mote")
+    func revisionCatchesLink() async throws {
+        let f = try Fixture()
+        let a = try await f.remember("a")
+        let b = try await f.remember("b")
+        let before = try f.store.revision()
+        // No memory written: only the edgeCount arm can catch this (the
+        // constellation must draw a new thread even when no node was added).
+        try f.store.link(MemoryEdge(fromID: a.id, toID: b.id, relation: "about-person"))
+        #expect(try f.store.revision() != before)
+    }
+
+    @Test("revision is stable across reads with no writes")
+    func revisionStableWhenIdle() async throws {
+        let f = try Fixture()
+        try await f.remember("a")
+        #expect(try f.store.revision() == f.store.revision())
+    }
+}
