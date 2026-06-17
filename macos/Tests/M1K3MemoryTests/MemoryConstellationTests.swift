@@ -81,6 +81,15 @@ struct MemoryConstellationTests {
         #expect(ConstellationLayout.hue(for: custom) != ConstellationLayout.hue(for: .profile))
     }
 
+    @Test("plain notes are near-white starlight; categorised kinds carry colour")
+    func saturationByKind() {
+        // Notes (what knowledge-base seeds map to) must NOT render as a saturated
+        // colour — the all-red-dots bug. They're near-white; kinds are accents.
+        #expect(ConstellationLayout.saturation(for: .note) < 0.2)
+        #expect(ConstellationLayout.saturation(for: .profile) > 0.5)
+        #expect(ConstellationLayout.saturation(for: .decision) > 0.5)
+    }
+
     @Test("growth order is oldest-first — the accretion timeline")
     func growthOrder() {
         let oldest = mem("oldest", at: 100)

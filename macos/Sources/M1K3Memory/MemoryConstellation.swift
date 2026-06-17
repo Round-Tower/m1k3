@@ -42,6 +42,9 @@ public struct ConstellationNode: Identifiable, Equatable, Sendable {
     public var radius: Float
     /// Hue in 0..<1 (HSB), mapped from `kind`.
     public var hue: Float
+    /// Saturation in 0...1 (HSB). Plain notes are near-white starlight; the
+    /// categorised kinds (profile/decision/…) carry colour as an accent.
+    public var saturation: Float
 }
 
 /// An edge between two placed nodes (dangling edges are dropped at build time).
@@ -144,7 +147,8 @@ public enum ConstellationLayout {
                 degree: deg,
                 position: positions[memory.id] ?? .zero,
                 radius: radius(forDegree: deg),
-                hue: hue(for: memory.kind)
+                hue: hue(for: memory.kind),
+                saturation: saturation(for: memory.kind)
             )
         }
 
@@ -163,20 +167,31 @@ public enum ConstellationLayout {
     /// Base radius + a sublinear bump per edge, so hubs read as bigger without
     /// a single mega-node dwarfing the field.
     static func radius(forDegree degree: Int) -> Float {
-        0.05 + 0.03 * sqrt(Float(degree))
+        0.06 + 0.03 * sqrt(Float(degree))
     }
 
     /// Kind → hue (HSB, 0..<1). Known kinds get a hand-picked hue; anything else
     /// (the open MemoryKind) hashes its rawValue to a stable hue so custom kinds
-    /// still get a consistent colour.
+    /// still get a consistent colour. Pair with `saturation(for:)` — a plain note
+    /// reads as white starlight regardless of this hue.
     static func hue(for kind: MemoryKind) -> Float {
         switch kind {
         case .profile: 0.08 // warm amber — facts about the person
         case .preference: 0.52 // teal
         case .decision: 0.6 // blue
         case .episode: 0.33 // green — things that happened
-        case .note: 0.0 // neutral (low-saturation grey at render)
+        case .note: 0.58 // cool whisper (near-white via low saturation)
         default: stableUnit(kind.rawValue) // custom kind → stable hashed hue
+        }
+    }
+
+    /// Kind → saturation. Plain notes are near-white stars (the calm default, and
+    /// what knowledge-base seeds map to); categorised kinds carry colour so a
+    /// profile/decision/episode stands out against the field.
+    static func saturation(for kind: MemoryKind) -> Float {
+        switch kind {
+        case .note: 0.06 // starlight white, barely cool
+        default: 0.68 // a coloured accent
         }
     }
 

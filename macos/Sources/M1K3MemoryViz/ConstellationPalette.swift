@@ -16,19 +16,19 @@ import SwiftUI
 #endif
 
 public enum ConstellationPalette {
-    /// Fixed saturation/brightness so motes share a family; only hue varies.
-    static let saturation: CGFloat = 0.68
+    /// Shared brightness so motes read as lit stars; hue + saturation vary per node
+    /// (a plain note is near-white starlight; categorised kinds carry colour).
     static let brightness: CGFloat = 1.0
 
-    public static func color(forHue hue: Float) -> Color {
+    public static func color(forHue hue: Float, saturation: Float) -> Color {
         Color(hue: Double(hue), saturation: Double(saturation), brightness: Double(brightness))
     }
 
     #if canImport(AppKit)
         /// RealityKit's `Material.Color` is `NSColor` on macOS — what
         /// `UnlitMaterial(color:)` wants for a glowing mote.
-        public static func materialColor(forHue hue: Float) -> NSColor {
-            NSColor(hue: CGFloat(hue), saturation: saturation, brightness: brightness, alpha: 1.0)
+        public static func materialColor(forHue hue: Float, saturation: Float) -> NSColor {
+            NSColor(hue: CGFloat(hue), saturation: CGFloat(saturation), brightness: brightness, alpha: 1.0)
         }
     #endif
 }

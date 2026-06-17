@@ -89,7 +89,9 @@ public struct ConstellationView: View {
     private func makeMote(_ node: ConstellationNode) -> ModelEntity {
         let mesh = MeshResource.generateSphere(radius: node.radius * spread)
         #if canImport(AppKit)
-            let material = UnlitMaterial(color: ConstellationPalette.materialColor(forHue: node.hue))
+            let material = UnlitMaterial(
+                color: ConstellationPalette.materialColor(forHue: node.hue, saturation: node.saturation)
+            )
         #else
             let material = UnlitMaterial(color: .white)
         #endif
