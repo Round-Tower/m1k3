@@ -1,7 +1,10 @@
 # Swift Package Manager
 .build/
 .swiftpm/
-Package.resolved
+# NOTE: Package.resolved IS committed (not ignored). Xcode Cloud disables
+# automatic package resolution and requires a committed lockfile; ci_post_clone.sh
+# seeds it into the generated .xcodeproj workspace. Keep it current: run
+# `swift package resolve` and commit when dependencies change.
 
 # Xcode (app shell added at the UI phase)
 DerivedData/

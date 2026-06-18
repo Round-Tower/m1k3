@@ -24,7 +24,24 @@ echo "--- Generating M1K3.xcodeproj from project.yml..."
 cd "$MACOS_DIR"
 xcodegen generate
 
-# 3. Resolve SPM packages — Xcode Cloud starts with empty DerivedData.
+# 3. Seed the committed lockfile into the freshly-generated project.
+# Xcode Cloud disables automatic package resolution and requires a committed
+# Package.resolved. Ours can't live in the (gitignored) .xcodeproj, so it's
+# committed at macos/Package.resolved and copied into the workspace here — else
+# resolution fails with exit 74 ("a resolved file is required…") the moment a
+# new dependency (e.g. onnxruntime) isn't in the project's lock.
+echo "--- Seeding committed Package.resolved into the generated workspace..."
+RESOLVED_SRC="$MACOS_DIR/Package.resolved"
+RESOLVED_DST="$MACOS_DIR/M1K3.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved"
+if [ -f "$RESOLVED_SRC" ]; then
+  mkdir -p "$(dirname "$RESOLVED_DST")"
+  cp "$RESOLVED_SRC" "$RESOLVED_DST"
+  echo "    seeded $RESOLVED_DST"
+else
+  echo "⚠️  $RESOLVED_SRC missing — resolution may fail under Xcode Cloud's locked mode."
+fi
+
+# 4. Resolve SPM packages — Xcode Cloud starts with empty DerivedData.
 echo "--- Resolving Swift packages..."
 xcodebuild -resolvePackageDependencies \
   -scheme M1K3 \
