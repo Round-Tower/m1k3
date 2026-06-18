@@ -35,6 +35,7 @@ import M1K3Memory // MemoryStore, Memory — the temporal memory graph the new t
 import M1K3Voice
 import MCP // StatelessHTTPServerTransport (the SDK type the session factory builds)
 import Observation
+import os // Logger — forget_memory's corpus-twin audit channel
 
 @MainActor
 @Observable
@@ -54,6 +55,13 @@ final class MCPHostController {
     // surfaces. The ask/speak/remember logic (single-flight, deadline, the canary
     // wiring, the memory-graph dual-write) lives once in AppEnvironment+Intelligence;
     // this controller is now just the MCP adapter over it.
+
+    /// Audit channel for forget_memory's corpus-twin delete (the ask/speak/remember
+    /// canary logging now lives in AppEnvironment+Intelligence; this stays for the
+    /// MCP-only forget path). Persisted; logs outcomes, never canary values.
+    private nonisolated static let securityLog = Logger(
+        subsystem: "app.m1k3", category: "security"
+    )
 
     private unowned let env: AppEnvironment
     private var server: LocalMCPHTTPServer?
