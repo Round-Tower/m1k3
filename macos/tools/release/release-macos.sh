@@ -127,4 +127,9 @@ if [ "$SKIP_NOTARIZE" -eq 0 ]; then
 fi
 echo
 echo "✓ Done → $DMG  ($(du -h "$DMG" | cut -f1))"
-[ "$SKIP_NOTARIZE" -eq 1 ] && echo "  ⚠ Unnotarized — for local testing only; Gatekeeper will block it on other Macs."
+# NB: if/fi, not `[ … ] && echo` — as the script's last line the latter returns
+# the test's exit status (1 when notarizing), failing the script on SUCCESS and
+# false-failing the nightly-dmg CI step.
+if [ "$SKIP_NOTARIZE" -eq 1 ]; then
+  echo "  ⚠ Unnotarized — for local testing only; Gatekeeper will block it on other Macs."
+fi
