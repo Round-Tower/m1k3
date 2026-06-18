@@ -56,12 +56,12 @@ void phosphorSurface(realitykit::surface_parameters params)
     surface.set_roughness(1.0h);
 }
 
-// Cel / toon shading — an ADAPTATION of the creature's own texture, not a flat
-// repaint. Samples the original base-colour texture (preserved by building the
-// CustomMaterial from the baked material), posterises it into flat bands, and
-// lights it with quantised N·L + an ink silhouette. Keeps the fox's fur identity
-// while reading unmistakably "toon" — distinct from the phosphor glow. A faint
-// state tint from custom_parameter keeps it shifting with M1K3's mood.
+// Cel / toon shading — the creature's OWN texture, lit in flat cartoon bands with
+// a bold ink outline. The cel signature is banding the LIGHT, not the colour:
+// posterising the albedo fragments the fur into camo blotches, so we keep the fur
+// faithful and quantise N·L into a few BRIGHT steps (cel is bold + flat, never
+// muddy). Distinct from phosphor's monochrome glow; not state-reactive (the fur is
+// the point — phosphor is the reactive one).
 [[visible]]
 void celSurface(realitykit::surface_parameters params)
 {
@@ -72,29 +72,23 @@ void celSurface(realitykit::surface_parameters params)
     constexpr sampler bilinear(coord::normalized, address::repeat, filter::linear, mip_filter::linear);
     float2 uv = geometry.uv0();
 
-    // The creature's OWN colour (texture × material tint), posterised into bands.
-    half3 albedo = tex.base_color().sample(bilinear, uv).rgb;
-    half3 fur = albedo * half3(params.material_constants().base_color_tint());
-    half3 poster = floor(fur * 4.0h) / 4.0h;
+    // The creature's OWN fur colour, kept faithful (NOT posterised).
+    half3 fur = tex.base_color().sample(bilinear, uv).rgb
+        * half3(params.material_constants().base_color_tint());
 
-    // Toon lighting: our own key light, N·L quantised into hard steps with an
-    // ambient floor so the shadow side keeps the fur colour, not black.
+    // Toon lighting: three BRIGHT flat bands (lit / mid / shadow). The shadow band
+    // is still 0.62 so the fur colour reads everywhere — cartoon, not gloom.
     float3 n = normalize(geometry.normal());
-    float3 light = normalize(float3(0.4, 0.6, 0.8));
+    float3 light = normalize(float3(0.35, 0.7, 0.9));
     float ndl = saturate(dot(n, light));
-    float toon = max(floor(ndl * 3.0) / 3.0, 0.45);
+    float toon = ndl > 0.66h ? 1.0h : (ndl > 0.33h ? 0.82h : 0.62h);
 
-    // Subtle mood tint (kept low so the fur identity dominates — Kev's ask).
-    // xyz = state tint (PhosphorTreatment.{red,green,blue}); .w (fresnelPower) unused here.
-    // 1.4 lifts the sub-1.0 treatment colours so the 20% tint stays additive, not darkening.
-    half3 state = half3(params.uniforms().custom_parameter().xyz);
-    half3 shaded = mix(poster, poster * state * 1.4h, 0.2h) * half(toon);
-
-    // Ink silhouette: hard black rim at grazing angles. 2.5 tightens the rim;
-    // 0.62 is the threshold past which the grazing edge becomes ink-black.
+    // Bold ink outline at the silhouette — the defining cel line. Wider/softer than
+    // the phosphor rim (threshold 0.78, gentle power 1.6) so it reads as a drawn edge.
     float3 view = normalize(geometry.view_direction());
-    float ink = step(0.62, pow(1.0 - saturate(dot(n, view)), 2.5));
+    float ink = step(0.78, pow(1.0 - saturate(dot(n, view)), 1.6));
 
+    half3 shaded = fur * half(toon);
     surface.set_base_color(half3(0.0h));
     surface.set_emissive_color(mix(shaded, half3(0.0h), half(ink)));
     surface.set_metallic(0.0h);
