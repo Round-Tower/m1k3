@@ -1,9 +1,12 @@
 name: Nightly DMG
 
 # Builds a signed, notarized, stapled M1K3.dmg from master each night and
-# publishes it to a rolling `nightly` GitHub Release — the off-store /
-# Homebrew-cask download path. Wraps tools/release/release-macos.sh (the same
-# script used for manual releases) so CI and local builds stay identical.
+# publishes it as a DateVer (CalVer, YYYY.MM.DD) GitHub Release — the off-store /
+# Homebrew-cask download path. The newest is marked --latest and the asset has a
+# stable name, so the site can hardlink a permanent URL:
+#   https://github.com/<owner>/<repo>/releases/latest/download/M1K3.dmg
+# Dated releases accumulate as history. Wraps tools/release/release-macos.sh (the
+# same script used for manual releases) so CI and local builds stay identical.
 #
 # ── ONE-TIME SETUP: add these repo secrets (Settings → Secrets and variables → Actions) ──
 #   MACOS_DEVELOPER_ID_CERT_P12       base64 of your "Developer ID Application" .p12
@@ -110,7 +113,7 @@ jobs:
         if: steps.gate.outputs.configured == 'true'
         run: macos/tools/release/release-macos.sh
 
-      - name: Publish to the rolling `nightly` release
+      - name: Publish a DateVer release (stable latest-download URL)
         if: steps.gate.outputs.configured == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
@@ -120,14 +123,21 @@ jobs:
           [ -f "$DMG" ] || { echo "❌ No DMG produced"; exit 1; }
           VERSION="$(grep -m1 'MARKETING_VERSION:' macos/project.yml | sed -E 's/.*"([^"]+)".*/\1/')"
           SHORT="$(git rev-parse --short HEAD)"
-          # Rolling release: drop the old one (and its tag), recreate at current master.
-          gh release delete nightly --yes --cleanup-tag 2>/dev/null || true
-          gh release create nightly "$DMG" \
+          DATE="$(date -u +%Y.%m.%d)"           # DateVer (CalVer) — one dated release per day
+          # Stable asset name → a PERMANENT download URL the site can hardlink:
+          #   https://github.com/<owner>/<repo>/releases/latest/download/M1K3.dmg
+          cp "$DMG" "$RUNNER_TEMP/M1K3.dmg"
+          # Same-day re-run replaces today's release; earlier days accumulate as history.
+          # --latest marks this the newest release so /releases/latest resolves to it.
+          gh release delete "$DATE" --yes --cleanup-tag 2>/dev/null || true
+          gh release create "$DATE" "$RUNNER_TEMP/M1K3.dmg" \
             --target "$GITHUB_SHA" \
-            --title "M1K3 Nightly (v$VERSION · $SHORT)" \
-            --prerelease \
-            --notes "Automated nightly build of M1K3 for Mac — signed, notarized, stapled (Developer ID, off-store). Built from master @ $SHORT. Not the App Store build."
-          echo "✅ Published nightly: $(basename "$DMG") ($(du -h "$DMG" | cut -f1))"
+            --title "M1K3 $DATE (app v$VERSION · $SHORT)" \
+            --latest \
+            --notes "Nightly build of M1K3 for Mac — signed, notarized, stapled (Developer ID, off-store). App version $VERSION, built from master @ $SHORT. Not the App Store build.
+
+          Permanent download: https://github.com/${GITHUB_REPOSITORY}/releases/latest/download/M1K3.dmg"
+          echo "✅ Published DateVer release $DATE → M1K3.dmg ($(du -h "$DMG" | cut -f1))"
 
       - name: Clean up the temporary keychain
         if: always() && steps.gate.outputs.configured == 'true'
