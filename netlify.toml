@@ -1,0 +1,12 @@
+# Netlify deploy config for the M1K3 launch site.
+# Static site, no build step: site/ is self-contained (THREE.js is vendored,
+# hero GLB is local — no CDN, fitting for a "no cloud attached" product).
+[build]
+  publish = "site"
+
+# Sensible defaults; no CSP so the one external request (Google Fonts) keeps working.
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
