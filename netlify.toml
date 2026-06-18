@@ -1,10 +1,16 @@
 # Netlify deploy config for the M1K3 launch site.
-# Static site, no build step: site/ is self-contained (THREE.js is vendored,
-# hero GLB is local — no CDN, fitting for a "no cloud attached" product).
+# site/ is a self-contained static site (THREE.js vendored, hero GLB local —
+# no CDN, fitting for a "no cloud attached" product).
+#
+# base = "site" so Netlify runs from inside site/ — which has no package.json,
+# so it SKIPS the repo-root package.json's npm install + build (that build is
+# what failed the first deploy). publish = "site" is resolved from the repo root.
 [build]
+  base = "site"
   publish = "site"
+  command = ""
 
-# Sensible defaults; no CSP so the one external request (Google Fonts) keeps working.
+# No CSP so the one external request (Google Fonts) keeps working.
 [[headers]]
   for = "/*"
   [headers.values]
