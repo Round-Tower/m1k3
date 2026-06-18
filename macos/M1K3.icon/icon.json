@@ -19,7 +19,7 @@
     {
       "layers" : [
         {
-          "glass" : false,
+          "glass" : true,
           "hidden" : false,
           "image-name" : "M1K3 2.png",
           "name" : "M1K3 2",
