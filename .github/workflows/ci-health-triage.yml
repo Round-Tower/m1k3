@@ -1,0 +1,65 @@
+name: CI Health Triage
+
+# The self-improvement loop: each morning a headless Claude reads the last 24h of
+# GitHub Actions history (failures, flaky re-runs, slow trends, the nightly DMG
+# result) and posts a SHORT digest — with concrete, evidence-backed fixes — to a
+# rolling "🩺 CI Health" GitHub issue. The pipeline critiques itself.
+#
+# Uses the same CLAUDE_CODE_OAUTH_TOKEN secret as claude.yml / the Mac review.
+# Runs at 07:00 UTC (after the 04:00 nightly DMG), plus on-demand.
+
+on:
+  schedule:
+    - cron: "0 7 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: ci-health-triage
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  issues: write # post / update the rolling CI Health issue
+  actions: read # read workflow run history + logs
+  id-token: write
+
+jobs:
+  triage:
+    name: Nightly CI health digest
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Claude — read CI history, post digest
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          additional_permissions: |
+            actions: read
+          claude_args: >-
+            --allowed-tools
+            "Bash(gh run list:*),Bash(gh run view:*),Bash(gh api:*),Bash(gh issue list:*),Bash(gh issue view:*),Bash(gh issue create:*),Bash(gh issue comment:*),Bash(date:*)"
+          prompt: |
+            You are M1K3's CI health triage. Be terse, factual, and grounded ONLY in the
+            actual run data — never invent problems.
+
+            1. Gather the last 24h of GitHub Actions runs:
+               - `gh run list --limit 60 --json databaseName,name,conclusion,event,headBranch,createdAt,url`
+               - For any run with conclusion "failure", inspect it: `gh run view <id> --log-failed`
+                 (focus on the failing step + the first real error line).
+            2. Identify, with evidence:
+               - Genuine failures (what broke, where).
+               - Flaky signals — the SAME job failing then passing on re-run, or intermittent failures.
+               - Notably slow trends (a job much slower than its recent norm).
+               - The "Nightly DMG" workflow result (built / skipped-for-no-secrets / failed).
+            3. Write a SHORT digest (markdown bullets). Lead with a one-line health verdict
+               (✅ healthy / ⚠️ attention / ❌ broken). Propose a concrete fix ONLY where the
+               evidence supports one. If everything is healthy, say so in one or two lines —
+               do not pad.
+            4. Post it: look for an OPEN issue whose title starts with "🩺 CI Health"
+               (`gh issue list --state open --search "🩺 CI Health in:title"`).
+               - If one exists, add your digest as a comment (date-stamp it via `date -u`).
+               - Otherwise create it: `gh issue create --title "🩺 CI Health" --body <digest>`.
+            5. Keep the whole thing scannable in 20 seconds. Sign off with the UTC date.
