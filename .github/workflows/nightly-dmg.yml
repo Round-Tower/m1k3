@@ -1,0 +1,141 @@
+name: Nightly DMG
+
+# Builds a signed, notarized, stapled M1K3.dmg from master each night and
+# publishes it to a rolling `nightly` GitHub Release — the off-store /
+# Homebrew-cask download path. Wraps tools/release/release-macos.sh (the same
+# script used for manual releases) so CI and local builds stay identical.
+#
+# ── ONE-TIME SETUP: add these repo secrets (Settings → Secrets and variables → Actions) ──
+#   MACOS_DEVELOPER_ID_CERT_P12       base64 of your "Developer ID Application" .p12
+#                                     (export from Keychain Access; then: base64 -i cert.p12 | pbcopy)
+#   MACOS_DEVELOPER_ID_CERT_PASSWORD  the password you set when exporting that .p12
+#   APPLE_NOTARY_APPLE_ID             Apple ID email for notarization (e.g. kevin@round-tower.ie)
+#   APPLE_NOTARY_PASSWORD             an app-specific password from appleid.apple.com
+#
+# Until those secrets exist the job SKIPS cleanly (it never reddens the Actions
+# tab — same philosophy as ci.yml's Slack notify). Once set, it just works.
+
+on:
+  schedule:
+    - cron: "0 4 * * *" # 04:00 UTC nightly
+  workflow_dispatch: # and on-demand
+
+concurrency:
+  group: nightly-dmg
+  cancel-in-progress: true
+
+permissions:
+  contents: write # to publish the GitHub Release
+
+env:
+  APPLE_TEAM_ID: "76DJH43A4P" # matches TEAM in release-macos.sh (not secret)
+  NOTARY_PROFILE: "M1K3-notary" # matches NOTARY_PROFILE in release-macos.sh
+
+jobs:
+  dmg:
+    name: Build · sign · notarize · publish
+    # macOS 26 image — the app links FoundationModels (macOS 26 runtime). Same
+    # pin as ci.yml's swift-mac job.
+    runs-on: macos-26
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Preflight — are signing secrets configured?
+        id: gate
+        env:
+          CERT: ${{ secrets.MACOS_DEVELOPER_ID_CERT_P12 }}
+        run: |
+          if [ -z "$CERT" ]; then
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Signing secrets not set yet — skipping the nightly DMG. See the header of this workflow for the 4 secrets to add."
+          else
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Select Xcode (26+)
+        if: steps.gate.outputs.configured == 'true'
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
+      - name: Install xcodegen + xcbeautify
+        if: steps.gate.outputs.configured == 'true'
+        run: brew install xcodegen xcbeautify
+
+      - name: Generate M1K3.xcodeproj (pbxproj is gitignored)
+        if: steps.gate.outputs.configured == 'true'
+        working-directory: macos
+        run: xcodegen generate
+
+      - name: Import Developer ID cert into a temporary keychain
+        if: steps.gate.outputs.configured == 'true'
+        env:
+          CERT_P12: ${{ secrets.MACOS_DEVELOPER_ID_CERT_P12 }}
+          CERT_PW: ${{ secrets.MACOS_DEVELOPER_ID_CERT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          KEYCHAIN="$RUNNER_TEMP/m1k3-signing.keychain-db"
+          KP="$(uuidgen)"   # ephemeral keychain password
+          echo "KEYCHAIN=$KEYCHAIN" >> "$GITHUB_ENV"
+          security create-keychain -p "$KP" "$KEYCHAIN"
+          security set-keychain-settings -lut 3600 "$KEYCHAIN"
+          security unlock-keychain -p "$KP" "$KEYCHAIN"
+          echo "$CERT_P12" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security import "$RUNNER_TEMP/cert.p12" -P "$CERT_PW" -A -t cert -f pkcs12 -k "$KEYCHAIN"
+          security set-key-partition-list -S apple-tool:,apple: -k "$KP" "$KEYCHAIN" >/dev/null
+          # Put our keychain first in the search list so codesign/notarytool find it.
+          EXISTING="$(security list-keychains -d user | sed 's/[" ]//g')"
+          # shellcheck disable=SC2086  # intentional split: each keychain path is its own arg
+          security list-keychains -d user -s "$KEYCHAIN" $EXISTING
+          rm -f "$RUNNER_TEMP/cert.p12"
+          security find-identity -p codesigning -v "$KEYCHAIN" | grep "Developer ID Application" || {
+            echo "❌ No Developer ID Application identity imported"; exit 1; }
+
+      - name: Store notary credentials (matches release-macos.sh profile)
+        if: steps.gate.outputs.configured == 'true'
+        env:
+          NOTARY_APPLE_ID: ${{ secrets.APPLE_NOTARY_APPLE_ID }}
+          NOTARY_PW: ${{ secrets.APPLE_NOTARY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          xcrun notarytool store-credentials "$NOTARY_PROFILE" \
+            --apple-id "$NOTARY_APPLE_ID" \
+            --team-id "$APPLE_TEAM_ID" \
+            --password "$NOTARY_PW" \
+            --keychain "$KEYCHAIN"
+
+      - name: Build the notarized DMG
+        if: steps.gate.outputs.configured == 'true'
+        run: macos/tools/release/release-macos.sh
+
+      - name: Publish to the rolling `nightly` release
+        if: steps.gate.outputs.configured == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          DMG="$(find /tmp/m1k3-release -maxdepth 1 -name 'M1K3-*.dmg' | sort | tail -1)"
+          [ -f "$DMG" ] || { echo "❌ No DMG produced"; exit 1; }
+          VERSION="$(grep -m1 'MARKETING_VERSION:' macos/project.yml | sed -E 's/.*"([^"]+)".*/\1/')"
+          SHORT="$(git rev-parse --short HEAD)"
+          # Rolling release: drop the old one (and its tag), recreate at current master.
+          gh release delete nightly --yes --cleanup-tag 2>/dev/null || true
+          gh release create nightly "$DMG" \
+            --target "$GITHUB_SHA" \
+            --title "M1K3 Nightly (v$VERSION · $SHORT)" \
+            --prerelease \
+            --notes "Automated nightly build of M1K3 for Mac — signed, notarized, stapled (Developer ID, off-store). Built from master @ $SHORT. Not the App Store build."
+          echo "✅ Published nightly: $(basename "$DMG") ($(du -h "$DMG" | cut -f1))"
+
+      - name: Clean up the temporary keychain
+        if: always() && steps.gate.outputs.configured == 'true'
+        run: security delete-keychain "$KEYCHAIN" 2>/dev/null || true
+
+# Signed: Kev + claude-opus-4-8, 2026-06-18, Confidence 0.72 (wraps the proven
+# release-macos.sh unmodified; the macOS signing-in-CI pattern — temp keychain +
+# notarytool store-credentials — is standard; the secret-gate keeps it from
+# reddening pre-setup. Confidence not higher: NOT yet run green in CI — the
+# Developer-ID-in-Actions path and macos-26 image behaviour are verify-on-first-run.
+# Prior: Unknown.
