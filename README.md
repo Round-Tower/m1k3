@@ -1,24 +1,42 @@
-# M1K3
+# M1K3 — Own your AI
+
+### Your AI. Your Mac. Nothing leaves.
+
+M1K3 is a native AI companion that runs **entirely on your Apple-Silicon Mac** —
+local LLM inference, live voice, a personal knowledge graph with RAG, encrypted
+call transcription, a local agent, and an MCP server. Edge AI you actually own:
+no cloud, no telemetry, no network cable it never asks for.
+
+### [⬇ Download for macOS](https://github.com/Round-Tower/m1k3/releases/latest/download/M1K3.dmg) · [m1k3.app](https://m1k3.app)
+
+*Requires macOS 26 Tahoe · Apple Silicon · signed & notarized (Developer ID).*
 
 [![CI](https://github.com/Round-Tower/m1k3/actions/workflows/ci.yml/badge.svg)](https://github.com/Round-Tower/m1k3/actions/workflows/ci.yml)
 [![Security](https://github.com/Round-Tower/m1k3/actions/workflows/security.yml/badge.svg)](https://github.com/Round-Tower/m1k3/actions/workflows/security.yml)
 [![Mac review](https://github.com/Round-Tower/m1k3/actions/workflows/claude-code-review-mac.yml/badge.svg)](https://github.com/Round-Tower/m1k3/actions/workflows/claude-code-review-mac.yml)
 
-**Privacy-focused local AI.** On-device inference, retrieval (RAG), voice
-(TTS + STT), a 3D avatar, and an MCP server — no data leaves the device.
+## What's inside
 
-> **Heads up:** this is a multi-surface monorepo. The root is the **Python
-> desktop CLI / MCP server**. The newest, most actively developed surface is the
-> native **macOS app** under [`macos/`](./macos). The mobile app lives in
+- **On-device inference** — MLX (Gemma, Qwen) + Apple Foundation Models. The model lives on your Mac.
+- **Live voice** — speak and be spoken to; neural TTS + on-device speech-to-text.
+- **Knowledge graph + RAG** — drop in notes and PDFs; M1K3 remembers and cites, locally.
+- **Call memory** — encrypted, on-device call transcription.
+- **A local agent** — tools that *do* things, grounded in your own data.
+- **MCP server** — expose M1K3's local capabilities to Claude and other agents.
+
+Everything above runs without leaving the device. The only network use is the
+one-time model download and an optional, explicitly-enabled web search.
+
+> **Repo map:** this is a multi-surface monorepo. The flagship is the native
+> **macOS app** under [`macos/`](./macos). The repo root is the original **Python
+> desktop CLI / MCP server** (documented below). The mobile app lives in
 > [`app/`](./app). For the live state of anything, `CLAUDE.md` and
 > `.claude/project-memory.md` lead this file.
 
-## Surfaces
-
 | Surface | Where | Stack | Status |
 |---|---|---|---|
-| **Desktop CLI / MCP** | repo root, `src/` | Python 3.12, MLX-LM | Runs. The original surface (this README). |
-| **macOS native** | [`macos/`](./macos) | Swift 6.2, SwiftUI, MLX-Swift | Active MVP — on-device knowledge · RAG · agent · TTS · calls. See [`macos/PLAN.md`](./macos/PLAN.md). |
+| **macOS native** | [`macos/`](./macos) | Swift 6.2, SwiftUI, MLX-Swift | **Flagship** — on-device knowledge · RAG · agent · voice · calls. See [`macos/PLAN.md`](./macos/PLAN.md). |
+| **Desktop CLI / MCP** | repo root, `src/` | Python 3.12, MLX-LM | Runs. The original surface (documented below). |
 | **間 AI mobile** | [`app/`](./app) | Kotlin Multiplatform | Active — Android first, iOS next. See [`app/README.md`](./app/README.md). |
 
 ---
