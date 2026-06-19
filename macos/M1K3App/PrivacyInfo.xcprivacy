@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<!--
+  PrivacyInfo.xcprivacy — App Store privacy manifest for M1K3.
+
+  M1K3 is local-first: chat, RAG, voice, memory, and calls all run on-device and
+  nothing is uploaded. So this manifest is a flex, not a confession — it declares
+  ZERO tracking and ZERO collected data types. The only entries are the four
+  "required reason" APIs Apple makes every app account for; each is traced to real
+  code and used purely on-device.
+
+  Reason codes are Apple's fixed enum from "Describing use of required reason API".
+  Re-confirm against the current Apple doc before each store submission — the
+  approved-reason lists drift. The SystemBootTime entry is the one to scrutinise
+  (see its inline note).
+
+  Signed: Kev + claude-opus-4-8, 2026-06-19, Confidence 0.8, Prior: Unknown
+-->
+<dict>
+	<!-- No tracking (no cross-app/data-broker correlation). -->
+	<key>NSPrivacyTracking</key>
+	<false/>
+	<key>NSPrivacyTrackingDomains</key>
+	<array/>
+	<!-- Nothing is collected. Everything stays on this Mac. -->
+	<key>NSPrivacyCollectedDataTypes</key>
+	<array/>
+	<key>NSPrivacyAccessedAPITypes</key>
+	<array>
+		<!-- @AppStorage / UserDefaults across the app (settings, toggles).
+		     Accessed only from M1K3 itself → CA92.1. -->
+		<dict>
+			<key>NSPrivacyAccessedAPIType</key>
+			<string>NSPrivacyAccessedAPICategoryUserDefaults</string>
+			<key>NSPrivacyAccessedAPITypeReasons</key>
+			<array>
+				<string>CA92.1</string>
+			</array>
+		</dict>
+		<!-- File modification date of a legacy transcript during one-time
+		     migration (TranscriptMigrator) — a file inside the app container → C617.1. -->
+		<dict>
+			<key>NSPrivacyAccessedAPIType</key>
+			<string>NSPrivacyAccessedAPICategoryFileTimestamp</string>
+			<key>NSPrivacyAccessedAPITypeReasons</key>
+			<array>
+				<string>C617.1</string>
+			</array>
+		</dict>
+		<!-- Available disk space surfaced to the user via the system-status tool
+		     (SystemStatusProviding) — displayed on-device, never sent off → 85F4.1. -->
+		<dict>
+			<key>NSPrivacyAccessedAPIType</key>
+			<string>NSPrivacyAccessedAPICategoryDiskSpace</string>
+			<key>NSPrivacyAccessedAPITypeReasons</key>
+			<array>
+				<string>85F4.1</string>
+			</array>
+		</dict>
+		<!-- ProcessInfo.systemUptime in the same on-device status tool → 35F9.1
+		     (measure elapsed time). NOTE: if this is only ever shown to the user as
+		     raw uptime rather than used to measure between in-app events, this reason
+		     is a loose fit — the cleaner long-term fix is to drop raw uptime from the
+		     status surface. Re-check before submission. -->
+		<dict>
+			<key>NSPrivacyAccessedAPIType</key>
+			<string>NSPrivacyAccessedAPICategorySystemBootTime</string>
+			<key>NSPrivacyAccessedAPITypeReasons</key>
+			<array>
+				<string>35F9.1</string>
+			</array>
+		</dict>
+	</array>
+</dict>
+</plist>

@@ -3,10 +3,13 @@
 # MAS entitlements + app-store-connect export). The direct .dmg path is
 # release-macos.sh; this is the App Store channel.
 #
-# Differs from the direct build in exactly three ways, all overridden here so
-# project.yml (the direct build) stays untouched:
+# Differs from the direct build (release-macos.sh) in exactly three ways:
 #   • signs with "Apple Distribution" (not Developer ID)
-#   • CODE_SIGN_ENTITLEMENTS → M1K3-MAS.entitlements (no audioanalyticsd)
+#   • CODE_SIGN_ENTITLEMENTS → M1K3-MAS.entitlements (no audioanalyticsd). This
+#     now MATCHES project.yml's default (the default was inverted to MAS-safe on
+#     2026-06-19 so no archive can leak the exception); the override is kept here
+#     as belt-and-suspenders + self-documentation. release-macos.sh is the one
+#     path that opts back INTO the full M1K3.entitlements.
 #   • exports method=app-store-connect → a .pkg for App Store Connect upload
 #
 # Prereqs: a VALID "Apple Distribution: … (76DJH43A4P)" cert in the keychain,
@@ -31,9 +34,14 @@ ARCHIVE="$BUILD/$APP_NAME.xcarchive"
 EXPORT_DIR="$BUILD/export"
 
 VERSION="$(grep -m1 'MARKETING_VERSION:' "$MACOS_DIR/project.yml" | sed -E 's/.*"([^"]+)".*/\1/')"
+# App Store Connect REQUIRES a build number strictly higher than any previously
+# uploaded for this MARKETING_VERSION. project.yml pins CURRENT_PROJECT_VERSION=1
+# (the direct-DMG path doesn't care), so an ASC upload MUST override it here.
+# Pass BUILD_NUMBER=<n> in the env; the archive sets CURRENT_PROJECT_VERSION to it.
+BUILD_NUMBER="${BUILD_NUMBER:-}"
 beautify() { if command -v xcbeautify >/dev/null 2>&1; then xcbeautify; else cat; fi; }
 
-echo "▸ M1K3 Mac App Store build — v$VERSION  (team $TEAM)"
+echo "▸ M1K3 Mac App Store build — v$VERSION build ${BUILD_NUMBER:-<project default>}  (team $TEAM)"
 echo
 
 # ── Preflight ────────────────────────────────────────────────────────────────
@@ -45,6 +53,11 @@ if ! security find-identity -v 2>/dev/null \
 fi
 echo "✓ Apple Distribution cert present"
 [ -f "$MAS_ENTITLEMENTS" ] || { echo "✗ Missing $MAS_ENTITLEMENTS"; exit 1; }
+if [ -z "$BUILD_NUMBER" ]; then
+  echo "⚠ BUILD_NUMBER not set — archive will use CURRENT_PROJECT_VERSION from"
+  echo "  project.yml (1). App Store Connect will REJECT it unless it's higher than"
+  echo "  every prior upload for v$VERSION. Re-run as: BUILD_NUMBER=<n> $0"
+fi
 echo
 
 # ── 1. Archive (automatic signing + MAS entitlements) ────────────────────────
@@ -59,6 +72,7 @@ xcodebuild archive \
   -project "$PROJECT" -scheme "$SCHEME" -configuration Release \
   -archivePath "$ARCHIVE" -destination 'generic/platform=macOS' \
   -allowProvisioningUpdates \
+  ${BUILD_NUMBER:+CURRENT_PROJECT_VERSION="$BUILD_NUMBER"} \
   DEVELOPMENT_TEAM="$TEAM" \
   CODE_SIGN_ENTITLEMENTS="$MAS_ENTITLEMENTS" | beautify
 
