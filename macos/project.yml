@@ -96,7 +96,17 @@ targets:
         GENERATE_INFOPLIST_FILE: YES
         INFOPLIST_KEY_NSHumanReadableCopyright: "© 2026 Kevin Murphy"
         INFOPLIST_KEY_LSApplicationCategoryType: "public.app-category.productivity"
-        CODE_SIGN_ENTITLEMENTS: M1K3App/M1K3.entitlements
+        # DEFAULT to the App-Store-SAFE entitlements (no audioanalyticsd
+        # mach-lookup exception, which ITMS-90285 rejects). The privileged direct-
+        # distribution set (M1K3.entitlements, with the exception) is an explicit
+        # OPT-IN in release-macos.sh's archive override — so any path that DOESN'T
+        # opt in (Xcode Organizer "Distribute App", the Xcode Cloud Release archive,
+        # release-mas.sh) is App-Store-safe by default. Least privilege as the
+        # default; the dangerous entitlement can only ship if a script asks for it.
+        # (Build 53 was rejected because the old default leaked the exception into a
+        # TestFlight archive that never passed through release-mas.sh's override.)
+        # Signed: Kev + claude-opus-4-8, 2026-06-19, Confidence 0.85, Prior: Unknown
+        CODE_SIGN_ENTITLEMENTS: M1K3App/M1K3-MAS.entitlements
         ENABLE_HARDENED_RUNTIME: YES
         SWIFT_EMIT_LOC_STRINGS: YES
     info:
@@ -107,6 +117,11 @@ targets:
         NSHumanReadableDescription: "Local, private AI companion."
         NSMicrophoneUsageDescription: "M1K3 uses the microphone for voice input. Audio is transcribed on-device and never leaves your Mac."
         NSSpeechRecognitionUsageDescription: "M1K3 transcribes your speech on-device to let you ask questions by voice. Nothing is sent to Apple or any server."
+        # Export compliance: M1K3 uses only standard, exempt encryption (HTTPS/TLS
+        # for on-device model-weight downloads). Declaring this up front skips the
+        # per-submission encryption prompt in App Store Connect and prevents an
+        # accidental mis-answer. Flip to true only if non-exempt crypto is ever added.
+        ITSAppUsesNonExemptEncryption: false
 
 # A SHARED M1K3 scheme, explicit so xcodegen emits it to xcshareddata/xcschemes/.
 # Without this, Xcode only auto-creates an ephemeral user scheme — invisible to

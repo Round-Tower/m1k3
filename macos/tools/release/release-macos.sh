@@ -64,11 +64,19 @@ fi
 echo
 
 # ── 1. Archive (Release, Developer ID, hardened runtime) ─────────────────────
+# The project DEFAULT entitlements are the App-Store-safe set (M1K3-MAS, no
+# audioanalyticsd). The DIRECT build explicitly opts back into the full set
+# (M1K3.entitlements, with the audioanalyticsd mach-lookup exception for the
+# AVSpeechSynthesizer system-voice path) — the one place that exception is
+# allowed to ship. Keeps the DMG's runtime behaviour identical to before the
+# default was inverted; only this archive carries the exception.
+DIRECT_ENTITLEMENTS="$MACOS_DIR/M1K3App/M1K3.entitlements"
 echo "▸ [1/6] Archiving…"
 rm -rf "$ARCHIVE"
 xcodebuild archive \
   -project "$PROJECT" -scheme "$SCHEME" -configuration Release \
   -archivePath "$ARCHIVE" -destination 'generic/platform=macOS' \
+  CODE_SIGN_ENTITLEMENTS="$DIRECT_ENTITLEMENTS" \
   DEVELOPMENT_TEAM="$TEAM" | beautify
 
 # ── 2. Export the signed .app ────────────────────────────────────────────────
