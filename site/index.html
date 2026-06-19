@@ -138,7 +138,9 @@
 
   /* ---------- Hero ---------- */
   .hero { position: relative; height: 100vh; min-height: 640px; display: flex; align-items: flex-end; }
-  #stage { position: absolute; inset: 0; }
+  /* The CRT scene is the focal layer: a page-wide fixed backdrop the whole site
+     rides over. z-index:-1 keeps it behind content but above the black body. */
+  #stage { position: fixed; inset: 0; z-index: -1; }
   #stage canvas { display: block; }
   .hero-copy {
     position: relative; z-index: 10; width: 100%;
@@ -207,10 +209,11 @@
   /* features */
   .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; background: var(--line); border: 1px solid var(--line); }
   .cell {
-    background: var(--bg); padding: 40px 32px; transition: background .3s;
+    background: rgba(10,10,10,0.55); backdrop-filter: blur(5px); -webkit-backdrop-filter: blur(5px);
+    padding: 40px 32px; transition: background .3s;
     position: relative; overflow: hidden;
   }
-  .cell:hover { background: var(--bg-3); }
+  .cell:hover { background: rgba(20,20,20,0.68); }
   .cell:hover .cell-icon { text-shadow: var(--glow); color: var(--ink-bright); }
   .cell-icon { font-family: var(--pixel); font-size: 30px; color: var(--ink-dim); transition: all .3s; }
   .cell h3 { font-size: 17px; font-weight: 500; margin: 18px 0 10px; }
@@ -220,7 +223,8 @@
   /* native section */
   .native { display: grid; grid-template-columns: 1.1fr 1fr; gap: 72px; align-items: center; }
   .term {
-    border: 1px solid var(--line); background: var(--bg-2);
+    border: 1px solid var(--line); background: rgba(10,10,10,0.6);
+    backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
     font-family: var(--mono); font-size: 13px; line-height: 1.9;
     box-shadow: var(--glow-soft);
   }
@@ -364,6 +368,8 @@
   <div class="flash"></div>
 </div>
 
+<!-- The CRT scene: page-wide fixed focal backdrop (THREE.js mounts here). -->
+<div id="stage"></div>
 <div class="scanlines"></div>
 <div class="vignette"></div>
 
@@ -381,7 +387,6 @@
 
 <!-- ================= HERO ================= -->
 <header class="hero">
-  <div id="stage"></div>
   <div class="hero-copy">
     <div class="boot" id="boot"></div>
     <h1 class="headline reveal in">Your AI.<br />Your Mac.<br /><span class="dim" id="rotator">Nothing leaves.</span></h1>
@@ -869,10 +874,12 @@ function tick() {
   const f = rig.userData.fallback;
   if (f) { f.rotation.y = t * 0.3; f.rotation.x = Math.sin(t * 0.4) * 0.15; }
 
+  /* Scene is now a persistent focal backdrop — keep a gentle scroll parallax so
+     it breathes, but never fly the companion out of frame (was 2.2 / 3.0). */
   const scroll = Math.min(scrollY / innerHeight, 1);
   camera.position.x = mx * 0.9 + Math.sin(t * 0.12) * 0.25;
-  camera.position.y = 1.6 - my * 0.5 + scroll * 2.2;
-  camera.position.z = 9 + scroll * 3;
+  camera.position.y = 1.6 - my * 0.5 + scroll * 0.6;
+  camera.position.z = 9 + scroll * 1.2;
   camera.lookAt(rig.position.x - 1.2, 1.2, 0);
 
   renderer.render(scene, camera);
@@ -886,6 +893,16 @@ tick();
      discovery hint, wordmark glitch tick, self-hosted favicon, mobile fox scrim.
      All motion gated on prefers-reduced-motion; zero new network requests.
      Verified live via Chrome DevTools (desktop + 500px). Prior: Unknown (cowork
-     landing page, no prior signature). -->
+     landing page, no prior signature).
+
+     Review: Kev + claude-opus-4-8, 2026-06-18, Confidence 0.9.
+     The CRT scene is now FOCAL — #stage lifted out of .hero to a page-wide
+     fixed backdrop (z-index:-1) the whole site rides over: bright in the side
+     gutters, dimmed behind content. .cell/.term became smoked glass so the
+     grid + companion read through the features/native sections. Scroll-linked
+     camera drift softened (2.2/3.0 → 0.6/1.2) so the companion stays framed
+     top-to-bottom instead of flying away after the hero. Verified live via
+     Chrome DevTools (1440 desktop hero/band/features/native/final + 414 mobile);
+     no console errors. -->
 </body>
 </html>
