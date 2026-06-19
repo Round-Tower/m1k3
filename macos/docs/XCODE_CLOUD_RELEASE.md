@@ -15,7 +15,7 @@ the nightly Developer-ID DMG are separate (see *How it composes* at the end).
 | Layer | Tool | Trigger | Job |
 |---|---|---|---|
 | PR gate | GitHub Actions `ci.yml` | every PR | `swift test` (macos-26) + Python smoke + Claude review — fast |
-| **Release** | **Xcode Cloud** | push to `master` | Test → Archive → **TestFlight** |
+| **Release** | **Xcode Cloud** | push to `master` | full `swift test` gate (in `ci_post_clone`) → Archive → **TestFlight** |
 | Nightly DMG | GitHub Actions cron | nightly | Developer-ID notarized `.dmg` → GitHub Release |
 
 Xcode Cloud manages signing natively (cloud signing via your ASC API key) — **no
@@ -53,14 +53,23 @@ separate Developer-ID DMG path (`tools/release/release-macos.sh`).
   "don't build" globs: `**/*.md`, `marketing/**`, `site/**`, `docs/**`,
   `**/project-memory.md`. (Keeps a README merge from minting a TestFlight build.)
 
-### Actions — ordered; a failed action stops the workflow
-1. **Test**  ← *the gate*
-   - **Scheme:** `M1K3`  ·  **Platform:** macOS  ·  **Destination:** Mac (Any)
-   - This runs the same SwiftPM tests as the PR gate. If it fails, **Archive never runs**,
-     so nothing reaches TestFlight. That is the "successful test gate."
-2. **Archive**
+### Actions — just one: Archive (the test gate runs in `ci_post_clone`)
+1. **Archive**
    - **Scheme:** `M1K3`  ·  **Platform:** macOS
    - **Distribution:** *TestFlight (Internal Testing) and App Store*
+
+> **⚠️ Do NOT add an Xcode Cloud "Test" action — it would be a hollow green gate.**
+> The app scheme's `<Testables>` is **empty**: M1K3's tests live in the SwiftPM package
+> (18 `*Tests` targets), and package test targets are not scheme-testable, so a Test
+> action runs **zero** tests and passes regardless of regressions.
+>
+> The **real full-suite gate runs in `ci_scripts/ci_post_clone.sh`** (step 5): it calls
+> `swift test`, which AUTO-DISCOVERS every test target in `Package.swift` — the exact
+> invocation the PR `ci.yml` uses, so the two gates can't drift, and new test targets are
+> picked up with no list to maintain. `ci_post_clone` runs **before** any action, so a red
+> suite exits non-zero, **fails the whole build run, and Archive never runs** → nothing
+> reaches TestFlight. That is the "successful test gate." Emergency archive-only run:
+> set `CI_SKIP_TESTS=1` as a workflow environment variable.
 
 ### Post-Actions
 - **TestFlight Internal Testing** → your internal tester group.
@@ -77,7 +86,7 @@ separate Developer-ID DMG path (`tools/release/release-macos.sh`).
 
 ## 4. Closing the gate's blind spot — the post-archive MLX smoke ⚠️
 
-**The Test action above has a hole.** `swift test` runs with the MLX / Metal / WhisperKit
+**The `swift test` gate (§3) has a hole.** It runs with the MLX / Metal / WhisperKit
 integration tests **gated OFF** (`M1K3_MLX_INTEGRATION=0` in `ci.yml`; the "metallib wall"
 — those paths only run from a bundled `.app`, never the CLI test binary). So a regression
 in the **on-device brain or voice path can pass the gate and still ship to TestFlight.**
@@ -140,15 +149,16 @@ fi
 ## 6. How it composes
 
 - **PR** → GitHub Actions `ci.yml` (fast gate; merge-blocker).
-- **Merge to `master`** → Xcode Cloud `Release` (Test → Archive → TestFlight + MLX smoke).
+- **Merge to `master`** → Xcode Cloud `Release` (full `swift test` gate in `ci_post_clone` → Archive → TestFlight; optional MLX smoke per §4).
 - **Nightly** → GitHub Actions cron → Developer-ID notarized `.dmg` → rolling `nightly` GitHub
   Release (the off-store / Homebrew-cask path; separate signing creds, not this pipeline).
 - **Metadata** → `fastlane mac metadata` (`deliver`) — text/screenshots only, run when copy changes.
 
 ---
 
-*Signed: Kev + claude-opus-4-8, 2026-06-18, Confidence 0.78 (the workflow shape, the ordered-
-action gate, and the self-test smoke are all grounded in the live `ci_scripts/`, `ci.yml`, and
-`SelfTest.swift`; confidence isn't higher because the ASC clicks are documented-not-executed
-and the MLX-in-Xcode-Cloud feasibility — GPU + model availability — is the named unknown in §4).
-Prior: Unknown.*
+*Signed: Kev + claude-opus-4-8, 2026-06-19, Confidence 0.82 (the full-suite gate is now a
+LIVE `swift test` in `ci_post_clone.sh` — verified the scheme's `<Testables>` is empty, so the
+old "Test action" design was a hollow gate; `swift test` auto-discovery matches `ci.yml` and
+gates Archive→TestFlight. Confidence isn't higher because the ASC workflow itself is
+documented-not-executed (workflows live in App Store Connect, not the repo) and the MLX smoke's
+Xcode-Cloud GPU/model feasibility is still the named §4 unknown). Prior: Kev + claude-opus-4-8.*

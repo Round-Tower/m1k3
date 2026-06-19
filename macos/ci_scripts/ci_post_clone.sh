@@ -47,4 +47,35 @@ xcodebuild -resolvePackageDependencies \
   -scheme M1K3 \
   -project "$MACOS_DIR/M1K3.xcodeproj"
 
+# 5. THE DEPLOY GATE: run the FULL SwiftPM test suite before anything is archived.
+# WHY HERE and not an Xcode Cloud "Test" action: the app scheme's <Testables> is
+# EMPTY — the package's test targets aren't scheme-testable, so a Test action runs
+# ZERO tests (a hollow green gate). `swift test` instead AUTO-DISCOVERS every test
+# target in Package.swift (the same invocation the PR CI uses), so the gate stays
+# correct with no hand-maintained target list — including when new targets land
+# (e.g. an incoming M1K3Preview). A failure here exits non-zero, which FAILS the
+# whole Xcode Cloud build run, so Archive never runs and no red build reaches
+# TestFlight. Emergency bypass: set CI_SKIP_TESTS=1 on the workflow (archive-only).
+#
+# This is the single source of the "successful test gate" — the Release workflow
+# is therefore just Archive→TestFlight (no separate, hollow Test action). See
+# docs/XCODE_CLOUD_RELEASE.md.
+if [ "${CI_SKIP_TESTS:-0}" = "1" ]; then
+  echo "--- ⚠ CI_SKIP_TESTS=1 — skipping the full-suite deploy gate (archive-only run)"
+else
+  echo "--- Running the FULL SwiftPM test suite (deploy gate)…"
+  # Match ci.yml EXACTLY: --parallel for speed, and M1K3_MLX_INTEGRATION=0 so the
+  # MLX/Metal + WhisperKit integration tests stay OFF — they only run from a
+  # bundled .app ("metallib wall"), and Xcode Cloud VMs may lack a usable Metal
+  # GPU, so leaving them on would false-fail the gate. (On-device coverage is the
+  # §4 post-archive MLX smoke, not this CLI suite.)
+  export M1K3_MLX_INTEGRATION="0"
+  if command -v xcbeautify >/dev/null 2>&1; then
+    swift test --package-path "$MACOS_DIR" --parallel 2>&1 | xcbeautify
+  else
+    swift test --package-path "$MACOS_DIR" --parallel
+  fi
+  echo "--- ✓ Full suite GREEN — safe to archive + deploy"
+fi
+
 echo "=== Post-Clone Complete ✓ ==="
