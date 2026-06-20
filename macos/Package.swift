@@ -42,6 +42,10 @@ let package = Package(
         // Launch-at-login policy (SMAppService seam) for the always-resident
         // menu-bar companion. Pure controller + thin ServiceManagement adapter.
         .library(name: "M1K3Launch", targets: ["M1K3Launch"]),
+        // The review-panel router: turns a pasted link / dropped file into a
+        // routed ReviewTarget. Pure + dependency-free; the QuickLook/WKWebView
+        // renderers live in the app target (verify-by-run).
+        .library(name: "M1K3Preview", targets: ["M1K3Preview"]),
     ],
     dependencies: [
         .package(url: "https://github.com/groue/GRDB.swift.git", from: "7.0.0"),
@@ -192,7 +196,7 @@ let package = Package(
         // The app injects these into the chat agent; M1K3Chat never links this.
         .target(
             name: "M1K3AgentTools",
-            dependencies: ["M1K3Agent"],
+            dependencies: ["M1K3Agent", "M1K3Preview"],
             path: "Sources/M1K3AgentTools"
         ),
         .testTarget(
@@ -291,6 +295,18 @@ let package = Package(
             name: "M1K3LaunchTests",
             dependencies: ["M1K3Launch"],
             path: "Tests/M1K3LaunchTests"
+        ),
+        // The review-panel router (ReviewTarget + ReviewTargetResolver). PURE,
+        // dependency-free: file existence + home dir are injected so it tests
+        // off-device. The QuickLook/WKWebView views are app-target glue.
+        .target(
+            name: "M1K3Preview",
+            path: "Sources/M1K3Preview"
+        ),
+        .testTarget(
+            name: "M1K3PreviewTests",
+            dependencies: ["M1K3Preview"],
+            path: "Tests/M1K3PreviewTests"
         ),
         // Call intelligence — the model-AGNOSTIC seam (this is the reusable IP, per
         // the challenger pass): batch-transcription + diarization + summarization

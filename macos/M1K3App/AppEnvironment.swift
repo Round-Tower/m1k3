@@ -93,6 +93,10 @@ final class AppEnvironment {
     let memoryStore: MemoryStore?
     let provider: any InferenceProvider
     let responder: any RAGResponding
+    /// The review panel's shared state: the inspector, chat link-chips, the MCP
+    /// `open_link` tool, and the local agent all converge here. Default-initialised
+    /// (no deps) so it's available to capture while the rest of init runs.
+    let review = ReviewModel()
     /// TTS behind a swappable seam: Built-in (Apple) by default, M1K3 Voice
     /// (Kokoro) once downloaded. Callers never see the swap.
     let speech: SwappableSpeechProvider
@@ -366,7 +370,18 @@ final class AppEnvironment {
             fallback: afm
         )
         provider = runtimeProvider
-        responder = Self.makeAgentResponder(store: store, embedder: swappable, provider: runtimeProvider)
+        // Capture the review model (already default-initialised) rather than self —
+        // self isn't fully initialised here. The agent's open_link tool routes a
+        // link into the panel on the MainActor.
+        let review = review
+        responder = Self.makeAgentResponder(
+            store: store,
+            embedder: swappable,
+            provider: runtimeProvider,
+            onOpenLink: { url in
+                Task { @MainActor in review.open(url: url) }
+            }
+        )
 
         // TTS seam: Built-in Apple voice wrapped in a swappable façade so the
         // premium Kokoro tier can drop in without rebuilding any caller.

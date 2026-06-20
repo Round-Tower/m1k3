@@ -1,0 +1,95 @@
+//
+//  ReviewModel.swift
+//  M1K3App
+//
+//  The shared state behind the review panel, owned by AppEnvironment so every
+//  surface that wants to surface a link or file converges here: the inspector
+//  itself, a one-click chip in the chat transcript, the MCP `open_link` tool a
+//  visiting agent calls, and M1K3's own local agent mid-answer. One observable,
+//  one source of truth.
+//
+//  Holds the security-scoped grant for a file target and releases it when we move
+//  off — so the sandbox access doesn't leak across opens.
+//
+//  Signed: Kev + claude-opus-4-8, 2026-06-19, Confidence 0.8, Prior: Unknown
+
+import Foundation
+import M1K3Preview
+
+@MainActor
+@Observable
+final class ReviewModel {
+    /// Whether the inspector is showing.
+    var isPresented = false
+    /// The address-bar text (bound by the panel).
+    var input = ""
+    /// What's currently routed for display.
+    private(set) var target: ReviewTarget = .empty
+
+    /// The live web URL, when a page is showing — for the "open in browser" action.
+    var currentWebURL: URL? {
+        if case let .web(url) = target { return url }
+        return nil
+    }
+
+    /// The file URL we hold security-scoped access to (from a drop / open panel).
+    private var scopedURL: URL?
+
+    /// Resolve whatever's in `input` (a typed link or path).
+    func openTyped() {
+        releaseScopedAccess()
+        target = ReviewTargetResolver.resolve(input)
+    }
+
+    /// Open a URL the caller already has access to — a chat-link click, a drop, an
+    /// open-panel pick, or a tool call. File URLs are trusted to `.file` (and the
+    /// security-scoped grant is activated for QuickLook's lazy reads); web URLs are
+    /// validated through the resolver. Presents the panel unless told otherwise.
+    func open(url: URL, present: Bool = true) {
+        releaseScopedAccess()
+        if url.isFileURL {
+            // `startAccessingSecurityScopedResource()` returns false for URLs that
+            // are ALREADY reachable without scoping (the common case for a file
+            // dropped / picked in-session) as well as for genuinely-denied ones —
+            // the bool can't tell them apart. So we only RETAIN the grant when it's
+            // truly scoped, but always show the file: QuickLook renders it if
+            // readable and shows its own "no preview" if not. (Treating false as a
+            // hard failure would wrongly reject readable files.)
+            if url.startAccessingSecurityScopedResource() {
+                scopedURL = url
+            }
+            input = url.path
+            target = .file(url)
+        } else {
+            input = url.absoluteString
+            // forGranted is the safety net: chip-tap and tool callers pre-validate
+            // (web-only), but a drag-drop of a non-file URL hasn't been — so we
+            // still route it through the resolver here rather than trusting it raw.
+            target = .forGranted(url)
+        }
+        if present {
+            isPresented = true
+        }
+    }
+
+    /// Reset to the empty resting state.
+    func clear() {
+        releaseScopedAccess()
+        input = ""
+        target = .empty
+    }
+
+    /// Relinquish any security-scoped file access we're holding. Called on every
+    /// transition off a file target (open / clear do).
+    ///
+    /// No `deinit` belt: under Swift 6 a nonisolated deinit can't touch the
+    /// MainActor-isolated `scopedURL`, and the workarounds (`nonisolated(unsafe)` /
+    /// `assumeIsolated`) cost more safety than the leak guards against — this model
+    /// lives for the app's lifetime, so a never-cleared grant is reclaimed at exit.
+    func releaseScopedAccess() {
+        if let scopedURL {
+            scopedURL.stopAccessingSecurityScopedResource()
+            self.scopedURL = nil
+        }
+    }
+}

@@ -71,6 +71,10 @@ echo
 # allowed to ship. Keeps the DMG's runtime behaviour identical to before the
 # default was inverted; only this archive carries the exception.
 DIRECT_ENTITLEMENTS="$MACOS_DIR/M1K3App/M1K3.entitlements"
+# Preflight: fail fast with a clear message if the entitlements file is missing
+# (deleted/renamed), rather than a cryptic xcodebuild error mid-archive. Mirrors
+# release-mas.sh's check on its MAS_ENTITLEMENTS.
+[ -f "$DIRECT_ENTITLEMENTS" ] || { echo "✗ Missing $DIRECT_ENTITLEMENTS"; exit 1; }
 echo "▸ [1/6] Archiving…"
 rm -rf "$ARCHIVE"
 xcodebuild archive \

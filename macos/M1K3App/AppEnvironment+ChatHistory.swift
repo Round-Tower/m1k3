@@ -124,11 +124,16 @@ extension AppEnvironment {
     /// engine: on these small local brains the think phase is what blows past
     /// the deadline on anything but a lookup (test-report follow-up, 2026-06-12).
     /// nil keeps the Settings picker + voice-mode override (the chat/voice UI).
+    /// `onOpenLink`, when supplied, adds the `open_link` agent tool so the model
+    /// can surface a web page into the review panel mid-answer. Only the
+    /// interactive chat responder passes it — the MCP/ask responder (forced
+    /// `.fast`, headless) has no panel to drive.
     nonisolated static func makeAgentResponder(
         store: KnowledgeStore,
         embedder: any EmbeddingService,
         provider: any InferenceProvider,
-        forcedThinkingMode: ThinkingMode? = nil
+        forcedThinkingMode: ThinkingMode? = nil,
+        onOpenLink: (@Sendable (URL) -> Void)? = nil
     ) -> any RAGResponding {
         // Hits the model retrieves itself (search_knowledge) flow through the
         // collector into the turn's sources + the citation allow-list.
@@ -154,6 +159,9 @@ extension AppEnvironment {
                     tools.insert(WikipediaTool(), at: 0)
                     tools.insert(FetchPageTool(), at: 0)
                     tools.insert(WebSearchTool(), at: 0)
+                }
+                if let onOpenLink {
+                    tools.append(OpenLinkTool(onOpen: onOpenLink))
                 }
                 return tools
             },

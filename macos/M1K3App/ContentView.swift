@@ -105,6 +105,16 @@ struct ContentView: View {
         .sheet(isPresented: $showHistory) {
             HistoryView().environment(env)
         }
+        // A trailing side panel for quick review of links and files, beside the
+        // conversation. Native macOS inspector — resizable, collapsible chrome.
+        // State lives in env.review so chat-chips / MCP / the agent can drive it.
+        .inspector(isPresented: Binding(
+            get: { env.review.isPresented },
+            set: { env.review.isPresented = $0 }
+        )) {
+            ReviewPanel(review: env.review)
+                .inspectorColumnWidth(min: 320, ideal: 420, max: 720)
+        }
         .confirmationDialog("Record this call?", isPresented: $showConsentDialog, titleVisibility: .visible) {
             Button("Record once") { Task { await env.affirmConsentAndRecord(scope: .once) } }
             Button("Always allow") { Task { await env.affirmConsentAndRecord(scope: .remembered) } }
@@ -159,10 +169,10 @@ struct ContentView: View {
                             let previous = index > 0 ? env.chat.messages[index - 1] : nil
                             MessageView(
                                 message: message,
-                                showsAvatar: previous?.role != .assistant
-                            ) { text in
-                                Task { await env.speak(text) }
-                            }
+                                showsAvatar: previous?.role != .assistant,
+                                onSpeak: { text in Task { await env.speak(text) } },
+                                onOpenLink: { url in env.review.open(url: url) }
+                            )
                             .id(message.id)
                         }
                     }
@@ -358,6 +368,11 @@ struct ContentView: View {
                 Label("History", systemImage: "clock.arrow.circlepath")
             }
             .help("Browse and switch between past conversations")
+            Button { env.review.isPresented.toggle() } label: {
+                Label("Review panel", systemImage: "sidebar.right")
+            }
+            .help("Open a side panel to review links and files (⌥⌘R)")
+            .keyboardShortcut("r", modifiers: [.command, .option])
             // One control for the avatar: panel / full-window background / off.
             Menu {
                 Picker("Avatar", selection: $avatarDisplay) {

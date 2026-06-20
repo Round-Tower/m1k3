@@ -56,7 +56,22 @@ echo "✓ Apple Distribution cert present"
 if [ -z "$BUILD_NUMBER" ]; then
   echo "⚠ BUILD_NUMBER not set — archive will use CURRENT_PROJECT_VERSION from"
   echo "  project.yml (1). App Store Connect will REJECT it unless it's higher than"
-  echo "  every prior upload for v$VERSION. Re-run as: BUILD_NUMBER=<n> $0"
+  echo "  every prior upload for v$VERSION."
+  # Don't sail past this: a warn-and-continue here costs a full archive + upload
+  # before ASC rejects it server-side. Interactive → require an explicit y;
+  # non-interactive (CI / piped) → hard-fail so an automated run can't waste an
+  # upload on the default build number.
+  if [ -t 0 ]; then
+    printf "  Continue with the project default (1) anyway? [y/N] "
+    read -r CONFIRM
+    case "$CONFIRM" in
+      y | Y) ;;
+      *) echo "  Aborted. Re-run as: BUILD_NUMBER=<n> $0"; exit 1 ;;
+    esac
+  else
+    echo "  Non-interactive shell — aborting. Re-run as: BUILD_NUMBER=<n> $0"
+    exit 1
+  fi
 fi
 echo
 

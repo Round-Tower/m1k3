@@ -32,6 +32,7 @@ import M1K3Chat // HeadlessAsk + RAGResponding (the ask_m1k3 core)
 import M1K3Knowledge // KnowledgeStore — forget_memory deletes the dual-written corpus twin too
 import M1K3MCPKit
 import M1K3Memory // MemoryStore, Memory — the temporal memory graph the new tools expose
+import M1K3Preview // ReviewTargetResolver — validate the open_link URL (web-only)
 import M1K3Voice
 import MCP // StatelessHTTPServerTransport (the SDK type the session factory builds)
 import Observation
@@ -107,6 +108,7 @@ final class MCPHostController {
             makeKnowledgeToolDefinitions(store: env.store)
                 + makeVoiceToolDefinitions(handlers: makeVoiceHandlers())
                 + makeIntelligenceToolDefinitions(handlers: makeIntelligenceHandlers())
+                + makeOpenLinkToolDefinitions(handlers: makeOpenLinkHandlers())
                 + memoryToolDefinitions()
         )
         let host = LocalMCPHTTPServer(
@@ -201,6 +203,34 @@ final class MCPHostController {
                 )
             }
         )
+    }
+
+    // MARK: - Open-link tool handler
+
+    /// The MCP adapter over the review panel: a visiting agent opens a web page in
+    /// M1K3's on-screen panel. Validated web-only through the shared resolver (the
+    /// same routing the panel and the local agent use); a non-web string is
+    /// refused rather than silently dropped.
+    private func makeOpenLinkHandlers() -> OpenLinkToolHandlers {
+        OpenLinkToolHandlers(
+            open: { [weak self] raw in
+                guard let self else { throw MCPVoiceError("M1K3 is shutting down") }
+                return try await self.openLinkInPanel(raw)
+            }
+        )
+    }
+
+    private func openLinkInPanel(_ raw: String) throws -> String {
+        guard case let .web(url) = ReviewTargetResolver.resolve(raw) else {
+            throw MCPVoiceError("\"\(raw)\" isn't a web link M1K3 can open.")
+        }
+        // A visiting agent must not drive the embedded WebView at the user's local
+        // network — the fetch runs on the user's Mac (SSRF-lite). Public web only.
+        guard !WebURLPolicy.isLocalOrPrivate(url) else {
+            throw MCPVoiceError("M1K3 won't open local or private-network addresses.")
+        }
+        env.review.open(url: url)
+        return "Opened \(url.host ?? url.absoluteString) in M1K3's review panel."
     }
 
     // MARK: - Memory-graph tool handlers
