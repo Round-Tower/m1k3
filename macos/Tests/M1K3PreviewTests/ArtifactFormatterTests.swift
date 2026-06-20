@@ -166,6 +166,13 @@ struct ArtifactFormatterTests {
         #expect(formatted.source.contains("<!DOCTYPE html>"))
     }
 
+    @Test("script content with comparison operators — best-effort, must not crash")
+    func scriptWithComparisonOperators() {
+        let input = "<script>if (x < 5) { return x; }</script>"
+        let result = ArtifactFormatter.formatHTML(input)
+        _ = result
+    }
+
     @Test("inline style and script tags in HTML are preserved")
     func inlineStyleScript() {
         let input = """

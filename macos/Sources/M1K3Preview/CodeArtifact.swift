@@ -1,4 +1,5 @@
 import Foundation
+import UniformTypeIdentifiers
 
 public struct CodeArtifact: Equatable, Sendable {
     public var source: String
@@ -13,8 +14,12 @@ public struct CodeArtifact: Equatable, Sendable {
         self.createdAt = createdAt
     }
 
+    public var displayTitle: String {
+        title ?? "Generated \(language.rawValue.uppercased())"
+    }
+
     public var filename: String {
-        "\(title ?? "untitled").\(language.fileExtension)"
+        "\(title ?? "generated").\(language.fileExtension)"
     }
 
     public var exportData: Data? {
@@ -28,6 +33,14 @@ public struct CodeArtifact: Equatable, Sendable {
 
         public var fileExtension: String {
             rawValue
+        }
+
+        public var utType: UTType {
+            switch self {
+            case .html: .html
+            case .css: .sourceCode
+            case .js: .javaScript
+            }
         }
 
         public init?(fileExtension ext: String) {

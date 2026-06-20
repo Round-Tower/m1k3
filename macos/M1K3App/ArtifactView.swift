@@ -40,7 +40,7 @@ struct ArtifactView: View {
         .fileExporter(
             isPresented: $showExporter,
             document: ArtifactDocument(artifact: artifact),
-            contentType: .plainText,
+            contentType: artifact.language.utType,
             defaultFilename: artifact.filename
         ) { _ in }
     }
@@ -57,7 +57,7 @@ struct ArtifactView: View {
 
             Spacer()
 
-            Text(artifact.title ?? "untitled")
+            Text(artifact.displayTitle)
                 .font(.caption)
                 .foregroundStyle(.secondary)
 
@@ -89,16 +89,31 @@ struct ArtifactView: View {
 private struct ArtifactPreviewWebView: NSViewRepresentable {
     let source: String
 
-    func makeNSView(context _: Context) -> WKWebView {
+    func makeCoordinator() -> Coordinator {
+        Coordinator()
+    }
+
+    func makeNSView(context: Context) -> WKWebView {
         let config = WKWebViewConfiguration()
         config.websiteDataStore = .nonPersistent()
         let webView = WKWebView(frame: .zero, configuration: config)
+        webView.navigationDelegate = context.coordinator
         webView.loadHTMLString(source, baseURL: nil)
         return webView
     }
 
-    func updateNSView(_ webView: WKWebView, context _: Context) {
-        webView.loadHTMLString(source, baseURL: nil)
+    func updateNSView(_: WKWebView, context _: Context) {
+        // source is immutable (let); identity is managed by .id(artifact.createdAt) in the parent.
+    }
+
+    final class Coordinator: NSObject, WKNavigationDelegate {
+        /// Block all outbound network requests — generated previews stay hermetic.
+        func webView(_: WKWebView, decidePolicyFor action: WKNavigationAction,
+                     decisionHandler: @escaping (WKNavigationActionPolicy) -> Void)
+        {
+            let scheme = action.request.url?.scheme ?? ""
+            decisionHandler(["about", ""].contains(scheme) ? .allow : .cancel)
+        }
     }
 }
 
@@ -106,7 +121,7 @@ private struct ArtifactPreviewWebView: NSViewRepresentable {
 
 struct ArtifactDocument: FileDocument {
     static var readableContentTypes: [UTType] {
-        [.plainText]
+        [.html, .javaScript, .sourceCode, .plainText]
     }
 
     let artifact: CodeArtifact

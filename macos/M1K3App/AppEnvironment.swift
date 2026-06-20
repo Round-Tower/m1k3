@@ -538,6 +538,7 @@ final class AppEnvironment {
 
     private func surfaceCodeArtifact(from responseText: String) {
         let artifacts = CodeBlockDetector.detect(in: responseText)
+        // MVP: surface only the first artifact; multi-block picker is a follow-up.
         guard let first = artifacts.first else { return }
         review.open(artifact: first)
     }

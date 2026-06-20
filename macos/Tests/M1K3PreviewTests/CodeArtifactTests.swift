@@ -1,6 +1,7 @@
 import Foundation
 @testable import M1K3Preview
 import Testing
+import UniformTypeIdentifiers
 
 struct CodeArtifactTests {
     // MARK: - Language detection
@@ -54,7 +55,33 @@ struct CodeArtifactTests {
     @Test("untitled artifact gets a default filename")
     func untitledFilename() {
         let artifact = CodeArtifact(source: "<p>hi</p>", language: .html)
-        #expect(artifact.filename == "untitled.html")
+        #expect(artifact.filename == "generated.html")
+    }
+
+    // MARK: - Export
+
+    // MARK: - Display title
+
+    @Test("displayTitle uses language name when no title set")
+    func displayTitleDefault() {
+        #expect(CodeArtifact(source: "", language: .html).displayTitle == "Generated HTML")
+        #expect(CodeArtifact(source: "", language: .css).displayTitle == "Generated CSS")
+        #expect(CodeArtifact(source: "", language: .js).displayTitle == "Generated JS")
+    }
+
+    @Test("displayTitle uses custom title when set")
+    func displayTitleCustom() {
+        let artifact = CodeArtifact(source: "", language: .html, title: "My Page")
+        #expect(artifact.displayTitle == "My Page")
+    }
+
+    // MARK: - UTType
+
+    @Test("utType returns language-appropriate type")
+    func languageUTType() {
+        #expect(CodeArtifact.Language.html.utType == .html)
+        #expect(CodeArtifact.Language.js.utType == .javaScript)
+        #expect(CodeArtifact.Language.css.utType == .sourceCode)
     }
 
     // MARK: - Export

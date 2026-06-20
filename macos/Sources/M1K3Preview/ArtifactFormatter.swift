@@ -21,7 +21,7 @@ public enum ArtifactFormatter {
         return html
     }
 
-    static func ensureHTMLStructure(_ source: String) -> String {
+    public static func ensureHTMLStructure(_ source: String) -> String {
         let trimmed = source.trimmingCharacters(in: .whitespacesAndNewlines)
         let lower = trimmed.lowercased()
 
@@ -164,6 +164,7 @@ public enum ArtifactFormatter {
         return result
     }
 
+    /// Does not handle `<` inside <script>/<style> content; a raw-text element parser is the long-term fix.
     private static func tokenize(_ source: String) -> [String] {
         var tokens: [String] = []
         var current = ""
