@@ -15,9 +15,29 @@ swift --version | head -1
 
 MACOS_DIR="$CI_PRIMARY_REPOSITORY_PATH/macos"
 
-# 1. Tooling — Xcode Cloud images ship Homebrew.
-echo "--- Installing xcodegen + xcbeautify..."
-brew install xcodegen xcbeautify || true
+# 1. Tooling — Xcode Cloud images ship Homebrew. Pin it down so a flaky
+# formulae.brew.sh fetch can't sink the build (build 57 timed out there after
+# 300s): skip the network-heavy auto-update, RETRY the install, then HARD-CHECK
+# xcodegen is on PATH — otherwise `set -e` + a bare `xcodegen` below fails with a
+# cryptic exit 127 ("command not found") instead of this clear, retryable message.
+export HOMEBREW_NO_AUTO_UPDATE=1 HOMEBREW_NO_ENV_HINTS=1 HOMEBREW_NO_INSTALL_CLEANUP=1
+echo "--- Installing xcodegen (essential)…"
+for attempt in 1 2 3; do
+  command -v xcodegen >/dev/null 2>&1 && break
+  brew install xcodegen || true
+  command -v xcodegen >/dev/null 2>&1 && break
+  echo "⚠️  xcodegen not yet available (attempt $attempt/3) — retrying in 15s…"
+  sleep 15
+done
+command -v xcodegen >/dev/null 2>&1 || {
+  echo "❌ xcodegen unavailable after 3 attempts — Homebrew (formulae.brew.sh) is"
+  echo "   unreachable on this runner. This is transient infra, not a code failure:"
+  echo "   re-run the build."
+  exit 1
+}
+# xcbeautify is cosmetic — the test step below falls back to raw output without it.
+echo "--- Installing xcbeautify (cosmetic, best-effort)…"
+brew install xcbeautify || echo "    (xcbeautify unavailable — raw swift test output)"
 
 # 2. Generate M1K3.xcodeproj from project.yml (the gitignored artifact).
 echo "--- Generating M1K3.xcodeproj from project.yml..."
