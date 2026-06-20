@@ -12,8 +12,12 @@ public enum CodeBlockDetector {
         }
 
         if artifacts.isEmpty {
-            if let language = CodeArtifact.Language.detect(from: text), looksLikeFullDocument(text) {
-                artifacts.append(CodeArtifact(source: text.trimmingCharacters(in: .whitespacesAndNewlines), language: language))
+            let isFullDoc = looksLikeFullDocument(text)
+            let language = isFullDoc ? .html : CodeArtifact.Language.detect(from: text)
+            if let language, isFullDoc {
+                artifacts.append(
+                    CodeArtifact(source: text.trimmingCharacters(in: .whitespacesAndNewlines), language: language)
+                )
             }
         }
 

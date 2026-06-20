@@ -70,6 +70,31 @@ struct CodeBlockDetectorTests {
         #expect(artifacts.first?.language == .html)
     }
 
+    @Test("unfenced HTML with inline CSS is detected as HTML, not CSS")
+    func unfencedHTMLWithCSS() {
+        let text = """
+        Here's your page:
+
+        <!DOCTYPE html>
+        <html>
+        <head>
+        <style>
+        body { background-color: #f4f4f9; }
+        header { background-color: #007BFF; color: white; }
+        h1 { margin: 0; font-size: 2.5em; }
+        </style>
+        </head>
+        <body>
+        <header><h1>Hello from M1K3</h1></header>
+        <p>Welcome!</p>
+        </body>
+        </html>
+        """
+        let artifacts = CodeBlockDetector.detect(in: text)
+        #expect(artifacts.count == 1)
+        #expect(artifacts.first?.language == .html)
+    }
+
     @Test("multiple code blocks produce multiple artifacts")
     func multipleBlocks() {
         let text = """
