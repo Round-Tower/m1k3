@@ -72,6 +72,18 @@ final class ReviewModel {
         }
     }
 
+    /// Show a code artifact M1K3's brain generated — formats it first, then
+    /// presents it in the artifact view (preview + code + export).
+    func open(artifact: CodeArtifact, present: Bool = true) {
+        releaseScopedAccess()
+        let formatted = ArtifactFormatter.format(artifact)
+        input = "M1K3 generated · \(formatted.filename)"
+        target = .artifact(formatted)
+        if present {
+            isPresented = true
+        }
+    }
+
     /// Reset to the empty resting state.
     func clear() {
         releaseScopedAccess()

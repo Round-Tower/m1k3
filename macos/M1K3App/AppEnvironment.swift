@@ -41,6 +41,7 @@ import M1K3KnowledgeTools
 import M1K3Kokoro
 import M1K3Memory
 import M1K3MLX
+import M1K3Preview
 import M1K3Voice
 import M1K3WhisperKit
 import Observation
@@ -519,6 +520,9 @@ final class AppEnvironment {
         if case .failed = chat.messages.last?.status {
             soundEffects.play(.error)
         } else {
+            if let responseText = chat.messages.last?.text {
+                surfaceCodeArtifact(from: responseText)
+            }
             // Successful answer: ping if the user tabbed away during a long think
             // (opt-in, backgrounded-only — the policy decides). Failures don't ping.
             await maybeNotifyTurnFinished(
@@ -530,6 +534,13 @@ final class AppEnvironment {
         // (e.g. auto-TTS path sets .speaking before we return here).
         if case .speaking = avatar.state.activity { return }
         avatar.resetToIdle()
+    }
+
+    private func surfaceCodeArtifact(from responseText: String) {
+        let artifacts = CodeBlockDetector.detect(in: responseText)
+        // MVP: surface only the first artifact; multi-block picker is a follow-up.
+        guard let first = artifacts.first else { return }
+        review.open(artifact: first)
     }
 
     // speak/stopSpeaking/wireSpeechCallbacks live in AppEnvironment+VoiceMode.swift
