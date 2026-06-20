@@ -15,34 +15,30 @@ swift --version | head -1
 
 MACOS_DIR="$CI_PRIMARY_REPOSITORY_PATH/macos"
 
-# 1. Tooling — Xcode Cloud images ship Homebrew. Pin it down so a flaky
-# formulae.brew.sh fetch can't sink the build (build 57 timed out there after
-# 300s): skip the network-heavy auto-update, RETRY the install, then HARD-CHECK
-# xcodegen is on PATH — otherwise `set -e` + a bare `xcodegen` below fails with a
-# cryptic exit 127 ("command not found") instead of this clear, retryable message.
-export HOMEBREW_NO_AUTO_UPDATE=1 HOMEBREW_NO_ENV_HINTS=1 HOMEBREW_NO_INSTALL_CLEANUP=1
-echo "--- Installing xcodegen (essential)…"
-for attempt in 1 2 3; do
-  command -v xcodegen >/dev/null 2>&1 && break
-  brew install xcodegen || true
-  command -v xcodegen >/dev/null 2>&1 && break
-  echo "⚠️  xcodegen not yet available (attempt $attempt/3) — retrying in 15s…"
-  sleep 15
-done
-command -v xcodegen >/dev/null 2>&1 || {
-  echo "❌ xcodegen unavailable after 3 attempts — Homebrew (formulae.brew.sh) is"
-  echo "   unreachable on this runner. This is transient infra, not a code failure:"
-  echo "   re-run the build."
-  exit 1
-}
-# xcbeautify is cosmetic — the test step below falls back to raw output without it.
-echo "--- Installing xcbeautify (cosmetic, best-effort)…"
-brew install xcbeautify || echo "    (xcbeautify unavailable — raw swift test output)"
+# 1. Tooling — xcodegen WITHOUT Homebrew.
+# Xcode Cloud's macOS-27-beta image has NO route to formulae.brew.sh (build 59:
+# curl exit 7, "Couldn't connect" in ~4ms) and Homebrew can't resolve a bottle
+# for the beta platform ("arm64_dunno"), so `brew install xcodegen` is impossible
+# here. But github.com IS reachable (the repo cloned, and SPM resolves its deps
+# from it), so fetch xcodegen's prebuilt release binary straight from GitHub and
+# run it in place — no Homebrew in the path at all. Pinned for reproducibility;
+# bump deliberately. (xcbeautify is dropped — it was cosmetic; step 5 falls back
+# to raw swift-test output without it.)
+XCODEGEN_VERSION="2.45.4"
+TOOLS_DIR="$CI_PRIMARY_REPOSITORY_PATH/.ci-tools"
+XCODEGEN="$TOOLS_DIR/xcodegen/bin/xcodegen"
+echo "--- Fetching xcodegen $XCODEGEN_VERSION from GitHub (Homebrew is unreachable on this image)…"
+mkdir -p "$TOOLS_DIR"
+curl -fsSL --retry 3 --retry-delay 5 -o "$TOOLS_DIR/xcodegen.zip" \
+  "https://github.com/yonaskolb/XcodeGen/releases/download/$XCODEGEN_VERSION/xcodegen.zip"
+unzip -q -o "$TOOLS_DIR/xcodegen.zip" -d "$TOOLS_DIR"
+chmod +x "$XCODEGEN"
+"$XCODEGEN" --version || { echo "❌ xcodegen $XCODEGEN_VERSION failed to run on this image"; exit 1; }
 
 # 2. Generate M1K3.xcodeproj from project.yml (the gitignored artifact).
 echo "--- Generating M1K3.xcodeproj from project.yml..."
 cd "$MACOS_DIR"
-xcodegen generate
+"$XCODEGEN" generate
 
 # 3. Seed the committed lockfile into the freshly-generated project.
 # Xcode Cloud disables automatic package resolution and requires a committed
