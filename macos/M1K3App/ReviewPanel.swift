@@ -116,11 +116,14 @@ struct ReviewPanel: View {
         case let .file(url):
             QuickLookPreview(url: url)
                 .id(url)
+        case let .artifact(artifact):
+            ArtifactView(artifact: artifact)
+                .id(artifact.createdAt)
         case let .invalid(raw):
             ContentUnavailableView {
-                Label("Couldn’t open that", systemImage: "questionmark.square.dashed")
+                Label("Couldn't open that", systemImage: "questionmark.square.dashed")
             } description: {
-                Text("“\(raw)” isn’t a link or a readable file. Paste an http(s) link, or drop / choose a file.")
+                Text("\"\(raw)\" isn't a link or a readable file. Paste an http(s) link, or drop / choose a file.")
             }
         }
     }
@@ -137,6 +140,7 @@ struct ReviewPanel: View {
     private var addressIcon: String {
         switch review.target {
         case .file: "doc"
+        case .artifact: "curlybraces"
         case .invalid: "exclamationmark.triangle"
         case .empty, .web: "globe"
         }
