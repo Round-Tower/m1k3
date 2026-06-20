@@ -30,33 +30,47 @@ public enum ArtifactFormatter {
         let hasHead = lower.contains("<head")
         let hasBody = lower.contains("<body")
 
+        let structured: String
         if hasDoctype && hasHTML {
-            return trimmed
+            structured = trimmed
+        } else if hasHTML && !hasDoctype {
+            structured = "<!DOCTYPE html>\n" + trimmed
+        } else if hasHead && hasBody {
+            structured = "<!DOCTYPE html>\n<html lang=\"en\">\n\(trimmed)\n</html>"
+        } else if hasBody {
+            structured = "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n  <meta charset=\"UTF-8\">\n</head>\n\(trimmed)\n</html>"
+        } else {
+            structured = """
+            <!DOCTYPE html>
+            <html lang="en">
+            <head>
+              <meta charset="UTF-8">
+            </head>
+            <body>
+            \(trimmed)
+            </body>
+            </html>
+            """
         }
 
-        if hasHTML && !hasDoctype {
-            return "<!DOCTYPE html>\n" + trimmed
-        }
+        // Defense in depth: seal the WebSocket/fetch/XHR egress the WKContentRuleList
+        // can't reach (see ArtifactSandboxPolicy). The artifact preview also disables
+        // JavaScript, so this is belt-and-braces — but a CSP costs nothing and survives
+        // even if the preview surface ever re-enables scripting.
+        return injectCSPMeta(structured)
+    }
 
-        if hasHead && hasBody {
-            return "<!DOCTYPE html>\n<html lang=\"en\">\n\(trimmed)\n</html>"
-        }
-
-        if hasBody {
-            return "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n  <meta charset=\"UTF-8\">\n</head>\n\(trimmed)\n</html>"
-        }
-
-        return """
-        <!DOCTYPE html>
-        <html lang="en">
-        <head>
-          <meta charset="UTF-8">
-        </head>
-        <body>
-        \(trimmed)
-        </body>
-        </html>
-        """
+    /// Insert the sandbox CSP as the first child of `<head>`. Idempotent (skips if the
+    /// CSP is already present). If the document has no `<head>` it is returned unchanged
+    /// rather than guessing a location — every synthesized path above provides one.
+    static func injectCSPMeta(_ html: String) -> String {
+        guard !html.contains(ArtifactSandboxPolicy.contentSecurityPolicy) else { return html }
+        guard let headOpen = html.range(of: "<head", options: [.caseInsensitive]),
+              let tagClose = html.range(of: ">", range: headOpen.upperBound ..< html.endIndex)
+        else { return html }
+        var result = html
+        result.insert(contentsOf: "\n  " + ArtifactSandboxPolicy.cspMetaTag, at: tagClose.upperBound)
+        return result
     }
 
     // MARK: - Unclosed tags

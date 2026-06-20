@@ -9,6 +9,7 @@
 
 import AppKit
 import M1K3Preview
+import os
 import SwiftUI
 import UniformTypeIdentifiers
 import WebKit
@@ -96,30 +97,45 @@ private struct ArtifactPreviewWebView: NSViewRepresentable {
     func makeNSView(context: Context) -> WKWebView {
         let config = WKWebViewConfiguration()
         config.websiteDataStore = .nonPersistent()
+        // The preview renders UNTRUSTED, model-generated HTML. Disable JavaScript
+        // outright: with no script there is no fetch/WebSocket/XHR egress, which is
+        // the amplifier that makes every other gap exploitable. A code PREVIEW does
+        // not need to execute scripts to render its HTML/CSS.
+        config.defaultWebpagePreferences.allowsContentJavaScript = false
         let webView = WKWebView(frame: .zero, configuration: config)
         webView.navigationDelegate = context.coordinator
 
         // Block ALL sub-resource loads (images, scripts, stylesheets, fetch/XHR).
         // The navigation delegate handles navigation-level requests synchronously;
-        // the content rule list seals the sub-resource gap. HTML loads only after
-        // the rule list is compiled so nothing leaks during the async window.
+        // the content rule list seals the sub-resource gap. The rule decisions live
+        // in the tested ArtifactSandboxPolicy.
         let source = self.source
-        let rules = """
-        [{"trigger":{"url-filter":".*"},"action":{"type":"block"}},
-         {"trigger":{"url-filter":"^about:"},"action":{"type":"ignore-previous-rules"}},
-         {"trigger":{"url-filter":"^data:"},"action":{"type":"ignore-previous-rules"}}]
-        """
         WKContentRuleListStore.default().compileContentRuleList(
-            forIdentifier: "m1k3-artifact-block", encodedContentRuleList: rules
-        ) { list, _ in
+            forIdentifier: ArtifactSandboxPolicy.contentRuleListIdentifier,
+            encodedContentRuleList: ArtifactSandboxPolicy.contentRuleListJSON
+        ) { list, error in
             if let list {
                 webView.configuration.userContentController.add(list)
+                webView.loadHTMLString(source, baseURL: nil)
+            } else {
+                // Fail CLOSED: if the seal won't compile, do NOT load the content with
+                // only the navigation delegate (which does not see sub-resource loads).
+                // Show an honest placeholder instead of a silently un-sealed preview.
+                Self.logger.error(
+                    "artifact preview seal failed to compile; refusing to load unsealed content: \(String(describing: error), privacy: .public)"
+                )
+                webView.loadHTMLString(Self.sealFailureHTML, baseURL: nil)
             }
-            webView.loadHTMLString(source, baseURL: nil)
         }
 
         return webView
     }
+
+    private static let logger = Logger(subsystem: "app.m1k3", category: "artifact-preview")
+
+    private static let sealFailureHTML =
+        "<html><body style=\"font-family:-apple-system;color:#888;padding:2rem\">"
+            + "Preview unavailable — the content sandbox could not be initialised.</body></html>"
 
     func updateNSView(_: WKWebView, context _: Context) {
         // source is immutable (let); identity is managed by .id(artifact.createdAt) in the parent.
@@ -129,8 +145,8 @@ private struct ArtifactPreviewWebView: NSViewRepresentable {
         func webView(_: WKWebView, decidePolicyFor action: WKNavigationAction,
                      decisionHandler: @escaping (WKNavigationActionPolicy) -> Void)
         {
-            let scheme = action.request.url?.scheme ?? ""
-            decisionHandler(["about", "", "data"].contains(scheme) ? .allow : .cancel)
+            let allowed = ArtifactSandboxPolicy.allowsNavigation(scheme: action.request.url?.scheme)
+            decisionHandler(allowed ? .allow : .cancel)
         }
     }
 }
