@@ -73,7 +73,7 @@ struct MessageView: View {
                             // top so it grows downward from the answer, not jumps).
                             .transition(.scale(scale: 0.96, anchor: .top).combined(with: .opacity))
                     }
-                    if !message.sources.isEmpty {
+                    if !citedSources.isEmpty {
                         sourcesDisclosure
                     }
                     linkChips
@@ -208,16 +208,25 @@ struct MessageView: View {
         }
     }
 
+    /// Only the sources the answer actually cited. Retrieval is promiscuous (top-K
+    /// over the grounding floor), so an off-topic chunk can ride along; show what
+    /// was REFERENCED, not everything read — matching HeadlessAsk's footer. The
+    /// message keeps the full `.sources` (retrieved) for diagnostics; this is the
+    /// honest display set.
+    private var citedSources: [ChunkHit] {
+        CitationFooter.referencedSources(from: message.sources, citedBy: message.citations)
+    }
+
     private var sourcesDisclosure: some View {
         DisclosureGroup(isExpanded: $showSources) {
             VStack(alignment: .leading, spacing: 6) {
-                ForEach(message.sources) { hit in
+                ForEach(citedSources) { hit in
                     SourceRow(hit: hit)
                 }
             }
             .padding(.top, 4)
         } label: {
-            Label("\(message.sources.count) source\(message.sources.count == 1 ? "" : "s")",
+            Label("\(citedSources.count) source\(citedSources.count == 1 ? "" : "s")",
                   systemImage: "doc.text.magnifyingglass")
                 .font(.caption.weight(.medium).monospacedDigit())
                 .foregroundStyle(.secondary)

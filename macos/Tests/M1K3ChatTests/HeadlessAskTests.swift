@@ -110,40 +110,45 @@ struct HeadlessAskTests {
         #expect(!answer.contains("GHOST-DOC"))
     }
 
-    @Test("sources are listed under the answer, including tool-collected ones")
+    @Test("only the sources the answer actually cited are listed, including tool-collected ones")
     func sourcesAppended() async throws {
         let injected = hit(title: "Plant Notes", heading: "Seals")
-        let collected = hit(title: "Safety Manual", heading: nil)
-        let responder = StreamResponder(sources: [injected], chunks: ["Answer."], collected: [collected])
+        let collected = hit(title: "Safety Manual", heading: "Care")
+        let responder = StreamResponder(
+            sources: [injected],
+            chunks: ["The seal failed [Plant Notes §Seals]; see [Safety Manual §Care]."],
+            collected: [collected]
+        )
         let answer = try await HeadlessAsk.answer("q", using: responder)
         #expect(answer.contains("Sources:"))
         #expect(answer.contains("Plant Notes §Seals"))
-        #expect(answer.contains("Safety Manual"))
+        #expect(answer.contains("Safety Manual §Care"))
     }
 
-    @Test("the Sources block dedupes repeats and ranks by relevance")
+    @Test("the Sources block lists only CITED sources — deduped, ranked, uncited noise dropped")
     func sourcesDedupedAndRanked() async throws {
-        // Mirrors the live Rosenblatt noise: the same item listed several times
-        // plus lower-similarity off-topic chunks (test-report F4).
-        let strong = hit(title: "Rosenblatt 1958", heading: nil, similarity: 0.81)
-        let strongDupe = hit(title: "Rosenblatt 1958", heading: nil, similarity: 0.79)
+        // The same item cited twice (a dupe) + a heading variant, plus an off-topic
+        // chunk that cleared the gate but the answer never cites (test-report F4).
+        // The footer now reflects what was REFERENCED, so the off-topic chunk is gone
+        // and only the cited Rosenblatt rows remain — deduped and ranked by relevance.
+        let strong = hit(title: "Rosenblatt 1958", heading: "Intro", similarity: 0.81)
+        let strongDupe = hit(title: "Rosenblatt 1958", heading: "Intro", similarity: 0.79)
         let strongHeading = hit(title: "Rosenblatt 1958", heading: "Phases", similarity: 0.74)
-        let weak = hit(title: "Scaling Laws", heading: "2.3", similarity: 0.63)
+        let offTopic = hit(title: "Scaling Laws", heading: "2.3", similarity: 0.63)
         let responder = StreamResponder(
-            sources: [weak, strong, strongDupe, strongHeading], chunks: ["Answer."]
+            sources: [offTopic, strong, strongDupe, strongHeading],
+            chunks: ["Per [Rosenblatt 1958 §Intro] and [Rosenblatt 1958 §Phases]."]
         )
         let answer = try await HeadlessAsk.answer("q", using: responder)
         let block = try #require(answer.components(separatedBy: "Sources:\n").last)
         let lines = block.split(separator: "\n").map(String.init)
-        // The two identical "Rosenblatt 1958" (no heading) collapse to one.
+        // The two identical "Rosenblatt 1958 §Intro" collapse to one; ranked by similarity.
         #expect(lines == [
-            "— Rosenblatt 1958",
+            "— Rosenblatt 1958 §Intro",
             "— Rosenblatt 1958 §Phases",
-            "— Scaling Laws §2.3",
         ])
-        // Most-relevant leads; the weak off-topic chunk sinks to the bottom.
-        #expect(lines.first == "— Rosenblatt 1958")
-        #expect(lines.last == "— Scaling Laws §2.3")
+        // The uncited off-topic chunk no longer rides into the footer (the abstain fix).
+        #expect(!answer.contains("Scaling Laws"))
     }
 
     @Test("memories never appear in the Sources block — ambient context, not citations")
@@ -155,7 +160,7 @@ struct HeadlessAskTests {
         // surface in the citation footer, however they cleared the gate.
         let doc = hit(title: "Plant Notes", heading: "Seals", similarity: 0.8)
         let memory = memoryHit("The user has a Mac.", similarity: 0.59)
-        let responder = StreamResponder(sources: [doc, memory], chunks: ["Answer."])
+        let responder = StreamResponder(sources: [doc, memory], chunks: ["The seal failed [Plant Notes §Seals]."])
         let answer = try await HeadlessAsk.answer("q", using: responder)
         #expect(answer.contains("Plant Notes §Seals"))
         #expect(!answer.contains("The user has a Mac"))
@@ -227,8 +232,8 @@ struct HeadlessAskTests {
         // when the body is clean — the guard scans the whole outgoing string.
         let canary = "PLUGH-LEAK-CANARY"
         let recorder = TripRecorder()
-        let leakyDoc = hit(title: "Notes \(canary)", heading: nil, similarity: 0.8)
-        let responder = StreamResponder(sources: [leakyDoc], chunks: ["Answer."])
+        let leakyDoc = hit(title: "Notes \(canary)", heading: "X", similarity: 0.8)
+        let responder = StreamResponder(sources: [leakyDoc], chunks: ["Answer [Notes \(canary) §X]."])
         let answer = try await HeadlessAsk.answer(
             "q", using: responder,
             canary: CanaryGuard(canaries: [canary]),
