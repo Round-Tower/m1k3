@@ -61,6 +61,11 @@ public struct EvalExpectation: Sendable, Equatable {
     /// The answer must carry at least one citation that validates against the
     /// retrieved corpus (grounded-Q fixtures).
     public let mustCite: Bool
+    /// The answer must carry NO valid citations — the inverse of `mustCite`. For
+    /// identity/banter turns seeded with an off-topic doc that clears the grounding
+    /// floor: a good brain answers from persona and cites nothing, so no phantom
+    /// source rides into the footer.
+    public let mustNotCite: Bool
     /// Length band on the trimmed answer (chars). A persona answer that runs to
     /// a wall of text, or comes back empty, both fail their band.
     public let minChars: Int?
@@ -73,6 +78,7 @@ public struct EvalExpectation: Sendable, Equatable {
         mustRefuse: Bool = false,
         mustCallTool: String? = nil,
         mustCite: Bool = false,
+        mustNotCite: Bool = false,
         minChars: Int? = nil,
         maxChars: Int? = nil
     ) {
@@ -82,6 +88,7 @@ public struct EvalExpectation: Sendable, Equatable {
         self.mustRefuse = mustRefuse
         self.mustCallTool = mustCallTool
         self.mustCite = mustCite
+        self.mustNotCite = mustNotCite
         self.minChars = minChars
         self.maxChars = maxChars
     }
@@ -165,6 +172,26 @@ public enum ChatEvalFixtures {
                 mustContainAny: ["voice", "remember", "search", "read", "help", "answer", "talk", "chat"],
                 mustNotContain: leakMarkers + ["wiring"],
                 minChars: 40, maxChars: 1200
+            )
+        ),
+        .init(
+            id: "chat-identity-noisy-corpus", kind: .openChat,
+            prompt: "Who are you?",
+            // The inverse of grounded-Q: an off-topic academic chunk is seeded so it
+            // clears the 0.51 grounding floor and rides into retrieval. A good brain
+            // answers "who are you" from PERSONA and cites nothing — so no phantom
+            // source should reach the footer. Pins the citation-noise abstain fix
+            // (HeadlessAsk/MessageView render only what was actually cited).
+            seedDoc: "2 Scaling Laws\nChinchilla shows compute-optimal training balances "
+                + "model size and tokens; most large models are undertrained for their size.",
+            // maxChars matches the sibling chat-capabilities band (1200): the check
+            // under test is `mustNotCite`, not verbosity — mini answers "who are you"
+            // at ~1.1k chars (verified on-device), and a tight length cap would
+            // false-fail the citation assertion we actually care about.
+            expectation: .init(
+                mustNotContain: leakMarkers,
+                mustNotCite: true,
+                minChars: 10, maxChars: 1200
             )
         ),
     ]

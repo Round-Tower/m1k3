@@ -179,6 +179,21 @@ struct ChatEvalScorerTests {
         #expect(check(uncited, "cites source")?.outcome == .fail)
     }
 
+    @Test("mustNotCite passes on zero citations, fails on a phantom one")
+    func citesNothing() {
+        let exp = EvalExpectation(mustNotCite: true)
+        let clean = ChatEvalScorer.score(
+            fixture: fixture(.openChat, exp),
+            observation: EvalObservation(rawText: "I'm M1K3, your local assistant.", validCitationCount: 0)
+        )
+        let phantom = ChatEvalScorer.score(
+            fixture: fixture(.openChat, exp),
+            observation: EvalObservation(rawText: "I'm M1K3 [Chinchilla §2].", validCitationCount: 1)
+        )
+        #expect(check(clean, "cites nothing")?.outcome == .pass)
+        #expect(check(phantom, "cites nothing")?.outcome == .fail)
+    }
+
     @Test("length band fails below min and above max")
     func lengthBand() {
         let tooShort = ChatEvalScorer.score(

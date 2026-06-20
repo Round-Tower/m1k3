@@ -1,0 +1,63 @@
+//
+//  CitationFooter.swift
+//  M1K3Knowledge
+//
+//  The honest "Sources:" footer. Retrieval is promiscuous by design — top-K plus
+//  a grounding-gate floor (0.51) lets an off-topic chunk ride above the bar (the
+//  documented sourdough/Chain-of-Thought leak), and on an identity turn ("who are
+//  you") the model answers from persona and cites nothing at all. Rendering the
+//  footer from what was RETRIEVED therefore staples phantom sources onto answers
+//  that never used them — a real honesty defect for a local-first assistant.
+//
+//  This keeps only the retrieved chunks the answer ACTUALLY cited: a validated
+//  `[Title §heading]` marker (CitationValidator already computes that set and the
+//  callers already throw it away). Source of truth = the model's validated
+//  citations, not retrieval. An identity turn validly cites nothing → empty footer;
+//  a grounded answer validly cites its doc → that source survives. The one trade:
+//  a grounded answer that FORGETS its marker shows no footer — more honest than
+//  inventing provenance, and the CHATEVAL `mustCite` fixtures are the regression
+//  alarm if marker-emission ever gets flaky.
+//
+//  Signed: claude-opus-4-8, 2026-06-20, Confidence 0.88, Prior: Unknown
+//  (Design challenged: Option A "intersect, don't replace" chosen over content-
+//   overlap (re-derives GroundingGate) and short-query thresholds (band-aid).
+//   Shared here so HeadlessAsk AND ChatSession apply one rule.)
+
+import Foundation
+
+public enum CitationFooter {
+    /// Of the retrieved `hits`, return only those the answer cited via a validated
+    /// citation (`validated` from `CitationValidator.Result`). Matching is
+    /// case-insensitive on title + heading (the model may recase what it echoes),
+    /// but the returned chunks carry their VERBATIM casing for rendering. Input
+    /// order (relevance) is preserved. Nothing cited ⇒ empty (no phantom sources).
+    ///
+    /// `.memory` hits are excluded here as a single shared rule — memories are
+    /// ambient "use naturally, do not cite" context, never citation sources — so
+    /// every caller (HeadlessAsk footer, MessageView disclosure) is provably
+    /// equivalent rather than each re-deriving the exclusion.
+    ///
+    /// Note: matching is exact (case-insensitive) on title AND heading, mirroring
+    /// CitationValidator. A model that rephrases a heading ("§3.2" vs the chunk's
+    /// "§3.2 Seals") won't match — but CitationValidator would have stripped that
+    /// citation upstream too, so the surfaces stay consistent.
+    public static func referencedSources(
+        from hits: [ChunkHit],
+        citedBy validated: [Citation]
+    ) -> [ChunkHit] {
+        guard !validated.isEmpty else { return [] }
+        return hits.filter { hit in
+            hit.kind != .memory && validated.contains { citation in cites(hit, citation) }
+        }
+    }
+
+    /// True when `citation` refers to `hit` — same title and same heading,
+    /// case-insensitively. A chunk with no heading can only be cited by an
+    /// (unparseable) empty-heading citation, so it never matches a real marker.
+    private static func cites(_ hit: ChunkHit, _ citation: Citation) -> Bool {
+        guard hit.itemTitle.compare(citation.source, options: .caseInsensitive) == .orderedSame
+        else { return false }
+        let hitHeading = (hit.heading ?? "").trimmingCharacters(in: .whitespaces)
+        return hitHeading.compare(citation.heading, options: .caseInsensitive) == .orderedSame
+    }
+}

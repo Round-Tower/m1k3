@@ -164,6 +164,30 @@ public enum ChatEvalScorer {
     /// thrashes its internal loop for minutes (AFM's context-overflow auto-loop)
     /// is not a pass — a 337s "correct" answer is a melt-down, not a success.
     /// nil = no latency check (the default; existing callers unchanged).
+    /// The citation pair: `mustCite` wants ≥1 valid citation (grounded-Q),
+    /// `mustNotCite` wants zero (identity/banter turns must not staple phantom
+    /// sources). At most one is set per fixture.
+    static func citationChecks(_ exp: EvalExpectation, _ observation: EvalObservation) -> [EvalCheck] {
+        var checks: [EvalCheck] = []
+        if exp.mustCite {
+            let cited = observation.validCitationCount > 0
+            checks.append(EvalCheck(
+                name: "cites source",
+                outcome: cited ? .pass : .fail,
+                detail: cited ? "\(observation.validCitationCount) valid" : "no valid citation"
+            ))
+        }
+        if exp.mustNotCite {
+            let clean = observation.validCitationCount == 0
+            checks.append(EvalCheck(
+                name: "cites nothing",
+                outcome: clean ? .pass : .fail,
+                detail: clean ? "no phantom source" : "\(observation.validCitationCount) phantom citation(s)"
+            ))
+        }
+        return checks
+    }
+
     public static func score(
         fixture: ChatEvalFixture, observation: EvalObservation, latencyCeilingMS: Int? = nil
     ) -> ChatEvalScore {
@@ -235,14 +259,7 @@ public enum ChatEvalScorer {
             ))
         }
 
-        if exp.mustCite {
-            let cited = observation.validCitationCount > 0
-            checks.append(EvalCheck(
-                name: "cites source",
-                outcome: cited ? .pass : .fail,
-                detail: cited ? "\(observation.validCitationCount) valid" : "no valid citation"
-            ))
-        }
+        checks.append(contentsOf: citationChecks(exp, observation))
 
         if let minChars = exp.minChars, answer.count < minChars {
             checks.append(EvalCheck(

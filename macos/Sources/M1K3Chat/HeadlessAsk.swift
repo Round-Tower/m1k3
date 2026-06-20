@@ -51,18 +51,19 @@ public enum HeadlessAsk {
         // reduces the turn to empty. Degrade with an honest message instead of
         // throwing; a visiting agent should never see a bare "Error: emptyAnswer".
         guard !polished.isEmpty else { return emptyAnswerMessage(didReason: reasoning != nil) }
-        // Memories are ambient context ("use naturally, do not cite" —
-        // AgentRAGResponder.memoryBlock), never citation sources. However they
-        // cleared the gate (a promiscuous short-fact embedding can match an
-        // unrelated query — live: "The user has a Mac." rode an apple-pruning
-        // turn), they must not surface in the citation footer. The validator
-        // allow-list keeps the full `merged` — memories are inert there.
-        let citable = merged.filter { $0.kind != .memory }
+        // The footer lists only what the answer ACTUALLY cited, not everything
+        // retrieved. Top-K + the grounding floor let an off-topic chunk ride above
+        // the bar; on an identity turn the model cites nothing, so rendering the
+        // whole retrieval stapled phantom sources (test-report F4). `validated` is
+        // the model's real citations (computed at line 47); CitationFooter keeps
+        // only the hits they reference and drops ambient `.memory` context — the
+        // live "The user has a Mac." leak that rode an apple-pruning turn.
+        let referenced = CitationFooter.referencedSources(from: merged, citedBy: validation.validated)
         let finalText: String
-        if citable.isEmpty {
+        if referenced.isEmpty {
             finalText = polished
         } else {
-            finalText = polished + "\n\nSources:\n" + sourceLines(citable).joined(separator: "\n")
+            finalText = polished + "\n\nSources:\n" + sourceLines(referenced).joined(separator: "\n")
         }
         // Leak tripwire: redact any planted honeypot that reached the outgoing
         // text (body or footer) and raise the alert. Inert unless a real guard
