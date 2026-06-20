@@ -119,6 +119,19 @@ struct CodeBlockDetectorTests {
         #expect(artifacts.isEmpty)
     }
 
+    @Test("prose mentioning head and body tags does not trigger artifact panel")
+    func proseAboutHTML() {
+        let text = "In HTML, the <head> element holds metadata and <body> holds content."
+        let artifacts = CodeBlockDetector.detect(in: text)
+        #expect(artifacts.isEmpty)
+    }
+
+    @Test("multiline prose mentioning head and body inline does not trigger artifact panel")
+    func multilineProseMentionsHTMLTags() {
+        let text = "The <head> tag holds metadata.\nThe <body> tag holds content."
+        #expect(CodeBlockDetector.detect(in: text).isEmpty)
+    }
+
     @Test("empty text returns no artifacts")
     func emptyText() {
         #expect(CodeBlockDetector.detect(in: "").isEmpty)

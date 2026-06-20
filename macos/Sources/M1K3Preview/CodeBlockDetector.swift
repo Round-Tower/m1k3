@@ -69,7 +69,14 @@ public enum CodeBlockDetector {
 
     private static func looksLikeFullDocument(_ text: String) -> Bool {
         let lower = text.lowercased()
-        return lower.contains("<!doctype html") || lower.contains("<html") ||
-            (lower.contains("<head") && lower.contains("<body"))
+        if lower.contains("<!doctype html") || lower.contains("<html") {
+            return true
+        }
+        // <head>/<body> without a doctype/html wrapper: require them to start a line
+        // so prose like "the <head> element holds metadata" doesn't fire the panel.
+        let lines = lower.split(separator: "\n").map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+        let hasHeadLine = lines.contains { $0.hasPrefix("<head") }
+        let hasBodyLine = lines.contains { $0.hasPrefix("<body") }
+        return hasHeadLine && hasBodyLine
     }
 }

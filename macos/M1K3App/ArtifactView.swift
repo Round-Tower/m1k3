@@ -114,17 +114,19 @@ private struct ArtifactPreviewWebView: NSViewRepresentable {
             forIdentifier: ArtifactSandboxPolicy.contentRuleListIdentifier,
             encodedContentRuleList: ArtifactSandboxPolicy.contentRuleListJSON
         ) { list, error in
-            if let list {
-                webView.configuration.userContentController.add(list)
-                webView.loadHTMLString(source, baseURL: nil)
-            } else {
-                // Fail CLOSED: if the seal won't compile, do NOT load the content with
-                // only the navigation delegate (which does not see sub-resource loads).
-                // Show an honest placeholder instead of a silently un-sealed preview.
-                Self.logger.error(
-                    "artifact preview seal failed to compile; refusing to load unsealed content: \(String(describing: error), privacy: .public)"
-                )
-                webView.loadHTMLString(Self.sealFailureHTML, baseURL: nil)
+            Task { @MainActor in
+                if let list {
+                    webView.configuration.userContentController.add(list)
+                    webView.loadHTMLString(source, baseURL: nil)
+                } else {
+                    // Fail CLOSED: if the seal won't compile, do NOT load the content with
+                    // only the navigation delegate (which does not see sub-resource loads).
+                    // Show an honest placeholder instead of a silently un-sealed preview.
+                    Self.logger.error(
+                        "artifact preview seal failed to compile; refusing to load unsealed content: \(String(describing: error), privacy: .public)"
+                    )
+                    webView.loadHTMLString(Self.sealFailureHTML, baseURL: nil)
+                }
             }
         }
 
@@ -155,7 +157,7 @@ private struct ArtifactPreviewWebView: NSViewRepresentable {
 
 struct ArtifactDocument: FileDocument {
     static var readableContentTypes: [UTType] {
-        [.html, .javaScript, .sourceCode, .plainText]
+        []
     }
 
     let artifact: CodeArtifact
@@ -165,7 +167,7 @@ struct ArtifactDocument: FileDocument {
     }
 
     init(configuration _: ReadConfiguration) throws {
-        artifact = CodeArtifact(source: "", language: .html)
+        throw CocoaError(.fileReadUnknown)
     }
 
     func fileWrapper(configuration _: WriteConfiguration) throws -> FileWrapper {

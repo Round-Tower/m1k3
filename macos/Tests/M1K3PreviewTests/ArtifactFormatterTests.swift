@@ -5,7 +5,7 @@ struct ArtifactFormatterTests {
     // MARK: - HTML structure wrapping
 
     @Test("bare content gets wrapped in a full HTML document")
-    func wrapsBarContent() {
+    func wrapsBareContent() {
         let input = "<h1>Hello</h1>\n<p>World</p>"
         let result = ArtifactFormatter.formatHTML(input)
         #expect(result.contains("<!DOCTYPE html>"))
@@ -33,6 +33,27 @@ struct ArtifactFormatterTests {
         let input = "<html><body><p>hi</p></body></html>"
         let result = ArtifactFormatter.formatHTML(input)
         #expect(result.hasPrefix("<!DOCTYPE html>"))
+    }
+
+    @Test("doctype without html tag does not produce double DOCTYPE")
+    func doctypeWithoutHtmlTag() {
+        let input = "<!DOCTYPE html>\n<head><title>T</title></head>\n<body><p>hi</p></body>"
+        let result = ArtifactFormatter.formatHTML(input)
+        let doctypeCount = result.components(separatedBy: "<!DOCTYPE").count - 1
+        #expect(doctypeCount == 1)
+        #expect(result.contains("<html"))
+        #expect(result.contains("</html>"))
+    }
+
+    @Test("content with head and body but no doctype or html tag gets full wrapping")
+    func wrapsHeadAndBody() {
+        let input = "<head><title>Test</title></head>\n<body><p>hi</p></body>"
+        let result = ArtifactFormatter.formatHTML(input)
+        #expect(result.contains("<!DOCTYPE html>"))
+        #expect(result.contains("<html"))
+        #expect(result.contains("</html>"))
+        let doctypeCount = result.components(separatedBy: "<!DOCTYPE").count - 1
+        #expect(doctypeCount == 1)
     }
 
     @Test("content with only a body tag gets full wrapping")

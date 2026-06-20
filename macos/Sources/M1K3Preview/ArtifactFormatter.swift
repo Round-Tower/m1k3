@@ -33,6 +33,13 @@ public enum ArtifactFormatter {
         let structured: String
         if hasDoctype && hasHTML {
             structured = trimmed
+        } else if hasDoctype && !hasHTML {
+            // Strips only the bare HTML5 doctype; legacy PUBLIC/SYSTEM doctypes are
+            // left in place (browsers tolerate a non-leading doctype inside <html>).
+            let body = trimmed.replacingOccurrences(
+                of: "<!doctype html>", with: "", options: [.caseInsensitive]
+            ).trimmingCharacters(in: .whitespacesAndNewlines)
+            structured = "<!DOCTYPE html>\n<html lang=\"en\">\n\(body)\n</html>"
         } else if hasHTML && !hasDoctype {
             structured = "<!DOCTYPE html>\n" + trimmed
         } else if hasHead && hasBody {
