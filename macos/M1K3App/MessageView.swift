@@ -11,6 +11,7 @@
 
 import M1K3Chat
 import M1K3Knowledge
+import M1K3Preview
 import SwiftUI
 
 struct MessageView: View {
@@ -20,17 +21,41 @@ struct MessageView: View {
     var showsAvatar = true
     /// Called with the message text when the user taps speak.
     let onSpeak: (String) -> Void
+    /// Called with a link found in the turn when the user taps its chip — opens it
+    /// in the review panel rather than launching an external browser.
+    var onOpenLink: (URL) -> Void = { _ in }
+
+    /// The http(s) links mentioned in this turn, surfaced as one-click chips.
+    /// Memoised in @State and recomputed only when the turn's text changes (via
+    /// `.task(id:)`), off the synchronous render path — NSDataDetector shouldn't
+    /// run on every body pass, which matters under the ~20Hz streaming throttle.
+    @State private var links: [URL] = []
 
     @State private var showSources = false
     @State private var showReasoning = false
 
     var body: some View {
+        rows
+            // Detect off the MainActor: NSDataDetector is synchronous, and under the
+            // ~20Hz stream throttle this re-runs on every partial — keep the regex
+            // engine off the main thread so a long streamed answer can't drop frames.
+            .task(id: message.text) {
+                let text = message.text
+                links = await Task.detached(priority: .utility) { LinkDetector.detect(in: text) }.value
+            }
+    }
+
+    @ViewBuilder
+    private var rows: some View {
         switch message.role {
         case .user:
-            HStack {
-                Spacer(minLength: 60)
-                bubble
-                    .glassEffect(.regular.tint(.accentColor.opacity(0.2)), in: .rect(cornerRadius: 18))
+            VStack(alignment: .trailing, spacing: 6) {
+                HStack {
+                    Spacer(minLength: 60)
+                    bubble
+                        .glassEffect(.regular.tint(.accentColor.opacity(0.2)), in: .rect(cornerRadius: 18))
+                }
+                linkChips
             }
         case .assistant:
             HStack(alignment: .top, spacing: 10) {
@@ -51,6 +76,7 @@ struct MessageView: View {
                     if !message.sources.isEmpty {
                         sourcesDisclosure
                     }
+                    linkChips
                 }
                 // Animate the panel's insertion/removal + the live think→answer
                 // collapse. Paired with the ~20Hz stream throttle so it eases, not stutters.
@@ -168,6 +194,20 @@ struct MessageView: View {
         .padding(.horizontal, 6)
     }
 
+    /// One-click chips for any links in the turn — tap to review in the side
+    /// panel (stays on-device, no jump to an external browser).
+    @ViewBuilder
+    private var linkChips: some View {
+        if !links.isEmpty {
+            VStack(alignment: .leading, spacing: 4) {
+                ForEach(links, id: \.self) { url in
+                    LinkChip(url: url) { onOpenLink(url) }
+                }
+            }
+            .padding(.horizontal, 6)
+        }
+    }
+
     private var sourcesDisclosure: some View {
         DisclosureGroup(isExpanded: $showSources) {
             VStack(alignment: .leading, spacing: 6) {
@@ -209,5 +249,36 @@ private struct SourceRow: View {
         } else {
             hit.itemTitle
         }
+    }
+}
+
+/// A tappable link found in a turn — opens in the review panel, not an external
+/// browser, so the review stays on this Mac.
+private struct LinkChip: View {
+    let url: URL
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 6) {
+                Image(systemName: "safari").imageScale(.small)
+                Text(label)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                Image(systemName: "arrow.up.forward.app")
+                    .imageScale(.small)
+                    .foregroundStyle(.secondary)
+            }
+            .font(.caption.weight(.medium))
+        }
+        .buttonStyle(.glass)
+        .help("Review \(url.absoluteString) in the side panel")
+        .accessibilityLabel("Review link \(label)")
+    }
+
+    /// Host without a leading "www.", falling back to the full string.
+    private var label: String {
+        guard let host = url.host else { return url.absoluteString }
+        return host.hasPrefix("www.") ? String(host.dropFirst(4)) : host
     }
 }
