@@ -95,6 +95,17 @@ struct CodeBlockDetectorTests {
         #expect(artifacts.first?.language == .html)
     }
 
+    @Test("prose that merely mentions <html>/<!doctype> does NOT open the artifact panel")
+    func proseMentioningTagsNotDetected() {
+        // Review follow-up (#64): the <html>/<!doctype> arm scanned the whole text,
+        // so a chatty answer ABOUT html opened the preview. Anchor to line-start
+        // (the <head>/<body> arm already was) — a real document opens its tag on
+        // its own line, prose mentions it mid-sentence.
+        let prose = "To make a page, wrap it in <html> tags and add a <!doctype html> "
+            + "declaration at the very top of the file."
+        #expect(CodeBlockDetector.detect(in: prose).isEmpty)
+    }
+
     @Test("multiple code blocks produce multiple artifacts")
     func multipleBlocks() {
         let text = """
