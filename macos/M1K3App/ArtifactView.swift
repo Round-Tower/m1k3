@@ -98,7 +98,26 @@ private struct ArtifactPreviewWebView: NSViewRepresentable {
         config.websiteDataStore = .nonPersistent()
         let webView = WKWebView(frame: .zero, configuration: config)
         webView.navigationDelegate = context.coordinator
-        webView.loadHTMLString(source, baseURL: nil)
+
+        // Block ALL sub-resource loads (images, scripts, stylesheets, fetch/XHR).
+        // The navigation delegate handles navigation-level requests synchronously;
+        // the content rule list seals the sub-resource gap. HTML loads only after
+        // the rule list is compiled so nothing leaks during the async window.
+        let source = self.source
+        let rules = """
+        [{"trigger":{"url-filter":".*"},"action":{"type":"block"}},
+         {"trigger":{"url-filter":"^about:"},"action":{"type":"ignore-previous-rules"}},
+         {"trigger":{"url-filter":"^data:"},"action":{"type":"ignore-previous-rules"}}]
+        """
+        WKContentRuleListStore.default().compileContentRuleList(
+            forIdentifier: "m1k3-artifact-block", encodedContentRuleList: rules
+        ) { list, _ in
+            if let list {
+                webView.configuration.userContentController.add(list)
+            }
+            webView.loadHTMLString(source, baseURL: nil)
+        }
+
         return webView
     }
 
@@ -107,12 +126,11 @@ private struct ArtifactPreviewWebView: NSViewRepresentable {
     }
 
     final class Coordinator: NSObject, WKNavigationDelegate {
-        /// Block all outbound network requests — generated previews stay hermetic.
         func webView(_: WKWebView, decidePolicyFor action: WKNavigationAction,
                      decisionHandler: @escaping (WKNavigationActionPolicy) -> Void)
         {
             let scheme = action.request.url?.scheme ?? ""
-            decisionHandler(["about", ""].contains(scheme) ? .allow : .cancel)
+            decisionHandler(["about", "", "data"].contains(scheme) ? .allow : .cancel)
         }
     }
 }

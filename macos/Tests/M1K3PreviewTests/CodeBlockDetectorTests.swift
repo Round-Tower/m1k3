@@ -146,4 +146,16 @@ struct CodeBlockDetectorTests {
         let artifacts = CodeBlockDetector.detect(in: text)
         #expect(artifacts.isEmpty)
     }
+
+    @Test("an unclosed fence captures content to end of text")
+    func unclosedFence() {
+        let text = """
+        ```html
+        <h1>Hello
+        """
+        let artifacts = CodeBlockDetector.detect(in: text)
+        #expect(artifacts.count == 1)
+        #expect(artifacts.first?.language == .html)
+        #expect(artifacts.first?.source.contains("Hello") == true)
+    }
 }

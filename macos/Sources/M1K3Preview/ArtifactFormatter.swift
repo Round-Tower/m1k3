@@ -66,6 +66,7 @@ public enum ArtifactFormatter {
         "link", "meta", "param", "source", "track", "wbr",
     ]
 
+    /// Best-effort for small-model output; does not handle `<` inside attribute values or raw-text elements.
     public static func closeUnclosedTags(_ source: String) -> String {
         var stack: [String] = []
         var scanner = source[source.startIndex...]
