@@ -303,6 +303,9 @@ final class AppEnvironment {
 
     /// True while the mic is capturing a call (drives the recording indicator).
     private(set) var isRecording = false
+    /// When the current capture started — drives the live elapsed clock in the
+    /// Calls view. Nil whenever `isRecording` is false.
+    private(set) var recordingStartedAt: Date?
     /// The most recent recording. Held so it can be (re)processed once the batch
     /// transcription model is ready.
     private(set) var lastRecordingURL: URL?
@@ -795,6 +798,7 @@ extension AppEnvironment {
         do {
             let stereo = try await recorder.start()
             isRecording = true
+            recordingStartedAt = Date()
             Self.callLog.notice("recording started (stereo=\(stereo, privacy: .public))")
             lastCallStatus = stereo
                 ? "Recording… (both sides — speakers will be separated)"
@@ -813,6 +817,7 @@ extension AppEnvironment {
         guard isRecording else { return }
         let url = await recorder.stop()
         isRecording = false
+        recordingStartedAt = nil
         lastRecordingURL = url
         guard let url else {
             Self.callLog.error("stop: nothing recorded")
