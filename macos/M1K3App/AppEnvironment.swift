@@ -135,6 +135,13 @@ final class AppEnvironment {
     /// muxed so the diarizer can separate speakers. Degrades to mono mic if
     /// screen-recording permission is absent.
     private let recorder = StereoCallRecorder()
+    /// Durable home for captured recordings (under Application Support, NOT the OS
+    /// temp dir). A recording lives here until it's transcribed + saved, then it's
+    /// removed — so a `.caf` left here at launch is a parked recording to recover.
+    /// This is what survives a relaunch; the in-memory `lastRecordingURL` alone did
+    /// not, and the temp dir could be swept (recordings vanished before they were
+    /// ever transcribed).
+    private let recordingsDir: URL
     /// The MLX provider for the currently-selected brain (Lil = Qwen / Big =
     /// Gemma). Rebuilt when the brain changes; held directly so the onboarding /
     /// picker can warm it and stream download progress to the UI.
@@ -313,6 +320,9 @@ final class AppEnvironment {
     /// The most recent recording. Held so it can be (re)processed once the batch
     /// transcription model is ready.
     private(set) var lastRecordingURL: URL?
+    /// Guards against two parked-recording recovery passes running at once (the
+    /// launch chain + a manual enable). Not UI-facing, so observation is suppressed.
+    @ObservationIgnored private var isRecoveringParked = false
     /// True while a recorded call is being transcribed → summarised → indexed.
     private(set) var isTranscribingCall = false
     /// True while the batch transcription model is downloading/loading.
@@ -436,6 +446,8 @@ final class AppEnvironment {
         callPersistence = Self.makeCallPersistence(at: callsURL)
         callIngester = CallIngester(store: store, embedder: embedder)
         callSummarizer = SummarizationPipeline(quickProvider: afm, deepProvider: runtimeProvider)
+        recordingsDir = url.deletingLastPathComponent().appendingPathComponent("recordings", isDirectory: true)
+        try? FileManager.default.createDirectory(at: recordingsDir, withIntermediateDirectories: true)
 
         refreshCounts()
         Task { await self.runStartupMaintenance() }
@@ -470,8 +482,13 @@ final class AppEnvironment {
 
         // Same restore for batch CALL transcription — without it the setting reverted
         // to OFF every launch and recorded calls parked silently (the bug Kev hit).
-        // The decision lives in the tested CallTranscriptionRestore policy.
-        Task { await restoreCallTranscriptionIfEnabled() }
+        // Then recover any recordings parked in a prior session: if the restore made
+        // transcription ready they transcribe now; otherwise the user sees how many
+        // are waiting. Chained so recovery sees the restored availability.
+        Task {
+            await restoreCallTranscriptionIfEnabled()
+            await recoverParkedRecordings()
+        }
     }
 
     /// Ingest a user-selected / dropped file (PDF or text) into the store.
@@ -824,21 +841,49 @@ extension AppEnvironment {
     /// user is pointed at the Settings enable; `enableCallTranscription` picks it up.
     func stopRecording() async {
         guard isRecording else { return }
-        let url = await recorder.stop()
+        let recorded = await recorder.stop()
         isRecording = false
         recordingStartedAt = nil
-        lastRecordingURL = url
-        guard let url else {
+        guard let recorded else {
+            lastRecordingURL = nil
             Self.callLog.error("stop: nothing recorded")
             lastCallStatus = "No audio was captured — check Microphone access in System Settings › Privacy & Security."
             return
         }
+        // Move the recording out of the OS temp dir into durable storage BEFORE we
+        // decide what to do with it — so a parked recording survives a relaunch /
+        // temp sweep and can be recovered.
+        let url = relocateToRecordings(recorded)
+        lastRecordingURL = url
         if batchTranscriber.isAvailable {
             Self.callLog.notice("stop: recorded \(url.lastPathComponent, privacy: .public) → transcribing")
             Task { await processRecording(url: url) }
         } else {
             Self.callLog.notice("stop: recorded \(url.lastPathComponent, privacy: .public) → parked (transcription model not enabled)")
-            lastCallStatus = "Recorded — enable call transcription in Settings to process it."
+            // If relocation failed the file is still in the temp dir — recoverable
+            // this session, but NOT across a relaunch. Warn so it isn't lost silently.
+            let durable = url.path.hasPrefix(recordingsDir.path)
+            lastCallStatus = durable
+                ? "Recorded — enable call transcription in Settings to process it."
+                : "Recorded — transcribe it now (enable call transcription); it may not survive a quit."
+        }
+    }
+
+    /// Move a just-captured recording from the recorder's temp output into the
+    /// durable recordings dir. On any failure the original URL is returned (still
+    /// playable/transcribable this session) — relocation is for relaunch survival,
+    /// never a reason to lose the recording.
+    private func relocateToRecordings(_ source: URL) -> URL {
+        let dest = recordingsDir.appendingPathComponent(source.lastPathComponent)
+        do {
+            if FileManager.default.fileExists(atPath: dest.path) {
+                try FileManager.default.removeItem(at: dest)
+            }
+            try FileManager.default.moveItem(at: source, to: dest)
+            return dest
+        } catch {
+            Self.callLog.error("couldn't relocate recording to durable dir: \(error, privacy: .public)")
+            return source
         }
     }
 
@@ -973,15 +1018,41 @@ extension AppEnvironment {
             // Remember the upgrade so the next launch reloads the batch model instead
             // of reverting to OFF and silently parking the next recorded call.
             UserDefaults.standard.set(true, forKey: Self.callTranscriptionEnabledKey)
-            if let url = lastRecordingURL {
-                await processRecording(url: url)
-            } else {
+            // Process everything that was parked while transcription was off — the
+            // just-stopped recording AND any from earlier sessions.
+            if await recoverParkedRecordings() == 0 {
                 lastCallStatus = "Call transcription ready."
             }
         } catch {
             isPreparingBatchTranscription = false
             lastCallStatus = "Couldn’t load call transcription: \(error.localizedDescription)"
         }
+    }
+
+    /// Process recordings that were parked in the durable dir (captured while
+    /// transcription wasn't ready — including across a relaunch). If transcription
+    /// is available now, transcribe each (then it's removed from the dir); if not,
+    /// surface how many are waiting so they're never silently lost.
+    /// - Returns: the number of parked recordings found.
+    @discardableResult
+    func recoverParkedRecordings() async -> Int {
+        guard !isRecoveringParked else { return 0 }
+        isRecoveringParked = true
+        defer { isRecoveringParked = false }
+        let listing = (try? FileManager.default.contentsOfDirectory(atPath: recordingsDir.path)) ?? []
+        let pending = ParkedRecordings.pending(in: listing)
+        guard !pending.isEmpty else { return 0 }
+        if batchTranscriber.isAvailable {
+            // Serial by design: processRecording's `defer { isTranscribingCall = false }`
+            // resets before the next await, so each recording transcribes one at a
+            // time (no swamping memory with concurrent jobs).
+            for name in pending {
+                await processRecording(url: recordingsDir.appendingPathComponent(name))
+            }
+        } else {
+            lastCallStatus = ParkedRecordings.waitingMessage(count: pending.count)
+        }
+        return pending.count
     }
 
     /// Reload the batch transcription model on launch when the user enabled it
@@ -1028,17 +1099,34 @@ extension AppEnvironment {
         do {
             let session = try await pipeline.process(fileURL: url, title: title, startedAt: Date())
             guard !session.segments.isEmpty else {
+                // Transcription RAN and found no speech — a deterministic empty
+                // result. Consume the file so it isn't re-transcribed every launch
+                // (a thrown failure below keeps it, so transient faults retry).
+                consumeRecording(at: url)
                 lastCallStatus = "Transcription produced no speech."
                 return
             }
             try callPersistence.save(session)
             try await callIngester.ingest(session)
-            lastRecordingURL = nil
+            // Saved + indexed → the source recording is done. Removing it is what
+            // makes "a .caf still in the recordings dir == a parked recording" true,
+            // so launch recovery never reprocesses a call already in the store.
+            consumeRecording(at: url)
             refreshCounts()
             lastCallStatus = "Transcribed “\(title)” — \(session.segments.count) segments, indexed."
         } catch {
+            // Left in place ON PURPOSE: a thrown transcribe/save error is treated as
+            // transient, so the recording stays parked and is retried next launch.
             lastCallStatus = "Couldn’t transcribe the call: \(error.localizedDescription)"
         }
+    }
+
+    /// A recording that's been fully handled (saved, or ran and found no speech) is
+    /// removed from the durable dir and dropped as the pending URL — so it's never
+    /// re-processed. Only a THROWN failure skips this (keeping the file for retry).
+    private func consumeRecording(at url: URL) {
+        try? FileManager.default.removeItem(at: url)
+        if lastRecordingURL == url { lastRecordingURL = nil }
     }
 
     fileprivate static let callTitleFormatter: DateFormatter = {
