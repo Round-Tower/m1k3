@@ -37,6 +37,7 @@ struct SettingsView: View {
     @AppStorage(StartupPreferences.menuBarOnlyKey) private var menuBarOnly = false
     @AppStorage(MenuBarGlyphStyle.storageKey) private var glyphStyle = MenuBarGlyphStyle.pixelM
     @State private var profileDraft = ""
+    @State private var showLicenses = false
 
     var body: some View {
         @Bindable var env = env
@@ -304,12 +305,24 @@ struct SettingsView: View {
                     LabeledContent("Model availability",
                                    value: env.providerAvailable ? "Ready" : "Unavailable")
                 }
+
+                Section {
+                    Button("Third-party licenses") { showLicenses = true }
+                        .buttonStyle(.glass)
+                } footer: {
+                    Text("M1K3 is built with open-source components. "
+                        + "Everything runs on this Mac.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
             }
             .formStyle(.grouped)
             .scrollContentBackground(.hidden)
         }
         .frame(width: 480, height: 520)
         .glassBackdrop()
+        .sheet(isPresented: $showLicenses) {
+            LicensesView()
+        }
         // Destructive re-run confirm, hoisted off the leaf Button (Startup section)
         // so it presents reliably — a confirmationDialog on a Button inside a Form
         // can silently fail to show on macOS, and this gate guards a full reset.

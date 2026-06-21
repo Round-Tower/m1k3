@@ -1,0 +1,96 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<array>
+	<dict>
+		<key>name</key>
+		<string>misaki</string>
+		<key>license</key>
+		<string>Apache License 2.0</string>
+		<key>url</key>
+		<string>https://github.com/hexgrad/misaki</string>
+		<key>purpose</key>
+		<string>British English G2P pronunciation dictionary (gb_gold + gb_silver, 197k entries) used by the Kokoro speech engine.</string>
+	</dict>
+	<dict>
+		<key>name</key>
+		<string>Kokoro</string>
+		<key>license</key>
+		<string>Apache License 2.0</string>
+		<key>url</key>
+		<string>https://github.com/hexgrad/kokoro</string>
+		<key>purpose</key>
+		<string>Neural text-to-speech model powering M1K3 Voice.</string>
+	</dict>
+	<dict>
+		<key>name</key>
+		<string>GRDB.swift</string>
+		<key>license</key>
+		<string>MIT License</string>
+		<key>url</key>
+		<string>https://github.com/groue/GRDB.swift</string>
+		<key>purpose</key>
+		<string>SQLite toolkit for on-device knowledge and memory storage.</string>
+	</dict>
+	<dict>
+		<key>name</key>
+		<string>MLX Swift</string>
+		<key>license</key>
+		<string>MIT License</string>
+		<key>url</key>
+		<string>https://github.com/ml-explore/mlx-swift</string>
+		<key>purpose</key>
+		<string>Apple Silicon ML array framework for on-device inference.</string>
+	</dict>
+	<dict>
+		<key>name</key>
+		<string>MLX Swift LM</string>
+		<key>license</key>
+		<string>MIT License</string>
+		<key>url</key>
+		<string>https://github.com/ml-explore/mlx-swift-lm</string>
+		<key>purpose</key>
+		<string>Language model loading and generation built on MLX Swift.</string>
+	</dict>
+	<dict>
+		<key>name</key>
+		<string>Swift Transformers</string>
+		<key>license</key>
+		<string>Apache License 2.0</string>
+		<key>url</key>
+		<string>https://github.com/huggingface/swift-transformers</string>
+		<key>purpose</key>
+		<string>Tokenizer support for local language models.</string>
+	</dict>
+	<dict>
+		<key>name</key>
+		<string>Swift MCP SDK</string>
+		<key>license</key>
+		<string>MIT License</string>
+		<key>url</key>
+		<string>https://github.com/modelcontextprotocol/swift-sdk</string>
+		<key>purpose</key>
+		<string>Model Context Protocol server implementation.</string>
+	</dict>
+	<dict>
+		<key>name</key>
+		<string>WhisperKit</string>
+		<key>license</key>
+		<string>MIT License</string>
+		<key>url</key>
+		<string>https://github.com/argmaxinc/WhisperKit</string>
+		<key>purpose</key>
+		<string>On-device speech recognition for voice input.</string>
+	</dict>
+	<dict>
+		<key>name</key>
+		<string>ONNX Runtime</string>
+		<key>license</key>
+		<string>MIT License</string>
+		<key>url</key>
+		<string>https://github.com/microsoft/onnxruntime</string>
+		<key>purpose</key>
+		<string>Neural network inference runtime for the Kokoro speech model.</string>
+	</dict>
+</array>
+</plist>
