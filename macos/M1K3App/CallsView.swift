@@ -8,6 +8,10 @@
 //  tested M1K3Calls package.
 //
 //  Signed: Kev + claude-opus-4-8, 2026-06-06, Confidence 0.8, Prior: Unknown
+//  Review: claude-opus-4-8, 2026-06-21 — Record/Stop moved INTO this view (header +
+//  empty state, routed through the tested CallRecordAction core) so recording lives
+//  where calls live; was only in the main toolbar, hidden behind this sheet. Added a
+//  live recording/transcribing banner with a ticking clock and the consent dialog.
 
 import M1K3Calls
 import SwiftUI
@@ -17,11 +21,13 @@ struct CallsView: View {
     @Environment(AppEnvironment.self) private var env
     @Environment(\.dismiss) private var dismiss
     @State private var showImporter = false
+    @State private var showConsentDialog = false
     @State private var selected: CallSession?
 
     var body: some View {
         VStack(spacing: 0) {
             header
+            if env.isRecording || env.isTranscribingCall { activityBanner }
             content
         }
         .frame(width: 480, height: 540)
@@ -34,6 +40,14 @@ struct CallsView: View {
             if case let .success(urls) = result, let url = urls.first {
                 Task { await env.importCallTranscript(url: url) }
             }
+        }
+        .confirmationDialog("Record this call?", isPresented: $showConsentDialog, titleVisibility: .visible) {
+            Button("Record once") { Task { await env.affirmConsentAndRecord(scope: .once) } }
+            Button("Always allow") { Task { await env.affirmConsentAndRecord(scope: .remembered) } }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("You’re responsible for having consent from everyone on the call. "
+                + "Recording is on-device only — audio never leaves this Mac.")
         }
         .sheet(item: $selected) { CallDetailView(call: $0) }
         .safeAreaInset(edge: .bottom) {
@@ -56,6 +70,7 @@ struct CallsView: View {
             Text("\(env.callCount)") // observable — re-renders the list after import/delete
                 .font(.caption.monospacedDigit()).foregroundStyle(.secondary)
             Spacer()
+            recordButton
             Button {
                 showImporter = true
             } label: {
@@ -68,6 +83,58 @@ struct CallsView: View {
         .padding(16)
     }
 
+    /// Record / Stop — now lives WHERE calls live (it used to be only in the main
+    /// toolbar, hidden behind this sheet). The action is resolved by the tested
+    /// CallRecordAction core; first-time taps route through the consent dialog.
+    private var recordButton: some View {
+        Button(action: triggerRecordAction) {
+            Label(env.isRecording ? "Stop" : "Record",
+                  systemImage: env.isRecording ? "stop.circle.fill" : "record.circle")
+        }
+        .tint(env.isRecording ? .red : nil)
+        // Can't start a new recording mid-transcription (Stop only shows while
+        // recording, when isTranscribingCall is false — so this never blocks Stop).
+        .disabled(env.isTranscribingCall)
+    }
+
+    /// Route a record-control tap through the tested resolver: stop, start, or
+    /// (first time) ask consent. Shared by the header button and the empty state.
+    private func triggerRecordAction() {
+        // Belt-and-braces: a tap that races the transcription window would otherwise
+        // start a recording whose result is silently dropped by processRecording's
+        // `guard !isTranscribingCall`.
+        guard !env.isTranscribingCall else { return }
+        switch CallRecordAction.resolve(isRecording: env.isRecording, isPreAuthorised: env.recordingPreAuthorised) {
+        case .stop: Task { await env.stopRecording() }
+        case .start: Task { await env.startRecording() }
+        case .requestConsent: showConsentDialog = true
+        }
+    }
+
+    /// Live indicator pinned under the header so a recording (or in-flight
+    /// transcription) is visible whether the list is empty or full.
+    private var activityBanner: some View {
+        HStack(spacing: 8) {
+            if env.isRecording {
+                Circle().fill(.red).frame(width: 8, height: 8)
+                Text("Recording")
+                if let started = env.recordingStartedAt {
+                    TimelineView(.periodic(from: started, by: 1)) { context in
+                        Text(RecordingClock.label(seconds: Int(context.date.timeIntervalSince(started))))
+                            .monospacedDigit().foregroundStyle(.secondary)
+                    }
+                }
+            } else if env.isTranscribingCall {
+                ProgressView().controlSize(.small)
+                Text("Transcribing…")
+            }
+            Spacer()
+        }
+        .font(.callout)
+        .padding(.horizontal, 16)
+        .padding(.bottom, 8)
+    }
+
     @ViewBuilder
     private var content: some View {
         let calls = env.calls()
@@ -75,8 +142,15 @@ struct CallsView: View {
             ContentUnavailableView {
                 Label("No calls yet", systemImage: "phone.bubble")
             } description: {
-                Text("Import a transcript (lines like “Speaker: …”). M1K3 summarises it, "
-                    + "encrypts it at rest, and makes it searchable alongside your documents.")
+                Text("Tap Record to capture a call, or import a transcript (lines like "
+                    + "“Speaker: …”). M1K3 summarises it, encrypts it at rest, and makes it "
+                    + "searchable alongside your documents.")
+            } actions: {
+                Button(action: triggerRecordAction) {
+                    Label("Record a call", systemImage: "record.circle")
+                }
+                .buttonStyle(.glassProminent)
+                .disabled(env.isTranscribingCall)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
