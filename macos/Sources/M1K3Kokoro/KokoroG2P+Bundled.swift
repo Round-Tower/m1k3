@@ -2,12 +2,20 @@
 //  KokoroG2P+Bundled.swift
 //  M1K3Kokoro
 //
-//  Loads the bundled espeak-en-gb pronunciation dictionary into a KokoroG2P. The
-//  resource `g2p-en-gb.deflate` is `[UInt32 LE uncompressedSize][raw DEFLATE bytes]`
-//  (~2 MB compressed from ~11 MB of `word<TAB>id,id,…` lines), inflated at load via
-//  Apple's Compression framework — no third-party dependency.
+//  Loads the bundled misaki-gb pronunciation dictionary into a KokoroG2P. The resource
+//  `g2p-en-gb.deflate` is `[UInt32 LE uncompressedSize][raw DEFLATE bytes]` (~1.5 MB
+//  compressed from ~7.7 MB of `word<TAB>id,id,…` lines), inflated at load via Apple's
+//  Compression framework — no third-party dependency.
+//
+//  Dictionary source: misaki (https://github.com/hexgrad/misaki), Apache License 2.0,
+//  gb_gold.json + gb_silver.json merged — 197k British English pronunciations using
+//  Kokoro's canonical single-token affricates/diphthongs.
 //
 //  Signed: Kev + claude-opus-4-8, 2026-06-09, Confidence 0.7, Prior: Unknown
+//  Review: Kev + claude-opus-4-6, 2026-06-21 — replaced espeak (GPL) dictionary with
+//  misaki (Apache 2.0) for commercial shipping. Canonical Kokoro vocab: single-token
+//  affricates (ʧ=133, ʤ=82) and diphthongs (A=24, I=25, Q=33, W=39, Y=41).
+//  Confidence 0.85.
 //
 
 import Compression
@@ -58,7 +66,7 @@ public extension KokoroG2P {
     /// Parse the `word<TAB>id,id,…` dictionary text into a lookup table. Lines without
     /// a tab or with no parseable ids are skipped.
     internal static func parse(_ text: String) -> [String: [Int]] {
-        var dict = [String: [Int]](minimumCapacity: 240_000)
+        var dict = [String: [Int]](minimumCapacity: 210_000)
         for line in text.split(separator: "\n", omittingEmptySubsequences: true) {
             guard let tab = line.firstIndex(of: "\t") else { continue }
             let word = String(line[..<tab])

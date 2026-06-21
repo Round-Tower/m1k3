@@ -8,10 +8,9 @@
 //  per-word phonemes joined by the space token, punctuation attached directly, wrapped
 //  in [0 … 0] pad tokens.
 //
-//  The DICTIONARY is data (swappable — espeak-en-gb for the spike; a public-domain
-//  CMUdict-derived set can replace it for ship with zero code change). THIS assembly
-//  logic is the tested IP. Per-word lookup reproduces whole-sentence espeak phonemes
-//  for the common case; minor sentence-prosody stress differences on some function
+//  The DICTIONARY is data (swappable — now misaki-gb, Apache 2.0). THIS assembly
+//  logic is the tested IP. Per-word lookup reproduces whole-sentence phonemes for
+//  the common case; minor sentence-prosody stress differences on some function
 //  words (ˈ vs ˌ) are expected and benign.
 //
 //  Signed: Kev + claude-opus-4-8, 2026-06-09, Confidence 0.75, Prior: Unknown
@@ -220,21 +219,20 @@ public struct KokoroG2P: Sendable {
     // forms but NOT "-s"/"-es" plurals/3rd-person or "-ed" pasts — so they were
     // silently dropped. We resolve the BASE (dictionary or compound-split) and
     // append the correct suffix phoneme. Token ids are the bundled Kokoro en-GB
-    // vocab (extracted by probing the real dict): the allomorphy is real, not a
-    // guess. A CMUdict-derived dictionary is the proper long-term fix; this is
-    // the safety net that also covers any future OOV inflection.
+    // vocab (canonical Kokoro token IDs): the allomorphy is real, not a guess.
+    // This is the safety net that also covers any future OOV inflection.
     private static let phonemeZ = 68 // /z/
     private static let phonemeS = 61 // /s/
     private static let phonemeIz = [102, 68] // /ɪz/
     private static let phonemeD = 46 // /d/
     private static let phonemeT = 62 // /t/
     private static let phonemeId = [102, 46] // /ɪd/
-    /// Stem-final phonemes that take the syllabic plural /ɪz/: s z ʃ ʒ (tʃ ends ʃ, dʒ ends ʒ).
-    private static let sibilantFinals: Set<Int> = [61, 68, 131, 147]
+    /// Stem-final phonemes that take the syllabic plural /ɪz/: s z ʃ ʒ ʧ ʤ.
+    private static let sibilantFinals: Set<Int> = [61, 68, 131, 147, 133, 82]
     /// Voiceless non-sibilant stem finals (take /s/ for plural): p t k f θ.
     private static let voicelessForPlural: Set<Int> = [58, 62, 53, 48, 119]
-    /// Voiceless stem finals (take /t/ for past, excluding t itself): p k f θ s ʃ.
-    private static let voicelessForPast: Set<Int> = [58, 53, 48, 119, 61, 131]
+    /// Voiceless stem finals (take /t/ for past, excluding t itself): p k f θ s ʃ ʧ.
+    private static let voicelessForPast: Set<Int> = [58, 53, 48, 119, 61, 131, 133]
     /// Stem finals that take the syllabic past /ɪd/: t d.
     private static let tdFinals: Set<Int> = [62, 46]
 
@@ -339,7 +337,7 @@ public struct KokoroG2P: Sendable {
     }
 
     /// Per-character expansion: letters via their single-character dictionary
-    /// keys (espeak letter names — all 26 are present), digits via NumberSpeller.
+    /// keys (all 26 are present), digits via NumberSpeller.
     private func spellOutTokens(_ text: String, extraWords: [String]) -> [Int]? {
         var words: [String] = []
         for char in text {

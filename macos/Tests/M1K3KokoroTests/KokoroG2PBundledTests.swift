@@ -15,10 +15,9 @@ struct KokoroG2PBundledTests {
     @Test("the bundled dictionary loads and reproduces the oracle tokens end-to-end")
     func bundledEndToEnd() throws {
         let g2p = try KokoroG2P.bundled()
-        // Real 234k-word espeak-en-gb dict → the exact sequence Python's kokoro_onnx fed.
+        // misaki-gb dict: canonical single-token diphthongs (Q=33 for /əʊ/).
         #expect(g2p.phonemeTokens("Hello world.") ==
-            [50, 83, 54, 156, 83, 135, 16, 65, 156, 87, 158, 54, 46, 4])
-        // Contraction coverage (web2 lacks these; added to the generated dict).
+            [50, 83, 54, 156, 33, 16, 65, 156, 87, 158, 54, 46, 4])
         #expect(g2p.phonemeTokens("don't").isEmpty == false)
     }
 
@@ -53,7 +52,9 @@ struct KokoroG2PBundledTests {
         // The spike dict has bases + "-ing" but NOT "-s"/"-ed" — every one of
         // these used to be silently dropped from speech. Each must now produce
         // a non-empty, single-word span.
-        for word in ["plays", "games", "cats", "runs", "makes", "words", "wanted", "walked", "played"] {
+        for word in ["plays", "games", "cats", "runs", "makes", "words", "wanted", "walked", "played",
+                     "churches", "judges", "watched", "bridged"]
+        {
             let result = g2p.annotatedTokens(word)
             #expect(!result.tokens.isEmpty, "\(word) is still silent")
             #expect(result.words.count == 1)
