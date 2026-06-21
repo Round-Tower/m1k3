@@ -1106,17 +1106,29 @@ extension AppEnvironment {
                 lastCallStatus = "Transcription produced no speech."
                 return
             }
+            // save() is the COMMIT point: once the call is in the store it's durable,
+            // so consume the source recording NOW — never reprocess it into a
+            // duplicate. Indexing below is best-effort + isolated: recovery runs early
+            // at launch when the embedder may still be cold, and an ingest throw there
+            // must NOT undo the save or re-park the .caf (the duplicate-on-relaunch bug
+            // the self-test caught). Mirrors the pipeline's own optional/isolated
+            // diarizer + summary stages.
             try callPersistence.save(session)
-            try await callIngester.ingest(session)
-            // Saved + indexed → the source recording is done. Removing it is what
-            // makes "a .caf still in the recordings dir == a parked recording" true,
-            // so launch recovery never reprocesses a call already in the store.
             consumeRecording(at: url)
             refreshCounts()
-            lastCallStatus = "Transcribed “\(title)” — \(session.segments.count) segments, indexed."
+            var indexed = true
+            do {
+                try await callIngester.ingest(session)
+            } catch {
+                indexed = false
+                Self.callLog.error("call indexing failed (call saved, not yet searchable): \(error, privacy: .public)")
+            }
+            lastCallStatus = indexed
+                ? "Transcribed “\(title)” — \(session.segments.count) segments, indexed."
+                : "Transcribed “\(title)” — \(session.segments.count) segments (indexing deferred)."
         } catch {
-            // Left in place ON PURPOSE: a thrown transcribe/save error is treated as
-            // transient, so the recording stays parked and is retried next launch.
+            // Left in place ON PURPOSE: a thrown transcribe/save error (NOT indexing)
+            // is treated as transient, so the recording stays parked and retries.
             lastCallStatus = "Couldn’t transcribe the call: \(error.localizedDescription)"
         }
     }
