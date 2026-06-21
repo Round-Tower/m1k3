@@ -58,6 +58,13 @@ public struct AgentRAGResponder: RAGResponding, Sendable {
     /// a runtime hot-swap is reflected — same per-turn pattern as `toolsProvider`.
     /// Empty when unknown (tests / simple callers); the context line omits it then.
     private let brainNameProvider: @Sendable () -> String
+    /// Per-turn override for the agent-loop iteration cap, read FRESH each turn so
+    /// a thermal "ease off" (CoolHeadPolicy) takes effect live without rebuilding
+    /// the long-lived responder. `nil` → the fixed `maxIterations` base, so the
+    /// default path is byte-identical. Stays an opaque `() -> Int`: the thermal
+    /// level enum lives in M1K3LanguageModel, which this module deliberately does
+    /// NOT link (the dependency-direction trap) — the enum→Int map is the app's job.
+    private let maxIterationsProvider: (@Sendable () -> Int)?
 
     public init(
         store: KnowledgeStore,
@@ -69,7 +76,8 @@ public struct AgentRAGResponder: RAGResponding, Sendable {
         maxIterations: Int = 3,
         sourceCollector: ToolSourceCollector? = nil,
         thinkingModeProvider: @escaping @Sendable () -> ThinkingMode = { .auto },
-        brainNameProvider: @escaping @Sendable () -> String = { "" }
+        brainNameProvider: @escaping @Sendable () -> String = { "" },
+        maxIterationsProvider: (@Sendable () -> Int)? = nil
     ) {
         self.store = store
         self.embedder = embedder
@@ -81,6 +89,7 @@ public struct AgentRAGResponder: RAGResponding, Sendable {
         self.sourceCollector = sourceCollector
         self.thinkingModeProvider = thinkingModeProvider
         self.brainNameProvider = brainNameProvider
+        self.maxIterationsProvider = maxIterationsProvider
     }
 
     /// Fixed tool list — convenience for tests and simple callers.
@@ -190,11 +199,14 @@ public struct AgentRAGResponder: RAGResponding, Sendable {
         )
         Self.logTurnStart(chunks: chunks, tools: tools, grounding: grounding)
         // Fresh agent per turn — its reasoning trace must not bleed across
-        // turns, and the tool list reflects current settings.
+        // turns, and the tool list reflects current settings. The iteration cap is
+        // read fresh too: `nil` keeps the configured base, else the live thermal
+        // budget (never snapshotted at build time — the responder is long-lived).
+        let iterations = maxIterationsProvider?() ?? maxIterations
         let agent = LocalAgent(
             inferenceProvider: provider,
             tools: tools,
-            maxIterations: maxIterations,
+            maxIterations: iterations,
             concludesOnUnstructuredThought: true
         )
         // Per-turn reasoning budget: casual asks skip the think phase

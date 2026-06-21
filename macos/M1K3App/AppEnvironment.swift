@@ -533,6 +533,10 @@ final class AppEnvironment {
         // Auto-routing (opt-in) picks the brain per the ladder before the turn.
         // No-op when off or when the pick is unchanged, so the default path is intact.
         applyAutoRouteIfEnabled()
+        // Prudent compute (opt-in): fold this turn's thermal/low-power pressure into
+        // the cool-head state so the agent loop eases off when the Mac runs hot.
+        // No-op when off. Never swaps the brain.
+        applyCoolHeadIfEnabled()
         let clock = ContinuousClock()
         let started = clock.now
         avatar.setActivity(.thinking)

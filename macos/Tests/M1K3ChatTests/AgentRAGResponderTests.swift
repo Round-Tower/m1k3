@@ -498,6 +498,50 @@ struct AgentRAGResponderTests {
         #expect(calls.withLock { $0 } == 2)
     }
 
+    @Test("the maxIterations provider is consulted fresh each turn (thermal ease applies live)")
+    func maxIterationsProviderPerTurn() async throws {
+        let (store, embedder) = try await ingestedStore()
+        let provider = AgentScriptedProvider([
+            "CONCLUSION: one.",
+            "CONCLUSION: two.",
+        ])
+        let calls = Mutex(0)
+        let responder = AgentRAGResponder(
+            store: store, embedder: embedder, provider: provider,
+            toolsProvider: { [] },
+            maxIterationsProvider: {
+                calls.withLock { $0 += 1 }
+                return 3
+            }
+        )
+        _ = try await collect(await responder.answerStreaming("first?").stream)
+        _ = try await collect(await responder.answerStreaming("second?").stream)
+        // Read once per turn (at agent construction), not per loop iteration —
+        // so a CoolHeadState change between turns is picked up, never snapshotted.
+        #expect(calls.withLock { $0 } == 2)
+    }
+
+    @Test("a lower iteration cap runs strictly fewer agent iterations (thermal lever bites)")
+    func lowerCapRunsFewerIterations() async throws {
+        /// A provider that NEVER concludes — it keeps asking for the tool — so the
+        /// only thing that stops the loop is the iteration cap. The number of model
+        /// prompts is then a direct, monotone read on the cap.
+        func promptsUnderCap(_ cap: Int) async throws -> Int {
+            let (store, embedder) = try await ingestedStore()
+            let provider = AgentScriptedProvider(Array(repeating: "ACTION: datetime(now)", count: 8))
+            let responder = AgentRAGResponder(
+                store: store, embedder: embedder, provider: provider,
+                toolsProvider: { [FixedTool(name: "datetime", response: "Tuesday")] },
+                maxIterationsProvider: { cap }
+            )
+            _ = try await collect(await responder.answerStreaming("what day is it?").stream)
+            return provider.allPrompts.count
+        }
+        let tight = try await promptsUnderCap(1)
+        let loose = try await promptsUnderCap(3)
+        #expect(tight < loose) // the cap genuinely bounds the loop
+    }
+
     @Test("prose without markers becomes the answer after one structured chance")
     func proseImplicitConclusion() async throws {
         let (store, embedder) = try await ingestedStore()

@@ -33,6 +33,7 @@ struct SettingsView: View {
     @AppStorage(AppEnvironment.companionShadingKey) private var companionShading = CompanionShadingStyle.off.rawValue
     @AppStorage(AppEnvironment.autoRouteBrainKey) private var autoRouteBrain = false
     @AppStorage(AppEnvironment.preferAppleOnDeviceKey) private var preferAppleOnDevice = false
+    @AppStorage(AppEnvironment.coolHeadEaseKey) private var coolHeadEase = false
     @AppStorage(StartupPreferences.menuBarOnlyKey) private var menuBarOnly = false
     @AppStorage(MenuBarGlyphStyle.storageKey) private var glyphStyle = MenuBarGlyphStyle.pixelM
     @State private var profileDraft = ""
@@ -66,13 +67,17 @@ struct SettingsView: View {
                         Toggle("Prefer Apple on-device", isOn: $preferAppleOnDevice)
                             .onChange(of: preferAppleOnDevice) { _, _ in env.applyAutoRouteIfEnabled() }
                     }
+                    Toggle("Ease off when my Mac runs hot", isOn: $coolHeadEase)
                 } header: {
                     Text("Brain")
                 } footer: {
                     Text("Mini is Apple's built-in model (instant). Lil and Big are local models "
                         + "that download once. On-device only — nothing leaves this Mac.\n"
                         + "Auto-route lets M1K3 pick: its own tuned model by default (stronger at "
-                        + "chat), or Apple on-device if you prefer it.")
+                        + "chat), or Apple on-device if you prefer it — always sized to what this "
+                        + "Mac runs comfortably.\n"
+                        + "Easing off trims M1K3's effort under thermal or low-power pressure. "
+                        + "It never changes your brain.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
