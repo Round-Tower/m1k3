@@ -816,7 +816,7 @@ extension AppEnvironment {
         lastRecordingURL = url
         guard let url else {
             Self.callLog.error("stop: nothing recorded")
-            lastCallStatus = "Nothing was recorded."
+            lastCallStatus = "No audio was captured — check Microphone access in System Settings › Privacy & Security."
             return
         }
         if batchTranscriber.isAvailable {
