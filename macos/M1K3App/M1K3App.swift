@@ -23,6 +23,13 @@ struct M1K3App: App {
     /// Stable id so the menu-bar item can re-open the main window after it's closed.
     static let mainWindowID = "main"
 
+    /// When true, the next OnboardingView is a brain-only re-pick (Settings →
+    /// "Change brain…"): it opens on the brain step and finishes on wake, rather
+    /// than replaying the full flow from the empty "Who am I talking to?" screen.
+    /// Kept here (not on AppEnvironment) so the Scene and Settings share it without
+    /// reaching into the store; reset to false when onboarding completes.
+    static let onboardingStartAtBrainKey = "onboarding.startAtBrain"
+
     /// Sets the activation policy (Dock icon vs accessory) before the first
     /// window appears, so a menu-bar-only launch never flashes a Dock icon.
     /// Owns + publishes the AppEnvironment (built at launch, window-independent) so
@@ -34,6 +41,9 @@ struct M1K3App: App {
     @State private var launchAtLogin = LaunchAtLogin(item: SMAppServiceLoginItem())
     /// First-run gate: show "choose your brain" until a brain has been picked.
     @AppStorage(AppEnvironment.hasChosenBrainKey) private var hasChosenBrain = false
+    /// Brain-only re-pick flag: when set by Settings → "Change brain…", the
+    /// re-shown OnboardingView opens on the brain step and finishes on wake.
+    @AppStorage(Self.onboardingStartAtBrainKey) private var onboardingStartAtBrain = false
     /// Menu-bar mark (favicon "M" by default) and whether to live in the menu bar
     /// only (no Dock icon, no window forced open at launch).
     @AppStorage(MenuBarGlyphStyle.storageKey) private var glyphStyle = MenuBarGlyphStyle.pixelM
@@ -61,8 +71,11 @@ struct M1K3App: App {
                         ContentView()
                             .environment(env)
                     } else {
-                        OnboardingView { hasChosenBrain = true }
-                            .environment(env)
+                        OnboardingView(startAtBrain: onboardingStartAtBrain) {
+                            hasChosenBrain = true
+                            onboardingStartAtBrain = false
+                        }
+                        .environment(env)
                     }
                 } else if let startupError = appDelegate.startupError {
                     StartupFailureView(message: startupError)

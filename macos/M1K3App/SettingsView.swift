@@ -26,6 +26,7 @@ struct SettingsView: View {
     @AppStorage(AppEnvironment.soundEffectsEnabledKey) private var soundEffectsEnabled = true
     @AppStorage(AppEnvironment.notifyOnLongTurnKey) private var notifyOnLongTurn = false
     @State private var showMemories = false
+    @State private var showResetOnboarding = false
     @AppStorage(AppEnvironment.thinkingModeKey) private var thinkingMode = ThinkingMode.auto.rawValue
     @AppStorage(AppEnvironment.voiceCompanionKey) private var voiceCompanion = ""
     @AppStorage(AppEnvironment.avatarDisplayKey) private var avatarDisplay = AvatarDisplay.panel
@@ -52,6 +53,10 @@ struct SettingsView: View {
                     }
                     modelLoadRow
                     Button("Change brain…") {
+                        // Brain-only re-pick: deep-link to the brain step and finish
+                        // on wake, instead of replaying the empty "Who am I talking
+                        // to?" screen (the old re-trigger bug).
+                        UserDefaults.standard.set(true, forKey: M1K3App.onboardingStartAtBrainKey)
                         UserDefaults.standard.set(false, forKey: AppEnvironment.hasChosenBrainKey)
                     }
                     .buttonStyle(.glass)
@@ -301,6 +306,24 @@ struct SettingsView: View {
         }
         .frame(width: 480, height: 520)
         .glassBackdrop()
+        // Destructive re-run confirm, hoisted off the leaf Button (Startup section)
+        // so it presents reliably — a confirmationDialog on a Button inside a Form
+        // can silently fail to show on macOS, and this gate guards a full reset.
+        .confirmationDialog(
+            "Re-run the first-run setup?",
+            isPresented: $showResetOnboarding,
+            titleVisibility: .visible
+        ) {
+            Button("Re-run onboarding", role: .destructive) {
+                // Full flow from the start (You → Brain → Voice → Speech) — NOT the
+                // brain-only re-pick. Saved profile + downloaded models are kept.
+                UserDefaults.standard.set(false, forKey: M1K3App.onboardingStartAtBrainKey)
+                UserDefaults.standard.set(false, forKey: AppEnvironment.hasChosenBrainKey)
+            }
+        } message: {
+            Text("Shows the full You → Brain → Voice → Speech flow again. "
+                + "Your saved profile and downloaded models are kept.")
+        }
         // Re-read the live login-item status each time Settings opens, so a grant
         // the user just made in System Settings (which we can't observe) is
         // reflected without them having to toggle it again.
@@ -408,6 +431,12 @@ extension SettingsView {
                         .tag(style)
                 }
             }
+            // Action only — the destructive confirm is hoisted onto the Form (see
+            // `body`) so it presents reliably; a confirmationDialog on a leaf Button
+            // inside a Form can silently fail to show on macOS, and this gate guards
+            // a full onboarding reset.
+            Button("Re-run onboarding…", role: .destructive) { showResetOnboarding = true }
+                .buttonStyle(.glass)
         } header: {
             Text("Startup")
         } footer: {

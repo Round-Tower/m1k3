@@ -16,9 +16,6 @@ import SwiftUI
 
 struct MessageView: View {
     let message: ChatMessage
-    /// Whether to draw the avatar — true only on the first assistant turn of a
-    /// run, so the mark appears once per reply, not on every consecutive line.
-    var showsAvatar = true
     /// Called with the message text when the user taps speak.
     let onSpeak: (String) -> Void
     /// Called with a link found in the turn when the user taps its chip — opens it
@@ -59,12 +56,6 @@ struct MessageView: View {
             }
         case .assistant:
             HStack(alignment: .top, spacing: 10) {
-                if showsAvatar {
-                    avatar
-                } else {
-                    // Reserve the avatar's width so stacked replies stay aligned.
-                    Color.clear.frame(width: 30, height: 1)
-                }
                 VStack(alignment: .leading, spacing: 8) {
                     assistantBody
                     if let reasoning = message.reasoning, !reasoning.isEmpty {
@@ -85,18 +76,6 @@ struct MessageView: View {
                 Spacer(minLength: 40)
             }
         }
-    }
-
-    /// M1K3's mark: the brain glyph seated in a glass disc so it reads as an
-    /// avatar with presence, not a thin tinted icon floating beside the bubble.
-    private var avatar: some View {
-        Image(systemName: "brain")
-            .symbolRenderingMode(.hierarchical)
-            .foregroundStyle(.tint)
-            .font(.system(size: 16, weight: .semibold))
-            .frame(width: 30, height: 30)
-            .glassEffect(.regular, in: .circle)
-            .accessibilityHidden(true)
     }
 
     private var bubble: some View {
@@ -186,7 +165,7 @@ struct MessageView: View {
                 .padding(.top, 4)
                 .frame(maxWidth: .infinity, alignment: .leading)
         } label: {
-            Label(isThinkingLive ? "Thinking…" : "Model reasoning", systemImage: "brain")
+            Label(isThinkingLive ? "Thinking…" : "Model reasoning", systemImage: "ellipsis.bubble")
                 .font(.caption.weight(.medium))
                 .foregroundStyle(.secondary)
                 .contentTransition(.opacity)

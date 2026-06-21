@@ -96,7 +96,7 @@ struct CompanionTests {
     @Test("named resolves a bundled id, and treats empty/unknown as the pixel face")
     func namedResolution() {
         #expect(CompanionSpec.named("Fox") == .fox)
-        #expect(CompanionSpec.named("Gecko") == .gecko)
+        #expect(CompanionSpec.named("Gecko") == nil) // dropped — stale id → pixel face
         #expect(CompanionSpec.named("") == nil) // the pixel-face sentinel
         #expect(CompanionSpec.named("pixel") == nil)
         #expect(CompanionSpec.named("Wolpertinger") == nil)
@@ -104,7 +104,7 @@ struct CompanionTests {
 
     @Test("shipped companions report installed; their whole clip set is bundled")
     func installedReflectsBundle() {
-        for spec in [CompanionSpec.fox, .gecko] {
+        for spec in CompanionSpec.all {
             #expect(CompanionAssets.isInstalled(spec))
             // Every declared clip is actually on disk (so no gait silently dead-ends).
             #expect(CompanionAssets.clipURLs(for: spec).count == spec.clips.count, "\(spec.id) missing clips")

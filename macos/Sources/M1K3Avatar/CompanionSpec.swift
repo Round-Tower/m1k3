@@ -78,19 +78,15 @@ public struct CompanionSpec: Equatable, Sendable, Identifiable {
         clips: ["Survey", "Walk", "Run"]
     )
 
-    /// Companion #2 — the Quaternius dialect's reference companion. Clips are
-    /// exactly the gait-mapped set (bundled == emittable, no dead assets).
-    public static let gecko = CompanionSpec(
-        id: "Gecko",
-        displayName: "Gecko",
-        dialect: .quaternius,
-        clips: ["Idle_A", "Idle_B", "Walk", "Jump", "Fear"]
-    )
-
     /// Every known companion. The voice-mode picker self-limits to the subset that
     /// actually ships assets (CompanionAssets.isInstalled), so adding a creature is
     /// a spec line here plus its USDZ folder — no picker wiring.
-    public static let all: [CompanionSpec] = [.fox, .gecko]
+    ///
+    /// Gecko (Quaternius dialect) was dropped 2026-06-21 — its converted clips
+    /// didn't animate on-device. The `.quaternius` dialect stays for the next
+    /// companion that speaks it; a stale "Gecko" picker id resolves to nil via
+    /// `named`, so it degrades to the pixel face rather than a broken creature.
+    public static let all: [CompanionSpec] = [.fox]
 
     /// Resolve a persisted picker id to a spec. The empty string (and any unknown
     /// id) means "pixel face" — the default — and returns nil.
