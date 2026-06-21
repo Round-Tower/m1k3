@@ -54,6 +54,10 @@ public struct AgentRAGResponder: RAGResponding, Sendable {
     /// The user's reasoning preference, read fresh each turn (Settings picker:
     /// Auto / Always think / Fast answers) — same per-turn pattern as tools.
     private let thinkingModeProvider: @Sendable () -> ThinkingMode
+    /// The active brain's display name (e.g. "Lil M1K3"), read fresh each turn so
+    /// a runtime hot-swap is reflected — same per-turn pattern as `toolsProvider`.
+    /// Empty when unknown (tests / simple callers); the context line omits it then.
+    private let brainNameProvider: @Sendable () -> String
 
     public init(
         store: KnowledgeStore,
@@ -64,7 +68,8 @@ public struct AgentRAGResponder: RAGResponding, Sendable {
         memoryTopK: Int = 5,
         maxIterations: Int = 3,
         sourceCollector: ToolSourceCollector? = nil,
-        thinkingModeProvider: @escaping @Sendable () -> ThinkingMode = { .auto }
+        thinkingModeProvider: @escaping @Sendable () -> ThinkingMode = { .auto },
+        brainNameProvider: @escaping @Sendable () -> String = { "" }
     ) {
         self.store = store
         self.embedder = embedder
@@ -75,6 +80,7 @@ public struct AgentRAGResponder: RAGResponding, Sendable {
         self.maxIterations = maxIterations
         self.sourceCollector = sourceCollector
         self.thinkingModeProvider = thinkingModeProvider
+        self.brainNameProvider = brainNameProvider
     }
 
     /// Fixed tool list — convenience for tests and simple callers.
@@ -174,7 +180,11 @@ public struct AgentRAGResponder: RAGResponding, Sendable {
         // so the native path never sees the ReAct format scaffold.
         let style: Self.PromptStyle =
             (provider as? ToolCallingProvider)?.supportsToolCalls == true ? .native : .react
-        let grounding = Self.grounding(
+        // The per-turn truth: today's precise date + which brain is answering.
+        // Prepended here (not inside `grounding`, which stays pure/testable) so it
+        // rides the variable grounding, never the cached persona prefix.
+        let contextLine = PromptContext.line(now: Date(), brainName: brainNameProvider())
+        let grounding = contextLine + "\n\n" + Self.grounding(
             chunks: chunks, memories: memories, toolNames: Set(tools.map(\.name)),
             history: history, style: style
         )
@@ -218,7 +228,10 @@ public struct AgentRAGResponder: RAGResponding, Sendable {
                 .trimmingCharacters(in: .whitespacesAndNewlines)
             let streamed = emittedLive.withLock { $0 }
             if !streamed, conclusion.isEmpty {
-                await fallBack(question: question, chunks: chunks, result: result, into: continuation)
+                await fallBack(
+                    question: question, chunks: chunks, contextLine: contextLine,
+                    result: result, into: continuation
+                )
             } else {
                 var tail = streamed ? "" : conclusion
                 tail += Self.webSourcesBlock(for: result)
@@ -234,7 +247,7 @@ public struct AgentRAGResponder: RAGResponding, Sendable {
             continuation.finish()
         } catch {
             Self.log.error("agent threw — falling back to plain RAG: \(error, privacy: .public)")
-            await streamFallback(question: question, chunks: chunks, into: continuation)
+            await streamFallback(question: question, chunks: chunks, contextLine: contextLine, into: continuation)
             continuation.finish()
         }
     }
@@ -301,13 +314,14 @@ public struct AgentRAGResponder: RAGResponding, Sendable {
     private func fallBack(
         question: String,
         chunks: [ChunkHit],
+        contextLine: String,
         result: AgentResult,
         into continuation: AsyncStream<String>.Continuation
     ) async {
         let steps = result.reasoningTrace.count
         Self.log.notice("agent returned empty (nothing streamed) — falling back with \(steps) trace step(s)")
         await streamFallback(
-            question: question, chunks: chunks,
+            question: question, chunks: chunks, contextLine: contextLine,
             gathered: result.reasoningTrace, into: continuation
         )
         let provenance = Self.webSourcesBlock(for: result) + Self.factSourcesBlock(for: result)
@@ -325,10 +339,14 @@ public struct AgentRAGResponder: RAGResponding, Sendable {
     private func streamFallback(
         question: String,
         chunks: [ChunkHit],
+        contextLine: String,
         gathered: [ReasoningStep] = [],
         into continuation: AsyncStream<String>.Continuation
     ) async {
-        let prompt = Self.fallbackPrompt(question: question, chunks: chunks, gathered: gathered)
+        let body = Self.fallbackPrompt(question: question, chunks: chunks, gathered: gathered)
+        // Carry the same per-turn context (precise date + active brain) the agent
+        // path got, so a "what day is it?" that collapses to the fallback still answers.
+        let prompt = contextLine.isEmpty ? body : contextLine + "\n\n" + body
         for await chunk in provider.generateStreaming(prompt: prompt) {
             continuation.yield(chunk)
         }

@@ -221,7 +221,10 @@ final class AppEnvironment {
     /// Statics merged onto shared lines where sensible: the class body rides the
     /// type_body_length ceiling, and @Observable ignores statics (unlike stored
     /// instance vars, which CANNOT share a declaration line under the macro).
-    private static let embedderPrefersMLXKey = "embedder.prefersMLX"; static let selectedBrainKey = "selectedBrain"
+    private static let embedderPrefersMLXKey = "embedder.prefersMLX"
+    /// `nonisolated` (like the sibling keys) so a @Sendable closure — the
+    /// responder's per-turn brain-name lookup — can read it off the main actor.
+    nonisolated static let selectedBrainKey = "selectedBrain"
     /// Whether the user has completed brain selection — gates the onboarding flow.
     static let hasChosenBrainKey = "hasChosenBrain"
     static let selectedVoiceTierKey = "selectedVoiceTier"
