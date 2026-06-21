@@ -237,6 +237,10 @@ final class AppEnvironment {
     /// auto-loads instead of silently reverting to Apple Speech (guarded by the
     /// model being on disk, never a silent re-download).
     static let whisperEnabledKey = "transcription.whisperEnabled"
+    /// Set once the user enables call transcription, so it reloads the batch model
+    /// on launch (when on disk) instead of reverting to OFF and silently parking
+    /// every recorded call. Mirrors `whisperEnabledKey` for the batch path.
+    static let callTranscriptionEnabledKey = "calls.transcriptionEnabled"
     /// The chosen WhisperKit accuracy tier (tiny/base/small). Restored on launch;
     /// the provider is built from it in `init`, so a change applies on next launch.
     static let whisperModelKey = "transcription.whisperModel"
@@ -463,6 +467,11 @@ final class AppEnvironment {
         if UserDefaults.standard.bool(forKey: Self.whisperEnabledKey), whisperKit.isModelDownloaded {
             Task { await enableWhisperKit() }
         }
+
+        // Same restore for batch CALL transcription — without it the setting reverted
+        // to OFF every launch and recorded calls parked silently (the bug Kev hit).
+        // The decision lives in the tested CallTranscriptionRestore policy.
+        Task { await restoreCallTranscriptionIfEnabled() }
     }
 
     /// Ingest a user-selected / dropped file (PDF or text) into the store.
@@ -961,6 +970,9 @@ extension AppEnvironment {
                 }
             }
             isPreparingBatchTranscription = false
+            // Remember the upgrade so the next launch reloads the batch model instead
+            // of reverting to OFF and silently parking the next recorded call.
+            UserDefaults.standard.set(true, forKey: Self.callTranscriptionEnabledKey)
             if let url = lastRecordingURL {
                 await processRecording(url: url)
             } else {
@@ -969,6 +981,28 @@ extension AppEnvironment {
         } catch {
             isPreparingBatchTranscription = false
             lastCallStatus = "Couldn’t load call transcription: \(error.localizedDescription)"
+        }
+    }
+
+    /// Reload the batch transcription model on launch when the user enabled it
+    /// before and the (shared WhisperKit) model is already on disk — so recorded
+    /// calls transcribe every session without re-enabling. Quiet by design: the
+    /// bytes are cached (no download) so there's no status flashing, unlike the
+    /// explicit `enableCallTranscription` flow. Idempotent + reuses the same
+    /// in-flight guard so it can't race a manual enable.
+    func restoreCallTranscriptionIfEnabled() async {
+        guard CallTranscriptionRestore.shouldRestore(
+            wasEnabled: UserDefaults.standard.bool(forKey: Self.callTranscriptionEnabledKey),
+            modelDownloaded: batchTranscriber.isModelDownloaded
+        ) else { return }
+        guard !isPreparingBatchTranscription, !batchTranscriber.isAvailable else { return }
+        isPreparingBatchTranscription = true
+        defer { isPreparingBatchTranscription = false }
+        do {
+            try await batchTranscriber.prepareModel { _ in }
+            Self.callLog.notice("call transcription restored on launch (model already on disk)")
+        } catch {
+            Self.callLog.error("call-transcription launch restore failed: \(error, privacy: .public)")
         }
     }
 

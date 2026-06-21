@@ -37,6 +37,10 @@ public final class WhisperKitBatchTranscriber: BatchTranscriptionProvider, @unch
     /// model is then cached in `whisperKit` for the sync `isAvailable`/`transcribe`
     /// reads the `BatchTranscriptionProvider` seam relies on.
     private let loader: SingleFlightLoader<LoadedWhisperKit>
+    /// Kept so `isModelDownloaded` can probe the on-disk cache without an instance
+    /// of the live provider.
+    private let model: String
+    private let downloadBase: URL?
 
     /// - Parameter model: WhisperKit variant. `base.en` (~142MB) balances size and
     ///   accuracy; batch transcription is latency-tolerant, so `small.en` is a fine
@@ -44,6 +48,8 @@ public final class WhisperKitBatchTranscriber: BatchTranscriptionProvider, @unch
     /// - Parameter downloadBase: Root URL for model storage. Should match the live
     ///   `WhisperKitProvider`'s base so both share the same cached weights.
     public init(model: String = "base.en", downloadBase: URL? = nil) {
+        self.model = model
+        self.downloadBase = downloadBase
         loader = SingleFlightLoader { progress in
             progress(0.05)
             let config = WhisperKitConfig(model: model, verbose: false, prewarm: true, load: true)
@@ -59,6 +65,14 @@ public final class WhisperKitBatchTranscriber: BatchTranscriptionProvider, @unch
         #else
             return false
         #endif
+    }
+
+    /// Whether this transcriber's model weights are already cached on disk — probes
+    /// the same path the live `WhisperKitProvider` uses (shared cache). Lets a launch
+    /// restore decide "reload, don't re-download" without coupling to the live
+    /// provider instance.
+    public var isModelDownloaded: Bool {
+        WhisperKitProvider.isModelDownloaded(model: model, downloadBase: downloadBase)
     }
 
     /// Download + load the WhisperKit model, reporting coarse progress. Idempotent.
