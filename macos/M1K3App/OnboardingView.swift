@@ -2,16 +2,21 @@
 //  OnboardingView.swift
 //  M1K3App
 //
-//  Two-step first-run flow:
-//    1. Brain — Mini / Lil / Big M1K3 (existing). Download for Lil/Big, instant for Mini.
-//    2. Voice — Apple Speech (default, built-in) or WhisperKit (higher accuracy, ~142 MB).
+//  Four-step first-run flow: You → Brain → Voice → Speech.
+//    You    — who M1K3 is talking to (seeds the persona; skippable).
+//    Brain  — Mini / Lil / Big / Huge M1K3. Download for Lil+, instant for Mini.
+//    Voice  — Apple Speech (default, built-in) or WhisperKit (higher accuracy).
+//    Speech — built-in TTS or the richer on-device M1K3 Voice.
 //
-//  Voice is always a choice; Apple Speech is the safe default so nobody is forced
-//  through a second download after their brain choice. WhisperKit can be started here
-//  or deferred to Settings → Voice input.
+//  Re-entry from Settings → "Change brain…" passes `startAtBrain: true`: it opens
+//  on the Brain step and finishes the moment the brain is awake, so a brain change
+//  never replays the empty "Who am I talking to?" screen (the old re-trigger bug).
 //
 //  Signed: Kev + claude-sonnet-4-6, 2026-06-08, Confidence 0.8,
 //  Prior: Kev + claude-opus-4-8 2026-06-08 (single-step brain-only version)
+//  Review: Kev + claude-opus-4-8, 2026-06-21, Confidence 0.85 — added the
+//  brain-only re-pick entry (startAtBrain) so "Change brain…" deep-links to the
+//  brain step and completes on wake instead of restarting the whole flow.
 
 import M1K3Avatar
 import M1K3Inference
@@ -21,11 +26,15 @@ import SwiftUI
 struct OnboardingView: View {
     @Environment(AppEnvironment.self) private var env
     let onComplete: () -> Void
+    /// Brain-only re-pick (Settings → "Change brain…"): open on the brain step and
+    /// finish on wake, instead of replaying the whole first-run flow from the empty
+    /// "Who am I talking to?" screen. Default false = full first-run.
+    let startAtBrain: Bool
 
     private enum Step { case you, brain, voice, speech }
     private enum VoiceEngine { case apple, whisperKit }
 
-    @State private var step: Step = .you
+    @State private var step: Step
     @State private var userName = ""
     @State private var userNotes = ""
     @State private var selectedBrain: BrainTier = .recommendedForThisMac
@@ -36,6 +45,12 @@ struct OnboardingView: View {
     @State private var isDownloadingVoice = false
 
     private let recommended = BrainTier.recommendedForThisMac
+
+    init(startAtBrain: Bool = false, onComplete: @escaping () -> Void) {
+        self.startAtBrain = startAtBrain
+        self.onComplete = onComplete
+        _step = State(initialValue: startAtBrain ? .brain : .you)
+    }
 
     var body: some View {
         // ScrollView: the four brain cards (plus header and button) outgrow
@@ -80,7 +95,11 @@ struct OnboardingView: View {
         }
         .frame(minWidth: 580, minHeight: 640)
         .glassBackdrop()
-        .onAppear { env.avatar.setEmotion(emotion(for: step)) }
+        .onAppear {
+            // A brain-only re-pick highlights the brain you're already running.
+            if startAtBrain { selectedBrain = env.selectedBrain }
+            env.avatar.setEmotion(emotion(for: step))
+        }
         .onChange(of: step) { _, newStep in
             env.avatar.setEmotion(emotion(for: newStep))
         }
@@ -88,7 +107,7 @@ struct OnboardingView: View {
         .onChange(of: env.modelLoad) { _, state in
             if case .ready = state, isWakingBrain {
                 isWakingBrain = false
-                step = .voice
+                advanceAfterBrain()
             }
         }
         .onChange(of: env.whisperLoad) { _, state in
@@ -257,7 +276,7 @@ private extension OnboardingView {
                         selectedBrain = .mini
                         isWakingBrain = false
                         env.selectBrain(.mini)
-                        step = .voice
+                        advanceAfterBrain()
                     }
                     .buttonStyle(.plain)
                     .font(.caption)
@@ -279,8 +298,14 @@ private extension OnboardingView {
         if selectedBrain.requiresDownload {
             isWakingBrain = true
         } else {
-            step = .voice
+            advanceAfterBrain()
         }
+    }
+
+    /// After the brain is awake: finish here for a brain-only re-pick, otherwise
+    /// continue into voice/speech setup (the full first-run flow).
+    private func advanceAfterBrain() {
+        if startAtBrain { onComplete() } else { step = .voice }
     }
 
     // MARK: - Voice step

@@ -165,11 +165,9 @@ struct ContentView: View {
             ScrollViewReader { proxy in
                 ScrollView {
                     LazyVStack(spacing: 16) {
-                        ForEach(Array(env.chat.messages.enumerated()), id: \.element.id) { index, message in
-                            let previous = index > 0 ? env.chat.messages[index - 1] : nil
+                        ForEach(env.chat.messages, id: \.id) { message in
                             MessageView(
                                 message: message,
-                                showsAvatar: previous?.role != .assistant,
                                 onSpeak: { text in Task { await env.speak(text) } },
                                 onOpenLink: { url in env.review.open(url: url) }
                             )

@@ -36,6 +36,13 @@ public struct ConstellationView: View {
     /// Accumulated spin, composed with each drag's delta so a new drag continues
     /// from where the last one ended instead of snapping back to the un-spun pose.
     @State private var storedOrientation = simd_quatf(ix: 0, iy: 0, iz: 0, r: 1)
+    /// The idle-animation clock origin, captured at first build — NOT in `onAppear`
+    /// (which fires after the first update pass, so the opening frame's delta would
+    /// be wrong). The phase is measured as elapsed-since-this, NOT an absolute
+    /// reference-date timestamp — whose ~7.7e8 magnitude (cast to Float) once
+    /// quantised every frame delta to zero and froze the drift. See `ConstellationIdle`
+    /// for the full autopsy; same fix as AudioCaptureBackdrop / AvatarView.
+    @State private var start = Date()
     /// Honour the system Reduce Motion preference — freeze the idle breath/float/
     /// rotation (the field still draws + grows, it just doesn't drift on its own).
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -63,7 +70,7 @@ public struct ConstellationView: View {
                 sync(into: field, firstBuild: false)
                 frameToFit()
                 if !reduceMotion {
-                    idle(at: timeline.date.timeIntervalSinceReferenceDate)
+                    idle(at: timeline.date.timeIntervalSince(start))
                 }
             }
             // No background: render transparent over the app's glass, like the 3D
@@ -77,13 +84,11 @@ public struct ConstellationView: View {
     /// Subtle life at rest: a slow rotation about a gently tilted axis, a shallow
     /// breath (scale pulse), and a soft vertical float. Applied to `field` so it
     /// composes with the user's drag-spin (on `root`) rather than fighting it.
-    private func idle(at t: TimeInterval) {
-        let time = Float(t)
-        field.orientation = simd_quatf(
-            angle: time * 0.06, axis: simd_normalize(SIMD3<Float>(0.15, 1, 0.05))
-        )
-        field.scale = SIMD3<Float>(repeating: 1 + 0.025 * sin(time * 0.6))
-        field.position.y = 0.06 * sin(time * 0.4)
+    private func idle(at elapsed: TimeInterval) {
+        let pose = ConstellationIdle.pose(elapsed: elapsed)
+        field.orientation = simd_quatf(angle: pose.rotationAngle, axis: ConstellationIdle.axis)
+        field.scale = SIMD3<Float>(repeating: pose.breathScale)
+        field.position.y = pose.floatY
     }
 
     // MARK: - Scene construction
