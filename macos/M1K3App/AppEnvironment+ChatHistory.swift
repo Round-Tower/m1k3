@@ -179,6 +179,12 @@ extension AppEnvironment {
                     voiceModeActive: defaults.bool(forKey: Self.voiceModeActiveKey),
                     voiceThinkingEnabled: defaults.bool(forKey: Self.voiceModeThinkingKey)
                 )
+            },
+            brainNameProvider: {
+                // The persisted brain tier, read fresh each turn so a runtime
+                // hot-swap names the new brain on the next answer. Empty → omitted.
+                let raw = UserDefaults.standard.string(forKey: Self.selectedBrainKey) ?? ""
+                return BrainTier(rawValue: raw)?.displayName ?? ""
             }
         )
     }

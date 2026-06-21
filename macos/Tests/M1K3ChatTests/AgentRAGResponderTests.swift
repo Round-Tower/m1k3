@@ -132,6 +132,30 @@ struct AgentRAGResponderTests {
         #expect(provider.allPrompts.count == 1)
     }
 
+    @Test("per-turn context line injects the active brain name and today's date")
+    func contextLineInjected() async throws {
+        let (store, embedder) = try await ingestedStore()
+        let provider = AgentScriptedProvider([
+            "CONCLUSION: The seal failed. [Plant Notes §3.2 Seals]",
+        ])
+        let responder = AgentRAGResponder(
+            store: store, embedder: embedder, provider: provider,
+            toolsProvider: { [] },
+            brainNameProvider: { "Lil M1K3" }
+        )
+        let (_, stream) = try await responder.answerStreaming(
+            "What hydraulic seal failed on the conveyor under load?"
+        )
+        _ = await collect(stream)
+        let prompt = try #require(provider.allPrompts.first)
+        // The active brain is named (so "which model are you?" can be honest) and
+        // the precise-date context line is present. (The date's exact formatting is
+        // pinned deterministically in PromptContextTests — asserting the clock here
+        // would couple this test to the calendar year.)
+        #expect(prompt.contains("Lil M1K3"))
+        #expect(prompt.contains("Right now (true for this turn)"))
+    }
+
     @Test("tool use is reported as activity and reaches the answer")
     func toolUseFlow() async throws {
         let (store, embedder) = try await ingestedStore()
@@ -289,6 +313,25 @@ struct AgentRAGResponderTests {
         let lastPrompt = try #require(provider.allPrompts.last)
         // ChatPromptBuilder's grounded template, not the ReAct scaffold.
         #expect(lastPrompt.contains("HOW TO ANSWER:"))
+    }
+
+    @Test("the per-turn context line also rides the plain-RAG fallback path")
+    func contextLineInFallback() async throws {
+        let (store, embedder) = try await ingestedStore()
+        // Empty thoughts to the cap + empty synthesis → the empty-fallback fires.
+        let provider = AgentScriptedProvider(["", "", "", "", "Plain grounded answer."])
+        let responder = AgentRAGResponder(
+            store: store, embedder: embedder, provider: provider,
+            toolsProvider: { [] },
+            brainNameProvider: { "Lil M1K3" }
+        )
+        let (_, stream) = try await responder.answerStreaming("hydraulic seal conveyor failed under load?")
+        _ = await collect(stream)
+        // The fallback generation carries the same date + brain context as the
+        // agent path, so a "what day is it?" that collapses still answers honestly.
+        let fallbackPrompt = try #require(provider.allPrompts.last)
+        #expect(fallbackPrompt.contains("Lil M1K3"))
+        #expect(fallbackPrompt.contains("Right now (true for this turn)"))
     }
 
     @Test("agent coming back empty AFTER gathering info synthesises from the observations")
