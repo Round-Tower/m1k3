@@ -11,10 +11,9 @@
 //  failure).
 //
 //  Verify-by-launch: SCStream + the mic engine + the screen-recording TCC prompt
-//  need a real device and a live call — none of it runs headless. The one part
-//  that's deterministic, the channel interleave, is StereoInterleaver (unit-tested).
-//  This adapter is the OS glue, kept defensive (mono fallback) so a capture fault
-//  can't lose a recording.
+//  need a real device and a live call — none of it runs headless. The file write
+//  is now in CallAudioWriter (atomic + validated, unit-tested). This adapter is the
+//  OS glue, kept defensive (mono fallback) so a capture fault can't lose a recording.
 //
 //  Async by necessity: SCStream start/stopCapture are async, so this carries its
 //  own async start()/stop() rather than the sync AudioRecorder seam.
@@ -23,8 +22,12 @@
 //  Review: claude-opus-4-8, 2026-06-09 (PR #10) — stop() now atomically claims the
 //  stop inside the lock before async teardown, so two concurrent stops can't both
 //  reach removeTap(onBus:) and trap; writeFile guards rather than force-unwraps.
-//  Context: lowest confidence in the session — entirely verify-by-launch OS
-//  capture; first ⌘R on a real call is where this gets shaken out.
+//  Review: claude-opus-4-8, 2026-06-21 — the inline writeFile handed AVAudioFile an
+//  INTERLEAVED buffer that didn't match its processingFormat, so every recording
+//  wrote ZERO frames (captured audio, saved silence — the "recorded, nothing
+//  appeared" bug). Write moved to CallAudioWriter: deinterleaved buffer in the file's
+//  processingFormat, written to a .partial, frame-count validated, then atomically
+//  renamed — so an empty or interrupted write never surfaces as a recording.
 
 @preconcurrency import AVFoundation
 import Foundation
@@ -106,14 +109,18 @@ public final class StereoCallRecorder: NSObject, @unchecked Sendable {
             Self.log.error("nothing captured — no file written (mic delivered 0 samples)")
             return nil
         }
-        let url = try? Self.writeFile(near: near, far: far, sampleRate: Self.sampleRate)
-        if let url {
+        do {
+            let url = try CallAudioWriter.write(near: near, far: far, sampleRate: Self.sampleRate)
             let bytes = (try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? Int) ?? nil
             Self.log.notice("wrote \(bytes ?? -1, privacy: .public) bytes → \(url.lastPathComponent, privacy: .public)")
-        } else {
-            Self.log.error("writeFile failed despite captured samples")
+            return url
+        } catch {
+            // Keep the specific cause (.formatUnavailable vs .writeFailed) — a disk
+            // fault must not be mis-reported to the user as a mic-permission problem.
+            let total = near.count + far.count
+            Self.log.error("write failed despite \(total, privacy: .public) captured samples: \(error, privacy: .public)")
+            return nil
         }
-        return url
     }
 
     // MARK: - Mic (near-end, left)
@@ -205,36 +212,6 @@ public final class StereoCallRecorder: NSObject, @unchecked Sendable {
     }
 
     // MARK: - File output
-
-    /// Interleave the two channels and write a Float32 stereo `.caf`. With one
-    /// channel empty this is effectively a (silence-paired) mono recording.
-    private static func writeFile(near: [Float], far: [Float], sampleRate: Double) throws -> URL {
-        let interleaved = StereoInterleaver.interleave(left: near, right: far)
-        guard !interleaved.isEmpty,
-              let format = AVAudioFormat(
-                  commonFormat: .pcmFormatFloat32,
-                  sampleRate: sampleRate, channels: 2, interleaved: true
-              ),
-              let buffer = AVAudioPCMBuffer(
-                  pcmFormat: format,
-                  frameCapacity: AVAudioFrameCount(interleaved.count / 2)
-              )
-        else { throw RecorderError.formatUnavailable }
-
-        buffer.frameLength = buffer.frameCapacity
-        interleaved.withUnsafeBufferPointer { src in
-            // Float32 format guarantees floatChannelData; guard anyway, matching the
-            // defensive idiom used elsewhere in this file rather than force-unwrapping.
-            guard let channel = buffer.floatChannelData, let base = src.baseAddress else { return }
-            channel[0].update(from: base, count: interleaved.count)
-        }
-
-        let url = FileManager.default.temporaryDirectory
-            .appendingPathComponent("m1k3-call-\(UUID().uuidString).caf")
-        let file = try AVAudioFile(forWriting: url, settings: format.settings)
-        try file.write(from: buffer)
-        return url
-    }
 
     /// Convert a captured PCM buffer to mono Float32 at the common rate → samples.
     private static func convert(
