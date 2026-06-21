@@ -20,7 +20,9 @@ import M1K3Chat
 import M1K3Inference
 import M1K3Knowledge
 import M1K3KnowledgeTools
+import M1K3LanguageModel
 import os
+import Synchronization
 
 extension AppEnvironment {
     private static let routeLog = Logger(subsystem: "app.m1k3", category: "route")
@@ -49,15 +51,21 @@ extension AppEnvironment {
             preferAppleOnDevice: defaults.bool(forKey: Self.preferAppleOnDeviceKey)
         )
 
-        let tier: BrainTier
+        let routedTier: BrainTier
         switch route {
         case .appleOnDevice:
-            tier = .mini
+            routedTier = .mini
         case .mlxFloor, .privateCloud, .thirdParty:
             // No network-brain backends are wired yet, so those rungs resolve to the
             // local MLX floor: keep the current MLX brain, else default to Lil.
-            tier = selectedBrain.mlxModelID != nil ? selectedBrain : .lil
+            routedTier = selectedBrain.mlxModelID != nil ? selectedBrain : .lil
         }
+        // Prudent compute: ease the automatic pick down to what THIS Mac can run
+        // comfortably (lower-only — never a silent upgrade-download). This is what
+        // makes auto-route machine-aware: Big has no hard memory floor, so without
+        // the cap it would otherwise ride along on a small Mac and thrash swap.
+        // Manual selection stays sovereign (capped only on the AUTOMATIC path).
+        let tier = BrainTier.cappedForThisMac(routedTier)
         guard tier != selectedBrain else { return }
         Self.routeLog.info("auto-route → \(tier.rawValue, privacy: .public)")
         selectBrain(tier)
@@ -185,7 +193,65 @@ extension AppEnvironment {
                 // hot-swap names the new brain on the next answer. Empty → omitted.
                 let raw = UserDefaults.standard.string(forKey: Self.selectedBrainKey) ?? ""
                 return BrainTier(rawValue: raw)?.displayName ?? ""
+            },
+            maxIterationsProvider: {
+                // Thermal "ease off" is opt-in; OFF → the plain base, so the
+                // default path is byte-identical. ON → CoolHeadPolicy trims the
+                // agent loop to the LIVE thermal level (read fresh each turn from
+                // the shared state — never snapshotted; the responder is built once
+                // and long-lived). The brain is NEVER swapped (CoolHeadPolicy
+                // doctrine: ease effort, not identity).
+                guard Self.coolHeadEaseEnabled() else { return Self.baseMaxIterations }
+                return CoolHeadPolicy.maxIterations(
+                    for: Self.coolHead.withLock(\.level),
+                    base: Self.baseMaxIterations
+                )
             }
         )
+    }
+
+    // MARK: - Cool Head (thermal effort easing — ADR: never swaps the brain)
+
+    /// Opt-in: ease M1K3's EFFORT when the Mac is under thermal / low-power
+    /// pressure (trim the agent loop). Default OFF → byte-identical. It deliberately
+    /// never swaps the chosen brain — a mid-conversation reload would dump the KV +
+    /// persona caches and rename M1K3's own identity for the sake of the room
+    /// temperature (CoolHeadPolicy's signed reasoning).
+    nonisolated static let coolHeadEaseKey = "compute.coolHeadEase"
+
+    nonisolated static func coolHeadEaseEnabled() -> Bool {
+        UserDefaults.standard.bool(forKey: coolHeadEaseKey) // default OFF
+    }
+
+    /// The agent-loop iteration base the thermal cap eases DOWN from. Matches
+    /// AgentRAGResponder's default — one named home so the two can't drift.
+    nonisolated static let baseMaxIterations = 3
+
+    /// Turns of SUSTAINED relief required before effort recovers (hysteresis) —
+    /// degrade now, recover slow, so a bouncing thermalState can't flap the level.
+    nonisolated static let coolHeadMinRecoveryTurns = 3
+
+    /// Process-wide thermal state with recovery hysteresis (CoolHeadPolicy.next).
+    /// Static because there is exactly one AppEnvironment, and the `nonisolated
+    /// static` responder factory must read the live level without capturing `self`.
+    nonisolated static let coolHead = Mutex(CoolHeadState())
+
+    /// Advance the thermal state for this turn — degrade immediately, recover only
+    /// after a sustained relief streak (hysteresis, so a bouncing thermalState can't
+    /// flap the effort level). A NO-OP when the opt-in is off. Called beside
+    /// `applyAutoRouteIfEnabled` at the top of `send`, so the level is current for
+    /// the SAME turn's `maxIterationsProvider` read.
+    func applyCoolHeadIfEnabled() {
+        guard Self.coolHeadEaseEnabled() else { return }
+        let info = ProcessInfo.processInfo
+        let target = CoolHeadPolicy.target(
+            thermal: info.thermalState,
+            lowPower: info.isLowPowerModeEnabled
+        )
+        Self.coolHead.withLock { state in
+            state = CoolHeadPolicy.next(
+                state, target: target, minRecoveryTurns: Self.coolHeadMinRecoveryTurns
+            )
+        }
     }
 }

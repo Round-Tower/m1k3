@@ -79,6 +79,46 @@ struct BrainTierTests {
         #expect(BrainTier.recommended(forPhysicalMemoryGB: 64) == .huge)
     }
 
+    @Test("tiers order by capability — mini < lil < big < huge")
+    func tierOrdering() {
+        #expect(BrainTier.mini < .lil)
+        #expect(BrainTier.lil < .big)
+        #expect(BrainTier.big < .huge)
+        #expect(BrainTier.allCases.sorted() == [.mini, .lil, .big, .huge])
+        // min/max read naturally off the ordering (what `capped` relies on).
+        #expect(min(BrainTier.huge, .lil) == .lil)
+        #expect(max(BrainTier.mini, .big) == .big)
+    }
+
+    @Test("capped eases a too-heavy automatic pick down to the Mac's comfortable ceiling")
+    func cappedDemotesTooHeavy() {
+        // Huge auto-picked on a 16GB Mac → eased to that Mac's ceiling (Lil).
+        #expect(BrainTier.capped(.huge, forPhysicalMemoryGB: 16) == .lil)
+        // Big has NO hard memory floor, so without the cap it would ride along on
+        // an 8GB Mac and thrash swap — the named bug. Capped → Mini.
+        #expect(BrainTier.capped(.big, forPhysicalMemoryGB: 8) == .mini)
+        // Huge on a 24GB Mac → Big (24GB *recommends* Big; Huge is comfortable
+        // only at 48GB — the cap uses `recommended`, the comfortable ceiling, not
+        // the permissive `isSelectable` floor).
+        #expect(BrainTier.capped(.huge, forPhysicalMemoryGB: 24) == .big)
+    }
+
+    @Test("capped NEVER raises a tier — a light pick on a big Mac stays put (no silent download)")
+    func cappedNeverRaises() {
+        // A .lil pick on a 64GB Mac is left alone: raising to Big/Huge would start
+        // a multi-GB download the user never asked for (#81's honesty rule).
+        #expect(BrainTier.capped(.lil, forPhysicalMemoryGB: 64) == .lil)
+        #expect(BrainTier.capped(.mini, forPhysicalMemoryGB: 8) == .mini)
+        #expect(BrainTier.capped(.mini, forPhysicalMemoryGB: 128) == .mini)
+    }
+
+    @Test("capped leaves an at-or-below-ceiling pick unchanged (boundaries)")
+    func cappedAtCeilingUnchanged() {
+        #expect(BrainTier.capped(.huge, forPhysicalMemoryGB: 48) == .huge) // exactly Huge's ceiling
+        #expect(BrainTier.capped(.big, forPhysicalMemoryGB: 24) == .big) // exactly Big's ceiling
+        #expect(BrainTier.capped(.lil, forPhysicalMemoryGB: 16) == .lil) // exactly Lil's ceiling
+    }
+
     @Test("Huge is selectable from 32GB even though only recommended at 48GB")
     func hugeSelectionGate() {
         #expect(BrainTier.huge.minimumPhysicalMemoryGB == 32)
