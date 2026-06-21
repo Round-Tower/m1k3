@@ -25,12 +25,12 @@ extension AppEnvironment {
 
     /// Persisted voice-mode thinking toggle (default off = fast replies).
     /// While voice mode is active this REPLACES the Settings Reasoning picker
-    /// (see VoiceThinkingPolicy). VoiceModeView's brain button writes it.
+    /// (see VoiceThinkingPolicy). The VoiceDock's brain button writes it.
     nonisolated static let voiceModeThinkingKey = "voiceMode.thinking"
 
     /// Persisted voice-mode avatar choice. Empty string (default) = the pixel face;
-    /// otherwise a CompanionSpec id (e.g. "Fox"). The picker writes it; VoiceModeView
-    /// reads it. The pixel face stays M1K3's default everywhere else.
+    /// otherwise a CompanionSpec id (e.g. "Fox"). The picker writes it; the VoiceDock
+    /// (via AvatarSurface) reads it. The pixel face stays M1K3's default everywhere else.
     nonisolated static let voiceCompanionKey = "voiceMode.companion"
 
     /// Sentinel `voiceCompanion` value selecting the live 3D memory constellation
