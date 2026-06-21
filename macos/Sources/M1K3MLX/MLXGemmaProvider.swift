@@ -225,6 +225,17 @@ public final class MLXGemmaProvider: InferenceProvider, ModelPreloading, @unchec
         _ = try await ensureLoaded(progress: progress)
     }
 
+    /// Eagerly release cached Metal state (persona KV prefix) and return
+    /// freed buffers to the OS. Call before dropping a provider (brain swap)
+    /// so its Metal allocations don't linger in the freed-buffer pool.
+    /// Safe to call while a generation is in flight — `PersonaPrefixCache`
+    /// holds a lock during snapshot copy, and ARC keeps the copied KV arrays
+    /// alive through the generation independent of this invalidation.
+    public func releaseMemory() {
+        personaPrefix.invalidate()
+        MLXMemoryBudget.reclaim(label: "releaseMemory")
+    }
+
     public func generate(prompt: String) async throws -> String {
         let container = try await ensureLoaded()
         // Return cached Metal buffers after every generation — without this the

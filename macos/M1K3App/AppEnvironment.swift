@@ -649,6 +649,7 @@ final class AppEnvironment {
         selectedBrain = tier
         UserDefaults.standard.set(tier.rawValue, forKey: Self.selectedBrainKey)
         UserDefaults.standard.set(true, forKey: Self.hasChosenBrainKey)
+        let oldMLX = currentMLXProvider
         if let modelID = tier.mlxModelID {
             let mlx = MLXGemmaProvider(modelID: modelID)
             currentMLXProvider = mlx
@@ -657,6 +658,7 @@ final class AppEnvironment {
         } else {
             selectedRuntime = .appleFoundationModels // didSet clears the bar
         }
+        oldMLX.releaseMemory()
     }
 
     /// Warm the current brain's MLX weights, folding download progress into
@@ -723,6 +725,7 @@ final class AppEnvironment {
             embedder.setEmbedder(usingMLXEmbeddings ? MLXEmbeddingService() : HashingEmbeddingService())
             embeddingStatus = "Couldn’t switch embeddings: \(error.localizedDescription)"
         }
+        MLXMemoryBudget.reclaim(label: "switchEmbeddings")
     }
 
     /// All indexed items, newest first, for the document manager — or one

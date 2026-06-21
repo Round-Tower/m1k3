@@ -84,6 +84,9 @@ public final class MLXEmbeddingService: EmbeddingService, @unchecked Sendable {
 
     public func embed(_ text: String) async throws -> [Float] {
         let container = try await ensureLoaded()
+        // Per-embed reclaim is intentional: prefer OS round-trips over peak
+        // accumulation during a bulk re-index (hundreds of chunks).
+        defer { MLXMemoryBudget.reclaim(label: "embed") }
 
         let raw: [Float] = await container.perform { context in
             let tokenIds = context.tokenizer.encode(text: text)
