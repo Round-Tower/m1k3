@@ -20,6 +20,7 @@
 //  is the P3 LLM-judge's job). Prior: Unknown
 
 import Foundation
+import M1K3Inference
 
 public enum CheckOutcome: String, Sendable, Equatable {
     case pass
@@ -106,23 +107,6 @@ public struct ChatEvalScore: Sendable, Equatable {
         let verdict = passed ? "PASS" : "FAIL"
         return "  \(fixtureID) [\(kind.label)]: \(verdict) (\(latencyMS)ms)\n"
             + lines.joined(separator: "\n")
-    }
-}
-
-/// Strip chain-of-thought so checks judge the ANSWER, not the scratchpad.
-/// Handles the matched pair, Qwen3.5's lone `</think>` close, and plain text —
-/// the same contract as ModelEvalReport.strippingThink (kept local to keep the
-/// package dependency-free).
-public enum ThinkStripper {
-    public static func strip(_ text: String) -> String {
-        var working = text
-        if let close = working.range(of: "</think>") {
-            working = String(working[close.upperBound...])
-        }
-        working = working.replacingOccurrences(
-            of: "<think>.*?</think>", with: "", options: .regularExpression
-        )
-        return working.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 }
 

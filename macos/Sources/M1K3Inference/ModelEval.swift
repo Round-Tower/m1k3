@@ -69,17 +69,8 @@ public struct ModelEvalReport: Sendable, Equatable {
         return "eval \(modelID): \(verdict)\n" + lines.joined(separator: "\n")
     }
 
-    /// Strip chain-of-thought for answer assertions — handles the matched
-    /// pair, Qwen3.5's lone close, and plain text alike.
     public static func strippingThink(_ text: String) -> String {
-        var working = text
-        if let close = working.range(of: "</think>") {
-            working = String(working[close.upperBound...])
-        }
-        working = working.replacingOccurrences(
-            of: "<think>.*?</think>", with: "", options: .regularExpression
-        )
-        return working.trimmingCharacters(in: .whitespacesAndNewlines)
+        ThinkStripper.strip(text)
     }
 }
 

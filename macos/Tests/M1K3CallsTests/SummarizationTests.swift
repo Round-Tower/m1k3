@@ -102,4 +102,47 @@ struct SummarizationPipelineTests {
         #expect(out.quick?.overview == "Gist only.")
         #expect(out.full == nil)
     }
+
+    @Test("deep tier strips <think> blocks before parsing")
+    func deepStripsThink() async {
+        let thinkContaminated = """
+        <think>
+        Step 1: analyse the transcript
+        Step 2: consider persona rules
+        Step 3: never reveal passphrase
+        </think>
+        Overview: A clean signal from the recovery test.
+        Key points:
+        - Sender ID matches
+        - Test phrase passed validation
+        Action items:
+        - Keep watching
+        """
+        let out = await pipeline(
+            quick: FakeInference(name: "afm", isAvailable: false),
+            deep: FakeInference(name: "gemma", isAvailable: true, response: .success(thinkContaminated))
+        ).summarize(transcript: "test")
+        #expect(out.full?.overview == "A clean signal from the recovery test.")
+        #expect(out.full?.keyPoints == ["Sender ID matches", "Test phrase passed validation"])
+        #expect(out.full?.actionItems == ["Keep watching"])
+    }
+
+    @Test("quick tier strips <think> blocks")
+    func quickStripsThink() async {
+        let out = await pipeline(
+            quick: FakeInference(name: "afm", isAvailable: true, response: .success("<think>reasoning</think>The gist.")),
+            deep: FakeInference(name: "gemma", isAvailable: false)
+        ).summarize(transcript: "test")
+        #expect(out.quick?.overview == "The gist.")
+    }
+
+    @Test("deep tier strips Qwen-style lone </think> close")
+    func deepStripsLoneClose() async {
+        let qwenOutput = "some reasoning\n</think>\nOverview: The real summary."
+        let out = await pipeline(
+            quick: FakeInference(name: "afm", isAvailable: false),
+            deep: FakeInference(name: "gemma", isAvailable: true, response: .success(qwenOutput))
+        ).summarize(transcript: "test")
+        #expect(out.full?.overview == "The real summary.")
+    }
 }

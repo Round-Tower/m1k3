@@ -46,7 +46,7 @@ public struct SummarizationPipeline: Sendable {
         guard quickProvider.isAvailable,
               let text = try? await quickProvider.generate(prompt: Self.quickPrompt(transcript))
         else { return nil }
-        let overview = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let overview = ThinkStripper.strip(text)
         return overview.isEmpty ? nil : QuickSummary(overview: overview)
     }
 
@@ -54,7 +54,8 @@ public struct SummarizationPipeline: Sendable {
         guard deepProvider.isAvailable,
               let text = try? await deepProvider.generate(prompt: Self.deepPrompt(transcript))
         else { return nil }
-        let summary = parser.parse(text)
+        let cleaned = ThinkStripper.strip(text)
+        let summary = parser.parse(cleaned)
         return summary.overview.isEmpty && summary.keyPoints.isEmpty && summary.actionItems.isEmpty
             ? nil : summary
     }
