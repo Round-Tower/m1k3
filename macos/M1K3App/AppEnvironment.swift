@@ -659,6 +659,17 @@ final class AppEnvironment {
         }
     }
 
+    /// Deep-link the next OnboardingView to the brain-picker step (the honest
+    /// download UI: explicit Download button, per-tier progress, Try-again/Use-Mini
+    /// fallback) instead of a silent in-place pull. Used by Settings "Change brain…"
+    /// and the chat toolbar's brain switcher when a tier needs downloading — the
+    /// actual brain write still happens via `selectBrain` inside onboarding. One
+    /// home for the two-key dance so it can't drift between call sites.
+    func routeToOnboardingBrainPicker() {
+        UserDefaults.standard.set(true, forKey: M1K3App.onboardingStartAtBrainKey)
+        UserDefaults.standard.set(false, forKey: Self.hasChosenBrainKey)
+    }
+
     /// Warm the current brain's MLX weights, folding download progress into
     /// `modelLoad` so the UI shows a real bar. Idempotent: returns fast once the
     /// model is cached. Runs off the main actor; progress hops back to update state.
