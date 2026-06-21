@@ -18,8 +18,10 @@
 //  Signed: Kev + claude-fable-5, 2026-06-10, Confidence 0.7, Prior: Unknown
 //  Context: cache-limit bands (32/64/128MB) chosen from Apple's LLMEval
 //  example (20MB) scaled up for steady-state decode headroom; tune after the
-//  before/after footprint measurement. memoryLimit = 75% of physical RAM is
-//  deliberately tighter than MLX's default (1.5x the device's recommended
+//  before/after footprint measurement. memoryLimit = min(75% of physical RAM,
+//  12 GB) — the 12 GB companion ceiling prevents a large-RAM Mac from letting
+//  MLX grow to ~72–96 GB (the observed 73.9 GB Activity Monitor footprint).
+//  Deliberately tighter than MLX's default (1.5x the device's recommended
 //  working set) because M1K3 shares the machine with the user's real work.
 //
 
@@ -38,6 +40,14 @@ public struct MLXMemoryBudget: Sendable, Equatable {
     private static let mebibyte = 1_048_576
     private static let gibibyte: UInt64 = 1_073_741_824
 
+    /// Companion-app ceiling: generous enough for a 4B model + embedder +
+    /// decode headroom, but NOT 75% of a 128 GB machine. Without this cap
+    /// a large-RAM Mac lets MLX's Metal allocator grow to ~72–96 GB — the
+    /// freed-buffer cache is bounded by `cacheLimit`, but the allocator's
+    /// ACTIVE memory (model weights + KV caches + intermediates) fills
+    /// `memoryLimit` because MLX uses back-pressure, not refusal.
+    private static let companionCeilingBytes = 12 * mebibyte * 1024 // 12 GB
+
     /// The budget for a machine with the given physical RAM.
     public static func budget(forPhysicalMemory physicalMemoryBytes: UInt64) -> MLXMemoryBudget {
         let physicalGB = Double(physicalMemoryBytes) / Double(gibibyte)
@@ -46,9 +56,10 @@ public struct MLXMemoryBudget: Sendable, Equatable {
         case 12...: 64
         default: 32
         }
+        let threeQuarters = Int(physicalMemoryBytes / 4 * 3)
         return MLXMemoryBudget(
             cacheLimitBytes: cacheMB * mebibyte,
-            memoryLimitBytes: Int(physicalMemoryBytes / 4 * 3)
+            memoryLimitBytes: min(threeQuarters, companionCeilingBytes)
         )
     }
 

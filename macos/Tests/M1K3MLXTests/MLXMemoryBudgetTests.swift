@@ -32,13 +32,24 @@ struct MLXMemoryBudgetTests {
         #expect(MLXMemoryBudget.budget(forPhysicalMemory: gigabytes(64)).cacheLimitBytes == 128 * 1_048_576)
     }
 
-    @Test("memory limit is three quarters of physical memory")
-    func memoryLimitIsThreeQuartersOfPhysical() {
+    @Test("memory limit is 75% of physical RAM up to the companion ceiling")
+    func memoryLimitCappedAtCompanionCeiling() {
+        // Small machines: 75% of physical RAM (no cap reached).
+        let eight = MLXMemoryBudget.budget(forPhysicalMemory: gigabytes(8))
+        #expect(eight.memoryLimitBytes == Int(gigabytes(6)))
+
         let sixteen = MLXMemoryBudget.budget(forPhysicalMemory: gigabytes(16))
         #expect(sixteen.memoryLimitBytes == Int(gigabytes(12)))
 
-        let eight = MLXMemoryBudget.budget(forPhysicalMemory: gigabytes(8))
-        #expect(eight.memoryLimitBytes == Int(gigabytes(6)))
+        // Large machines: capped at the companion ceiling (12 GB).
+        let sixtyfour = MLXMemoryBudget.budget(forPhysicalMemory: gigabytes(64))
+        #expect(sixtyfour.memoryLimitBytes == Int(gigabytes(12)))
+
+        let ninetysix = MLXMemoryBudget.budget(forPhysicalMemory: gigabytes(96))
+        #expect(ninetysix.memoryLimitBytes == Int(gigabytes(12)))
+
+        let onetwentyeight = MLXMemoryBudget.budget(forPhysicalMemory: gigabytes(128))
+        #expect(onetwentyeight.memoryLimitBytes == Int(gigabytes(12)))
     }
 
     @Test("budget never shrinks as physical memory grows")
