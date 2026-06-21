@@ -18,6 +18,10 @@ except ModuleNotFoundError:  # slim CI env may omit it; only temp_db needs it
 
 # Add src directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
+# The legacy Python CLI was archived to _legacy/ (2026-06-21); keep it importable
+# so the curated smoke suite that still exercises it (e.g. voice_text_preprocessor)
+# stays green without un-archiving the modules.
+sys.path.insert(0, str(Path(__file__).parent.parent / "_legacy"))
 
 
 # --- CI triage markers --------------------------------------------------------

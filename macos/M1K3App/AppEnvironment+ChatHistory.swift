@@ -159,6 +159,8 @@ extension AppEnvironment {
                         embedder: embedder,
                         onHits: { hits in sourceCollector.record(hits) }
                     ),
+                    ListDocumentsTool(store: store),
+                    GetDocumentTool(store: store),
                 ]
                 let defaults = UserDefaults.standard
                 let webAllowed = defaults.object(forKey: Self.webSearchEnabledKey) == nil

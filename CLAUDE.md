@@ -2,14 +2,20 @@
 
 @.claude/project-memory.md
 
+> **⚠️ Orientation (2026-06-21):** The **live product** is the Mac-native SwiftUI
+> app under **`macos/`** — see `macos/PLAN.md` and `macos/.claude/project-memory.md`.
+> The Python CLI documented below is **legacy** (pre-Mac-app, last meaningful work
+> Jan 2026) and was archived under **`_legacy/`** in this pass. The in-app MCP server
+> (native macOS app) and `mcp_unified_server.py` (`.mcp.json`) remain live.
+
 Privacy-focused local AI with voice synthesis, RAG, 3D avatars, and CLI interfaces.
 
 ## Commands
 ```bash
-# Run
-python m1k3.py --no-voice      # CLI without audio
-python m1k3.py --tui --rag     # TUI with RAG
-python cli.py                   # CLI with avatar dashboard
+# Run (LEGACY Python CLI — archived under _legacy/)
+python _legacy/m1k3.py --no-voice      # CLI without audio
+python _legacy/m1k3.py --tui --rag     # TUI with RAG
+python _legacy/cli.py                   # CLI with avatar dashboard
 
 # MLX-LM Server (Apple Silicon - see docs/MLX_SETUP.md)
 mlx-env/bin/mlx_lm.server --model mlx-community/SmolLM2-135M-Instruct --port 8080
