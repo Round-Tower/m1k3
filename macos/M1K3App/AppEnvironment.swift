@@ -533,6 +533,10 @@ final class AppEnvironment {
         // Auto-routing (opt-in) picks the brain per the ladder before the turn.
         // No-op when off or when the pick is unchanged, so the default path is intact.
         applyAutoRouteIfEnabled()
+        // Prudent compute (opt-in): fold this turn's thermal/low-power pressure into
+        // the cool-head state so the agent loop eases off when the Mac runs hot.
+        // No-op when off. Never swaps the brain.
+        applyCoolHeadIfEnabled()
         let clock = ContinuousClock()
         let started = clock.now
         avatar.setActivity(.thinking)
@@ -649,6 +653,7 @@ final class AppEnvironment {
         selectedBrain = tier
         UserDefaults.standard.set(tier.rawValue, forKey: Self.selectedBrainKey)
         UserDefaults.standard.set(true, forKey: Self.hasChosenBrainKey)
+        let oldMLX = currentMLXProvider
         if let modelID = tier.mlxModelID {
             let mlx = MLXGemmaProvider(modelID: modelID)
             currentMLXProvider = mlx
@@ -657,6 +662,7 @@ final class AppEnvironment {
         } else {
             selectedRuntime = .appleFoundationModels // didSet clears the bar
         }
+        oldMLX.releaseMemory()
     }
 
     /// Deep-link the next OnboardingView to the brain-picker step (the honest
@@ -734,6 +740,7 @@ final class AppEnvironment {
             embedder.setEmbedder(usingMLXEmbeddings ? MLXEmbeddingService() : HashingEmbeddingService())
             embeddingStatus = "Couldn’t switch embeddings: \(error.localizedDescription)"
         }
+        MLXMemoryBudget.reclaim(label: "switchEmbeddings")
     }
 
     /// All indexed items, newest first, for the document manager — or one

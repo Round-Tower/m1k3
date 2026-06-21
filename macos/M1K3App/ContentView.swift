@@ -11,6 +11,11 @@
 //  Review: Kev + claude-fable-5, 2026-06-11 — voice-first mode: full-window body
 //  swap to VoiceModeView, toolbar entry + ⌘⇧V, chat actions hidden while active.
 //  Confidence 0.8.
+//  Review: Kev + claude-opus-4-8, 2026-06-21 — voice-first MERGED into the chat:
+//  the full-window body-swap is replaced by a bottom VoiceDock overlay
+//  (safeAreaInset) over the still-visible transcript. The top avatar yields to the
+//  dock's face, the input bar hides under voice, follow-latest pauses (scroll-back),
+//  and chat actions stay reachable. Confidence 0.75 (layout/feel verify-at-⌘R).
 
 import M1K3Avatar
 import M1K3Inference
@@ -35,22 +40,29 @@ struct ContentView: View {
     @AppStorage(AppEnvironment.autoRouteBrainKey) private var autoRouteBrain = false
 
     var body: some View {
-        Group {
+        VStack(spacing: 0) {
+            avatarPanel
+            transcript
+            // The input bar hides while voice owns the conversation — the dock
+            // below IS the bottom chrome then, so there's no typed-vs-spoken clash.
+            if !env.isVoiceModeActive {
+                inputBar
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+        }
+        .animation(.spring(duration: 0.35), value: avatarDisplay)
+        .frame(minWidth: 600, minHeight: 520)
+        // Voice-first as a non-exclusive overlay: a dock pinned to the bottom over
+        // the still-visible transcript, rather than a full-window body-swap.
+        // safeAreaInset insets the chat ABOVE the dock (no overlap → no hit-test
+        // puzzle), so you see the conversation scroll AND M1K3 talking.
+        .safeAreaInset(edge: .bottom, spacing: 0) {
             if env.isVoiceModeActive {
-                VoiceModeView()
-                    .transition(.opacity.combined(with: .scale(scale: 0.97)))
-            } else {
-                VStack(spacing: 0) {
-                    avatarPanel
-                    transcript
-                    inputBar
-                }
-                .transition(.opacity)
-                .animation(.spring(duration: 0.35), value: avatarDisplay)
+                VoiceDock()
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
         .animation(.easeInOut(duration: 0.3), value: env.isVoiceModeActive)
-        .frame(minWidth: 600, minHeight: 520)
         // Global readiness gate: until the active brain is actually loaded into
         // memory, swallow interaction behind a loading/failure surface — a turn
         // fired against still-downloading weights is the "interacted before ready"
@@ -149,7 +161,9 @@ struct ContentView: View {
 
     @ViewBuilder
     private var avatarPanel: some View {
-        if avatarDisplay == .panel {
+        // The top panel yields to the voice dock's own avatar while voice is active
+        // — one face on screen, never two.
+        if avatarDisplay == .panel, !env.isVoiceModeActive {
             AvatarSurface(env: env)
                 .frame(height: 200)
                 .padding(.horizontal, 12)
@@ -323,8 +337,11 @@ struct ContentView: View {
     }
 
     /// Keep the newest turn pinned to the bottom as it streams (text or reasoning).
+    /// Paused while voice is active so the transcript becomes the calm scroll-back
+    /// record — the dock's karaoke is the live read — and the user can read earlier
+    /// turns without being yanked to the bottom mid-utterance.
     private func followLatest(_ proxy: ScrollViewProxy) {
-        guard let last = env.chat.messages.last?.id else { return }
+        guard !env.isVoiceModeActive, let last = env.chat.messages.last?.id else { return }
         withAnimation(.easeOut(duration: 0.15)) {
             proxy.scrollTo(last, anchor: .bottom)
         }
@@ -356,9 +373,9 @@ struct ContentView: View {
             .help(env.isVoiceModeActive
                 ? "Back to the chat (⌘⇧V)"
                 : "Talk with M1K3 — hands-free conversation (⌘⇧V)")
-            if !env.isVoiceModeActive {
-                chatToolbarItems
-            }
+            // The chat is co-visible under the voice dock now, so its actions stay
+            // reachable (they used to hide for the full-window body-swap).
+            chatToolbarItems
         }
     }
 
@@ -410,7 +427,8 @@ struct ContentView: View {
             : "Switch brain — currently \(env.selectedBrain.displayName)")
     }
 
-    /// The chat-surface actions — hidden while voice mode owns the window.
+    /// The chat-surface actions — always available now the chat stays on screen
+    /// beneath the voice dock.
     private var chatToolbarItems: some View {
         Group {
             brainSwitcher

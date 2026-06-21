@@ -36,7 +36,7 @@ public enum BrainBacking: Sendable, Equatable {
 
 /// One of the four M1K3 brains. `rawValue` ("mini"/"lil"/"big"/"huge") is the
 /// stable persistence key — pre-Huge installs persisted the first three.
-public enum BrainTier: String, CaseIterable, Identifiable, Sendable {
+public enum BrainTier: String, CaseIterable, Identifiable, Sendable, Comparable {
     case mini
     case lil
     case big
@@ -44,6 +44,22 @@ public enum BrainTier: String, CaseIterable, Identifiable, Sendable {
 
     public var id: String {
         rawValue
+    }
+
+    /// Capability/resource ordering: mini < lil < big < huge. Explicit (NOT the
+    /// `allCases` declaration order) so a future reorder can't silently change it.
+    /// Drives `capped` and any "is this a heavier brain?" comparison.
+    private var weight: Int {
+        switch self {
+        case .mini: 0
+        case .lil: 1
+        case .big: 2
+        case .huge: 3
+        }
+    }
+
+    public static func < (lhs: BrainTier, rhs: BrainTier) -> Bool {
+        lhs.weight < rhs.weight
     }
 
     public var displayName: String {
@@ -161,6 +177,24 @@ public enum BrainTier: String, CaseIterable, Identifiable, Sendable {
     /// Convenience: the recommendation for the machine we're running on.
     public static var recommendedForThisMac: BrainTier {
         recommended(forPhysicalMemoryGB: physicalMemoryGB)
+    }
+
+    /// Ease an AUTOMATIC brain pick down to what this much memory comfortably
+    /// runs — never heavier than `recommended(forPhysicalMemoryGB:)`. LOWER-ONLY:
+    /// a pick already at or below the comfortable ceiling is returned unchanged;
+    /// this never RAISES a tier, because raising would start a silent multi-GB
+    /// download the user never asked for (the onboarding flow owns that choice —
+    /// see #81's download honesty). The point is to stop auto-routing from keeping
+    /// a too-heavy brain on a small Mac (Big has no hard memory floor, so without
+    /// this it would ride along on an 8GB machine and thrash swap). Manual
+    /// selection is the user's sovereign choice and is deliberately NOT capped.
+    public static func capped(_ tier: BrainTier, forPhysicalMemoryGB gigabytes: Double) -> BrainTier {
+        min(tier, recommended(forPhysicalMemoryGB: gigabytes))
+    }
+
+    /// Convenience: `capped` for the machine we're running on.
+    public static func cappedForThisMac(_ tier: BrainTier) -> BrainTier {
+        capped(tier, forPhysicalMemoryGB: physicalMemoryGB)
     }
 
     /// Convenience: whether this tier is selectable on the machine we're on.
