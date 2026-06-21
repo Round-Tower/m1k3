@@ -34,6 +34,10 @@ struct ContentView: View {
     @State private var showConsentDialog = false
     @State private var isDropTargeted = false
     @AppStorage(AppEnvironment.avatarDisplayKey) private var avatarDisplay = AvatarDisplay.panel
+    /// Auto-route on → M1K3 picks the brain → a manual toolbar pick would snap back
+    /// next turn, so the switcher disables itself. Reactive so toggling Auto-route in
+    /// Settings updates the chat toolbar live.
+    @AppStorage(AppEnvironment.autoRouteBrainKey) private var autoRouteBrain = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -375,10 +379,59 @@ struct ContentView: View {
         }
     }
 
+    /// Brain hot-swap + the "currently using X" indicator. This intentionally
+    /// REVERSES the older "runtime lives in Settings, not the chrome" choice
+    /// (`statusIndicator` renders nothing when ready): the brain you're on is now
+    /// visible at a glance and one tap to change — Kev's "easy optics on which
+    /// we're using". The label reads the ONE live source (`env.selectedBrain`)
+    /// composed with `env.modelLoad` so it never claims a brain that's still
+    /// downloading. A switch to a downloaded tier (or Mini) is instant via
+    /// `selectBrain` (transcript preserved); an un-downloaded tier routes to the
+    /// onboarding brain step (the honest download UI) rather than silently pulling
+    /// gigabytes from a single tap.
+    /// Signed: Kev + claude-opus-4-8, 2026-06-21, Confidence 0.8, Prior: Unknown
+    private var brainSwitcher: some View {
+        Menu {
+            ForEach(BrainSwitcher.rows(
+                active: env.selectedBrain,
+                isDownloaded: { env.isBrainDownloaded($0) },
+                isLocked: { !$0.isSelectableOnThisMac }
+            )) { row in
+                Button {
+                    if row.needsDownload {
+                        // Don't start a multi-GB pull from one toolbar tap — route to
+                        // the onboarding brain step (the honest download UI). Same
+                        // entry point Settings "Change brain…" uses.
+                        env.routeToOnboardingBrainPicker()
+                    } else {
+                        env.selectBrain(row.tier)
+                    }
+                } label: {
+                    Label(row.menuTitle, systemImage: row.isActive ? "checkmark" : row.tier.glyph)
+                }
+                .disabled(row.isLocked)
+            }
+        } label: {
+            // The Menu label IS the persistent indicator. During a download it shows
+            // "Big M1K3 · 34%" — deliberately the same figure the transient principal
+            // statusIndicator shows; both read env.modelLoad, so they always agree.
+            Label(
+                BrainSwitcher.indicatorLabel(active: env.selectedBrain, load: env.modelLoad),
+                systemImage: env.selectedBrain.glyph
+            )
+            .symbolRenderingMode(.hierarchical)
+        }
+        .disabled(autoRouteBrain)
+        .help(autoRouteBrain
+            ? "Auto-route is on — M1K3 picks the brain. Turn it off in Settings to choose manually."
+            : "Switch brain — currently \(env.selectedBrain.displayName)")
+    }
+
     /// The chat-surface actions — always available now the chat stays on screen
     /// beneath the voice dock.
     private var chatToolbarItems: some View {
         Group {
+            brainSwitcher
             // New chat lives in the input bar now (next to mic/send) — not here.
             Button { showHistory = true } label: {
                 Label("History", systemImage: "clock.arrow.circlepath")

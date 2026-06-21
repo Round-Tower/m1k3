@@ -54,11 +54,10 @@ struct SettingsView: View {
                     }
                     modelLoadRow
                     Button("Change brain…") {
-                        // Brain-only re-pick: deep-link to the brain step and finish
-                        // on wake, instead of replaying the empty "Who am I talking
-                        // to?" screen (the old re-trigger bug).
-                        UserDefaults.standard.set(true, forKey: M1K3App.onboardingStartAtBrainKey)
-                        UserDefaults.standard.set(false, forKey: AppEnvironment.hasChosenBrainKey)
+                        // Brain-only re-pick: deep-link to the brain step and finish on
+                        // wake, instead of replaying the empty "Who am I talking to?"
+                        // screen (the old re-trigger bug). One home for the deep-link.
+                        env.routeToOnboardingBrainPicker()
                     }
                     .buttonStyle(.glass)
                     Toggle("Auto-route (M1K3 picks the brain)", isOn: $autoRouteBrain)
