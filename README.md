@@ -55,10 +55,10 @@ pip install -r requirements.txt
 # Download local models (AI + embeddings + voice)
 python src/models/loaders/download_models.py
 
-# Run
-python m1k3.py --no-voice        # CLI, no audio
-python m1k3.py --tui --rag       # TUI with retrieval
-python cli.py                    # CLI with the avatar dashboard
+# Run (legacy Python CLI — see _legacy/)
+python _legacy/m1k3.py --no-voice    # CLI, no audio
+python _legacy/m1k3.py --tui --rag   # TUI with retrieval
+python _legacy/cli.py                # CLI with the avatar dashboard
 ```
 
 **Apple Silicon (recommended):** M1K3 auto-detects an MLX-LM server on port 8080
@@ -113,7 +113,7 @@ python mcp_unified_server.py
 
 ```
 m1k3/
-├── m1k3.py, cli.py            # Desktop entry points
+├── _legacy/                  # Legacy Python CLI (m1k3.py, cli.py, …) — archived
 ├── mcp_unified_server.py      # MCP server (TTS + Avatar + STT)
 ├── src/
 │   ├── engines/ai/            # AI backends (MLX, SmolLM2, …)

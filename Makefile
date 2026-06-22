@@ -25,11 +25,11 @@ download:
 
 test:
 	@echo "🧪 Running functionality test..."
-	python cli.py --no-voice --query "Hello M1K3!"
+	python _legacy/cli.py --no-voice --query "Hello M1K3!"
 
 test-voice:
 	@echo "🔊 Testing voice synthesis..."
-	python cli.py --test-voice
+	python _legacy/cli.py --test-voice
 
 demo:
 	@echo "🎮 Running M1K3 PlayStation 1 voice demo..."
@@ -37,11 +37,11 @@ demo:
 
 run:
 	@echo "🎮 Starting M1K3 with PlayStation 1 retro voice..."
-	python m1k3.py
+	python _legacy/m1k3.py
 
 run-silent:
 	@echo "🚀 Starting M1K3 CLI without voice..."
-	python cli.py --no-voice
+	python _legacy/cli.py --no-voice
 
 benchmark:
 	@echo "📊 Running performance benchmarks..."

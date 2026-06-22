@@ -56,15 +56,20 @@ python generate_comprehensive_kb.py
 
 ### 6. Test Installation
 
+> **Note (legacy):** The `m1k3.py` / `cli.py` Python CLI has been archived under
+> `_legacy/` (superseded by the macOS app under `macos/`). The `python m1k3.py …`
+> and `python cli.py …` commands below run as `python _legacy/m1k3.py …` /
+> `python _legacy/cli.py …` from the repo root.
+
 ```bash
 # Test basic functionality
-python m1k3.py --no-voice
+python _legacy/m1k3.py --no-voice
 
 # Test with RAG system
-python m1k3.py --rag --query "How do I fix slow WiFi?"
+python _legacy/m1k3.py --rag --query "How do I fix slow WiFi?"
 
 # Test TUI interface
-python m1k3.py --tui
+python _legacy/m1k3.py --tui
 
 # Test validation suite
 python test_rag_practical.py
@@ -76,8 +81,8 @@ After setup, you should have:
 
 - ✅ `models/` directory with downloaded AI models
 - ✅ `knowledge/comprehensive_knowledge_base.json` (if generated)
-- ✅ Working CLI: `python m1k3.py --help`
-- ✅ Working RAG: `python m1k3.py --rag`
+- ✅ Working CLI: `python _legacy/m1k3.py --help`
+- ✅ Working RAG: `python _legacy/m1k3.py --rag`
 - ✅ Web interfaces: `rag_knowledge_viewer.html`, `rag_admin.html`
 
 ## Troubleshooting
@@ -113,7 +118,7 @@ python -c "from m1k3_rag_engine import M1K3RAGEngine; print('✅ RAG engine OK')
 
 ```bash
 # Use quantized models for low-memory systems
-python m1k3.py --model-size small
+python _legacy/m1k3.py --model-size small
 
 # Check system resources
 python -c "import psutil; print(f'RAM: {psutil.virtual_memory().available // (1024**3)} GB available')"
@@ -141,14 +146,14 @@ python -c "import json; data=json.load(open('knowledge/comprehensive_knowledge_b
 pip install TTS pydub sounddevice
 
 # Test voice
-python m1k3.py --voice
+python _legacy/m1k3.py --voice
 ```
 
 ### Avatar System
 
 ```bash
 # Start avatar web dashboard
-python cli.py --with-avatar
+python _legacy/cli.py --with-avatar
 
 # Open http://localhost:3000 in browser
 ```
@@ -223,7 +228,7 @@ export M1K3_RAG_ENABLED=true
 git clone https://github.com/Round-Tower/m1k3.git && cd m1k3
 pip install -r requirements.txt
 python download_models.py
-python m1k3.py --rag --query "Hello M1K3!"
+python _legacy/m1k3.py --rag --query "Hello M1K3!"
 ```
 
 **System is ready when you see:** `🎯 M1K3 RAG Engine ready!`

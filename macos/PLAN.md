@@ -15,6 +15,27 @@ The strategic unlock from exploration: we are **not** building this from scratch
 
 ---
 
+## Status reconciliation — 2026-06-21 (lean pass)
+
+The "Update —" log below is an append-only historical record (signed; not rewritten). This block
+is the **current truth** where the log has drifted:
+
+- **LiteRT-LM backend → DROPPED, never built.** The 2026-06-06 "build both MLX *and* LiteRT" decision
+  resolved in MLX's favour. There is no `LiteRTGemmaProvider` in the tree and no scratch spike. The
+  inference layer is **MLX-Swift + Apple Foundation Models** only. Treat LiteRT references below as
+  historical context, not roadmap.
+- **CMUdict TTS swap → SUPERSEDED by misaki.** The recurring "CMUdict dict swap (proper TTS fix)"
+  carry-forward is obsolete: the misaki Apache-2.0 G2P dictionary shipped (PR #85, commit f00f5882),
+  replacing the espeak GPL path. Only re-open if a concrete gap over misaki is identified.
+- **Phase 16 (on-device LoRA) → SPIKED, not "next".** The lil-4B QLoRA spike ran to completion
+  (results in `scratch/lora-spike/`). Remaining work is narrow: fuse → point lil's brain at the fused
+  model → A/B with voice exemplars removed from the prompt.
+- **Phase 17 (prompt-hardening v2) → largely SHIPPED.** Prompt + enforcement landed (#41 hardened
+  prompt, #69 citation-noise abstain; `M1K3Persona`/`CanaryGuard`/`CitationFooter` live). Remaining
+  sub-items: the self-query router and knowledge-index segregation.
+
+---
+
 ## Update — 2026-06-06: Gemma 4 shipped (changes the north star from "someday" to "spike now")
 
 **Gemma 4 12B released 2026-06-03** (post-cutoff; web-verified). It is encoder-free multimodal with **native audio** — built-in **speech recognition *and* speaker diarization** — Apache 2.0, on-device. The **edge variants E2B (2B eff.) / E4B (4B eff.)** carry native audio with an encoder **50% smaller than Gemma 3n** and a **40ms frame tuned for low-latency ASR**, sized for phone/laptop memory. Both runtimes M1K3 bet on now support it: **MLX-Swift** (`VincentGourbin/gemma-4-swift-mlx`) and **LiteRT-LM** (`litert-community/gemma-4-12B-it-litert-lm`, text+audio now).
