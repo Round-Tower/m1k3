@@ -71,13 +71,22 @@ struct SettingsView: View {
                 } header: {
                     Text("Brain")
                 } footer: {
-                    Text("Mini is Apple's built-in model (instant). Lil and Big are local models "
-                        + "that download once. On-device only — nothing leaves this Mac.\n"
-                        + "Auto-route lets M1K3 pick: its own tuned model by default (stronger at "
-                        + "chat), or Apple on-device if you prefer it — always sized to what this "
-                        + "Mac runs comfortably.\n"
-                        + "Easing off trims M1K3's effort under thermal or low-power pressure. "
-                        + "It never changes your brain.")
+                    // A multiline literal (no `+` chain) keeps this copy out of the
+                    // ViewBuilder's overload resolution — the old 7-segment `String`
+                    // concatenation tripped "unable to type-check in reasonable time",
+                    // which then cascaded into phantom "cannot find … in scope" errors
+                    // elsewhere in the file. `\` joins wrapped lines; blank-free line
+                    // breaks become the paragraph `\n`s.
+                    let copy = """
+                    Mini is Apple's built-in model (instant). Lil and Big are local models \
+                    that download once. On-device only — nothing leaves this Mac.
+                    Auto-route lets M1K3 pick: its own tuned model by default (stronger at \
+                    chat), or Apple on-device if you prefer it — always sized to what this \
+                    Mac runs comfortably.
+                    Easing off trims M1K3's effort under thermal or low-power pressure. \
+                    It never changes your brain.
+                    """
+                    Text(copy)
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }

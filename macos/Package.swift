@@ -169,7 +169,10 @@ let package = Package(
         // self-test (M1K3_SELFTEST_CHATEVAL) because MLX needs the .app bundle.
         .target(
             name: "M1K3Eval",
-            dependencies: [],
+            // ChatEvalScorer uses M1K3Inference.ThinkStripper (added #87). The
+            // SwiftPM CLI build resolved this implicitly via the shared module
+            // dir, but the strict Xcode/xcodegen graph needs it declared.
+            dependencies: ["M1K3Inference"],
             path: "Sources/M1K3Eval"
         ),
         .testTarget(
