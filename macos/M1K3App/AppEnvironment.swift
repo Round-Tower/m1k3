@@ -53,7 +53,7 @@ import os
 enum RuntimeOption: String, CaseIterable, Identifiable {
     case appleFoundationModels = "Apple Foundation Models"
     // Model-neutral label: the MLX slot now serves whichever brain is chosen
-    // (Qwen3.5 Lil/Huge, Gemma 4 Big) — not display-persisted, safe to rename.
+    // (Qwen3 Lil/Huge, Gemma 4 Big) — not display-persisted, safe to rename.
     case mlxGemma = "MLX (local model)"
     case liteRTGemma = "LiteRT Gemma"
 

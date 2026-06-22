@@ -51,13 +51,17 @@ struct BrainTierTests {
         #expect(!BrainTier.mini.requiresDownload)
     }
 
-    @Test("the MLX tiers point at the Gemma 4-era models")
+    @Test("the MLX tiers point at the dense Qwen3 / Gemma 4 models")
     func mlxTierModels() {
-        #expect(BrainTier.lil.mlxModelID == "mlx-community/Qwen3.5-4B-4bit")
+        // lil/huge use DENSE Qwen3 (not the Qwen3.5 GatedDeltaNet hybrid, which
+        // CPU-spikes on mlx-swift-lm 3.31.3 — see MODEL_CHOICES.md). Dense routes
+        // through the existing qwen3 path: .json tools, no pre-open-think,
+        // quantized KV — verified against the real Qwen3 chat template.
+        #expect(BrainTier.lil.mlxModelID == "mlx-community/Qwen3-4B-4bit")
         #expect(BrainTier.big.mlxModelID == "mlx-community/gemma-4-e4b-it-4bit")
-        // Gate B fallback: gemma-4-12B's `gemma4_unified` arch is unregistered
-        // in mlx-swift-lm 3.31.3 (won't load) — Qwen3.5-9B until upstream does.
-        #expect(BrainTier.huge.mlxModelID == "mlx-community/Qwen3.5-9B-4bit")
+        // Gate B: gemma-4-12B's `gemma4_unified` arch is unregistered in
+        // mlx-swift-lm 3.31.3 (won't load) — dense Qwen3-8B fills huge until upstream.
+        #expect(BrainTier.huge.mlxModelID == "mlx-community/Qwen3-8B-4bit")
         #expect(BrainTier.mini.mlxModelID == nil)
         for tier in [BrainTier.lil, .big, .huge] {
             #expect((tier.approxDownloadMB ?? 0) > 0)
