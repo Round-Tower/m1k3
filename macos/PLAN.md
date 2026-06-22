@@ -15,7 +15,7 @@ The strategic unlock from exploration: we are **not** building this from scratch
 
 ---
 
-## Status reconciliation — 2026-06-21 (lean pass)
+## Status reconciliation — 2026-06-22 (model review)
 
 The "Update —" log below is an append-only historical record (signed; not rewritten). This block
 is the **current truth** where the log has drifted:
@@ -33,6 +33,10 @@ is the **current truth** where the log has drifted:
 - **Phase 17 (prompt-hardening v2) → largely SHIPPED.** Prompt + enforcement landed (#41 hardened
   prompt, #69 citation-noise abstain; `M1K3Persona`/`CanaryGuard`/`CitationFooter` live). Remaining
   sub-items: the self-query router and knowledge-index segregation.
+- **Phase 21 (model & inference upgrade) → PLANNED.** Research complete (2026-06-22): OptiQ
+  mixed-precision swap is the quick win (PLE bug fix + reasoning lift, same families); Phi-4 Mini /
+  SmolLM3 / Granite 4.1 are eval-gated candidates; Gemma 4 12B + Qwen3.6 MoE blocked on upstream
+  mlx-swift-lm arch registration. Full plan at `.claude/plans/composed-skipping-floyd.md`.
 
 ---
 
@@ -584,6 +588,21 @@ SwiftUI, macOS 26, native `.glassEffect` / `GlassEffectContainer` for the real L
     - **Companion lever — RAM ceiling (`BrainTier.capped`, NEW 2026-06-21):** this DOES add a `min(tier, recommended(forPhysicalMemoryGB:))` seam — but keyed on **machine capability (physical memory), NOT heat**, so it's consistent with the thermal rejection above (thermal→effort; capability→ceiling). Lower-only (never raises — raising = a silent multi-GB download, #81's honesty rule); makes the opt-in auto-route machine-aware (it was flooring at Lil on big Macs AND keeping a too-heavy Big on small Macs — Big has no hard floor). Manual selection stays sovereign. `BrainTier: Comparable` by explicit weight; 12 tests.
     - **Two CoolHeadPolicy knobs still UNWIRED — named follow-ups (own small PRs):** (1) `defersHeavyGeneration(.minimal)` — at `.critical`, surface ONE honest line (`"running light to keep your Mac cool · still fully local"`) and offer Mini as a one-tap USER choice instead of starting the heavy decode (cleaner once #81's toolbar brain-switch lands; `.critical` is rare/brief). (2) `allowsBackgroundWork` — pause constellation-polling/re-embed under heat (per-site judgement: deferring `reindexIfEmbedderChanged` at launch could leave stale embeddings degrading retrieval until cool — not a blind one-liner). The shipped Settings copy ("trims M1K3's effort") is honest about the iteration-cap that IS wired and does not promise either.
     - *Origin:* the session's own eval gotcha — lil latency degraded 5× (61s→300s) under sustained load; the lesson ("respect the machine") became the feature. *Verify (verify-by-launch, owed — a HOT machine, not manufacturable in a unit test):* force `.serious`/`.critical` (a stress load) → iterations cap; a brief blip does NOT flip effort; the user's chosen brain is unchanged throughout. Plus: auto-route ON → the pick is sized to this Mac.
+
+21. **Model & Inference Upgrade** (**PLANNED 2026-06-22** — research + plan complete, implementation next session) — the brain tiers were pinned in the Gemma 4 era (2026-06-13, mlx-swift-lm 3.31.3). Since then: **OptiQ mixed-precision quantization** landed on HuggingFace (per-layer sensitivity analysis → same disk size, meaningfully better reasoning); new small-model families emerged (Phi-4 Mini, SmolLM3, Granite 4.1); and the MLX framework added speculative decoding + Gemma 4 MTP drafters. Three layers:
+    - **Layer A — OptiQ variant swap (quick win, do first):** swap the 3 MLX model IDs from uniform 4-bit to their OptiQ mixed-precision equivalents. Fixes the **known PLE (Per-Layer Embedding) corruption bug** in stock Gemma 4 4-bit quants (GSM8K 24→56% on E4B); Qwen3.5 sees 2.3x GSM8K lift. Same families, same tool-call dialects, same think-tag behaviour → same `supportsQuantizedKVCache` / `resolveToolCallFormat` / `templatePreOpensThink` family detection (substring matching preserved). One small PR: `BrainTier.swift` model IDs + download sizes, `BrainTierTests` + `MLXGemmaProviderTests` pinned assertions. Existing users re-download ~same-size weights on next launch. Pre-flight: verify the 3 OptiQ repo IDs exist on HuggingFace.
+    - **Layer B — New model candidate evaluation (eval-gated, no production change until proven):** run CHATEVAL harness against: **(B1) Phi-4 Mini 3.8B** (`mlx-community/Phi-4-mini-instruct-4bit`, ~2.5 GB — lil contender: 89% GSM8K, native fn-call, 128K ctx; `.json` tool-call already handled; KV-quant support unknown → investigate `attentionWithCacheUpdate` routing); **(B2) SmolLM3 3B** (budget dark horse: smallest footprint ~2 GB, Apache 2.0, dual-mode reasoning; tool-call dialect + mlx-swift-lm arch support unknown → check before eval); **(B3) Granite 4.1 8B** (big contender: 87% HumanEval, strong tool-call + RAG; tool-call dialect needs verification); **(B4) Qwen3.6-35B-A3B MoE** (huge ceiling-raiser: 35B total / 3B active; **BLOCKED** on MoE arch support in mlx-swift-lm). Eval via temporary `MLXGemmaProvider(modelID:)` in the self-test harness — no hidden tiers in the user-facing `BrainTier` enum. Compare `grounded-Q` + `open-chat` scores (tool-use, persona, citation, latency) on an IDLE machine, serialised (per the 2026-06-20 thermal-contention lesson).
+    - **Layer C — Framework-level improvements (track upstream, act when unblocked):** **(C1) Speculative decoding** — already in mlx-swift-lm 3.31.3 but unwired; 74% tok/s improvement on 27B models, smaller gains on 4B–9B; needs investigation on drafter model availability per family (MTP drafters are Gemma-specific — Qwen may need a separate small drafter or skip spec-decode). **(C2) OptiQ per-layer KV cache** — current: uniform 8-bit KV for Qwen families (`kvBits=8, kvGroupSize=64`); OptiQ's per-layer precision gives +62% decode tok/s at 64K context — blocked on `GenerateParameters` exposing per-layer kvBits upstream. **(C3) Gemma 4 quantized KV** — `Gemma4Text` calls `cache.update(keys:values:)` directly (fatalError on QuantizedKVCache at 3.31.3); once upstream fixes it, add "gemma-4" to the `supportsQuantizedKVCache` allowlist for Big-tier memory/speed win. **(C4) WWDC26 rebuilt AFM** — macOS 27's on-device model adds vision + better tool-calling + the `fm` CLI → re-eval Mini for agentic capability (Phase-15 found mini 0/5 on ReAct tool-use; rebuilt model may graduate it).
+    - **Upstream blockers:** Gemma 4 12B (`gemma4_unified` arch registration → Big tier upgrade to trimodal 12B) · Qwen3.6 MoE (arch support → Huge tier ceiling-raiser) · Gemma 4 KV quant (`Gemma4Text` → `attentionWithCacheUpdate`) · per-layer KV config (`GenerateParameters` per-layer kvBits) — all tracked at ml-explore/mlx-swift-lm releases/PRs.
+    - *Verify:* `swift test` green (pinned assertions updated); on-device ⌘R each tier downloads OptiQ and generates correctly; CHATEVAL `grounded-Q` + `open-chat` scores compared pre/post-OptiQ (citation rate, tool-use rate, latency); family detection returns same values for OptiQ IDs (substring matching).
+
+<!-- Signed: Kev + claude-opus-4-6, 2026-06-22, Confidence 0.85, Prior: Kev + claude-opus-4-8 (this file).
+     Context: Research session — cross-referenced HuggingFace model landscape + MLX framework state
+     against M1K3's BrainTier/MLXGemmaProvider/MLXToolCalling implementation. The OptiQ PLE bug fix is
+     the high-confidence quick win (same families, proven quant improvement); new-model candidates are
+     eval-gated (no production change without CHATEVAL proof); upstream blockers are named and tracked.
+     The 0.85 confidence reflects: OptiQ variant existence on HF is research-sourced (web search), not
+     locally verified (pre-flight check is the first implementation step). -->
 
 ---
 
