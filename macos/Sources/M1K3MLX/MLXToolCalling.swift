@@ -93,24 +93,48 @@ enum MLXToolMapping {
     static func callText(_ call: ParsedToolCall, format: ToolCallFormat) -> String {
         switch format {
         case .gemma: gemmaCallText(call)
+        case .gemma4: gemma4CallText(call)
         case .xmlFunction: xmlFunctionCallText(call)
         default: jsonCallText(call)
         }
     }
 
-    /// Gemma dialect: `<start_function_call>call:name{k:value,k:<escape>str<escape>}<end_function_call>`
+    /// Gemma 3 dialect: `<start_function_call>call:name{k:value,k:<escape>str<escape>}<end_function_call>`
     /// — string args are escape-wrapped, scalars raw (mirrors GemmaFunctionParser).
     static func gemmaCallText(_ call: ParsedToolCall) -> String {
+        gemmaStyleCallText(
+            call, startTag: "<start_function_call>", endTag: "<end_function_call>", escapeMarker: "<escape>"
+        )
+    }
+
+    /// Gemma 4 dialect: `<|tool_call>call:name{k:value,k:<|"|>str<|"|>}<tool_call|>` — Gemma 4
+    /// changed BOTH the delimiters and the escape marker from Gemma 3. Mirrors upstream's
+    /// `GemmaFunctionParser(.gemma4)` config (ToolCallFormat.createParser in mlx-swift-lm).
+    static func gemma4CallText(_ call: ParsedToolCall) -> String {
+        gemmaStyleCallText(
+            call, startTag: "<|tool_call>", endTag: "<tool_call|>", escapeMarker: "<|\"|>"
+        )
+    }
+
+    /// Shared Gemma-family call echo, parameterised by the dialect's delimiters +
+    /// escape marker (string args escape-wrapped, scalars raw, keys sorted) — the
+    /// single algorithm both Gemma 3 and Gemma 4 use, exactly as upstream configures
+    /// one `GemmaFunctionParser` per format. Array/object arg VALUES fall back to
+    /// `JSONValue.stringValue`: the Gemma dialect (and its upstream parser) handles
+    /// only primitives + escaped strings, not nested structured args — true of both.
+    private static func gemmaStyleCallText(
+        _ call: ParsedToolCall, startTag: String, endTag: String, escapeMarker: String
+    ) -> String {
         let arguments = call.arguments
             .sorted { $0.key < $1.key }
             .map { key, value -> String in
                 if case let .string(string) = value {
-                    return "\(key):<escape>\(string)<escape>"
+                    return "\(key):\(escapeMarker)\(string)\(escapeMarker)"
                 }
                 return "\(key):\(value.stringValue)"
             }
             .joined(separator: ",")
-        return "<start_function_call>call:\(call.name){\(arguments)}<end_function_call>"
+        return "\(startTag)call:\(call.name){\(arguments)}\(endTag)"
     }
 
     /// XML function dialect (Qwen3.5/Nemotron):
@@ -182,10 +206,12 @@ extension MLXGemmaProvider: ToolCallingProvider {
     static func resolveToolCallFormat(for configuration: ModelConfiguration) -> ToolCallFormat? {
         if let explicit = configuration.toolCallFormat { return explicit }
         let name = configuration.name.lowercased()
-        // Gemma 4 emits a NEW dialect (<|tool_call>…) that mlx-swift-lm 3.31.3
-        // has no parser for (.gemma4 landed upstream post-tag). nil → the agent
-        // uses the proven ReAct floor; flip to .gemma4 on the next upstream tag.
-        if name.contains("gemma-4") || name.contains("gemma4") { return nil }
+        // Gemma 4 emits a NEW dialect (<|tool_call>…<tool_call|>, escape <|"|>) parsed by
+        // upstream's GemmaFunctionParser(.gemma4) — available since #183 now that we build
+        // off mlx-swift-lm main (see Package.swift). Routes NATIVE instead of the ReAct
+        // floor that left gemma-4 reasoning into silence. MUST stay before the generic
+        // gemma arm (gemma3n contains "gemma" but not "gemma4" → still .gemma).
+        if name.contains("gemma-4") || name.contains("gemma4") { return .gemma4 }
         if name.contains("gemma") { return .gemma }
         // Qwen3.5 is trained on the XML function dialect, NOT <tool_call> JSON
         // (matches upstream infer(): qwen3_5 → .xmlFunction).

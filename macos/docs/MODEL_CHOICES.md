@@ -11,11 +11,13 @@
 
 ---
 
-## The hard constraint: mlx-swift-lm 3.31.3
+## The runtime constraint: mlx-swift-lm (now a main-HEAD revision pin)
 
-We are pinned to **mlx-swift-lm 3.31.3** (and mlx-swift kernel 0.31.4) — both are the **latest
-release**, so there is no newer tag to escape to. What runs is decided entirely by 3.31.3's
-model registry (`Libraries/MLXLLM/LLMModelFactory.swift`) and which arches it actually implements.
+**Update 2026-06-23:** M1K3 now builds off **mlx-swift-lm main** (`revision 40c2ff06`, = PR #330's
+merge) to unlock Gemma 4 native tool-calling — the last *release*, 3.31.3, had no `.gemma4` parser.
+See "Runtime watch" below for the full why + the (temporary) revert path. The failure-axes analysis
+below still holds; what runs is decided by the registry (`Libraries/MLXLLM/LLMModelFactory.swift`) +
+which arches it implements (main's registry ⊇ 3.31.3's).
 
 Three independent failure axes, all seen this session:
 1. **Format loadability** — OptiQ (`mlx-optiq` mixed precision) has no Swift loader → won't load
@@ -23,8 +25,10 @@ Three independent failure axes, all seen this session:
 2. **Architecture / perf** — SSM/linear-attention hybrids run a per-timestep recurrent scan
    (`GatedDelta.swift:244`) that spikes **CPU** (sequential kernel dispatch) — the Huge spike.
 3. **Tool-calling dialect** — M1K3 runs a tool loop every turn. Models with a native dialect in
-   `MLXToolCalling.resolveToolCallFormat` (json / xmlFunction / gemma / glm4 / lfm2) are reliable;
-   the rest fall to the **prompt-ReAct floor**, which gemma-4 handles badly (see the no-response bug).
+   `MLXToolCalling.resolveToolCallFormat` (json / xmlFunction / gemma / **gemma4** / glm4 / lfm2) are
+   reliable; the rest fall to the **prompt-ReAct floor**, which gemma-4 handled badly (the no-response
+   bug). **As of the main pin, gemma-4 resolves `.gemma4` → native tools** (on-device verify-owed that
+   this kills the no-response bug).
 
 ---
 
@@ -153,11 +157,11 @@ Caveats (not legal advice — get a real IP review before a commercial ship lean
 
 ---
 
-## Runtime watch — mlx-swift-lm version (the gemma-4 unlock)
+## Runtime watch — mlx-swift-lm version (the gemma-4 unlock) — ✅ DONE 2026-06-23
 
-We are pinned to **mlx-swift-lm 3.31.3** (released 2026-04-15) — the latest *release*. Two things
-that materially change the Gemma 4 calculus already exist in **main**, but landed **after** that tag,
-so they are NOT pinnable via a release:
+**M1K3 now builds off `mlx-swift-lm` main** (`revision 40c2ff06` = PR #330's merge). The last
+*release* was 3.31.3 (2026-04-15); two fixes that materially change the Gemma 4 calculus landed in
+**main** after that tag, so a release pin couldn't reach them:
 
 - **Native Gemma 4 tool-calling** — `mlx-swift-lm` **PR #183** ("Adopt GemmaFunctionParser to
   accommodate Gemma4 tool calls", merge commit `8c618003`, ~2026-05-22) extends the `gemma` parser to
@@ -170,29 +174,27 @@ so they are NOT pinnable via a release:
   found` error we hit loading gemma-4 OptiQ — a known gemma-4-loader gap, not purely OptiQ's fault.
   **As of 2026-06-23, main has BOTH #183 and #330.**
 
-**Can we build off main now instead of waiting for a release?** Technically yes — SwiftPM can pin to a
-commit/branch: change `Package.swift:58` from `.upToNextMinor(from: "3.31.3")` to
-`.revision("<commit at/after #330>")`, then regenerate + commit `Package.resolved` (Xcode Cloud needs the
-lockfile — the exit-74 lesson). BUT it's a **spike-first, not a blind bump**:
-- **The WhisperKit / swift-transformers version clash** is the named landmine — bumping mlx-swift-lm may
-  pull a swift-transformers version incompatible with WhisperKit's pin → could break STT/transcription.
-- Main carries **~2 months of unreleased drift** beyond 3.31.3 (Apr 15 → now) — could regress the dense
-  Qwen3 path we just shipped, model loading, etc. A main pin must **re-verify the WHOLE lineup loads +
-  generates** (the OptiQ/dense discipline), not just gemma-4.
-- A commit pin is reproducible (fixed SHA) but unreleased — less stable to reason about long-term.
+**The spike PASSED (2026-06-23) → shipped.** `Package.swift` pins `revision 40c2ff06` + the regenerated
+`Package.resolved` is committed (Xcode Cloud needs the lockfile — the exit-74 lesson). What the spike proved:
+- **The WhisperKit / swift-transformers clash did NOT fire** — mlx-swift-lm depends on *neither*
+  swift-transformers nor WhisperKit (only mlx-swift + swift-syntax), so it can't drag them. Confirmed both
+  analytically and by a clean `swift package resolve`.
+- **Blast radius = exactly two resolved pins:** mlx-swift-lm → the revision, and swift-syntax
+  `600.0.1 → 603.0.2` (a prebuilt macro artifact — no source compile). Every other pin (incl.
+  swift-transformers 1.1.9, WhisperKit 0.18.0, mlx-swift 0.31.4) is byte-identical to master. Zero new packages.
+- **The whole lineup builds + the full suite is green off main** (1525 tests / 237 suites). The
+  ~2-months-of-drift regression risk is covered by the on-device verify (esp. the dense Qwen3 path).
+- **gemma-4 now routes `.gemma4` → native tools.** Whether that kills the no-response bug is the named
+  **on-device verify-owed**.
 
-**Recommended path — SPIKE on a throwaway branch:** pin to the #330 commit, then confirm (a) it compiles,
-(b) WhisperKit/swift-transformers still resolve, (c) lil/big/huge dense models still load + generate, and
-(d) gemma-4 now gets native tools (no-response bug gone). All green → viable bump that promotes gemma-4 to
-a strong `big`. Any clash/regression → back out and keep the release watch.
+**The pin is explicitly TEMPORARY.** The armed weekly release-watch flags when `mlx-swift-lm` cuts a
+*release* > 3.31.3 (which will contain #183 + #330); at that point swap the revision back to
+`.upToNextMinor(from: "<next-tag>")` — the cleaner long-term pin. Until then the revision is reproducible
+(fixed SHA) and gives us gemma-4 native tools + Apache 2.0 now.
 
-**THE WATCH (cleaner alternative):** the armed weekly routine flags when `mlx-swift-lm` cuts a *release*
-> 3.31.3 (which will contain #183 + #330) — the lower-risk path vs a main pin. At that point, re-evaluate
-**Gemma 4 for `big`**: native tools + load fix, AND it's Apache 2.0 (vs Gemma 3's custom terms).
-
-**Until then (on the pinned 3.31.3):** the native-tools Gemma is **Gemma 3** (the `gemma` parser ships in
-3.31.3) — but Gemma 3 carries the old **Gemma Terms** (only Gemma 4 is Apache 2.0; see the License axis),
-so it's a tools-vs-license tradeoff against sticking with dense Qwen3 or the current gemma-4-on-ReAct.
+**Net for `big`:** gemma-4-e4b now has native tools AND Apache 2.0 (vs Gemma 3's custom Gemma Terms),
+clearing two of the three strikes against it — *if* the on-device verify confirms the no-response bug is
+gone. Otherwise dense Qwen3-8B stays the `big` fallback (see Recommendation).
 
 ---
 
@@ -208,6 +210,13 @@ so it's a tools-vs-license tradeoff against sticking with dense Qwen3 or the cur
   corrected an earlier wrong read). **mlx-swift-lm main now has #183 (gemma-4 tools) + #330 (E-series
   load), both merged** → gemma-4-native-tools is now reachable via a main pin (spike-first, WhisperKit
   clash risk) or the next release (watch armed).
+- **2026-06-23 (cont.):** **Shipped the build-off-main spike.** `mlx-swift-lm` pinned to `revision 40c2ff06`
+  (main HEAD = #330 merge); `resolveToolCallFormat` flips gemma-4 `nil → .gemma4` + a `gemma4CallText` echo
+  renderer (extracted a shared `gemmaStyleCallText`; Gemma 3 unchanged). TDD'd RED→GREEN; tdd-enforcer +
+  code-quality + pr-reviewer all green; full suite **1525** green off main. Resolve was clean — NO
+  WhisperKit/swift-transformers clash (mlx-swift-lm depends on neither); only mlx-swift-lm + swift-syntax
+  (600→603, prebuilt) move. gemma-4 native tools now REACHABLE; the **no-response-bug fix is the on-device
+  verify-owed**. Pin is temporary → swap to a tag when the release-watch fires.
 
 <!-- Signed: Kev + claude-opus-4-8, 2026-06-22, Confidence 0.85 (registry + repo facts verified on-device/web;
 gemma-4 no-response is model-behaviour-primary with a named parse verify-owed; the dense-vs-hybrid split is the
