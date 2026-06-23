@@ -432,16 +432,13 @@ struct ContentView: View {
     private var chatToolbarItems: some View {
         Group {
             brainSwitcher
+
             // New chat lives in the input bar now (next to mic/send) — not here.
             Button { showHistory = true } label: {
                 Label("History", systemImage: "clock.arrow.circlepath")
             }
             .help("Browse and switch between past conversations")
-            Button { env.review.isPresented.toggle() } label: {
-                Label("Review panel", systemImage: "sidebar.right")
-            }
-            .help("Open a side panel to review links and files (⌥⌘R)")
-            .keyboardShortcut("r", modifiers: [.command, .option])
+
             // One control for the avatar: panel / full-window background / off.
             Menu {
                 Picker("Avatar", selection: $avatarDisplay) {
@@ -454,6 +451,7 @@ struct ContentView: View {
                 Label("Avatar", systemImage: avatarDisplay.systemImage)
             }
             .help("How M1K3's avatar appears: panel, full-window background, or off")
+
             Button { showImporter = true } label: {
                 Label("Import", systemImage: "doc.badge.plus")
             }
@@ -466,6 +464,7 @@ struct ContentView: View {
             Button { showCalls = true } label: {
                 Label("Calls", systemImage: "phone.bubble")
             }
+
             Button {
                 if env.isRecording {
                     Task { await env.stopRecording() }
@@ -479,6 +478,13 @@ struct ContentView: View {
                       systemImage: env.isRecording ? "stop.circle.fill" : "record.circle")
             }
             .tint(env.isRecording ? .red : nil)
+
+            Button { env.review.isPresented.toggle() } label: {
+                Label("Review panel", systemImage: "sidebar.right")
+            }
+            .help("Open a side panel to review links and files (⌥⌘R)")
+            .keyboardShortcut("r", modifiers: [.command, .option])
+
             SettingsLink {
                 Label("Settings", systemImage: "gearshape")
             }
