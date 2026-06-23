@@ -23,6 +23,13 @@
 //  below the floor for grounded generation + tool use (ignored good sources,
 //  confabulated on an empty gate); 4B is the same Qwen3.5 family so tool-call
 //  format (xmlFunction) + pre-open-think resolve unchanged. ~3GB, still fits 16GB.
+//  Review: Kev + claude-opus-4-8, 2026-06-22 — Lil/Huge moved OFF Qwen3.5 to
+//  DENSE Qwen3 (Qwen3-4B-4bit / Qwen3-8B-4bit). Qwen3.5 is a GatedDeltaNet
+//  hybrid whose per-timestep recurrent scan CPU-spikes on mlx-swift-lm 3.31.3.
+//  NOTE: the Qwen3.5 mapping/claims ABOVE are now historical — dense Qwen3 routes
+//  to .json tools (NOT xmlFunction) and does NOT pre-open <think> (verified vs the
+//  real Qwen3 template); quantized KV stays safe (attentionWithCacheUpdate path).
+//  See macos/docs/MODEL_CHOICES.md.
 
 import Foundation
 
@@ -113,11 +120,15 @@ public enum BrainTier: String, CaseIterable, Identifiable, Sendable, Comparable 
     public var backing: BrainBacking {
         switch self {
         case .mini: .appleFoundationModels
-        case .lil: .mlx(modelID: "mlx-community/Qwen3.5-4B-4bit")
+        // DENSE Qwen3 (not the Qwen3.5 GatedDeltaNet hybrid — that CPU-spikes on
+        // mlx-swift-lm 3.31.3, a per-timestep recurrent scan). Dense routes through
+        // the existing qwen3 path (.json tools, no pre-open-think, quantized KV).
+        // See macos/docs/MODEL_CHOICES.md.
+        case .lil: .mlx(modelID: "mlx-community/Qwen3-4B-4bit")
         case .big: .mlx(modelID: "mlx-community/gemma-4-e4b-it-4bit")
-        // Gate B fallback — gemma-4-12B-it-4bit once mlx-swift-lm registers
-        // its `gemma4_unified` arch (unloadable at 3.31.3).
-        case .huge: .mlx(modelID: "mlx-community/Qwen3.5-9B-4bit")
+        // Gate B — gemma-4-12B is `gemma4_unified`, unregistered in mlx-swift-lm
+        // 3.31.3 (won't load); dense Qwen3-8B fills huge until upstream does.
+        case .huge: .mlx(modelID: "mlx-community/Qwen3-8B-4bit")
         }
     }
 
@@ -129,13 +140,14 @@ public enum BrainTier: String, CaseIterable, Identifiable, Sendable, Comparable 
 
     /// Approx one-time download in MB, or `nil` for the no-download Apple tier.
     /// Rough estimates surfaced as "~NN MB"; the real size shows on the progress
-    /// bar at download time. (HF usedStorage, 2026-06-10.)
+    /// bar at download time. lil/huge are dense Qwen3 (HF tree API, 2026-06-22);
+    /// big is gemma-4-e4b (HF usedStorage, 2026-06-10).
     public var approxDownloadMB: Int? {
         switch self {
         case .mini: nil
-        case .lil: 2900
+        case .lil: 2270
         case .big: 5250
-        case .huge: 5970
+        case .huge: 4620
         }
     }
 

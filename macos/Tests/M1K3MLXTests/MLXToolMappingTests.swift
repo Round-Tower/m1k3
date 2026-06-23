@@ -163,6 +163,10 @@ struct MLXToolFormatResolutionTests {
         #expect(MLXGemmaProvider.resolveToolCallFormat(for: .init(id: "mlx-community/Qwen3.5-2B-4bit")) == .xmlFunction)
         #expect(MLXGemmaProvider.resolveToolCallFormat(for: .init(id: "mlx-community/Qwen3.5-9B-4bit")) == .xmlFunction)
         #expect(MLXGemmaProvider.resolveToolCallFormat(for: .init(id: "mlx-community/Qwen3-1.7B-4bit")) == .json)
+        // The WIRED dense tiers (lil/huge) resolve to .json — the agentic path
+        // depends on this; Qwen3 (no ".5") must NOT hit the xmlFunction arm.
+        #expect(MLXGemmaProvider.resolveToolCallFormat(for: .init(id: "mlx-community/Qwen3-4B-4bit")) == .json)
+        #expect(MLXGemmaProvider.resolveToolCallFormat(for: .init(id: "mlx-community/Qwen3-8B-4bit")) == .json)
     }
 
     @Test("an explicit configuration format wins over the family heuristic")
@@ -191,6 +195,11 @@ struct MLXThinkTemplateTests {
     @Test("qwen3 and non-reasoning families do NOT pre-open think")
     func othersDoNot() {
         #expect(!MLXGemmaProvider.templatePreOpensThink(for: .init(id: "mlx-community/Qwen3-1.7B-4bit")))
+        // The WIRED dense tiers (lil/huge): verified against the real Qwen3 chat
+        // template — it pre-opens <think> ONLY when thinking is disabled, so the
+        // default reasoning path must NOT add a synthetic opener.
+        #expect(!MLXGemmaProvider.templatePreOpensThink(for: .init(id: "mlx-community/Qwen3-4B-4bit")))
+        #expect(!MLXGemmaProvider.templatePreOpensThink(for: .init(id: "mlx-community/Qwen3-8B-4bit")))
         #expect(!MLXGemmaProvider.templatePreOpensThink(for: .init(id: "mlx-community/gemma-4-e4b-it-4bit")))
         #expect(!MLXGemmaProvider.templatePreOpensThink(for: .init(id: "meta/Llama-3.2-1B")))
     }

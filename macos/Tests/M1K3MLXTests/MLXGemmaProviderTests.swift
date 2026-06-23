@@ -47,6 +47,16 @@ struct MLXGemmaProviderTests {
         #expect(!MLXGemmaProvider.supportsQuantizedKVCache(
             for: ModelConfiguration(id: "some/unknown-model")
         ))
+        // The WIRED dense tiers (lil/huge): Qwen3 attention routes through
+        // upstream's attentionWithCacheUpdate dispatcher (Qwen3.swift:84), which
+        // handles QuantizedKVCache — unlike Gemma4Text's raw cache.update. So
+        // quantized KV is SAFE for dense Qwen3 (verified vs mlx-swift-lm 3.31.3).
+        #expect(MLXGemmaProvider.supportsQuantizedKVCache(
+            for: ModelConfiguration(id: "mlx-community/Qwen3-4B-4bit")
+        ))
+        #expect(MLXGemmaProvider.supportsQuantizedKVCache(
+            for: ModelConfiguration(id: "mlx-community/Qwen3-8B-4bit")
+        ))
     }
 
     @Test("tool-turn thinking is decided per-turn, never from construction-time state")
