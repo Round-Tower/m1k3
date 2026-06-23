@@ -284,6 +284,36 @@ struct LocalAgentTests {
         #expect(result.conclusion == "The seal failed under load.")
     }
 
+    @Test("a leaked <function_call> block is stripped from the conclusion (dense Qwen3, ⌘R 2026-06-23)")
+    func stripsLeakedFunctionCallBlock() {
+        // Seen live on lil (Qwen3-4B): the model answered from context, then
+        // tacked on a SPURIOUS <function_call> it never executed — leaking the raw
+        // JSON into the visible answer because no dialect parser consumed it.
+        let raw = """
+        Today's date is Tuesday, 23 June 2026.
+
+        <function_call>
+        {"name": "datetime", "arguments": {}}
+        </function_call>
+        """
+        #expect(LocalAgent.stripScaffolding(raw) == "Today's date is Tuesday, 23 June 2026.")
+        #expect(!LocalAgent.stripScaffolding(raw).contains("function_call"))
+    }
+
+    @Test("leaked <tool_call> and Gemma <start_function_call> blocks are stripped too (cross-dialect)")
+    func stripsOtherDialectToolCallBlocks() {
+        #expect(LocalAgent.stripScaffolding("A.\n<tool_call>{\"name\":\"s\"}</tool_call>") == "A.")
+        #expect(
+            LocalAgent.stripScaffolding("B.\n<start_function_call>call:s{}<end_function_call>") == "B."
+        )
+    }
+
+    @Test("prose that merely MENTIONS a tool-call word (no tags) is preserved — no false positives")
+    func toolCallProseIsPreserved() {
+        let prose = "You can use a function_call or a tool_call to invoke tools."
+        #expect(LocalAgent.stripScaffolding(prose) == prose)
+    }
+
     @Test("'CONCLUSION: ACTION: …' is an action in a trench coat, not a conclusion")
     func degenerateConclusionTreatedAsAction() async throws {
         // Seen live (Boston weather): the model wrapped a repeat ACTION in the

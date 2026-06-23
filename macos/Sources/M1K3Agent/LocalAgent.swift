@@ -159,13 +159,34 @@ public actor LocalAgent {
     /// decoration) from user-visible text. Small models leak these into
     /// conclusions and the iteration-cap synthesis — seen live at ⌘R.
     static func stripScaffolding(_ text: String) -> String {
-        text.components(separatedBy: "\n")
+        stripLeakedToolCalls(text)
+            .components(separatedBy: "\n")
             .filter { line in
                 let bare = line.trimmingCharacters(in: decoration)
                 return !bare.hasPrefix("ACTION:")
             }
             .joined(separator: "\n")
             .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    /// Remove leaked tool-call SYNTAX blocks a model emitted into user-visible
+    /// prose but which no dialect parser consumed (so they were neither executed
+    /// nor stripped). Real tool calls are parsed/executed upstream on the streamed
+    /// output — this only cleans the FINAL conclusion, so it can't suppress a live
+    /// call. Covers the JSON dialect (`<tool_call>…`/`<function_call>…`) and Gemma
+    /// (`<start_function_call>…<end_function_call>`). Seen live: dense Qwen3
+    /// emitting a spurious `<function_call>` after already answering from context
+    /// (⌘R 2026-06-23). The `(?s)` flag lets `.` span the multi-line JSON body;
+    /// the tags are matched literally so prose that merely mentions the words is safe.
+    static func stripLeakedToolCalls(_ text: String) -> String {
+        let blockPatterns = [
+            "(?s)<function_call>.*?</function_call>",
+            "(?s)<tool_call>.*?</tool_call>",
+            "(?s)<start_function_call>.*?<end_function_call>",
+        ]
+        return blockPatterns.reduce(text) { acc, pattern in
+            acc.replacingOccurrences(of: pattern, with: "", options: .regularExpression)
+        }
     }
 
     /// Characters small models wrap tool names/arguments in: markdown bold,
