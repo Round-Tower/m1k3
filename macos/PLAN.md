@@ -37,6 +37,13 @@ is the **current truth** where the log has drifted:
   mixed-precision swap is the quick win (PLE bug fix + reasoning lift, same families); Phi-4 Mini /
   SmolLM3 / Granite 4.1 are eval-gated candidates; Gemma 4 12B + Qwen3.6 MoE blocked on upstream
   mlx-swift-lm arch registration. Full plan at `.claude/plans/composed-skipping-floyd.md`.
+  - **STATUS 2026-06-22 (verify, additive — see project-memory):** OptiQ swap ATTEMPTED on-device and
+    REVERTED (#91 closed). `mlx-optiq` is **incompatible with mlx-swift-lm 3.31.3** — no Swift OptiQ loader
+    (the format targets Python `mlx-lm`): Qwen3.5 OptiQ → token-soup, gemma-4 OptiQ → hard load failure
+    (`k_proj.weight not found`). 3.31.3 is the version ceiling, so **OptiQ is PARKED until upstream adds it.**
+    Separately found the base Qwen3.5 tiers use **GatedDeltaNet** (per-timestep recurrent scan) → CPU-heavy
+    on Huge (9B). Net: **Part B (Phi-4 Mini / SmolLM3 / a DENSE-attention model) is now the path, esp. for
+    Huge** — two reasons (OptiQ-incompat + GatedDeltaNet perf). All tiers reverted to working uniform 4-bit.
 
 ---
 
