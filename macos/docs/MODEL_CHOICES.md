@@ -131,6 +131,37 @@ largely moot for a RAG/text app (see "what we lose going dense" below).
 
 ---
 
+## Runtime watch — mlx-swift-lm version (the gemma-4 unlock)
+
+We are pinned to **mlx-swift-lm 3.31.3** (released 2026-04-15) — the latest *release*. Two things
+that materially change the Gemma 4 calculus already exist in **main**, but landed **after** that tag,
+so they are NOT pinnable via a release:
+
+- **Native Gemma 4 tool-calling** — `mlx-swift-lm` **PR #183** ("Adopt GemmaFunctionParser to
+  accommodate Gemma4 tool calls", merge commit `8c618003`, ~2026-05-22) extends the `gemma` parser to
+  Gemma 4's `<|tool_call>call:name{key:<|"|>value<|"|>}<tool_call|>` format. (Python `mlx-lm` got the
+  same via PR #1105, 2026-04-05 — but that's the Python package, irrelevant to our Swift app.) Once
+  this is in a release, M1K3's `resolveToolCallFormat` can return a real dialect for gemma-4 instead
+  of `nil` → gemma-4 gets NATIVE tools instead of the ReAct floor, which likely kills its no-response bug.
+- **Gemma 4 E-series load fix** — `mlx-swift-lm` **PR #330** (OPEN) "Fix Gemma4 QAT (E-series) load:
+  KV-shared layers have no k_proj/v_proj/k_norm" is the exact `k_proj.weight not found` error we hit
+  loading gemma-4 OptiQ. So that load failure was a known gemma-4-loader gap, not purely OptiQ's fault.
+
+**Why we don't bump now:** there is no release containing #183, so a bump means pinning to an
+unreleased main commit — and the memory flags the **WhisperKit / swift-transformers version clash**
+risk on any mlx-swift-lm bump. Not free, not now.
+
+**THE WATCH (revisit trigger):** when `mlx-swift-lm` cuts a release **> 3.31.3 that contains #183**
+(ideally also #330), re-evaluate **Gemma 4 for `big`** — it would then have native tools + the load
+fix, a much stronger candidate than today. Quick check:
+`gh api repos/ml-explore/mlx-swift-lm/releases/latest --jq .tag_name` → if `> 3.31.3`, inspect its
+changelog for #183/#330.
+
+**Until then:** the native-tools Gemma is **Gemma 3** (the `gemma` parser already ships in 3.31.3) —
+a real `big` candidate that dodges gemma-4's no-response + ReAct-floor issues, at the cost of a generation.
+
+---
+
 ## Decision log
 
 - **2026-06-22:** OptiQ swap reverted — `mlx-optiq` incompatible with mlx-swift-lm 3.31.3 (no Swift
