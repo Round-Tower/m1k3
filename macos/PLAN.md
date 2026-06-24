@@ -44,6 +44,23 @@ is the **current truth** where the log has drifted:
     Separately found the base Qwen3.5 tiers use **GatedDeltaNet** (per-timestep recurrent scan) → CPU-heavy
     on Huge (9B). Net: **Part B (Phi-4 Mini / SmolLM3 / a DENSE-attention model) is now the path, esp. for
     Huge** — two reasons (OptiQ-incompat + GatedDeltaNet perf). All tiers reverted to working uniform 4-bit.
+  - **STATUS 2026-06-24 (additive — supersedes the OptiQ/12B framing in the Phase 21 body below):** Phase 21
+    moved since the 06-22 plan, and **Layer B is the live edge, not Layer A.** Shipped: dense Qwen3 tiers
+    (lil→`Qwen3-4B-4bit`, huge→`Qwen3-8B-4bit`, #94 — on-device verified incl. native tool exec) + gemma-4
+    native tool-calling (#98 — built off the mlx-swift-lm `main` revision, `.gemma4` dialect). **Layer A
+    (OptiQ "quick win, do first") is DEAD — do NOT re-attempt:** there is still no Swift OptiQ loader even
+    off `main` (re-confirmed #98), so the "do first" framing below is superseded. **gemma-4-12B as `huge`
+    → REJECTED on-device (#100):** the `vision_embedder` sanitize gap closed so 12B now LOADS + RAM-fits
+    (7.4 GB peak), but it deterministically CRASHES on first tool-use (`RotatingKVCache.temporalOrder`, the
+    12B no-KV-sharing geometry) under both `maxKVSize` settings — an upstream mlx-swift-lm bug, unfixable
+    from M1K3. **`huge` stays Qwen3-8B.** So the "12B/MoE blocked on arch registration" lines below are
+    stale (12B is registered + loads; the tool-use crash is what blocks it). The genuine open question is
+    Layer B's CHATEVAL bake-off — where `huge` Qwen3-8B loop-thrashes tools (2/5 vs `big`/e4b's 5/5) — not
+    a quant swap.
+    <!-- Signed: Kev + claude-opus-4-8, 2026-06-24, Confidence 0.9 (claims PR-traceable: #94/#98 merged,
+         #100 open carrying the on-device verdict; OptiQ-has-no-Swift-loader and the 12B temporalOrder
+         tool-use crash were both verified on-device across the 06-22→06-24 arc). Prior: Kev +
+         claude-opus-4-6 (the STATUS 2026-06-22 note above). -->
 
 ---
 
