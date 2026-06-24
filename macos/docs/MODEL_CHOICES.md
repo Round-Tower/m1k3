@@ -50,10 +50,16 @@ lifts it** (2.7–14.6× prefill on GDN models, scaling with context). Now a bak
 automatic avoid; the recurrence itself stays on-GPU per step (inherent to SSMs).
 
 ### 🚫 Registered-but-blocked / RAM-heavy
-- **`gemma4_unified` — was blocked at 3.31.3, now REGISTERED on main** (#0767814; `LLMModelFactory`
-  + `VLMModelFactory` both map `"gemma4_unified"`). So **gemma-4-12B may now load** — a real `huge`
-  candidate, and the "Gate B" reason Qwen3.5-9B is in huge today no longer holds. On-device load + RAM-fit
-  is verify-owed (12B 4-bit ≈ 7–8 GB weights — check against the 12 GB MLX ceiling from #82).
+- **`gemma4_unified` — registered on main's LLM path (#0767814), but gemma-4-12B STILL won't load as-is.**
+  `LLMModelFactory.swift:35` maps `gemma4_unified → Gemma4Model` (text wrapper) and the 12B config decodes
+  cleanly (text_config nested; 48 layers / hidden 3840; KV-share=0, PLE=0, k_eq_v=true all match). BUT the
+  12B-unified checkpoint renamed its vision encoder to **`vision_embedder.*`** (11 tensors), which
+  `Gemma4Model.sanitize` (mlx-swift-lm `MLXLLM/Models/Gemma4.swift:72-77`) does NOT drop — it drops
+  `vision_tower`/`audio_tower`/`embed_vision`/`embed_audio` (e4b's names), not `vision_embedder`. → 11 orphan
+  keys → `model.update(verify:[.all])` throws `UpdateError.unhandledKeys`. **Fix = one upstream line** (add
+  `vision_embedder` to that drop list). Verified statically (conf 0.85) + the 11 tensors confirmed in the HF
+  index; on-device load is the final gate. So: a `huge` candidate gated on an upstream `sanitize` fix, NOT a
+  drop-in. (12B-4bit = 6.74 GB.)
 - MoE (RAM-hungry, viable but heavy): `qwen3_moe`, `glm4_moe`, `gpt_oss`, `deepseek_v3`, `phimoe`,
   `olmoe`, `bailing_moe`, `afmoe`.
 
@@ -216,9 +222,12 @@ carry a stack of capabilities. Verified against the local checkout. **✅ = now 
 - ✅ **E-series load fix** (#330) — the `k_proj.weight not found` gap closed.
 - 🔬 **Decode +23.8%** (#82d9cd6) + **MTP speculative decoding** (#e145aca) + a **MoE router fix** —
   gemma-4 is now faster, not just functional. Free on the pin; confirm on-device.
-- 🔬 **gemma-4-12B now loadable** (`gemma4_unified` registered on main, #0767814) — hard-blocked at
-  3.31.3. A genuine **`huge`** candidate → a possible all-Gemma-4 ladder (`big` e4b + `huge` 12B),
-  Apache 2.0 throughout. Verify-owed: on-device load + RAM-fit (12B-4bit ≈ 7–8 GB vs the 12 GB ceiling, #82).
+- 🚧 **gemma-4-12B — registered (#0767814) + config decodes, but BLOCKED by a `vision_embedder` sanitize
+  gap** (one upstream line in mlx-swift-lm `Gemma4Model.sanitize`). The 12B-unified checkpoint renamed its
+  vision encoder `vision_tower`→`vision_embedder` (11 tensors); the LLM-path drop-list misses it → orphan
+  keys → load throws `unhandledKeys`. A real **`huge`** candidate + all-Gemma-4 ladder (`big` e4b + `huge`
+  12B, Apache 2.0) ONCE the drop-list is patched. 12B-4bit = 6.74 GB (fits the 12 GB ceiling, but gemma-4 has
+  no quantized KV → tight). Verified statically (recon workflow 2026-06-24); on-device load is the gate.
 
 **Qwen3.5 — the perf blocker is GONE (re-opens the bake-off):**
 - ✅ **GatedDeltaNet prefill 2.7–14.6×** (#225 asyncEval) — scales with context = our exact symptom.
@@ -267,8 +276,9 @@ item its own TDD'd id-swap or eval.
   asyncEval, 2.7–14.6×), NOT per-token CPU dispatch (the fused kernel was always one GPU dispatch; the
   `for t` at `GatedDelta.swift:244` is the CPU fallback). Confirmed against the local checkout: **OptiQ
   still has no Swift loader** (token-soup cause unchanged), but **ParoQuant/AWQ** (#164) is a new
-  mixed-precision path; **gemma4_unified is now registered** (#0767814 → gemma-4-12B may load, a `huge`
-  lead); gemma-4 gained **decode +23.8%** (#82d9cd6) + MTP spec-decoding; and a **LoRA/PEFT adapter
+  mixed-precision path; **gemma4_unified is now registered on the LLM path** (#0767814) but gemma-4-12B is
+  **blocked by a one-line `vision_embedder` sanitize gap** upstream (recon 06-24 — config decodes, but the
+  renamed vision tensors orphan-throw at load; on-device load is the gate); gemma-4 gained **decode +23.8%** (#82d9cd6) + MTP spec-decoding; and a **LoRA/PEFT adapter
   loader** (#5626257) lands the knows-me thread. Net: `big` = strong Gemma 4; Qwen3.5 perf blocker lifted
   (bake-off worth running again); OptiQ stays parked.
 
