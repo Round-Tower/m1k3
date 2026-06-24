@@ -52,10 +52,22 @@ let package = Package(
         // On-device embeddings + Gemma generation on Apple Silicon (Metal).
         // Same package family the prior knowledge-server project ships MLXEmbedders from; isolated to the
         // M1K3MLX target so the heavy Metal build never touches the core tests.
-        // upToNextMinor deliberately: 3.x majors AND minors have carried API +
-        // mlx-swift kernel changes (kernel change = embedder re-index); bumps
-        // are probe-first, on purpose (see HuggingFaceBridge.swift).
-        .package(url: "https://github.com/ml-explore/mlx-swift-lm.git", .upToNextMinor(from: "3.31.3")),
+        // upToNextMinor deliberately when on a tag: 3.x majors AND minors have
+        // carried API + mlx-swift kernel changes (kernel change = embedder
+        // re-index); bumps are probe-first, on purpose (see HuggingFaceBridge.swift).
+        //
+        // TEMPORARILY pinned to main HEAD (= PR #330's merge, 2026-06-23) — the
+        // last tag 3.31.3 has NO Gemma 4 tool-call parser, so M1K3's big brain
+        // (gemma-4-e4b) was stuck on the ReAct floor and reasoned into silence.
+        // main carries #183 (GemmaFunctionParser → .gemma4) + #330 (Gemma 4
+        // E-series load fix). Probed first: `swift package resolve` is clean —
+        // mlx-swift-lm depends on neither swift-transformers nor WhisperKit, so
+        // no clash; the only resolved pins that MOVE are mlx-swift-lm (→ this
+        // revision) and swift-syntax 600.0.1→603.0.2 (a prebuilt macro artifact,
+        // no source compile) — swift-transformers/WhisperKit/mlx-swift unchanged.
+        // Swap back to `.upToNextMinor(from: "<next-tag>")` once upstream cuts a
+        // release > 3.31.3 — the armed release-watch routine pings when that lands.
+        .package(url: "https://github.com/ml-explore/mlx-swift-lm.git", revision: "40c2ff061bff5f7c5b55e4ff2067df3b7aa74fd7"),
         // Downloader/Tokenizer for the MLX stack. 3.x removed the built-in HF
         // client; the official adapter packages (swift-tokenizers-mlx) clash
         // with WhisperKit's swift-transformers (duplicate `Tokenizers` target),

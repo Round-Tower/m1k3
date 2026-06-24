@@ -139,6 +139,21 @@ struct MLXGemmaCallTextTests {
         #expect(text.contains("<parameter=query>seals</parameter>"))
         #expect(text.contains("<parameter=limit>3</parameter>"))
     }
+
+    @Test("the gemma4 dialect renders <|tool_call> with the <|\"|> escape (Gemma 4)")
+    func gemma4CallText() {
+        let call = ParsedToolCall(name: "lookup", arguments: ["q": .string("x y"), "n": .int(3)])
+        let text = MLXToolMapping.callText(call, format: .gemma4)
+        #expect(text.hasPrefix("<|tool_call>call:lookup{"))
+        #expect(text.hasSuffix("}<tool_call|>"))
+        // String args wrapped in Gemma 4's new <|"|> escape marker; scalars raw.
+        #expect(text.contains("q:<|\"|>x y<|\"|>"))
+        #expect(text.contains("n:3"))
+        // Regression guard: must NOT leak the Gemma 3 dialect (the pre-flip
+        // default arm rendered JSON; a copy-paste could render <start_function_call>).
+        #expect(!text.contains("<start_function_call>"))
+        #expect(!text.contains("<escape>"))
+    }
 }
 
 struct MLXToolFormatResolutionTests {
@@ -150,12 +165,16 @@ struct MLXToolFormatResolutionTests {
         #expect(MLXGemmaProvider.resolveToolCallFormat(for: .init(id: "some/unknown-model")) == nil)
     }
 
-    @Test("gemma-4 resolves BEFORE the generic gemma arm — no parser at 3.31.3, ReAct floor")
-    func gemma4ResolvesNil() {
+    @Test("gemma-4 resolves to .gemma4 (native parser on main) BEFORE the generic gemma arm")
+    func gemma4ResolvesGemma4() {
         let gemma4 = ModelConfiguration(id: "mlx-community/gemma-4-e4b-it-4bit")
         let gemma3n = ModelConfiguration(id: "mlx-community/gemma-3n-E4B-it-lm-4bit")
-        #expect(MLXGemmaProvider.resolveToolCallFormat(for: gemma4) == nil)
+        let gemma3 = ModelConfiguration(id: "mlx-community/gemma3-1b-it-4bit")
+        // gemma-4 routes native now that we build off main (#183 GemmaFunctionParser).
+        #expect(MLXGemmaProvider.resolveToolCallFormat(for: gemma4) == .gemma4)
+        // gemma3n / gemma3 contain "gemma" but NOT "gemma4" → still the generic .gemma arm.
         #expect(MLXGemmaProvider.resolveToolCallFormat(for: gemma3n) == .gemma)
+        #expect(MLXGemmaProvider.resolveToolCallFormat(for: gemma3) == .gemma)
     }
 
     @Test("qwen3.5 resolves to xmlFunction BEFORE the generic qwen arm")

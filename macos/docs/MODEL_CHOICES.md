@@ -11,20 +11,27 @@
 
 ---
 
-## The hard constraint: mlx-swift-lm 3.31.3
+## The runtime constraint: mlx-swift-lm (now a main-HEAD revision pin)
 
-We are pinned to **mlx-swift-lm 3.31.3** (and mlx-swift kernel 0.31.4) — both are the **latest
-release**, so there is no newer tag to escape to. What runs is decided entirely by 3.31.3's
-model registry (`Libraries/MLXLLM/LLMModelFactory.swift`) and which arches it actually implements.
+**Update 2026-06-23:** M1K3 now builds off **mlx-swift-lm main** (`revision 40c2ff06`, = PR #330's
+merge) to unlock Gemma 4 native tool-calling — the last *release*, 3.31.3, had no `.gemma4` parser.
+See "Runtime watch" below for the full why + the (temporary) revert path. The failure-axes analysis
+below still holds; what runs is decided by the registry (`Libraries/MLXLLM/LLMModelFactory.swift`) +
+which arches it implements (main's registry ⊇ 3.31.3's).
 
 Three independent failure axes, all seen this session:
 1. **Format loadability** — OptiQ (`mlx-optiq` mixed precision) has no Swift loader → won't load
    (Qwen3.5 OptiQ → token-soup; gemma-4 OptiQ → `k_proj.weight not found`). **OptiQ is parked.**
-2. **Architecture / perf** — SSM/linear-attention hybrids run a per-timestep recurrent scan
-   (`GatedDelta.swift:244`) that spikes **CPU** (sequential kernel dispatch) — the Huge spike.
+2. **Architecture / perf** — SSM/linear-attention hybrids (GatedDeltaNet, e.g. Qwen3.5) were
+   CPU+GPU-heavy at prefill. **Corrected 2026-06-24:** this was NOT per-token CPU dispatch — on Apple
+   Silicon the fused Metal kernel runs the whole T-step loop in ONE GPU dispatch (`GatedDelta.swift:244`'s
+   `for t` is the CPU *fallback*, not the path taken). The real cost was the prefill **sync stall**, and
+   **main's #225 (asyncEval prefill) fixes it** (2.7–14.6× prefill). See "What building off main unlocks."
 3. **Tool-calling dialect** — M1K3 runs a tool loop every turn. Models with a native dialect in
-   `MLXToolCalling.resolveToolCallFormat` (json / xmlFunction / gemma / glm4 / lfm2) are reliable;
-   the rest fall to the **prompt-ReAct floor**, which gemma-4 handles badly (see the no-response bug).
+   `MLXToolCalling.resolveToolCallFormat` (json / xmlFunction / gemma / **gemma4** / glm4 / lfm2) are
+   reliable; the rest fall to the **prompt-ReAct floor**, which gemma-4 handled badly (the no-response
+   bug). **As of the main pin, gemma-4 resolves `.gemma4` → native tools** (on-device verify-owed that
+   this kills the no-response bug).
 
 ---
 
@@ -35,15 +42,24 @@ Three independent failure axes, all seen this session:
 `gemma4`/`gemma4_text` (E-variants only), `glm4`, `mistral3`, `smollm3`, `cohere`, `internlm2`,
 `minicpm`, `starcoder2`, `olmo2/3`, `exaone4`.
 
-### ⚠️ SSM / hybrid — the GatedDeltaNet CPU-spike trap (avoid for interactive chat)
+### ⚠️ SSM / hybrid — GatedDeltaNet prefill cost (largely LIFTED on main)
 `qwen3_5` (current lil/huge), `qwen3_next`, **`granite` / `granitemoehybrid`** (← the plan's
-"Granite 4.1" candidate is a Mamba2 hybrid — *same trap*), `falcon_h1`, `nemotron_h`, `jamba_3b`,
-`minimax`. These do per-timestep recurrent scans → CPU-heavy on this runtime.
+"Granite 4.1" candidate is a Mamba2 hybrid — *same family*), `falcon_h1`, `nemotron_h`, `jamba_3b`,
+`minimax`. The prefill spike was the **sync stall**, not a per-token CPU scan — **main's #225 (asyncEval)
+lifts it** (2.7–14.6× prefill on GDN models, scaling with context). Now a bake-off question, not an
+automatic avoid; the recurrence itself stays on-GPU per step (inherent to SSMs).
 
 ### 🚫 Registered-but-blocked / RAM-heavy
-- **`gemma4_unified` is NOT in the registry** → **gemma-4-12B / 26B / 31B do NOT load** (all the
-  larger Gemma 4s use `Gemma4UnifiedForConditionalGeneration`). Verified via the 12B config.json.
-  This is the exact "Gate B" reason Qwen3.5-9B is in huge today.
+- **`gemma4_unified` — registered on main's LLM path (#0767814), but gemma-4-12B STILL won't load as-is.**
+  `LLMModelFactory.swift:35` maps `gemma4_unified → Gemma4Model` (text wrapper) and the 12B config decodes
+  cleanly (text_config nested; 48 layers / hidden 3840; KV-share=0, PLE=0, k_eq_v=true all match). BUT the
+  12B-unified checkpoint renamed its vision encoder to **`vision_embedder.*`** (11 tensors), which
+  `Gemma4Model.sanitize` (mlx-swift-lm `MLXLLM/Models/Gemma4.swift:72-77`) does NOT drop — it drops
+  `vision_tower`/`audio_tower`/`embed_vision`/`embed_audio` (e4b's names), not `vision_embedder`. → 11 orphan
+  keys → `model.update(verify:[.all])` throws `UpdateError.unhandledKeys`. **Fix = one upstream line** (add
+  `vision_embedder` to that drop list). Verified statically (conf 0.85) + the 11 tensors confirmed in the HF
+  index; on-device load is the final gate. So: a `huge` candidate gated on an upstream `sanitize` fix, NOT a
+  drop-in. (12B-4bit = 6.74 GB.)
 - MoE (RAM-hungry, viable but heavy): `qwen3_moe`, `glm4_moe`, `gpt_oss`, `deepseek_v3`, `phimoe`,
   `olmoe`, `bailing_moe`, `afmoe`.
 
@@ -153,11 +169,11 @@ Caveats (not legal advice — get a real IP review before a commercial ship lean
 
 ---
 
-## Runtime watch — mlx-swift-lm version (the gemma-4 unlock)
+## Runtime watch — mlx-swift-lm version (the gemma-4 unlock) — ✅ DONE 2026-06-23
 
-We are pinned to **mlx-swift-lm 3.31.3** (released 2026-04-15) — the latest *release*. Two things
-that materially change the Gemma 4 calculus already exist in **main**, but landed **after** that tag,
-so they are NOT pinnable via a release:
+**M1K3 now builds off `mlx-swift-lm` main** (`revision 40c2ff06` = PR #330's merge). The last
+*release* was 3.31.3 (2026-04-15); two fixes that materially change the Gemma 4 calculus landed in
+**main** after that tag, so a release pin couldn't reach them:
 
 - **Native Gemma 4 tool-calling** — `mlx-swift-lm` **PR #183** ("Adopt GemmaFunctionParser to
   accommodate Gemma4 tool calls", merge commit `8c618003`, ~2026-05-22) extends the `gemma` parser to
@@ -170,29 +186,69 @@ so they are NOT pinnable via a release:
   found` error we hit loading gemma-4 OptiQ — a known gemma-4-loader gap, not purely OptiQ's fault.
   **As of 2026-06-23, main has BOTH #183 and #330.**
 
-**Can we build off main now instead of waiting for a release?** Technically yes — SwiftPM can pin to a
-commit/branch: change `Package.swift:58` from `.upToNextMinor(from: "3.31.3")` to
-`.revision("<commit at/after #330>")`, then regenerate + commit `Package.resolved` (Xcode Cloud needs the
-lockfile — the exit-74 lesson). BUT it's a **spike-first, not a blind bump**:
-- **The WhisperKit / swift-transformers version clash** is the named landmine — bumping mlx-swift-lm may
-  pull a swift-transformers version incompatible with WhisperKit's pin → could break STT/transcription.
-- Main carries **~2 months of unreleased drift** beyond 3.31.3 (Apr 15 → now) — could regress the dense
-  Qwen3 path we just shipped, model loading, etc. A main pin must **re-verify the WHOLE lineup loads +
-  generates** (the OptiQ/dense discipline), not just gemma-4.
-- A commit pin is reproducible (fixed SHA) but unreleased — less stable to reason about long-term.
+**The spike PASSED (2026-06-23) → shipped.** `Package.swift` pins `revision 40c2ff06` + the regenerated
+`Package.resolved` is committed (Xcode Cloud needs the lockfile — the exit-74 lesson). What the spike proved:
+- **The WhisperKit / swift-transformers clash did NOT fire** — mlx-swift-lm depends on *neither*
+  swift-transformers nor WhisperKit (only mlx-swift + swift-syntax), so it can't drag them. Confirmed both
+  analytically and by a clean `swift package resolve`.
+- **Blast radius = exactly two resolved pins:** mlx-swift-lm → the revision, and swift-syntax
+  `600.0.1 → 603.0.2` (a prebuilt macro artifact — no source compile). Every other pin (incl.
+  swift-transformers 1.1.9, WhisperKit 0.18.0, mlx-swift 0.31.4) is byte-identical to master. Zero new packages.
+- **The whole lineup builds + the full suite is green off main** (1525 tests / 237 suites). The
+  ~2-months-of-drift regression risk is covered by the on-device verify (esp. the dense Qwen3 path).
+- **gemma-4 now routes `.gemma4` → native tools.** Whether that kills the no-response bug is the named
+  **on-device verify-owed**.
 
-**Recommended path — SPIKE on a throwaway branch:** pin to the #330 commit, then confirm (a) it compiles,
-(b) WhisperKit/swift-transformers still resolve, (c) lil/big/huge dense models still load + generate, and
-(d) gemma-4 now gets native tools (no-response bug gone). All green → viable bump that promotes gemma-4 to
-a strong `big`. Any clash/regression → back out and keep the release watch.
+**The pin is explicitly TEMPORARY.** The armed weekly release-watch flags when `mlx-swift-lm` cuts a
+*release* > 3.31.3 (which will contain #183 + #330); at that point swap the revision back to
+`.upToNextMinor(from: "<next-tag>")` — the cleaner long-term pin. Until then the revision is reproducible
+(fixed SHA) and gives us gemma-4 native tools + Apache 2.0 now.
 
-**THE WATCH (cleaner alternative):** the armed weekly routine flags when `mlx-swift-lm` cuts a *release*
-> 3.31.3 (which will contain #183 + #330) — the lower-risk path vs a main pin. At that point, re-evaluate
-**Gemma 4 for `big`**: native tools + load fix, AND it's Apache 2.0 (vs Gemma 3's custom terms).
+**Net for `big`:** gemma-4-e4b now has native tools AND Apache 2.0 (vs Gemma 3's custom Gemma Terms),
+clearing two of the three strikes against it — *if* the on-device verify confirms the no-response bug is
+gone. Otherwise dense Qwen3-8B stays the `big` fallback (see Recommendation).
 
-**Until then (on the pinned 3.31.3):** the native-tools Gemma is **Gemma 3** (the `gemma` parser ships in
-3.31.3) — but Gemma 3 carries the old **Gemma Terms** (only Gemma 4 is Apache 2.0; see the License axis),
-so it's a tools-vs-license tradeoff against sticking with dense Qwen3 or the current gemma-4-on-ReAct.
+---
+
+## What building off main unlocks (the level-up — 2026-06-24)
+
+Pinning main wasn't just the gemma-4 tool-calling fix — the same ~40 commits (3.31.3 → `40c2ff06`)
+carry a stack of capabilities. Verified against the local checkout. **✅ = now live via the pin ·
+🔬 = reachable, needs a verify/eval · 🚫 = still blocked.** Each is its own scoped piece of work.
+
+**Gemma 4 (`big`) — went from shaky to strong:**
+- ✅ **Native tool-calling** (#183) — shipped (PR #98); `resolveToolCallFormat` → `.gemma4`. Should kill
+  the no-response bug (on-device verify-owed).
+- ✅ **E-series load fix** (#330) — the `k_proj.weight not found` gap closed.
+- 🔬 **Decode +23.8%** (#82d9cd6) + **MTP speculative decoding** (#e145aca) + a **MoE router fix** —
+  gemma-4 is now faster, not just functional. Free on the pin; confirm on-device.
+- 🚧 **gemma-4-12B — registered (#0767814) + config decodes, but BLOCKED by a `vision_embedder` sanitize
+  gap** (one upstream line in mlx-swift-lm `Gemma4Model.sanitize`). The 12B-unified checkpoint renamed its
+  vision encoder `vision_tower`→`vision_embedder` (11 tensors); the LLM-path drop-list misses it → orphan
+  keys → load throws `unhandledKeys`. A real **`huge`** candidate + all-Gemma-4 ladder (`big` e4b + `huge`
+  12B, Apache 2.0) ONCE the drop-list is patched. 12B-4bit = 6.74 GB (fits the 12 GB ceiling, but gemma-4 has
+  no quantized KV → tight). Verified statically (recon workflow 2026-06-24); on-device load is the gate.
+
+**Qwen3.5 — the perf blocker is GONE (re-opens the bake-off):**
+- ✅ **GatedDeltaNet prefill 2.7–14.6×** (#225 asyncEval) — scales with context = our exact symptom.
+  Plus #229 (−2× SSM memory) + fp32 state (quality) + #323 recurrent-cache fixes.
+- 🚫 **OptiQ still won't load** — zero OptiQ loader on main; the token-soup cause is unchanged.
+- 🔬 **Net:** Qwen3.5 (4B/8B) is worth a CHATEVAL vs dense Qwen3 again — the perf blocker that made it
+  "not worth measuring" is lifted. Decider = reasoning quality vs dense, on our context lengths.
+
+**New quant + tuning machinery:**
+- 🔬 **ParoQuant + AutoAWQ loader** (#164) — a real mixed-precision / AWQ-checkpoint path (≠ OptiQ);
+  opens AWQ-quantized variants we couldn't load before.
+- 🔬 **LoRA runtime toggle + PEFT adapter loader** (#5626257) — directly enables the long-carried
+  **"knows-me" LoRA** thread: load a fine-tuned adapter at runtime over a base brain.
+- ℹ️ **Audio I/O plumbing** (#a47894a) — `UserInput.audios` exists now, but there's still no Gemma audio
+  *tower* in Swift (`Gemma4.swift` = "text + vision only") → **WhisperKit stays** (the STT decision holds).
+- ℹ️ Quant *formats* (mxfp4/mxfp8/nvfp4) were already in 3.31.3 — no new bit-widths, just ParoQuant/AWQ.
+
+**The shape of the level-up:** `big` becomes a fast, native-tool, Apache-2.0 Gemma 4; `huge` could become
+Gemma-4-12B (one clean family, no SSM); `lil`/`huge` get a fair Qwen3.5 re-match; and the knows-me LoRA
+path finally has a loader. Nothing here is claimed shipped beyond #98 — it's the now-reachable menu, each
+item its own TDD'd id-swap or eval.
 
 ---
 
@@ -208,7 +264,29 @@ so it's a tools-vs-license tradeoff against sticking with dense Qwen3 or the cur
   corrected an earlier wrong read). **mlx-swift-lm main now has #183 (gemma-4 tools) + #330 (E-series
   load), both merged** → gemma-4-native-tools is now reachable via a main pin (spike-first, WhisperKit
   clash risk) or the next release (watch armed).
+- **2026-06-23 (cont.):** **Shipped the build-off-main spike.** `mlx-swift-lm` pinned to `revision 40c2ff06`
+  (main HEAD = #330 merge); `resolveToolCallFormat` flips gemma-4 `nil → .gemma4` + a `gemma4CallText` echo
+  renderer (extracted a shared `gemmaStyleCallText`; Gemma 3 unchanged). TDD'd RED→GREEN; tdd-enforcer +
+  code-quality + pr-reviewer all green; full suite **1525** green off main. Resolve was clean — NO
+  WhisperKit/swift-transformers clash (mlx-swift-lm depends on neither); only mlx-swift-lm + swift-syntax
+  (600→603, prebuilt) move. gemma-4 native tools now REACHABLE; the **no-response-bug fix is the on-device
+  verify-owed**. Pin is temporary → swap to a tag when the release-watch fires.
+- **2026-06-24:** **Mapped what building off main unlocks** (see the section above) + **corrected the
+  06-22 GatedDeltaNet diagnosis** — the Qwen3.5 spike was the prefill *sync stall* (fixed by #225's
+  asyncEval, 2.7–14.6×), NOT per-token CPU dispatch (the fused kernel was always one GPU dispatch; the
+  `for t` at `GatedDelta.swift:244` is the CPU fallback). Confirmed against the local checkout: **OptiQ
+  still has no Swift loader** (token-soup cause unchanged), but **ParoQuant/AWQ** (#164) is a new
+  mixed-precision path; **gemma4_unified is now registered on the LLM path** (#0767814) but gemma-4-12B is
+  **blocked by a one-line `vision_embedder` sanitize gap** upstream (recon 06-24 — config decodes, but the
+  renamed vision tensors orphan-throw at load; on-device load is the gate); gemma-4 gained **decode +23.8%** (#82d9cd6) + MTP spec-decoding; and a **LoRA/PEFT adapter
+  loader** (#5626257) lands the knows-me thread. Net: `big` = strong Gemma 4; Qwen3.5 perf blocker lifted
+  (bake-off worth running again); OptiQ stays parked.
 
 <!-- Signed: Kev + claude-opus-4-8, 2026-06-22, Confidence 0.85 (registry + repo facts verified on-device/web;
 gemma-4 no-response is model-behaviour-primary with a named parse verify-owed; the dense-vs-hybrid split is the
 load-bearing lens; CHATEVAL is the named decider). Prior: Unknown. -->
+<!-- Review: Kev + claude-opus-4-8, 2026-06-24, Confidence 0.85 — reconciled to building off main (revision
+40c2ff06): corrected the 06-22 GatedDeltaNet diagnosis (prefill sync stall, fixed by #225 — NOT per-token CPU
+dispatch), added the "What building off main unlocks" map, flipped the gemma4_unified registry status. All
+findings verified against the local mlx-swift-lm/mlx-swift checkouts (commit SHAs cited). The capability
+claims beyond PR #98 are marked 🔬 (reachable, verify/eval-owed), not shipped. Prior: Kev + claude-opus-4-8. -->
