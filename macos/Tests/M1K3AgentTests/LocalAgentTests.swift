@@ -306,6 +306,12 @@ struct LocalAgentTests {
         #expect(
             LocalAgent.stripScaffolding("B.\n<start_function_call>call:s{}<end_function_call>") == "B."
         )
+        // Gemma 4 dialect (<|tool_call>…<tool_call|>) — leaks now that gemma-4 routes
+        // native (PR #98). The pipe-delimited tags are DISTINCT from <tool_call>, so
+        // the existing patterns don't catch them (review #98, claude-review-mac).
+        #expect(
+            LocalAgent.stripScaffolding("C.\n<|tool_call>call:s{n:<|\"|>x<|\"|>}<tool_call|>") == "C."
+        )
     }
 
     @Test("prose that merely MENTIONS a tool-call word (no tags) is preserved — no false positives")
