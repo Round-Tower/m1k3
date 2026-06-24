@@ -16,7 +16,7 @@
 //  OS glue, kept defensive (mono fallback) so a capture fault can't lose a recording.
 //
 //  Async by necessity: SCStream start/stopCapture are async, so this carries its
-//  own async start()/stop() rather than the sync AudioRecorder seam.
+//  own async start()/stop().
 //
 //  Signed: Kev + claude-opus-4-8, 2026-06-07, Confidence 0.55, Prior: Unknown
 //  Review: claude-opus-4-8, 2026-06-09 (PR #10) — stop() now atomically claims the
