@@ -281,6 +281,31 @@ item its own TDD'd id-swap or eval.
   renamed vision tensors orphan-throw at load; on-device load is the gate); gemma-4 gained **decode +23.8%** (#82d9cd6) + MTP spec-decoding; and a **LoRA/PEFT adapter
   loader** (#5626257) lands the knows-me thread. Net: `big` = strong Gemma 4; Qwen3.5 perf blocker lifted
   (bake-off worth running again); OptiQ stays parked.
+- **2026-06-24 (bake-off):** **gemma-4-12B PARKED as `huge` — verified on-device, fails on tool-use.**
+  Built off the #363 pin (the `vision_embedder` sanitize fix) and ran it end-to-end. It **LOADS clean** (no
+  `vision_embedder` orphan-throw — #363 works), generates coherent prose, and fits memory comfortably (**peak
+  7.4 GB** active vs the 12 GB ceiling, flat across a memloop — better than the ~9 GB estimate). BUT it
+  **crashes on the first tool-use fixture**: a `RotatingKVCache.temporalOrder` assertion (`Gemma4Attention →
+  RotatingKVCache.update`). Proven **unfixable from M1K3's side** — it crashes under `maxKVSize=8192` AND
+  `maxKVSize=nil` (the "maxKVSize forces a uniform cache" theory was disproven on-device; both configs crash).
+  The bug is **12B-specific**: `big` (gemma-4-e4b) shares the same RotatingKVCache path but passed tool-use
+  **5/5, no crash** — e4b has 18 KV-shared layers + PLE, the 12B has **0 KV-shared layers**, and that
+  no-sharing sliding geometry is what trips `temporalOrder`. So **no `big`/production regression**, and the
+  swap is blocked on an **upstream** `RotatingKVCache` bug, *separate from #363*. **Decision: `huge` stays
+  Qwen3-8B.** Revisit gemma-4-12B when upstream fixes `temporalOrder` for no-KV-sharing gemma-4 (the
+  release-watch will catch a tag carrying it). CHATEVAL data (the clean parts): on the
+  openChat/grounded/reasoning overlap (19 fixtures) gemma-4-12B and Qwen3-8B both scored ~18/19, but
+  **gemma-4-12B was far faster on reasoning** (1–7 s vs Qwen's ~57 s); Qwen3-8B finished 23/36 overall but
+  **loop-thrashes on tool-use** (2/5, 130–315 s/fixture) where `big`/e4b aced it 5/5 — i.e. the *incumbent
+  huge* has a tool weakness worth a future look. Side-finding: the CHATEVAL **refusal scorer was
+  false-FAILing genuine refusals** (curly-apostrophe mismatch + missing "I don't <verb>" phrasings) — fixed
+  in this same change (`ChatEvalScorer.isRefusal`: apostrophe normalisation + flat-decline markers).
+
+<!-- Review: Kev + claude-opus-4-8, 2026-06-24 (bake-off), Confidence 0.9 — gemma-4-12B verified on-device
+end-to-end: loads (#363) + generates + RAM 7.4 GB, but a deterministic RotatingKVCache.temporalOrder crash on
+tool-use, reproduced under both maxKVSize settings and isolated to the 12B (no-KV-sharing) geometry vs e4b's
+crash-free 5/5. The decision (huge stays Qwen3-8B) follows from a hard crash on core functionality, not a
+quality call. Prior: Kev + claude-opus-4-8. -->
 
 <!-- Signed: Kev + claude-opus-4-8, 2026-06-22, Confidence 0.85 (registry + repo facts verified on-device/web;
 gemma-4 no-response is model-behaviour-primary with a named parse verify-owed; the dense-vs-hybrid split is the
