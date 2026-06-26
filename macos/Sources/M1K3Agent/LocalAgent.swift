@@ -64,10 +64,6 @@ public struct AgentResult: Sendable, Equatable {
     }
 }
 
-public enum AgentError: Error, Sendable, Equatable {
-    case toolNotFound(String)
-}
-
 /// Loop progress, surfaced so the chat UI can show what the agent is doing
 /// while no tokens are streaming ("Thinking…", "Searching the web…").
 public enum AgentLoopEvent: Sendable, Equatable {

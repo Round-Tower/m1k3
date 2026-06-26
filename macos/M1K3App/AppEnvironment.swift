@@ -129,7 +129,7 @@ final class AppEnvironment {
     private let callIngester: CallIngester
     private let callSummarizer: SummarizationPipeline
     /// Recording is consent-gated (legal: call recording needs consent) and captured
-    /// behind the AudioRecorder seam.
+    /// by the StereoCallRecorder below.
     private let consentGate = RecordingConsentGate(store: UserDefaultsConsentStore())
     /// Stereo capture: near-end mic + far-end system audio (ScreenCaptureKit),
     /// muxed so the diarizer can separate speakers. Degrades to mono mic if
