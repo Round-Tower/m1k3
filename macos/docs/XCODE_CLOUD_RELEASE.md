@@ -70,6 +70,15 @@ separate Developer-ID DMG path (`tools/release/release-macos.sh`).
 > real `.xctest` bundles and `test-without-building` runs them → native xcresult, a red
 > suite **fails the run and Archive never runs** → nothing reaches TestFlight.
 >
+> **⚠️ Scheme location matters for ASC discovery.** `M1K3-Tests` lives in the *package's*
+> shared schemes — `macos/.swiftpm/xcode/xcshareddata/xcschemes/M1K3-Tests.xcscheme` —
+> NOT at the workspace level. Xcode Cloud's scheme picker enumerates schemes from the
+> *containers* (the project + the package); a workspace-level shared scheme is **not**
+> listed in the dropdown even though `xcodebuild -list` shows it. `.swiftpm/` is otherwise
+> gitignored — `macos/.gitignore` un-ignores just this one path so the scheme is tracked.
+> When you set the container to `M1K3.xcworkspace`, `M1K3-Tests` appears near the top of
+> the Scheme dropdown (the `-` sorts before letters).
+>
 > A **drift guard** (`tools/ci/check_test_scheme.py`, run in `ci_post_clone` *and* the PR
 > `ci.yml`) fails CI if a `.testTarget` is added to `Package.swift` but not the scheme —
 > so the hand-listed scheme can't silently fall behind.

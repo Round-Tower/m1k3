@@ -18,3 +18,14 @@ M1K3App/Info.generated.plist
 
 # macOS
 .DS_Store
+
+# Track the shared package test scheme (M1K3-Tests) so Xcode Cloud enumerates it
+# as a package scheme. .swiftpm is otherwise ignored; un-ignore just this path
+# (git needs each parent dir un-ignored to reach the file).
+!.swiftpm/
+.swiftpm/*
+!.swiftpm/xcode/
+.swiftpm/xcode/*
+!.swiftpm/xcode/xcshareddata/
+.swiftpm/xcode/xcshareddata/*
+!.swiftpm/xcode/xcshareddata/xcschemes/
