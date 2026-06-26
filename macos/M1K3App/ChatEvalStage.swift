@@ -28,7 +28,13 @@
 //  confirmed on-device). Prior: Unknown
 
 import Foundation
-import FoundationModels
+
+// Weak-linked — see AppleFoundationModelsProvider for the full rationale: this
+// stage's `@Generable EvalToolArguments` strong-references FoundationModels
+// symbols an older OS seed than our SDK may not export, which would abort the
+// archived app's launch on a skewed CI VM. Weak-linking lets it load; the AFM
+// fixtures only run where the model is actually available.
+@_weakLinked import FoundationModels
 import M1K3Agent
 import M1K3Chat
 import M1K3Eval
