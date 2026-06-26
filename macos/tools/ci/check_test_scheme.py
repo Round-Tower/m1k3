@@ -63,7 +63,7 @@ def main(argv: list[str]) -> int:
         argv[2]
         if len(argv) > 2
         else os.path.join(
-            macos, "M1K3.xcworkspace", "xcshareddata", "xcschemes", "M1K3-Tests.xcscheme"
+            macos, ".swiftpm", "xcode", "xcshareddata", "xcschemes", "M1K3-Tests.xcscheme"
         )
     )
 
@@ -84,7 +84,7 @@ def main(argv: list[str]) -> int:
         print("⚠️  test targets in M1K3-Tests.xcscheme but GONE from Package.swift:")
         for t in sorted(stale):
             print(f"     - {t}")
-    print("\nFix: update M1K3.xcworkspace/.../M1K3-Tests.xcscheme to match Package.swift.")
+    print("\nFix: update .swiftpm/xcode/xcshareddata/xcschemes/M1K3-Tests.xcscheme to match Package.swift.")
     return 1
 
 

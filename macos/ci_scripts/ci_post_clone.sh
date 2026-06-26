@@ -74,7 +74,7 @@ xcodebuild -resolvePackageDependencies \
   -project "$MACOS_DIR/M1K3.xcodeproj"
 
 # 4b. SCHEME-DRIFT GUARD: the native Test action (Xcode Cloud) runs the test
-# targets hand-listed in the M1K3-Tests workspace scheme — xcodegen/the app
+# targets hand-listed in the M1K3-Tests package scheme — xcodegen/the app
 # project CAN'T reference package test targets, so that list is the source of
 # truth for what gets tested. If a `.testTarget` lands in Package.swift but not
 # the scheme, its tests would silently never run (a hollow-green gate). This
