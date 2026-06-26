@@ -15,7 +15,17 @@
 //  Prior: the internal call-pipeline project AppleFoundationModelsProvider (Kev)
 
 import Foundation
-import FoundationModels
+
+// Weak-linked: FoundationModels is an OPTIONAL framework for M1K3 — every call
+// here is already gated behind `SystemLanguageModel.default.availability`, and
+// the `@Generable` macro below strong-references symbols (e.g. the macOS-26.0
+// `Generable.promptRepresentation` getter) that an OLDER OS *seed* than our SDK
+// may not export. Strong-linking aborts `dlopen` of any test bundle that links
+// this module the instant dyld binds the missing symbol (the Xcode Cloud VM,
+// whose runtime FoundationModels lags its Xcode-beta SDK). Weak-linking binds
+// the absent symbol to NULL so the bundle/app loads; the guarded AFM path is the
+// only thing that would ever touch it, and never on a runtime that lacks it.
+@_weakLinked import FoundationModels
 
 public struct AppleFoundationModelsProvider: InferenceProvider {
     public let name = "apple-foundation-models"
