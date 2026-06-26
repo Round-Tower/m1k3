@@ -53,6 +53,20 @@ jobs:
           M1K3_MLX_INTEGRATION: "0"
         run: swift test --parallel
 
+  scheme-drift:
+    # The native Xcode Cloud Test action runs the test targets hand-listed in the
+    # M1K3-Tests workspace scheme (the app project can't reference package test
+    # targets). Guard against a `.testTarget` added to Package.swift but not the
+    # scheme — which would silently never run. Pure-Python, no build, seconds.
+    name: Test scheme covers all targets
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+      - name: Check M1K3-Tests scheme vs Package.swift
+        working-directory: macos
+        run: python3 tools/ci/check_test_scheme.py
+
   python-smoke:
     name: Python · smoke subset
     runs-on: ubuntu-latest
