@@ -1,5 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <Workspace version = "1.0">
+   <!-- The macos package as a FOLDER reference (not Package.swift the file) — this
+        makes it a real workspace member, so its shared schemes (incl. M1K3-Tests in
+        .swiftpm/) are exposed to Xcode Cloud's scheme picker, AND it stays valid in a
+        fresh clone where the gitignored M1K3.xcodeproj below doesn't exist yet (a file
+        ref to Package.swift exposes nothing; a missing-project ref alone empties the
+        whole workspace). The project ref adds the app `M1K3` scheme once xcodegen has
+        generated it (for the Archive action); when absent it's skipped, not fatal. -->
+   <FileRef location = "group:."></FileRef>
    <FileRef location = "group:M1K3.xcodeproj"></FileRef>
-   <FileRef location = "group:Package.swift"></FileRef>
 </Workspace>

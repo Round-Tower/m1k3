@@ -70,13 +70,23 @@ separate Developer-ID DMG path (`tools/release/release-macos.sh`).
 > real `.xctest` bundles and `test-without-building` runs them → native xcresult, a red
 > suite **fails the run and Archive never runs** → nothing reaches TestFlight.
 >
-> **⚠️ Scheme location matters for ASC discovery.** `M1K3-Tests` lives in the *package's*
-> shared schemes — `macos/.swiftpm/xcode/xcshareddata/xcschemes/M1K3-Tests.xcscheme` —
-> NOT at the workspace level. Xcode Cloud's scheme picker enumerates schemes from the
-> *containers* (the project + the package); a workspace-level shared scheme is **not**
-> listed in the dropdown even though `xcodebuild -list` shows it. `.swiftpm/` is otherwise
-> gitignored — `macos/.gitignore` un-ignores just this one path so the scheme is tracked.
-> When you set the container to `M1K3.xcworkspace`, `M1K3-Tests` appears near the top of
+> **⚠️ Two non-obvious requirements for ASC to show `M1K3-Tests` (both load-bearing):**
+>
+> 1. **Scheme location** — it lives in the *package's* shared schemes,
+>    `macos/.swiftpm/xcode/xcshareddata/xcschemes/M1K3-Tests.xcscheme`, NOT at the
+>    workspace level. Xcode Cloud's picker enumerates schemes from the *containers* (the
+>    project + the package), not workspace-level shared schemes. `.swiftpm/` is otherwise
+>    gitignored — `macos/.gitignore` un-ignores just this one path.
+> 2. **The workspace references the package as a FOLDER** (`<FileRef location="group:.">`),
+>    not as `group:Package.swift`. A *file* ref to `Package.swift` exposes **no** schemes;
+>    only a *folder* ref makes the package a real workspace member whose shared schemes
+>    surface. The folder ref is also what keeps the workspace valid in a **fresh clone**:
+>    the second ref (`group:M1K3.xcodeproj`, for the app `M1K3` scheme used by Archive) is
+>    gitignored and absent until `xcodegen` runs — and a workspace whose *only* refs are
+>    missing loads to **zero schemes** (an empty dropdown). With the always-present folder
+>    ref, the package schemes show regardless; the app scheme joins once xcodegen runs.
+>
+> Net: set the container to `macos/M1K3.xcworkspace`; `M1K3-Tests` appears near the top of
 > the Scheme dropdown (the `-` sorts before letters).
 >
 > A **drift guard** (`tools/ci/check_test_scheme.py`, run in `ci_post_clone` *and* the PR
