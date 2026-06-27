@@ -198,6 +198,7 @@ final class AppEnvironment {
     /// which @Observable's rewrite would otherwise forbid).
     @ObservationIgnored private(set) lazy var soundEffects: SoundEffectPlayer = .bundled(
         isEnabled: Self.soundEffectsEnabledDefault,
+        volume: 0.4, // gentle — earcons are seasoning, not the meal (was 0.6 default)
         isSpeaking: { [weak self] in
             guard let self else { return false }
             if case .speaking = avatar.state.activity { return true }
@@ -613,6 +614,14 @@ final class AppEnvironment {
         guard variant != selectedWhisperModel else { return }
         selectedWhisperModel = variant
         UserDefaults.standard.set(variant.modelID, forKey: Self.whisperModelKey)
+    }
+
+    /// Whether the live WhisperKit STT engine is loaded and currently serving
+    /// (vs the always-available Apple Speech fallback). Voice mode reads this to
+    /// decide whether to kick a WhisperKit load on entry — the better engine, and
+    /// the home of the `[Music]`/`[BLANK_AUDIO]` cleaning.
+    var isWhisperKitActive: Bool {
+        whisperKit.isAvailable
     }
 
     /// Download + load WhisperKit's model so voice input upgrades from Apple

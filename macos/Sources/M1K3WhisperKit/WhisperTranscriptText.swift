@@ -46,6 +46,15 @@ public enum WhisperTranscriptText {
         text = text.replacingOccurrences(
             of: "\\[[^\\[\\]]*\\]", with: " ", options: .regularExpression
         )
+        // A trailing UNTERMINATED marker — the live stream emits a forming
+        // annotation a chunk at a time, so a partial can end "[MUSIC" before the
+        // closing "]" arrives. The pair rule above needs the close, so without this
+        // an endpoint mid-annotation sends "[MUSIC" to the model (the screenshot
+        // bug). Anchored to end-of-string: in live STT a dangling "[…" is always a
+        // forming artifact (a person can't utter "[").
+        text = text.replacingOccurrences(
+            of: "\\[[^\\[\\]]*$", with: " ", options: .regularExpression
+        )
         text = text.replacingOccurrences(
             of: "\\((?:\(nonSpeechVocabulary))\\)", with: " ",
             options: [.regularExpression, .caseInsensitive]

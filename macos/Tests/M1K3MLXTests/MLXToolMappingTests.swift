@@ -223,6 +223,23 @@ struct MLXThinkTemplateTests {
         #expect(!MLXGemmaProvider.templatePreOpensThink(for: .init(id: "meta/Llama-3.2-1B")))
     }
 
+    @Test("enable_thinking toggle support spans the WHOLE Qwen3 family, not just 3.5")
+    func thinkingToggleFamilies() {
+        // The bug this guards: the dense-Qwen3 swap (#94) moved lil/huge to plain
+        // Qwen3, but toggle support was (wrongly) tied to the 3.5-only pre-open
+        // check — so fast mode could never send enable_thinking:false and the model
+        // thought on every turn. ALL Qwen3 honour the switch (verified: the template
+        // pre-opens <think> only when thinking is disabled = it reads the flag).
+        #expect(MLXGemmaProvider.templateSupportsThinkingToggle(for: .init(id: "mlx-community/Qwen3-4B-4bit")))
+        #expect(MLXGemmaProvider.templateSupportsThinkingToggle(for: .init(id: "mlx-community/Qwen3-8B-4bit")))
+        #expect(MLXGemmaProvider.templateSupportsThinkingToggle(for: .init(id: "mlx-community/Qwen3-1.7B-4bit")))
+        #expect(MLXGemmaProvider.templateSupportsThinkingToggle(for: .init(id: "mlx-community/Qwen3.5-9B-4bit")))
+        #expect(MLXGemmaProvider.templateSupportsThinkingToggle(for: .init(id: "mlx-community/qwen3_5-instruct")))
+        // Families with no enable_thinking switch.
+        #expect(!MLXGemmaProvider.templateSupportsThinkingToggle(for: .init(id: "mlx-community/gemma-4-e4b-it-4bit")))
+        #expect(!MLXGemmaProvider.templateSupportsThinkingToggle(for: .init(id: "meta/Llama-3.2-1B")))
+    }
+
     @Test("the synthetic opener is added once and never duplicated")
     func normalisePrefix() {
         #expect(MLXGemmaProvider.normaliseThinkPrefix("plan</think>answer", preOpened: true)

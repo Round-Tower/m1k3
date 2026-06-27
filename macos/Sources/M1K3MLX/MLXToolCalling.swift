@@ -320,7 +320,8 @@ extension MLXGemmaProvider: ToolCallingProvider {
         // state (which would silently override a turn that asked to think).
         let thinking = Self.toolTurnThinkingDecision(
             turnThinking: options.thinkingEnabled,
-            supportsToggle: supportsThinkingToggle
+            supportsToggle: supportsThinkingToggle,
+            preOpensThink: preOpensThinkTemplate
         )
         return MLXToolTurnSession(
             container: container,
@@ -333,20 +334,22 @@ extension MLXGemmaProvider: ToolCallingProvider {
         )
     }
 
-    /// Per-turn thinking decision (pure): given the turn's thinking flag and
-    /// whether the family has an `enable_thinking` switch, produce the template
-    /// context + whether to pre-open a synthetic `<think>`. A fast turn renders
-    /// the EMPTY think pair (`enable_thinking:false`) and skips the opener; a
-    /// thinking turn leaves the template default and pre-opens. Independent of
-    /// construction-time `thinkingEnabled` so the in-turn decision wins.
+    /// Per-turn thinking decision (pure). `supportsToggle` (does the family read
+    /// `enable_thinking`?) gates suppression; `preOpensThink` (does the template
+    /// pre-open `<think>`? — Qwen3.5 only) gates the synthetic opener. These are
+    /// SEPARATE: dense Qwen3 toggles thinking but does NOT pre-open, so a fast turn
+    /// suppresses (`enable_thinking:false`) while a thinking turn adds no opener
+    /// (the model emits its own). Independent of construction-time `thinkingEnabled`
+    /// so the in-turn decision wins.
     static func toolTurnThinkingDecision(
         turnThinking: Bool,
-        supportsToggle: Bool
+        supportsToggle: Bool,
+        preOpensThink: Bool
     ) -> (context: [String: any Sendable]?, prefixNeeded: Bool) {
         let suppressThinking = supportsToggle && !turnThinking
         return (
             suppressThinking ? ["enable_thinking": false] : nil,
-            turnThinking && supportsToggle
+            turnThinking && preOpensThink
         )
     }
 }

@@ -98,6 +98,9 @@ public final class MLXGemmaProvider: InferenceProvider, ModelPreloading, @unchec
     /// Whether the family's template understands `enable_thinking` at all.
     /// (Internal: the tool-calling extension reads it for per-turn fast mode.)
     let supportsThinkingToggle: Bool
+    /// Whether the template pre-opens a `<think>` tag (Qwen3.5 only) — distinct
+    /// from toggle support. Read by the tool path to decide the synthetic opener.
+    let preOpensThinkTemplate: Bool
     /// The model id this provider was built for — keys the persona prefix.
     let modelIdentifier: String
     /// Per-(tools × persona) prefilled system-block KV prefix; turns start
@@ -158,7 +161,10 @@ public final class MLXGemmaProvider: InferenceProvider, ModelPreloading, @unchec
         self.thinkingEnabled = thinkingEnabled
         modelIdentifier = configuration.name
         let familyPreOpens = Self.templatePreOpensThink(for: configuration)
-        supportsThinkingToggle = familyPreOpens
+        preOpensThinkTemplate = familyPreOpens
+        // Toggle support is the WHOLE Qwen3 family — NOT tied to the 3.5-only
+        // pre-open check (the conflation that disabled fast mode after #94).
+        supportsThinkingToggle = Self.templateSupportsThinkingToggle(for: configuration)
         thinkPrefixNeeded = thinkingEnabled && familyPreOpens
         let loadConfiguration: ModelConfiguration = {
             var config = configuration
@@ -484,6 +490,19 @@ extension MLXGemmaProvider {
         let modelName = configuration.name.lowercased()
         return modelName.contains("qwen3.5") || modelName.contains("qwen3_5")
             || modelName.contains("qwen3-5")
+    }
+
+    /// Whether the family's chat template understands the `enable_thinking` switch
+    /// — i.e. fast mode can suppress the think phase by rendering
+    /// `enable_thinking:false`. This spans the WHOLE Qwen3 family (3 AND 3.5);
+    /// keep it DISTINCT from `templatePreOpensThink` (a 3.5-only quirk about
+    /// pre-opening the `<think>` tag). Conflating the two is what silently disabled
+    /// fast mode after the dense-Qwen3 swap (#94): plain Qwen3 toggles thinking but
+    /// does not pre-open, so tying toggle-support to the pre-open check meant
+    /// `enable_thinking:false` was never sent and the model thought on every turn.
+    static func templateSupportsThinkingToggle(for configuration: ModelConfiguration) -> Bool {
+        // "qwen3" matches Qwen3-4B/8B AND every Qwen3.5 spelling (which contains it).
+        configuration.name.lowercased().contains("qwen3")
     }
 
     /// Allow-list of families whose attention routes through upstream's

@@ -16,6 +16,10 @@
 //  (safeAreaInset) over the still-visible transcript. The top avatar yields to the
 //  dock's face, the input bar hides under voice, follow-latest pauses (scroll-back),
 //  and chat actions stay reachable. Confidence 0.75 (layout/feel verify-at-⌘R).
+//  Review: Kev + claude-opus-4-8, 2026-06-26 — the 06-21 dock was a regression in
+//  use (avatar shrank to a 92pt corner card). Reverted to a FULL-WINDOW voice hero
+//  (VoiceModeView) mounted as a full-window overlay: the avatar fills the window,
+//  karaoke + controls float on glass. Confidence 0.75 (look verify-at-⌘R).
 
 import M1K3Avatar
 import M1K3Inference
@@ -52,17 +56,26 @@ struct ContentView: View {
         }
         .animation(.spring(duration: 0.35), value: avatarDisplay)
         .frame(minWidth: 600, minHeight: 520)
-        // Voice-first as a non-exclusive overlay: a dock pinned to the bottom over
-        // the still-visible transcript, rather than a full-window body-swap.
-        // safeAreaInset insets the chat ABOVE the dock (no overlap → no hit-test
-        // puzzle), so you see the conversation scroll AND M1K3 talking.
-        .safeAreaInset(edge: .bottom, spacing: 0) {
+        // Voice-first as a FULL-WINDOW hero: the avatar fills the window with the
+        // karaoke line + controls floating on glass, covering the chat while
+        // active (the chat answer still lands in the transcript underneath). This
+        // replaced the 06-21 bottom dock — Kev wanted the face full screen, not a
+        // 92pt corner card. Mounted as an overlay (not a body-swap) so the toolbar
+        // chrome stays reachable and the transition is a clean fade.
+        .overlay {
             if env.isVoiceModeActive {
-                VoiceDock()
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                VoiceModeView()
+                    // Grow open from where the panel sat (top-anchored) instead of a
+                    // flat cross-fade — the felt "hero zoom" without matchedGeometry's
+                    // empty-frame trap: the hero is a FRESH RealityView that rebuilds
+                    // its scene, so a matched-frame morph would zoom an empty rect and
+                    // pop the face in after. A plain scale+opacity spring is robust
+                    // (no namespace, no two-scenes), and the opacity masks the scene
+                    // build during the grow. Collapses back on exit.
+                    .transition(.scale(scale: 0.88, anchor: .top).combined(with: .opacity))
             }
         }
-        .animation(.easeInOut(duration: 0.3), value: env.isVoiceModeActive)
+        .animation(.spring(response: 0.42, dampingFraction: 0.82), value: env.isVoiceModeActive)
         // Global readiness gate: until the active brain is actually loaded into
         // memory, swallow interaction behind a loading/failure surface — a turn
         // fired against still-downloading weights is the "interacted before ready"

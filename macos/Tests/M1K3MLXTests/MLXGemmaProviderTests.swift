@@ -61,22 +61,46 @@ struct MLXGemmaProviderTests {
 
     @Test("tool-turn thinking is decided per-turn, never from construction-time state")
     func toolTurnThinkingIsPerTurn() {
-        // A toggle family: thinking ON ⇒ no enable_thinking suppression + a
-        // pre-opened <think>; thinking OFF ⇒ enable_thinking:false + no pre-open.
-        let thinkOn = MLXGemmaProvider.toolTurnThinkingDecision(turnThinking: true, supportsToggle: true)
+        // A toggle family that ALSO pre-opens (Qwen3.5): thinking ON ⇒ no
+        // enable_thinking suppression + a pre-opened <think>; OFF ⇒
+        // enable_thinking:false + no pre-open.
+        let thinkOn = MLXGemmaProvider.toolTurnThinkingDecision(
+            turnThinking: true, supportsToggle: true, preOpensThink: true
+        )
         #expect(thinkOn.context == nil)
         #expect(thinkOn.prefixNeeded)
 
-        let thinkOff = MLXGemmaProvider.toolTurnThinkingDecision(turnThinking: false, supportsToggle: true)
+        let thinkOff = MLXGemmaProvider.toolTurnThinkingDecision(
+            turnThinking: false, supportsToggle: true, preOpensThink: true
+        )
         #expect(thinkOff.context?["enable_thinking"] as? Bool == false)
         #expect(!thinkOff.prefixNeeded)
 
-        // A non-toggle family never suppresses and never pre-opens, either way.
-        let noToggleOn = MLXGemmaProvider.toolTurnThinkingDecision(turnThinking: true, supportsToggle: false)
+        // THE FIX — dense Qwen3 (lil/huge): toggles enable_thinking but does NOT
+        // pre-open. Fast mode MUST suppress (enable_thinking:false), and a thinking
+        // turn must NOT add a synthetic opener (the model emits its own <think>).
+        let denseFast = MLXGemmaProvider.toolTurnThinkingDecision(
+            turnThinking: false, supportsToggle: true, preOpensThink: false
+        )
+        #expect(denseFast.context?["enable_thinking"] as? Bool == false)
+        #expect(!denseFast.prefixNeeded)
+
+        let denseThink = MLXGemmaProvider.toolTurnThinkingDecision(
+            turnThinking: true, supportsToggle: true, preOpensThink: false
+        )
+        #expect(denseThink.context == nil)
+        #expect(!denseThink.prefixNeeded)
+
+        // A non-toggle family (gemma) never suppresses and never pre-opens.
+        let noToggleOn = MLXGemmaProvider.toolTurnThinkingDecision(
+            turnThinking: true, supportsToggle: false, preOpensThink: false
+        )
         #expect(noToggleOn.context == nil)
         #expect(!noToggleOn.prefixNeeded)
 
-        let noToggleOff = MLXGemmaProvider.toolTurnThinkingDecision(turnThinking: false, supportsToggle: false)
+        let noToggleOff = MLXGemmaProvider.toolTurnThinkingDecision(
+            turnThinking: false, supportsToggle: false, preOpensThink: false
+        )
         #expect(noToggleOff.context == nil)
         #expect(!noToggleOff.prefixNeeded)
     }
