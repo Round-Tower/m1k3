@@ -93,4 +93,15 @@ struct WhisperTranscriptTextTests {
     func cleanLeavesPlainText() {
         #expect(WhisperTranscriptText.clean("just words") == "just words")
     }
+
+    @Test("an UNTERMINATED trailing marker (mid-stream partial) is stripped")
+    func unterminatedTrailingMarker() {
+        // The live stream emits a forming annotation a chunk at a time, so a partial
+        // can end "[MUSIC" with no closing "]" yet — the pair regex needs the close,
+        // so it leaked to the model (the screenshot's "[MUSIC" turn). A trailing
+        // "[…" with no close is always a forming Whisper artifact in live STT.
+        #expect(WhisperTranscriptText.clean("[MUSIC") == "")
+        #expect(WhisperTranscriptText.clean("so what time is it [Musi") == "so what time is it")
+        #expect(WhisperTranscriptText.clean("hello [BLANK_AUD") == "hello")
+    }
 }

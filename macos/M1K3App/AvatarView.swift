@@ -215,11 +215,20 @@ struct CRTOverlay: View {
     @State private var start = Date()
 
     // Tunables, judged by eye.
-    private static let scanlineSpacing: CGFloat = 3
     private static let scanlineOpacity: Double = 0.20
     private static let bandHeight: CGFloat = 70
     private static let bandSpeed: CGFloat = 26 // points per second, downward
     private static let vignetteOpacity: Double = 0.38
+
+    /// Scanline pitch scales WITH the surface so the CRT reads the same at any
+    /// avatar size. A fixed 3pt pitch is a fine texture on the ~200pt panel but a
+    /// dense venetian blind when the face fills the window (voice-mode hero). Tied
+    /// to height (≈ view/100) and clamped [3, 8]: the small panel + tiny menu-bar
+    /// glyph stay at the original 3pt; the full-window face widens to ~7pt — wider
+    /// lines, and (1px thick) lighter coverage, like a bigger tube.
+    private static func scanlineSpacing(forHeight height: CGFloat) -> CGFloat {
+        min(8, max(3, height / 100))
+    }
 
     var body: some View {
         TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { context in
@@ -238,11 +247,12 @@ struct CRTOverlay: View {
     private func drawScanlines(_ canvas: GraphicsContext, size: CGSize, time: Double) {
         let breathe = 1 + 0.08 * sin(time * 1.7)
         let opacity = Self.scanlineOpacity * breathe
+        let spacing = Self.scanlineSpacing(forHeight: size.height)
         var y: CGFloat = 0
         while y < size.height {
             let line = CGRect(x: 0, y: y, width: size.width, height: 1)
             canvas.fill(Path(line), with: .color(.black.opacity(opacity)))
-            y += Self.scanlineSpacing
+            y += spacing
         }
     }
 
@@ -268,10 +278,14 @@ struct CRTOverlay: View {
         )
     }
 
-    /// Radial darkening toward the corners — curved-glass falloff.
+    /// Radial darkening toward the corners — curved-glass falloff. The radius
+    /// eases outward as the surface grows (0.75 → ~1.05) so a full-window face
+    /// keeps gentle corner curvature instead of crushed black wells; the small
+    /// panel is unchanged.
     private func drawVignette(_ canvas: GraphicsContext, size: CGSize) {
         let centre = CGPoint(x: size.width / 2, y: size.height / 2)
-        let radius = max(size.width, size.height) * 0.75
+        let ease = min(0.30, size.height / 3000)
+        let radius = max(size.width, size.height) * (0.75 + ease)
         let gradient = Gradient(stops: [
             .init(color: .clear, location: 0),
             .init(color: .clear, location: 0.55),

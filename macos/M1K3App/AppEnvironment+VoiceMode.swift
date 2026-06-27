@@ -128,6 +128,14 @@ extension AppEnvironment {
         let controller = VoiceLoopController(dependencies: makeVoiceLoopDependencies())
         voiceLoop = controller
         controller.begin()
+        // Voice deserves the sharper engine. If WhisperKit isn't loaded, kick its
+        // load now (downloads on first use). NON-blocking: the loop re-resolves its
+        // provider at the start of EACH listen, so it upgrades from the Apple Speech
+        // fallback to WhisperKit on the next cycle once ready — the first utterance
+        // still works meanwhile, and an offline/failed load just stays on Apple.
+        if !isWhisperKitActive {
+            Task { [weak self] in await self?.enableWhisperKit() }
+        }
     }
 
     /// Leave the mode: tears down mic + speech. An in-flight turn is NOT

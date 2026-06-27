@@ -31,7 +31,7 @@ public enum SoundEffect: String, CaseIterable, Sendable {
         switch self {
         case .error: "badBoing"
         case .save: "coin"
-        case .voiceEnter: "cast_a_spell_sound"
+        case .voiceEnter: "materialise"
         }
     }
 }
