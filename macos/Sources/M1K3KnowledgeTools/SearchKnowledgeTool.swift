@@ -66,9 +66,18 @@ public struct SearchKnowledgeTool: AgentTool {
         let hits: [ChunkHit]
         if let embedder {
             let queryVector = try await embedder.embed(query)
-            hits = try GroundingGate.relevant(
-                store.searchHybrid(query: query, queryVector: queryVector, limit: limit)
+            // Two-lane retrieval (documents + memories get SEPARATE top-K budgets),
+            // the same path implicit grounding uses — so a large document corpus can't
+            // crowd short memory facts out of one ranking BEFORE the floor is applied.
+            // Was a single searchHybrid top-K, which is how a memory like "Ada is a
+            // scientist" went missing here while ask_m1k3 (two-lane) still found it.
+            let (knowledge, memories) = try GroundingGate.partition(
+                store.searchGrounding(
+                    query: query, queryVector: queryVector,
+                    documentLimit: limit, memoryLimit: limit
+                )
             )
+            hits = knowledge + memories
             guard !hits.isEmpty else {
                 return ToolResult(output: "Nothing relevant in stored knowledge for \"\(query)\" "
                     + "— the user's documents don't cover this. Do not search again for it; "
