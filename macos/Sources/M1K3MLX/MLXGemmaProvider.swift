@@ -102,7 +102,9 @@ public final class MLXGemmaProvider: InferenceProvider, ModelPreloading, @unchec
     /// from toggle support. Read by the tool path to decide the synthetic opener.
     let preOpensThinkTemplate: Bool
     /// The model id this provider was built for — keys the persona prefix.
-    let modelIdentifier: String
+    /// Public so the app can skip a redundant `selectBrain` reload when the active
+    /// provider already serves this model.
+    public let modelIdentifier: String
     /// Per-(tools × persona) prefilled system-block KV prefix; turns start
     /// from copies instead of re-prefilling the persona every time.
     let personaPrefix = PersonaPrefixCache()

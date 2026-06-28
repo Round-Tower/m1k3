@@ -31,20 +31,50 @@ enum IssueReporter {
     /// Build the redacted report, stash the full body on the clipboard, and open
     /// the prefilled GitHub issue page. Returns whether the body was truncated in
     /// the URL (full text is on the clipboard either way) so the UI can hint.
+    private static let issueTitle = "M1K3: issue report"
+
+    /// Build the redacted report, stash the full body on the clipboard, and open
+    /// the prefilled GitHub issue page. Returns whether the body was truncated in
+    /// the URL (full text is on the clipboard either way) so the UI can hint.
+    ///
+    /// `OSLogStore.getEntries` + redaction can take hundreds of ms, so the whole
+    /// report is built OFF the main actor; only the pasteboard write + open happen
+    /// on main — tapping the button never hangs the UI.
     @discardableResult
     @MainActor
     static func reportIssue(
         whatHappened: String = "",
         activeBrain: String,
         userProfile: String?
-    ) -> Bool {
+    ) async -> Bool {
+        let body = await Task.detached(priority: .userInitiated) {
+            buildReportBody(whatHappened: whatHappened, activeBrain: activeBrain, userProfile: userProfile)
+        }.value
+
+        // Full (untruncated) body to the clipboard so nothing is lost to the URL cap.
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(body, forType: .string)
+
+        guard let built = GitHubIssueURL.newIssue(repo: repo, title: issueTitle, body: body) else {
+            return false
+        }
+        NSWorkspace.shared.open(built.url)
+        return built.truncated
+    }
+
+    /// The redacted markdown body. Pure, non-isolated, no UI — safe to run off-main.
+    private static func buildReportBody(
+        whatHappened: String,
+        activeBrain: String,
+        userProfile: String?
+    ) -> String {
         let redactor = DiagnosticRedactor(homeDirectory: NSHomeDirectory(), userName: userProfile)
         var logs = redactor.redact(recentLogs())
         // Honeypot pass (inert unless a local canary is configured) — defence in depth.
         logs = CanaryGuard.fromLocalConfig().scan(logs).text
 
         let report = IssueReport(
-            title: "M1K3: issue report",
+            title: issueTitle,
             whatHappened: whatHappened,
             appVersion: infoString("CFBundleShortVersionString"),
             build: infoString("CFBundleVersion"),
@@ -54,17 +84,7 @@ enum IssueReporter {
             activeBrain: activeBrain,
             logs: logs
         )
-
-        let body = IssueReportFormatter.markdownBody(report)
-        // Full (untruncated) body to the clipboard so nothing is lost to the URL cap.
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(body, forType: .string)
-
-        guard let built = GitHubIssueURL.newIssue(repo: repo, title: report.title, body: body) else {
-            return false
-        }
-        NSWorkspace.shared.open(built.url)
-        return built.truncated
+        return IssueReportFormatter.markdownBody(report)
     }
 
     /// Recent M1K3 log lines (last ~10 minutes, subsystem `app.m1k3`) from this

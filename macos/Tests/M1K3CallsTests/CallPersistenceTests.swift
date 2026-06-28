@@ -63,6 +63,16 @@ struct CallPersistenceTests {
         #expect(try store.loadAll().count == 1)
     }
 
+    @Test("count matches the number of stored calls, without decoding payloads")
+    func count() throws {
+        let store = try GRDBCallPersistence(coder: EncryptedCallCoder(key: SymmetricKey(size: .bits256)))
+        #expect(try store.count() == 0)
+        try store.save(sampleCall(title: "one", at: 100))
+        try store.save(sampleCall(title: "two", at: 200))
+        #expect(try store.count() == 2)
+        #expect(try store.count() == store.loadAll().count)
+    }
+
     @Test("delete removes the call and reports it")
     func delete() throws {
         let store = try GRDBCallPersistence()

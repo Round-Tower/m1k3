@@ -22,6 +22,17 @@ public protocol CallPersistence: Sendable {
     /// Delete a call; returns whether a row was removed.
     @discardableResult
     func delete(id: UUID) throws -> Bool
+
+    /// Number of stored calls. Stores should override with a cheap `COUNT(*)` —
+    /// the default decodes (and so decrypts) every row just to count, which is the
+    /// thing we're trying to avoid on the hot count path.
+    func count() throws -> Int
+}
+
+public extension CallPersistence {
+    func count() throws -> Int {
+        try loadAll().count
+    }
 }
 
 public enum CallPersistenceError: Error, Sendable, Equatable {

@@ -23,6 +23,9 @@ struct CallsView: View {
     @State private var showImporter = false
     @State private var showConsentDialog = false
     @State private var selected: CallSession?
+    /// Loaded once (and on count change) rather than decrypting the whole call log
+    /// on every body re-render — the recording banner alone re-runs body often.
+    @State private var calls: [CallSession] = []
 
     var body: some View {
         VStack(spacing: 0) {
@@ -32,6 +35,8 @@ struct CallsView: View {
         }
         .frame(width: 480, height: 540)
         .glassBackdrop()
+        .task { calls = env.calls() }
+        .onChange(of: env.callCount) { _, _ in calls = env.calls() }
         .fileImporter(
             isPresented: $showImporter,
             allowedContentTypes: [.plainText, .text],
@@ -137,7 +142,6 @@ struct CallsView: View {
 
     @ViewBuilder
     private var content: some View {
-        let calls = env.calls()
         if calls.isEmpty {
             ContentUnavailableView {
                 Label("No calls yet", systemImage: "phone.bubble")

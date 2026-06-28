@@ -319,11 +319,13 @@ struct SettingsView: View {
 
                 Section {
                     Button("Report an issue…") {
-                        issueTruncated = IssueReporter.reportIssue(
-                            activeBrain: env.selectedBrain.displayName,
-                            userProfile: M1K3Persona.userProfile
-                        )
-                        issueReported = true
+                        Task {
+                            issueTruncated = await IssueReporter.reportIssue(
+                                activeBrain: env.selectedBrain.displayName,
+                                userProfile: M1K3Persona.userProfile
+                            )
+                            issueReported = true
+                        }
                     }
                     .buttonStyle(.glass)
                 } header: {
