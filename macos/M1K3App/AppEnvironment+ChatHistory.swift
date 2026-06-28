@@ -214,6 +214,12 @@ extension AppEnvironment {
                 let raw = UserDefaults.standard.string(forKey: Self.selectedBrainKey) ?? ""
                 return BrainTier(rawValue: raw)?.displayName ?? ""
             },
+            fastThinkingProvider: {
+                // Speed tiers (Mini/Lil) skip the think phase on plain grounded
+                // lookups — read fresh each turn so a hot-swap applies immediately.
+                let raw = UserDefaults.standard.string(forKey: Self.selectedBrainKey) ?? ""
+                return BrainTier(rawValue: raw)?.prefersFastThinking ?? false
+            },
             maxIterationsProvider: {
                 // Thermal "ease off" is opt-in; OFF → the plain base, so the
                 // default path is byte-identical. ON → CoolHeadPolicy trims the

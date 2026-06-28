@@ -52,17 +52,23 @@ enum ThinkingPolicy {
         "write", "code", "calculate", "summar", "review", "design",
     ]
 
+    /// - Parameter fastByDefault: the active brain biases toward speed (Mini/Lil).
+    ///   When true, the blanket "grounding present ⇒ think" rule is dropped: a plain
+    ///   fact lookup on the speed tier shouldn't pay the think tax. Genuinely
+    ///   analytic or long asks STILL think (the signals below). Heavier tiers
+    ///   (false) keep grounded ⇒ think, where CoT earns its keep on citations.
     static func shouldThink(
         question: String,
         hasGroundedKnowledge: Bool,
-        mode: ThinkingMode
+        mode: ThinkingMode,
+        fastByDefault: Bool = false
     ) -> Bool {
         switch mode {
         case .always: return true
         case .fast: return false
         case .auto: break
         }
-        if hasGroundedKnowledge { return true }
+        if hasGroundedKnowledge, !fastByDefault { return true }
         let lowered = question.lowercased()
         if analyticMarkers.contains(where: { lowered.contains($0) }) { return true }
         let words = lowered.split(whereSeparator: \.isWhitespace).count

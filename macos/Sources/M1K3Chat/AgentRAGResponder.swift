@@ -65,6 +65,12 @@ public struct AgentRAGResponder: RAGResponding, Sendable {
     /// level enum lives in M1K3LanguageModel, which this module deliberately does
     /// NOT link (the dependency-direction trap) — the enum→Int map is the app's job.
     private let maxIterationsProvider: (@Sendable () -> Int)?
+    /// Whether the active brain biases toward fast answers (Mini/Lil), read fresh
+    /// each turn like the other providers so a hot-swap takes effect immediately.
+    /// Feeds `ThinkingPolicy.shouldThink(fastByDefault:)` — the speed tiers skip the
+    /// think phase on plain grounded lookups. Default `false` = the heavy-tier
+    /// behaviour, so existing callers/tests are byte-identical.
+    private let fastThinkingProvider: @Sendable () -> Bool
 
     public init(
         store: KnowledgeStore,
@@ -77,6 +83,7 @@ public struct AgentRAGResponder: RAGResponding, Sendable {
         sourceCollector: ToolSourceCollector? = nil,
         thinkingModeProvider: @escaping @Sendable () -> ThinkingMode = { .auto },
         brainNameProvider: @escaping @Sendable () -> String = { "" },
+        fastThinkingProvider: @escaping @Sendable () -> Bool = { false },
         maxIterationsProvider: (@Sendable () -> Int)? = nil
     ) {
         self.store = store
@@ -90,6 +97,7 @@ public struct AgentRAGResponder: RAGResponding, Sendable {
         self.thinkingModeProvider = thinkingModeProvider
         self.brainNameProvider = brainNameProvider
         self.maxIterationsProvider = maxIterationsProvider
+        self.fastThinkingProvider = fastThinkingProvider
     }
 
     /// Fixed tool list — convenience for tests and simple callers.
@@ -214,7 +222,8 @@ public struct AgentRAGResponder: RAGResponding, Sendable {
         let thinkingEnabled = ThinkingPolicy.shouldThink(
             question: question,
             hasGroundedKnowledge: !chunks.isEmpty,
-            mode: thinkingModeProvider()
+            mode: thinkingModeProvider(),
+            fastByDefault: fastThinkingProvider()
         )
         let emittedLive = Mutex(false)
         do {

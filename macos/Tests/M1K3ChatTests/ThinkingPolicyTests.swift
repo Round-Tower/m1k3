@@ -54,6 +54,39 @@ struct ThinkingPolicyTests {
         ))
     }
 
+    @Test("speed tiers skip the think phase on a plain grounded lookup; heavy tiers don't")
+    func fastTierSkipsGroundedLookup() {
+        // Short, non-analytic, grounded — a fact lookup. Heavy tier thinks…
+        #expect(ThinkingPolicy.shouldThink(
+            question: "what's my address?", hasGroundedKnowledge: true, mode: .auto, fastByDefault: false
+        ))
+        // …the speed tier stays fast.
+        #expect(!ThinkingPolicy.shouldThink(
+            question: "what's my address?", hasGroundedKnowledge: true, mode: .auto, fastByDefault: true
+        ))
+    }
+
+    @Test("speed tiers still think for analytic or long grounded asks")
+    func fastTierStillThinksWhenHard() {
+        #expect(ThinkingPolicy.shouldThink(
+            question: "why did the pump fail?", hasGroundedKnowledge: true, mode: .auto, fastByDefault: true
+        ))
+        let long = "could you have a look at the maintenance schedule and tell me which intervals overlap next month"
+        #expect(ThinkingPolicy.shouldThink(
+            question: long, hasGroundedKnowledge: true, mode: .auto, fastByDefault: true
+        ))
+    }
+
+    @Test("the fast-tier default never overrides the user's Always/Fast choice")
+    func fastTierRespectsOverride() {
+        #expect(ThinkingPolicy.shouldThink(
+            question: "hi", hasGroundedKnowledge: false, mode: .always, fastByDefault: true
+        ))
+        #expect(!ThinkingPolicy.shouldThink(
+            question: "why did it fail?", hasGroundedKnowledge: true, mode: .fast, fastByDefault: false
+        ))
+    }
+
     @Test("user overrides always win")
     func overridesWin() {
         #expect(ThinkingPolicy.shouldThink(
