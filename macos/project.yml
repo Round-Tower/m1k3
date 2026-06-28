@@ -92,6 +92,8 @@ targets:
         product: M1K3MemoryViz
       - package: M1K3
         product: M1K3Preview
+      - package: M1K3
+        product: M1K3Diagnostics
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: app.m1k3
