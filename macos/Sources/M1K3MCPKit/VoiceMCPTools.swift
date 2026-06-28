@@ -3,7 +3,7 @@
 //  M1K3MCPKit
 //
 //  Voice tools for the in-app MCP server: speak / stop_speaking /
-//  get_voice_status / listen. Handlers are injected closures — the app wires
+//  get_status / listen. Handlers are injected closures — the app wires
 //  them to its speech provider, avatar, and transcription router on the
 //  MainActor; this package stays free of M1K3Voice/M1K3Avatar links (emotion
 //  crosses as a plain string, mirroring the app's toolsProvider pattern).
@@ -20,7 +20,7 @@
 import Foundation
 import MCP
 
-/// Snapshot of the speech stack for `get_voice_status`. The busy flags are
+/// Snapshot of the speech stack for `get_status`. The busy flags are
 /// computed from the SAME predicates the speak/listen guards use — the whole
 /// point is that an agent can poll for readiness instead of getting blind
 /// errors (test-report F2).
@@ -140,10 +140,10 @@ public func makeVoiceToolDefinitions(handlers: VoiceToolHandlers) -> [MCPToolDef
         ),
         MCPToolDefinition(
             tool: Tool(
-                name: "get_voice_status",
-                description: "Current TTS provider, voice tier, active brain, and the busy flags: "
-                    + "whether M1K3 is speaking, in a conversation, using its mic, or already "
-                    + "answering an ask_m1k3 call.",
+                name: "get_status",
+                description: "M1K3's overall status: active brain tier, TTS provider, voice tier, and "
+                    + "the busy flags — whether M1K3 is speaking, in a conversation, using its mic, or "
+                    + "already answering an ask_m1k3 call. Poll this before speak/listen/ask_m1k3.",
                 inputSchema: ["type": "object", "properties": [:]]
             ),
             handler: { _ in

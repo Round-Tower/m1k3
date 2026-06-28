@@ -65,10 +65,10 @@ private func text(_ result: CallTool.Result) -> String? {
 }
 
 struct VoiceMCPToolsTests {
-    @Test("the voice surface is speak, stop_speaking, get_voice_status, listen")
+    @Test("the voice surface is speak, stop_speaking, get_status, listen")
     func surface() {
         let registry = MCPToolRegistry(makeVoiceToolDefinitions(handlers: makeHandlers(log: HandlerLog())))
-        #expect(registry.tools.map(\.name) == ["speak", "stop_speaking", "get_voice_status", "listen"])
+        #expect(registry.tools.map(\.name) == ["speak", "stop_speaking", "get_status", "listen"])
     }
 
     @Test("speak passes text and emotion through, defaulting wait to false")
@@ -125,10 +125,10 @@ struct VoiceMCPToolsTests {
         #expect(text(result)?.contains("voice conversation") == true)
     }
 
-    @Test("get_voice_status renders compact JSON including the busy/brain fields")
+    @Test("get_status renders compact JSON including the busy/brain fields")
     func status() async throws {
         let registry = MCPToolRegistry(makeVoiceToolDefinitions(handlers: makeHandlers(log: HandlerLog())))
-        let result = await registry.call(name: "get_voice_status", arguments: nil)
+        let result = await registry.call(name: "get_status", arguments: nil)
         let payload = try #require(text(result)?.data(using: .utf8))
         let decoded = try #require(try JSONSerialization.jsonObject(with: payload) as? [String: Any])
         #expect(decoded["provider"] as? String == "kokoro")
