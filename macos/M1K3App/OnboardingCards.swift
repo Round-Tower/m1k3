@@ -102,6 +102,58 @@ struct BrainCard: View {
     }
 }
 
+// MARK: - Auto ("Who cares") card
+
+/// "Let M1K3 choose" — turns on auto-route (ADR 0001): M1K3 picks the brain for
+/// this Mac and keeps adapting to power, memory and heat. Sits above the explicit
+/// tiers as the no-decision default for people who'd rather not pick.
+struct AutoBrainCard: View {
+    let isSelected: Bool
+    let onTap: () -> Void
+
+    var body: some View {
+        Button(action: onTap) {
+            HStack(alignment: .top, spacing: 16) {
+                Image(systemName: "wand.and.stars")
+                    .symbolRenderingMode(.hierarchical)
+                    .font(.system(size: 26, weight: .semibold))
+                    .foregroundStyle(.tint)
+                    .frame(width: 40)
+                    .accessibilityHidden(true)
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Let M1K3 choose").font(.pixel(15)).padding(.bottom, 2)
+                    Text("Recommended for most people")
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(.tint)
+                    Text("M1K3 picks the best brain for this Mac and keeps adapting to "
+                        + "power, memory and heat. Change it any time.")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 0)
+                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                    .symbolRenderingMode(.hierarchical)
+                    .foregroundStyle(isSelected ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
+                    .font(.title3)
+                    .accessibilityHidden(true)
+            }
+            .padding(16)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .glassEffect(
+                isSelected ? .regular.tint(.accentColor.opacity(0.22)) : .regular,
+                in: .rect(cornerRadius: 18)
+            )
+            .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Let M1K3 choose. Recommended for most people.")
+        .accessibilityAddTraits(isSelected ? [.isSelected] : [])
+    }
+}
+
 // MARK: - Voice-input card
 
 struct VoiceCard: View {

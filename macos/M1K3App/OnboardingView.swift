@@ -38,6 +38,10 @@ struct OnboardingView: View {
     @State private var userName = ""
     @State private var userNotes = ""
     @State private var selectedBrain: BrainTier = .recommendedForThisMac
+    /// "Let M1K3 choose" (auto-route) selected instead of a specific tier. When
+    /// true the explicit tier cards show unselected and the button hands the pick
+    /// to M1K3 (ADR 0001). Restored from the saved auto-route flag on re-pick.
+    @State private var autoSelected = false
     @State private var isWakingBrain = false
     @State private var selectedVoice: VoiceEngine = .apple
     @State private var isDownloadingWhisper = false
@@ -96,8 +100,12 @@ struct OnboardingView: View {
         .frame(minWidth: 580, minHeight: 640)
         .glassBackdrop()
         .onAppear {
-            // A brain-only re-pick highlights the brain you're already running.
-            if startAtBrain { selectedBrain = env.selectedBrain }
+            // A brain-only re-pick highlights the brain you're already running —
+            // or the Auto card if auto-route is the live choice.
+            if startAtBrain {
+                selectedBrain = env.selectedBrain
+                autoSelected = UserDefaults.standard.bool(forKey: AppEnvironment.autoRouteBrainKey)
+            }
             env.avatar.setEmotion(emotion(for: step))
         }
         .onChange(of: step) { _, newStep in
@@ -128,10 +136,10 @@ struct OnboardingView: View {
     /// step call sites' spirit via the per-step EMOTION instead.)
     private func header(glyph _: String, title: String, subtitle: String) -> some View {
         VStack(spacing: 8) {
-            AvatarView(controller: env.avatar)
-                .frame(width: 260, height: 150)
-                .padding(.bottom, 4)
-                .accessibilityHidden(true)
+//            AvatarView(controller: env.avatar)
+//                .frame(width: 260, height: 150)
+//                .padding(.bottom, 4)
+//                .accessibilityHidden(true)
             Text(title)
                 .font(.pixel(40))
                 .kerning(2)
@@ -218,20 +226,23 @@ private extension OnboardingView {
 
     var brainPicker: some View {
         VStack(spacing: 16) {
+            AutoBrainCard(isSelected: autoSelected) { autoSelected = true }
+
             ForEach(BrainTier.allCases) { tier in
                 BrainCard(
                     tier: tier,
-                    isSelected: selectedBrain == tier,
+                    isSelected: !autoSelected && selectedBrain == tier,
                     isRecommended: tier == recommended,
                     isLocked: !tier.isSelectableOnThisMac,
                     isDownloaded: env.isBrainDownloaded(tier)
-                ) { selectedBrain = tier }
+                ) {
+                    autoSelected = false
+                    selectedBrain = tier
+                }
             }
 
             Button(action: wakeBrain) {
-                Text(selectedBrain.requiresDownload && !env.isBrainDownloaded(selectedBrain)
-                    ? "Download \(selectedBrain.displayName) →"
-                    : "Wake up \(selectedBrain.displayName) →")
+                Text(brainButtonTitle)
                     .font(.headline)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 6)
@@ -293,8 +304,28 @@ private extension OnboardingView {
         }
     }
 
+    /// The wake button's label tracks the selection: auto hands the pick to M1K3,
+    /// an un-fetched tier offers a download, a ready tier wakes in place.
+    private var brainButtonTitle: String {
+        if autoSelected { return "Let M1K3 choose →" }
+        return selectedBrain.requiresDownload && !env.isBrainDownloaded(selectedBrain)
+            ? "Download \(selectedBrain.displayName) →"
+            : "Wake up \(selectedBrain.displayName) →"
+    }
+
     private func wakeBrain() {
-        env.selectBrain(selectedBrain)
+        // Auto-route: M1K3 resolves the concrete brain for this Mac, then we drive
+        // the SAME download/wake path as a manual pick (the resolved tier may need
+        // a download — e.g. Lil — so the wake screen shows what it chose).
+        if autoSelected {
+            selectedBrain = env.enableAutoRouteForOnboarding()
+        } else {
+            // A specific pick is sovereign — turn auto-route off so it isn't
+            // overridden on the next turn (matters on a Settings → "Change brain…"
+            // re-pick where auto-route was previously on).
+            UserDefaults.standard.set(false, forKey: AppEnvironment.autoRouteBrainKey)
+            env.selectBrain(selectedBrain)
+        }
         if selectedBrain.requiresDownload {
             isWakingBrain = true
         } else {

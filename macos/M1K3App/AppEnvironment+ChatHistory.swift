@@ -36,9 +36,19 @@ extension AppEnvironment {
     /// reversible. Reuses `selectBrain`, so the routed pick drives the same proven
     /// load/warmup path; only switches when the pick actually changes.
     func applyAutoRouteIfEnabled() {
-        let defaults = UserDefaults.standard
-        guard defaults.bool(forKey: Self.autoRouteBrainKey) else { return }
+        guard UserDefaults.standard.bool(forKey: Self.autoRouteBrainKey) else { return }
+        let tier = resolvedAutoRouteTier()
+        guard tier != selectedBrain else { return }
+        Self.routeLog.info("auto-route → \(tier.rawValue, privacy: .public)")
+        selectBrain(tier)
+    }
 
+    /// The brain auto-route resolves to for THIS Mac right now, given current
+    /// Apple-Intelligence availability and consent settings (ADR 0001). Pure read —
+    /// no side effects — so both `applyAutoRouteIfEnabled` and onboarding's
+    /// "Let M1K3 choose" can ask "what would auto-route pick?" without committing.
+    func resolvedAutoRouteTier() -> BrainTier {
+        let defaults = UserDefaults.standard
         // TODO: (ADR 0001 Edge A): replace with a DEDICATED egress-consent key when the
         // network rungs are wired. The web-search toggle is a provisional proxy only —
         // third-party cloud escalation (chat → Claude/Gemini) is a far bigger privacy
@@ -65,10 +75,18 @@ extension AppEnvironment {
         // makes auto-route machine-aware: Big has no hard memory floor, so without
         // the cap it would otherwise ride along on a small Mac and thrash swap.
         // Manual selection stays sovereign (capped only on the AUTOMATIC path).
-        let tier = BrainTier.cappedForThisMac(routedTier)
-        guard tier != selectedBrain else { return }
-        Self.routeLog.info("auto-route → \(tier.rawValue, privacy: .public)")
+        return BrainTier.cappedForThisMac(routedTier)
+    }
+
+    /// Onboarding "Let M1K3 choose": turn auto-route ON and resolve the concrete
+    /// starting brain so the first-run flow can drive the SAME download/wake UI a
+    /// manual pick uses. Returns the resolved tier so the caller can show it.
+    @discardableResult
+    func enableAutoRouteForOnboarding() -> BrainTier {
+        UserDefaults.standard.set(true, forKey: Self.autoRouteBrainKey)
+        let tier = resolvedAutoRouteTier()
         selectBrain(tier)
+        return tier
     }
 
     /// Memory auto-capture consent (Settings "Learn from conversations").
