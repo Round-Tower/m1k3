@@ -230,7 +230,7 @@ struct ContentView: View {
                         .padding(.vertical, 12)
                         .glassEffect(.regular, in: .rect(cornerRadius: 22))
                 } else {
-                    TextField("Ask M1K3 about your documents…", text: $draft, axis: .vertical)
+                    TextField("Ask M1K3…", text: $draft, axis: .vertical)
                         .textFieldStyle(.plain)
                         .lineLimit(1 ... 5)
                         .padding(.horizontal, 16)
