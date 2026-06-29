@@ -453,7 +453,15 @@ final class MLXToolTurnSession: ToolTurnSession, @unchecked Sendable {
             self.sendCount += 1
             let cache: [KVCache]
             let input: LMInput
-            if reuse > 0, let existing = self.kvCache {
+            // Reuse only a LINEAR cache: trimming a wrapped sliding-window cache
+            // (gemma-4's RotatingKVCache) underflows its rotation pointer and the
+            // next decode asserts in temporalOrder. isTrimmable==false flags the
+            // wrap; one wrapped layer vetoes reuse (rebuild fresh — correct, just
+            // re-prefills the prefix).
+            let reusable = CrossTurnCacheReuse.cacheReusable(
+                layersTrimmable: self.kvCache?.map(\.isTrimmable) ?? []
+            )
+            if reuse > 0, reusable, let existing = self.kvCache {
                 // Keep the reusable prefix; trim past it (the prior turn's
                 // generated tail + any divergence) and prefill only the rest.
                 for layer in existing {
@@ -490,11 +498,21 @@ final class MLXToolTurnSession: ToolTurnSession, @unchecked Sendable {
             // Keep cachedIDs an EXACT mirror of the cache: trim this turn's
             // generated tokens (unstable — the next render re-derives the
             // assistant turn structurally), leaving precisely fullIDs in place.
-            for layer in cache {
-                let extra = layer.offset - fullIDs.count
-                if extra > 0 { _ = layer.trim(extra) }
+            // But if a sliding-window layer WRAPPED during generation it can no
+            // longer be trimmed into a faithful linear mirror (the same
+            // RotatingKVCache underflow) — drop the cache so the next send
+            // rebuilds fresh rather than reusing a corrupt one.
+            if CrossTurnCacheReuse.cacheReusable(layersTrimmable: cache.map(\.isTrimmable)) {
+                for layer in cache {
+                    let extra = layer.offset - fullIDs.count
+                    if extra > 0 { _ = layer.trim(extra) }
+                }
+                self.kvCache = cache
+                self.cachedIDs = fullIDs
+            } else {
+                self.kvCache = nil
+                self.cachedIDs = []
             }
-            self.cachedIDs = fullIDs
 
             let turn: ToolTurn
             if calls.isEmpty {

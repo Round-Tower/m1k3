@@ -383,9 +383,17 @@ public final class MLXGemmaProvider: InferenceProvider, ModelPreloading, @unchec
                 context: context
             )
             for await _ in stream {}
-            for layer in cache {
-                let extra = layer.offset - ids.count
-                if extra > 0 { _ = layer.trim(extra) }
+            // Trim the sampled token back off — but only on a linear cache. If a
+            // long persona overran a sliding window the cache wrapped, and
+            // trimming a wrapped RotatingKVCache underflows its rotation pointer
+            // (the temporalOrder crash). A wrapped prefix can't be linearly
+            // reused anyway; leave it untrimmed — the cross-turn gate rejects a
+            // non-trimmable seed downstream, so it just re-prefills, never reuses.
+            if CrossTurnCacheReuse.cacheReusable(layersTrimmable: cache.map(\.isTrimmable)) {
+                for layer in cache {
+                    let extra = layer.offset - ids.count
+                    if extra > 0 { _ = layer.trim(extra) }
+                }
             }
             return PrefixBox(cache: cache, tokenIDs: ids)
         }
