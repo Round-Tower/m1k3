@@ -60,4 +60,28 @@ struct MessageTextPolishTests {
         let text = "The seal failed under load.\n\nWeb sources:\n• https://a"
         #expect(MessageTextPolish.polish(text) == text)
     }
+
+    @Test("fenced code blocks survive verbatim — heading/comment lines, backticks, bold")
+    func preservesFencedCode() {
+        let html = "Here you go:\n\n```html\n<!DOCTYPE html>\n<h1>Hi</h1>\n```\n\nThat's it."
+        let out = MessageTextPolish.polish(html)
+        #expect(out.contains("```html"))
+        #expect(out.contains("<!DOCTYPE html>"))
+        #expect(out.contains("<h1>Hi</h1>"))
+    }
+
+    @Test("a `# comment` line inside a code fence is NOT eaten as a heading")
+    func preservesCodeComments() {
+        let py = "```python\n# reverse a string\ndef rev(s):\n    return s[::-1]\n```"
+        #expect(MessageTextPolish.polish(py) == py)
+    }
+
+    @Test("prose around a fence is still flattened; the fence is left alone")
+    func polishesProseAroundFence() {
+        let text = "**Note:** run this:\n\n```\nls -la\n```\n\nand `done`."
+        let out = MessageTextPolish.polish(text)
+        #expect(out.contains("Note: run this")) // **bold** flattened in prose
+        #expect(out.contains("```\nls -la\n```")) // fence intact (incl. its content)
+        #expect(out.contains("and done.")) // inline `code` flattened in prose
+    }
 }

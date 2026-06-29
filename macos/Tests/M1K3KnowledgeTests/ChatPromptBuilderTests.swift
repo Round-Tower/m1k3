@@ -54,6 +54,17 @@ struct ChatPromptBuilderTests {
         #expect(prompt.contains("say so plainly rather than"))
     }
 
+    @Test("the no-context prompt permits generation and drops the failed-lookup framing")
+    func emptyContextPermitsGeneration() {
+        let prompt = ChatPromptBuilder.build(chunks: [], userMessage: "write me an HTML page")
+        // No more "found nothing in your documents" stapled onto a generative ask.
+        #expect(!prompt.lowercased().contains("found nothing"))
+        // Generation is explicitly licensed.
+        #expect(prompt.contains("write, create, code, or explain"))
+        // Honest abstention survives — for factual questions only.
+        #expect(prompt.contains("never invent facts or sources"))
+    }
+
     @Test("citation label includes heading when present, omits when absent")
     func citationLabel() {
         #expect(ChatPromptBuilder.citationLabel(for: hit("Doc", "1.1 A", "x")) == "[Doc §1.1 A]")

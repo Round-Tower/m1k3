@@ -14,6 +14,12 @@
 //
 //  Signed: Kev + claude-opus-4-8, 2026-06-06, Confidence 0.85,
 //  Prior: the prior knowledge-server project the internal knowledge-server core/ChatPromptBuilder.swift (Kev)
+//  Review: Kev + claude-opus-4-8, 2026-06-29, Confidence 0.85 — the empty-context
+//  branch unconditionally told the model to "say you found nothing in the user's
+//  own documents", framing EVERY no-context turn as a failed lookup — so a
+//  "write me an HTML page" got a confusing failed-lookup disclaimer. Now it
+//  explicitly permits generation (write/create/code/explain are tasks to do, not
+//  lookups) and keeps honest abstention only for factual questions.
 
 import Foundation
 
@@ -26,10 +32,12 @@ public enum ChatPromptBuilder {
             return """
             You are M1K3, a private local assistant.
 
-            No stored knowledge matched this question. Answer from what you
-            genuinely know — and if you don't, say so plainly rather than
-            guessing. Either way, say that you found nothing in the user's own
-            documents or calls.
+            No stored knowledge matched this question — that's fine.
+            A request to write, create, code, or explain something is a task to
+            do — just produce it; stored sources aren't needed for that.
+
+            Answer from what you genuinely know. If it's a fact you don't have,
+            say so plainly rather than guessing — never invent facts or sources.
 
             USER: \(userMessage)
             """

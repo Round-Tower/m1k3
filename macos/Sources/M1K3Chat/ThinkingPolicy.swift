@@ -10,6 +10,14 @@
 //
 //  Signed: Kev + claude-fable-5, 2026-06-10, Confidence 0.8 (heuristic is a
 //  starting point — tune on real turns). Prior: Unknown
+//  Review: Kev + claude-opus-4-8, 2026-06-29, Confidence 0.85 — the per-tier
+//  fast default (df73a25a) removed only the "grounded ⇒ think" trigger, so the
+//  broad substring markers ("how"/"why") and the 12-word length fallback still
+//  fired thinking on nearly every UI message — "fast" was a lie and codegen
+//  ("write"/"code") forced a think phase that ate the token budget the artifact
+//  needs (the "refuses to code" bug). Fix: generation verbs are no longer
+//  "analytic" on any tier, and the speed tier now thinks ONLY on an explicit
+//  deep-reasoning marker (no weak openers, no length). Verify-by-feel at ⌘R.
 //
 
 import Foundation
@@ -44,12 +52,22 @@ enum ThinkingPolicy {
 
     /// Analytic markers — asks that benefit from chain-of-thought even when
     /// short. Matched as SUBSTRINGS (not word prefixes) on purpose — "analy"
-    /// catches analyse/analyze/analysis — which also means "barcode" trips
-    /// "code" and "rewrite" trips "write": acceptable false positives, they
-    /// only cost a think phase. Tune from real ttft logs.
+    /// catches analyse/analyze/analysis. GENERATION verbs ("write"/"code") are
+    /// deliberately NOT here: producing an artifact is a task to DO, not a
+    /// reasoning ask, and a forced think phase eats the token budget the artifact
+    /// itself needs (the "refuses to code" bug). Used on the heavier tiers only.
     private static let analyticMarkers = [
         "why", "how", "explain", "compare", "analy", "plan", "debug",
-        "write", "code", "calculate", "summar", "review", "design",
+        "calculate", "summar", "review", "design",
+    ]
+
+    /// The narrow set the SPEED tiers (Mini/Lil) think on. Only an explicit
+    /// deep-reasoning ask earns the think tax there — never a weak opener
+    /// ("how"/"why"), generation, or mere length, all of which fired on nearly
+    /// every message and made "fast" a lie. Want CoT on a quick brain? Toggle
+    /// Always-think, or pick a heavier brain.
+    private static let strongAnalyticMarkers = [
+        "explain", "compare", "analy", "debug", "step by step", "reason through",
     ]
 
     /// - Parameter fastByDefault: the active brain biases toward speed (Mini/Lil).
@@ -68,8 +86,14 @@ enum ThinkingPolicy {
         case .fast: return false
         case .auto: break
         }
-        if hasGroundedKnowledge, !fastByDefault { return true }
         let lowered = question.lowercased()
+        if fastByDefault {
+            // Speed tier: bias hard to fast. Only an explicit deep-reasoning ask
+            // earns CoT — not grounding, not a weak opener, not length.
+            return strongAnalyticMarkers.contains { lowered.contains($0) }
+        }
+        // Heavier tiers: grounding, an analytic verb, or length all earn CoT.
+        if hasGroundedKnowledge { return true }
         if analyticMarkers.contains(where: { lowered.contains($0) }) { return true }
         let words = lowered.split(whereSeparator: \.isWhitespace).count
         return words >= longQuestionWordCount
