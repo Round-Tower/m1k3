@@ -68,6 +68,19 @@ struct ChatEvalFixturesTests {
         }
     }
 
+    @Test("code-gen fixtures are closed-book, must comply, and assert artifact markers")
+    func codeGenShape() {
+        let codeGen = ChatEvalFixtures.fixtures(for: .codeGen)
+        #expect(codeGen.count >= 5)
+        for fixture in codeGen {
+            #expect(fixture.kind == .codeGen)
+            #expect(fixture.seedDoc == nil, "\(fixture.id) is closed-book — generation, not lookup")
+            #expect(fixture.expectation.mustComply, "\(fixture.id) must require compliance")
+            #expect(!fixture.expectation.mustRefuse, "\(fixture.id) must not expect a refusal")
+            #expect(!fixture.expectation.mustContainAny.isEmpty, "\(fixture.id) needs artifact markers")
+        }
+    }
+
     @Test("open-chat fixtures guard against scaffolding leak")
     func openChatGuardsLeak() {
         for fixture in ChatEvalFixtures.openChat {

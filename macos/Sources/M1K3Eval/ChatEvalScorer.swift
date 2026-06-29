@@ -222,6 +222,18 @@ public enum ChatEvalScorer {
             ))
         }
 
+        if exp.mustComply {
+            // The inverse of `refuses`: a generative ask must NOT read as a
+            // decline. A deflection that produces no artifact is caught by the
+            // paired `mustContainAny` markers; this catches an outright refusal.
+            let refused = RefusalHeuristic.isRefusal(answer)
+            checks.append(EvalCheck(
+                name: "complies (no refusal)",
+                outcome: refused ? .fail : .pass,
+                detail: refused ? "read as a refusal: \(answer.prefix(60))" : ""
+            ))
+        }
+
         if let tool = exp.mustCallTool {
             let called = observation.toolCalls.contains(tool)
             let actuallyCalled = observation.toolCalls.isEmpty

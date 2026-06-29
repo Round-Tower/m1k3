@@ -72,8 +72,8 @@ struct MessageTextPolishTests {
 
     @Test("a `# comment` line inside a code fence is NOT eaten as a heading")
     func preservesCodeComments() {
-        let py = "```python\n# reverse a string\ndef rev(s):\n    return s[::-1]\n```"
-        #expect(MessageTextPolish.polish(py) == py)
+        let pySnippet = "```python\n# reverse a string\ndef rev(s):\n    return s[::-1]\n```"
+        #expect(MessageTextPolish.polish(pySnippet) == pySnippet)
     }
 
     @Test("prose around a fence is still flattened; the fence is left alone")
