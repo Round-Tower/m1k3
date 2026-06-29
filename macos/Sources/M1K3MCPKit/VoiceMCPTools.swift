@@ -27,7 +27,7 @@ import MCP
 public struct VoiceStatus: Sendable, Equatable {
     public let providerName: String
     public let tier: String
-    /// Active brain tier ("Huge M1K3" etc.) — an agent deciding whether to
+    /// Active brain tier ("Huge", "Mini", etc.) — an agent deciding whether to
     /// delegate wants to know if it's talking to Mini or Huge.
     public let brain: String
     /// True from utterance start (synthesis included) until playback ends.

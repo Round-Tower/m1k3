@@ -1307,6 +1307,6 @@ extension AppEnvironment {
     /// Speak a short sample line in the current voice — the onboarding/Settings
     /// "Hear a sample" affordance.
     func speakSample() async {
-        await speech.speak("Hi, I'm M1K3 — your local intelligence, running entirely on this Mac.")
+        await speech.speak("Hi, I'm M1K3 — but my friends call me Mike!")
     }
 }

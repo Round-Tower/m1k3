@@ -38,10 +38,10 @@ struct BrainTierTests {
 
     @Test("display names follow the M1K3 family naming")
     func displayNames() {
-        #expect(BrainTier.mini.displayName == "Mini M1K3")
-        #expect(BrainTier.lil.displayName == "Lil M1K3")
-        #expect(BrainTier.big.displayName == "Big M1K3")
-        #expect(BrainTier.huge.displayName == "Huge M1K3")
+        #expect(BrainTier.mini.displayName == "Mini")
+        #expect(BrainTier.lil.displayName == "Lil")
+        #expect(BrainTier.big.displayName == "Big")
+        #expect(BrainTier.huge.displayName == "Huge")
     }
 
     @Test("Mini runs on Apple Foundation Models with no download")

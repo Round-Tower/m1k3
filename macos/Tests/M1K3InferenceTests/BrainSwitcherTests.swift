@@ -55,14 +55,14 @@ struct BrainSwitcherTests {
         let mini = row(.mini, in: rows(active: .mini))
         #expect(!mini.needsDownload)
         #expect(!mini.isLocked)
-        #expect(mini.menuTitle == "Mini M1K3")
+        #expect(mini.menuTitle == "Mini")
     }
 
     @Test("a selectable, not-yet-downloaded tier needs a download — with a size hint")
     func needsDownloadWithSize() {
         let lil = row(.lil, in: rows(active: .mini))
         #expect(lil.needsDownload)
-        #expect(lil.menuTitle.contains("Lil M1K3"))
+        #expect(lil.menuTitle.contains("Lil"))
         #expect(lil.menuTitle.contains("GB")) // ~2.9 GB
     }
 
@@ -70,30 +70,30 @@ struct BrainSwitcherTests {
     func downloadedIsPlain() {
         let lil = row(.lil, in: rows(active: .lil, downloaded: [.lil]))
         #expect(!lil.needsDownload)
-        #expect(lil.menuTitle == "Lil M1K3")
+        #expect(lil.menuTitle == "Lil")
     }
 
     // MARK: - indicatorLabel (the no-lie-during-download invariant)
 
     @Test("indicator is the plain brain name only when truly settled (idle or ready)")
     func indicatorWhenSettled() {
-        #expect(BrainSwitcher.indicatorLabel(active: .big, load: .ready) == "Big M1K3")
-        #expect(BrainSwitcher.indicatorLabel(active: .big, load: .idle) == "Big M1K3")
+        #expect(BrainSwitcher.indicatorLabel(active: .big, load: .ready) == "Big")
+        #expect(BrainSwitcher.indicatorLabel(active: .big, load: .idle) == "Big")
     }
 
     @Test("indicator flags preparing (loading weights into memory) — not yet ready")
     func indicatorWhilePreparing() {
-        #expect(BrainSwitcher.indicatorLabel(active: .lil, load: .preparing) == "Lil M1K3 · loading")
+        #expect(BrainSwitcher.indicatorLabel(active: .lil, load: .preparing) == "Lil · loading")
     }
 
     @Test("indicator shows the percent while downloading — never a false 'ready'")
     func indicatorWhileDownloading() {
-        #expect(BrainSwitcher.indicatorLabel(active: .big, load: .downloading(fraction: 0.34)) == "Big M1K3 · 34%")
-        #expect(BrainSwitcher.indicatorLabel(active: .big, load: .downloading(fraction: 0)) == "Big M1K3 · 0%")
+        #expect(BrainSwitcher.indicatorLabel(active: .big, load: .downloading(fraction: 0.34)) == "Big · 34%")
+        #expect(BrainSwitcher.indicatorLabel(active: .big, load: .downloading(fraction: 0)) == "Big · 0%")
     }
 
     @Test("indicator flags a failed load")
     func indicatorWhenFailed() {
-        #expect(BrainSwitcher.indicatorLabel(active: .lil, load: .failed(message: "boom")) == "Lil M1K3 · failed")
+        #expect(BrainSwitcher.indicatorLabel(active: .lil, load: .failed(message: "boom")) == "Lil · failed")
     }
 }

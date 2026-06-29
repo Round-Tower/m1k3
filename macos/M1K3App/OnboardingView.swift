@@ -53,7 +53,7 @@ struct OnboardingView: View {
     init(startAtBrain: Bool = false, onComplete: @escaping () -> Void) {
         self.startAtBrain = startAtBrain
         self.onComplete = onComplete
-        _step = State(initialValue: startAtBrain ? .brain : .you)
+        _step = State(initialValue: startAtBrain ? .brain : .speech)
     }
 
     var body: some View {
@@ -67,14 +67,14 @@ struct OnboardingView: View {
                     header(
                         glyph: "person.crop.circle",
                         title: "Hello",
-                        subtitle: "I'm M1K3 — everything you tell me stays on this Mac. Who am I talking to?"
+                        subtitle: "I'm M1K3 — your local AI. Who am I talking to?"
                     )
                     youStep
                 case .brain:
                     header(
                         glyph: "brain.head.profile.fill",
                         title: "M1K3",
-                        subtitle: "Your local intelligence machine. Choose a brain — it runs entirely on this Mac."
+                        subtitle: "My friends call me Mike"
                     )
                     if isWakingBrain { brainAwakening } else { brainPicker }
                 case .voice:
@@ -136,10 +136,6 @@ struct OnboardingView: View {
     /// step call sites' spirit via the per-step EMOTION instead.)
     private func header(glyph _: String, title: String, subtitle: String) -> some View {
         VStack(spacing: 8) {
-//            AvatarView(controller: env.avatar)
-//                .frame(width: 260, height: 150)
-//                .padding(.bottom, 4)
-//                .accessibilityHidden(true)
             Text(title)
                 .font(.pixel(40))
                 .kerning(2)
@@ -297,9 +293,6 @@ private extension OnboardingView {
                 ProgressView()
             }
 
-            Text("Your data stays on your device, always.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
             Spacer()
         }
     }

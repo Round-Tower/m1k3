@@ -550,7 +550,6 @@ private struct ModelGateView: View {
             Rectangle().fill(.ultraThinMaterial).ignoresSafeArea()
             card
                 .padding(28)
-                .glassEffect(.regular, in: .rect(cornerRadius: 20))
                 .padding(40)
         }
         .contentShape(Rectangle()) // swallow taps to the gated surface beneath
@@ -563,7 +562,7 @@ private struct ModelGateView: View {
             VStack(spacing: 16) {
                 if let fraction = state.fraction {
                     ProgressView(value: fraction) {
-                        Label("Waking M1K3", systemImage: "brain")
+                        // NO-op
                     }
                     .progressViewStyle(.linear)
                     .frame(maxWidth: 280)
