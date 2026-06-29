@@ -299,7 +299,9 @@ enum ChatEvalStage {
                     return try await afmNativeToolScore(fixture, start: start, clock: clock)
                 }
                 return try await toolObservationScore(fixture, provider: provider, start: start, clock: clock)
-            case .openChat, .reasoning, .refusal, .security:
+            case .openChat, .reasoning, .codeGen, .refusal, .security:
+                // codeGen is closed-book like the others: plain generate, then the
+                // scorer checks artifact markers + must-comply (no tools, no seed).
                 let raw = try await provider.generate(prompt: fixture.prompt)
                 let ms = milliseconds(clock.now - start)
                 return ChatEvalScorer.score(

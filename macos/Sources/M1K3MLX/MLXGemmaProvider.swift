@@ -102,7 +102,9 @@ public final class MLXGemmaProvider: InferenceProvider, ModelPreloading, @unchec
     /// from toggle support. Read by the tool path to decide the synthetic opener.
     let preOpensThinkTemplate: Bool
     /// The model id this provider was built for — keys the persona prefix.
-    let modelIdentifier: String
+    /// Public so the app can skip a redundant `selectBrain` reload when the active
+    /// provider already serves this model.
+    public let modelIdentifier: String
     /// Per-(tools × persona) prefilled system-block KV prefix; turns start
     /// from copies instead of re-prefilling the persona every time.
     let personaPrefix = PersonaPrefixCache()
@@ -381,9 +383,17 @@ public final class MLXGemmaProvider: InferenceProvider, ModelPreloading, @unchec
                 context: context
             )
             for await _ in stream {}
-            for layer in cache {
-                let extra = layer.offset - ids.count
-                if extra > 0 { _ = layer.trim(extra) }
+            // Trim the sampled token back off — but only on a linear cache. If a
+            // long persona overran a sliding window the cache wrapped, and
+            // trimming a wrapped RotatingKVCache underflows its rotation pointer
+            // (the temporalOrder crash). A wrapped prefix can't be linearly
+            // reused anyway; leave it untrimmed — the cross-turn gate rejects a
+            // non-trimmable seed downstream, so it just re-prefills, never reuses.
+            if CrossTurnCacheReuse.cacheReusable(layersTrimmable: cache.map(\.isTrimmable)) {
+                for layer in cache {
+                    let extra = layer.offset - ids.count
+                    if extra > 0 { _ = layer.trim(extra) }
+                }
             }
             return PrefixBox(cache: cache, tokenIDs: ids)
         }

@@ -47,6 +47,11 @@ public struct ConstellationView: View {
     /// rotation (the field still draws + grows, it just doesn't drift on its own).
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
+    /// Per-frame bookkeeping for the change-gate. A reference type held in `@State`
+    /// so mutating it inside the RealityView update closure costs nothing and does
+    /// NOT trigger SwiftUI invalidation (unlike a @State value would).
+    @State private var syncTracker = SyncTracker()
+
     public init(model: ConstellationModel, growthStep: TimeInterval = 0.08, spread: Float = 1.6) {
         self.model = model
         self.growthStep = growthStep
@@ -54,21 +59,29 @@ public struct ConstellationView: View {
     }
 
     public var body: some View {
-        // TimelineView drives a per-frame tick for the idle animation (breath /
-        // float / slow rotation) — the field feels alive at rest, not a frozen chart.
-        TimelineView(.animation) { timeline in
+        // 30fps is plenty for a gentle breath/float/rotation — uncapped `.animation`
+        // ran at the display's native rate (120Hz on ProMotion), burning 4× the work
+        // for motion the eye can't resolve at this amplitude.
+        TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { timeline in
             RealityView { content in
                 root.addChild(field)
                 content.add(root)
                 content.add(camera)
                 sync(into: field, firstBuild: true)
                 frameToFit()
+                syncTracker.note(model)
             } update: { _ in
-                // Re-runs each frame (timeline) AND whenever a fresh model arrives.
-                // sync adds only what's new, so the field GROWS live without tearing
-                // down the scene or resetting the drag-spin; then re-frame + breathe.
-                sync(into: field, firstBuild: false)
-                frameToFit()
+                // The model only GROWS (sync is additive, entities named by id), so a
+                // node/edge count change is a reliable "something new" signal. Reconcile
+                // + re-frame ONLY then — the old code walked the whole entity tree
+                // (visualBounds) and allocated dedup Sets EVERY frame just to discover
+                // nothing was new. The idle breath/float/rotation still ticks per frame
+                // (three trig ops — cheap), so the field stays alive at rest.
+                if syncTracker.changed(model) {
+                    sync(into: field, firstBuild: false)
+                    frameToFit()
+                    syncTracker.note(model)
+                }
                 if !reduceMotion {
                     idle(at: timeline.date.timeIntervalSince(start))
                 }
@@ -197,6 +210,22 @@ public struct ConstellationView: View {
             .onEnded { value in
                 storedOrientation *= Self.spinDelta(value.translation)
             }
+    }
+
+    /// Tracks the last-reconciled node/edge counts so the per-frame update can skip
+    /// the (allocating, tree-walking) `sync` + `frameToFit` unless the field grew.
+    private final class SyncTracker {
+        private var nodes = -1
+        private var edges = -1
+
+        func changed(_ model: ConstellationModel) -> Bool {
+            model.nodes.count != nodes || model.edges.count != edges
+        }
+
+        func note(_ model: ConstellationModel) {
+            nodes = model.nodes.count
+            edges = model.edges.count
+        }
     }
 
     /// The incremental rotation for a drag translation: yaw about Y, pitch about X.

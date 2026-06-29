@@ -68,7 +68,7 @@ public func makeIntelligenceToolDefinitions(
                 description: "Ask M1K3's local brain a question. The answer is grounded in M1K3's "
                     + "private knowledge store with section-level citations, and may use web search if "
                     + "the user has it enabled in M1K3's settings. Fully local inference — can take tens "
-                    + "of seconds on the larger brains. Check get_voice_status for which brain is active "
+                    + "of seconds on the larger brains. Check get_status for which brain is active "
                     + "and whether a conversation is in progress.",
                 inputSchema: [
                     "type": "object",

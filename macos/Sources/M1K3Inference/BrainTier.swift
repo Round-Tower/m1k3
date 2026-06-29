@@ -71,11 +71,20 @@ public enum BrainTier: String, CaseIterable, Identifiable, Sendable, Comparable 
 
     public var displayName: String {
         switch self {
-        case .mini: "Mini M1K3"
-        case .lil: "Lil M1K3"
-        case .big: "Big M1K3"
-        case .huge: "Huge M1K3"
+        case .mini: "Mini"
+        case .lil: "Lil"
+        case .big: "Big"
+        case .huge: "Huge"
         }
+    }
+
+    /// Speed-first tiers: in auto thinking-mode they don't burn a `<think>` phase
+    /// on a plain grounded lookup (only on genuinely analytic or long asks), where
+    /// the heavier tiers keep the grounded ⇒ think default. Mini is Apple Foundation
+    /// Models (no think toggle), so the flag is a harmless no-op there; Lil is the
+    /// MLX speed tier this actually accelerates.
+    public var prefersFastThinking: Bool {
+        self == .mini || self == .lil
     }
 
     /// The one-line personality hook (lifted from the KMP tiers).

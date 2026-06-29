@@ -46,6 +46,10 @@ let package = Package(
         // routed ReviewTarget. Pure + dependency-free; the QuickLook/WKWebView
         // renderers live in the app target (verify-by-run).
         .library(name: "M1K3Preview", targets: ["M1K3Preview"]),
+        // Diagnostics: privacy scrub + issue-report formatting for the secret-free
+        // "Report an issue" flow. Pure + dependency-free so the redaction rules
+        // are unit-pinned (a miss leaks PII).
+        .library(name: "M1K3Diagnostics", targets: ["M1K3Diagnostics"]),
     ],
     dependencies: [
         .package(url: "https://github.com/groue/GRDB.swift.git", from: "7.0.0"),
@@ -145,6 +149,17 @@ let package = Package(
             name: "M1K3InferenceTests",
             dependencies: ["M1K3Inference"],
             path: "Tests/M1K3InferenceTests"
+        ),
+        // Privacy scrub + issue-report formatting (no deps; the redaction rules
+        // are the most test-worthy code in the report-an-issue feature).
+        .target(
+            name: "M1K3Diagnostics",
+            path: "Sources/M1K3Diagnostics"
+        ),
+        .testTarget(
+            name: "M1K3DiagnosticsTests",
+            dependencies: ["M1K3Diagnostics"],
+            path: "Tests/M1K3DiagnosticsTests"
         ),
         // Local agent: ReAct loop + tool protocol. Pure logic over the
         // InferenceProvider seam — tools are injected, so it tests against

@@ -65,6 +65,12 @@ public struct AgentRAGResponder: RAGResponding, Sendable {
     /// level enum lives in M1K3LanguageModel, which this module deliberately does
     /// NOT link (the dependency-direction trap) — the enum→Int map is the app's job.
     private let maxIterationsProvider: (@Sendable () -> Int)?
+    /// Whether the active brain biases toward fast answers (Mini/Lil), read fresh
+    /// each turn like the other providers so a hot-swap takes effect immediately.
+    /// Feeds `ThinkingPolicy.shouldThink(fastByDefault:)` — the speed tiers skip the
+    /// think phase on plain grounded lookups. Default `false` = the heavy-tier
+    /// behaviour, so existing callers/tests are byte-identical.
+    private let fastThinkingProvider: @Sendable () -> Bool
 
     public init(
         store: KnowledgeStore,
@@ -77,6 +83,7 @@ public struct AgentRAGResponder: RAGResponding, Sendable {
         sourceCollector: ToolSourceCollector? = nil,
         thinkingModeProvider: @escaping @Sendable () -> ThinkingMode = { .auto },
         brainNameProvider: @escaping @Sendable () -> String = { "" },
+        fastThinkingProvider: @escaping @Sendable () -> Bool = { false },
         maxIterationsProvider: (@Sendable () -> Int)? = nil
     ) {
         self.store = store
@@ -90,6 +97,7 @@ public struct AgentRAGResponder: RAGResponding, Sendable {
         self.thinkingModeProvider = thinkingModeProvider
         self.brainNameProvider = brainNameProvider
         self.maxIterationsProvider = maxIterationsProvider
+        self.fastThinkingProvider = fastThinkingProvider
     }
 
     /// Fixed tool list — convenience for tests and simple callers.
@@ -214,7 +222,8 @@ public struct AgentRAGResponder: RAGResponding, Sendable {
         let thinkingEnabled = ThinkingPolicy.shouldThink(
             question: question,
             hasGroundedKnowledge: !chunks.isEmpty,
-            mode: thinkingModeProvider()
+            mode: thinkingModeProvider(),
+            fastByDefault: fastThinkingProvider()
         )
         let emittedLive = Mutex(false)
         do {
@@ -453,6 +462,9 @@ public struct AgentRAGResponder: RAGResponding, Sendable {
         case .react:
             """
             RULES:
+            - A request to write, create, code, or compose something is a task to \
+            DO, not a lookup — just produce it. No tools, no grounding, no citations, \
+            no "found nothing"; those are for factual questions.
             - If the KNOWLEDGE already answers the question, reply IMMEDIATELY \
             starting with "CONCLUSION:" — do not use tools.
             - Cite knowledge sources inline with citation tokens like \
@@ -469,6 +481,9 @@ public struct AgentRAGResponder: RAGResponding, Sendable {
         case .native:
             """
             RULES:
+            - A request to write, create, code, or compose something is a task to \
+            DO, not a lookup — just produce it. No tools, no grounding, no citations, \
+            no "found nothing"; those are for factual questions.
             - Pure small talk — greetings, banter — needs no tools or knowledge; just reply. \
             A question about the current world is NOT small talk, even phrased casually.
             - If the KNOWLEDGE above answers the question, answer from it directly.

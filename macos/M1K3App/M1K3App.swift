@@ -80,7 +80,7 @@ struct M1K3App: App {
                 } else if let startupError = appDelegate.startupError {
                     StartupFailureView(message: startupError)
                 } else {
-                    ProgressView("Waking M1K3…")
+                    ProgressView("M1K3…")
                         .controlSize(.large)
                         .frame(minWidth: 560, minHeight: 480)
                 }

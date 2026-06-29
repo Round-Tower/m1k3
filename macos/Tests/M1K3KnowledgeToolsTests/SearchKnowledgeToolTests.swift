@@ -216,6 +216,49 @@ struct SearchKnowledgeToolTests {
         #expect(!result.output.contains("throughput"))
     }
 
+    @Test("a relevant memory surfaces even when documents fill the result limit (two-lane budget)")
+    func memoryNotCrowdedOutByDocuments() async throws {
+        let store = try KnowledgeStore()
+        // Query word appears in NO content, so FTS contributes nothing and the
+        // vector cosine deterministically orders the lanes.
+        let query = "who is lila"
+        let doc1 = "Project alpha shipped in Q1."
+        let doc2 = "Project beta shipped in Q2."
+        let doc3 = "Project gamma shipped in Q3."
+        let memory = "Ada is a marine biologist."
+        let embedder = ScriptedEmbedder(vectors: [
+            query: [1, 0],
+            doc1: [0.95, 0.312], // every document out-scores the memory…
+            doc2: [0.93, 0.367],
+            doc3: [0.91, 0.414],
+            memory: [0.6, 0.8], // …but the memory still clears both bars (cosine 0.6)
+        ])
+
+        let docID = UUID()
+        let docChunks = [doc1, doc2, doc3].enumerated().map {
+            KnowledgeChunk(itemID: docID, ordinal: $0.offset, content: $0.element)
+        }
+        try store.index(
+            item: KnowledgeItem(id: docID, kind: .document, title: "Projects"),
+            chunks: docChunks,
+            embeddings: await embedder.embedBatch(docChunks.map(\.content))
+        )
+        let memID = UUID()
+        let memChunks = [KnowledgeChunk(itemID: memID, ordinal: 0, content: memory)]
+        try store.index(
+            item: KnowledgeItem(id: memID, kind: .memory, title: "Ada"),
+            chunks: memChunks,
+            embeddings: await embedder.embedBatch(memChunks.map(\.content))
+        )
+
+        // limit 2 < the 3 documents: a single-lane top-K would be ALL documents and
+        // the memory would never appear. The two-lane budget gives memories their own
+        // slots — this is the search_knowledge "Ada gap" the chat path didn't have.
+        let tool = SearchKnowledgeTool(store: store, embedder: embedder, limit: 2)
+        let result = try await tool.execute(input: ["query": query])
+        #expect(result.output.contains("marine biologist"))
+    }
+
     @Test("an FTS-only hit (no vector score) does not survive the hybrid floor")
     func ftsOnlyDroppedInHybrid() async throws {
         let store = try KnowledgeStore()

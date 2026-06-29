@@ -78,4 +78,11 @@ public final class GRDBCallPersistence: CallPersistence, @unchecked Sendable {
             return db.changesCount > 0
         }
     }
+
+    /// Cheap count — never reads or decrypts a payload, just counts rows.
+    public func count() throws -> Int {
+        try dbQueue.read { db in
+            try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM call_sessions") ?? 0
+        }
+    }
 }

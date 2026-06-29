@@ -57,4 +57,25 @@ struct CrossTurnCacheReuseTests {
         // cached holds more than the render shares — clamp to full.count - 1
         #expect(CrossTurnCacheReuse.reusableLength(cached: [1, 2, 3, 4, 5], full: [1, 2, 3], hasCache: true) == 2)
     }
+
+    // MARK: - trimmability gate (the RotatingKVCache wrap crash)
+
+    @Test("a fully-trimmable cache (Qwen3 KVCacheSimple) is reusable")
+    func allTrimmableReusable() {
+        // Every layer linear → trimming the tail is positionally sound.
+        #expect(CrossTurnCacheReuse.cacheReusable(layersTrimmable: [true, true, true]))
+    }
+
+    @Test("a wrapped sliding-window layer (gemma-4 RotatingKVCache) blocks reuse")
+    func oneWrappedLayerBlocksReuse() {
+        // gemma-4 mixes linear full-attention layers with sliding layers; once a
+        // sliding layer wraps it reports isTrimmable=false. Trimming it would
+        // underflow `idx` → temporalOrder assert. One false vetoes the whole cache.
+        #expect(!CrossTurnCacheReuse.cacheReusable(layersTrimmable: [true, false, true]))
+    }
+
+    @Test("no live cache (empty layers) is not reusable")
+    func emptyLayersNotReusable() {
+        #expect(!CrossTurnCacheReuse.cacheReusable(layersTrimmable: []))
+    }
 }

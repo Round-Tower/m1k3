@@ -20,4 +20,22 @@ enum CrossTurnCacheReuse {
         let common = SystemBlockBoundary.commonPrefixLength(cached, full)
         return min(common, full.count - 1)
     }
+
+    /// Whether the live cache may be trimmed-and-reused this turn (and whether
+    /// its post-generation tail may be trimmed back into a faithful mirror).
+    ///
+    /// Reuse trims the cache down to the reusable prefix and prefills only the
+    /// suffix — which assumes a LINEAR cache, where a token's logical position
+    /// equals its physical slot. Qwen3's `KVCacheSimple` is always linear. A
+    /// sliding-window cache (gemma-4's `RotatingKVCache`, `keep: 0`) holds that
+    /// only until it WRAPS: past the window, `trim(_:)` clamps against `offset`,
+    /// not the internal rotation pointer `idx`, so trimming more than `idx`
+    /// drives it negative and the next decode asserts in `temporalOrder`
+    /// (`array[..., 0 ..< idx, ...]` with `idx < 0`). Upstream signals the
+    /// wrapped state as `isTrimmable == false` (`offset >= maxSize`), so trim —
+    /// for reuse OR for the post-turn mirror — is safe iff EVERY layer is
+    /// currently trimmable. An empty list means no live cache: not reusable.
+    static func cacheReusable(layersTrimmable: [Bool]) -> Bool {
+        !layersTrimmable.isEmpty && layersTrimmable.allSatisfy { $0 }
+    }
 }

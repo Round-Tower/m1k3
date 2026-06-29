@@ -38,6 +38,8 @@ struct SettingsView: View {
     @AppStorage(MenuBarGlyphStyle.storageKey) private var glyphStyle = MenuBarGlyphStyle.pixelM
     @State private var profileDraft = ""
     @State private var showLicenses = false
+    @State private var issueReported = false
+    @State private var issueTruncated = false
 
     var body: some View {
         @Bindable var env = env
@@ -313,6 +315,29 @@ struct SettingsView: View {
                         .monospacedDigit()
                     LabeledContent("Model availability",
                                    value: env.providerAvailable ? "Ready" : "Unavailable")
+                }
+
+                Section {
+                    Button("Report an issue…") {
+                        Task {
+                            issueTruncated = await IssueReporter.reportIssue(
+                                activeBrain: env.selectedBrain.displayName,
+                                userProfile: M1K3Persona.userProfile
+                            )
+                            issueReported = true
+                        }
+                    }
+                    .buttonStyle(.glass)
+                } header: {
+                    Text("Diagnostics")
+                } footer: {
+                    Text(issueReported
+                        ? (issueTruncated
+                            ? "Full report copied to your clipboard — paste it into the issue body on GitHub."
+                            : "Opened a prefilled issue on GitHub (also copied to your clipboard). Review before you submit.")
+                        : "Copies recent logs + this Mac's details, scrubbed of paths, emails and "
+                        + "your name, then opens a prefilled GitHub issue. Nothing is sent until you submit.")
+                        .font(.caption).foregroundStyle(.secondary)
                 }
 
                 Section {

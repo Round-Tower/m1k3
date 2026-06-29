@@ -659,6 +659,18 @@ final class AppEnvironment {
     /// warm the model so onboarding / Settings show a real download bar. Mini is
     /// instant — Apple Foundation Models, no download.
     func selectBrain(_ tier: BrainTier) {
+        // Already on this exact MLX brain and it's loaded — re-selecting would spin up
+        // a fresh MLXGemmaProvider (cold persona-KV prefix) and release the warm one,
+        // repaying a multi-GB load + persona prefill for nothing. A non-ready state
+        // (failed / downloading / idle) falls through so onboarding "Try again" and
+        // first-wake still re-attempt. Mini (no mlxModelID) is cheap, so it's not guarded.
+        if tier == selectedBrain,
+           case .ready = modelLoad,
+           let modelID = tier.mlxModelID,
+           modelID == currentMLXProvider.modelIdentifier
+        {
+            return
+        }
         selectedBrain = tier
         UserDefaults.standard.set(tier.rawValue, forKey: Self.selectedBrainKey)
         UserDefaults.standard.set(true, forKey: Self.hasChosenBrainKey)
@@ -919,7 +931,7 @@ extension AppEnvironment {
 
     func refreshCounts() { // internal: MCP remember tool refreshes after ingest
         indexedItemCount = (try? store.itemCount()) ?? indexedItemCount
-        callCount = (try? callPersistence.loadAll().count) ?? callCount
+        callCount = (try? callPersistence.count()) ?? callCount
     }
 }
 
@@ -1295,6 +1307,6 @@ extension AppEnvironment {
     /// Speak a short sample line in the current voice — the onboarding/Settings
     /// "Hear a sample" affordance.
     func speakSample() async {
-        await speech.speak("Hi, I'm M1K3 — your local intelligence, running entirely on this Mac.")
+        await speech.speak("Hi, I'm M1K3 — but my friends call me Mike!")
     }
 }
