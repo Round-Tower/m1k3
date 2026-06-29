@@ -257,12 +257,17 @@ struct SettingsView: View {
                 } header: {
                     Text("Tools")
                 } footer: {
-                    Text("M1K3 can search the web (DuckDuckGo) and read result pages "
-                        + "mid-answer. This is the one capability that sends anything off "
-                        + "this Mac — every search and page read is shown in the reply as "
-                        + "it happens. Date, time and system status tools stay fully local. "
-                        + "Off means the model can't see the web tools at all.")
-                        .font(.caption).foregroundStyle(.secondary)
+                    // Multiline literal (not a + chain): the SwiftUI ViewBuilder
+                    // type-checker times out on multi-segment String concatenation
+                    // (the PR #92 lesson) — backslash continuations keep it one line.
+                    Text("""
+                    M1K3 can search the web (DuckDuckGo) and read result pages \
+                    mid-answer. This is the one capability that sends anything off \
+                    this Mac — every search and page read is shown in the reply as \
+                    it happens. Date, time and system status tools stay fully local. \
+                    Off means the model can't see the web tools at all.
+                    """)
+                    .font(.caption).foregroundStyle(.secondary)
                 }
 
                 mcpSection
@@ -281,12 +286,15 @@ struct SettingsView: View {
                 } header: {
                     Text("Reasoning")
                 } footer: {
-                    Text("Reasoning models think out loud before answering — great for "
-                        + "hard questions, slow for small talk. Auto skips the thinking "
-                        + "on casual turns and keeps it for grounded or analytic ones. "
-                        + "Voice mode has its own thinking toggle (the brain button) "
-                        + "and ignores this setting while active.")
-                        .font(.caption).foregroundStyle(.secondary)
+                    // Multiline literal, not a + chain (see the web-search footer above).
+                    Text("""
+                    Reasoning models think out loud before answering — great for \
+                    hard questions, slow for small talk. Auto skips the thinking \
+                    on casual turns and keeps it for grounded or analytic ones. \
+                    Voice mode has its own thinking toggle (the brain button) \
+                    and ignores this setting while active.
+                    """)
+                    .font(.caption).foregroundStyle(.secondary)
                 }
 
                 Section {
