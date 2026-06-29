@@ -15,7 +15,7 @@ the nightly Developer-ID DMG are separate (see *How it composes* at the end).
 | Layer | Tool | Trigger | Job |
 |---|---|---|---|
 | PR gate | GitHub Actions `ci.yml` | every PR | `swift test` (macos-26) + Python smoke + Claude review — fast |
-| **Release** | **Xcode Cloud** | push to `master` | full `swift test` gate (in `ci_post_clone`) → Archive → **TestFlight** |
+| **Release** | **Xcode Cloud** | push to `master` | Analyze → **Test** (`M1K3.xcworkspace` / `M1K3-Tests`) → Archive → **TestFlight** (+ `swift test` belt-gate in `ci_post_clone`) |
 | Nightly DMG | GitHub Actions cron | nightly | Developer-ID notarized `.dmg` → GitHub Release |
 
 Xcode Cloud manages signing natively (cloud signing via your ASC API key) — **no
@@ -53,23 +53,51 @@ separate Developer-ID DMG path (`tools/release/release-macos.sh`).
   "don't build" globs: `**/*.md`, `marketing/**`, `site/**`, `docs/**`,
   `**/project-memory.md`. (Keeps a README merge from minting a TestFlight build.)
 
-### Actions — just one: Archive (the test gate runs in `ci_post_clone`)
-1. **Archive**
-   - **Scheme:** `M1K3`  ·  **Platform:** macOS
-   - **Distribution:** *TestFlight (Internal Testing) and App Store*
+### Actions — Analyze → Test → Archive
+1. **Analyze** — **Scheme:** `M1K3` · **Platform:** macOS.
+2. **Test** — **Workspace:** `M1K3.xcworkspace` · **Scheme:** `M1K3-Tests` · **Platform:** macOS.
+3. **Archive** — **Scheme:** `M1K3` · **Platform:** macOS · **Distribution:** *TestFlight (Internal) and App Store*.
 
-> **⚠️ Do NOT add an Xcode Cloud "Test" action — it would be a hollow green gate.**
-> The app scheme's `<Testables>` is **empty**: M1K3's tests live in the SwiftPM package
-> (18 `*Tests` targets), and package test targets are not scheme-testable, so a Test
-> action runs **zero** tests and passes regardless of regressions.
+> **⚠️ The Test action MUST use the workspace `M1K3.xcworkspace` + scheme `M1K3-Tests`,
+> NOT the app project's `M1K3` scheme.** This is the one piece you wire in App Store Connect.
 >
-> The **real full-suite gate runs in `ci_scripts/ci_post_clone.sh`** (step 5): it calls
-> `swift test`, which AUTO-DISCOVERS every test target in `Package.swift` — the exact
-> invocation the PR `ci.yml` uses, so the two gates can't drift, and new test targets are
-> picked up with no list to maintain. `ci_post_clone` runs **before** any action, so a red
-> suite exits non-zero, **fails the whole build run, and Archive never runs** → nothing
-> reaches TestFlight. That is the "successful test gate." Emergency archive-only run:
-> set `CI_SKIP_TESTS=1` as a workflow environment variable.
+> Why: the app project depends on the package's *products* (libraries), so its `M1K3`
+> scheme can't reference the package's 19 *test* targets — a Test action on `M1K3` runs
+> **zero** tests (a hollow green gate). The fix is a committed **`M1K3.xcworkspace`** that
+> includes the package as a top-level member, plus a shared **`M1K3-Tests`** scheme that
+> lists all 19 package test targets (with `M1K3_MLX_INTEGRATION=0`, so the GPU/metallib
+> integration tier stays off — the fast tiers all run). `build-for-testing` then produces
+> real `.xctest` bundles and `test-without-building` runs them → native xcresult, a red
+> suite **fails the run and Archive never runs** → nothing reaches TestFlight.
+>
+> **⚠️ Two non-obvious requirements for ASC to show `M1K3-Tests` (both load-bearing):**
+>
+> 1. **Scheme location** — it lives in the *package's* shared schemes,
+>    `macos/.swiftpm/xcode/xcshareddata/xcschemes/M1K3-Tests.xcscheme`, NOT at the
+>    workspace level. Xcode Cloud's picker enumerates schemes from the *containers* (the
+>    project + the package), not workspace-level shared schemes. `.swiftpm/` is otherwise
+>    gitignored — `macos/.gitignore` un-ignores just this one path.
+> 2. **The workspace references the package as a FOLDER** (`<FileRef location="group:.">`),
+>    not as `group:Package.swift`. A *file* ref to `Package.swift` exposes **no** schemes;
+>    only a *folder* ref makes the package a real workspace member whose shared schemes
+>    surface. The folder ref is also what keeps the workspace valid in a **fresh clone**:
+>    the second ref (`group:M1K3.xcodeproj`, for the app `M1K3` scheme used by Archive) is
+>    gitignored and absent until `xcodegen` runs — and a workspace whose *only* refs are
+>    missing loads to **zero schemes** (an empty dropdown). With the always-present folder
+>    ref, the package schemes show regardless; the app scheme joins once xcodegen runs.
+>
+> Net: set the container to `macos/M1K3.xcworkspace`; `M1K3-Tests` appears near the top of
+> the Scheme dropdown (the `-` sorts before letters).
+>
+> A **drift guard** (`tools/ci/check_test_scheme.py`, run in `ci_post_clone` *and* the PR
+> `ci.yml`) fails CI if a `.testTarget` is added to `Package.swift` but not the scheme —
+> so the hand-listed scheme can't silently fall behind.
+>
+> **Belt-and-suspenders (current):** `ci_post_clone.sh` still runs the full `swift test`
+> gate before any action — auto-discovers every target, independent of the scheme list.
+> Keep both until the native Test action has a few green runs; then the `swift test` gate
+> can be retired to drop the double-run (it currently runs once per action). Emergency
+> archive-only run: set `CI_SKIP_TESTS=1` as a workflow environment variable.
 
 ### Post-Actions
 - **TestFlight Internal Testing** → your internal tester group.
@@ -149,16 +177,19 @@ fi
 ## 6. How it composes
 
 - **PR** → GitHub Actions `ci.yml` (fast gate; merge-blocker).
-- **Merge to `master`** → Xcode Cloud `Release` (full `swift test` gate in `ci_post_clone` → Archive → TestFlight; optional MLX smoke per §4).
+- **Merge to `master`** → Xcode Cloud `Release` (Analyze → native **Test** via `M1K3.xcworkspace`/`M1K3-Tests` → Archive → TestFlight; `swift test` belt-gate in `ci_post_clone`; optional MLX smoke per §4).
 - **Nightly** → GitHub Actions cron → Developer-ID notarized `.dmg` → rolling `nightly` GitHub
   Release (the off-store / Homebrew-cask path; separate signing creds, not this pipeline).
 - **Metadata** → `fastlane mac metadata` (`deliver`) — text/screenshots only, run when copy changes.
 
 ---
 
-*Signed: Kev + claude-opus-4-8, 2026-06-19, Confidence 0.82 (the full-suite gate is now a
-LIVE `swift test` in `ci_post_clone.sh` — verified the scheme's `<Testables>` is empty, so the
-old "Test action" design was a hollow gate; `swift test` auto-discovery matches `ci.yml` and
-gates Archive→TestFlight. Confidence isn't higher because the ASC workflow itself is
-documented-not-executed (workflows live in App Store Connect, not the repo) and the MLX smoke's
-Xcode-Cloud GPU/model feasibility is still the named §4 unknown). Prior: Kev + claude-opus-4-8.*
+*Signed: Kev + claude-opus-4-8, 2026-06-26, Confidence 0.85 (the native Test action is now
+REAL: a committed `M1K3.xcworkspace` + shared `M1K3-Tests` scheme make the 19 package test
+targets scheme-testable — verified on-device with `xcodebuild test`, all 19 bundles green incl.
+the MLX/Metal suites under the native action, `M1K3_MLX_INTEGRATION=0` keeping the integration
+tier off; a drift guard (PR + Release) stops the hand-listed scheme silently falling behind the
+package. Confidence isn't higher because the ASC-side wiring — point the Test action at the
+workspace/scheme — is a manual one-time step done in App Store Connect, not the repo, and the
+first real Release run is the proof. Prior: Kev + claude-opus-4-8, 2026-06-19 (the swift-test
+post-clone gate, now kept as the belt-and-suspenders layer).*

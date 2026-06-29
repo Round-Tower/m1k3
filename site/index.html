@@ -42,7 +42,7 @@
   "downloadUrl": "https://github.com/Round-Tower/m1k3",
   "author": { "@type": "Organization", "name": "Round Tower", "url": "https://round-tower.ie", "sameAs": ["https://github.com/Round-Tower"] },
   "sameAs": ["https://github.com/Round-Tower/m1k3"],
-  "dateModified": "2026-06-13"
+  "dateModified": "2026-06-26"
 }
 </script>
 <script type="application/ld+json">
@@ -61,7 +61,7 @@
     { "@type": "Question", "name": "Can Claude or other AI agents use my M1K3 knowledge?",
       "acceptedAnswer": { "@type": "Answer", "text": "Yes. M1K3 ships an MCP (Model Context Protocol) server exposing search_knowledge, list_documents, and get_document, so Claude and other MCP clients can query your local knowledge base, locally." } },
     { "@type": "Question", "name": "Is M1K3 free and open source?",
-      "acceptedAnswer": { "@type": "Answer", "text": "Yes. M1K3 is free and open source, developed by Round Tower in Ireland. You can build it from source on GitHub today or join the launch list for the packaged app." } }
+      "acceptedAnswer": { "@type": "Answer", "text": "Yes. M1K3 is free for humans, forever, and open source, developed by Round Tower in Ireland — no account, no subscription, no telemetry. You can join the TestFlight beta today or build it from source on GitHub. An optional GitHub Sponsors page funds development without gating features." } }
   ]
 }
 </script>
@@ -392,10 +392,10 @@
     <h1 class="headline reveal in">Your AI.<br />Your Mac.<br /><span class="dim" id="rotator">Nothing leaves.</span></h1>
     <p class="sub reveal in">M1K3 is a native AI companion that runs <strong>entirely on your Mac</strong>. Local models, live voice, a knowledge graph that remembers everything — and a network cable it never asks for.</p>
     <div class="cta-row reveal in">
-      <a class="btn btn-primary" href="#get">Download for macOS</a>
+      <a class="btn btn-primary" href="https://testflight.apple.com/join/UCUJGbJe">Join the TestFlight beta</a>
       <a class="btn btn-ghost" href="#features">See what's inside</a>
     </div>
-    <div class="hero-meta">REQUIRES MACOS 26 TAHOE · APPLE SILICON · FREE &amp; OPEN SOURCE</div>
+    <div class="hero-meta">REQUIRES MACOS 26 TAHOE · APPLE SILICON · FREE FOR HUMANS, FOREVER</div>
   </div>
   <div class="companion-hint" id="companionHint" aria-hidden="true">
     <span class="k">click</span> · it plays<br /><span class="k">dbl-click</span> · it changes
@@ -528,7 +528,7 @@ the action list?<br />
     </details>
     <details class="reveal">
       <summary>Is it free?</summary>
-      <p>Free and open source, made by Round Tower in Ireland. Build from source today, or join the launch list for the packaged app.</p>
+      <p>Free for humans, forever — and open source, made by Round Tower in Ireland. No account, no subscription, no telemetry. Join the TestFlight beta or build from source today. If M1K3 earns a place on your Mac, there's an optional <a href="https://github.com/sponsors/Round-Tower">GitHub Sponsors</a> page — it funds development, never gates features.</p>
     </details>
   </div>
 </section>
@@ -537,18 +537,19 @@ the action list?<br />
 
 <!-- ================= FINAL CTA ================= -->
 <section class="final" id="get">
-  <span class="label reveal">// launching soon</span>
+  <span class="label reveal">// now in open beta</span>
   <h2 class="reveal" style="margin-top:18px;">Own your AI.</h2>
-  <p class="reveal">M1K3 for Mac is in final testing. Join the launch list and be first to run it — or build it from source today.</p>
+  <p class="reveal">M1K3 for Mac is on TestFlight now. Free for humans, forever — run it on your own Mac, or build it from source.</p>
   <div class="cta-row reveal" style="justify-content:center;">
-    <a class="btn btn-primary" href="mailto:hello@round-tower.ie?subject=M1K3%20launch%20list">Join the launch list</a>
+    <a class="btn btn-primary" href="https://testflight.apple.com/join/UCUJGbJe">Join the TestFlight beta</a>
     <a class="btn btn-ghost" href="https://github.com/Round-Tower/m1k3">Build from source</a>
   </div>
+  <p class="reveal" style="margin-top:30px; font-family:var(--mono); font-size:13px; letter-spacing:0.06em; color:var(--ink-faint);">Free, and staying that way. If it earns a place on your Mac, you can <a href="https://github.com/sponsors/Round-Tower" style="color:var(--ink-dim); text-decoration:underline;">sponsor its development</a> — optional, never nagged.</p>
 </section>
 
 <footer>
   <span>© 2026 <a href="https://round-tower.ie">ROUND TOWER</a> · MADE IN IRELAND · FOX: <a href="https://github.com/KhronosGroup/glTF-Sample-Assets/tree/main/Models/Fox" rel="license">PIXELMANNEN / TOMKRANIS, CC-BY 4.0</a> · CREATURES: <a href="https://quaternius.com" rel="license">QUATERNIUS, CC0</a></span>
-  <span><button class="share-link" id="shareBtn" type="button" aria-label="Share M1K3">SHARE ↗</button> · <a href="https://github.com/Round-Tower/m1k3">GITHUB</a> · NO TRACKING ON THIS PAGE, OBVIOUSLY</span>
+  <span><button class="share-link" id="shareBtn" type="button" aria-label="Share M1K3">SHARE ↗</button> · <a href="https://github.com/sponsors/Round-Tower" aria-label="Sponsor M1K3 on GitHub">SPONSOR ♥</a> · <a href="https://github.com/Round-Tower/m1k3">GITHUB</a> · NO TRACKING ON THIS PAGE, OBVIOUSLY</span>
 </footer>
 
 <!-- ================= SCRIPTS ================= -->
@@ -573,7 +574,7 @@ the action list?<br />
        "Nothing leaves." stays in the static markup (SEO / no-JS) and leads the
        cycle. Skipped entirely under prefers-reduced-motion. */
     var rotator = document.getElementById('rotator');
-    var phrases = ['Nothing leaves.', 'No data centers.', 'Eco friendly.', 'Open source.'];
+    var phrases = ['Nothing leaves.', 'Free for humans.', 'No data centers.', 'Eco friendly.', 'Open source.'];
     var reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     if (rotator && !reduceMotion) {
       var pi = 0;
@@ -903,6 +904,18 @@ tick();
      camera drift softened (2.2/3.0 → 0.6/1.2) so the companion stays framed
      top-to-bottom instead of flying away after the hero. Verified live via
      Chrome DevTools (1440 desktop hero/band/features/native/final + 414 mobile);
-     no console errors. -->
+     no console errors.
+
+     Review: Kev + claude-opus-4-8, 2026-06-26, Confidence 0.85.
+     Monetisation + launch-status pass. Position is now "free for humans, forever"
+     (hero meta, rotator phrase, both FAQ surfaces, final CTA, JSON-LD). The mailto
+     launch-list retired — primary CTA across hero + final is the live TestFlight
+     beta (testflight.apple.com/join/UCUJGbJe). Added one optional, never-nagged
+     support path: GitHub Sponsors (github.com/sponsors/Round-Tower) in the footer,
+     final CTA, and both FAQ answers + a repo .github/FUNDING.yml. One vendor only,
+     per Kev's minimal-vendor call; Sponsors not yet enabled on GitHub, so the link
+     is a dormant placeholder until flipped on. dateModified bumped per marketing
+     README. No new network requests; "no tracking" promise intact. Prior: Kev +
+     claude-opus-4-8 (this file). -->
 </body>
 </html>

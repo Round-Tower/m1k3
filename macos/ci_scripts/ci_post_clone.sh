@@ -46,13 +46,23 @@ cd "$MACOS_DIR"
 # committed at macos/Package.resolved and copied into the workspace here — else
 # resolution fails with exit 74 ("a resolved file is required…") the moment a
 # new dependency (e.g. onnxruntime) isn't in the project's lock.
-echo "--- Seeding committed Package.resolved into the generated workspace..."
+echo "--- Seeding committed Package.resolved into the generated workspaces..."
 RESOLVED_SRC="$MACOS_DIR/Package.resolved"
-RESOLVED_DST="$MACOS_DIR/M1K3.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved"
+# Two containers need the lockfile under Xcode Cloud's locked-resolution mode:
+#  • the Archive action builds the app via M1K3.xcodeproj (its internal workspace)
+#  • the Test action builds via the committed M1K3.xcworkspace (the package-test
+#    scheme M1K3-Tests lives there — the app project can't reference package test
+#    targets, so the workspace is the testing container). Miss either → exit 74.
+RESOLVED_DSTS=(
+  "$MACOS_DIR/M1K3.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved"
+  "$MACOS_DIR/M1K3.xcworkspace/xcshareddata/swiftpm/Package.resolved"
+)
 if [ -f "$RESOLVED_SRC" ]; then
-  mkdir -p "$(dirname "$RESOLVED_DST")"
-  cp "$RESOLVED_SRC" "$RESOLVED_DST"
-  echo "    seeded $RESOLVED_DST"
+  for RESOLVED_DST in "${RESOLVED_DSTS[@]}"; do
+    mkdir -p "$(dirname "$RESOLVED_DST")"
+    cp "$RESOLVED_SRC" "$RESOLVED_DST"
+    echo "    seeded $RESOLVED_DST"
+  done
 else
   echo "⚠️  $RESOLVED_SRC missing — resolution may fail under Xcode Cloud's locked mode."
 fi
@@ -62,6 +72,16 @@ echo "--- Resolving Swift packages..."
 xcodebuild -resolvePackageDependencies \
   -scheme M1K3 \
   -project "$MACOS_DIR/M1K3.xcodeproj"
+
+# 4b. SCHEME-DRIFT GUARD: the native Test action (Xcode Cloud) runs the test
+# targets hand-listed in the M1K3-Tests package scheme — xcodegen/the app
+# project CAN'T reference package test targets, so that list is the source of
+# truth for what gets tested. If a `.testTarget` lands in Package.swift but not
+# the scheme, its tests would silently never run (a hollow-green gate). This
+# fails the build loudly on any such drift. Cheap, no build. (Also enforced on
+# PRs in ci.yml, so this rarely fires here — defence in depth.)
+echo "--- Checking M1K3-Tests scheme covers every package test target…"
+python3 "$MACOS_DIR/tools/ci/check_test_scheme.py"
 
 # 5. THE DEPLOY GATE: run the FULL SwiftPM test suite before anything is archived.
 # WHY HERE and not an Xcode Cloud "Test" action: the app scheme's <Testables> is
