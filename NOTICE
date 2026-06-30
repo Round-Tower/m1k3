@@ -1,0 +1,30 @@
+M1K3
+Copyright 2026 Kevin Murphy
+
+This product includes software developed by Kevin Murphy and contributors,
+licensed under the Apache License, Version 2.0 (see LICENSE).
+
+M1K3 is built in the open with MurphySig provenance (https://murphysig.dev):
+the commit history records human–AI collaboration on the record. Per the
+LICENSE, please retain attribution and provenance notices in derivative works.
+
+------------------------------------------------------------------------------
+Third-party components
+------------------------------------------------------------------------------
+
+This repository incorporates third-party components that remain governed by
+their own licenses. The macOS app's bundled dependency notices are generated
+into macos/M1K3App/ThirdPartyLicenses.plist; notable components include:
+
+  - llama.cpp — MIT License (included as a git submodule under
+    app/composeApp/src/androidMain/cpp/llama.cpp)
+  - MLX / mlx-swift / mlx-swift-lm — MIT License
+  - WhisperKit — MIT License
+  - Model weights (Qwen3, Gemma 4) — Apache License 2.0, retrieved at runtime
+  - 3D avatar assets — Creative Commons / asset-store terms; see the license
+    files within their respective directories (e.g. app/3d/, and per-asset
+    license.txt files such as app/3d/mask/license.txt)
+
+Nothing in the Apache-2.0 LICENSE for M1K3's own materials modifies the terms
+of these third-party components. Consult each component's own license for the
+governing terms.

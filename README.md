@@ -149,13 +149,13 @@ Architecture and current state: [`CLAUDE.md`](./CLAUDE.md).
 Inference, retrieval, and voice run on-device. No telemetry; conversations stay
 on your machine. Network is only used to download models on first run.
 
-## License & Access
+## License
 
-**Proprietary — all rights reserved.** M1K3 is a private, invitation-only
-project. There is no general public grant: absent a written grant of access from
-the Owner, you may not access, copy, use, or redistribute the Software. See
-[`LICENSE`](./LICENSE) for the full terms.
+**[Apache License 2.0](./LICENSE).** M1K3 is free and open source — use it, fork
+it, build on it, commercially or otherwise. Attribution and third-party notices
+are in [`NOTICE`](./NOTICE).
 
-If you've been invited (or want to be), start with [`ACCESS.md`](./ACCESS.md)
-for how access works, and [`ACCESS_AGREEMENT.md`](./ACCESS_AGREEMENT.md) for the
-terms every Authorized User accepts.
+Contributions are welcome and are accepted under the same Apache-2.0 terms (per
+section 5 of the License). M1K3 is built in the open with
+[MurphySig](https://murphysig.dev) provenance — the git history is signed,
+human-and-AI collaboration on the record.
