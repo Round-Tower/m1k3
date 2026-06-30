@@ -109,9 +109,9 @@ struct MemoryGroundingTests {
         - For current or external information — weather, news, prices, \
         anything happening now — use web_search. search_knowledge only \
         finds documents already stored on this Mac.
-        - web_search returns links and snippets. For details \
-        (like an actual forecast), run fetch_page on the most \
-        relevant result URL, then conclude from the page text.
+        - web_search returns snippets AND automatically reads the \
+        top result's page for you. Use fetch_page only to read a \
+        DIFFERENT result in full, then conclude from the page text.
         """
         let actual = AgentRAGResponder.grounding(
             chunks: [docHit()], toolNames: allTools, style: .react
@@ -147,9 +147,9 @@ struct MemoryGroundingTests {
         - For current or external information — weather, news, prices, \
         anything happening now — use web_search. search_knowledge only \
         finds documents already stored on this Mac.
-        - web_search returns links and snippets. For details \
-        (like an actual forecast), run fetch_page on the most \
-        relevant result URL, then conclude from the page text.
+        - web_search returns snippets AND automatically reads the \
+        top result's page for you. Use fetch_page only to read a \
+        DIFFERENT result in full, then conclude from the page text.
         """
         let actual = AgentRAGResponder.grounding(
             chunks: [], toolNames: allTools, style: .native
