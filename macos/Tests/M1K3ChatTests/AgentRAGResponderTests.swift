@@ -198,6 +198,37 @@ private func collect(_ stream: AsyncStream<String>) async -> String {
 // MARK: - Tests
 
 struct AgentRAGResponderTests {
+    @Test("the history budget provider scales the replayed conversation in the prompt (long context)")
+    func historyBudgetScalesReplay() async throws {
+        let (store, embedder) = try await ingestedStore()
+        // 10 prior turns of ~300 chars each, oldest = [1], newest = [10].
+        let history = (1 ... 10).map { i in
+            ChatTurn(
+                role: i % 2 == 0 ? .assistant : .user,
+                text: "[\(i)]" + String(repeating: "h", count: 300)
+            )
+        }
+        func firstPrompt(_ budget: HistoryWindow.Budget) async throws -> String {
+            let provider = AgentScriptedProvider(["CONCLUSION: ok"])
+            let responder = AgentRAGResponder(
+                store: store, embedder: embedder, provider: provider,
+                toolsProvider: { [] },
+                historyBudgetProvider: { budget }
+            )
+            let (_, stream) = try await responder.answerStreaming("follow up?", history: history) { _ in }
+            _ = await collect(stream)
+            return try #require(provider.allPrompts.first)
+        }
+        let wide = try await firstPrompt(.init(totalChars: 6000, perTurnChars: 1500, maxTurns: 20))
+        let tight = try await firstPrompt(.init(totalChars: 800, perTurnChars: 1500, maxTurns: 20))
+        // A wider budget replays more history → a longer prompt that still holds the oldest turn;
+        // the tight budget drops the oldest. This is the long-context knob biting end-to-end.
+        #expect(wide.count > tight.count)
+        #expect(wide.contains("[1]"))
+        #expect(!tight.contains("[1]"))
+        #expect(tight.contains("[10]")) // newest always survives
+    }
+
     @Test("immediate conclusion: sources up front, grounded prompt, streamed answer")
     func immediateConclusion() async throws {
         let (store, embedder) = try await ingestedStore()
@@ -658,6 +689,21 @@ struct AgentRAGResponderTests {
             chunks: [groundingChunk()], toolNames: ["web_search"], style: .native
         )
         #expect(!webOnly.contains("lookup_fact"))
+    }
+
+    @Test("the rules free the model to answer well-known facts from its own knowledge")
+    func rulesFreeKnownFacts() {
+        let rules = AgentRAGResponder.grounding(
+            chunks: [groundingChunk()],
+            toolNames: ["lookup_fact", "web_search", "search_knowledge"],
+            style: .native
+        )
+        // The old leash ("don't answer from memory and risk a confident mistake")
+        // made the model defer EVERY fact to lookup_fact and abstain without it.
+        #expect(!rules.contains("don't answer from memory"))
+        // Freedom: answer what you reliably know; look up only when genuinely unsure.
+        #expect(rules.contains("just answer from what you know"))
+        #expect(rules.contains("lookup_fact")) // still routed for genuine uncertainty
     }
 
     @Test("the rules tell the model to answer with uncertainty when a lookup fails")

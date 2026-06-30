@@ -119,6 +119,50 @@ struct MemoryFactParserTests {
         #expect(MemoryFactParser.parse("I am a helpful assistant and I think...").isEmpty)
         #expect(MemoryFactParser.parse("").isEmpty)
     }
+
+    @Test("role-fence: a fact conflating the user with the assistant is dropped")
+    func dropsAssistantConflation() {
+        let raw = """
+        FACT: The user's name is M1K3.
+        FACT: The user prefers metric units.
+        """
+        #expect(MemoryFactParser.parse(raw) == ["The user prefers metric units."])
+    }
+}
+
+// MARK: - Validator (role-fence)
+
+struct MemoryFactValidatorTests {
+    @Test("rejects facts that conflate the user with the assistant by name")
+    func rejectsNameConflation() {
+        #expect(!MemoryFactValidator.isAcceptable("The user's name is M1K3"))
+        #expect(!MemoryFactValidator.isAcceptable("The user is called M1K3."))
+        #expect(!MemoryFactValidator.isAcceptable("The user is M1K3"))
+        #expect(!MemoryFactValidator.isAcceptable("M1K3 is the user"))
+    }
+
+    @Test("rejects facts that describe the user as an AI/assistant (assistant self-description)")
+    func rejectsIdentityAttribution() {
+        #expect(!MemoryFactValidator.isAcceptable("The user is an AI assistant"))
+        #expect(!MemoryFactValidator.isAcceptable("The user is a chatbot."))
+        #expect(!MemoryFactValidator.isAcceptable("The user is a language model"))
+    }
+
+    @Test("keeps genuine user facts, including near-keyword phrasings (no false positives)")
+    func keepsGenuineFacts() {
+        #expect(MemoryFactValidator.isAcceptable("Kev's sister is called Aoife."))
+        #expect(MemoryFactValidator.isAcceptable("The user prefers metric units."))
+        #expect(MemoryFactValidator.isAcceptable("Kev lives in Cork."))
+        // false-positive guards: mentions M1K3 / contains "program" but is genuine
+        #expect(MemoryFactValidator.isAcceptable("The user is building an app called M1K3."))
+        #expect(MemoryFactValidator.isAcceptable("The user is a programmer."))
+        // The user builds a THING named M1K3 — the conflation is "the user IS
+        // M1K3", not "the user's project is M1K3". Subject must be the user.
+        #expect(MemoryFactValidator.isAcceptable("The user's project is called M1K3."))
+        #expect(MemoryFactValidator.isAcceptable("The user's app is named M1K3."))
+        #expect(MemoryFactValidator.isAcceptable("The user's project name is M1K3."))
+        #expect(MemoryFactValidator.isAcceptable("The user is a research assistant."))
+    }
 }
 
 // MARK: - Normalizer

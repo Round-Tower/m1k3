@@ -296,6 +296,49 @@ struct MemoryDistillationTriggerTests {
         session.startNewConversation()
         #expect(session.distillationTask == nil)
     }
+
+    // MARK: - Rolling (mid-session) distillation
+
+    @Test("rolling policy: fires only once the undistilled backlog outgrows the window")
+    func rollingPolicyThreshold() {
+        let n = ChatSession.rollingDistillBacklog
+        #expect(!ChatSession.shouldRollingDistill(messageCount: n - 1, watermark: 0))
+        #expect(ChatSession.shouldRollingDistill(messageCount: n, watermark: 0))
+        // The watermark offsets the backlog — only UN-distilled turns count.
+        #expect(!ChatSession.shouldRollingDistill(messageCount: n + 5, watermark: 6))
+        #expect(ChatSession.shouldRollingDistill(messageCount: n + 6, watermark: 6))
+    }
+
+    @Test("a long live session distills mid-stream, before any exit (no more mid-session amnesia)")
+    func rollingDistillsMidSession() async throws {
+        let f = try Fixture()
+        // Each echo exchange = 2 messages; drive past the rolling backlog WITHOUT
+        // ever switching or exiting the conversation.
+        let exchanges = ChatSession.rollingDistillBacklog / 2
+        for i in 1 ... exchanges {
+            await f.exchange("fact number \(i)")
+        }
+        await f.session.distillationTask?.value
+
+        #expect(f.distiller.callCount == 1) // distilled WITHOUT an exit
+        let id = f.session.activeConversationID
+        #expect(try f.history.distilledWatermark(id: id) == f.session.messages.count)
+        #expect(try f.store.allItems(kind: .memory).count == 1)
+    }
+
+    @Test("a short session does NOT distill mid-stream — cost stays off the hot path")
+    func shortSessionNoRollingDistill() async throws {
+        let f = try Fixture()
+        for i in 1 ... 3 {
+            await f.exchange("fact \(i)")
+        } // 6 messages, under the backlog
+        #expect(f.session.distillationTask == nil) // nothing fired mid-session
+        #expect(f.distiller.callCount == 0)
+
+        f.session.startNewConversation() // exit still distills, exactly as before
+        await f.session.distillationTask?.value
+        #expect(f.distiller.callCount == 1)
+    }
 }
 
 private extension WatermarkHistoryStore {

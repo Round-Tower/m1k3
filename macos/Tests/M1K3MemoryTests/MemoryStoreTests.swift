@@ -426,3 +426,38 @@ struct MemoryStoreRevisionTests {
         #expect(try f.store.revision() == f.store.revision())
     }
 }
+
+// MARK: - Edge-on-write (the graph actually becomes a graph)
+
+struct MemoryStoreConnectedWriteTests {
+    @Test("rememberConnected links a new fact to a semantically-similar existing fact")
+    func connectsSimilar() async throws {
+        let f = try Fixture()
+        let a = try await f.remember("alpha beta gamma") // seed node
+        let b = Memory(kind: .note, text: "alpha beta gamma delta", source: "test")
+        let links = try f.store.rememberConnected(b, embedding: await f.vec(b.text))
+        #expect(links == 1)
+        #expect(try f.store.related(to: a.id).map(\.id).contains(b.id))
+    }
+
+    @Test("rememberConnected leaves an unrelated fact isolated — no hairball")
+    func isolatesUnrelated() async throws {
+        let f = try Fixture()
+        _ = try await f.remember("alpha beta gamma")
+        let c = Memory(kind: .note, text: "zeta eta theta", source: "test")
+        let links = try f.store.rememberConnected(c, embedding: await f.vec(c.text))
+        #expect(links == 0)
+        #expect(try f.store.related(to: c.id).isEmpty)
+    }
+
+    @Test("rememberConnected caps edges at maxLinks so a common topic can't hairball")
+    func capsDegree() async throws {
+        let f = try Fixture()
+        for i in 1 ... 5 {
+            try await f.remember("alpha beta gamma \(i)")
+        }
+        let n = Memory(kind: .note, text: "alpha beta gamma", source: "test")
+        let links = try f.store.rememberConnected(n, embedding: await f.vec(n.text), maxLinks: 3)
+        #expect(links == 3)
+    }
+}

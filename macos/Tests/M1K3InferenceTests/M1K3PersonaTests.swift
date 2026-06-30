@@ -61,6 +61,13 @@ struct M1K3PersonaTests {
         #expect(M1K3Persona.systemPrompt.contains("Never invent"))
     }
 
+    @Test("frees well-known facts from its own knowledge (anti-fabrication, not over-grounded)")
+    func ownKnowledgeCounts() {
+        let p = M1K3Persona.systemPrompt
+        #expect(p.contains("Never invent")) // anti-fabrication preserved
+        #expect(p.contains("your own solid knowledge")) // own-knowledge counts as knowing
+    }
+
     @Test("injects the current month + year to keep the model honest about time")
     func currentDate() throws {
         var comps = DateComponents()
