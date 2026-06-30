@@ -295,7 +295,9 @@ public struct AgentRAGResponder: RAGResponding, Sendable {
         }
         let retrievedCount = retrieved.count
         let keptCount = kept.count
-        log.info("grounding gate: kept \(keptCount)/\(retrievedCount)")
+        // .notice (not .info): the gate decision is load-bearing for diagnosing a
+        // bad retrieval from a captured issue report, where .info/.debug don't persist.
+        log.notice("grounding gate: kept \(keptCount)/\(retrievedCount)")
     }
 
     /// Map agent-loop events to UI activity.
@@ -315,7 +317,9 @@ public struct AgentRAGResponder: RAGResponding, Sendable {
 
     private static func logTurnStart(chunks: [ChunkHit], tools: [any AgentTool], grounding: String) {
         let toolNames = tools.map(\.name).sorted().joined(separator: ", ")
-        log.info("""
+        // .notice: retrieval count + grounding size at turn start is a primary
+        // breadcrumb — it must survive into a default-level issue-report capture.
+        log.notice("""
         turn start: \(chunks.count) chunk(s) retrieved, tools=[\(toolNames, privacy: .public)], \
         grounding=\(grounding.count) chars
         """)

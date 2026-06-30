@@ -13,6 +13,7 @@
 
 import Foundation
 import MCP
+import os
 
 /// One tool: its MCP declaration plus the handler that runs it.
 public struct MCPToolDefinition: Sendable {
@@ -27,6 +28,7 @@ public struct MCPToolDefinition: Sendable {
 
 /// Name-keyed dispatch over a fixed set of tool definitions.
 public struct MCPToolRegistry: Sendable {
+    private static let log = Logger(subsystem: "app.m1k3", category: "mcp")
     private let definitions: [MCPToolDefinition]
 
     public init(_ definitions: [MCPToolDefinition]) {
@@ -51,6 +53,9 @@ public struct MCPToolRegistry: Sendable {
             let text = try await definition.handler(arguments)
             return CallTool.Result(content: [.text(text: text, annotations: nil, _meta: nil)])
         } catch {
+            // The client gets isError, but Kev debugging from the app's own logs
+            // saw nothing for a thrown tool — record the tool NAME (never args: PII).
+            Self.log.error("tool \"\(name, privacy: .public)\" threw: \(error.localizedDescription, privacy: .public)")
             return CallTool.Result(
                 content: [.text(text: "Error: \(error)", annotations: nil, _meta: nil)],
                 isError: true

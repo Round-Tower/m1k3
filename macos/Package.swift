@@ -20,6 +20,7 @@ let package = Package(
     name: "M1K3",
     platforms: [.macOS(.v26)],
     products: [
+        .library(name: "M1K3LogCore", targets: ["M1K3LogCore"]),
         .library(name: "M1K3Knowledge", targets: ["M1K3Knowledge"]),
         .library(name: "M1K3Memory", targets: ["M1K3Memory"]),
         .library(name: "M1K3MemoryViz", targets: ["M1K3MemoryViz"]),
@@ -93,6 +94,20 @@ let package = Package(
         .package(url: "https://github.com/microsoft/onnxruntime-swift-package-manager", from: "1.16.0"),
     ],
     targets: [
+        // The single source of truth for unified logging: the `app.m1k3`
+        // subsystem + the category catalogue + LogPreview. DEPENDENCY-FREE on
+        // purpose so every target (including the heavy MLX/Kokoro/WhisperKit
+        // seams) can reference the constants without dragging in the agent
+        // stack. The SubsystemGuard test scans the tree to enforce uniformity.
+        .target(
+            name: "M1K3LogCore",
+            path: "Sources/M1K3LogCore"
+        ),
+        .testTarget(
+            name: "M1K3LogCoreTests",
+            dependencies: ["M1K3LogCore"],
+            path: "Tests/M1K3LogCoreTests"
+        ),
         .target(
             name: "M1K3Knowledge",
             dependencies: [
@@ -166,7 +181,7 @@ let package = Package(
         // fakes with no model. Knowledge-backed tools wire in at the app layer.
         .target(
             name: "M1K3Agent",
-            dependencies: ["M1K3Inference", "M1K3LanguageModel"],
+            dependencies: ["M1K3LogCore", "M1K3Inference", "M1K3LanguageModel"],
             path: "Sources/M1K3Agent"
         ),
         .testTarget(
@@ -409,7 +424,7 @@ let package = Package(
         .target(
             name: "M1K3Kokoro",
             dependencies: [
-                "M1K3Voice", "M1K3Inference",
+                "M1K3LogCore", "M1K3Voice", "M1K3Inference",
                 .product(name: "onnxruntime", package: "onnxruntime-swift-package-manager"),
             ],
             path: "Sources/M1K3Kokoro",

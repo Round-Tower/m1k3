@@ -12,10 +12,12 @@
 //  Signed: Kev + claude-opus-4-8, 2026-06-16, Confidence 0.8, Prior: Unknown
 
 import Foundation
+import os
 
 @MainActor
 @Observable
 public final class LaunchAtLogin {
+    private static let log = Logger(subsystem: "app.m1k3", category: "launch")
     private let item: any LoginItemManaging
 
     /// Last-known service status, mirrored for SwiftUI observation.
@@ -64,7 +66,10 @@ public final class LaunchAtLogin {
                 if current != .notRegistered { try item.unregister() }
             }
         } catch {
+            // SMAppService register/unregister failures only reached the UI string;
+            // log them too so a login-item that won't enable leaves a trace.
             lastError = error.localizedDescription
+            Self.log.error("setEnabled failed: \(error.localizedDescription, privacy: .public)")
         }
         refresh()
     }

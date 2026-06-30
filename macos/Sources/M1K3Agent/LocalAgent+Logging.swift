@@ -11,6 +11,7 @@
 //  Signed: Kev + claude-fable-5, 2026-06-10, Confidence 0.85, Prior: Unknown
 
 import Foundation
+import M1K3LogCore
 import os
 
 extension LocalAgent {

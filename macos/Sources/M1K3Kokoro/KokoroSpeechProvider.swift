@@ -27,13 +27,14 @@
 
 import Foundation
 import M1K3Inference
+import M1K3LogCore
 import M1K3Voice
 import os
 
 public final class KokoroSpeechProvider: SpeechProviderWithWordTiming, ModelPreloading, @unchecked Sendable {
     public let name = "kokoro"
 
-    private static let log = Logger(subsystem: "dev.m1k3.kokoro", category: "voice")
+    private static let log = M1K3Log.logger(.voice)
 
     /// Public release of the Kokoro v1.0 ONNX weights (matches the filenames M1K3
     /// already ships under `models/kokoro/`). The spike loads these.
@@ -194,7 +195,13 @@ public final class KokoroSpeechProvider: SpeechProviderWithWordTiming, ModelPrel
         }
 
         lock.withLock { _ready = true }
-        try? await synthesizer.preload()
+        do {
+            try await synthesizer.preload()
+        } catch {
+            // Same as the on-disk path above: Apple-voice fallback is the intended
+            // recovery, but a "neural voice ready" that then can't synthesise needs a signal.
+            Self.log.warning("Kokoro preload failed: \(error.localizedDescription, privacy: .public)")
+        }
         progress(1)
     }
 

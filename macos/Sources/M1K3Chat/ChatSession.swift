@@ -19,6 +19,7 @@
 import Foundation
 import M1K3Knowledge
 import Observation
+import os
 
 /// The seam ChatSession drives. RAGResponder conforms; tests inject fakes so the
 /// reducer is exercised without a model, store, or embedder.
@@ -157,6 +158,7 @@ public struct ChatTranscriptStore: Sendable {
 @MainActor
 @Observable
 public final class ChatSession {
+    private static let log = Logger(subsystem: "app.m1k3", category: "responder")
     public private(set) var messages: [ChatMessage] = []
     public private(set) var isResponding = false
 
@@ -319,7 +321,13 @@ public final class ChatSession {
     /// drawer to refresh. Lazy row creation happens here — nowhere else writes.
     func persistActiveConversation() {
         guard let history else { return }
-        try? history.save(id: activeConversationID, messages: messages, updatedAt: Date())
+        do {
+            try history.save(id: activeConversationID, messages: messages, updatedAt: Date())
+        } catch {
+            // The transcript silently failed to persist while the UI looks saved —
+            // record it (GRDB redacts SQL args by default, so this is PII-safe).
+            Self.log.error("conversation save failed: \(error.localizedDescription, privacy: .public)")
+        }
         historyRevision += 1
     }
 

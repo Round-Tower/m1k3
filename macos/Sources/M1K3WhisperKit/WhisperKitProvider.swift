@@ -27,6 +27,7 @@ import AVFoundation
 import Foundation
 import M1K3Inference
 import M1K3Voice
+import os
 @preconcurrency import WhisperKit
 
 /// `@unchecked Sendable`: WhisperKit + the active streamer/continuation are
@@ -34,6 +35,7 @@ import M1K3Voice
 public final class WhisperKitProvider: TranscriptionProvider, @unchecked Sendable {
     public let name = "WhisperKit"
 
+    private static let log = Logger(subsystem: "app.m1k3", category: "stt")
     private let lock = NSLock()
     private var whisperKit: WhisperKit?
     private var streamer: AudioStreamTranscriber?
@@ -151,7 +153,13 @@ public final class WhisperKitProvider: TranscriptionProvider, @unchecked Sendabl
 
             Task {
                 do { try await streamer.startStreamTranscription() }
-                catch { self.stopListening() }
+                catch {
+                    // Mid-session stream failure (CoreML hiccup, audio route change,
+                    // decoder error) otherwise looks identical to a normal silence
+                    // endpoint downstream — leave a trail before tearing down.
+                    Self.log.error("stream transcription failed: \(error.localizedDescription, privacy: .public)")
+                    self.stopListening()
+                }
             }
         }
     }
