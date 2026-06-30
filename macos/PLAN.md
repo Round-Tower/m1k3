@@ -630,6 +630,60 @@ SwiftUI, macOS 26, native `.glassEffect` / `GlassEffectContainer` for the real L
 
 ---
 
+### STATUS 2026-06-30 — third-party codebase review triaged (CODEBASE_REVIEW_2026-06-30.md)
+
+A non-Claude tool ("opencode/big-pickle") produced a 16-finding firehose review of `macos/` +
+the legacy Python MCP server (`docs/CODEBASE_REVIEW_2026-06-30.md`). A recoup session
+adversarially verified the highest-confidence findings against current source before acting —
+several didn't survive contact with the live codebase:
+
+- **Actioned (shipped this session):** CQ-3 (NSLock/Mutex inconsistency) — unified
+  `SwappableInferenceProvider` + `SwappableSpeechProvider` on `Synchronization.Mutex`, dropping
+  `@unchecked Sendable`; mechanical, existing test coverage carried through unchanged.
+- **REFUTED — claim was already stale by the time it was reviewed:** S-3 ("`.mcp.json` points to
+  Python") — `.mcp.json` was fixed to point at the in-app HTTP server *earlier the same day*
+  (commits `1eead79d`/`45ed9722`), before this review doc was even written. Corrected two
+  downstream-stale doc references (root `CLAUDE.md`, `README.md`) that still claimed
+  `mcp_unified_server.py` "remains live."
+- **REFUTED — dead code, not a live bug:** CQ-1 (`ProviderRouter` generate/generateStreaming
+  fall-through asymmetry) and CQ-4 (its dead `anyAvailable` store) — `ProviderRouter` is never
+  constructed in `M1K3App/`; production routes through `RuntimeInferenceProvider`'s single-active-
+  backend model instead. Left unfixed; **open decision for Kev:** delete `ProviderRouter` (dead) or
+  wire it in as the real selection mechanism — polishing it in place fixes nothing live either way.
+- **CONFIRMED but NOT a same-session fix:** CQ-8 (MCP timeout) — the claim's "120s" framing was
+  wrong (the real binding ceiling on the MCP surface is the tighter 50s `IntelligenceMCPTools`
+  timeout, not `MCPHostController`'s 120s, which only gates the Siri/Shortcuts App Intent path).
+  The underlying problem is real and already worked around (verify thinking models in-app, not over
+  MCP). A poll-based fix needs a new client-visible MCP tool surface + a job registry — a protocol
+  decision, not a patch. **Demonstrated live this session:** an `ask_m1k3` call during dogfooding hit
+  exactly this 50s ceiling.
+- **CONFIRMED but inert/low-priority:** P-1 (duplicate `generate_response` methods in
+  `simple_ai_engine.py`, actually ~8 duplicated methods not 1) and P-2 (`mcp_unified_server.py`
+  blocks on `sd.wait()`) — both real, but `mcp_unified_server.py` is no longer the live MCP path
+  (see S-3) and `simple_ai_engine.py` is only reachable from the archived `_legacy/` CLI tree.
+- **Also fixed (separately tracked, not from this review):** the already-scoped
+  `voice-priority-inversion` hang risk (auto-memory) — `StreamingPlaybackSession.complete()` called
+  `player.stop()` synchronously from whatever QoS context triggered it (including a user-initiated
+  stop on a high-QoS caller); deferred to a `.utility`-priority `Task`. The companion `isSpeaking()`
+  MainActor-hop (`EffectfulSpeechProvider.swift:142`) and the 33ms `StreamingPlaybackSession.tick()`
+  poll loop are both real but verify-by-launch-only (no automated threading regression coverage) —
+  left as a named follow-up rather than guessed at blind.
+- **Not yet triaged:** S-1/S-2/S-4/S-5 (structural — AppEnvironment/ChatSession size, 22-target
+  proliferation, dual-database architecture) and T-1/T-3 (UI test coverage) remain open in the
+  original doc for a future pass.
+
+<!-- Signed: Kev + claude-sonnet-5, 2026-06-30, Confidence 0.85, Prior: Kev + opencode/big-pickle
+     (CODEBASE_REVIEW_2026-06-30.md), Kev + claude-opus-4-8 (this file).
+     Context: verified-review pass (7 parallel adversarial-verify agents) over the third-party
+     review's highest-confidence findings before acting on any of them. Two findings flipped from
+     "high confidence bug" to "dead code" on contact with the actual call graph (CQ-1/CQ-4); one
+     flipped from "needs fixing" to "already fixed earlier today" (S-3); one was demonstrated live
+     during MCP dogfooding (CQ-8). The lesson: verify a third-party review's claims against current
+     source before fixing — confidence scores in the source doc reflect a deep read, not a
+     verified one. -->
+
+---
+
 ## Files to reuse (vendor + MurphySig review)
 
 | Capability | Source (read-only IP) |
