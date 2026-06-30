@@ -1,11 +1,8 @@
 {
   "mcpServers": {
     "m1k3": {
-      "command": "python",
-      "args": ["mcp_unified_server.py"],
-      "env": {
-        "PYTHONPATH": "."
-      }
+      "type": "url",
+      "url": "http://127.0.0.1:4242/mcp"
     }
   }
 }
