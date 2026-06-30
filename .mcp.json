@@ -1,7 +1,7 @@
 {
   "mcpServers": {
     "m1k3": {
-      "type": "url",
+      "type": "http",
       "url": "http://127.0.0.1:4242/mcp"
     }
   }
