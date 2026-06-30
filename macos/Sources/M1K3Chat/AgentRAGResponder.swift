@@ -443,6 +443,12 @@ public struct AgentRAGResponder: RAGResponding, Sendable {
         using the INFORMATION GATHERED below. Be direct and plain — do not \
         mention tools or actions.
 
+        First check the gathered information actually answers the question. If it \
+        does NOT establish that the thing asked about exists — it only mentions the \
+        words separately, or covers a related-but-different topic — say plainly you \
+        couldn't confirm it, and don't present a guess as fact. Do NOT stitch \
+        tangential mentions into an affirmative answer.
+
         INFORMATION GATHERED:
         \(observations.joined(separator: "\n\n"))
 

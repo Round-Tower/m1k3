@@ -56,6 +56,20 @@ struct M1K3PersonaTests {
         #expect(prompt.contains("humour"))
     }
 
+    @Test("the VOICE gives the character room to breathe (not just clipped brevity)")
+    func voicePermitsCharacterToBreathe() {
+        // Kev's 2026-06-30 character pass: the v2 brevity clamp ("brief / don't
+        // pad") read as CURT on the 4B tiers — the costume was there, the warmth
+        // wasn't. The voice now permits good-company verbosity (a dry aside, a
+        // teach that breathes) WHILE keeping the never-pad/never-recap clamp on
+        // facts. The truth-guards (HONESTY / ABSOLUTE RULES) are untouched.
+        let prompt = M1K3Persona.systemPrompt.lowercased()
+        #expect(prompt.contains("good company")) // permission to be company, not a results page
+        #expect(prompt.contains("breathe")) // explicit room for character
+        // …but the anti-pad clamp on facts survives (warmth ≠ rambling).
+        #expect(prompt.contains("never pad") || prompt.contains("don't pad"))
+    }
+
     @Test("stays honest: never invent facts or citations")
     func honesty() {
         #expect(M1K3Persona.systemPrompt.contains("Never invent"))
@@ -98,20 +112,22 @@ struct M1K3PersonaTests {
             core: M1K3Persona.corePrompt + "\n" + M1K3Persona.currentDateLine(september),
             profile: nil
         )
-        #expect(worst.count < 3500) // v2 runtime floor ≈ 3250 (v1 was ~850); the rules block is the cost
+        #expect(worst.count < 3800) // v2 floor ≈3250 + the 2026-06-30 character pass (≈+270, VOICE breathes); cached on MLX, negligible on mini
     }
 
-    @Test("voice exemplars are three illustration beats with no copyable turn scaffolding")
+    @Test("voice exemplars are four illustration beats with no copyable turn scaffolding")
     func voiceExemplars() {
         let exemplars = M1K3Persona.voiceExemplars
-        // Three beats, framed as quoted illustrations…
-        #expect(exemplars.components(separatedBy: "- Asked").count - 1 == 3)
+        // Four beats, framed as quoted illustrations (the 4th = the companion /
+        // "good company" register added in the 2026-06-30 character pass)…
+        #expect(exemplars.components(separatedBy: "- Asked").count - 1 == 4)
         // …NOT "USER:/M1K3:" chat turns a weak 4B would continue verbatim (the
         // exemplar-bleed fix). No speaker labels for the model to echo.
         #expect(!exemplars.contains("USER:"))
         #expect(!exemplars.contains("M1K3:"))
         #expect(exemplars.contains("honey")) // the curious-fact beat
         #expect(exemplars.contains("cod you")) // the honest-abstention beat, in voice
+        #expect(exemplars.contains("the Mac'll keep")) // the companion beat (warmth + privacy)
         #expect(exemplars.contains("?")) // ends beats with a question back
     }
 
@@ -121,7 +137,7 @@ struct M1K3PersonaTests {
         #expect(full.hasPrefix(M1K3Persona.systemPrompt))
         #expect(full.contains("by example")) // the exemplar block rode along…
         #expect(!full.contains("USER:")) // …without the copyable scaffolding
-        #expect(full.count < 4200) // v2 core + exemplars ≈ 3949 (cached MLX path)
+        #expect(full.count < 4700) // v2 core + 4 exemplars after the character pass (cached MLX path; was ≈3949 / 3 beats)
 
         let compact = M1K3Persona.systemPrompt(includeExemplars: false)
         #expect(compact == M1K3Persona.systemPrompt)

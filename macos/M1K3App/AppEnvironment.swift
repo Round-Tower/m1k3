@@ -1006,10 +1006,30 @@ extension AppEnvironment {
     }
 
     /// Launch-time housekeeping off the init path: restore the user profile
-    /// into the persona, then the one-time embedder re-index check.
+    /// into the persona, the one-time embedder re-index check, then pre-warm the
+    /// embedder so the first chat turn doesn't pay a cold model load.
     func runStartupMaintenance() async {
         M1K3Persona.setUserProfile(try? store.meta(key: Self.userProfileMetaKey))
         await reindexIfEmbedderChanged()
+        await warmEmbedderOnLaunch()
+    }
+
+    /// Pre-warm the embedder at launch so the FIRST chat turn isn't slow.
+    /// Every turn embeds the query BEFORE retrieval + generation, on the critical
+    /// path to the first token (`AgentRAGResponder.answerStreaming`); the MLX
+    /// embedder (~600MB) lazy-loads on its first `embed`, so without this the
+    /// first question stalls on that cold Metal load before M1K3 even starts
+    /// thinking — a chunk of the "TTFT is off on the first reply" feel. One
+    /// throwaway embed loads the container + warms the kernels. Idempotent (the
+    /// container is cached, so it's a no-op if `reindexIfEmbedderChanged` already
+    /// ran), and near-free on the Hashing embedder. Off the main critical path —
+    /// it's launch housekeeping, not gated on a turn.
+    ///
+    /// Signed: Kev + claude-opus-4-8, 2026-06-30, Confidence 0.8 (TTFT first-turn
+    /// fix; the cold-embedder-on-critical-path was traced in code, the win is
+    /// verify-by-launch via SelfTest). Prior: this file.
+    private func warmEmbedderOnLaunch() async {
+        _ = try? await embedder.embed("warm")
     }
 
     /// The user's self-description (onboarding "you" step). Lives in
