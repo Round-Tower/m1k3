@@ -76,6 +76,106 @@ private struct FixedTool: AgentTool {
     }
 }
 
+/// A `ToolCallingProvider` reproducing the gemma-4 live shapes: its session
+/// streams an optional natural-language PREFACE, emits a tool call, then on the
+/// post-tool turn either reasons into SILENCE or free-forms content-free FILLER
+/// (configurable). Either way the loose in-loop conclusion is unreliable, so the
+/// responder's gather-then-synthesise path must answer over the gathered
+/// evidence instead. `generateStreaming` serves that grounded synthesis (gemma's
+/// competent path) and records its prompt so the test can prove the answer came
+/// FROM the evidence.
+private final class PrefacingToolProvider: ToolCallingProvider, @unchecked Sendable {
+    let name = "prefacing-tool"
+    let isAvailable = true
+    let supportsToolCalls = true
+
+    private let preface: String
+    private let toolName: String
+    private let toolQuery: String
+    private let fallbackAnswer: String
+    private let synthesisText: String
+    private let lock = NSLock()
+    private var prompts: [String] = []
+
+    init(
+        preface: String, toolName: String, toolQuery: String, fallbackAnswer: String,
+        synthesisText: String = ""
+    ) {
+        self.preface = preface
+        self.toolName = toolName
+        self.toolQuery = toolQuery
+        self.fallbackAnswer = fallbackAnswer
+        self.synthesisText = synthesisText
+    }
+
+    func makeToolTurnSession(
+        tools _: [ToolDefinition], options _: ToolTurnOptions
+    ) async throws -> any ToolTurnSession {
+        PrefacingSession(
+            preface: preface, toolName: toolName, toolQuery: toolQuery, synthesisText: synthesisText
+        )
+    }
+
+    /// Never called — the native loop drives the overridden session. Fail loudly
+    /// if the contract ever changes so the gap can't hide behind a silent empty turn.
+    func continueToolTurn(messages _: [ToolMessage], tools _: [ToolDefinition]) async throws -> ToolTurn {
+        fatalError("PrefacingToolProvider.continueToolTurn should never be called — loop uses makeToolTurnSession")
+    }
+
+    func generate(prompt: String) async throws -> String {
+        lock.withLock { prompts.append(prompt) }
+        return fallbackAnswer
+    }
+
+    /// One chunk (not cumulative) so it composes cleanly with the live preface in
+    /// `collect`'s prefix-folding.
+    func generateStreaming(prompt: String) -> AsyncStream<String> {
+        lock.withLock { prompts.append(prompt) }
+        let answer = fallbackAnswer
+        return AsyncStream { continuation in
+            continuation.yield(answer)
+            continuation.finish()
+        }
+    }
+
+    var allPrompts: [String] {
+        lock.withLock { prompts }
+    }
+}
+
+/// Streams an optional preface live, returns one tool call, then emits the
+/// (configurable) post-tool turn — empty (reasons into silence) OR content-free
+/// filler that ignores the observation. The two live gemma failure modes.
+private final class PrefacingSession: ToolTurnSession, @unchecked Sendable {
+    private let preface: String
+    private let toolName: String
+    private let toolQuery: String
+    private let synthesisText: String
+    private let lock = NSLock()
+    private var turn = 0
+
+    init(preface: String, toolName: String, toolQuery: String, synthesisText: String) {
+        self.preface = preface
+        self.toolName = toolName
+        self.toolQuery = toolQuery
+        self.synthesisText = synthesisText
+    }
+
+    func send(
+        _: [ToolMessage], onToken: @escaping @Sendable (String) -> Void
+    ) async throws -> ToolTurn {
+        let current = lock.withLock { defer { turn += 1 }; return turn }
+        guard current == 0 else {
+            // Post-tool turn: filler (or nothing) that ignores the observation —
+            // the responder must synthesise over the gathered evidence instead.
+            if !synthesisText.isEmpty { onToken(synthesisText) }
+            return .text(synthesisText)
+        }
+        if !preface.isEmpty { onToken(preface) } // optional answer-channel preface
+        return .toolCalls([ParsedToolCall(name: toolName, arguments: ["query": .string(toolQuery)])])
+    }
+}
+
 private func ingestedStore() async throws -> (KnowledgeStore, HashingEmbeddingService) {
     let store = try KnowledgeStore()
     let embedder = HashingEmbeddingService()
@@ -366,6 +466,108 @@ struct AgentRAGResponderTests {
         #expect(lastPrompt.contains("weather in boston?"))
     }
 
+    @Test("native path: a preface then an EMPTY post-tool synthesis still answers over the evidence")
+    func nativePrefaceThenEmptySynthesisAnswersOverEvidence() async throws {
+        // One gemma-4 failure shape (Big M1K3, web_search): the model streams a
+        // chatty preface ("Searching the web… Stand by.") on the SAME turn it calls
+        // web_search, then the post-tool turn comes back EMPTY (reasons into
+        // silence). Gather-then-synthesise must still answer over the gathered web
+        // results — the path gemma answers well on — not leave the user with just
+        // the preface + source URLs.
+        let (store, embedder) = try await ingestedStore()
+        let webObservation = "1. Apple (AAPL) — https://finance.example/aapl\n   Trading at $281."
+        let provider = PrefacingToolProvider(
+            preface: "Searching the web for that. Stand by.",
+            toolName: "web_search",
+            toolQuery: "apple stock price",
+            fallbackAnswer: "Apple (AAPL) is trading at $281."
+        )
+        let responder = AgentRAGResponder(
+            store: store, embedder: embedder, provider: provider,
+            tools: [FixedTool(name: "web_search", response: webObservation)]
+        )
+
+        let (_, stream) = try await responder.answerStreaming("what is the apple stock price?")
+        let answer = await collect(stream)
+
+        // The real answer lands — not just the preface + sources.
+        #expect(answer.contains("Apple (AAPL) is trading at $281."))
+        // Deterministic provenance still rides along.
+        #expect(answer.contains("Web sources:"))
+        #expect(answer.contains("https://finance.example/aapl"))
+        // #3: the answer was synthesised FROM the gathered web result (not a canned
+        // degradation) — the fallback prompt carries the observation.
+        let fallbackPrompt = try #require(provider.allPrompts.last)
+        #expect(fallbackPrompt.contains("INFORMATION GATHERED"))
+        #expect(fallbackPrompt.contains("Trading at $281."))
+    }
+
+    @Test("gather-then-synthesise: a filler conclusion after a tool is replaced by a synthesis over the evidence")
+    func gatherThenSynthesiseReplacesFiller() async throws {
+        // The dominant live gemma bug: after web_search it emits a content-free
+        // "let me look" sentence (NON-empty, so the empty-only fallback never
+        // fired) and ignores what the search returned. Gather-then-synthesise
+        // suppresses that loose conclusion and answers explicitly over the
+        // gathered observation — gemma's competent grounded path.
+        let (store, embedder) = try await ingestedStore()
+        let webObservation = "1. Artemis III — https://nasa.example/artemis\n   NASA named four Artemis III crew members."
+        let provider = PrefacingToolProvider(
+            preface: "", // no pre-tool preface this time
+            toolName: "web_search",
+            toolQuery: "artemis news",
+            fallbackAnswer: "NASA has named four crew members for Artemis III.",
+            synthesisText: "Let me see what the net has coughed up." // the filler the model free-forms post-tool
+        )
+        let responder = AgentRAGResponder(
+            store: store, embedder: embedder, provider: provider,
+            tools: [FixedTool(name: "web_search", response: webObservation)]
+        )
+
+        let (_, stream) = try await responder.answerStreaming("what's the latest on artemis?")
+        let answer = await collect(stream)
+
+        // The synthesised answer lands...
+        #expect(answer.contains("NASA has named four crew members for Artemis III."))
+        // ...and the content-free filler the model free-formed is NOT shown.
+        #expect(!answer.contains("Let me see what the net has coughed up."))
+        // Provenance rides along, and the answer was built FROM the observation.
+        #expect(answer.contains("https://nasa.example/artemis"))
+        let fallbackPrompt = try #require(provider.allPrompts.last)
+        #expect(fallbackPrompt.contains("INFORMATION GATHERED"))
+        #expect(fallbackPrompt.contains("NASA named four Artemis III crew members."))
+    }
+
+    @Test("native tool turn whose tool only ERRORED degrades to plain RAG, never the loose conclusion")
+    func nativeToolErrorDegradesToPlainRAG() async throws {
+        // A native tool turn can gather only an error (e.g. web search rate-limited).
+        // gemma's loose post-tool conclusion is still untrustworthy filler, so the
+        // turn must route through fallBack — which filters the error observation and
+        // degrades to plain RAG — rather than surface that filler.
+        let (store, embedder) = try await ingestedStore()
+        let provider = PrefacingToolProvider(
+            preface: "",
+            toolName: "web_search",
+            toolQuery: "news today",
+            fallbackAnswer: "I couldn't reach the web just now — nothing stored covers that either.",
+            synthesisText: "Let me have a look for you." // filler that must NOT surface
+        )
+        let responder = AgentRAGResponder(
+            store: store, embedder: embedder, provider: provider,
+            tools: [FixedTool(name: "web_search", response: "Error: web search is temporarily unavailable.")]
+        )
+
+        let (_, stream) = try await responder.answerStreaming("what's in the news today?")
+        let answer = await collect(stream)
+
+        #expect(answer.contains("I couldn't reach the web just now"))
+        #expect(!answer.contains("Let me have a look for you.")) // filler suppressed
+        // The error observation was filtered → a plain-RAG prompt (no synthesis
+        // over the useless error "evidence"), and the error text never reaches it.
+        let fallbackPrompt = try #require(provider.allPrompts.last)
+        #expect(!fallbackPrompt.contains("INFORMATION GATHERED"))
+        #expect(!fallbackPrompt.contains("temporarily unavailable"))
+    }
+
     @Test("with web search available, the rules route current-world questions to it")
     func rulesRouteToWebSearch() async throws {
         let (store, embedder) = try await ingestedStore()
@@ -381,7 +583,7 @@ struct AgentRAGResponderTests {
         #expect(prompt.contains("already stored on this Mac"))
     }
 
-    @Test("with fetch_page available, the rules teach the search→read→conclude flow")
+    @Test("with fetch_page available, the rules note web_search auto-reads the top result + point fetch_page elsewhere")
     func rulesTeachFetchFlow() async throws {
         let (store, embedder) = try await ingestedStore()
         let provider = AgentScriptedProvider(["CONCLUSION: ok."])
@@ -393,7 +595,10 @@ struct AgentRAGResponderTests {
         _ = try await collect(await responder.answerStreaming("weather?").stream)
         let prompt = try #require(provider.allPrompts.first)
         #expect(prompt.contains("fetch_page"))
-        #expect(prompt.contains("most relevant result"))
+        // The rule reflects the deterministic deepen: web_search reads the top
+        // result, so fetch_page is for a DIFFERENT one (no redundant re-fetch).
+        #expect(prompt.contains("automatically reads the top result"))
+        #expect(prompt.contains("DIFFERENT result"))
     }
 
     @Test("without web search, the rules say so instead of advertising a missing tool")

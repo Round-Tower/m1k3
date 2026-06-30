@@ -186,7 +186,15 @@ extension AppEnvironment {
                 if webAllowed {
                     tools.insert(WikipediaTool(), at: 0)
                     tools.insert(FetchPageTool(), at: 0)
-                    tools.insert(WebSearchTool(), at: 0)
+                    // Deterministic search→read: small models won't chain to
+                    // fetch_page themselves, so web_search auto-reads the top
+                    // result and feeds real page text back in one observation.
+                    // The deep reader uses a tight, no-retry fetch (8s) so a slow
+                    // or JS-only top result bails fast instead of blowing the turn
+                    // budget. (fetch_page — default 12s+retry — stays available for
+                    // the model to read OTHER results in full.)
+                    let deepReader = FetchPageTool(fetcher: URLSessionHTTPFetcher(timeout: 8))
+                    tools.insert(WebSearchTool(deepReader: deepReader), at: 0)
                 }
                 if let onOpenLink {
                     tools.append(OpenLinkTool(onOpen: onOpenLink))

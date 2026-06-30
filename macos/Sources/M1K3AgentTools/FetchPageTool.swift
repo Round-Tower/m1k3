@@ -14,6 +14,10 @@
 //  and the activity label shows which page is being read.
 //
 //  Signed: Kev + claude-fable-5, 2026-06-10, Confidence 0.85, Prior: Unknown
+//  Review: Kev + claude-opus-4-8, 2026-06-30, Confidence 0.9 — extracted
+//  validatedURL/pageRequest helpers + readablePage(at:) (a text-or-nil core)
+//  so web_search's deterministic deepen can read a page without the tool's
+//  agent-facing error strings. execute() behaviour is unchanged.
 
 import Foundation
 import M1K3Agent
@@ -106,22 +110,13 @@ public struct FetchPageTool: AgentTool {
 
     public func execute(input: [String: String]) async throws -> ToolResult {
         let raw = (input["url"] ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-        guard let url = URL(string: raw),
-              let scheme = url.scheme?.lowercased(),
-              ["http", "https"].contains(scheme),
-              url.host() != nil
-        else {
+        guard let url = Self.validatedURL(raw) else {
             return ToolResult(output: "Error: fetch_page needs a full http(s) URL "
                 + "(use one from the web_search results).")
         }
 
-        var request = URLRequest(url: url)
-        request.setValue(WebSearchTool.browserUserAgent, forHTTPHeaderField: "User-Agent")
-        request.setValue("text/html,application/xhtml+xml", forHTTPHeaderField: "Accept")
-        request.setValue("en-GB,en;q=0.9", forHTTPHeaderField: "Accept-Language")
-
         do {
-            let (data, response) = try await fetcher.fetch(request)
+            let (data, response) = try await fetcher.fetch(Self.pageRequest(for: url))
             if HTTPStatus.classify(response.statusCode) != .ok {
                 Self.log.notice("HTTP \(response.statusCode) for \(url.host() ?? "?", privacy: .public)")
                 return ToolResult(output: "Error: the page returned HTTP \(response.statusCode) "
@@ -147,6 +142,46 @@ public struct FetchPageTool: AgentTool {
         } catch {
             Self.log.error("fetch failed for \(url.absoluteString, privacy: .public): \(error, privacy: .public)")
             return ToolResult(output: "Error: could not fetch the page — \(error.localizedDescription)")
+        }
+    }
+
+    /// Scheme/host-guarded http(s) URL, or nil if not a fetchable page.
+    static func validatedURL(_ raw: String) -> URL? {
+        guard let url = URL(string: raw),
+              let scheme = url.scheme?.lowercased(),
+              ["http", "https"].contains(scheme),
+              url.host() != nil
+        else { return nil }
+        return url
+    }
+
+    /// The browser-headed request both fetch_page and the web_search auto-deepen
+    /// chain use to read a page.
+    static func pageRequest(for url: URL) -> URLRequest {
+        var request = URLRequest(url: url)
+        request.setValue(WebSearchTool.browserUserAgent, forHTTPHeaderField: "User-Agent")
+        request.setValue("text/html,application/xhtml+xml", forHTTPHeaderField: "Accept")
+        request.setValue("en-GB,en;q=0.9", forHTTPHeaderField: "Accept-Language")
+        return request
+    }
+
+    /// The core read shared with web_search's deterministic deepen: capped
+    /// readable text, or nil when the page can't be read (bad URL, non-OK status,
+    /// or a JS-only/empty body). Never throws — the caller degrades gracefully.
+    public func readablePage(at raw: String) async -> String? {
+        guard let url = Self.validatedURL(raw) else { return nil }
+        do {
+            let (data, response) = try await fetcher.fetch(Self.pageRequest(for: url))
+            guard HTTPStatus.classify(response.statusCode) == .ok else { return nil }
+            let html = BodyDecoder.decode(
+                data, contentType: response.value(forHTTPHeaderField: "Content-Type")
+            )
+            let text = HTMLTextExtractor.text(from: html)
+            guard !text.isEmpty else { return nil }
+            guard text.count > maxCharacters else { return text }
+            return text.prefix(maxCharacters).trimmingCharacters(in: .whitespacesAndNewlines) + "…"
+        } catch {
+            return nil
         }
     }
 }

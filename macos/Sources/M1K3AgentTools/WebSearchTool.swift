@@ -16,6 +16,11 @@
 //  never thrown, so the agent loop can recover and conclude from what it has.
 //
 //  Signed: Kev + claude-fable-5, 2026-06-09, Confidence 0.85, Prior: Unknown
+//  Review: Kev + claude-opus-4-8, 2026-06-30, Confidence 0.9 — deterministic
+//  deepen: small models won't chain to fetch_page on their own, so web_search
+//  now concurrently reads the top-2 results (tight no-retry timeout via an
+//  injected deepReader) and appends the first readable page's text, degrading
+//  to snippets when nothing reads. The link list was never the answer.
 
 import Foundation
 import M1K3Agent
@@ -37,10 +42,16 @@ public struct WebSearchTool: AgentTool {
 
     private let fetcher: any HTTPFetching
     private let maxResults: Int
+    private let deepReader: FetchPageTool?
 
-    public init(fetcher: any HTTPFetching = RetryingHTTPFetcher.production, maxResults: Int = 5) {
+    public init(
+        fetcher: any HTTPFetching = RetryingHTTPFetcher.production,
+        maxResults: Int = 5,
+        deepReader: FetchPageTool? = nil
+    ) {
         self.fetcher = fetcher
         self.maxResults = maxResults
+        self.deepReader = deepReader
     }
 
     public func execute(input: [String: String]) async throws -> ToolResult {
@@ -59,12 +70,45 @@ public struct WebSearchTool: AgentTool {
                 return ToolResult(output: "No web results for \"\(query)\".")
             case let .results(results):
                 Self.log.info("\(results.count) result(s) for \"\(query, privacy: .public)\"")
-                return ToolResult(output: WebSearchFormatter.format(results, limit: maxResults))
+                let base = WebSearchFormatter.format(results, limit: maxResults)
+                return ToolResult(output: await deepened(base, results: results))
             }
         } catch {
             Self.log.error("fetch failed for \"\(query, privacy: .public)\": \(error, privacy: .public)")
             return ToolResult(output: "Error: web search failed — \(error.localizedDescription)")
         }
+    }
+
+    /// Deterministic search→read chain: small models won't call fetch_page on
+    /// their own (seen live — gemma searches, then concludes with filler), so
+    /// when a deep reader is wired we fetch the top result's text and append it
+    /// to the SAME observation the model reliably triggers. Tries the first two
+    /// results (the top hit is often a JS aggregator with no static text) and
+    /// degrades to snippets-only when nothing is readable.
+    private func deepened(_ base: String, results: [WebSearchResult]) async -> String {
+        guard let deepReader else { return base }
+        let candidates = Array(results.prefix(2))
+        guard !candidates.isEmpty else { return base }
+        // Read the top candidates CONCURRENTLY (so total latency is one fetch, not
+        // the sum) and take the highest-ranked one that yields text. The deep
+        // reader carries a tight, no-retry timeout — a slow/JS page bails fast
+        // rather than blowing the turn's budget.
+        let contents = await withTaskGroup(of: (Int, String?).self) { group in
+            for (index, result) in candidates.enumerated() {
+                group.addTask { (index, await deepReader.readablePage(at: result.url)) }
+            }
+            var byIndex: [Int: String] = [:]
+            for await (index, content) in group where content != nil {
+                byIndex[index] = content
+            }
+            return byIndex
+        }
+        for (index, result) in candidates.enumerated() {
+            if let content = contents[index] {
+                return base + "\n\nPage content from \(result.url):\n\(content)"
+            }
+        }
+        return base
     }
 
     private enum SearchOutcome {

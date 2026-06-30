@@ -26,6 +26,12 @@
 //  uses store.searchGrounding (two-lane doc+memory budgets, memoryTopK) so the
 //  document corpus can't crowd memory recall out of a single top-K. Fixes the
 //  live open-chat miss (M1K3 forgot the user's own city). verify-at-⌘R.
+//  Review: Kev + claude-opus-4-8, 2026-06-30, Confidence 0.9 — gather-then-
+//  synthesise on the native path: once a tool runs, suppress the model's loose
+//  in-loop conclusion (gemma free-forms content-free filler and ignores the
+//  results) and answer explicitly over the gathered observations via fallBack.
+//  ReAct's CONCLUSION: contract is untouched (gated on style == .native).
+//  Diagnosed live — the conclusion was filler, not empty; instrument first.
 
 import Foundation
 import M1K3Agent
@@ -225,21 +231,37 @@ public struct AgentRAGResponder: RAGResponding, Sendable {
             mode: thinkingModeProvider(),
             fastByDefault: fastThinkingProvider()
         )
+        // A direct answer streams live only until the FIRST tool runs. After that
+        // the model's free-form in-loop conclusion is unreliable — gemma emits a
+        // content-free "let me look" preamble and ignores what the tools actually
+        // returned (seen live). So once a tool dispatches we suppress the loose
+        // conclusion and, when the loop ends, synthesise explicitly over the
+        // gathered observations (gemma's competent grounded path) via `fallBack`.
         let emittedLive = Mutex(false)
+        let toolUsed = Mutex(false)
         do {
             let result = try await agent.run(
                 goal: question,
                 context: grounding,
                 thinkingEnabled: thinkingEnabled,
-                onEvent: { Self.forward($0, to: onActivity) },
+                onEvent: { event in
+                    if case .actionStarted = event { toolUsed.withLock { $0 = true } }
+                    Self.forward(event, to: onActivity)
+                },
                 onConclusionToken: { token in
+                    // Native small models free-form a content-free "let me look"
+                    // preamble AFTER a tool and ignore what it returned, so once a
+                    // tool runs we suppress the loose conclusion and synthesise
+                    // explicitly below. The ReAct floor's CONCLUSION: contract is
+                    // reliable — never suppress it (it carries the real answer).
+                    if style == .native, toolUsed.withLock({ $0 }) { return }
                     emittedLive.withLock { $0 = true }
                     continuation.yield(token)
                 },
                 // Chain-of-thought streams into the same chat stream — the
                 // chat-side splitter routes it to the reasoning disclosure.
                 // Deliberately does NOT set emittedLive: reasoning alone is
-                // not an answer, so the empty-conclusion fallback still fires.
+                // not an answer, so the synthesis/fallback still fires.
                 onReasoningToken: { token in
                     continuation.yield(token)
                 }
@@ -248,7 +270,14 @@ public struct AgentRAGResponder: RAGResponding, Sendable {
             let conclusion = result.conclusion
                 .trimmingCharacters(in: .whitespacesAndNewlines)
             let streamed = emittedLive.withLock { $0 }
-            if !streamed, conclusion.isEmpty {
+            // Native tool turns ALWAYS synthesise via fallBack: gemma's loose
+            // in-loop conclusion is unreliable filler, so even an error-only or
+            // empty gather must route through fallBack (which filters errors and
+            // degrades to plain RAG) rather than surface that conclusion. The
+            // ReAct path keeps its reliable CONCLUSION:. Both still use the
+            // empty-conclusion fallback for the no-tool case.
+            let synthesiseOverEvidence = style == .native && !result.toolsUsed.isEmpty
+            if synthesiseOverEvidence || (!streamed && conclusion.isEmpty) {
                 await fallBack(
                     question: question, chunks: chunks, contextLine: contextLine,
                     result: result, into: continuation
@@ -449,9 +478,9 @@ public struct AgentRAGResponder: RAGResponding, Sendable {
             + "Mac. You have no web access — if the stored knowledge can't "
             + "answer, say so plainly; do not guess."
         if hasWebSearch, toolNames.contains("fetch_page") {
-            routing += "\n- web_search returns links and snippets. For details "
-                + "(like an actual forecast), run fetch_page on the most "
-                + "relevant result URL, then conclude from the page text."
+            routing += "\n- web_search returns snippets AND automatically reads the "
+                + "top result's page for you. Use fetch_page only to read a "
+                + "DIFFERENT result in full, then conclude from the page text."
         }
         if toolNames.contains("lookup_fact") {
             routing += "\n- For an established fact about a person, place, concept, "
