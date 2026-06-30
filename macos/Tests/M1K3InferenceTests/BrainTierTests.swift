@@ -145,4 +145,21 @@ struct BrainTierTests {
         #expect(BrainTier(rawValue: "big") == .big)
         #expect(BrainTier(rawValue: "nonsense") == nil)
     }
+
+    @Test("context-window metadata: big is the hard 8192 rotating window; dense-Qwen tiers are wide")
+    func contextWindowMetadata() {
+        // big = gemma-4-e4b → RotatingKVCache(maxSize: 8192): the load-bearing fact.
+        #expect(BrainTier.big.approximateContextTokens == 8192)
+        #expect(BrainTier.big.usesRotatingKVCache)
+        // dense Qwen3 tiers are unbounded (memory-bound, not truncation-bound) and wide.
+        #expect(BrainTier.lil.approximateContextTokens == 32768)
+        #expect(BrainTier.huge.approximateContextTokens == 32768)
+        #expect(!BrainTier.lil.usesRotatingKVCache)
+        #expect(!BrainTier.huge.usesRotatingKVCache)
+        // mini (AFM) is conservatively small and not rotating.
+        #expect(BrainTier.mini.approximateContextTokens == 4096)
+        #expect(!BrainTier.mini.usesRotatingKVCache)
+        // Only big rotates — the clamp is a correctness bound there, a latency knob elsewhere.
+        #expect(BrainTier.allCases.filter(\.usesRotatingKVCache) == [.big])
+    }
 }

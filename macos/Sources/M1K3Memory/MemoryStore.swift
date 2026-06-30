@@ -93,6 +93,8 @@ public struct MemoryKind: RawRepresentable, Hashable, Sendable, Codable {
     public static let episode = MemoryKind(rawValue: "episode")
     /// Anything else worth keeping.
     public static let note = MemoryKind(rawValue: "note")
+    // TODO: both write paths currently tag every fact `.note`; the richer kinds
+    // above stay unused until the distiller classifies (profile/preference/…).
 }
 
 /// One atomic memory. Small, deletable, supersedable.
@@ -300,6 +302,43 @@ public final class MemoryStore: @unchecked Sendable {
                 ]
             )
         }
+    }
+
+    /// Remember a fact AND weave it into the graph: insert the node, then link
+    /// it (relation "related") to the most semantically-similar existing LIVE
+    /// facts above `threshold`, capped at `maxLinks`. This is what makes the
+    /// store an actual graph as it grows — plain `remember` only ever creates a
+    /// node (and a supersedes edge on correction), which left `related` and the
+    /// constellation edgeless in production. The cosine bar (default = the recall
+    /// cutoff) keeps unrelated facts unlinked; `maxLinks` caps degree so a common
+    /// topic can't hairball. Returns the number of edges created.
+    ///
+    /// Node + edges are SEPARATE writes (not one transaction): a crash mid-loop
+    /// leaves the node intact and recallable with some edges missing — acceptable
+    /// for a best-effort personal graph, and `link`'s INSERT OR IGNORE keeps
+    /// retries idempotent. Facts distilled before this path existed live in the
+    /// corpus only and are NOT backfilled here — the graph accretes from new
+    /// writes (a one-shot backfill/scrub is a separate, manual step).
+    @discardableResult
+    public func rememberConnected(
+        _ memory: Memory,
+        embedding: [Float],
+        maxLinks: Int = 3,
+        threshold: Float = GroundingGate.chunkThreshold
+    ) throws -> Int {
+        try remember(memory, embedding: embedding)
+        // Nearest live neighbours by cosine — the +1 absorbs the node we just
+        // inserted (cosine 1.0 with itself), which we then drop by id.
+        let neighbours = try recallVector(queryVector: embedding, limit: maxLinks + 1)
+            .filter { $0.memory.id != memory.id && ($0.similarity ?? 0) >= threshold }
+            .prefix(maxLinks)
+        for n in neighbours {
+            try link(MemoryEdge(
+                fromID: memory.id, toID: n.memory.id,
+                relation: "related", createdAt: memory.createdAt
+            ))
+        }
+        return neighbours.count
     }
 
     /// Hard-delete: the row, its vector, its FTS mirror, every edge touching

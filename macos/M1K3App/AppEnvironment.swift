@@ -244,6 +244,16 @@ final class AppEnvironment {
     /// Call-subsystem diagnostics — pairs with StereoCallRecorder's trail so a full
     /// record→transcribe QA pass is one `log stream` predicate.
     private static let callLog = Logger(subsystem: "app.m1k3", category: "calls")
+    /// Brain load / swap diagnostics — the most common field issue ("stuck/failed
+    /// download"); pairs with M1K3MLX's mlx-load trail under one predicate.
+    private static let brainLog = Logger(subsystem: "app.m1k3", category: "mlx-load")
+    /// Embedding service load + reindex decisions (the suspected "stale vector
+    /// space" class behind a search that finds nothing it should).
+    private static let embedLog = Logger(subsystem: "app.m1k3", category: "embeddings")
+    /// Voice input (dictation / STT) lifecycle in the app shell.
+    private static let voiceLog = Logger(subsystem: "app.m1k3", category: "stt")
+    /// Memory-graph store availability.
+    private static let memoryLog = Logger(subsystem: "app.m1k3", category: "memory-graph")
     /// The user has upgraded voice input to WhisperKit — restored on launch so it
     /// auto-loads instead of silently reverting to Apple Speech (guarded by the
     /// model being on disk, never a silent re-download).
@@ -350,7 +360,14 @@ final class AppEnvironment {
         // notes). Best-effort: if it can't open, the app runs unchanged and the
         // dual-write/recall tools simply stay inert.
         let memoryURL = url.deletingLastPathComponent().appendingPathComponent("memory.sqlite")
-        memoryStore = try? MemoryStore(path: memoryURL.path)
+        do {
+            memoryStore = try MemoryStore(path: memoryURL.path)
+        } catch {
+            // A corrupt/locked memory.sqlite silently disables remember/recall/
+            // related/constellation — keep the inert nil fallback, but say why.
+            memoryStore = nil
+            Self.memoryLog.error("memory store open failed — memory tools inert: \(error.localizedDescription, privacy: .public)")
+        }
 
         // Embeddings define the stored vector space, so the choice must persist
         // across launches (Hashing query vectors against MLX-stored vectors would
@@ -439,7 +456,10 @@ final class AppEnvironment {
                 store: store,
                 embedder: swappable,
                 ingester: documentIngester,
-                fallback: runtimeProvider
+                fallback: runtimeProvider,
+                // Wire the graph seam so distilled facts ALSO populate the temporal
+                // memory graph (was corpus-only — the empty-graph root cause).
+                graph: memoryStore.map { DistilledFactGraphAdapter(store: $0) as any DistilledFactGraphWriting }
             ),
             autoCaptureEnabled: { Self.memoryAutoCaptureEnabled() }
         )
@@ -669,8 +689,10 @@ final class AppEnvironment {
            let modelID = tier.mlxModelID,
            modelID == currentMLXProvider.modelIdentifier
         {
+            Self.brainLog.notice("selectBrain \(tier.rawValue, privacy: .public): already loaded, no-op")
             return
         }
+        Self.brainLog.notice("selectBrain \(tier.rawValue, privacy: .public): model=\(tier.mlxModelID ?? "appleFoundationModels", privacy: .public)")
         selectedBrain = tier
         UserDefaults.standard.set(tier.rawValue, forKey: Self.selectedBrainKey)
         UserDefaults.standard.set(true, forKey: Self.hasChosenBrainKey)
@@ -724,7 +746,12 @@ final class AppEnvironment {
             // Deliberately switched away mid-load — leave modelLoad to the current
             // selection (the didSet already cleared the bar).
         } catch {
-            if !Task.isCancelled { modelLoad = .failed(message: error.localizedDescription) }
+            if !Task.isCancelled {
+                // A 404/gated-repo/disk-full/checksum failure is non-transient, so
+                // Retry never fires onRetry — it lands here and only set UI state.
+                Self.brainLog.error("brain load failed [\(mlx.modelIdentifier, privacy: .public)]: \(error.localizedDescription, privacy: .public)")
+                modelLoad = .failed(message: error.localizedDescription)
+            }
         }
     }
 
@@ -754,11 +781,13 @@ final class AppEnvironment {
             usingMLXEmbeddings = useMLX
             UserDefaults.standard.set(useMLX, forKey: Self.embedderPrefersMLXKey)
             let label = useMLX ? "MLX Qwen3-Embedding" : "Hashing"
+            Self.embedLog.notice("switched embeddings to \(label, privacy: .public), reindexed \(count) chunk(s)")
             embeddingStatus = "Reindexed \(count) chunk\(count == 1 ? "" : "s") with \(label)."
         } catch {
             // Reindex writes atomically, so the store still matches the previous
             // embedder — roll the façade back to it.
             embedder.setEmbedder(usingMLXEmbeddings ? MLXEmbeddingService() : HashingEmbeddingService())
+            Self.embedLog.error("embedding switch failed, rolled back: \(error.localizedDescription, privacy: .public)")
             embeddingStatus = "Couldn’t switch embeddings: \(error.localizedDescription)"
         }
         MLXMemoryBudget.reclaim(label: "switchEmbeddings")
@@ -1026,12 +1055,14 @@ extension AppEnvironment {
         isReindexing = true
         embeddingStatus = "Updating the index for the new embedder…"
         defer { isReindexing = false }
+        Self.embedLog.notice("embedder changed (\(vectorCount) vectors) — reindexing")
         do {
             let count = try await store.reindexEmbeddings(using: embedder, fingerprint: current)
             embeddingStatus = "Reindexed \(count) chunk\(count == 1 ? "" : "s") for the new embedder."
         } catch {
             // Reindex writes atomically — the store still matches the stored
             // marker, so the next launch retries.
+            Self.embedLog.error("reindex failed — retries next launch: \(error.localizedDescription, privacy: .public)")
             embeddingStatus = "Couldn’t update the index: \(error.localizedDescription)"
         }
     }
@@ -1223,6 +1254,9 @@ extension AppEnvironment {
                 await finishDictation(text: accumulator.text, confidence: accumulator.confidence)
             }
         } catch {
+            // Mic dies mid-session (permission revoked, audio-engine failure) with
+            // no UI status otherwise — leave a trail before resetting.
+            Self.voiceLog.error("dictation failed: \(error.localizedDescription, privacy: .public)")
             isListening = false
             dictationProvider = nil
             liveTranscript = ""

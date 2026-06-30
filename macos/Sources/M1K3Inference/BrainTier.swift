@@ -23,6 +23,12 @@
 //  below the floor for grounded generation + tool use (ignored good sources,
 //  confabulated on an empty gate); 4B is the same Qwen3.5 family so tool-call
 //  format (xmlFunction) + pre-open-think resolve unchanged. ~3GB, still fits 16GB.
+//  Review: Kev + claude-opus-4-8, 2026-06-30 — added approximateContextTokens +
+//  usesRotatingKVCache (the long-context work). big=8192 is the HARD gemma-4
+//  RotatingKVCache window (past it the persona/grounding head silently rotates
+//  out); lil/huge=32768 unbounded KVCacheSimple. HistoryBudgetPolicy clamps the
+//  conversation replay below the rotating window. Token counts are estimates —
+//  on-device SelfTest verify-owed (the [SPIKE]); the gemma cliff is code-grounded.
 //  Review: Kev + claude-opus-4-8, 2026-06-22 — Lil/Huge moved OFF Qwen3.5 to
 //  DENSE Qwen3 (Qwen3-4B-4bit / Qwen3-8B-4bit). Qwen3.5 is a GatedDeltaNet
 //  hybrid whose per-timestep recurrent scan CPU-spikes on mlx-swift-lm 3.31.3.
@@ -162,6 +168,35 @@ public enum BrainTier: String, CaseIterable, Identifiable, Sendable, Comparable 
 
     public var requiresDownload: Bool {
         approxDownloadMB != nil
+    }
+
+    /// Approximate USABLE context window in tokens — a per-tier FACT, not a knob,
+    /// used by `HistoryBudgetPolicy` to size the conversation replay. It is the
+    /// budget layer's hard upper bound, especially on a rotating-KV tier.
+    /// - `mini` (Apple Foundation Models): a conservative ~4K until measured —
+    ///   AFM manages its own window and overflows are surfaced as errors, so
+    ///   under-estimating is the safe direction.
+    /// - `lil`/`huge` (dense Qwen3, `maxKVSize == nil` → `KVCacheSimple`): the
+    ///   native ~32K window; growth is MEMORY-bounded, never silently truncated.
+    /// - `big` (gemma-4-e4b, `RotatingKVCache(maxSize: 8192)`): a HARD 8192-token
+    ///   sliding window — past it the head (persona + grounding) rotates OUT
+    ///   during prefill with no error. See `usesRotatingKVCache`.
+    public var approximateContextTokens: Int {
+        switch self {
+        case .mini: 4096
+        case .lil, .huge: 32768
+        case .big: 8192
+        }
+    }
+
+    /// True when the backing model uses a fixed sliding-window KV cache
+    /// (`RotatingKVCache`): exceeding `approximateContextTokens` silently drops the
+    /// prompt HEAD rather than erroring, so the budget layer must clamp BELOW it
+    /// (with margin for the char≈token estimate). Only `big` (gemma-4-e4b) today;
+    /// the dense-Qwen tiers use an unbounded `KVCacheSimple`. Verified against
+    /// `MLXGemmaProvider`'s per-family cache config (see docs/MODEL_CHOICES.md).
+    public var usesRotatingKVCache: Bool {
+        self == .big
     }
 
     /// The memory floor below which this brain shouldn't even be SELECTABLE

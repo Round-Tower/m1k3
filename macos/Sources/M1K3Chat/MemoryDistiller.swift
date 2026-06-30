@@ -18,6 +18,7 @@
 
 import Foundation
 import M1K3Inference
+import os
 
 // MARK: - Protocol
 
@@ -65,7 +66,9 @@ public enum MemoryDistillationPrompt {
 
         Do NOT extract: small talk, transient states ("user is tired today"), \
         questions the user merely asked about, or anything the assistant said \
-        about itself.
+        about itself. The assistant is called M1K3 — NEVER write that the user \
+        is M1K3, is named M1K3, or is an AI/assistant/program; those describe \
+        the assistant, not the user.
 
         Reply with one line per fact, each starting with exactly "FACT: ". \
         Each fact must be one short standalone sentence about the user. \
@@ -99,6 +102,10 @@ public enum MemoryFactParser {
             // Overlong = the model rambled mid-line; drop rather than cut a
             // fact mid-thought. Tiny = no information ("FACT: yes").
             guard fact.count >= minFactLength, fact.count <= maxFactLength else { continue }
+            // Role-fence: a weak model attributes M1K3's OWN persona/self-talk to
+            // "the user" ("the user's name is M1K3"). The prompt asks it not to;
+            // this is the deterministic backstop that the prompt can't guarantee.
+            guard MemoryFactValidator.isAcceptable(fact) else { continue }
             guard seen.insert(MemoryFactNormalizer.normalize(fact)).inserted else { continue }
             facts.append(fact)
             if facts.count == maxFacts { break }
@@ -110,6 +117,49 @@ public enum MemoryFactParser {
     static func isExplicitNone(_ raw: String) -> Bool {
         ReasoningSplit.split(raw).answer
             .trimmingCharacters(in: .whitespacesAndNewlines) == "NONE"
+    }
+}
+
+// MARK: - Validator (role-fence)
+
+/// Rejects "facts" that conflate the user with the assistant — the dominant
+/// pollution class observed live ("the user's name is M1K3", "the user is an AI
+/// assistant"). A weak distiller, fed M1K3's own ASSISTANT turns and its
+/// Irish/Cork persona, mislabels M1K3's self-description as a user fact. The
+/// prompt forbids this; the parser CAN'T trust a small model to obey, so this
+/// is the deterministic backstop. Deliberately HIGH-PRECISION: it only fires on
+/// identity conflation, never on genuine facts that merely mention M1K3 or sit
+/// near a keyword (verified by false-positive tests).
+public enum MemoryFactValidator {
+    /// The assistant's own name(s). A user-fact equating the user with one of
+    /// these is conflation, not memory.
+    static let assistantNames: Set<String> = ["m1k3"]
+
+    /// True when the fact is a genuine user fact worth storing.
+    public static func isAcceptable(_ fact: String) -> Bool {
+        !conflatesUserWithAssistant(fact)
+    }
+
+    static func conflatesUserWithAssistant(_ fact: String) -> Bool {
+        let norm = MemoryFactNormalizer.normalize(fact)
+        // 1. Name conflation — the USER (as subject) is / is called / is named
+        //    the assistant. Anchored to "user" so a genuine fact about a THING
+        //    the user named M1K3 survives ("the user's project is called M1K3",
+        //    "the user is building an app called M1K3").
+        for name in assistantNames {
+            let phrases = [
+                "user's name is \(name)", "user name is \(name)",
+                "user is \(name)", "user is called \(name)", "user is named \(name)",
+                "\(name) is the user", "user goes by \(name)",
+            ]
+            if phrases.contains(where: norm.contains) { return true }
+        }
+        // 2. Identity attribution — the user described as the assistant's KIND.
+        //    \b after each kind so "programmer"/"botanist" don't match
+        //    "program"/"bot".
+        let kindPattern =
+            #"\buser is an? (a\.?i\.?|artificial intelligence|ai assistant|assistant|chatbot|bot|language model|llm|program)\b"#
+        return norm.range(of: kindPattern, options: .regularExpression) != nil
     }
 }
 
@@ -138,6 +188,7 @@ public enum MemoryFactNormalizer {
 /// would re-distill the same slice at every conversation exit. Only a throw
 /// from the final attempted provider propagates (the watermark-retry signal).
 public struct ProviderMemoryDistiller: MemoryDistilling {
+    private static let log = Logger(subsystem: "app.m1k3", category: "memory-distill")
     private let primary: any InferenceProvider
     private let fallback: any InferenceProvider
 
@@ -160,7 +211,9 @@ public struct ProviderMemoryDistiller: MemoryDistilling {
                 // The turn was cancelled — never burn a fallback generation.
                 throw CancellationError()
             } catch {
-                // Primary generation failed: the fallback is the retry.
+                // Primary generation failed: the fallback is the retry. Note it so
+                // a primary that throws every time isn't masked as silent success.
+                Self.log.notice("primary distiller failed, using fallback: \(error.localizedDescription, privacy: .public)")
             }
         }
         let raw = try await fallback.generate(prompt: prompt)

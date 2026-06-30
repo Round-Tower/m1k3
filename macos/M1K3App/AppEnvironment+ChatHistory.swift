@@ -109,7 +109,8 @@ extension AppEnvironment {
         store: KnowledgeStore,
         embedder: any EmbeddingService,
         ingester: DocumentIngester,
-        fallback: any InferenceProvider
+        fallback: any InferenceProvider,
+        graph: (any DistilledFactGraphWriting)? = nil
     ) -> MemoryDistillationCoordinator {
         MemoryDistillationCoordinator(
             distiller: ProviderMemoryDistiller(
@@ -120,7 +121,8 @@ extension AppEnvironment {
             ),
             ingester: ingester,
             store: store,
-            embedder: embedder
+            embedder: embedder,
+            graph: graph
         )
     }
 
@@ -228,6 +230,26 @@ extension AppEnvironment {
                 let raw = UserDefaults.standard.string(forKey: Self.selectedBrainKey) ?? ""
                 return BrainTier(rawValue: raw)?.prefersFastThinking ?? false
             },
+            historyBudgetProvider: {
+                // Brain-aware long context: a wide conversation replay on the
+                // dense-Qwen tiers (lil/huge, ~32K window), a hard clamp on gemma-4
+                // (big, whose RotatingKVCache silently rotates the persona/grounding
+                // head out past 8192). Read fresh each turn so a hot-swap re-sizes
+                // the window immediately. Mini (Apple Foundation Models) manages its
+                // own window — keep the conservative shipped default there (its real
+                // budget is the named [SPIKE]; don't risk an AFM overflow error).
+                let raw = UserDefaults.standard.string(forKey: Self.selectedBrainKey) ?? ""
+                guard let tier = BrainTier(rawValue: raw), tier != .mini else {
+                    // Mini (AFM) + any unknown brain: the fixed conservative replay,
+                    // NOT the wide MLX default (which would overflow AFM's ~4K window).
+                    return HistoryBudgetPolicy.conservativeMiniBudget
+                }
+                return HistoryBudgetPolicy.budget(
+                    for: tier,
+                    reservedTokens: Self.historyReserveTokens,
+                    generationTokens: Self.historyGenerationReserveTokens
+                )
+            },
             maxIterationsProvider: {
                 // Thermal "ease off" is opt-in; OFF → the plain base, so the
                 // default path is byte-identical. ON → CoolHeadPolicy trims the
@@ -260,6 +282,20 @@ extension AppEnvironment {
     /// The agent-loop iteration base the thermal cap eases DOWN from. Matches
     /// AgentRAGResponder's default — one named home so the two can't drift.
     nonisolated static let baseMaxIterations = 3
+
+    /// Conservative fixed reserve (tokens) for the NON-history parts of the prompt
+    /// — persona+exemplars (~1130) + tools spec (~600) + grounding chunks (~1100)
+    /// + goal/context line (~170). Subtracted from the tier's window before the
+    /// conversation replay gets what's left. Bigger = safer (less history, less
+    /// chance of crossing gemma's 8192). Tune from the `ttft` token-count log
+    /// (the [SPIKE]) — this is a verify-by-launch estimate, not a measured fact.
+    nonisolated static let historyReserveTokens = 3000
+
+    /// Generation headroom (tokens) kept clear of a rotating-KV window so a normal
+    /// answer can't rotate gemma's persona/grounding head out mid-decode. 2048 is
+    /// generous for these brains' typical answers; a pathologically long gemma
+    /// answer at a full history budget is the residual verify-owed (SelfTest step).
+    nonisolated static let historyGenerationReserveTokens = 2048
 
     /// Turns of SUSTAINED relief required before effort recovers (hysteresis) —
     /// degrade now, recover slow, so a bouncing thermalState can't flap the level.

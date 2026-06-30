@@ -32,6 +32,13 @@
 //  results) and answer explicitly over the gathered observations via fallBack.
 //  ReAct's CONCLUSION: contract is untouched (gated on style == .native).
 //  Diagnosed live — the conclusion was filler, not empty; instrument first.
+//  Review: Kev + claude-opus-4-8, 2026-06-30, Confidence 0.85 — brain-aware
+//  conversation replay: `grounding` now takes a `HistoryWindow.Budget` (per-tier,
+//  from `HistoryBudgetPolicy`) so the multi-turn window scales to the brain. The
+//  compose-fix that briefly lived here (trust `conclusionWasStreamed`) was
+//  SUPERSEDED by the gather-then-synthesise approach above (verified on gemma,
+//  the brain that actually fills); the persona-voiced composed answer on Qwen is
+//  a tracked follow-up. Only the history-budget threading survives this merge.
 
 import Foundation
 import M1K3Agent
@@ -77,6 +84,11 @@ public struct AgentRAGResponder: RAGResponding, Sendable {
     /// think phase on plain grounded lookups. Default `false` = the heavy-tier
     /// behaviour, so existing callers/tests are byte-identical.
     private let fastThinkingProvider: @Sendable () -> Bool
+    /// The conversation-replay budget, read FRESH each turn (same per-turn pattern
+    /// as the other providers) so a brain hot-swap re-sizes the window immediately —
+    /// wide on the dense-Qwen tiers, clamped under gemma-4's 8192 rotating window.
+    /// Defaults to the conservative shipped window so an unwired caller is unchanged.
+    private let historyBudgetProvider: @Sendable () -> HistoryWindow.Budget
 
     public init(
         store: KnowledgeStore,
@@ -90,6 +102,7 @@ public struct AgentRAGResponder: RAGResponding, Sendable {
         thinkingModeProvider: @escaping @Sendable () -> ThinkingMode = { .auto },
         brainNameProvider: @escaping @Sendable () -> String = { "" },
         fastThinkingProvider: @escaping @Sendable () -> Bool = { false },
+        historyBudgetProvider: @escaping @Sendable () -> HistoryWindow.Budget = { .default },
         maxIterationsProvider: (@Sendable () -> Int)? = nil
     ) {
         self.store = store
@@ -104,6 +117,7 @@ public struct AgentRAGResponder: RAGResponding, Sendable {
         self.brainNameProvider = brainNameProvider
         self.maxIterationsProvider = maxIterationsProvider
         self.fastThinkingProvider = fastThinkingProvider
+        self.historyBudgetProvider = historyBudgetProvider
     }
 
     /// Fixed tool list — convenience for tests and simple callers.
@@ -209,7 +223,7 @@ public struct AgentRAGResponder: RAGResponding, Sendable {
         let contextLine = PromptContext.line(now: Date(), brainName: brainNameProvider())
         let grounding = contextLine + "\n\n" + Self.grounding(
             chunks: chunks, memories: memories, toolNames: Set(tools.map(\.name)),
-            history: history, style: style
+            history: history, historyBudget: historyBudgetProvider(), style: style
         )
         Self.logTurnStart(chunks: chunks, tools: tools, grounding: grounding)
         // Fresh agent per turn — its reasoning trace must not bleed across
@@ -289,7 +303,9 @@ public struct AgentRAGResponder: RAGResponding, Sendable {
                 if !tail.isEmpty {
                     continuation.yield(tail)
                 }
-                Self.logTurnDone(streamed: streamed, tailCount: tail.count, result: result)
+                Self.logTurnDone(
+                    streamed: streamed, tailCount: tail.count, result: result
+                )
             }
             continuation.finish()
         } catch is CancellationError {
@@ -451,12 +467,13 @@ public struct AgentRAGResponder: RAGResponding, Sendable {
     /// search_knowledge can reach the live world; the ⌘R weather bug).
     static func grounding(
         chunks: [ChunkHit], memories: [ChunkHit] = [], toolNames: Set<String>,
-        history: [ChatTurn] = [], style: PromptStyle = .react
+        history: [ChatTurn] = [], historyBudget: HistoryWindow.Budget = .default,
+        style: PromptStyle = .react
     ) -> String {
         let body = groundingBody(
             chunks: chunks, memories: memories, toolNames: toolNames, style: style
         )
-        guard let replay = HistoryWindow.render(history) else { return body }
+        guard let replay = HistoryWindow.render(history, budget: historyBudget) else { return body }
         return "\(replay)\n\n\(body)"
     }
 
@@ -487,9 +504,11 @@ public struct AgentRAGResponder: RAGResponding, Sendable {
                 + "DIFFERENT result in full, then conclude from the page text."
         }
         if toolNames.contains("lookup_fact") {
-            routing += "\n- For an established fact about a person, place, concept, "
-                + "or historical event you are not fully sure of, call lookup_fact "
-                + "and cite its Source — don't answer from memory and risk a confident mistake."
+            routing += "\n- Stable, well-known facts (who wrote a famous book, a "
+                + "capital city, basic science) you can just answer from what you know "
+                + "— you're reliable there. Use lookup_fact only when you're genuinely "
+                + "unsure, the detail is obscure or easy to mix up, or it could have "
+                + "changed over time; then cite its Source."
         }
         let rules = switch style {
         case .react:

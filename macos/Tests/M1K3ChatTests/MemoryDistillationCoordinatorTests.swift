@@ -26,8 +26,29 @@ private struct FakeDistiller: MemoryDistilling {
 
 private struct Boom: Error {}
 
+/// Records every graph dual-write so a test can assert WHICH distilled facts
+/// reached the graph (and with an embedding). Optionally throws to prove the
+/// dual-write is best-effort.
+private actor FakeGraphWriter: DistilledFactGraphWriting {
+    private(set) var writes: [(text: String, embedding: [Float])] = []
+    let shouldThrow: Bool
+    init(shouldThrow: Bool = false) {
+        self.shouldThrow = shouldThrow
+    }
+
+    func writeDistilledFact(_ text: String, embedding: [Float]) async throws {
+        if shouldThrow { throw Boom() }
+        writes.append((text, embedding))
+    }
+
+    func texts() -> [String] {
+        writes.map(\.text)
+    }
+}
+
 private func makeFixture(
-    facts: Result<[String], Error>
+    facts: Result<[String], Error>,
+    graph: (any DistilledFactGraphWriting)? = nil
 ) throws -> (MemoryDistillationCoordinator, KnowledgeStore) {
     let store = try KnowledgeStore()
     let embedder = HashingEmbeddingService()
@@ -36,7 +57,8 @@ private func makeFixture(
             distiller: FakeDistiller(result: facts),
             ingester: DocumentIngester(store: store, embedder: embedder),
             store: store,
-            embedder: embedder
+            embedder: embedder,
+            graph: graph
         ),
         store
     )
@@ -132,5 +154,49 @@ struct MemoryDistillationCoordinatorTests {
         let written = try await coordinator.distillAndStore(turns: someTurns)
         #expect(written == 0)
         #expect(try store.itemCount() == 0)
+    }
+
+    // MARK: - Dual-write to the graph (the missing seam)
+
+    @Test("a newly distilled fact is written to BOTH the corpus and the graph")
+    func newFactDualWrites() async throws {
+        let graph = FakeGraphWriter()
+        let (coordinator, store) = try makeFixture(
+            facts: .success(["Kev's sister is called Aoife.", "The user prefers metric units."]),
+            graph: graph
+        )
+        let written = try await coordinator.distillAndStore(turns: someTurns)
+        #expect(written == 2)
+        #expect(try store.allItems(kind: .memory).count == 2) // corpus
+        let graphed = await graph.texts() // graph
+        #expect(Set(graphed) == ["Kev's sister is called Aoife.", "The user prefers metric units."])
+        #expect(await graph.writes.allSatisfy { !$0.embedding.isEmpty })
+    }
+
+    @Test("a deduped fact is NOT written to the graph (dedup is respected on the seam)")
+    func dedupedFactSkipsGraph() async throws {
+        let graph = FakeGraphWriter()
+        // First pass writes it to corpus + graph; second pass is an exact dup.
+        let (first, store) = try makeFixture(facts: .success(["Kev lives in Cork."]), graph: graph)
+        _ = try await first.distillAndStore(turns: someTurns)
+        let second = MemoryDistillationCoordinator(
+            distiller: FakeDistiller(result: .success(["Kev lives in Cork."])),
+            ingester: DocumentIngester(store: store, embedder: HashingEmbeddingService()),
+            store: store,
+            embedder: HashingEmbeddingService(),
+            graph: graph
+        )
+        _ = try await second.distillAndStore(turns: someTurns)
+        #expect(await graph.texts() == ["Kev lives in Cork."]) // graphed once, not twice
+        #expect(try store.allItems(kind: .memory).count == 1)
+    }
+
+    @Test("a graph-write failure does not fail distillation — the corpus write stands")
+    func graphFailureIsBestEffort() async throws {
+        let graph = FakeGraphWriter(shouldThrow: true)
+        let (coordinator, store) = try makeFixture(facts: .success(["Kev lives in Cork."]), graph: graph)
+        let written = try await coordinator.distillAndStore(turns: someTurns)
+        #expect(written == 1)
+        #expect(try store.allItems(kind: .memory).count == 1)
     }
 }

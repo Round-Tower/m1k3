@@ -15,6 +15,13 @@
 //  it's a delta and appends. One reducer renders both correctly.
 //
 //  Signed: Kev + claude-opus-4-8, 2026-06-06, Confidence 0.85, Prior: Unknown
+//  Review: Kev + claude-opus-4-8, 2026-06-30, Confidence 0.85 — distillation
+//  gained a ROLLING trigger (was exit/launch only, "never per turn"). Once the
+//  undistilled backlog outgrows the live HistoryWindow it distils mid-session, so
+//  a long live conversation's early turns become retrievable facts before they
+//  fall out of context — the other half of the context-headroom work. The
+//  isResponding guard moved to the exit/launch path; the rolling path runs at
+//  end-of-send (streaming done) so it can't contend with a live response.
 
 import Foundation
 import M1K3Knowledge
@@ -195,6 +202,21 @@ public final class ChatSession {
     /// (DEFAULT-0 watermarks mean old conversations distill once, in full).
     nonisolated static let maxDistillationTurns = 40
 
+    /// Rolling-distillation trigger: fire mid-session once the UN-distilled
+    /// backlog (messages past the watermark) outgrows what the live
+    /// `HistoryWindow` can replay, plus a small batch so it fires ~every few
+    /// exchanges rather than every turn. Below this, distillation stays on the
+    /// exit/launch path; above it, a long live session's early turns become
+    /// retrievable facts shortly after they fall out of context — closing the
+    /// mid-session amnesia gap the wider window alone can't.
+    nonisolated static let rollingDistillBacklog = HistoryWindow.maxTurns + 4
+
+    /// Pure policy (so it's TDD'd without the async machinery): is the
+    /// undistilled backlog large enough to distill now?
+    nonisolated static func shouldRollingDistill(messageCount: Int, watermark: Int) -> Bool {
+        messageCount - watermark >= rollingDistillBacklog
+    }
+
     public init(
         responder: any RAGResponding,
         history: (any ChatHistoryPersisting)? = nil,
@@ -315,6 +337,9 @@ public final class ChatSession {
         }
         persistActiveConversation()
         scheduleTitlingIfNeeded(question: trimmed)
+        // Rolling distillation: a no-op until the backlog outgrows the window,
+        // then it captures the long tail mid-session so it stays recoverable.
+        scheduleRollingDistillationIfNeeded()
     }
 
     /// Save the live transcript to the active conversation's row and tell the
@@ -368,15 +393,42 @@ public final class ChatSession {
     }
 
     /// Fire-and-forget memory distillation over the transcript content the
-    /// watermark hasn't covered. Called at conversation EXIT (new/switch,
-    /// BEFORE the swap) and by the launch catch-up — never per turn, never on
-    /// delete (deletion is discard intent). The titling blueprint throughout:
+    /// watermark hasn't covered. Driven from three places: conversation EXIT
+    /// (new/switch, BEFORE the swap), the launch catch-up, and — once the
+    /// backlog outgrows the window — mid-session via the rolling trigger. Never
+    /// on delete (deletion is discard intent). The titling blueprint throughout:
     /// id + count captured at spawn, defer cleanup, task exposed for tests.
     /// Watermark advances ONLY on success (a throw leaves the slice for the
     /// next trigger to retry).
     func scheduleDistillationIfNeeded() {
+        // Exit/launch path: never distil while a response is actively streaming
+        // (it would contend with the user's turn for the model). The rolling
+        // path runs at end-of-send when streaming is already done, so it goes
+        // through `spawnDistillation` directly.
+        guard !isResponding else { return }
+        spawnDistillation()
+    }
+
+    /// Mid-session ("rolling") trigger: when the undistilled backlog has outgrown
+    /// the live window, capture it now so a long session's early turns survive as
+    /// facts. Called at the tail of `send` (the response is complete, so it skips
+    /// the `isResponding` latch); single-flight + watermark guards in
+    /// `spawnDistillation` keep it from over-firing.
+    func scheduleRollingDistillationIfNeeded() {
+        guard let history, distillation != nil, autoCaptureEnabled() else { return }
+        let watermark = (try? history.distilledWatermark(id: activeConversationID)) ?? 0
+        guard Self.shouldRollingDistill(messageCount: messages.count, watermark: watermark) else { return }
+        spawnDistillation()
+    }
+
+    /// The distillation worker, deliberately WITHOUT an `isResponding` guard.
+    /// ⚠️ Contract: callers must guarantee no response is actively streaming —
+    /// `scheduleDistillationIfNeeded` enforces it for the exit/launch path, and
+    /// the rolling path calls in at end-of-send (streaming already done). A new
+    /// call site MUST uphold this or distillation will contend with a live turn.
+    private func spawnDistillation() {
         guard let history, let distillation, autoCaptureEnabled() else { return }
-        guard distillationTask == nil, !isResponding else { return }
+        guard distillationTask == nil else { return }
         let conversationID = activeConversationID
         let snapshotCount = messages.count
         let watermark = (try? history.distilledWatermark(id: conversationID)) ?? 0

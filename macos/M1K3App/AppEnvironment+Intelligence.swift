@@ -64,6 +64,14 @@ extension AppEnvironment {
     /// the log store). Logs the match COUNT only — never the value, which re-leaks it.
     private nonisolated static let securityLog = Logger(subsystem: "app.m1k3", category: "security")
 
+    /// Ask-path lifecycle (the MCP `ask_m1k3` / Ask App Intent core). Logs question
+    /// LENGTH + brain, never the text — these lines are harvested by IssueReporter.
+    private nonisolated static let askLog = Logger(subsystem: "app.m1k3", category: "responder")
+
+    /// Memory-graph writes from the ask path — a storage failure is NOT a security
+    /// event, so it must not surface under the [security] canary channel.
+    private nonisolated static let memoryLog = Logger(subsystem: "app.m1k3", category: "memory-graph")
+
     // MARK: - Ask
 
     /// One grounded, cited answer with no transcript — the core behind the MCP
@@ -78,10 +86,17 @@ extension AppEnvironment {
             throw MCPVoiceError("M1K3 is in a conversation right now — try again shortly")
         }
         guard !intelligenceAskInFlight else {
+            Self.askLog.notice("ask rejected: already answering")
             throw MCPVoiceError("M1K3 is already answering a question")
         }
         intelligenceAskInFlight = true
         defer { intelligenceAskInFlight = false }
+        // Hoist members into locals before the Logger interpolation: the message is
+        // an autoclosure, so a `self.` member there requires explicit self, which
+        // swiftformat then strips → a build break (the documented logging landmine).
+        let askChars = question.count
+        let askBrain = selectedBrain.rawValue
+        Self.askLog.notice("ask: \(askChars) chars, brain=\(askBrain, privacy: .public)")
         avatar.setActivity(.thinking)
         defer { avatar.resetToIdle() }
 
@@ -102,6 +117,7 @@ extension AppEnvironment {
         } catch is TimeoutError {
             // Deadline hit: the generation is cancelled and the lock is releasing
             // (defer) — tell the caller honestly rather than hang.
+            Self.askLog.error("ask timed out after \(Int(MCPHostController.askDeadlineSeconds))s")
             throw MCPVoiceError(
                 "M1K3 took too long to answer (over \(Int(MCPHostController.askDeadlineSeconds))s) and stopped. "
                     + "Try a more specific question, or ask again."
@@ -165,11 +181,24 @@ extension AppEnvironment {
         do {
             let vector = try await embedder.embed(text)
             let fact = Memory(kind: .note, text: text, source: provenance)
-            try memoryStore.remember(fact, embedding: vector)
+            try memoryStore.rememberConnected(fact, embedding: vector)
         } catch {
-            Self.securityLog.error(
+            Self.memoryLog.error(
                 "memory-graph dual-write skipped: \(error.localizedDescription, privacy: .public)"
             )
         }
+    }
+}
+
+/// Adapts the concrete `MemoryStore` graph to M1K3Chat's `DistilledFactGraphWriting`
+/// seam, so the distillation coordinator mirrors NEW facts into the graph without
+/// M1K3Chat depending on M1K3Memory. Distilled facts land as `.note` nodes tagged
+/// `distilled` — the same shape as the explicit remember dual-write above. The
+/// embedding is the coordinator's (computed with the shared `swappable` embedder
+/// recall also queries with), so graph writes and recall share one space.
+struct DistilledFactGraphAdapter: DistilledFactGraphWriting {
+    let store: MemoryStore
+    func writeDistilledFact(_ text: String, embedding: [Float]) async throws {
+        try store.rememberConnected(Memory(kind: .note, text: text, source: "distilled"), embedding: embedding)
     }
 }

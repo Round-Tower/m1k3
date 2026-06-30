@@ -22,6 +22,18 @@ import M1K3Inference
 import M1K3Knowledge
 import os
 
+/// The temporal memory GRAPH write seam, kept as a protocol so M1K3Chat stays
+/// free of a hard M1K3Memory dependency (the app wires the concrete MemoryStore
+/// adapter). This is THE fix for the divergent stores: distilled facts now reach
+/// the graph through the same coordinator that writes the corpus, instead of the
+/// corpus-only path that left the graph empty and `related_memory` edgeless.
+public protocol DistilledFactGraphWriting: Sendable {
+    /// Persist a newly distilled fact as a node in the memory graph. Best-effort:
+    /// the corpus write is the source of truth, so a graph-write failure must
+    /// never fail distillation.
+    func writeDistilledFact(_ text: String, embedding: [Float]) async throws
+}
+
 public struct MemoryDistillationCoordinator: Sendable {
     private static let log = Logger(subsystem: M1K3Log.subsystem, category: "memory-distill")
     /// Cosine above which a stored memory counts as "already known".
@@ -32,17 +44,22 @@ public struct MemoryDistillationCoordinator: Sendable {
     private let ingester: DocumentIngester
     private let store: KnowledgeStore
     private let embedder: any EmbeddingService
+    /// Optional: nil keeps the legacy corpus-only behaviour (tests, any caller
+    /// that hasn't wired the graph yet).
+    private let graph: (any DistilledFactGraphWriting)?
 
     public init(
         distiller: any MemoryDistilling,
         ingester: DocumentIngester,
         store: KnowledgeStore,
-        embedder: any EmbeddingService
+        embedder: any EmbeddingService,
+        graph: (any DistilledFactGraphWriting)? = nil
     ) {
         self.distiller = distiller
         self.ingester = ingester
         self.store = store
         self.embedder = embedder
+        self.graph = graph
     }
 
     /// Distill the slice and store what's new. Returns the number of facts
@@ -57,7 +74,10 @@ public struct MemoryDistillationCoordinator: Sendable {
         }
         var written = 0
         for fact in facts {
-            if try await isSemanticDuplicate(fact) {
+            // Embed ONCE: the same vector gates semantic dedup AND seeds the graph
+            // node, so the dual-write costs no extra embed.
+            let vector = await embed(fact)
+            if let vector, try hasSemanticDuplicate(vector) {
                 Self.log.debug("skip (semantic dup): \(LogPreview.preview(fact, max: 60), privacy: .public)")
                 continue
             }
@@ -70,23 +90,42 @@ public struct MemoryDistillationCoordinator: Sendable {
             )
             if result.wasDeduped {
                 Self.log.debug("skip (exact dup): \(LogPreview.preview(fact, max: 60), privacy: .public)")
-            } else {
-                written += 1
-                Self.log.info("remembered: \(LogPreview.preview(fact, max: 80), privacy: .public)")
+                continue
             }
+            written += 1
+            Self.log.info("remembered: \(LogPreview.preview(fact, max: 80), privacy: .public)")
+            await dualWriteToGraph(fact, vector: vector)
         }
         Self.log.info("distillation wrote \(written)/\(facts.count) fact(s)")
         return written
     }
 
-    private func isSemanticDuplicate(_ fact: String) async throws -> Bool {
-        guard let vector = try? await embedder.embed(fact) else { return false }
+    /// Embed for dedup + graph seed. Returns nil (logged) on failure so a
+    /// degenerate embedder doesn't silently read as "no duplicates" — the corpus
+    /// write still proceeds (fail-open), only dedup + the graph seed are skipped.
+    private func embed(_ fact: String) async -> [Float]? {
+        do { return try await embedder.embed(fact) } catch {
+            Self.log.notice("embed failed — dedup + graph-write skipped: \(error.localizedDescription, privacy: .public)")
+            return nil
+        }
+    }
+
+    private func hasSemanticDuplicate(_ vector: [Float]) throws -> Bool {
         // limit 20, not 5: searchVector ranks across ALL kinds, and a stack of
         // similar document chunks would crowd a true memory duplicate out of a
         // narrow top-K before the kind filter ever saw it.
         let near = try store.searchVector(queryVector: vector, limit: 20)
         return near.contains {
             $0.kind == .memory && ($0.similarity ?? 0) >= Self.semanticDedupeThreshold
+        }
+    }
+
+    /// Mirror a freshly-written fact into the memory graph. Best-effort: a graph
+    /// failure is logged, never thrown — the corpus already holds the fact.
+    private func dualWriteToGraph(_ fact: String, vector: [Float]?) async {
+        guard let graph, let vector else { return }
+        do { try await graph.writeDistilledFact(fact, embedding: vector) } catch {
+            Self.log.notice("graph dual-write failed (corpus write stands): \(error.localizedDescription, privacy: .public)")
         }
     }
 
