@@ -94,12 +94,15 @@ enum IssueReporter {
         do {
             let store = try OSLogStore(scope: .currentProcessIdentifier)
             let start = store.position(date: Date().addingTimeInterval(-600))
-            let lines = try store.getEntries(at: start)
+            let entries = try store.getEntries(at: start)
                 .compactMap { $0 as? OSLogEntryLog }
                 .filter { $0.subsystem == "app.m1k3" }
-                .map { "[\($0.category)] \($0.composedMessage)" }
-                .suffix(maxLines)
-            return lines.joined(separator: "\n")
+            // Level-prioritized, not a blind tail: keep every error/fault so the
+            // triggering failure can't scroll off behind a flood of .notice lines.
+            let kept = DiagnosticLogPartition.select(entries, maxLines: maxLines) { entry in
+                entry.level == .error || entry.level == .fault
+            }
+            return kept.map { "[\($0.category)] \($0.composedMessage)" }.joined(separator: "\n")
         } catch {
             return "(could not read logs: \(error.localizedDescription))"
         }

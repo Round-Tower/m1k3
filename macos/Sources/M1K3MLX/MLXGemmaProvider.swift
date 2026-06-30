@@ -61,13 +61,14 @@ let mlxTTFTLog = Logger(subsystem: "app.m1k3", category: "ttft")
 /// Log one generation's completion metrics. Free function taking only params
 /// (the swiftformat↔Logger autoclosure landmine: never interpolate members).
 /// Internal by design — called from MLXToolCalling.swift too.
-func logGenerationInfo(_ info: GenerateCompletionInfo, label: String) {
+func logGenerationInfo(_ info: GenerateCompletionInfo, label: String, model: String) {
     let promptTokens = info.promptTokenCount
     let prefillMS = Int(info.promptTime * 1000)
     let decodeTokens = info.generationTokenCount
     let tokensPerSecond = Int(info.tokensPerSecond)
+    // model id included so timings stay attributable after a mid-session brain swap.
     mlxTTFTLog.notice(
-        "\(label, privacy: .public): prompt=\(promptTokens)tok prefill=\(prefillMS)ms decode=\(decodeTokens)tok @\(tokensPerSecond)tok/s"
+        "\(label, privacy: .public) [\(model, privacy: .public)]: prompt=\(promptTokens)tok prefill=\(prefillMS)ms decode=\(decodeTokens)tok @\(tokensPerSecond)tok/s"
     )
 }
 
@@ -253,7 +254,7 @@ public final class MLXGemmaProvider: InferenceProvider, ModelPreloading, @unchec
         var raw = ""
         for try await event in session.streamDetails(to: prompt, images: [], videos: []) {
             if let piece = event.chunk { raw += piece }
-            if let info = event.info { logGenerationInfo(info, label: "generate") }
+            if let info = event.info { logGenerationInfo(info, label: "generate", model: modelIdentifier) }
         }
         return Self.normaliseThinkPrefix(raw, preOpened: thinkPrefixNeeded)
     }
@@ -274,12 +275,21 @@ public final class MLXGemmaProvider: InferenceProvider, ModelPreloading, @unchec
                     if thinkPrefixNeeded { continuation.yield("<think>") }
                     for try await event in session.streamDetails(to: prompt, images: [], videos: []) {
                         if let chunk = event.chunk { continuation.yield(chunk) }
-                        if let info = event.info { logGenerationInfo(info, label: "stream") }
+                        if let info = event.info { logGenerationInfo(info, label: "stream", model: modelIdentifier) }
                     }
                     continuation.finish()
                 } catch {
                     // Per the InferenceProvider contract, errors terminate the
-                    // stream rather than throwing.
+                    // stream rather than throwing. A user "stop" cancels the task
+                    // (see onTermination) and lands here as CancellationError —
+                    // that's normal, so only a genuine failure is worth an error
+                    // line (else every stop emits a false error).
+                    if !(error is CancellationError) {
+                        mlxLoadLog.error("""
+                        generateStreaming failed [\(self.modelIdentifier, privacy: .public)]: \
+                        \(error.localizedDescription, privacy: .public)
+                        """)
+                    }
                     continuation.finish()
                 }
             }

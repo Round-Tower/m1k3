@@ -40,6 +40,7 @@ struct SettingsView: View {
     @State private var showLicenses = false
     @State private var issueReported = false
     @State private var issueTruncated = false
+    @State private var whatHappened = ""
 
     var body: some View {
         @Bindable var env = env
@@ -326,9 +327,13 @@ struct SettingsView: View {
                 }
 
                 Section {
+                    TextField("What happened? (optional)", text: $whatHappened, axis: .vertical)
+                        .lineLimit(2 ... 5)
+                        .textFieldStyle(.roundedBorder)
                     Button("Report an issue…") {
                         Task {
                             issueTruncated = await IssueReporter.reportIssue(
+                                whatHappened: whatHappened,
                                 activeBrain: env.selectedBrain.displayName,
                                 userProfile: M1K3Persona.userProfile
                             )

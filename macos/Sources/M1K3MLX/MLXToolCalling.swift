@@ -274,7 +274,7 @@ extension MLXGemmaProvider: ToolCallingProvider {
                 case let .toolCall(libraryCall):
                     calls.append(MLXToolMapping.parsedToolCall(from: libraryCall))
                 case let .info(info):
-                    logGenerationInfo(info, label: "toolTurn")
+                    logGenerationInfo(info, label: "toolTurn", model: modelIdentifier)
                 @unknown default:
                     break
                 }
@@ -325,6 +325,7 @@ extension MLXGemmaProvider: ToolCallingProvider {
         )
         return MLXToolTurnSession(
             container: container,
+            modelID: modelIdentifier,
             parameters: generateParameters,
             format: format,
             specs: normalizedSpecs,
@@ -361,6 +362,7 @@ extension MLXGemmaProvider: ToolCallingProvider {
 /// upstream ChatSession relies on).
 final class MLXToolTurnSession: ToolTurnSession, @unchecked Sendable {
     private let container: ModelContainer
+    private let modelID: String
     private let parameters: GenerateParameters
     private let format: ToolCallFormat
     private let specs: [ToolSpec]?
@@ -391,6 +393,7 @@ final class MLXToolTurnSession: ToolTurnSession, @unchecked Sendable {
 
     init(
         container: ModelContainer,
+        modelID: String,
         parameters: GenerateParameters,
         format: ToolCallFormat,
         specs: [ToolSpec]?,
@@ -399,6 +402,7 @@ final class MLXToolTurnSession: ToolTurnSession, @unchecked Sendable {
         seed: PersonaPrefixSnapshot? = nil
     ) {
         self.container = container
+        self.modelID = modelID
         self.parameters = parameters
         self.format = format
         self.specs = specs
@@ -490,7 +494,7 @@ final class MLXToolTurnSession: ToolTurnSession, @unchecked Sendable {
                 case let .toolCall(libraryCall):
                     calls.append(MLXToolMapping.parsedToolCall(from: libraryCall))
                 case let .info(info):
-                    logGenerationInfo(info, label: "toolTurnSession")
+                    logGenerationInfo(info, label: "toolTurnSession", model: modelID)
                 @unknown default:
                     break
                 }

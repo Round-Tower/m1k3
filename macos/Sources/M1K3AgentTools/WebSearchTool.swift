@@ -66,10 +66,12 @@ public struct WebSearchTool: AgentTool {
                 return ToolResult(output: "Error: web search is temporarily unavailable "
                     + "(DuckDuckGo rate-limited this Mac). Answer from what you already have.")
             case let .results(results) where results.isEmpty:
-                Self.log.info("no results for \"\(query, privacy: .public)\"")
+                // .notice: "the search found nothing" is a load-bearing breadcrumb
+                // (distinguishes empty-result from never-ran) that must persist.
+                Self.log.notice("no results for \"\(query, privacy: .public)\"")
                 return ToolResult(output: "No web results for \"\(query)\".")
             case let .results(results):
-                Self.log.info("\(results.count) result(s) for \"\(query, privacy: .public)\"")
+                Self.log.notice("\(results.count) result(s) for \"\(query, privacy: .public)\"")
                 let base = WebSearchFormatter.format(results, limit: maxResults)
                 return ToolResult(output: await deepened(base, results: results))
             }
