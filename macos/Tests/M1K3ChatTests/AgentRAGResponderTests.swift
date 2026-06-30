@@ -355,6 +355,35 @@ struct AgentRAGResponderTests {
         ])
     }
 
+    @Test("web-synthesis prompt makes the model verify the premise, not stitch tangential hits")
+    func fallbackPromptGuardsAgainstFalsePremise() {
+        // The Glanmire false-positive (caught live, web ON): a FICTIONAL entity
+        // returns only tangential real hits; the bare synthesis prompt said
+        // "answer using the INFORMATION GATHERED", which the model read as "this
+        // IS the answer" and bridged the tangents into an affirmative. The prompt
+        // must instruct premise-verification / honest abstention. With web OFF the
+        // model already abstains under the full persona — this brings the web-
+        // synthesis seam up to the same honesty bar without touching the legit
+        // #110 case (real results that DO answer still proceed normally).
+        let gathered = [ReasoningStep(
+            iteration: 0,
+            thought: "",
+            action: "web_search(Glanmire Accord 1987)",
+            observation: "1. Anglo-Irish Agreement — https://en.wikipedia.org/wiki/Anglo-Irish_Agreement\n"
+                + "Some 1987 Oireachtas debate text mentioning Glanmire and a hospital."
+        )]
+        let prompt = AgentRAGResponder.fallbackPrompt(
+            question: "What were the terms of the Glanmire Accord of 1987?",
+            chunks: [], gathered: gathered
+        )
+        // Still synthesises over the gathered evidence (the #110 path is intact)…
+        #expect(prompt.contains("INFORMATION GATHERED"))
+        // …but now tells the model to abstain when the evidence doesn't establish
+        // the thing exists, instead of stitching tangents into a confident "yes".
+        #expect(prompt.contains("couldn't confirm"))
+        #expect(prompt.lowercased().contains("tangential"))
+    }
+
     @Test("lookup_fact appends a deterministic Wikipedia-sources block")
     func factSourcesBlock() async throws {
         let (store, embedder) = try await ingestedStore()
