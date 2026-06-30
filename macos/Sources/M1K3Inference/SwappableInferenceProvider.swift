@@ -18,23 +18,23 @@
 //  unchanged; members made `public`.
 
 import Foundation
+import Synchronization
 
-public final class SwappableInferenceProvider: InferenceProvider, @unchecked Sendable {
+public final class SwappableInferenceProvider: InferenceProvider, Sendable {
     public let name = "swappable-mlx"
 
-    private let lock = NSLock()
-    private var current: any InferenceProvider
+    private let current: Mutex<any InferenceProvider>
 
     public init(_ initial: any InferenceProvider) {
-        current = initial
+        current = Mutex(initial)
     }
 
     public var active: any InferenceProvider {
-        lock.withLock { current }
+        current.withLock { $0 }
     }
 
     public func setProvider(_ provider: any InferenceProvider) {
-        lock.withLock { current = provider }
+        current.withLock { $0 = provider }
     }
 
     public var isAvailable: Bool {

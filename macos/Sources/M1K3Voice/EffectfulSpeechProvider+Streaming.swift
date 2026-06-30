@@ -211,7 +211,13 @@ final class StreamingPlaybackSession {
         // (probe-verified), leaving isSpeaking() stuck true — the next speak()
         // would fire a spurious ended event and inherit a stale clock. At
         // natural completion nothing is queued; after stop() this is a no-op.
-        player.stop()
+        // Deferred off this call's priority: complete() can run on a high-QoS
+        // caller (a user-triggered stop()), and AVAudioPlayerNode.stop() takes
+        // an internal engine lock the audio render thread also touches — a
+        // direct call here is a priority-inversion hang risk. Nothing below
+        // depends on the stop completing first.
+        let node = player
+        Task(priority: .utility) { @MainActor in node.stop() }
         clockTask?.cancel()
         clockTask = nil
         // Consume the continuation: a buffer callback already in flight when

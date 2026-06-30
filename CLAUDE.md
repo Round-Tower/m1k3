@@ -5,8 +5,10 @@
 > **⚠️ Orientation (2026-06-21):** The **live product** is the Mac-native SwiftUI
 > app under **`macos/`** — see `macos/PLAN.md` and `macos/.claude/project-memory.md`.
 > The Python CLI documented below is **legacy** (pre-Mac-app, last meaningful work
-> Jan 2026) and was archived under **`_legacy/`** in this pass. The in-app MCP server
-> (native macOS app) and `mcp_unified_server.py` (`.mcp.json`) remain live.
+> Jan 2026) and was archived under **`_legacy/`** in this pass. The live MCP surface
+> is the Mac app's in-app HTTP server (`.mcp.json` points at `127.0.0.1:4242/mcp`
+> as of 2026-06-30); `mcp_unified_server.py` is no longer launched by `.mcp.json`
+> and is orphaned — it still exists at the repo root but isn't the active path.
 
 Privacy-focused local AI with voice synthesis, RAG, 3D avatars, and CLI interfaces.
 

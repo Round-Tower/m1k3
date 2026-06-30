@@ -97,17 +97,14 @@ runs — even with nothing installed (the mock fallback answers).
 
 ## MCP integration
 
-[`mcp_unified_server.py`](./mcp_unified_server.py) provides 12 tools to Claude
-Desktop:
+The live MCP surface is the **Mac app's in-app HTTP server** — see
+[`macos/CLAUDE.md`](./macos/CLAUDE.md#mcp-exposure-two-surfaces) and
+[`docs/MCP_SETUP.md`](./macos/docs/MCP_SETUP.md). `.mcp.json` at the repo root
+points Claude Code at `http://127.0.0.1:4242/mcp` while the app is running.
 
-- **TTS** — `speak` (with `emotion_hint`), `list_voices`, `set_voice`, `get_voice_status`
-- **Avatar** — `get`/`set_avatar_state`, `set_avatar_emotion`, `set_avatar_model`, `list_avatar_models`
-- **STT** — `start_voice_input`, `get_stt_status`
-
-```bash
-# Register in your Claude Desktop MCP config
-python mcp_unified_server.py
-```
+[`mcp_unified_server.py`](./mcp_unified_server.py) is the legacy Python MCP
+server (pre-Mac-app) — it's no longer referenced by `.mcp.json` and isn't the
+active path, though the file is still present at the repo root.
 
 ## Layout
 
