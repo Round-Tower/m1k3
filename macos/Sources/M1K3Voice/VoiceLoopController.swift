@@ -24,6 +24,7 @@
 
 import Foundation
 import Observation
+import os
 
 /// A user-facing turn failure (the message is shown, not logged-and-lost).
 public struct VoiceTurnFailure: Error, Equatable, Sendable {
@@ -37,6 +38,7 @@ public struct VoiceTurnFailure: Error, Equatable, Sendable {
 @MainActor
 @Observable
 public final class VoiceLoopController {
+    private static let log = Logger(subsystem: "app.m1k3", category: "stt")
     /// The loop's real-world effects, injected as closures so tests fake them
     /// and the app layer adapts its existing seams without this type importing
     /// chat/avatar machinery.
@@ -148,6 +150,7 @@ public final class VoiceLoopController {
                     self?.dispatch(.answerReady(answer))
                 case let .failure(failure):
                     self?.lastError = failure.message
+                    Self.log.error("voice turn failed: \(failure.message, privacy: .public)")
                     self?.dispatch(.answerFailed(failure.message))
                 }
             }
@@ -181,6 +184,7 @@ public final class VoiceLoopController {
                 stream = try dependencies.startListening()
             } catch {
                 lastError = error.localizedDescription
+                Self.log.error("voice mic unavailable, parking: \(error.localizedDescription, privacy: .public)")
                 dispatch(.mute) // park: mic unavailable
                 return
             }

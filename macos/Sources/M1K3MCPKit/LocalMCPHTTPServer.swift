@@ -25,10 +25,12 @@
 import Foundation
 import MCP
 import Network
+import os
 
 public actor LocalMCPHTTPServer {
     public typealias SessionFactory = @Sendable () async throws -> (Server, StatelessHTTPServerTransport)
 
+    private static let log = Logger(subsystem: "app.m1k3", category: "mcp")
     private let port: UInt16
     private let makeSession: SessionFactory
     /// Called when the server stops itself (session rebuild failed) — the
@@ -92,7 +94,12 @@ public actor LocalMCPHTTPServer {
             guard let chunk = await receiveChunk(connection) else { break }
             buffer.append(chunk)
             guard let parsed = HTTPWireCodec.parseRequest(buffer) else {
-                if buffer.count > 1_048_576 { break } // oversized head/body → drop
+                if buffer.count > 1_048_576 {
+                    // Dropped silently before — a client whose request never lands
+                    // looked identical to a hung server.
+                    Self.log.notice("dropped oversized request (\(buffer.count) bytes) before parse")
+                    break
+                }
                 continue
             }
             let response = await respond(to: parsed.request)
@@ -115,6 +122,7 @@ public actor LocalMCPHTTPServer {
             } catch {
                 // A factory throw must not leave a zombie listener returning
                 // 500s while claiming to run — stop honestly and tell the host.
+                Self.log.error("MCP session rebuild failed: \(error.localizedDescription, privacy: .public)")
                 await stop()
                 onAbnormalStop?("MCP session rebuild failed: \(error)")
                 return .error(statusCode: 500, MCPError.internalError("MCP session rebuild failed"))

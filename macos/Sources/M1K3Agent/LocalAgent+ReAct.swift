@@ -19,6 +19,7 @@
 
 import Foundation
 import M1K3Inference
+import M1K3LogCore
 import os
 
 extension LocalAgent {

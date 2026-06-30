@@ -16,6 +16,7 @@
 
 import AppKit
 import M1K3Launch
+import os
 import SwiftUI
 
 @main
@@ -170,7 +171,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
         }
     }
 
+    private static let launchLog = Logger(subsystem: "app.m1k3", category: "launch")
+
+    /// First line of every session: which build emitted the lines that follow.
+    /// Without it a `log stream` window or a user's Console capture has no anchor
+    /// to the version/build under test. `GitCommitSHA` is logged when injected at
+    /// build time (Info.plist key), omitted otherwise.
+    private static func logLaunchStamp() {
+        func info(_ key: String) -> String {
+            Bundle.main.object(forInfoDictionaryKey: key) as? String ?? "?"
+        }
+        let version = info("CFBundleShortVersionString")
+        let build = info("CFBundleVersion")
+        let os = ProcessInfo.processInfo.operatingSystemVersionString
+        let sha = Bundle.main.object(forInfoDictionaryKey: "GitCommitSHA") as? String ?? "—"
+        launchLog.notice("launch: M1K3 \(version, privacy: .public) (\(build, privacy: .public)) sha=\(sha, privacy: .public) on \(os, privacy: .public)")
+    }
+
     func applicationDidFinishLaunching(_: Notification) {
+        Self.logLaunchStamp()
         // The self-test path drives its own composition; don't double-build here.
         guard !SelfTest.isRequested else { return }
         // Build off the launch beat (async) so first paint isn't blocked, but at
