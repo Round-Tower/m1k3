@@ -28,6 +28,9 @@ struct MessageView: View {
 
     /// Testing aid: show per-turn generation stats under each answer (Settings).
     @AppStorage(AppEnvironment.showGenerationStatsKey) private var showGenerationStats = false
+    /// When the full-window avatar is the backdrop, M1K3's flat turns need a readability
+    /// scrim to stay legible; on the plain backdrop they stay card-free.
+    @AppStorage(AppEnvironment.avatarDisplayKey) private var avatarDisplay = AvatarDisplay.panel
 
     /// The http(s) links mentioned in this turn, surfaced as one-click chips.
     /// Memoised in @State and recomputed only when the turn's text changes (via
@@ -181,8 +184,9 @@ struct MessageView: View {
         }
         // M1K3's turns sit flat on the backdrop — minimal, no glass card (the user's
         // own turns keep the tinted glass bubble, so the two speakers stay legible
-        // apart). Kept a little inset so the controls aren't jammed against the edge.
-        .padding(.vertical, 4)
+        // apart). When the full-window avatar is the backdrop, a subtle scrim fades in
+        // behind the text so it stays readable over the moving image.
+        .modifier(LegibilityScrim(active: avatarDisplay == .background))
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
@@ -327,5 +331,26 @@ private struct LinkChip: View {
     private var label: String {
         guard let host = url.host else { return url.absoluteString }
         return host.hasPrefix("www.") ? String(host.dropFirst(4)) : host
+    }
+}
+
+/// A readability scrim for M1K3's flat turns when the full-window avatar is the
+/// backdrop. Off → the text stays truly card-free (a little inset only). On → a soft
+/// dark scrim hugs the text so it reads over the moving avatar. Far lighter than the
+/// old .glassEffect card; opacity is the knob if it wants tuning.
+private struct LegibilityScrim: ViewModifier {
+    let active: Bool
+
+    func body(content: Content) -> some View {
+        content
+            .padding(.horizontal, active ? 12 : 0)
+            .padding(.vertical, active ? 8 : 4)
+            .background {
+                if active {
+                    RoundedRectangle(cornerRadius: 14)
+                        .fill(.black.opacity(0.3))
+                }
+            }
+            .animation(.easeInOut(duration: 0.2), value: active)
     }
 }
