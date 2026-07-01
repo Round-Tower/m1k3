@@ -14,7 +14,21 @@
 // dependency-free knowledge primitives (VectorMath, RRFFusion) ported from
 // the prior knowledge-server project so the foundation builds in seconds before MLX/GRDB enter the graph.
 
+import Foundation
 import PackageDescription
+
+// M1K3_FM27 — compile the REAL FoundationModels conformance (ADR 0001 dual-path;
+// M1K3Agent/M1K3FoundationModel.swift). Env-gated because the conformance needs
+// the macOS 27 SDK, which only the Xcode 27 beta carries:
+//
+//   M1K3_FM27=1 DEVELOPER_DIR=/Applications/Xcode-beta.app \
+//     swift build --target M1K3Agent --scratch-path .build-fm27
+//
+// Default OFF: stable 26.x builds (CI, releases, plain `swift build`) never set
+// the env var, so they are byte-identical to before this gate existed. The
+// separate scratch path keeps beta-toolchain artifacts out of the shared .build.
+let fm27 = ProcessInfo.processInfo.environment["M1K3_FM27"] == "1"
+let fm27Settings: [SwiftSetting] = fm27 ? [.define("M1K3_FM27")] : []
 
 let package = Package(
     name: "M1K3",
@@ -181,7 +195,8 @@ let package = Package(
         .target(
             name: "M1K3Agent",
             dependencies: ["M1K3LogCore", "M1K3Inference", "M1K3LanguageModel"],
-            path: "Sources/M1K3Agent"
+            path: "Sources/M1K3Agent",
+            swiftSettings: fm27Settings
         ),
         .testTarget(
             name: "M1K3AgentTests",
