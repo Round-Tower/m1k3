@@ -6,12 +6,29 @@ public struct CodeArtifact: Equatable, Sendable {
     public var language: Language
     public var title: String?
     public let createdAt: Date
+    /// Rendered HTML for the Preview tab when `source` isn't itself displayable HTML
+    /// (i.e. markdown: Code shows the raw `source`, Preview loads this). `nil` for
+    /// html/css/js, where the Preview loads `source` directly.
+    public var previewSource: String?
 
-    public init(source: String, language: Language, title: String? = nil, createdAt: Date = Date()) {
+    public init(
+        source: String,
+        language: Language,
+        title: String? = nil,
+        createdAt: Date = Date(),
+        previewSource: String? = nil
+    ) {
         self.source = source
         self.language = language
         self.title = title
         self.createdAt = createdAt
+        self.previewSource = previewSource
+    }
+
+    /// The HTML the Preview WebView should load — rendered HTML if present, else the
+    /// source (html artifacts are their own preview).
+    public var previewHTML: String {
+        previewSource ?? source
     }
 
     public var displayTitle: String {
@@ -30,9 +47,13 @@ public struct CodeArtifact: Equatable, Sendable {
         case html
         case css
         case js
+        case markdown
 
         public var fileExtension: String {
-            rawValue
+            switch self {
+            case .markdown: "md"
+            default: rawValue
+            }
         }
 
         public var utType: UTType {
@@ -40,6 +61,7 @@ public struct CodeArtifact: Equatable, Sendable {
             case .html: .html
             case .css: .sourceCode
             case .js: .javaScript
+            case .markdown: .plainText
             }
         }
 
@@ -48,6 +70,7 @@ public struct CodeArtifact: Equatable, Sendable {
             case "html", "htm": self = .html
             case "css": self = .css
             case "js": self = .js
+            case "md", "markdown": self = .markdown
             default: return nil
             }
         }

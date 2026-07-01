@@ -482,4 +482,12 @@ public final class ChatSession {
         guard let index = messages.lastIndex(where: { $0.role == .assistant }) else { return }
         messages[index].metrics = metrics
     }
+
+    /// Replace any <artifact>…</artifact> blocks in the last assistant message with a
+    /// breadcrumb — call AFTER the document has been detected + opened in the panel, so
+    /// the transcript stays clean while the document lives in the panel.
+    public func stripArtifactTagsFromLastMessage() {
+        guard let index = messages.lastIndex(where: { $0.role == .assistant }) else { return }
+        messages[index].text = ChatArtifactDisplay.stripArtifactTags(messages[index].text)
+    }
 }

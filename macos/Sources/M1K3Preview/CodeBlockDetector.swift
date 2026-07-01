@@ -4,20 +4,52 @@ public enum CodeBlockDetector {
     public static func detect(in text: String) -> [CodeArtifact] {
         var artifacts: [CodeArtifact] = []
 
-        let fenced = extractFencedBlocks(from: text)
+        // <artifact title="…">…</artifact> — an explicit document the model marked
+        // for the panel (rendered as markdown). Captured first, and its span removed
+        // so the fence scan below doesn't also pick up any fences inside the body.
+        var remaining = text
+        for tagged in extractArtifactTags(from: text) {
+            artifacts.append(
+                CodeArtifact(source: tagged.source, language: .markdown, title: tagged.title)
+            )
+            remaining = remaining.replacingOccurrences(of: tagged.raw, with: "")
+        }
+
+        let fenced = extractFencedBlocks(from: remaining)
         for block in fenced {
             let language = resolveLanguage(tag: block.tag, source: block.source)
             guard let language else { continue }
             artifacts.append(CodeArtifact(source: block.source, language: language))
         }
 
-        if artifacts.isEmpty, looksLikeFullDocument(text) {
+        if artifacts.isEmpty, looksLikeFullDocument(remaining) {
             artifacts.append(
-                CodeArtifact(source: text.trimmingCharacters(in: .whitespacesAndNewlines), language: .html)
+                CodeArtifact(source: remaining.trimmingCharacters(in: .whitespacesAndNewlines), language: .html)
             )
         }
 
         return artifacts
+    }
+
+    private struct TaggedArtifact {
+        let raw: String
+        let title: String?
+        let source: String
+    }
+
+    /// Extract `<artifact …>…</artifact>` blocks (case-insensitive, spanning
+    /// newlines), pulling an optional `title="…"` attribute. Empty bodies are skipped.
+    private static func extractArtifactTags(from text: String) -> [TaggedArtifact] {
+        let block = /<artifact([^>]*)>(.*?)<\/artifact>/.ignoresCase().dotMatchesNewlines()
+        var result: [TaggedArtifact] = []
+        for match in text.matches(of: block) {
+            let source = String(match.2).trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !source.isEmpty else { continue }
+            let title = String(match.1).firstMatch(of: /title\s*=\s*"([^"]*)"/.ignoresCase())
+                .map { String($0.1) }
+            result.append(TaggedArtifact(raw: String(match.0), title: title, source: source))
+        }
+        return result
     }
 
     private struct FencedBlock {
@@ -61,6 +93,7 @@ public enum CodeBlockDetector {
             case "html", "htm": return .html
             case "css": return .css
             case "js", "javascript": return .js
+            case "md", "markdown": return .markdown
             default: return nil
             }
         }

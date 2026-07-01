@@ -31,7 +31,9 @@ struct ArtifactView: View {
             Divider().opacity(0.4)
             switch selectedTab {
             case .preview:
-                ArtifactPreviewWebView(source: artifact.source)
+                // Markdown renders to HTML (previewHTML); html/css/js preview their
+                // own source. The Code tab always shows the raw `source`.
+                ArtifactPreviewWebView(source: artifact.previewHTML)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             case .code:
                 codeView

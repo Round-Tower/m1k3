@@ -605,6 +605,10 @@ final class AppEnvironment {
         // MVP: surface only the first artifact; multi-block picker is a follow-up.
         guard let first = artifacts.first else { return }
         review.open(artifact: first)
+        // Documents the model wrapped in <artifact> tags now live in the panel —
+        // replace the raw tag blocks in the bubble with a breadcrumb. No-op when the
+        // artifact came from a fenced block (those stay inline, as code always has).
+        chat.stripArtifactTagsFromLastMessage()
     }
 
     // speak/stopSpeaking/wireSpeechCallbacks live in AppEnvironment+VoiceMode.swift

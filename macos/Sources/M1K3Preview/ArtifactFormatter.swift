@@ -8,9 +8,69 @@ public enum ArtifactFormatter {
             result.source = formatHTML(artifact.source)
         case .css, .js:
             result.source = trimLines(artifact.source)
+        case .markdown:
+            // Keep `source` as the raw markdown (the Code tab shows it); render the
+            // Preview HTML into `previewSource`.
+            result.previewSource = formatMarkdown(artifact.source)
         }
         return result
     }
+
+    // MARK: - Markdown
+
+    /// Render markdown into a full, styled, CSP-sealed HTML document for the preview
+    /// WebView. The body comes from `MarkdownToHTML`; the shell mirrors the HTML path
+    /// (charset + CSP) plus a small readable stylesheet that follows the system theme.
+    public static func formatMarkdown(_ source: String) -> String {
+        let body = MarkdownToHTML.render(source)
+        let document = """
+        <!DOCTYPE html>
+        <html lang="en">
+        <head>
+          <meta charset="UTF-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1">
+          <style>\(markdownStylesheet)</style>
+        </head>
+        <body>
+        \(body)
+        </body>
+        </html>
+        """
+        return injectCSPMeta(document)
+    }
+
+    /// Reader-friendly typography for rendered markdown; follows light/dark via
+    /// `prefers-color-scheme` so it sits well inside the app's dark chrome.
+    private static let markdownStylesheet = """
+    :root { color-scheme: light dark; }
+    body {
+      font: -apple-system-body, system-ui, sans-serif;
+      line-height: 1.6;
+      max-width: 46rem;
+      margin: 0 auto;
+      padding: 2rem 1.5rem;
+      color: #1d1d1f;
+    }
+    @media (prefers-color-scheme: dark) {
+      body { color: #e8e8ea; }
+      a { color: #6cb6ff; }
+      code, pre { background: rgba(255,255,255,0.08); }
+      hr { border-color: rgba(255,255,255,0.15); }
+      blockquote { border-color: rgba(255,255,255,0.2); color: #b0b0b4; }
+    }
+    h1, h2, h3, h4 { line-height: 1.25; margin: 1.4em 0 0.5em; }
+    h1 { font-size: 1.8rem; }
+    h2 { font-size: 1.4rem; }
+    p, ul, ol, blockquote { margin: 0.6em 0; }
+    li { margin: 0.2em 0; }
+    a { color: #0a66c2; }
+    code { font-family: ui-monospace, SFMono-Regular, monospace; font-size: 0.9em;
+      background: rgba(0,0,0,0.06); padding: 0.1em 0.35em; border-radius: 4px; }
+    pre { background: rgba(0,0,0,0.06); padding: 0.9em 1em; border-radius: 8px; overflow-x: auto; }
+    pre code { background: none; padding: 0; }
+    hr { border: none; border-top: 1px solid rgba(0,0,0,0.15); margin: 1.6em 0; }
+    blockquote { border-left: 3px solid rgba(0,0,0,0.2); padding-left: 1em; color: #555; }
+    """
 
     // MARK: - HTML
 

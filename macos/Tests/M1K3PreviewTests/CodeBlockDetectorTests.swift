@@ -2,6 +2,56 @@
 import Testing
 
 struct CodeBlockDetectorTests {
+    @Test("captures an <artifact> tag as a titled markdown document")
+    func artifactTag() {
+        let text = """
+        Here's the blueprint:
+
+        <artifact title="Project Blueprint">
+        # Project Blueprint
+
+        - Primary Directive: ship it
+        </artifact>
+
+        Let me know what you think.
+        """
+        let artifacts = CodeBlockDetector.detect(in: text)
+        #expect(artifacts.count == 1)
+        #expect(artifacts.first?.language == .markdown)
+        #expect(artifacts.first?.title == "Project Blueprint")
+        #expect(artifacts.first?.source.hasPrefix("# Project Blueprint") == true)
+    }
+
+    @Test("a fence INSIDE an <artifact> is not double-captured")
+    func artifactTagWithInnerFence() {
+        let text = """
+        <artifact title="Doc">
+        # Doc
+
+        ```js
+        const x = 1
+        ```
+        </artifact>
+        """
+        let artifacts = CodeBlockDetector.detect(in: text)
+        #expect(artifacts.count == 1)
+        #expect(artifacts.first?.language == .markdown)
+    }
+
+    @Test("detects a fenced markdown block (fallback signal)")
+    func fencedMarkdown() {
+        let text = """
+        ```markdown
+        # Notes
+        - one
+        ```
+        """
+        let artifacts = CodeBlockDetector.detect(in: text)
+        #expect(artifacts.count == 1)
+        #expect(artifacts.first?.language == .markdown)
+        #expect(artifacts.first?.source.contains("# Notes") == true)
+    }
+
     @Test("detects a fenced HTML code block")
     func fencedHTML() {
         let text = """

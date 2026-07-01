@@ -28,12 +28,27 @@ public enum MessageTextPolish {
     /// blocks (```…```) untouched. Splits on fences, polishes only the prose
     /// segments, then trims the joined result once.
     public static func polish(_ text: String) -> String {
+        // Regions left byte-for-byte: fenced code blocks AND <artifact>…</artifact>
+        // document blocks — the markdown inside an artifact must survive verbatim so
+        // the review panel can render it (flattening would strip its structure first).
+        var ranges: [Range<String.Index>] = []
+        for match in text.matches(of: /```(?s:.*?)```/) {
+            ranges.append(match.range)
+        }
+        for match in text.matches(of: /<artifact(?:[^>]*)>(?s:.*?)<\/artifact>/.ignoresCase()) {
+            ranges.append(match.range)
+        }
+        ranges.sort { $0.lowerBound < $1.lowerBound }
+
         var result = ""
         var cursor = text.startIndex
-        for match in text.matches(of: /```(?s:.*?)```/) {
-            result += polishProse(String(text[cursor ..< match.range.lowerBound]))
-            result += String(text[match.range]) // code fence, verbatim
-            cursor = match.range.upperBound
+        for range in ranges {
+            // Skip a region nested in one already emitted (e.g. a fence inside an
+            // <artifact> — the artifact span already covers it).
+            guard range.lowerBound >= cursor else { continue }
+            result += polishProse(String(text[cursor ..< range.lowerBound]))
+            result += String(text[range]) // verbatim
+            cursor = range.upperBound
         }
         result += polishProse(String(text[cursor...]))
         return result.trimmingCharacters(in: .whitespacesAndNewlines)
