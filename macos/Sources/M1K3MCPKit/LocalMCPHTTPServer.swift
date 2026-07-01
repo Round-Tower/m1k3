@@ -75,8 +75,27 @@ public actor LocalMCPHTTPServer {
             Task { await self.handle(connection) }
         }
 
-        // Suspend until the listener actually binds. `.waiting` (EADDRINUSE) is
-        // treated as failure — we want a bound socket NOW, not eventually.
+        try await awaitListenerReady(listener)
+
+        // Bound. Swap in the long-lived handler: a listener that dies mid-session
+        // must flip the host status off (parity with the session-rebuild honesty
+        // path). Route only genuine failures — normal stop() fires `.cancelled`,
+        // which must NOT be reported as an abnormal stop.
+        listener.stateUpdateHandler = { [weak self] state in
+            if case let .failed(error) = state {
+                Task { await self?.handleListenerFailure(error) }
+            }
+        }
+        self.listener = listener
+        session = try await makeSession()
+        isRunning = true
+    }
+
+    /// Suspend until the listener binds (`.ready`) or fail fast on a bind error
+    /// (`.failed` / `.waiting` — EADDRINUSE surfaces as `.waiting`). Guards against
+    /// a double-resume since `stateUpdateHandler` fires repeatedly, and cancels the
+    /// listener on failure so a rejected bind can't leak.
+    private func awaitListenerReady(_ listener: NWListener) async throws {
         do {
             try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
                 let resumed = OSAllocatedUnfairLock(initialState: false)
@@ -103,19 +122,6 @@ public actor LocalMCPHTTPServer {
             listener.cancel()
             throw error
         }
-
-        // Bound. Swap in the long-lived handler: a listener that dies mid-session
-        // must flip the host status off (parity with the session-rebuild honesty
-        // path). Route only genuine failures — normal stop() fires `.cancelled`,
-        // which must NOT be reported as an abnormal stop.
-        listener.stateUpdateHandler = { [weak self] state in
-            if case let .failed(error) = state {
-                Task { await self?.handleListenerFailure(error) }
-            }
-        }
-        self.listener = listener
-        session = try await makeSession()
-        isRunning = true
     }
 
     /// A listener that failed after it was serving — tear down honestly so the

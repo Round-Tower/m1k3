@@ -66,115 +66,146 @@ public func makeIntelligenceToolDefinitions(
     graceSeconds: Double = defaultAskGraceSeconds
 ) -> [MCPToolDefinition] {
     [
-        MCPToolDefinition(
-            tool: Tool(
-                name: "ask_m1k3",
-                description: "Ask M1K3's local brain a question. The answer is grounded in M1K3's "
-                    + "private knowledge store with section-level citations, and may use web search if "
-                    + "the user has it enabled in M1K3's settings. Fully local inference. Fast answers "
-                    + "return inline; a long turn (web search on a larger brain) instead returns a job id "
-                    + "— call get_answer with it in a few seconds to fetch the result. Check get_status "
-                    + "for which brain is active.",
-                inputSchema: [
-                    "type": "object",
-                    "properties": [
-                        "question": ["type": "string", "description": "the question to ask"],
-                    ],
-                    "required": ["question"],
-                ]
-            ),
-            handler: { args in
-                let question = stringArg(args, "question")?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-                guard !question.isEmpty else { throw MCPVoiceError("ask_m1k3 requires a non-empty question") }
-
-                let id = await jobStore.submit()
-                // Detached generation: outlives this request so a turn that beats
-                // the client's ~60s deadline still finishes and is fetchable via
-                // get_answer. Its own cap lives inside handlers.ask (app-side).
-                Task {
-                    do {
-                        let answer = try await handlers.ask(question)
-                        await jobStore.complete(id: id, result: answer)
-                    } catch {
-                        await jobStore.fail(id: id, message: describeAskError(error))
-                    }
-                }
-
-                // Grace window: the common fast case returns the answer inline,
-                // exactly as before. Poll the store cheaply until the deadline.
-                let deadline = ContinuousClock.now.advanced(by: .seconds(graceSeconds))
-                while ContinuousClock.now < deadline {
-                    switch await jobStore.status(of: id) {
-                    case let .done(answer):
-                        return answer
-                    case let .error(message):
-                        throw MCPVoiceError(message)
-                    case .running, .none:
-                        try? await Task.sleep(for: .milliseconds(50))
-                    }
-                }
-                return "M1K3 is still working on this one — it's taking longer than usual "
-                    + "(a long think or a web search). Call get_answer with job_id \"\(id)\" in a "
-                    + "few seconds to fetch the result."
-            }
-        ),
-        MCPToolDefinition(
-            tool: Tool(
-                name: "get_answer",
-                description: "Fetch the result of an ask_m1k3 call that returned a job id because it "
-                    + "was taking a while. Returns the grounded answer once ready, or asks you to poll "
-                    + "again if M1K3 is still working. Only needed when ask_m1k3 handed back a job id.",
-                inputSchema: [
-                    "type": "object",
-                    "properties": [
-                        "job_id": ["type": "string", "description": "the job id ask_m1k3 returned"],
-                    ],
-                    "required": ["job_id"],
-                ]
-            ),
-            handler: { args in
-                let id = stringArg(args, "job_id")?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-                guard !id.isEmpty else { throw MCPVoiceError("get_answer requires a job_id") }
-                switch await jobStore.status(of: id) {
-                case .none:
-                    throw MCPVoiceError(
-                        "No such job \"\(id)\" — it may have expired. Ask again with ask_m1k3."
-                    )
-                case .running:
-                    return "M1K3 is still working on job \"\(id)\" — poll get_answer again in a few seconds."
-                case let .done(answer):
-                    return answer
-                case let .error(message):
-                    throw MCPVoiceError(message)
-                }
-            }
-        ),
-        MCPToolDefinition(
-            tool: Tool(
-                name: "remember",
-                description: "Store text in M1K3's memory — it becomes part of what M1K3 knows, "
-                    + "searchable in every future conversation (the same store search_knowledge "
-                    + "reads). Use it for durable facts, notes, summaries, decisions. "
-                    + "Survives every session.",
-                inputSchema: [
-                    "type": "object",
-                    "properties": [
-                        "title": ["type": "string", "description": "a short title for the entry"],
-                        "text": ["type": "string", "description": "the content to index"],
-                    ],
-                    "required": ["title", "text"],
-                ]
-            ),
-            handler: { args in
-                let title = stringArg(args, "title")?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-                let text = stringArg(args, "text")?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-                guard !title.isEmpty, !text.isEmpty else {
-                    throw MCPVoiceError("remember requires both a title and text")
-                }
-                return try await handlers.remember(title, text)
-            }
-        ),
+        askM1K3Definition(handlers: handlers, jobStore: jobStore, graceSeconds: graceSeconds),
+        getAnswerDefinition(jobStore: jobStore),
+        rememberDefinition(handlers: handlers),
     ]
+}
+
+private func askM1K3Definition(
+    handlers: IntelligenceToolHandlers,
+    jobStore: AskJobStore,
+    graceSeconds: Double
+) -> MCPToolDefinition {
+    MCPToolDefinition(
+        tool: Tool(
+            name: "ask_m1k3",
+            description: "Ask M1K3's local brain a question. The answer is grounded in M1K3's "
+                + "private knowledge store with section-level citations, and may use web search if "
+                + "the user has it enabled in M1K3's settings. Fully local inference. Fast answers "
+                + "return inline; a long turn (web search on a larger brain) instead returns a job id "
+                + "— call get_answer with it in a few seconds to fetch the result. Check get_status "
+                + "for which brain is active.",
+            inputSchema: [
+                "type": "object",
+                "properties": [
+                    "question": ["type": "string", "description": "the question to ask"],
+                ],
+                "required": ["question"],
+            ]
+        ),
+        handler: askM1K3Handler(handlers: handlers, jobStore: jobStore, graceSeconds: graceSeconds)
+    )
+}
+
+private func getAnswerDefinition(jobStore: AskJobStore) -> MCPToolDefinition {
+    MCPToolDefinition(
+        tool: Tool(
+            name: "get_answer",
+            description: "Fetch the result of an ask_m1k3 call that returned a job id because it "
+                + "was taking a while. Returns the grounded answer once ready, or asks you to poll "
+                + "again if M1K3 is still working. Only needed when ask_m1k3 handed back a job id.",
+            inputSchema: [
+                "type": "object",
+                "properties": [
+                    "job_id": ["type": "string", "description": "the job id ask_m1k3 returned"],
+                ],
+                "required": ["job_id"],
+            ]
+        ),
+        handler: getAnswerHandler(jobStore: jobStore)
+    )
+}
+
+private func rememberDefinition(handlers: IntelligenceToolHandlers) -> MCPToolDefinition {
+    MCPToolDefinition(
+        tool: Tool(
+            name: "remember",
+            description: "Store text in M1K3's memory — it becomes part of what M1K3 knows, "
+                + "searchable in every future conversation (the same store search_knowledge "
+                + "reads). Use it for durable facts, notes, summaries, decisions. "
+                + "Survives every session.",
+            inputSchema: [
+                "type": "object",
+                "properties": [
+                    "title": ["type": "string", "description": "a short title for the entry"],
+                    "text": ["type": "string", "description": "the content to index"],
+                ],
+                "required": ["title", "text"],
+            ]
+        ),
+        handler: { args in
+            let title = stringArg(args, "title")?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            let text = stringArg(args, "text")?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            guard !title.isEmpty, !text.isEmpty else {
+                throw MCPVoiceError("remember requires both a title and text")
+            }
+            return try await handlers.remember(title, text)
+        }
+    )
+}
+
+/// ask_m1k3: submit the generation, wait a short grace window for the fast case,
+/// otherwise hand back a job id the client fetches via get_answer.
+private func askM1K3Handler(
+    handlers: IntelligenceToolHandlers,
+    jobStore: AskJobStore,
+    graceSeconds: Double
+) -> @Sendable ([String: Value]?) async throws -> String {
+    { args in
+        let question = stringArg(args, "question")?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard !question.isEmpty else { throw MCPVoiceError("ask_m1k3 requires a non-empty question") }
+
+        let id = await jobStore.submit()
+        // Detached generation: outlives this request so a turn that beats the
+        // client's ~60s deadline still finishes and is fetchable via get_answer.
+        // Its own cap lives inside handlers.ask (app-side).
+        Task {
+            do {
+                let answer = try await handlers.ask(question)
+                await jobStore.complete(id: id, result: answer)
+            } catch {
+                await jobStore.fail(id: id, message: describeAskError(error))
+            }
+        }
+
+        // Grace window: the common fast case returns the answer inline, exactly as
+        // before. Poll the store cheaply until the deadline.
+        let deadline = ContinuousClock.now.advanced(by: .seconds(graceSeconds))
+        while ContinuousClock.now < deadline {
+            switch await jobStore.status(of: id) {
+            case let .done(answer):
+                return answer
+            case let .error(message):
+                throw MCPVoiceError(message)
+            case .running, .none:
+                try? await Task.sleep(for: .milliseconds(50))
+            }
+        }
+        return "M1K3 is still working on this one — it's taking longer than usual "
+            + "(a long think or a web search). Call get_answer with job_id \"\(id)\" in a "
+            + "few seconds to fetch the result."
+    }
+}
+
+/// get_answer: fetch a submitted ask_m1k3 job's result, or report it's still working.
+private func getAnswerHandler(
+    jobStore: AskJobStore
+) -> @Sendable ([String: Value]?) async throws -> String {
+    { args in
+        let id = stringArg(args, "job_id")?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard !id.isEmpty else { throw MCPVoiceError("get_answer requires a job_id") }
+        switch await jobStore.status(of: id) {
+        case .none:
+            throw MCPVoiceError("No such job \"\(id)\" — it may have expired. Ask again with ask_m1k3.")
+        case .running:
+            return "M1K3 is still working on job \"\(id)\" — poll get_answer again in a few seconds."
+        case let .done(answer):
+            return answer
+        case let .error(message):
+            throw MCPVoiceError(message)
+        }
+    }
 }
 
 /// Preserve a clean, client-facing message when stashing a failed job — an

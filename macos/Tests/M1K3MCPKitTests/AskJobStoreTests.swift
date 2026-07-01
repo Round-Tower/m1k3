@@ -14,13 +14,13 @@ import Testing
 private func counterID() -> @Sendable () -> String {
     final class Box: @unchecked Sendable {
         let lock = NSLock()
-        var n = 0
+        var count = 0
     }
     let box = Box()
     return {
         box.lock.lock(); defer { box.lock.unlock() }
-        box.n += 1
-        return "job-\(box.n)"
+        box.count += 1
+        return "job-\(box.count)"
     }
 }
 
@@ -36,9 +36,9 @@ struct AskJobStoreTests {
     @Test("distinct submits get distinct ids")
     func distinctIDs() async {
         let store = AskJobStore(makeID: counterID())
-        let a = await store.submit()
-        let b = await store.submit()
-        #expect(a != b)
+        let first = await store.submit()
+        let second = await store.submit()
+        #expect(first != second)
     }
 
     @Test("complete moves a running job to done")

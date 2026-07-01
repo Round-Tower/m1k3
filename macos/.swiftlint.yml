@@ -1,0 +1,11 @@
+# SwiftLint configuration — M1K3 macOS app.
+#
+# `trailing_comma` is disabled because SwiftFormat (run in the same pre-commit
+# hook) ADDS trailing commas to multi-line collection literals. With no config
+# the two tools fight every commit: SwiftFormat inserts the comma, SwiftLint
+# flags it, and the warning re-appears the next time the formatter runs. Comma
+# style is owned by SwiftFormat here, so we silence the lint rule rather than
+# churn it. Pre-existing length/complexity warnings are left visible on purpose
+# (they read as debt signals, not noise).
+disabled_rules:
+  - trailing_comma
