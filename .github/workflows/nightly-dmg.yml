@@ -57,11 +57,11 @@ jobs:
             echo "configured=true" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Select Xcode (26+)
+      - name: Select Xcode (26.x, pinned)
         if: steps.gate.outputs.configured == 'true'
         uses: maxim-lobanov/setup-xcode@v1
         with:
-          xcode-version: latest-stable
+          xcode-version: "26" # pinned: Xcode 27 GA must be a deliberate bump, never a silent one
 
       - name: Install xcodegen + xcbeautify
         if: steps.gate.outputs.configured == 'true'

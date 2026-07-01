@@ -44,6 +44,18 @@ beautify() { if command -v xcbeautify >/dev/null 2>&1; then xcbeautify; else cat
 echo "▸ M1K3 Mac App Store build — v$VERSION build ${BUILD_NUMBER:-<project default>}  (team $TEAM)"
 echo
 
+# ── Toolchain guard ──────────────────────────────────────────────────────────
+# MAS artifacts come off STABLE Xcode 26.x only — never a beta toolchain
+# (ADR 0001; App Store submission additionally REQUIRES a GA SDK). Bump the
+# "26" deliberately when moving to Xcode 27 GA.
+XCODE_PATH="$(xcode-select -p)"
+XCODE_MAJOR="$(xcodebuild -version | sed -nE 's/^Xcode ([0-9]+).*/\1/p')"
+if [ "$XCODE_MAJOR" != "26" ] || echo "$XCODE_PATH" | grep -qi "beta"; then
+  echo "✗ MAS builds require stable Xcode 26.x — found Xcode ${XCODE_MAJOR:-?} at $XCODE_PATH"
+  echo "  Fix: sudo xcode-select -s /Applications/Xcode.app"
+  exit 1
+fi
+
 # ── Preflight ────────────────────────────────────────────────────────────────
 if ! security find-identity -v 2>/dev/null \
      | grep "Apple Distribution.*$TEAM" | grep -vq "EXPIRED"; then
