@@ -19,7 +19,9 @@ public enum CodeBlockDetector {
         for block in fenced {
             let language = resolveLanguage(tag: block.tag, source: block.source)
             guard let language else { continue }
-            artifacts.append(CodeArtifact(source: block.source, language: language))
+            // A generic .code artifact carries its fence tag as the display label.
+            let label = (language == .code && !block.tag.isEmpty) ? block.tag : nil
+            artifacts.append(CodeArtifact(source: block.source, language: language, languageLabel: label))
         }
 
         if artifacts.isEmpty, looksLikeFullDocument(remaining) {
@@ -94,7 +96,8 @@ public enum CodeBlockDetector {
             case "css": return .css
             case "js", "javascript": return .js
             case "md", "markdown": return .markdown
-            default: return nil
+            // Any other named language → a generic code artifact for the Code view.
+            default: return .code
             }
         }
         return CodeArtifact.Language.detect(from: source)

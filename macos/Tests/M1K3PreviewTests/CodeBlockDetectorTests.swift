@@ -38,6 +38,20 @@ struct CodeBlockDetectorTests {
         #expect(artifacts.first?.language == .markdown)
     }
 
+    @Test("any tagged fence (python, swift, …) is captured as generic code with its label")
+    func fencedArbitraryLanguage() {
+        let python = CodeBlockDetector.detect(in: "```python\nprint('hi')\n```")
+        #expect(python.count == 1)
+        #expect(python.first?.language == .code)
+        #expect(python.first?.languageLabel == "python")
+        #expect(python.first?.source == "print('hi')")
+        #expect(python.first?.language.isRenderable == false)
+
+        let swift = CodeBlockDetector.detect(in: "```swift\nlet x = 1\n```")
+        #expect(swift.first?.language == .code)
+        #expect(swift.first?.languageLabel == "swift")
+    }
+
     @Test("detects a fenced markdown block (fallback signal)")
     func fencedMarkdown() {
         let text = """
@@ -210,11 +224,12 @@ struct CodeBlockDetectorTests {
         #expect(artifacts.first?.language == .html)
     }
 
-    @Test("a fenced block with unknown language tag is skipped")
-    func unknownLanguage() {
+    @Test("a fenced block with an untagged, unrecognisable body is skipped")
+    func untaggedProseFence() {
+        // No language tag AND the body doesn't look like html/css/js — nothing to show.
         let text = """
-        ```python
-        print("hello")
+        ```
+        just some plain prose in a fence
         ```
         """
         let artifacts = CodeBlockDetector.detect(in: text)

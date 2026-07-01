@@ -6,6 +6,9 @@ public struct CodeArtifact: Equatable, Sendable {
     public var language: Language
     public var title: String?
     public let createdAt: Date
+    /// The raw fence tag for a generic `.code` artifact (e.g. "python", "swift") —
+    /// used for the display title. `nil` for the first-class languages.
+    public var languageLabel: String?
     /// Rendered HTML for the Preview tab when `source` isn't itself displayable HTML
     /// (i.e. markdown: Code shows the raw `source`, Preview loads this). `nil` for
     /// html/css/js, where the Preview loads `source` directly.
@@ -16,13 +19,15 @@ public struct CodeArtifact: Equatable, Sendable {
         language: Language,
         title: String? = nil,
         createdAt: Date = Date(),
-        previewSource: String? = nil
+        previewSource: String? = nil,
+        languageLabel: String? = nil
     ) {
         self.source = source
         self.language = language
         self.title = title
         self.createdAt = createdAt
         self.previewSource = previewSource
+        self.languageLabel = languageLabel
     }
 
     /// The HTML the Preview WebView should load — rendered HTML if present, else the
@@ -32,7 +37,7 @@ public struct CodeArtifact: Equatable, Sendable {
     }
 
     public var displayTitle: String {
-        title ?? "Generated \(language.rawValue.uppercased())"
+        title ?? "Generated \((languageLabel ?? language.rawValue).uppercased())"
     }
 
     public var filename: String {
@@ -48,12 +53,22 @@ public struct CodeArtifact: Equatable, Sendable {
         case css
         case js
         case markdown
+        /// Any other fenced language (python, swift, bash, …) — shown in the Code
+        /// view; the specific language is carried in `CodeArtifact.languageLabel`.
+        case code
 
         public var fileExtension: String {
             switch self {
             case .markdown: "md"
+            case .code: "txt"
             default: rawValue
             }
+        }
+
+        /// Whether the Preview tab is meaningful — only html and markdown render.
+        /// Everything else (code, css, js) is primarily read as source.
+        public var isRenderable: Bool {
+            self == .html || self == .markdown
         }
 
         public var utType: UTType {
@@ -62,6 +77,7 @@ public struct CodeArtifact: Equatable, Sendable {
             case .css: .sourceCode
             case .js: .javaScript
             case .markdown: .plainText
+            case .code: .sourceCode
             }
         }
 

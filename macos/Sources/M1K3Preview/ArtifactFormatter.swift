@@ -6,7 +6,7 @@ public enum ArtifactFormatter {
         switch artifact.language {
         case .html:
             result.source = formatHTML(artifact.source)
-        case .css, .js:
+        case .css, .js, .code:
             result.source = trimLines(artifact.source)
         case .markdown:
             // Keep `source` as the raw markdown (the Code tab shows it); render the

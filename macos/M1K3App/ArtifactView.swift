@@ -22,8 +22,20 @@ struct ArtifactView: View {
         case code = "Code"
     }
 
-    @State private var selectedTab: Tab = .preview
+    @State private var selectedTab: Tab
     @State private var showExporter = false
+
+    init(artifact: CodeArtifact) {
+        self.artifact = artifact
+        // Code (python, swift, css, js…) opens straight to the source; only html and
+        // markdown have a meaningful live Preview.
+        _selectedTab = State(initialValue: artifact.language.isRenderable ? .preview : .code)
+    }
+
+    /// Preview is only offered for renderable languages; code opens to source only.
+    private var tabs: [Tab] {
+        artifact.language.isRenderable ? Tab.allCases : [.code]
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -50,13 +62,15 @@ struct ArtifactView: View {
 
     private var toolbar: some View {
         HStack(spacing: 12) {
-            Picker("", selection: $selectedTab) {
-                ForEach(Tab.allCases, id: \.self) { tab in
-                    Text(tab.rawValue).tag(tab)
+            if tabs.count > 1 {
+                Picker("", selection: $selectedTab) {
+                    ForEach(tabs, id: \.self) { tab in
+                        Text(tab.rawValue).tag(tab)
+                    }
                 }
+                .pickerStyle(.segmented)
+                .frame(maxWidth: 200)
             }
-            .pickerStyle(.segmented)
-            .frame(maxWidth: 200)
 
             Spacer()
 
