@@ -453,13 +453,50 @@ public extension KnowledgeStore {
             vectorHits.compactMap { hit in hit.similarity.map { (hit.chunkID, $0) } },
             uniquingKeysWith: { first, _ in first }
         )
-        return fused.prefix(limit).map { item, score in
+        var results = fused.prefix(limit).map { item, score in
             var hit = item
             hit.rrfScore = score
             if hit.similarity == nil {
                 hit.similarity = similarityByChunk[hit.chunkID]
             }
             return hit
+        }
+        // An FTS-lane hit OUTSIDE the vector top-K still has similarity == nil
+        // here, and the grounding gate drops nil unjudged — which discarded a
+        // keyword-exact memory whose embedding was one read away (live
+        // 2026-07-02, the Golden Gate miss). Judge such hits on their STORED
+        // embeddings: at most `limit` extra blob reads, and genuinely
+        // irrelevant keyword matches still fall to the gate's threshold —
+        // the no-keyword-flood rule survives, now enforced on real scores.
+        let unscored = results.filter { $0.similarity == nil }.map(\.chunkID)
+        if !unscored.isEmpty, !queryVector.isEmpty {
+            let stored = try storedEmbeddings(forChunkIDs: unscored)
+            for index in results.indices where results[index].similarity == nil {
+                guard let blob = stored[results[index].chunkID] else { continue }
+                results[index].similarity = VectorMath.cosineSimilarity(
+                    queryVector, VectorMath.deserialize(blob)
+                )
+            }
+        }
+        return results
+    }
+
+    /// Embedding blobs for specific chunks — the hybrid backfill's single read.
+    private func storedEmbeddings(forChunkIDs ids: [UUID]) throws -> [UUID: Data] {
+        try dbQueue.read { db in
+            let placeholders = ids.map { _ in "?" }.joined(separator: ", ")
+            let rows = try Row.fetchAll(
+                db,
+                sql: "SELECT chunk_id, embedding FROM knowledge_chunk_embeddings WHERE chunk_id IN (\(placeholders))",
+                arguments: StatementArguments(ids.map(\.uuidString))
+            )
+            var blobs: [UUID: Data] = [:]
+            for row in rows {
+                guard let raw: String = row["chunk_id"], let id = UUID(uuidString: raw),
+                      let blob: Data = row["embedding"] else { continue }
+                blobs[id] = blob
+            }
+            return blobs
         }
     }
 

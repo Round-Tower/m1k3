@@ -254,6 +254,25 @@ item its own TDD'd id-swap or eval.
 
 ## Decision log
 
+- **2026-07-02: MTP PARKED for big (gemma-4-e4b) — batch-1 evidence is a regression, not a win.**
+  Review triggered by "Python MLX shipped MTP" — which is a conflation: **`mlx-lm` proper has NOT
+  shipped MTP** (latest v0.31.3, no MTP commits; only unmerged PR #1161). MTP in the Python ecosystem
+  lives in **mlx-vlm** (v0.6.0/0.6.1, June 2026: Qwen MTP + Gemma 4 Unified/MTP), LM Studio's MLX
+  engine 1.8.1, and Ollama 0.31. On OUR runtime: **mlx-swift-lm 3.31.4 DOES carry the MTP API**
+  (#308/e145aca — `generate(... mtpDrafter:blockSize:)`, `MTPSpeculativeTokenIterator`,
+  `MTPDrafterModelFactory`), and Google ships an official ~79M gemma-4-E4B drafter checkpoint. BUT:
+  (a) the only MTP-aware **target** is MLXVLM's Gemma4 — M1K3 loads via **MLXLLM**, whose Gemma4 has
+  zero mtp plumbing (silent single-token passthrough, no crash, no speedup); (b) the load-bearing
+  batch-1 benchmark (M1 Max, mlx-vlm) shows **E4B + MTP = 29.6 → 18.1 tok/s, a −39% REGRESSION** —
+  the technique pays on 12B/26B-class models at batch >1, not E4B at batch 1; (c) quantized KV
+  disables MTP upstream. Also: Swift **strips `mtp.` weights even from Qwen3.5 checkpoints** —
+  Qwen-side MTP heads (3.6-era) are Python-only. **Revisit trigger:** big ever moves to a 12B+ model
+  (where the RotatingKVCache 12B crash is the other gate anyway). **The realistic decode-speed
+  experiment instead: classic speculative decoding on huge** (Qwen3-8B target + Qwen3-0.6B-4bit draft
+  ≈0.4 GB, shared tokenizer ✓, `SpeculativeDecodingConfig` + memory policy already in 3.31.4, fits
+  the 12 GB ceiling) — M-sized spike via the SelfTest TTFT harness; verify-owed: quantized-KV
+  trimmability in practice + tool-calls parsing through the speculative loop. No published Apple-
+  Silicon numbers for that pairing — measure, don't assume.
 - **2026-06-22:** OptiQ swap reverted — `mlx-optiq` incompatible with mlx-swift-lm 3.31.3 (no Swift
   loader). Huge CPU spike root-caused to Qwen3.5 GatedDeltaNet. gemma-4-e4b no-response bug observed.
   Direction set: move off the Qwen3.5 hybrid to **dense** models; CHATEVAL to pick. See

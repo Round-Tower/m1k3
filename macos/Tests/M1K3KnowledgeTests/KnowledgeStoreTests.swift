@@ -207,6 +207,50 @@ struct KnowledgeStoreTests {
         #expect(try f.store.searchFTS(query: "xyzzy plugh zork").isEmpty)
     }
 
+    // MARK: - Hybrid similarity backfill (live repro 2026-07-02, round 2: the
+
+    // Golden Gate memory reached the fused set via FTS but missed the vector
+    // top-K, so searchHybrid returned it with similarity == nil — and the
+    // grounding gate drops nil-similarity hits unjudged, even though the
+    // chunk's embedding was one DB read away)
+
+    @Test("an FTS-lane hit outside the vector top-K gets its similarity stamped from the stored embedding")
+    func hybridBackfillsSimilarityFromStore() async throws {
+        let store = try KnowledgeStore()
+        let embedder = HashingEmbeddingService()
+
+        // 12 fillers share the decoy vocabulary, so they own the vector top-10
+        // (limit 5 → limit*2 candidates); the target chunk's vocabulary is
+        // disjoint, so it can only arrive via the FTS lane.
+        let fillerID = UUID()
+        let fillerTexts = (0 ..< 12).map { "orchard apple harvest ladder crate number \($0)" }
+        let fillerChunks = fillerTexts.enumerated().map { idx, text in
+            KnowledgeChunk(itemID: fillerID, ordinal: idx, content: text)
+        }
+        try store.index(
+            item: KnowledgeItem(id: fillerID, kind: .document, title: "Orchard"),
+            chunks: fillerChunks,
+            embeddings: await embedder.embedBatch(fillerTexts)
+        )
+        let targetID = UUID()
+        let targetText = "zephyrblade calibration ritual for the brass gyroscope"
+        let target = KnowledgeChunk(itemID: targetID, ordinal: 0, content: targetText)
+        try store.index(
+            item: KnowledgeItem(id: targetID, kind: .memory, title: "Zephyrblade"),
+            chunks: [target],
+            embeddings: await embedder.embedBatch([targetText])
+        )
+
+        let queryVector = try await embedder.embed("orchard apple harvest ladder crate")
+        let hits = try store.searchHybrid(query: "zephyrblade", queryVector: queryVector, limit: 5)
+
+        let hit = try #require(hits.first { $0.chunkID == target.id })
+        let similarity = try #require(hit.similarity, "FTS-lane hit must be judged on its stored embedding, not returned unscored")
+        // The stamp must be the TRUE cosine against the stored embedding.
+        let expected = try VectorMath.cosineSimilarity(queryVector, await embedder.embed(targetText))
+        #expect(abs(similarity - expected) < 0.0001)
+    }
+
     @Test("relaxedFTSQuery OR-joins quoted tokens, nil below two tokens")
     func relaxedQueryConstruction() {
         #expect(KnowledgeStore.relaxedFTSQuery("Golden Gate milestone")
