@@ -70,6 +70,12 @@ func logGenerationInfo(_ info: GenerateCompletionInfo, label: String, model: Str
     mlxTTFTLog.notice(
         "\(label, privacy: .public) [\(model, privacy: .public)]: prompt=\(promptTokens)tok prefill=\(prefillMS)ms decode=\(decodeTokens)tok @\(tokensPerSecond)tok/s"
     )
+    // Also surface to the in-app testing readout (no-op unless the app installed a sink).
+    GenerationMetricsReporter.report(GenerationMetrics(
+        promptTokens: promptTokens,
+        generationTokens: decodeTokens,
+        tokensPerSecond: info.tokensPerSecond
+    ))
 }
 
 /// `@unchecked Sendable`: model loading is coalesced through a `SingleFlightLoader`

@@ -234,6 +234,9 @@ final class AppEnvironment {
     /// then never offered to the model). The one capability that sends
     /// chat-derived queries off this Mac.
     nonisolated static let webSearchEnabledKey = "webSearchEnabled"
+    /// Settings (testing aid): show per-turn generation stats — context tokens +
+    /// tok/s — under each assistant answer. Default OFF; MLX tiers only.
+    nonisolated static let showGenerationStatsKey = "showGenerationStats"
     /// Settings: reasoning budget — ThinkingMode rawValue (auto/always/fast).
     nonisolated static let thinkingModeKey = "thinkingMode"
     /// Whether the user has made a voice-output choice (onboarding speech step).
@@ -1014,8 +1017,18 @@ extension AppEnvironment {
     /// embedder so the first chat turn doesn't pay a cold model load.
     func runStartupMaintenance() async {
         M1K3Persona.setUserProfile(try? store.meta(key: Self.userProfileMetaKey))
+        installGenerationMetricsSink()
         await reindexIfEmbedderChanged()
         await warmEmbedderOnLaunch()
+    }
+
+    /// Route the MLX backend's per-turn stats onto the streaming assistant message
+    /// (the in-app testing readout). Always records — it's a cheap struct stamp; the
+    /// message view decides whether to render it, gated by the Settings toggle.
+    private func installGenerationMetricsSink() {
+        GenerationMetricsReporter.install { [weak self] metrics in
+            Task { @MainActor in self?.chat.recordMetrics(metrics) }
+        }
     }
 
     /// Pre-warm the embedder at launch so the FIRST chat turn isn't slow.

@@ -200,7 +200,8 @@ struct ContentView: View {
                             MessageView(
                                 message: message,
                                 onSpeak: { text in Task { await env.speak(text) } },
-                                onOpenLink: { url in env.review.open(url: url) }
+                                onOpenLink: { url in env.review.open(url: url) },
+                                contextWindow: env.selectedBrain.approximateContextTokens
                             )
                             .id(message.id)
                         }

@@ -21,6 +21,12 @@ struct MessageView: View {
     /// Called with a link found in the turn when the user taps its chip — opens it
     /// in the review panel rather than launching an external browser.
     var onOpenLink: (URL) -> Void = { _ in }
+    /// The active brain's context window, so the stats footer can show how full it
+    /// got. 0 = unknown (the footer then shows the raw token count).
+    var contextWindow: Int = 0
+
+    /// Testing aid: show per-turn generation stats under each answer (Settings).
+    @AppStorage(AppEnvironment.showGenerationStatsKey) private var showGenerationStats = false
 
     /// The http(s) links mentioned in this turn, surfaced as one-click chips.
     /// Memoised in @State and recomputed only when the turn's text changes (via
@@ -68,6 +74,7 @@ struct MessageView: View {
                         sourcesDisclosure
                     }
                     linkChips
+                    statsFooter
                 }
                 // Animate the panel's insertion/removal + the live think→answer
                 // collapse. Paired with the ~20Hz stream throttle so it eases, not stutters.
@@ -82,6 +89,28 @@ struct MessageView: View {
         ReadingText(message.text)
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
+    }
+
+    /// Per-turn generation stats (context tokens · output · tok/s) — a testing aid,
+    /// shown only when the Settings toggle is on and the turn reported metrics
+    /// (MLX tiers; Mini reports none). The context figure shows the fraction of the
+    /// window used when known, else the raw prompt-token count.
+    @ViewBuilder
+    private var statsFooter: some View {
+        if showGenerationStats, let metrics = message.metrics {
+            let context: String = {
+                if let fraction = metrics.contextFraction(window: contextWindow) {
+                    return "\(metrics.promptTokens.formatted()) / \(contextWindow.formatted()) ctx "
+                        + "(\(Int((fraction * 100).rounded()))%)"
+                }
+                return "\(metrics.promptTokens.formatted()) tok ctx"
+            }()
+            Text("\(context) · \(metrics.generationTokens.formatted()) out · "
+                + "\(Int(metrics.tokensPerSecond.rounded())) tok/s")
+                .font(.caption2.monospacedDigit())
+                .foregroundStyle(.secondary)
+                .textSelection(.enabled)
+        }
     }
 
     private var assistantBody: some View {

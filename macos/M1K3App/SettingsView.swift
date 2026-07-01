@@ -34,6 +34,7 @@ struct SettingsView: View {
     @AppStorage(AppEnvironment.autoRouteBrainKey) private var autoRouteBrain = false
     @AppStorage(AppEnvironment.preferAppleOnDeviceKey) private var preferAppleOnDevice = false
     @AppStorage(AppEnvironment.coolHeadEaseKey) private var coolHeadEase = false
+    @AppStorage(AppEnvironment.showGenerationStatsKey) private var showGenerationStats = false
     @AppStorage(StartupPreferences.menuBarOnlyKey) private var menuBarOnly = false
     @AppStorage(MenuBarGlyphStyle.storageKey) private var glyphStyle = MenuBarGlyphStyle.pixelM
     @State private var profileDraft = ""
@@ -71,6 +72,7 @@ struct SettingsView: View {
                             .onChange(of: preferAppleOnDevice) { _, _ in env.applyAutoRouteIfEnabled() }
                     }
                     Toggle("Ease off when my Mac runs hot", isOn: $coolHeadEase)
+                    Toggle("Show generation stats", isOn: $showGenerationStats)
                 } header: {
                     Text("Brain")
                 } footer: {

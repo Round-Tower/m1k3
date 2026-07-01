@@ -16,6 +16,7 @@
 
 import Foundation
 @testable import M1K3Chat
+import M1K3Inference
 import M1K3Knowledge
 import Testing
 
@@ -143,6 +144,22 @@ private func fixtureSource(_ text: String) -> ChunkHit {
 
 @MainActor
 struct ChatSessionTests {
+    @Test("recordMetrics stamps the last assistant message (and no-ops with none)")
+    func recordMetricsStampsLastAssistant() async {
+        let session = ChatSession(responder: DeltaResponder(sources: [], deltas: ["ok"]))
+        let metrics = GenerationMetrics(promptTokens: 1240, generationTokens: 380, tokensPerSecond: 34)
+
+        // No assistant message yet → safe no-op.
+        session.recordMetrics(metrics)
+
+        await session.send("What failed?")
+        session.recordMetrics(metrics)
+        #expect(session.messages.last?.role == .assistant)
+        #expect(session.messages.last?.metrics == metrics)
+        // The user message never carries generation stats.
+        #expect(session.messages.first?.metrics == nil)
+    }
+
     @Test("send appends the user message immediately")
     func appendsUserMessage() async {
         let session = ChatSession(responder: DeltaResponder(sources: [], deltas: ["ok"]))

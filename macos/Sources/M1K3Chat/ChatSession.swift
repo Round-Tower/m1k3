@@ -24,6 +24,7 @@
 //  end-of-send (streaming done) so it can't contend with a live response.
 
 import Foundation
+import M1K3Inference
 import M1K3Knowledge
 import Observation
 import os
@@ -117,6 +118,11 @@ public struct ChatMessage: Identifiable, Sendable, Equatable, Codable {
     /// the answer and surfaced (collapsibly) for transparency. Persisted as an
     /// optional key, so old transcripts (without it) still decode to nil.
     public var reasoning: String?
+    /// Per-turn generation stats (context tokens, throughput) for the in-app
+    /// testing readout. Transient — omitted from `CodingKeys` like `activityLabel`,
+    /// so it isn't persisted and old transcripts still decode. MLX tiers only
+    /// (Apple Foundation Models / Mini reports no throughput).
+    public var metrics: GenerationMetrics?
     public var status: Status
 
     enum CodingKeys: String, CodingKey {
@@ -465,5 +471,15 @@ public final class ChatSession {
     private func update(_ id: UUID, _ mutate: (inout ChatMessage) -> Void) {
         guard let index = messages.firstIndex(where: { $0.id == id }) else { return }
         mutate(&messages[index])
+    }
+
+    /// Stamp the most recent assistant message with a completed turn's generation
+    /// stats (the in-app testing readout). Called as each MLX generation within a
+    /// turn finishes — an agent turn can generate several times (think, tool call,
+    /// answer), so the LAST call wins: the badge shows the peak prompt/context and
+    /// the answer's throughput. A no-op if there's no assistant message yet.
+    public func recordMetrics(_ metrics: GenerationMetrics) {
+        guard let index = messages.lastIndex(where: { $0.role == .assistant }) else { return }
+        messages[index].metrics = metrics
     }
 }
