@@ -58,11 +58,43 @@ public final class EffectfulSpeechProvider: NSObject, SpeechProviderWithWordTimi
     @MainActor private var playbackContinuation: CheckedContinuation<Void, Never>?
     /// The in-flight chunked playback (speak(stream:)), so `stop()` can cancel it.
     @MainActor var streamingSession: StreamingPlaybackSession?
+    /// Observes `.AVAudioEngineConfigurationChange` so an output-route flip (BLE
+    /// headphones arriving, AirPods leaving) rebinds playback to the NEW default
+    /// device instead of leaving the voice pinned to the old one. Same pattern as
+    /// AppleSpeechTranscriber's input-side observer.
+    private var configObserver: NSObjectProtocol?
 
     public init(chain: VoiceEffectChain = .m1k3Character, fallback: AVSpeechProvider = AVSpeechProvider()) {
         self.chain = chain
         plainFallback = fallback
         super.init()
+        configObserver = NotificationCenter.default.addObserver(
+            forName: .AVAudioEngineConfigurationChange, object: engine, queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in self?.handleEngineConfigurationChange() }
+        }
+    }
+
+    deinit {
+        if let configObserver {
+            NotificationCenter.default.removeObserver(configObserver)
+        }
+    }
+
+    /// The output route changed (live 2026-07-02: BLE headphones connected
+    /// mid-session got system sounds but no M1K3 voice until relaunch). The
+    /// engine STOPS itself when this fires, so an in-flight utterance's
+    /// .dataPlayedBack completion will never arrive — unwind it exactly like
+    /// stop() does (finishPlayback resumes play()'s wait, which fires its single
+    /// onSpeakingEnded as it unwinds), and drop the configured flag so the next
+    /// utterance reconnects + restarts the engine against the new default device.
+    @MainActor
+    private func handleEngineConfigurationChange() {
+        engineConfigured = false
+        streamingSession?.cancel()
+        streamingSession = nil
+        finishPlayback()
+        speakingState.end()
     }
 
     public var isAvailable: Bool {
@@ -256,7 +288,10 @@ public final class EffectfulSpeechProvider: NSObject, SpeechProviderWithWordTimi
     func configureEngineIfNeeded(format: AVAudioFormat) throws {
         // Reconnect when the sample rate changes (e.g. a different system voice) —
         // scheduling a buffer whose format mismatches the connection asserts.
-        if engineConfigured, configuredSampleRate == format.sampleRate { return }
+        // Also require the engine to actually be RUNNING: it stops itself on an
+        // output-route change (see handleEngineConfigurationChange) or a render
+        // error, and scheduling onto a stopped engine plays silence forever.
+        if engineConfigured, configuredSampleRate == format.sampleRate, engine.isRunning { return }
         if engineConfigured {
             player.stop()
             engine.disconnectNodeOutput(player)
