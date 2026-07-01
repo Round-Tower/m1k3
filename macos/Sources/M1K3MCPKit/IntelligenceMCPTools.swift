@@ -18,15 +18,18 @@
 //  report 2026-06-11 (F5) + the resident/visitor reflection.
 //
 //  Review: Kev + claude-opus-4-8, 2026-06-14, Confidence 0.8. Wired the
-//  AsyncTimeout helper (written 2026-06-12 but never called) into the
-//  ask_m1k3 handler. A think-phase question on a slow brain used to out-run
-//  the MCP client's request deadline (-32001) while the server kept
-//  generating, holding the single-flight lock — the wedge AsyncTimeout was
-//  built to kill. Now a deadline races the generation: on expiry the helper
-//  cancels the MLX loop (freeing the lock) and we surface a clean MCPVoiceError
-//  instead of a raw transport timeout. Deadline is a parameter (default
-//  `defaultAskTimeoutSeconds`) so Huge-brain sessions can raise it. Build/⌘R
-//  verify pending — sandbox can't compile FoundationModels.
+//  AsyncTimeout helper into ask_m1k3 so a runaway think-phase surfaced a clean
+//  message instead of a raw -32001 at the MCP client's ~60s request deadline.
+//
+//  Review: Kev + claude-opus-4-8, 2026-07-01, Confidence 0.85. Replaced that
+//  request-path timeout with a HYBRID submit-and-poll: a long turn (web search +
+//  a verbose thinker) genuinely can't finish inside the client's deadline, so
+//  ask_m1k3 now submits the generation to an AskJobStore, waits a short GRACE
+//  window (the common fast case still returns the answer inline, unchanged), and
+//  otherwise returns a job id the client fetches later via the new get_answer
+//  tool. The generation runs detached with its own cap (inside handlers.ask), so
+//  it finishes and is fetchable even after this request returns. Build/⌘R verify
+//  pending — the live wire (job survival across stateless requests) is verify-by-launch.
 //
 
 import Foundation
@@ -50,16 +53,17 @@ public struct IntelligenceToolHandlers: Sendable {
     }
 }
 
-/// Server-side deadline for a single `ask_m1k3` generation. Set just under the
-/// typical ~60s MCP client request deadline so a runaway think-phase surfaces a
-/// clean message (and frees the single-flight lock) BEFORE the client reports a
-/// raw `-32001`. Legitimate answers are "tens of seconds"; true wedges are
-/// minutes. Raise it for Huge-brain sessions that genuinely need longer.
-public let defaultAskTimeoutSeconds: Double = 50
+/// How long `ask_m1k3` waits inline before handing back a job id to poll. Kept
+/// well under the MCP client's ~60s request deadline: the common fast answer
+/// still returns within this window (contract unchanged), while a genuinely long
+/// turn hands back a job id instead of dying on the wire. The generation keeps
+/// running detached and is fetched via `get_answer`.
+public let defaultAskGraceSeconds: Double = 8
 
 public func makeIntelligenceToolDefinitions(
     handlers: IntelligenceToolHandlers,
-    askTimeoutSeconds: Double = defaultAskTimeoutSeconds
+    jobStore: AskJobStore = AskJobStore(),
+    graceSeconds: Double = defaultAskGraceSeconds
 ) -> [MCPToolDefinition] {
     [
         MCPToolDefinition(
@@ -67,9 +71,10 @@ public func makeIntelligenceToolDefinitions(
                 name: "ask_m1k3",
                 description: "Ask M1K3's local brain a question. The answer is grounded in M1K3's "
                     + "private knowledge store with section-level citations, and may use web search if "
-                    + "the user has it enabled in M1K3's settings. Fully local inference — can take tens "
-                    + "of seconds on the larger brains. Check get_status for which brain is active "
-                    + "and whether a conversation is in progress.",
+                    + "the user has it enabled in M1K3's settings. Fully local inference. Fast answers "
+                    + "return inline; a long turn (web search on a larger brain) instead returns a job id "
+                    + "— call get_answer with it in a few seconds to fetch the result. Check get_status "
+                    + "for which brain is active.",
                 inputSchema: [
                     "type": "object",
                     "properties": [
@@ -81,19 +86,66 @@ public func makeIntelligenceToolDefinitions(
             handler: { args in
                 let question = stringArg(args, "question")?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
                 guard !question.isEmpty else { throw MCPVoiceError("ask_m1k3 requires a non-empty question") }
-                do {
-                    return try await withTimeout(seconds: askTimeoutSeconds) {
-                        try await handlers.ask(question)
+
+                let id = await jobStore.submit()
+                // Detached generation: outlives this request so a turn that beats
+                // the client's ~60s deadline still finishes and is fetchable via
+                // get_answer. Its own cap lives inside handlers.ask (app-side).
+                Task {
+                    do {
+                        let answer = try await handlers.ask(question)
+                        await jobStore.complete(id: id, result: answer)
+                    } catch {
+                        await jobStore.fail(id: id, message: describeAskError(error))
                     }
-                } catch let timeout as TimeoutError {
-                    // The generation lost the race to the clock: withTimeout has
-                    // already cancelled it (freeing the single-flight lock). Give
-                    // the caller a clean, actionable message rather than a raw
-                    // transport -32001.
+                }
+
+                // Grace window: the common fast case returns the answer inline,
+                // exactly as before. Poll the store cheaply until the deadline.
+                let deadline = ContinuousClock.now.advanced(by: .seconds(graceSeconds))
+                while ContinuousClock.now < deadline {
+                    switch await jobStore.status(of: id) {
+                    case let .done(answer):
+                        return answer
+                    case let .error(message):
+                        throw MCPVoiceError(message)
+                    case .running, .none:
+                        try? await Task.sleep(for: .milliseconds(50))
+                    }
+                }
+                return "M1K3 is still working on this one — it's taking longer than usual "
+                    + "(a long think or a web search). Call get_answer with job_id \"\(id)\" in a "
+                    + "few seconds to fetch the result."
+            }
+        ),
+        MCPToolDefinition(
+            tool: Tool(
+                name: "get_answer",
+                description: "Fetch the result of an ask_m1k3 call that returned a job id because it "
+                    + "was taking a while. Returns the grounded answer once ready, or asks you to poll "
+                    + "again if M1K3 is still working. Only needed when ask_m1k3 handed back a job id.",
+                inputSchema: [
+                    "type": "object",
+                    "properties": [
+                        "job_id": ["type": "string", "description": "the job id ask_m1k3 returned"],
+                    ],
+                    "required": ["job_id"],
+                ]
+            ),
+            handler: { args in
+                let id = stringArg(args, "job_id")?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+                guard !id.isEmpty else { throw MCPVoiceError("get_answer requires a job_id") }
+                switch await jobStore.status(of: id) {
+                case .none:
                     throw MCPVoiceError(
-                        "M1K3 didn't finish within \(Int(timeout.seconds))s — likely a long think phase. "
-                            + "Try a shorter or more direct question, turn thinking off, or switch to a faster brain."
+                        "No such job \"\(id)\" — it may have expired. Ask again with ask_m1k3."
                     )
+                case .running:
+                    return "M1K3 is still working on job \"\(id)\" — poll get_answer again in a few seconds."
+                case let .done(answer):
+                    return answer
+                case let .error(message):
+                    throw MCPVoiceError(message)
                 }
             }
         ),
@@ -123,4 +175,12 @@ public func makeIntelligenceToolDefinitions(
             }
         ),
     ]
+}
+
+/// Preserve a clean, client-facing message when stashing a failed job — an
+/// MCPVoiceError's own text (e.g. the "in a conversation right now" busy line)
+/// rather than a wrapped debug description.
+private func describeAskError(_ error: Error) -> String {
+    if let voiceError = error as? MCPVoiceError { return voiceError.description }
+    return error.localizedDescription
 }

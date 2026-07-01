@@ -4,10 +4,10 @@
 //
 //  InferenceProvider backed by Apple's on-device Foundation Models. M1K3's
 //  cheap/fast tier — short turns, the Tier-1 call summary, anything that
-//  doesn't need Gemma 4's depth. Thin OS adapter: the testable routing logic
-//  lives in ProviderRouter, so this file is verified by compiling against the
-//  macOS 26 SDK + a name check, not by invoking the model (which needs Apple
-//  Intelligence hardware).
+//  doesn't need Gemma 4's depth. Thin OS adapter: runtime selection lives in
+//  the app's RuntimeInferenceProvider, so this file is verified by compiling
+//  against the macOS 26 SDK + a name check, not by invoking the model (which
+//  needs Apple Intelligence hardware).
 //
 //  Mirrors the internal call-pipeline project's AppleFoundationModelsProvider.
 //

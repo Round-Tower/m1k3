@@ -262,6 +262,15 @@ extension AppEnvironment {
                     for: Self.coolHead.withLock(\.level),
                     base: Self.baseMaxIterations
                 )
+            },
+            defersHeavyGenerationProvider: {
+                // Same opt-in as the iteration cap. ON + minimal (critical thermal)
+                // → the turn skips the heavy retrieve+generate and answers with an
+                // honest deferral. OFF or any lighter level → false, so the default
+                // path is byte-identical. Level is the LIVE thermal state advanced by
+                // applyCoolHeadIfEnabled() at the top of THIS send().
+                guard Self.coolHeadEaseEnabled() else { return false }
+                return CoolHeadPolicy.defersHeavyGeneration(Self.coolHead.withLock(\.level))
             }
         )
     }

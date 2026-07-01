@@ -263,6 +263,44 @@ struct AgentRAGResponderTests {
         #expect(provider.allPrompts.count == 1)
     }
 
+    @Test("Cool Head defer ON: skips the heavy path entirely and answers with the honest deferral")
+    func coolHeadDeferSkipsGeneration() async throws {
+        let (store, embedder) = try await ingestedStore()
+        let provider = AgentScriptedProvider(["CONCLUSION: should never run."])
+        let responder = AgentRAGResponder(
+            store: store, embedder: embedder, provider: provider,
+            toolsProvider: { [] },
+            defersHeavyGenerationProvider: { true }
+        )
+        let (sources, stream) = try await responder.answerStreaming(
+            "What hydraulic seal failed on the conveyor under load?"
+        )
+        let answer = await collect(stream)
+        #expect(answer == AgentRAGResponder.coolHeadDeferralMessage)
+        #expect(sources.isEmpty)
+        // The whole heavy path — embed, retrieve, decode — was skipped.
+        #expect(provider.allPrompts.isEmpty)
+    }
+
+    @Test("Cool Head defer OFF (false): runs the turn normally — byte-identical default path")
+    func coolHeadDeferOffRunsNormally() async throws {
+        let (store, embedder) = try await ingestedStore()
+        let provider = AgentScriptedProvider([
+            "CONCLUSION: The seal failed. [Plant Notes §3.2 Seals]",
+        ])
+        let responder = AgentRAGResponder(
+            store: store, embedder: embedder, provider: provider,
+            toolsProvider: { [] },
+            defersHeavyGenerationProvider: { false }
+        )
+        let (_, stream) = try await responder.answerStreaming(
+            "What hydraulic seal failed on the conveyor under load?"
+        )
+        let answer = await collect(stream)
+        #expect(answer.contains("The seal failed."))
+        #expect(provider.allPrompts.count == 1)
+    }
+
     @Test("per-turn context line injects the active brain name and today's date")
     func contextLineInjected() async throws {
         let (store, embedder) = try await ingestedStore()

@@ -104,10 +104,14 @@ final class MCPHostController {
 
     func start() async {
         guard server == nil else { return }
+        // One job store for the server's lifetime — captured in the ask_m1k3 /
+        // get_answer closures so a long turn submitted on one request is fetchable
+        // on a later one (the HTTP transport is stateless per-request).
+        let intelligenceJobStore = AskJobStore()
         let registry = MCPToolRegistry(
             makeKnowledgeToolDefinitions(store: env.store)
                 + makeVoiceToolDefinitions(handlers: makeVoiceHandlers())
-                + makeIntelligenceToolDefinitions(handlers: makeIntelligenceHandlers())
+                + makeIntelligenceToolDefinitions(handlers: makeIntelligenceHandlers(), jobStore: intelligenceJobStore)
                 + makeOpenLinkToolDefinitions(handlers: makeOpenLinkHandlers())
                 + memoryToolDefinitions()
         )

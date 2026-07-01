@@ -18,15 +18,14 @@ struct AppleFoundationModelsProviderTests {
         #expect(AppleFoundationModelsProvider().name == "apple-foundation-models")
     }
 
-    @Test("conforms to InferenceProvider and slots into a router")
-    func conformsAndRoutes() {
-        let provider = AppleFoundationModelsProvider()
-        let router = ProviderRouter(providers: [provider])
-        // Reads availability without asserting a value (host-dependent).
+    @Test("conforms to the InferenceProvider seam")
+    func conformsToSeam() {
+        // Reads availability without asserting a value (host-dependent), and
+        // pins that the concrete type satisfies the protocol the runtime routes
+        // against.
+        let provider: any InferenceProvider = AppleFoundationModelsProvider()
         _ = provider.isAvailable
-        // When available on this host it is the active provider; either way the
-        // call resolves against the protocol seam.
-        #expect(router.providers.count == 1)
+        #expect(provider.name == "apple-foundation-models")
     }
 
     @Test("native tool-calling is OFF by default — launch routing keeps the ReAct floor")

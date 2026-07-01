@@ -32,8 +32,6 @@ public protocol InferenceProvider: Sendable {
 }
 
 public enum InferenceError: Error, Sendable, Equatable {
-    /// No configured provider reported `isAvailable`.
-    case noProviderAvailable
     /// The backend failed to produce a response.
     case generationFailed(String)
 }

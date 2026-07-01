@@ -89,6 +89,13 @@ public struct AgentRAGResponder: RAGResponding, Sendable {
     /// wide on the dense-Qwen tiers, clamped under gemma-4's 8192 rotating window.
     /// Defaults to the conservative shipped window so an unwired caller is unchanged.
     private let historyBudgetProvider: @Sendable () -> HistoryWindow.Budget
+    /// Cool Head's heavy-generation defer, read FRESH each turn. `true` (critical
+    /// thermal + opt-in ON) makes the turn skip the heavy retrieve+generate and
+    /// answer with an honest deferral instead of piling onto a throttling Mac.
+    /// `nil` → never defers, so the default path is byte-identical. Opaque
+    /// `() -> Bool` for the same dependency-direction reason as `maxIterationsProvider`:
+    /// the CoolHeadLevel enum lives in M1K3LanguageModel, which this module doesn't link.
+    private let defersHeavyGenerationProvider: (@Sendable () -> Bool)?
 
     public init(
         store: KnowledgeStore,
@@ -103,7 +110,8 @@ public struct AgentRAGResponder: RAGResponding, Sendable {
         brainNameProvider: @escaping @Sendable () -> String = { "" },
         fastThinkingProvider: @escaping @Sendable () -> Bool = { false },
         historyBudgetProvider: @escaping @Sendable () -> HistoryWindow.Budget = { .default },
-        maxIterationsProvider: (@Sendable () -> Int)? = nil
+        maxIterationsProvider: (@Sendable () -> Int)? = nil,
+        defersHeavyGenerationProvider: (@Sendable () -> Bool)? = nil
     ) {
         self.store = store
         self.embedder = embedder
@@ -118,6 +126,7 @@ public struct AgentRAGResponder: RAGResponding, Sendable {
         self.maxIterationsProvider = maxIterationsProvider
         self.fastThinkingProvider = fastThinkingProvider
         self.historyBudgetProvider = historyBudgetProvider
+        self.defersHeavyGenerationProvider = defersHeavyGenerationProvider
     }
 
     /// Fixed tool list — convenience for tests and simple callers.
@@ -151,11 +160,31 @@ public struct AgentRAGResponder: RAGResponding, Sendable {
         try await answerStreaming(question, history: [], onActivity: onActivity)
     }
 
+    /// The honest line M1K3 gives when Cool Head defers a heavy turn (critical
+    /// thermal). Warm, brief, and truthful — never a silent non-answer.
+    static let coolHeadDeferralMessage =
+        "My Mac's gone properly warm, so I'm easing off the heavy thinking for a "
+            + "moment to let it cool down. Give it a minute and ask me again."
+
     public func answerStreaming(
         _ question: String,
         history: [ChatTurn],
         onActivity: @escaping @Sendable (ResponderActivity) -> Void
     ) async throws -> (sources: [ChunkHit], stream: AsyncStream<String>) {
+        // Cool Head at minimal (critical thermal, opt-in ON): skip the whole heavy
+        // path — no embed, no retrieval, no decode — and answer honestly instead of
+        // piling onto a throttling Mac. The caller (ChatSession) has already recorded
+        // the user's turn, so this just fills the assistant bubble; the transcript is
+        // intact. Default path (provider nil/false) is byte-identical.
+        if defersHeavyGenerationProvider?() == true {
+            let message = Self.coolHeadDeferralMessage
+            let stream = AsyncStream<String> { continuation in
+                continuation.yield(message)
+                continuation.finish()
+            }
+            return (sources: [], stream: stream)
+        }
+
         onActivity(.retrieving)
         // Stale tool hits from an aborted prior turn must not leak in.
         _ = sourceCollector?.drain()

@@ -99,7 +99,7 @@ public extension EffectfulSpeechProvider {
                 do { try configureEngineIfNeeded(format: format) } catch { break }
                 if !started {
                     started = true
-                    onSpeakingStarted?()
+                    fireSpeakingStarted()
                 }
                 session.schedule(samples: processed, timeline: chunk.timeline, format: format)
                 player.play() // no-op while already playing; restarts after engine reconfig
@@ -110,7 +110,7 @@ public extension EffectfulSpeechProvider {
         session.markStreamEnded()
         if started { await session.awaitCompletion() }
         if streamingSession === session { streamingSession = nil }
-        if started { onSpeakingEnded?() }
+        if started { fireSpeakingEnded() }
         return started
     }
 }

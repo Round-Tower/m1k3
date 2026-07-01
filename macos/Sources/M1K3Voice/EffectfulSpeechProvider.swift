@@ -48,6 +48,11 @@ public final class EffectfulSpeechProvider: NSObject, SpeechProviderWithWordTimi
 
     @MainActor private var engineConfigured = false
     @MainActor private var configuredSampleRate: Double = 0
+    /// Cached speaking flag — flipped by the fireSpeaking* helpers at the exact
+    /// seams that fire onSpeakingStarted/Ended, so isSpeaking() never has to poll
+    /// the audio engine (a cross-QoS lock-hold + a Thread-Performance-Checker hang
+    /// risk when read ~30 fps). See SpeakingState.swift.
+    @MainActor private var speakingState = SpeakingState()
     /// The in-flight playback wait, so `stop()` can resume it (the .dataPlayedBack
     /// completion is NOT delivered after player.stop(), which would otherwise hang).
     @MainActor private var playbackContinuation: CheckedContinuation<Void, Never>?
@@ -125,6 +130,10 @@ public final class EffectfulSpeechProvider: NSObject, SpeechProviderWithWordTimi
             streamingSession?.cancel()
             streamingSession = nil
             finishPlayback()
+            // Clear the cached flag NOW so isSpeaking() reads false the instant
+            // stop() returns — the interrupted task's fireSpeakingEnded (which also
+            // clears it, idempotently) may not unwind until a later actor hop.
+            speakingState.end()
             return had
         }
         await plainFallback.stop()
@@ -133,13 +142,35 @@ public final class EffectfulSpeechProvider: NSObject, SpeechProviderWithWordTimi
         // onSpeakingEnded as it unwinds — so fire here only when there was no
         // playback to resume (cancelled mid-synthesis), otherwise the avatar gets a
         // spurious second "ended" event.
-        if wasActive, !hadPlayback { await MainActor.run { onSpeakingEnded?() } }
+        if wasActive, !hadPlayback { await MainActor.run { fireSpeakingEnded() } }
     }
 
     public func isSpeaking() async -> Bool {
-        // A live streaming session counts even before its first buffer is scheduled
-        // (chunk 1 still synthesizing) and between buffers during a dry gap.
-        await MainActor.run { player.isPlaying || synthesizer.isSpeaking || streamingSession != nil }
+        // Reads the cached flag, NOT the engine: player.isPlaying / synthesizer
+        // .isSpeaking take an internal AVAudioEngine lock the render thread holds,
+        // so polling them from a high-QoS caller inverts priority (the TPC hang
+        // risk). A live streaming session still counts even before its first buffer
+        // is scheduled (chunk 1 still synthesizing) — that term is a cheap nil check.
+        await MainActor.run { speakingState.isSpeaking(streamingActive: streamingSession != nil) }
+    }
+
+    // Internal (not private) so EffectfulSpeechProvider+Streaming.swift can fire
+    // them too — same reason `player`/`streamingSession` are internal.
+
+    /// Flip the cached flag ON and fire onSpeakingStarted as one step, so the flag
+    /// can never drift from the callback. Called at every playback-start seam.
+    @MainActor
+    func fireSpeakingStarted() {
+        speakingState.begin()
+        onSpeakingStarted?()
+    }
+
+    /// Flip the cached flag OFF and fire onSpeakingEnded as one step. Called at
+    /// every playback-end seam (and, defensively, from stop()).
+    @MainActor
+    func fireSpeakingEnded() {
+        speakingState.end()
+        onSpeakingEnded?()
     }
 
     // MARK: - Synthesis → PCM
@@ -197,7 +228,7 @@ public final class EffectfulSpeechProvider: NSObject, SpeechProviderWithWordTimi
 
         try configureEngineIfNeeded(format: format)
 
-        onSpeakingStarted?()
+        fireSpeakingStarted()
         await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
             playbackContinuation = continuation
             player.scheduleBuffer(
@@ -207,7 +238,7 @@ public final class EffectfulSpeechProvider: NSObject, SpeechProviderWithWordTimi
             }
             player.play()
         }
-        onSpeakingEnded?()
+        fireSpeakingEnded()
     }
 
     /// Resume the playback wait exactly once — from either the .dataPlayedBack
@@ -241,9 +272,9 @@ public final class EffectfulSpeechProvider: NSObject, SpeechProviderWithWordTimi
     // MARK: - Fallback
 
     private func plainSpeak(_ utterance: SpeechUtterance) async {
-        await MainActor.run { onSpeakingStarted?() }
+        await MainActor.run { fireSpeakingStarted() }
         await plainFallback.speak(utterance)
-        await MainActor.run { onSpeakingEnded?() }
+        await MainActor.run { fireSpeakingEnded() }
     }
 }
 

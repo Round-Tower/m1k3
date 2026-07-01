@@ -37,7 +37,7 @@ Legend: ✅ done · 🟢 logic done (deferred adapter) · 🟡 partial · ⬜ no
 | Target | Deps | Status |
 |--------|------|--------|
 | `M1K3Knowledge` | GRDB + PDFKit | VectorMath, RRFFusion, EmbeddingService(protocol) + HashingEmbeddingService(fallback), KnowledgeItem/Chunk, KnowledgeStore (FTS5+vector+RRF, fetch/list), KnowledgeGraphBuilder, DocumentChunker, DocumentPage, CitationValidator, PDFTextExtractor, DocumentIngester |
-| `M1K3Inference` | — | InferenceProvider, ProviderRouter, AppleFoundationModelsProvider |
+| `M1K3Inference` | — | InferenceProvider, BrainTier, AppleFoundationModelsProvider |
 | `M1K3Agent` | M1K3Inference | AgentTool + ToolParameter/ToolResult, LocalAgent (ReAct loop) |
 | `M1K3KnowledgeTools` | M1K3Agent + M1K3Knowledge | SearchKnowledgeTool, ListDocumentsTool, GetDocumentTool (⏳ hybrid search variant; QueryGraphTool) |
 | `M1K3Chat` | M1K3Knowledge + M1K3Inference | ChatPromptBuilder (in Knowledge) + RAGResponder (embed→hybrid→prompt→answer+sources, streaming) + `RAGResponding` seam + `ChatSession` (@MainActor @Observable, self-normalising token fold) |
@@ -108,7 +108,7 @@ seam, on-device only.
 
 - **Pure core (`M1K3Voice`, tested):** `TranscriptSegment` (slim — no call-domain
   speaker/sentiment), `TranscriptionProvider` (live-session API), `TranscriptionRouter`
-  (selector mirroring `ProviderRouter`), `TranscriptAccumulator` (partial→final fold).
+  (an availability-ordered selector), `TranscriptAccumulator` (partial→final fold).
   12 new tests → 159/33 green.
 - **`AppleSpeechTranscriber` (`M1K3Voice`):** SFSpeechRecognizer + AVAudioEngine,
   system-framework, zero-dep, **on-device forced** (privacy floor). The day-one path.

@@ -650,6 +650,12 @@ several didn't survive contact with the live codebase:
   constructed in `M1K3App/`; production routes through `RuntimeInferenceProvider`'s single-active-
   backend model instead. Left unfixed; **open decision for Kev:** delete `ProviderRouter` (dead) or
   wire it in as the real selection mechanism — polishing it in place fixes nothing live either way.
+  - **RESOLVED 2026-07-01 — DELETED.** Kev's call: delete. Its availability-ordered fall-through
+    semantics contradict the explicit single-brain product model (`RuntimeInferenceProvider` is the
+    real selector), so wiring it would have meant re-architecting `selectBrain`/`RuntimeSelectionBox`
+    for no user benefit. Removed `ProviderRouter.swift` + `ProviderRouterTests.swift` + the now-orphaned
+    `InferenceError.noProviderAvailable` case (~−205 LOC); CQ-1 and CQ-4 evaporate with it. `swift test
+    --filter M1K3InferenceTests` green (120 tests).
 - **CONFIRMED but NOT a same-session fix:** CQ-8 (MCP timeout) — the claim's "120s" framing was
   wrong (the real binding ceiling on the MCP surface is the tighter 50s `IntelligenceMCPTools`
   timeout, not `MCPHostController`'s 120s, which only gates the Siri/Shortcuts App Intent path).

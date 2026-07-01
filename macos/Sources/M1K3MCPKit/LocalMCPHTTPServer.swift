@@ -52,6 +52,12 @@ public actor LocalMCPHTTPServer {
     }
 
     /// Bind the loopback listener and serve until `stop()`.
+    ///
+    /// Awaits the listener's REAL bind result before returning: `listener.start`
+    /// is fire-and-forget and delivers a bind failure (e.g. EADDRINUSE when a
+    /// second instance already holds the port) asynchronously on
+    /// `stateUpdateHandler`. Without awaiting `.ready`, start() returned success
+    /// while the socket never bound — the host then showed a stale "Running".
     public func start() async throws {
         guard !isRunning else { return }
         let parameters = NWParameters.tcp
@@ -68,10 +74,57 @@ public actor LocalMCPHTTPServer {
             }
             Task { await self.handle(connection) }
         }
-        listener.start(queue: .global(qos: .userInitiated))
+
+        // Suspend until the listener actually binds. `.waiting` (EADDRINUSE) is
+        // treated as failure — we want a bound socket NOW, not eventually.
+        do {
+            try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+                let resumed = OSAllocatedUnfairLock(initialState: false)
+                let resumeOnce: @Sendable (Result<Void, Error>) -> Void = { result in
+                    let firstTime = resumed.withLock { done -> Bool in
+                        if done { return false }
+                        done = true
+                        return true
+                    }
+                    if firstTime { continuation.resume(with: result) }
+                }
+                listener.stateUpdateHandler = { state in
+                    switch state {
+                    case .ready: resumeOnce(.success(()))
+                    case let .failed(error): resumeOnce(.failure(error))
+                    case let .waiting(error): resumeOnce(.failure(error))
+                    case .cancelled: resumeOnce(.failure(CancellationError()))
+                    default: break
+                    }
+                }
+                listener.start(queue: .global(qos: .userInitiated))
+            }
+        } catch {
+            listener.cancel()
+            throw error
+        }
+
+        // Bound. Swap in the long-lived handler: a listener that dies mid-session
+        // must flip the host status off (parity with the session-rebuild honesty
+        // path). Route only genuine failures — normal stop() fires `.cancelled`,
+        // which must NOT be reported as an abnormal stop.
+        listener.stateUpdateHandler = { [weak self] state in
+            if case let .failed(error) = state {
+                Task { await self?.handleListenerFailure(error) }
+            }
+        }
         self.listener = listener
         session = try await makeSession()
         isRunning = true
+    }
+
+    /// A listener that failed after it was serving — tear down honestly so the
+    /// host UI stops claiming "Running". No-op if we already stopped cleanly.
+    private func handleListenerFailure(_ error: NWError) async {
+        guard isRunning else { return }
+        Self.log.error("MCP listener failed: \(error.localizedDescription, privacy: .public)")
+        await stop()
+        onAbnormalStop?("MCP listener failed: \(error.localizedDescription)")
     }
 
     public func stop() async {

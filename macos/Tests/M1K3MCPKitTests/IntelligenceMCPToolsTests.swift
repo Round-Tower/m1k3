@@ -48,11 +48,29 @@ private func text(_ result: CallTool.Result) -> String? {
     return nil
 }
 
+/// A one-shot gate so a fake `ask` can block until the test releases it — used to
+/// exercise the submit → poll → done lifecycle deterministically.
+private actor Gate {
+    private var continuation: CheckedContinuation<Void, Never>?
+    private var opened = false
+
+    func wait() async {
+        if opened { return }
+        await withCheckedContinuation { continuation = $0 }
+    }
+
+    func open() {
+        opened = true
+        continuation?.resume()
+        continuation = nil
+    }
+}
+
 struct IntelligenceMCPToolsTests {
-    @Test("the surface is ask_m1k3 and remember")
+    @Test("the surface is ask_m1k3, get_answer, and remember")
     func surface() {
         let registry = MCPToolRegistry(makeIntelligenceToolDefinitions(handlers: makeHandlers(log: CallLog())))
-        #expect(registry.tools.map(\.name) == ["ask_m1k3", "remember"])
+        #expect(registry.tools.map(\.name) == ["ask_m1k3", "get_answer", "remember"])
     }
 
     @Test("ask_m1k3 passes the question through and returns the answer")
@@ -86,40 +104,91 @@ struct IntelligenceMCPToolsTests {
         #expect(text(result)?.contains("conversation") == true)
     }
 
-    @Test("a brain that outlives the deadline surfaces a clean isError, not a raw transport timeout")
-    func askTimesOut() async {
-        // A generation that never returns in time (the wedge AsyncTimeout kills).
+    @Test("a turn that outlives the grace window hands back a job id, fast, instead of blocking")
+    func askExceedingGraceReturnsJobId() async {
+        // A generation slower than the grace window: ask_m1k3 must return a job
+        // id promptly (non-error) rather than block until the client's deadline.
         let handlers = IntelligenceToolHandlers(
             ask: { _ in
-                try await Task.sleep(for: .seconds(10))
-                return "should never arrive"
+                try await Task.sleep(for: .seconds(3))
+                return "arrives after the grace window"
             },
             remember: { _, _ in "noop" }
         )
         let registry = MCPToolRegistry(
-            makeIntelligenceToolDefinitions(handlers: handlers, askTimeoutSeconds: 0.1)
+            makeIntelligenceToolDefinitions(handlers: handlers, graceSeconds: 0.2)
         )
         let start = ContinuousClock.now
         let result = await registry.call(
             name: "ask_m1k3",
             arguments: ["question": .string("why is the sky blue — explain step by step, in great detail?")]
         )
-        // Returned on the deadline (0.1s), not after the 10s sleep — the lock is freed.
-        #expect(start.duration(to: .now) < .seconds(5))
-        #expect(result.isError == true)
-        #expect(text(result)?.contains("didn't finish") == true)
+        // Returned on the grace window (~0.2s), not after the 3s generation.
+        #expect(start.duration(to: .now) < .seconds(2))
+        #expect(result.isError != true)
+        #expect(text(result)?.contains("get_answer") == true)
     }
 
-    @Test("a fast brain is unaffected by the deadline")
-    func askWithinDeadline() async {
+    @Test("a fast brain returns its answer inline within the grace window")
+    func askFastReturnsInline() async {
         let log = CallLog()
         let registry = MCPToolRegistry(
-            makeIntelligenceToolDefinitions(handlers: makeHandlers(log: log), askTimeoutSeconds: 5)
+            makeIntelligenceToolDefinitions(handlers: makeHandlers(log: log), graceSeconds: 5)
         )
         let result = await registry.call(name: "ask_m1k3", arguments: ["question": .string("what failed?")])
         #expect(result.isError != true)
         #expect(text(result) == "Grounded answer [Doc §Heading]")
         #expect(log.all == ["ask:what failed?"])
+    }
+
+    @Test("a long turn returns a job id, then get_answer fetches the result once ready")
+    func submitPollLifecycle() async throws {
+        let gate = Gate()
+        let store = AskJobStore(makeID: { "job-x" })
+        let handlers = IntelligenceToolHandlers(
+            ask: { _ in
+                await gate.wait()
+                return "delayed answer [Doc §Heading]"
+            },
+            remember: { _, _ in "noop" }
+        )
+        let registry = MCPToolRegistry(
+            makeIntelligenceToolDefinitions(handlers: handlers, jobStore: store, graceSeconds: 0.2)
+        )
+
+        // Grace expires while the generation is gated → a job id comes back.
+        let submit = await registry.call(name: "ask_m1k3", arguments: ["question": .string("the slow one")])
+        #expect(submit.isError != true)
+        #expect(text(submit)?.contains("job-x") == true)
+
+        // Still gated → get_answer reports it's working, not an error.
+        let pending = await registry.call(name: "get_answer", arguments: ["job_id": .string("job-x")])
+        #expect(pending.isError != true)
+        #expect(text(pending)?.contains("still working") == true)
+
+        // Release the generation, let the detached task write back, then fetch.
+        await gate.open()
+        try await Task.sleep(for: .milliseconds(150))
+        let done = await registry.call(name: "get_answer", arguments: ["job_id": .string("job-x")])
+        #expect(done.isError != true)
+        #expect(text(done) == "delayed answer [Doc §Heading]")
+    }
+
+    @Test("get_answer for an unknown job is a clean isError")
+    func getAnswerUnknownJob() async {
+        let registry = MCPToolRegistry(makeIntelligenceToolDefinitions(handlers: makeHandlers(log: CallLog())))
+        let result = await registry.call(name: "get_answer", arguments: ["job_id": .string("ghost")])
+        #expect(result.isError == true)
+        #expect(text(result)?.contains("No such job") == true)
+    }
+
+    @Test("get_answer requires a job_id")
+    func getAnswerValidation() async {
+        let registry = MCPToolRegistry(makeIntelligenceToolDefinitions(handlers: makeHandlers(log: CallLog())))
+        let missing = await registry.call(name: "get_answer", arguments: nil)
+        let blank = await registry.call(name: "get_answer", arguments: ["job_id": .string("  ")])
+        #expect(missing.isError == true)
+        #expect(blank.isError == true)
     }
 
     @Test("remember passes title and text through")

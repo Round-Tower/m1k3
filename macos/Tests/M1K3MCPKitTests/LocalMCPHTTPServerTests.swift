@@ -76,8 +76,7 @@ struct LocalMCPHTTPServerTests {
         let server = makeServer(port: port)
         try await server.start()
         defer { Task { await server.stop() } }
-        // The listener binds asynchronously; give it a beat.
-        try await Task.sleep(for: .milliseconds(200))
+        // No sleep: start() now awaits the listener's real bind before returning.
 
         let initResponse = try await post(initializeBody, port: port)
         #expect(initResponse.status == 200)
@@ -120,7 +119,6 @@ struct LocalMCPHTTPServerTests {
             return (mcpServer, transport)
         }
         try await server.start()
-        try await Task.sleep(for: .milliseconds(200))
 
         _ = try await post(initializeBody, port: port)
         // Second initialize → factory throws → server must stop, not zombie.
@@ -133,12 +131,40 @@ struct LocalMCPHTTPServerTests {
         #expect(stopped.value == 1)
     }
 
+    @Test("a second server on the same port throws instead of falsely reporting Running")
+    func portConflictThrows() async throws {
+        // The bug: start() ignored the async bind result, so a second instance on
+        // an already-held port set isRunning=true and the host showed "Running"
+        // while no socket ever bound. start() must now surface EADDRINUSE.
+        let port = UInt16.random(in: 52000 ... 59000)
+        let first = makeServer(port: port)
+        try await first.start()
+        defer { Task { await first.stop() } }
+
+        let second = makeServer(port: port)
+        await #expect(throws: (any Error).self) {
+            try await second.start()
+        }
+        let secondRunning = await second.isRunning
+        #expect(!secondRunning)
+    }
+
+    @Test("start() returns only once bound — an immediate request needs no sleep")
+    func startAwaitsBind() async throws {
+        let port = UInt16.random(in: 52000 ... 59000)
+        let server = makeServer(port: port)
+        try await server.start()
+        defer { Task { await server.stop() } }
+        // No Task.sleep: start() awaited .ready, so this lands immediately.
+        let response = try await post(initializeBody, port: port)
+        #expect(response.status == 200)
+    }
+
     @Test("tool calls dispatch through the live stack")
     func toolCall() async throws {
         let port = UInt16.random(in: 52000 ... 59000)
         let server = makeServer(port: port)
         try await server.start()
-        try await Task.sleep(for: .milliseconds(200))
 
         _ = try await post(initializeBody, port: port)
         let call = try await post(
