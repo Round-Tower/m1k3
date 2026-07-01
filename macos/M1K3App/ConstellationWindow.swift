@@ -38,6 +38,10 @@ struct MemoryConstellationCanvas: View {
     /// the view shows the newest motes. Poll cadence for "grows over time".
     private let maxNodes = 300
     private let refresh: Duration = .seconds(2)
+    /// Backed-off cadence when the Mac is under thermal/low-power pressure — the
+    /// O(n²) relayout is speculative background work, so it runs less often when
+    /// hot (Cool Head knob 1). Re-checked each tick, so it recovers automatically.
+    private let throttledRefresh: Duration = .seconds(10)
 
     var body: some View {
         Group {
@@ -64,7 +68,8 @@ struct MemoryConstellationCanvas: View {
     private func watch() async {
         await rebuildIfChanged()
         while !Task.isCancelled {
-            try? await Task.sleep(for: refresh)
+            let interval = AppEnvironment.backgroundWorkAllowed() ? refresh : throttledRefresh
+            try? await Task.sleep(for: interval)
             await rebuildIfChanged()
         }
     }

@@ -288,6 +288,24 @@ extension AppEnvironment {
         UserDefaults.standard.bool(forKey: coolHeadEaseKey) // default OFF
     }
 
+    /// Whether speculative/background work — the launch reindex, the embedder
+    /// pre-warm, the constellation poll cadence — should run right now.
+    ///
+    /// Reads `ProcessInfo` DIRECTLY, not the chat-turn `coolHead.level`: that level
+    /// is only advanced by `applyCoolHeadIfEnabled()` on a `send()`, so at launch
+    /// and window-open seams (which fire outside any turn) it is stale/default
+    /// `.full` — gating background work on it would be a silent no-op. Point-in-time
+    /// (`target`, no hysteresis): a background check is one-shot, not a conversation
+    /// to keep from flapping. Opt-in OFF → always allowed (byte-identical default).
+    nonisolated static func backgroundWorkAllowed() -> Bool {
+        guard coolHeadEaseEnabled() else { return true }
+        let info = ProcessInfo.processInfo
+        let level = CoolHeadPolicy.target(
+            thermal: info.thermalState, lowPower: info.isLowPowerModeEnabled
+        )
+        return CoolHeadPolicy.allowsBackgroundWork(level)
+    }
+
     /// The agent-loop iteration base the thermal cap eases DOWN from. Matches
     /// AgentRAGResponder's default — one named home so the two can't drift.
     nonisolated static let baseMaxIterations = 3

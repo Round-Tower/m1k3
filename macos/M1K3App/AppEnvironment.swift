@@ -285,6 +285,10 @@ final class AppEnvironment {
     private(set) var usingMLXEmbeddings = false
     /// True while a full re-embed of the store is in flight.
     private(set) var isReindexing = false
+    /// Set while a background job (reindex/warm) is deferred for heat, so the
+    /// cooldown re-run is armed exactly once (Cool Head knob 1). Lives on the main
+    /// class body — extensions can't hold stored properties.
+    private var thermalRecoveryObserver: NSObjectProtocol?
     /// Last embeddings-switch outcome, surfaced to Settings.
     private(set) var embeddingStatus: String?
 
@@ -1029,7 +1033,44 @@ extension AppEnvironment {
     /// fix; the cold-embedder-on-critical-path was traced in code, the win is
     /// verify-by-launch via SelfTest). Prior: this file.
     private func warmEmbedderOnLaunch() async {
+        // Background work: skip under thermal/low-power pressure (the embedder
+        // lazy-loads on the first query anyway, and the thermal-recovery observer
+        // re-warms it on cooldown). backgroundWorkAllowed reads ProcessInfo LIVE,
+        // not the stale chat-turn coolHead level.
+        guard Self.backgroundWorkAllowed() else { return }
         _ = try? await embedder.embed("warm")
+    }
+
+    // MARK: - Thermal recovery (Cool Head knob 1: pause background work under heat)
+
+    /// Arm a one-shot cooldown re-trigger: when the Mac's thermal state changes to
+    /// one that again allows background work, re-run the deferred reindex + warm.
+    /// Idempotent — only one observer is ever live. Without this, a reindex deferred
+    /// under heat would wait until the NEXT launch (stale vectors until then); this
+    /// closes that window as soon as the machine cools.
+    private func armThermalRecovery() {
+        guard thermalRecoveryObserver == nil else { return }
+        thermalRecoveryObserver = NotificationCenter.default.addObserver(
+            forName: ProcessInfo.thermalStateDidChangeNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                // Both self-gate on backgroundWorkAllowed; re-arm stays a no-op.
+                await self.reindexIfEmbedderChanged()
+                await self.warmEmbedderOnLaunch()
+                // Cooled back down and the work ran → tear the observer down.
+                if Self.backgroundWorkAllowed() { self.disarmThermalRecovery() }
+            }
+        }
+    }
+
+    private func disarmThermalRecovery() {
+        if let observer = thermalRecoveryObserver {
+            NotificationCenter.default.removeObserver(observer)
+            thermalRecoveryObserver = nil
+        }
     }
 
     /// The user's self-description (onboarding "you" step). Lives in
@@ -1069,6 +1110,15 @@ extension AppEnvironment {
             if stored != current {
                 try? store.setMeta(key: KnowledgeStore.embedderFingerprintKey, value: current)
             }
+            return
+        }
+        // There IS a full re-embed to do (heavy background work) — defer it under
+        // thermal/low-power pressure rather than pile onto a throttling Mac. The
+        // marker is NOT adopted, so needsReindex stays true; armThermalRecovery re-runs
+        // this the moment the machine cools (no longer "waits until next launch").
+        guard Self.backgroundWorkAllowed() else {
+            Self.embedLog.notice("reindex deferred — thermal/low-power pressure; retries on cooldown")
+            armThermalRecovery()
             return
         }
         guard !isReindexing else { return }
