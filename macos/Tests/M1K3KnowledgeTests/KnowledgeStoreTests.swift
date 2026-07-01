@@ -171,4 +171,51 @@ struct KnowledgeStoreTests {
         let hits = try store.searchVector(queryVector: vec)
         #expect(hits.first?.chunkID == chunk.id)
     }
+
+    // MARK: - FTS relaxation (live repro 2026-07-02: a stored memory was listed
+
+    // but invisible to a natural multi-term search — FTS5's implicit AND demands
+    // every token in one chunk, so long queries starve retrieval to zero)
+
+    @Test("over-constrained multi-term query falls back to best-coverage ranking")
+    func overConstrainedQueryRelaxes() async throws {
+        let f = try Fixture()
+        try await f.ingest()
+        // "milestone" appears in no chunk → strict AND is zero; the relaxed
+        // fallback must still surface the chunk covering most query terms.
+        let hits = try f.store.searchFTS(query: "hydraulic seal milestone conveyor failed")
+        #expect(hits.isEmpty == false)
+        #expect(hits.first?.content.contains("hydraulic") == true)
+    }
+
+    @Test("relaxation never fires when the strict AND query has hits")
+    func strictAndPrecisionPreserved() async throws {
+        let f = try Fixture()
+        try await f.ingest()
+        // Both terms live in chunk 1 → strict AND matches exactly one chunk; the
+        // OR fallback (which would also match the pricing/gloves chunks on
+        // neither term) must not run.
+        let hits = try f.store.searchFTS(query: "hydraulic conveyor")
+        #expect(hits.count == 1)
+        #expect(hits.first?.content.contains("hydraulic") == true)
+    }
+
+    @Test("query with no matching terms stays empty even after relaxation")
+    func garbageQueryStaysEmpty() async throws {
+        let f = try Fixture()
+        try await f.ingest()
+        #expect(try f.store.searchFTS(query: "xyzzy plugh zork").isEmpty)
+    }
+
+    @Test("relaxedFTSQuery OR-joins quoted tokens, nil below two tokens")
+    func relaxedQueryConstruction() {
+        #expect(KnowledgeStore.relaxedFTSQuery("Golden Gate milestone")
+            == "\"Golden\" OR \"Gate\" OR \"milestone\"")
+        // A single token relaxes to nothing new — strict already covered it.
+        #expect(KnowledgeStore.relaxedFTSQuery("hydraulic") == nil)
+        #expect(KnowledgeStore.relaxedFTSQuery("   ") == nil)
+        // Embedded quotes are stripped, same as the strict sanitiser.
+        #expect(KnowledgeStore.relaxedFTSQuery("say \"cheese\" now")
+            == "\"say\" OR \"cheese\" OR \"now\"")
+    }
 }

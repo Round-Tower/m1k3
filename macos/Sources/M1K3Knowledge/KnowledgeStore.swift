@@ -355,11 +355,28 @@ public final class KnowledgeStore: @unchecked Sendable {
 public extension KnowledgeStore {
     /// FTS5 BM25 search over chunk text. Each query word is double-quoted to
     /// neutralise FTS5 operators (same sanitisation as the prior knowledge-server project).
+    ///
+    /// Precision first, recall fallback: FTS5's implicit AND demands every token
+    /// in one chunk, so a natural multi-term question can starve retrieval to
+    /// zero even when a chunk covers most of it (live 2026-07-02: a stored
+    /// memory was listed but unfindable). When the strict query returns nothing,
+    /// retry OR-joined — BM25 still ranks the best-covered chunk first, and the
+    /// hybrid/grounding layers gate relevance downstream.
     func searchFTS(
         query: String, limit: Int = 10, kinds: Set<KnowledgeKind>? = nil
     ) throws -> [ChunkHit] {
         guard let sanitized = Self.sanitizeFTSQuery(query) else { return [] }
-        return try dbQueue.read { db in
+        let strict = try ftsMatch(sanitized, limit: limit, kinds: kinds)
+        if !strict.isEmpty { return strict }
+        guard let relaxed = Self.relaxedFTSQuery(query) else { return [] }
+        return try ftsMatch(relaxed, limit: limit, kinds: kinds)
+    }
+
+    /// One FTS5 MATCH execution — shared by the strict pass and the relaxed retry.
+    private func ftsMatch(
+        _ match: String, limit: Int, kinds: Set<KnowledgeKind>?
+    ) throws -> [ChunkHit] {
+        try dbQueue.read { db in
             var sql = """
             SELECT c.id AS chunk_id, c.item_id, c.heading, c.content,
                    i.title, i.kind
@@ -368,7 +385,7 @@ public extension KnowledgeStore {
             JOIN knowledge_items i ON i.id = c.item_id
             WHERE knowledge_chunk_fts MATCH ?
             """
-            var args: [DatabaseValueConvertible] = [sanitized]
+            var args: [DatabaseValueConvertible] = [match]
             if let kinds, !kinds.isEmpty {
                 let placeholders = kinds.map { _ in "?" }.joined(separator: ", ")
                 sql += "\nAND i.kind IN (\(placeholders))"
@@ -503,12 +520,25 @@ public extension KnowledgeStore {
     /// literals (neutralises `*`, `:`, `"`, `-` etc.). Returns nil if the query
     /// has no usable tokens. Ported from the prior knowledge-server project's sanitizeFTSQuery.
     internal static func sanitizeFTSQuery(_ query: String) -> String? {
-        let tokens = query
+        let tokens = ftsTokens(query)
+        guard !tokens.isEmpty else { return nil }
+        return tokens.map { "\"\($0)\"" }.joined(separator: " ")
+    }
+
+    /// The zero-hit fallback for `sanitizeFTSQuery`: same quoted tokens,
+    /// OR-joined so any term can match (BM25 ranks coverage). Nil below two
+    /// tokens — a single-token OR is identical to the strict query.
+    internal static func relaxedFTSQuery(_ query: String) -> String? {
+        let tokens = ftsTokens(query)
+        guard tokens.count >= 2 else { return nil }
+        return tokens.map { "\"\($0)\"" }.joined(separator: " OR ")
+    }
+
+    private static func ftsTokens(_ query: String) -> [String] {
+        query
             .components(separatedBy: .whitespacesAndNewlines)
             .map { $0.replacingOccurrences(of: "\"", with: "") }
             .filter { !$0.isEmpty }
-        guard !tokens.isEmpty else { return nil }
-        return tokens.map { "\"\($0)\"" }.joined(separator: " ")
     }
 }
 
