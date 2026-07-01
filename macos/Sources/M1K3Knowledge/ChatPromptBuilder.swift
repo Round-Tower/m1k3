@@ -36,8 +36,6 @@ public enum ChatPromptBuilder {
             A request to write, create, code, or explain something is a task to
             do — just produce it; stored sources aren't needed for that.
 
-            \(documentRule)
-
             Answer from what you genuinely know. If it's a fact you don't have,
             say so plainly rather than guessing — never invent facts or sources.
 
@@ -63,21 +61,9 @@ public enum ChatPromptBuilder {
           These are citation tokens, NOT markdown links — never follow them with
           parentheses or a URL.
 
-        \(documentRule)
-
         USER: \(userMessage)
         """
     }
-
-    /// Teach the model to wrap long-form documents in an <artifact> tag so they open
-    /// in the review panel instead of cluttering the transcript. Guarded to real
-    /// documents so it doesn't wrap every short reply.
-    private static let documentRule = """
-    When you write a long-form DOCUMENT (a plan, spec, blueprint, report — something \
-    multi-section the user would want to keep), wrap the WHOLE document in \
-    <artifact title="Short Title">…markdown…</artifact> so it opens in a clean reading \
-    panel. Everyday conversational replies need no tags.
-    """
 
     /// The bracketed label for a chunk: `[Title §heading]` or `[Title]`.
     public static func citationLabel(for hit: ChunkHit) -> String {
