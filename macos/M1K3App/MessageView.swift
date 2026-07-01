@@ -9,6 +9,7 @@
 //
 //  Signed: Kev + claude-opus-4-8, 2026-06-06, Confidence 0.8, Prior: Unknown
 
+import AppKit
 import M1K3Chat
 import M1K3Knowledge
 import M1K3Preview
@@ -36,6 +37,7 @@ struct MessageView: View {
 
     @State private var showSources = false
     @State private var showReasoning = false
+    @State private var didCopy = false
 
     var body: some View {
         rows
@@ -151,22 +153,49 @@ struct MessageView: View {
             }
 
             if case .complete = message.status, !message.text.isEmpty {
-                Button {
-                    onSpeak(message.text)
-                } label: {
-                    Image(systemName: "speaker.wave.2")
-                        .symbolRenderingMode(.hierarchical)
-                        .font(.caption)
+                HStack(spacing: 6) {
+                    Button {
+                        onSpeak(message.text)
+                    } label: {
+                        Image(systemName: "speaker.wave.2")
+                            .symbolRenderingMode(.hierarchical)
+                            .font(.caption)
+                    }
+                    .buttonStyle(.glass)
+                    .accessibilityLabel("Speak this answer")
+                    .help("Speak this answer")
+
+                    Button {
+                        copyAnswer(message.text)
+                    } label: {
+                        Image(systemName: didCopy ? "checkmark" : "doc.on.doc")
+                            .symbolRenderingMode(.hierarchical)
+                            .font(.caption)
+                            .contentTransition(.symbolEffect(.replace))
+                    }
+                    .buttonStyle(.glass)
+                    .accessibilityLabel("Copy this answer")
+                    .help(didCopy ? "Copied" : "Copy this answer")
                 }
-                .buttonStyle(.glass)
-                .accessibilityLabel("Speak this answer")
-                .help("Speak this answer")
             }
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 12)
+        // M1K3's turns sit flat on the backdrop — minimal, no glass card (the user's
+        // own turns keep the tinted glass bubble, so the two speakers stay legible
+        // apart). Kept a little inset so the controls aren't jammed against the edge.
+        .padding(.vertical, 4)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .glassEffect(.regular, in: .rect(cornerRadius: 18))
+    }
+
+    /// Copy the answer to the clipboard, with a brief checkmark confirmation. Copies
+    /// the shown text (already polished) — what the user reads is what they share.
+    private func copyAnswer(_ text: String) {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text, forType: .string)
+        didCopy = true
+        Task {
+            try? await Task.sleep(for: .seconds(1.6))
+            didCopy = false
+        }
     }
 
     /// True while the model is thinking out loud: still streaming, reasoning

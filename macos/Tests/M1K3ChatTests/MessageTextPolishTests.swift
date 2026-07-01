@@ -20,6 +20,26 @@ struct MessageTextPolishTests {
         #expect(MessageTextPolish.polish("the **10-day** forecast") == "the 10-day forecast")
     }
 
+    @Test("single-asterisk italic is flattened, but arithmetic is left alone")
+    func flattensItalic() {
+        #expect(MessageTextPolish.polish("*(Defines who Claude is)*") == "(Defines who Claude is)")
+        #expect(MessageTextPolish.polish("the *quick* brown fox") == "the quick brown fox")
+        // The reason single-asterisk was historically left alone: don't eat maths.
+        #expect(MessageTextPolish.polish("area = 2 * 3 * 4") == "area = 2 * 3 * 4")
+        #expect(MessageTextPolish.polish("a * b + c") == "a * b + c")
+    }
+
+    @Test("bold-italic (***) collapses to plain text")
+    func flattensBoldItalic() {
+        #expect(MessageTextPolish.polish("***Project Blueprint***") == "Project Blueprint")
+    }
+
+    @Test("a thematic-break line (*** / --- / ___) is dropped, prose around it kept")
+    func dropsThematicBreak() {
+        #expect(MessageTextPolish.polish("Intro\n\n***\n\nBody") == "Intro\n\nBody")
+        #expect(MessageTextPolish.polish("Intro\n\n---\n\nBody") == "Intro\n\nBody")
+    }
+
     @Test("a link whose label IS the url collapses to the url (the ⌘R artifact)")
     func collapsesDuplicateLink() {
         let text = "[https://weather.com/boston](https://weather.com/boston)"

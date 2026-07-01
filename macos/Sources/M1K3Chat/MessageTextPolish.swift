@@ -42,15 +42,28 @@ public enum MessageTextPolish {
     /// The flattening pass, applied only to non-code prose.
     private static func polishProse(_ text: String) -> String {
         var output = text
+        // Thematic breaks (*** / --- / ___ alone on a line) are document structure,
+        // not prose — drop the line before the emphasis passes run (a bare *** would
+        // otherwise be mis-read as an unterminated italic). The newline-collapse
+        // below tidies the gap it leaves.
+        output = output.replacing(/^[ \t]*[-*_]{3,}[ \t]*$/.anchorsMatchLineEndings()) { _ in "" }
         // [label](url): collapse the duplicate-link artifact, keep real labels.
         output = output.replacing(/\[([^\]]+)\]\(([^)\s]+)\)/) { match in
             let label = String(match.1)
             let url = String(match.2)
             return label == url ? url : "\(label) (\(url))"
         }
-        // **bold** → bold (single-asterisk emphasis is left alone — too easy
-        // to collide with legitimate asterisks).
+        // **bold** → bold. Runs first so ***bold-italic*** lands as *bold-italic*,
+        // which the italic pass below then finishes.
         output = output.replacing(/\*\*([^*]+)\*\*/) { String($0.1) }
+        // *italic* → italic. Only a properly-paired *word* where the content touches
+        // both asterisks — so arithmetic ("2 * 3") and the "* " bullet marker (space
+        // after the star) are left untouched. Group 1 is the preserved leading
+        // boundary (start-of-line / space / opening bracket); the trailing boundary
+        // is a zero-width lookahead so it isn't consumed.
+        output = output.replacing(
+            /(^|[\s(\[])\*(\S(?:[^*\n]*\S)?|\S)\*(?=$|[\s).,;:!?\]])/.anchorsMatchLineEndings()
+        ) { "\($0.1)\($0.2)" }
         // `code` → code
         output = output.replacing(/`([^`\n]+)`/) { String($0.1) }
         // Line-leading "* " bullets → real bullets.
