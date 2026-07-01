@@ -116,11 +116,12 @@ struct MessageView: View {
     private var assistantBody: some View {
         VStack(alignment: .leading, spacing: 8) {
             if !message.text.isEmpty {
+                // NO .contentTransition(.opacity)/.animation(value: message.text) here:
+                // contentTransition cross-fades the WHOLE Text on every value change,
+                // so a growing streamed answer flashes ALL words on each token (worse
+                // at the ~20Hz stream cadence). Plain append reads as live; a true
+                // per-word fade-in would need per-word views (not worth the frame cost).
                 ReadingText(message.text)
-                    // Soft cross-fade as streamed text grows — words ease in
-                    // rather than snapping (reads as live, not a teleprinter).
-                    .contentTransition(.opacity)
-                    .animation(.easeOut(duration: 0.18), value: message.text)
             } else if case .streaming = message.status {
                 // While the agent works (thinking, searching the web…) show what
                 // it's doing — the label doubles as the privacy surface for any
