@@ -1,11 +1,34 @@
 # SwiftLint configuration — M1K3 macOS app.
-#
-# `trailing_comma` is disabled because SwiftFormat (run in the same pre-commit
-# hook) ADDS trailing commas to multi-line collection literals. With no config
-# the two tools fight every commit: SwiftFormat inserts the comma, SwiftLint
-# flags it, and the warning re-appears the next time the formatter runs. Comma
-# style is owned by SwiftFormat here, so we silence the lint rule rather than
-# churn it. Pre-existing length/complexity warnings are left visible on purpose
-# (they read as debt signals, not noise).
+
+# Lint OUR code only. Without this, `swiftlint lint` walks .build/ and every
+# vendored dependency (mlx-swift, WhisperKit, GRDB, swift-transformers, …):
+# ~198k violations, 99.7% of them third-party, which makes any full-repo lint,
+# CI check, or editor integration meaningless and slow (517 real → drowned).
+# The pre-commit hook only lints staged files, but everything else needs this.
+included:
+  - Sources
+  - M1K3App
+  - Tests
+excluded:
+  - .build
+  - .spm-cache
+
 disabled_rules:
+  # SwiftFormat (run in the same pre-commit hook) ADDS trailing commas to
+  # multi-line collection literals, so this rule flags exactly what the formatter
+  # just produced — the two fight every commit. Comma style is SwiftFormat's.
   - trailing_comma
+
+identifier_name:
+  # House style uses idiomatic short names — GRDB's `db` handle (51×), sort
+  # comparators `a`/`b`, math `x`/`y`/`t`, loop `i`/`j`, durations `ms`/`ns`.
+  # These were 328 of ~517 real violations; renaming them all is noise, not
+  # signal. Keep the rule's max-length + casing checks; drop the min-length one.
+  min_length:
+    warning: 1
+    error: 0
+
+# Deliberately left at defaults so growth still flags as a visible debt signal
+# rather than being silenced: file_length, type_body_length,
+# function_body_length, cyclomatic_complexity. (The big composition-root files —
+# e.g. AppEnvironment — are known, standing "don't chase" debt.)

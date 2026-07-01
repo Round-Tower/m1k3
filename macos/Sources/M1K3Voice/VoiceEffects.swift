@@ -72,7 +72,6 @@ public struct BandpassEffect: VoiceEffect {
 
         // RBJ biquad coefficients + Direct Form I state. Short names (b0, a1, x1…)
         // are the canonical cookbook notation — clearer here than verbose renames.
-        // swiftlint:disable identifier_name
         let w0 = 2 * Double.pi * centre / sampleRate
         let alpha = sin(w0) / (2 * quality)
         let cosW0 = cos(w0)
@@ -97,7 +96,6 @@ public struct BandpassEffect: VoiceEffect {
             x2 = x1; x1 = x0
             y2 = y1; y1 = y0
         }
-        // swiftlint:enable identifier_name
         return output
     }
 }
