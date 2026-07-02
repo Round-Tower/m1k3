@@ -31,6 +31,15 @@
 //  it finishes and is fetchable even after this request returns. Build/⌘R verify
 //  pending — the live wire (job survival across stateless requests) is verify-by-launch.
 //
+//  Review: Kev + claude-fable-5, 2026-07-02, Confidence 0.9 (Issue #2). ask_m1k3
+//  now self-redeems: an optional job_id argument fetches that job's result via
+//  the same redeemJob path as get_answer, so a client whose cached tool list
+//  predates get_answer can always redeem the ticket the tool itself issued —
+//  the stateless transport can't announce tools/list_changed, so the fallback
+//  lives in the tool that hands out the id. job_id wins over question (a stale
+//  client's schema still requires question, so redemption calls may carry both).
+//  Test-pinned with fakes, incl. the no-second-generation invariant.
+//
 
 import Foundation
 import MCP
@@ -84,14 +93,18 @@ private func askM1K3Definition(
                 + "private knowledge store with section-level citations, and may use web search if "
                 + "the user has it enabled in M1K3's settings. Fully local inference. Fast answers "
                 + "return inline; a long turn (web search on a larger brain) instead returns a job id "
-                + "— call get_answer with it in a few seconds to fetch the result. Check get_status "
-                + "for which brain is active.",
+                + "— redeem it in a few seconds via get_answer, or by calling this tool again with "
+                + "just the job_id. Check get_status for which brain is active.",
             inputSchema: [
                 "type": "object",
                 "properties": [
-                    "question": ["type": "string", "description": "the question to ask"],
+                    "question": ["type": "string", "description": "the question to ask (omit when redeeming a job_id)"],
+                    "job_id": [
+                        "type": "string",
+                        "description": "a job id a previous ask_m1k3 call returned — fetches that result instead of asking a new question",
+                    ],
                 ],
-                "required": ["question"],
+                "required": [],
             ]
         ),
         handler: askM1K3Handler(handlers: handlers, jobStore: jobStore, graceSeconds: graceSeconds)
@@ -153,6 +166,17 @@ private func askM1K3Handler(
     graceSeconds: Double
 ) -> @Sendable ([String: Value]?) async throws -> String {
     { args in
+        // Self-redemption (Issue #2): a job_id means "fetch that result", never a
+        // new generation — the tool that issues the ticket can always redeem it,
+        // so a client whose cached tool list predates get_answer is never
+        // stranded. It wins over question because a stale client's schema still
+        // marks question required, so its redemption call may carry both.
+        if let jobID = stringArg(args, "job_id")?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !jobID.isEmpty
+        {
+            return try await redeemJob(id: jobID, jobStore: jobStore)
+        }
+
         let question = stringArg(args, "question")?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         guard !question.isEmpty else { throw MCPVoiceError("ask_m1k3 requires a non-empty question") }
 
@@ -184,7 +208,8 @@ private func askM1K3Handler(
         }
         return "M1K3 is still working on this one — it's taking longer than usual "
             + "(a long think or a web search). Call get_answer with job_id \"\(id)\" in a "
-            + "few seconds to fetch the result."
+            + "few seconds to fetch the result. (If get_answer isn't in your tool list, "
+            + "call ask_m1k3 again with just that job_id.)"
     }
 }
 
@@ -195,16 +220,23 @@ private func getAnswerHandler(
     { args in
         let id = stringArg(args, "job_id")?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         guard !id.isEmpty else { throw MCPVoiceError("get_answer requires a job_id") }
-        switch await jobStore.status(of: id) {
-        case .none:
-            throw MCPVoiceError("No such job \"\(id)\" — it may have expired. Ask again with ask_m1k3.")
-        case .running:
-            return "M1K3 is still working on job \"\(id)\" — poll get_answer again in a few seconds."
-        case let .done(answer):
-            return answer
-        case let .error(message):
-            throw MCPVoiceError(message)
-        }
+        return try await redeemJob(id: id, jobStore: jobStore)
+    }
+}
+
+/// The single redemption path behind both get_answer and ask_m1k3-with-job_id
+/// (Issue #2's stale-tool-list escape hatch shares it by construction).
+private func redeemJob(id: String, jobStore: AskJobStore) async throws -> String {
+    switch await jobStore.status(of: id) {
+    case .none:
+        throw MCPVoiceError("No such job \"\(id)\" — it may have expired. Ask again with ask_m1k3.")
+    case .running:
+        return "M1K3 is still working on job \"\(id)\" — poll again in a few seconds "
+            + "(get_answer, or ask_m1k3 with just this job_id)."
+    case let .done(answer):
+        return answer
+    case let .error(message):
+        throw MCPVoiceError(message)
     }
 }
 
