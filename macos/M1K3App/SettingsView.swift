@@ -28,9 +28,6 @@ struct SettingsView: View {
     @State private var showMemories = false
     @State private var showResetOnboarding = false
     @AppStorage(AppEnvironment.thinkingModeKey) private var thinkingMode = ThinkingMode.auto.rawValue
-    @AppStorage(AppEnvironment.voiceCompanionKey) private var voiceCompanion = ""
-    @AppStorage(AppEnvironment.avatarDisplayKey) private var avatarDisplay = AvatarDisplay.panel
-    @AppStorage(AppEnvironment.companionShadingKey) private var companionShading = CompanionShadingStyle.off.rawValue
     @AppStorage(AppEnvironment.autoRouteBrainKey) private var autoRouteBrain = false
     @AppStorage(AppEnvironment.preferAppleOnDeviceKey) private var preferAppleOnDevice = false
     @AppStorage(AppEnvironment.coolHeadEaseKey) private var coolHeadEase = false
@@ -431,39 +428,12 @@ struct SettingsView: View {
 /// Same-file extension — sees the struct's private @State / @Environment while
 /// keeping the main struct body under SwiftLint's type_body_length ceiling.
 extension SettingsView {
-    /// Voice-mode face: the pixel face (default) or an opt-in 3D companion. Only
-    /// companions with bundled assets are offered. The pixel face stays M1K3's
-    /// face everywhere else — this is just the voice-mode skin. (Own property — the
-    /// Form is at the type-checker budget; see aboutYouSection.)
+    /// Voice-mode face: a live preview + glass face-cards (CompanionSettings.swift
+    /// owns the whole section — the face is the product's identity, so choosing it
+    /// shows it). The pixel face stays M1K3's face everywhere else. (Own property —
+    /// the Form is at the type-checker budget; see aboutYouSection.)
     private var companionSection: some View {
-        Section {
-            Picker("Companion", selection: $voiceCompanion) {
-                Text("Pixel face").tag("")
-                Text("Memory constellation").tag(AppEnvironment.voiceCompanionConstellation)
-                ForEach(CompanionSpec.all.filter(CompanionAssets.isInstalled)) { spec in
-                    Text(spec.displayName).tag(spec.id)
-                }
-            }
-            Picker("Display", selection: $avatarDisplay) {
-                ForEach(AvatarDisplay.allCases) { mode in
-                    Text(mode.label).tag(mode)
-                }
-            }
-            Picker("3D creature skin", selection: $companionShading) {
-                ForEach(CompanionShadingStyle.allCases) { Text($0.displayName).tag($0.rawValue) }
-            }
-        } header: {
-            Text("Companion")
-        } footer: {
-            Text("M1K3's face in the avatar panel and voice mode. The pixel face is the "
-                + "default; the memory constellation shows your knowledge growing in 3D; "
-                + "or pick a 3D creature. The menu-bar mark stays the pixel M either way.\n"
-                + "Display: a panel above the chat, a full-window background (recedes while "
-                + "you read or type so text stays legible), or off. 3D creature skin restyles a "
-                + "creature live: Phosphor (a glowing rim that shifts with M1K3's state) or Cel "
-                + "(a toon banding of the creature's own texture).")
-                .font(.caption).foregroundStyle(.secondary)
-        }
+        CompanionSettingsSection(env: env)
     }
 
     /// Launch-at-login + the menu-bar companion note. Own property to keep the
