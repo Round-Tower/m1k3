@@ -1,12 +1,13 @@
 name: CI
 
 # Lean test pipeline — tests what M1K3 actually ships.
-#   • swift-mac    : the Mac-native MVP (the active surface), via `swift test`
-#   • python-smoke : a curated, verified-green subset of the legacy Python suite
+#   • swift-mac : the Mac-native MVP (the active surface), via `swift test`
 #
-# Replaced the old Node/Playwright "unified suite" (quick-tests / unified-tests /
-# release-testing), which tested a web dashboard, was perpetually red, and never
-# covered the Swift work. See tests/CI_TRIAGE.md for the Python story.
+# The legacy Python smoke subset moved to attic.yml (path-filtered on attic/**)
+# when the Python surface was archived. Replaced the old Node/Playwright
+# "unified suite" (quick-tests / unified-tests / release-testing), which tested
+# a web dashboard, was perpetually red, and never covered the Swift work. See
+# attic/tests/CI_TRIAGE.md for the Python story.
 
 on:
   push:
@@ -121,36 +122,6 @@ jobs:
         working-directory: macos
         run: python3 tools/ci/check_test_scheme.py
 
-  python-smoke:
-    name: Python · smoke subset
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v5
-
-      - name: Set up Python
-        uses: actions/setup-python@v6
-        with:
-          python-version: "3.12"
-          cache: pip
-          cache-dependency-path: requirements-ci.txt
-
-      - name: Install slim CI deps
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements-ci.txt
-
-      - name: Run smoke subset
-        # Explicit allowlist (not `-m ci_smoke`) so the swamp files — which crash
-        # at COLLECTION time (top-level sys.exit, heavy ML imports) — are never
-        # imported. The ci_smoke / quarantine markers are still applied (see
-        # tests/conftest.py) for local `pytest -m ci_smoke` / `-m quarantine`.
-        run: |
-          mapfile -t SMOKE < <(grep -vE '^\s*(#|$)' tests/ci_smoke.txt)
-          echo "Running ${#SMOKE[@]} smoke files"
-          pytest "${SMOKE[@]}" -q --no-header
-
   # Posts a per-job build-status list to Slack (same shape as the dyslexia-ai-server
   # `verify` workflow: act10ns/slack, if-always, ✅/❌ per job). No-op until the
   # SLACK_WEBHOOK_URL secret is set, so it never reddens CI before Slack is wired.
@@ -158,7 +129,7 @@ jobs:
   # SLACK_WEBHOOK_URL = a Slack incoming-webhook URL (posts to its bound channel).
   notify:
     name: Notify Slack
-    needs: [swift-mac, app-build, scheme-drift, python-smoke]
+    needs: [swift-mac, app-build, scheme-drift]
     runs-on: ubuntu-latest
     if: always()
     env:
@@ -168,14 +139,13 @@ jobs:
         if: env.SLACK_WEBHOOK_URL != ''
         uses: act10ns/slack@v2.2.0
         with:
-          status: ${{ (needs.swift-mac.result == 'success' && needs.app-build.result == 'success' && needs.scheme-drift.result == 'success' && needs.python-smoke.result == 'success') && 'success' || 'failure' }}
+          status: ${{ (needs.swift-mac.result == 'success' && needs.app-build.result == 'success' && needs.scheme-drift.result == 'success') && 'success' || 'failure' }}
           message: |
             M1K3 CI · ${{ github.ref_name }} (${{ github.event_name }})
 
             ${{ needs.swift-mac.result == 'success' && '✅' || '❌' }} : Swift · Mac MVP (swift test)
             ${{ needs.app-build.result == 'success' && '✅' || '❌' }} : Swift · App shell (xcodebuild)
             ${{ needs.scheme-drift.result == 'success' && '✅' || '❌' }} : Test scheme covers all targets
-            ${{ needs.python-smoke.result == 'success' && '✅' || '❌' }} : Python · smoke subset
 
             <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View run> · by ${{ github.actor }}
 
