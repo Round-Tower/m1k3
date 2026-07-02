@@ -9,8 +9,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import app.m1k3.ai.assistant.avatar.AvatarState
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.Json
 import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 
 /**
  * M1K3 - 3D Avatar WebView Integration
@@ -20,7 +20,7 @@ import kotlinx.serialization.encodeToString
  * requiring native Filament shader implementation.
  *
  * **Features**:
- * - WebView wrapper for src/web-avatar/index.html
+ * - WebView wrapper for attic/src/web-avatar/index.html (archived source; built bundle is vendored into assets)
  * - Bidirectional JS ↔ Kotlin state sync
  * - Shader effects (Pixelation, Glitch, Hologram, Bloom, etc.)
  * - GitHub model explorer integration
@@ -61,22 +61,23 @@ import kotlinx.serialization.encodeToString
  */
 @Serializable
 data class AvatarStateJS(
-    val emotion: String,      // lowercase emotion name (happy, sad, thinking, etc.)
-    val activity: String,     // uppercase activity name (IDLE, GENERATING, etc.)
-    val intensity: Float,     // 0.0 to 1.0
-    val message: String? = null
+    val emotion: String, // lowercase emotion name (happy, sad, thinking, etc.)
+    val activity: String, // uppercase activity name (IDLE, GENERATING, etc.)
+    val intensity: Float, // 0.0 to 1.0
+    val message: String? = null,
 )
 
 /**
  * Convert AvatarState to JavaScript-compatible JSON
  */
 fun AvatarState.toJS(): String {
-    val jsState = AvatarStateJS(
-        emotion = emotion.name.lowercase(),
-        activity = activity.name,
-        intensity = intensity,
-        message = message
-    )
+    val jsState =
+        AvatarStateJS(
+            emotion = emotion.name.lowercase(),
+            activity = activity.name,
+            intensity = intensity,
+            message = message,
+        )
     return Json.encodeToString(jsState)
 }
 
@@ -103,7 +104,7 @@ expect fun AvatarWebViewContent(
     onModelLoaded: (String) -> Unit = {},
     enableGitHubExplorer: Boolean = true,
     enableShaders: Boolean = true,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 )
 
 /**

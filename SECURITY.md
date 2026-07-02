@@ -34,5 +34,5 @@ project:
 | Surface | Status |
 |---|---|
 | macOS app (`macos/`, TestFlight beta) | Supported — latest beta build |
-| Python CLI (`_legacy/`) | Archived — best effort only |
+| Python CLI (`attic/`) | Archived — best effort only |
 | 間 AI mobile (`app/`) | Pre-release — not yet supported |

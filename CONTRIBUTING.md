@@ -8,7 +8,7 @@ you from clone to green tests, and explains how we work.
 | Surface | Where | Status |
 |---|---|---|
 | **macOS app** (the flagship) | [`macos/`](./macos) | Active — this is where contributions land |
-| Python CLI / MCP | root + [`_legacy/`](./_legacy) | Archived, best-effort |
+| Python CLI / MCP (the origins) | [`attic/`](./attic) | Archived, best-effort |
 | 間 AI mobile (KMP) | [`app/`](./app) | Slow burn |
 
 Build-from-source instructions for the Mac app live in
