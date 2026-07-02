@@ -5,9 +5,11 @@ name: Claude Code Review (Mac)
 # Android reviewer never fires on Swift changes, so the Mac MVP had no automated
 # review until now.
 
+# reopened matters: gh pr close/reopen is the recovery path when GitHub drops a
+# push's workflow event, and without it this reviewer stays dark on the retry.
 on:
   pull_request:
-    types: [opened, synchronize]
+    types: [opened, synchronize, reopened]
     paths:
       - "macos/**/*.swift"
       - "macos/**/Package.swift"

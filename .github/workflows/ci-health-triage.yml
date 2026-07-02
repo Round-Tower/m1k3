@@ -7,6 +7,8 @@ name: CI Health Triage
 #
 # Uses the same CLAUDE_CODE_OAUTH_TOKEN secret as claude.yml / the Mac review.
 # Runs at 07:00 UTC (after the 04:00 nightly DMG), plus on-demand.
+# Note: on the fresh public repo (2026-07-02) that secret starts absent — the
+# run no-ops until it's restored (Settings → Secrets → Actions).
 
 on:
   schedule:
