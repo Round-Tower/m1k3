@@ -27,15 +27,16 @@ struct AsyncTimeoutTests {
         let start = ContinuousClock.now
         await #expect(throws: TimeoutError.self) {
             _ = try await withTimeout(seconds: 0.1) {
-                try await Task.sleep(for: .seconds(10)) // far past the deadline
+                try await Task.sleep(for: .seconds(60)) // far past the deadline
                 return "should never arrive"
             }
         }
-        // Proves we returned on the deadline (0.1s), not after the 10s operation.
-        // The bound is half the operation, not a tight multiple of the deadline:
-        // the only failure this guards is "blocked for the full 10s", and a loose
-        // 5s threshold tolerates CI scheduling jitter that flaked a tighter 2s.
-        #expect(start.duration(to: .now) < .seconds(5))
+        // TimeoutError itself proves the deadline branch won the race. The
+        // clock bound only guards "blocked for the full 60s operation", kept
+        // at half the operation because tight bounds flake on stalled CI
+        // runners (a 5s bound measured 9.5s for a 0.1s deadline return —
+        // the runner stalled, not the code).
+        #expect(start.duration(to: .now) < .seconds(30))
     }
 
     @Test("timing out cancels the operation")

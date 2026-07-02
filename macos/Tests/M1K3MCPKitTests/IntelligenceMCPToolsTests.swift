@@ -110,7 +110,7 @@ struct IntelligenceMCPToolsTests {
         // id promptly (non-error) rather than block until the client's deadline.
         let handlers = IntelligenceToolHandlers(
             ask: { _ in
-                try await Task.sleep(for: .seconds(3))
+                try await Task.sleep(for: .seconds(60))
                 return "arrives after the grace window"
             },
             remember: { _, _ in "noop" }
@@ -123,8 +123,13 @@ struct IntelligenceMCPToolsTests {
             name: "ask_m1k3",
             arguments: ["question": .string("why is the sky blue — explain step by step, in great detail?")]
         )
-        // Returned on the grace window (~0.2s), not after the 3s generation.
-        #expect(start.duration(to: .now) < .seconds(2))
+        // The job-id response is the semantic proof of non-blocking: a call
+        // that blocked to completion would return the ANSWER inline, never
+        // the get_answer pointer. The clock bound only guards "blocked for
+        // the whole 60s generation" — kept stall-proof at half the operation,
+        // because tight bounds (2s) flaked twice on stalled CI runners
+        // (3.9s and 9.1s measured for a ~0.2s return).
+        #expect(start.duration(to: .now) < .seconds(30))
         #expect(result.isError != true)
         #expect(text(result)?.contains("get_answer") == true)
     }
