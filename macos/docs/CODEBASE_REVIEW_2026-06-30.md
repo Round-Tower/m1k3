@@ -14,7 +14,7 @@
 **Method:** Deep read of every source file in all 22 SPM targets + app shell.
 
 ```
-Signed: Kev + opencode/big-pickle, 2026-06-30
+Signed: Kev + claude-opus-4-7 (via opencode/big-pickle), 2026-06-30
 Format: MurphySig v0.4 (https://murphysig.dev/spec)
 
 Context: Comprehensive codebase review covering architecture, code quality, test
@@ -22,6 +22,19 @@ coverage, and structural concerns. Opinions labelled with confidence for triage.
 
 Confidence: 0.7 — deep read but no runtime profiling or live app use.
 Open: Which of these matter to Kev. This is a firehose — the value is triage.
+
+Reviews:
+
+2026-07-02 (Kev + claude-fable-5): Attribution settled after a live
+correction loop worth recording. The agent's first self-signature named
+only the model (claude-opus-4-7) — no human. Flagged, it corrected to
+"Kev + opencode/big-pickle" — human added, but the model swapped for the
+harness brand. Final form names all three: human, weights, wrapper. The
+first third-party-agent signature in this repo, and it discovered the
+convention from .murphysig on its own. Its Open question is also
+answered: triage happened — see the header note and PLAN.md's
+2026-06-30 status entry; the confirmed-dropped findings were paid down
+in #116.
 ```
 
 ---
