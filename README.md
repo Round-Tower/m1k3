@@ -1,20 +1,39 @@
-# M1K3 — Own your AI
+<p align="center">
+  <img src="assets/brand/readme-hero.png" alt="M1K3 — Your AI. Your Mac. Nothing leaves." width="100%">
+</p>
 
-### Your AI. Your Mac. Nothing leaves.
+<h1 align="center">M1K3 — Own your AI</h1>
 
-M1K3 is a native AI companion that runs **entirely on your Apple-Silicon Mac** —
+<p align="center">
+A native AI companion that runs <strong>entirely on your Apple-Silicon Mac</strong> —
 local LLM inference, live voice, a personal knowledge graph with RAG, encrypted
-call transcription, a local agent, and an MCP server. Edge AI you actually own:
-no cloud, no telemetry, no network cable it never asks for.
+call transcription, a local agent, and an MCP server.<br>
+Edge AI you actually own: no cloud, no telemetry, no network cable it never asks for.
+</p>
 
-### [⬇ Download for macOS](https://github.com/Round-Tower/m1k3/releases/latest/download/M1K3.dmg) · [m1k3.app](https://m1k3.app)
+<p align="center">
+  <a href="https://github.com/Round-Tower/m1k3/releases/latest/download/M1K3.dmg"><strong>⬇ Download for macOS</strong></a>
+  · <a href="https://m1k3.app">m1k3.app</a>
+  · <a href="https://testflight.apple.com/join/UCUJGbJe">TestFlight beta</a>
+</p>
 
-*Requires macOS 26 Tahoe · Apple Silicon · signed & notarized (Developer ID).*
+<p align="center"><em>Requires macOS 26 Tahoe · Apple Silicon · signed & notarized (Developer ID).</em></p>
 
-[![CI](https://github.com/Round-Tower/m1k3/actions/workflows/ci.yml/badge.svg)](https://github.com/Round-Tower/m1k3/actions/workflows/ci.yml)
-[![Security](https://github.com/Round-Tower/m1k3/actions/workflows/security.yml/badge.svg)](https://github.com/Round-Tower/m1k3/actions/workflows/security.yml)
-[![Mac review](https://github.com/Round-Tower/m1k3/actions/workflows/claude-code-review-mac.yml/badge.svg)](https://github.com/Round-Tower/m1k3/actions/workflows/claude-code-review-mac.yml)
-[![MurphySig: signed](https://murphysig.dev/badge/Round-Tower/m1k3.svg)](https://murphysig.dev/signed/Round-Tower/m1k3/)
+<p align="center">
+  <a href="https://github.com/Round-Tower/m1k3/actions/workflows/ci.yml"><img src="https://github.com/Round-Tower/m1k3/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="https://github.com/Round-Tower/m1k3/actions/workflows/security.yml"><img src="https://github.com/Round-Tower/m1k3/actions/workflows/security.yml/badge.svg" alt="Security"></a>
+  <a href="https://github.com/Round-Tower/m1k3/actions/workflows/claude-code-review-mac.yml"><img src="https://github.com/Round-Tower/m1k3/actions/workflows/claude-code-review-mac.yml/badge.svg" alt="Mac review"></a>
+</p>
+
+<p align="center">
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/Round-Tower/m1k3?color=0a0a0a&labelColor=0a0a0a" alt="Apache-2.0"></a>
+  <a href="https://github.com/Round-Tower/m1k3/releases/latest"><img src="https://img.shields.io/github/v/release/Round-Tower/m1k3?color=0a0a0a&labelColor=0a0a0a&label=release" alt="Latest release"></a>
+  <img src="https://img.shields.io/badge/platform-macOS%2026%20·%20Apple%20Silicon-0a0a0a?labelColor=0a0a0a" alt="macOS 26 · Apple Silicon">
+  <img src="https://img.shields.io/badge/swift-6.2%20strict-0a0a0a?labelColor=0a0a0a" alt="Swift 6.2">
+  <a href="https://murphysig.dev/signed/Round-Tower/m1k3/"><img src="https://murphysig.dev/badge/Round-Tower/m1k3.svg" alt="MurphySig: signed"></a>
+</p>
+
+---
 
 ## What's inside
 
