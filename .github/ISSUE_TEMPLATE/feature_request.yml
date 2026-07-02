@@ -1,0 +1,23 @@
+name: Feature request
+description: An idea for M1K3
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        One thing worth knowing before you write: M1K3 is deliberately **local-only**.
+        Features that require accounts, telemetry, or always-on cloud services are out of
+        scope by design — everything else is fair game.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What's the problem or wish?
+      description: Describe the need, not just the solution — there may be a simpler way to get you there.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: How do you imagine it working?
+    validations:
+      required: false

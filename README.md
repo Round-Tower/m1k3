@@ -170,7 +170,10 @@ on your machine. Network is only used to download models on first run.
 it, build on it, commercially or otherwise. Attribution and third-party notices
 are in [`NOTICE`](./NOTICE).
 
-Contributions are welcome and are accepted under the same Apache-2.0 terms (per
+Contributions are welcome — start with [`CONTRIBUTING.md`](./CONTRIBUTING.md)
+(build-from-source lives in [`macos/README.md`](./macos/README.md), security
+reports go through [`SECURITY.md`](./SECURITY.md)). Contributions are accepted
+under the same Apache-2.0 terms (per
 section 5 of the License). M1K3 is built in the open with
 [MurphySig](https://murphysig.dev) provenance — the git history is signed,
 human-and-AI collaboration on the record.

@@ -1,0 +1,62 @@
+name: Bug report
+description: Something in the Mac app isn't working right
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report! Two quick notes:
+        - **Security or privacy issues** (data leaving the machine, PII in diagnostics): please use
+          [private vulnerability reporting](https://github.com/Round-Tower/m1k3/security/advisories/new) instead — see SECURITY.md.
+        - In the app, **Settings → Report an issue…** generates a redacted diagnostic log you can paste below.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What did you do, what did you expect, what did you get instead?
+      placeholder: "Asked M1K3 about a document I'd ingested; it answered but the citation pointed at the wrong file…"
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. …
+        2. …
+    validations:
+      required: false
+  - type: input
+    id: build
+    attributes:
+      label: M1K3 build
+      description: TestFlight build number, or the commit if built from source (shown in Settings)
+      placeholder: "TestFlight 1.0 (42) / built from a1b2c3d"
+    validations:
+      required: true
+  - type: input
+    id: machine
+    attributes:
+      label: Mac + macOS version
+      placeholder: "MacBook Pro M2 16 GB · macOS 26.4"
+    validations:
+      required: true
+  - type: dropdown
+    id: brain
+    attributes:
+      label: Brain tier in use
+      options:
+        - Mini
+        - Lil
+        - Big
+        - Not sure
+    validations:
+      required: false
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Diagnostic log (optional)
+      description: From Settings → Report an issue… — it's redacted on-device, but skim it before pasting anyway.
+      render: text
+    validations:
+      required: false
