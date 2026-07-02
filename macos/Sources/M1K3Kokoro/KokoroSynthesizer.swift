@@ -84,10 +84,6 @@ public actor KokoroSynthesizer {
         self.voice = voice
     }
 
-    public var isLoaded: Bool {
-        loaded != nil
-    }
-
     /// Eagerly load the model/voices/dictionary (e.g. at voice-prepare time) so the
     /// first spoken utterance isn't gated on the ~326 MB session init.
     public func preload() async throws {

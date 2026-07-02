@@ -16,9 +16,12 @@
 //  remains the final authority; this struct only drives the live rendering.
 //
 //  Signed: Kev + claude-fable-5, 2026-06-10, Confidence 0.85, Prior: Unknown
+//  Review: Kev + claude-fable-5, 2026-07-02 — snapshot-vs-delta normalisation
+//  delegated to M1K3Inference.StreamFold (was one of three inlined copies).
 //
 
 import Foundation
+import M1K3Inference
 
 struct StreamingReasoningSplitter {
     /// Chain-of-thought routed out so far (live view of the disclosure).
@@ -55,13 +58,8 @@ struct StreamingReasoningSplitter {
 
     /// Feed one raw stream chunk (delta or cumulative snapshot).
     mutating func feed(_ chunk: String) {
-        // Normalise cumulative snapshots to deltas (ChatSession.fold's rule):
-        // a chunk that extends the accumulated text is a snapshot, replace.
-        let delta: String = if !raw.isEmpty, chunk.hasPrefix(raw) {
-            String(chunk.dropFirst(raw.count))
-        } else {
-            chunk
-        }
+        // Normalise cumulative snapshots to deltas (StreamFold's shared rule).
+        let delta = StreamFold.delta(current: raw, chunk: chunk)
         raw += delta
         buffer += delta
         process()

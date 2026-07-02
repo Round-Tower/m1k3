@@ -11,6 +11,9 @@
 //  over KnowledgeStore.allItems / item / chunks.
 //
 //  Signed: Kev + claude-opus-4-8, 2026-06-06, Confidence 0.85, Prior: Unknown
+//  Review: Kev + claude-fable-5, 2026-07-02 — GetDocumentTool renders via
+//  DocumentRenderer (shared with the MCP get_document): windowed paging with
+//  a resume-offset footer replaces the silent 4,000-char ellipsis truncation.
 
 import Foundation
 import M1K3Agent
@@ -41,13 +44,17 @@ public struct ListDocumentsTool: AgentTool {
     }
 }
 
-/// Fetches a stored item's full text by title (case-insensitive substring).
+/// Fetches a stored item's full text by title (case-insensitive substring),
+/// windowed with a resume-offset footer (DocumentRenderer — the same paging
+/// the MCP get_document serves; was a silent 4,000-char ellipsis cut).
 public struct GetDocumentTool: AgentTool {
     public let name = "get_document"
     public let description =
-        "Get the full text of a stored document by title. Argument: the document title (or part of it)."
+        "Get the full text of a stored document by title. Argument: the document title (or part of it); "
+            + "optional offset to continue a long document from a previous call's footer."
     public let parameters = [
         ToolParameter(name: "title", description: "the document title to fetch"),
+        ToolParameter(name: "offset", description: "character offset to resume from (optional)"),
     ]
 
     private let store: KnowledgeStore
@@ -66,11 +73,11 @@ public struct GetDocumentTool: AgentTool {
         guard let match = items.first(where: { $0.title.range(of: query, options: .caseInsensitive) != nil }) else {
             return ToolResult(output: "No document matching \"\(query)\".")
         }
+        let offset = Int(input["offset"] ?? "0") ?? 0
         let chunks = try store.chunks(forItem: match.id)
-        var text = chunks.map(\.content).joined(separator: "\n")
-        if text.count > maxChars {
-            text = String(text.prefix(maxChars)) + "…"
-        }
-        return ToolResult(output: "[\(match.title)]\n\(text)")
+        return ToolResult(output: DocumentRenderer.render(
+            title: match.title, kind: match.kind, chunks: chunks,
+            maxChars: maxChars, offset: offset
+        ))
     }
 }

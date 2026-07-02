@@ -9,8 +9,8 @@
 //  No RealityKit here, by design. This file is `simd`-only value-in/value-out so
 //  it's fully unit-testable without a renderer; the RealityKit view (separate
 //  target) is a thin adapter that just places entities at these positions and
-//  plays the growth order. Same split as KnowledgeGraph (pure) vs the avatar
-//  views (RealityKit).
+//  plays the growth order. Same pure-core/RealityKit-adapter split as the
+//  avatar views.
 //
 //  Layout is a deterministic force-directed relaxation: positions seed from a
 //  hash of each memory's UUID (stable across runs), then a fixed number of

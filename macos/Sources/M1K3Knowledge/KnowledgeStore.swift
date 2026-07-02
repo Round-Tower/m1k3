@@ -365,10 +365,10 @@ public extension KnowledgeStore {
     func searchFTS(
         query: String, limit: Int = 10, kinds: Set<KnowledgeKind>? = nil
     ) throws -> [ChunkHit] {
-        guard let sanitized = Self.sanitizeFTSQuery(query) else { return [] }
+        guard let sanitized = FTSQuery.sanitized(query) else { return [] }
         let strict = try ftsMatch(sanitized, limit: limit, kinds: kinds)
         if !strict.isEmpty { return strict }
-        guard let relaxed = Self.relaxedFTSQuery(query) else { return [] }
+        guard let relaxed = FTSQuery.relaxed(query) else { return [] }
         return try ftsMatch(relaxed, limit: limit, kinds: kinds)
     }
 
@@ -551,32 +551,7 @@ public extension KnowledgeStore {
         )
     }
 
-    // MARK: - FTS sanitisation
-
-    /// Double-quote each whitespace-separated token so FTS5 treats them as
-    /// literals (neutralises `*`, `:`, `"`, `-` etc.). Returns nil if the query
-    /// has no usable tokens. Ported from the prior knowledge-server project's sanitizeFTSQuery.
-    internal static func sanitizeFTSQuery(_ query: String) -> String? {
-        let tokens = ftsTokens(query)
-        guard !tokens.isEmpty else { return nil }
-        return tokens.map { "\"\($0)\"" }.joined(separator: " ")
-    }
-
-    /// The zero-hit fallback for `sanitizeFTSQuery`: same quoted tokens,
-    /// OR-joined so any term can match (BM25 ranks coverage). Nil below two
-    /// tokens — a single-token OR is identical to the strict query.
-    internal static func relaxedFTSQuery(_ query: String) -> String? {
-        let tokens = ftsTokens(query)
-        guard tokens.count >= 2 else { return nil }
-        return tokens.map { "\"\($0)\"" }.joined(separator: " OR ")
-    }
-
-    private static func ftsTokens(_ query: String) -> [String] {
-        query
-            .components(separatedBy: .whitespacesAndNewlines)
-            .map { $0.replacingOccurrences(of: "\"", with: "") }
-            .filter { !$0.isEmpty }
-    }
+    // FTS MATCH-string construction lives in FTSQuery (shared with MemoryStore).
 }
 
 public enum KnowledgeStoreError: Error, Sendable, Equatable {

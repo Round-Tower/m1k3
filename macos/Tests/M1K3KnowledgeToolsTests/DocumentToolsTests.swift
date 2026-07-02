@@ -52,7 +52,7 @@ struct GetDocumentToolTests {
     func fetches() async throws {
         let tool = try GetDocumentTool(store: seededStore())
         let out = try await tool.execute(input: ["title": "plant"]).output
-        #expect(out.contains("[Plant Notes]"))
+        #expect(out.contains("# Plant Notes"))
         #expect(out.contains("hydraulic seal failed"))
         #expect(out.contains("Replace before next shift"))
     }
@@ -69,18 +69,40 @@ struct GetDocumentToolTests {
         #expect(try await tool.execute(input: ["title": " "]).output.hasPrefix("Error:"))
     }
 
-    @Test("truncates very long documents")
-    func truncates() async throws {
+    @Test("pages very long documents with a resume-offset footer")
+    func pagesLongDocuments() async throws {
         let store = try KnowledgeStore()
         let id = UUID()
-        let big = String(repeating: "word ", count: 2000)
+        let big = String(repeating: "A", count: 150) + String(repeating: "B", count: 150)
         try store.index(
             item: KnowledgeItem(id: id, kind: .document, title: "Big"),
             chunks: [KnowledgeChunk(itemID: id, ordinal: 0, content: big)],
             embeddings: nil
         )
         let tool = GetDocumentTool(store: store, maxChars: 100)
-        let out = try await tool.execute(input: ["title": "Big"]).output
-        #expect(out.hasSuffix("…"))
+
+        // First page: capped, with the exact resume offset — never a silent cut.
+        let page1 = try await tool.execute(input: ["title": "Big"]).output
+        #expect(page1.contains("200 more characters"))
+        #expect(page1.contains("offset:100"))
+        #expect(!page1.contains("BBBBB"))
+
+        // Resuming reaches the tail and says so.
+        let page2 = try await tool.execute(input: ["title": "Big", "offset": "200"]).output
+        #expect(page2.contains("BBBBB"))
+        #expect(page2.contains("end of document"))
+    }
+
+    @Test("explains a title-only item instead of returning a bare header")
+    func chunklessItem() async throws {
+        let store = try KnowledgeStore()
+        try store.index(
+            item: KnowledgeItem(kind: .document, title: "Title Only Doc"),
+            chunks: []
+        )
+        let tool = GetDocumentTool(store: store)
+        let out = try await tool.execute(input: ["title": "Title Only"]).output
+        #expect(out.contains("# Title Only Doc"))
+        #expect(out.lowercased().contains("no readable text"))
     }
 }

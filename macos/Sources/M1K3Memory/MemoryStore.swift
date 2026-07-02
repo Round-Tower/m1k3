@@ -68,6 +68,10 @@
 //  migration deliberately deferred to its own PR). Prior: Kev + claude-fable-5
 //  (scratch/memory-store-sketch/MemoryStore.swift) → Kev + claude-opus-4-8
 //  (KnowledgeStore.swift).
+//  Review: Kev + claude-fable-5, 2026-07-02 — executed the documented follow-up:
+//  the duplicated sanitiser is lifted into M1K3Knowledge.FTSQuery (shared with
+//  KnowledgeStore), and recallFTS gained the strict→relaxed zero-hit retry (B5)
+//  its twin already had. The cosine floor in `recall` still gates relaxed hits.
 
 import Foundation
 import GRDB
@@ -411,9 +415,22 @@ public final class MemoryStore: @unchecked Sendable {
             .map { $0 }
     }
 
-    private func recallFTS(query: String, limit: Int) throws -> [MemoryHit] {
-        guard let sanitized = Self.sanitizeFTSQuery(query) else { return [] }
-        return try dbQueue.read { db in
+    /// Strict-then-relaxed FTS lane (same rule as KnowledgeStore.searchFTS):
+    /// FTS5's implicit AND starves natural multi-term queries, so a zero-hit
+    /// strict pass retries OR-joined — BM25 ranks best coverage, and the
+    /// cosine floor in `recall` still gates every hit. Internal (not private)
+    /// so the relaxation is test-pinned.
+    func recallFTS(query: String, limit: Int) throws -> [MemoryHit] {
+        guard let strict = FTSQuery.sanitized(query) else { return [] }
+        let hits = try ftsMatch(strict, limit: limit)
+        if !hits.isEmpty { return hits }
+        guard let relaxed = FTSQuery.relaxed(query) else { return [] }
+        return try ftsMatch(relaxed, limit: limit)
+    }
+
+    /// One FTS5 MATCH execution — shared by the strict pass and the relaxed retry.
+    private func ftsMatch(_ match: String, limit: Int) throws -> [MemoryHit] {
+        try dbQueue.read { db in
             let rows = try Row.fetchAll(
                 db,
                 sql: """
@@ -423,7 +440,7 @@ public final class MemoryStore: @unchecked Sendable {
                 ORDER BY bm25(memory_fts) ASC
                 LIMIT ?
                 """,
-                arguments: [sanitized, limit]
+                arguments: [match, limit]
             )
             return rows.compactMap { Self.memory(from: $0).map { MemoryHit(memory: $0) } }
         }
@@ -641,16 +658,5 @@ public final class MemoryStore: @unchecked Sendable {
             createdAt: Date(timeIntervalSince1970: row["created_at"] ?? 0),
             supersededBy: (row["superseded_by"] as String?).flatMap(UUID.init(uuidString:))
         )
-    }
-
-    /// Same double-quoting sanitiser as KnowledgeStore (would be shared if
-    /// this graduates — lift sanitizeFTSQuery into a common home).
-    private static func sanitizeFTSQuery(_ query: String) -> String? {
-        let tokens = query
-            .components(separatedBy: .whitespacesAndNewlines)
-            .map { $0.replacingOccurrences(of: "\"", with: "") }
-            .filter { !$0.isEmpty }
-        guard !tokens.isEmpty else { return nil }
-        return tokens.map { "\"\($0)\"" }.joined(separator: " ")
     }
 }

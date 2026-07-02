@@ -109,7 +109,7 @@ final class MCPHostController {
         // on a later one (the HTTP transport is stateless per-request).
         let intelligenceJobStore = AskJobStore()
         let registry = MCPToolRegistry(
-            makeKnowledgeToolDefinitions(store: env.store)
+            makeKnowledgeToolDefinitions(store: env.store, embedder: env.embedder)
                 + makeVoiceToolDefinitions(handlers: makeVoiceHandlers())
                 + makeIntelligenceToolDefinitions(handlers: makeIntelligenceHandlers(), jobStore: intelligenceJobStore)
                 + makeOpenLinkToolDefinitions(handlers: makeOpenLinkHandlers())

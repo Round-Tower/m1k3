@@ -251,15 +251,5 @@ struct KnowledgeStoreTests {
         #expect(abs(similarity - expected) < 0.0001)
     }
 
-    @Test("relaxedFTSQuery OR-joins quoted tokens, nil below two tokens")
-    func relaxedQueryConstruction() {
-        #expect(KnowledgeStore.relaxedFTSQuery("Golden Gate milestone")
-            == "\"Golden\" OR \"Gate\" OR \"milestone\"")
-        // A single token relaxes to nothing new — strict already covered it.
-        #expect(KnowledgeStore.relaxedFTSQuery("hydraulic") == nil)
-        #expect(KnowledgeStore.relaxedFTSQuery("   ") == nil)
-        // Embedded quotes are stripped, same as the strict sanitiser.
-        #expect(KnowledgeStore.relaxedFTSQuery("say \"cheese\" now")
-            == "\"say\" OR \"cheese\" OR \"now\"")
-    }
+    // MATCH-string construction is pinned in FTSQueryTests (shared policy).
 }

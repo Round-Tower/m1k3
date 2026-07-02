@@ -18,8 +18,11 @@
 //  call `flush()` after the stream ends to release the held-back tail.
 //
 //  Signed: Kev + claude-fable-5, 2026-06-09, Confidence 0.9, Prior: Unknown
+//  Review: Kev + claude-fable-5, 2026-07-02 — snapshot-vs-delta normalisation
+//  delegated to M1K3Inference.StreamFold (was one of three inlined copies).
 
 import Foundation
+import M1K3Inference
 
 struct ConclusionStreamSplitter {
     /// The full thought accumulated so far (marker included).
@@ -42,13 +45,8 @@ struct ConclusionStreamSplitter {
     /// Feed one raw stream chunk. Returns the text to emit live — empty while
     /// still buffering (no marker yet) or while text sits in the guard window.
     mutating func feed(_ chunk: String) -> String {
-        // Normalise cumulative snapshots to deltas (ChatSession.fold's rule):
-        // a chunk that extends the accumulated text is a snapshot, replace.
-        let delta: String = if !thought.isEmpty, chunk.hasPrefix(thought) {
-            String(chunk.dropFirst(thought.count))
-        } else {
-            chunk
-        }
+        // Normalise cumulative snapshots to deltas (StreamFold's shared rule).
+        let delta = StreamFold.delta(current: thought, chunk: chunk)
         thought += delta
 
         if truncated { return "" }

@@ -7,24 +7,48 @@
 //  import) so it's testable against an in-memory store — the stdio wiring in
 //  main.swift just calls these and wraps the strings in MCP content.
 //
-//  Search is FTS-only: the server is a plain CLI with no embedder (and MLX won't
-//  load outside an .app bundle anyway), so it uses BM25 text search, which needs
-//  no query vector.
+//  Search runs GroundedSearch: hybrid two-lane gated retrieval when the host
+//  injects an embedder (the in-app HTTP server — the app has one live in env),
+//  FTS-only when it can't (the stdio binary is a plain CLI with no embedder,
+//  and MLX won't load outside an .app bundle anyway).
 //
 //  Signed: Kev + claude-opus-4-8, 2026-06-06, Confidence 0.8, Prior: Unknown
+//  Review: Kev + claude-fable-5, 2026-07-02 — search delegates to
+//  GroundedSearch (the agent tool's two-lane gated policy; was FTS-only even
+//  in-app) behind an optional embedder, stdio surface byte-identical via the
+//  nil default; get_document rendering lifted to DocumentRenderer (shared
+//  with the agent's GetDocumentTool).
+//
 
 import Foundation
 import M1K3Knowledge
 
 struct KnowledgeMCPTools {
     let store: KnowledgeStore
+    var embedder: (any EmbeddingService)?
 
-    /// Full-text search over stored knowledge. Returns ranked chunks as text.
-    func searchKnowledge(query: String, limit: Int = 5) throws -> String {
+    init(store: KnowledgeStore, embedder: (any EmbeddingService)? = nil) {
+        self.store = store
+        self.embedder = embedder
+    }
+
+    /// Search stored knowledge (hybrid when an embedder is injected, FTS
+    /// otherwise). Returns ranked chunks as text.
+    func searchKnowledge(query: String, limit: Int = 5) async throws -> String {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return "Error: empty query." }
-        let hits = try store.searchFTS(query: trimmed, limit: limit)
-        guard !hits.isEmpty else { return "No results for “\(trimmed)”." }
+        let hits = try await GroundedSearch.run(
+            store: store, embedder: embedder, query: trimmed, limit: limit
+        )
+        guard !hits.isEmpty else {
+            if embedder != nil {
+                // Gated-empty: nothing cleared the relevance floor — abstain
+                // honestly rather than hand the caller top-K garbage.
+                return "Nothing relevant in stored knowledge for “\(trimmed)” — "
+                    + "the stored documents don't cover this."
+            }
+            return "No results for “\(trimmed)”."
+        }
         return hits.enumerated().map { index, hit -> String in
             let heading: String = hit.heading.map { " §\($0)" } ?? ""
             return "\(index + 1). [\(hit.itemTitle)\(heading)] (\(hit.kind.rawValue))\n\(hit.content)"
@@ -40,18 +64,12 @@ struct KnowledgeMCPTools {
         }.joined(separator: "\n")
     }
 
-    /// Default character window per `get_document` call. Generous enough for a
-    /// whole short paper, bounded so a multi-megabyte item can't flood a
-    /// visiting agent's context in one shot (test-report F5 — the firehose).
-    static let defaultMaxChars = 6000
+    /// Default character window per `get_document` call (DocumentRenderer owns
+    /// the policy; this alias keeps the MCP surface's knob where it was).
+    static let defaultMaxChars = DocumentRenderer.defaultMaxChars
 
-    /// Full text of one item by id, chunk by chunk, windowed.
-    ///
-    /// Returns at most `maxChars` characters starting at `offset`; when more
-    /// remains, a footer tells the caller the exact `offset` to resume from, so
-    /// a long document is paged, never silently truncated. A chunkless item
-    /// (indexed by title only — e.g. a failed text extract) gets an explicit
-    /// note instead of a bare header (test-report F3).
+    /// Full text of one item by id, chunk by chunk, windowed with a
+    /// resume-offset footer (DocumentRenderer owns the rendering).
     func getDocument(idString: String, maxChars: Int = defaultMaxChars, offset: Int = 0) throws -> String {
         guard let id = UUID(uuidString: idString.trimmingCharacters(in: .whitespacesAndNewlines)) else {
             return "Error: “\(idString)” is not a valid document id."
@@ -59,29 +77,12 @@ struct KnowledgeMCPTools {
         guard let item = try store.item(id: id) else {
             return "No document found with id \(id.uuidString)."
         }
-        let header = "# \(item.title)  [\(item.kind.rawValue)]"
-        let chunks = try store.chunks(forItem: id)
-        let body: String = chunks.map { chunk -> String in
-            let heading: String = chunk.heading.map { "## \($0)\n" } ?? ""
-            return "\(heading)\(chunk.content)"
-        }.joined(separator: "\n\n")
-        guard !body.isEmpty else {
-            return "\(header)\n\n(No readable text — this item was indexed by title only, "
-                + "with no extractable body content. Nothing to return.)"
-        }
-
-        let total = body.count
-        let window = max(1, maxChars)
-        let start = max(0, min(offset, total))
-        let slice = String(body.dropFirst(start).prefix(window))
-        let end = start + slice.count
-        var out = "\(header)\n\n\(slice)"
-        if end < total {
-            out += "\n\n[… \(total - end) more characters. "
-                + "Call get_document again with offset:\(end) to continue.]"
-        } else if start > 0 {
-            out += "\n\n[— end of document —]"
-        }
-        return out
+        return try DocumentRenderer.render(
+            title: item.title,
+            kind: item.kind,
+            chunks: store.chunks(forItem: id),
+            maxChars: maxChars,
+            offset: offset
+        )
     }
 }

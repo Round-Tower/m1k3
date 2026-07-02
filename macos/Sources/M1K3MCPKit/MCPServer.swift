@@ -80,14 +80,20 @@ public func runM1K3MCPServer() async throws {
 // MARK: - Knowledge tool definitions
 
 /// The three knowledge tools over a KnowledgeStore — the stdio server's whole
-/// surface, and the read-only half of the in-app server's.
-public func makeKnowledgeToolDefinitions(store: KnowledgeStore) -> [MCPToolDefinition] {
-    let tools = KnowledgeMCPTools(store: store)
+/// surface, and the read-only half of the in-app server's. The in-app host
+/// injects its live embedder so search runs the same two-lane gated hybrid as
+/// the agent tool; the stdio binary passes nil (FTS-only, byte-identical to
+/// its pre-embedder behaviour).
+public func makeKnowledgeToolDefinitions(
+    store: KnowledgeStore,
+    embedder: (any EmbeddingService)? = nil
+) -> [MCPToolDefinition] {
+    let tools = KnowledgeMCPTools(store: store, embedder: embedder)
     return [
         MCPToolDefinition(
             tool: Tool(
                 name: "search_knowledge",
-                description: "Full-text search over M1K3's stored knowledge (documents, calls, notes). Returns ranked matching chunks.",
+                description: "Search M1K3's stored knowledge (documents, calls, notes; hybrid retrieval when available). Returns ranked matching chunks.",
                 inputSchema: [
                     "type": "object",
                     "properties": [
@@ -98,7 +104,7 @@ public func makeKnowledgeToolDefinitions(store: KnowledgeStore) -> [MCPToolDefin
                 ]
             ),
             handler: { args in
-                try tools.searchKnowledge(query: stringArg(args, "query") ?? "", limit: intArg(args, "limit") ?? 5)
+                try await tools.searchKnowledge(query: stringArg(args, "query") ?? "", limit: intArg(args, "limit") ?? 5)
             }
         ),
         MCPToolDefinition(

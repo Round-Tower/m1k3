@@ -6,6 +6,9 @@
 //  glue; this is where the behaviour Claude will see is pinned.
 //
 //  Signed: Kev + claude-opus-4-8, 2026-06-06, Confidence 0.85, Prior: Unknown
+//  Review: Kev + claude-fable-5, 2026-07-02 — search is async + optionally
+//  hybrid (GroundedSearch); added the embedder-injected hybrid + gated
+//  abstention pins. FTS-only surface unchanged via the nil default.
 
 import Foundation
 import M1K3Knowledge
@@ -30,7 +33,7 @@ struct KnowledgeMCPToolsTests {
     @Test("search_knowledge returns ranked matching chunks")
     func search() async throws {
         let tools = try await KnowledgeMCPTools(store: seededStore())
-        let out = try tools.searchKnowledge(query: "hydraulic seal", limit: 5)
+        let out = try await tools.searchKnowledge(query: "hydraulic seal", limit: 5)
         #expect(out.contains("Plant Notes"))
         #expect(out.contains("hydraulic seal"))
     }
@@ -38,8 +41,34 @@ struct KnowledgeMCPToolsTests {
     @Test("search_knowledge handles empty query + no matches")
     func searchEdges() async throws {
         let tools = try await KnowledgeMCPTools(store: seededStore())
-        #expect(try tools.searchKnowledge(query: "   ").contains("empty"))
-        #expect(try tools.searchKnowledge(query: "zzzznotpresent").contains("No results"))
+        #expect(try await tools.searchKnowledge(query: "   ").contains("empty"))
+        #expect(try await tools.searchKnowledge(query: "zzzznotpresent").contains("No results"))
+    }
+
+    @Test("search_knowledge runs gated hybrid when the host injects an embedder")
+    func searchHybrid() async throws {
+        // Same embedder the seeding ingester used → same vector space; an
+        // exact-sentence query earns cosine ≈ 1.0, well past the floor.
+        let tools = try await KnowledgeMCPTools(
+            store: seededStore(), embedder: HashingEmbeddingService()
+        )
+        let out = try await tools.searchKnowledge(
+            query: "The hydraulic seal on the conveyor failed under load.", limit: 5
+        )
+        #expect(out.contains("Plant Notes"))
+        #expect(out.contains("hydraulic seal"))
+    }
+
+    @Test("search_knowledge abstains honestly when nothing clears the floor")
+    func searchHybridAbstains() async throws {
+        let tools = try await KnowledgeMCPTools(
+            store: seededStore(), embedder: HashingEmbeddingService()
+        )
+        // Off-store gibberish: cosine ~0 everywhere, FTS empty — the gated
+        // path must say the store doesn't cover it, not "No results" (the
+        // FTS-only phrasing) and never top-K garbage.
+        let out = try await tools.searchKnowledge(query: "zzzznotpresent gibberish", limit: 5)
+        #expect(out.contains("don't cover this"))
     }
 
     @Test("list_documents lists every indexed item with its id")

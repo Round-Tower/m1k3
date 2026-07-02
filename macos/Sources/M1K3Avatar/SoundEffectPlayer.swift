@@ -9,19 +9,14 @@
 //
 //  Signed: Kev + claude-opus-4-8, 2026-06-12, Confidence 0.85 (gate + dispatch
 //  test-pinned; AVAudioPlayer pool is verify-at-⌘R). Prior: Unknown.
+//  Review: Kev + claude-fable-5, 2026-07-02 — removed the unused
+//  SoundEffectPlaying protocol (nothing in the repo typed against it; sink
+//  injection is the test seam, and the app holds the concrete player).
 //
 
 import AVFoundation
 import Foundation
 import os
-
-/// Anything that can voice an earcon. Lets the app hold a protocol (and tests a
-/// fake) instead of the concrete AVAudioPlayer-backed player.
-@MainActor
-public protocol SoundEffectPlaying: AnyObject {
-    var isEnabled: Bool { get set }
-    func play(_ effect: SoundEffect)
-}
 
 /// The pure play decision: earcons sound only when enabled AND M1K3 isn't
 /// mid-speech. One place, exhaustively tested, so the player stays trivial.
@@ -32,7 +27,7 @@ public enum SoundGate {
 }
 
 @MainActor
-public final class SoundEffectPlayer: SoundEffectPlaying {
+public final class SoundEffectPlayer {
     /// The user's Settings preference, read live so a toggle applies at once.
     public var isEnabled: Bool
     private let isSpeaking: @MainActor () -> Bool

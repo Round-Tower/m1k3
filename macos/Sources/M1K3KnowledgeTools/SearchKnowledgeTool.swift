@@ -23,6 +23,9 @@
 //  Review: Kev + claude-fable-5, 2026-06-12, Confidence 0.85 — relevance floor
 //  + honest abstention; replaces the deliberately-ungated stance (sound for a
 //  strong model, wrong for a confabulating 2B).
+//  Review: Kev + claude-fable-5, 2026-07-02 — retrieval branches lifted into
+//  M1K3Knowledge.GroundedSearch so the MCP surface runs the same policy;
+//  behaviour and phrasing here unchanged.
 
 import Foundation
 import M1K3Agent
@@ -63,34 +66,21 @@ public struct SearchKnowledgeTool: AgentTool {
         // sub-floor nearest neighbours are noise no matter who asked. When
         // nothing clears the bar, abstain honestly — handing a small model
         // top-K garbage is how off-store questions become confabulation.
-        let hits: [ChunkHit]
-        if let embedder {
-            let queryVector = try await embedder.embed(query)
-            // Two-lane retrieval (documents + memories get SEPARATE top-K budgets),
-            // the same path implicit grounding uses — so a large document corpus can't
-            // crowd short memory facts out of one ranking BEFORE the floor is applied.
-            // Was a single searchHybrid top-K, which is how a memory like "Ada is a
-            // scientist" went missing here while ask_m1k3 (two-lane) still found it.
-            let (knowledge, memories) = try GroundingGate.partition(
-                store.searchGrounding(
-                    query: query, queryVector: queryVector,
-                    documentLimit: limit, memoryLimit: limit
-                )
-            )
-            hits = knowledge + memories
-            guard !hits.isEmpty else {
+        // GroundedSearch owns the retrieval policy (two-lane gated hybrid with
+        // an embedder, FTS without); this tool owns the agent-facing phrasing.
+        let hits = try await GroundedSearch.run(
+            store: store, embedder: embedder, query: query, limit: limit
+        )
+        guard !hits.isEmpty else {
+            if embedder != nil {
                 return ToolResult(output: "Nothing relevant in stored knowledge for \"\(query)\" "
                     + "— the user's documents don't cover this. Do not search again for it; "
                     + "if the answer isn't already in this conversation, say it isn't in "
                     + "the stored knowledge.")
             }
-        } else {
             // FTS-only fallback (no embedder, self-test): no vector scores
-            // exist, so no floor can apply.
-            hits = try store.searchFTS(query: query, limit: limit)
-            guard !hits.isEmpty else {
-                return ToolResult(output: "No results for \"\(query)\".")
-            }
+            // exist, so no floor applied — a plain miss, not an abstention.
+            return ToolResult(output: "No results for \"\(query)\".")
         }
         onHits?(hits)
         let body = hits.enumerated().map { index, hit -> String in

@@ -454,11 +454,10 @@ public final class ChatSession {
         }
     }
 
-    /// Fold a streamed chunk into the accumulated answer. A chunk that extends
-    /// the current text is a cumulative snapshot (replace); anything else is a
-    /// delta (append). Handles both provider contracts with one rule.
+    /// Fold a streamed chunk into the accumulated answer — the shared
+    /// snapshot-vs-delta rule (StreamFold owns the contract).
     nonisolated static func fold(_ current: String, _ chunk: String) -> String {
-        chunk.hasPrefix(current) ? chunk : current + chunk
+        StreamFold.fold(current: current, chunk: chunk)
     }
 
     /// Injected sources + what the model retrieved itself, deduped by chunk

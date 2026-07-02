@@ -61,6 +61,20 @@ struct MemoryStoreWriteRecallTests {
         #expect(hits.first?.memory.text == "Kev's sister is Aoife")
     }
 
+    @Test("FTS lane relaxes implicit AND when the strict query zeroes out")
+    func recallFTSRelaxesStrictAND() async throws {
+        let f = try Fixture()
+        try await f.remember("Ada is a scientist")
+
+        // Strict FTS5 (implicit AND) demands every token in one row —
+        // "brilliant"/"friend" aren't stored, so the strict pass returns
+        // nothing and the OR-joined retry must find the fact (the B5 gap,
+        // fixed in KnowledgeStore 9300f574 but not mirrored here until now).
+        let hits = try f.store.recallFTS(query: "Ada the brilliant scientist friend", limit: 5)
+
+        #expect(hits.contains { $0.memory.text.contains("Ada") })
+    }
+
     @Test("recall on an empty store returns nothing and does not throw")
     func recallEmpty() async throws {
         let f = try Fixture()
