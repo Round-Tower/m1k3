@@ -7,7 +7,7 @@
 //  selected, the chat answers stream from a real Gemma running in-process, no
 //  server, no cloud.
 //
-//  Unproven-path note: the broader the internal prior projects stack only ever exercised
+//  Unproven-path note: the broader prior-project stack only ever exercised
 //  MLXEmbedders; MLXLLM generation is new here. It's compile-verified and covered
 //  by a gated integration test (downloads weights — minutes, network), but the
 //  first real on-device generation is the milestone to watch, not a settled fact.
@@ -20,7 +20,7 @@
 //  fold normalises that against AFM's cumulative snapshots, so both render right.
 //
 //  Signed: Kev + claude-opus-4-8, 2026-06-06, Confidence 0.65, Prior: Unknown
-//  Context: First MLXLLM generation in the M1K3/the internal prior projects family — the PLAN's
+//  Context: First MLXLLM generation in the M1K3 / prior-project family — the PLAN's
 //  flagged Phase-2 risk ("confirm MLXLLM runs Gemma cleanly"). Compiles; runtime
 //  generation pending on-device verification.
 //

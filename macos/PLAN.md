@@ -4,14 +4,14 @@
 
 M1K3 today exists as a Python desktop CLI + MCP servers and a Kotlin Multiplatform mobile app (Android shipping, iOS a shell). **There is no Mac-native app.** This plan builds one: a native SwiftUI macOS app that is M1K3's first-class desktop surface — a local, private AI companion with live voice, a knowledge graph, document memory, an embedded agent, and an MCP server so Claude (and other agents) can pull from it.
 
-The strategic unlock from exploration: we are **not** building this from scratch. `the prior knowledge-server project` (`$HOME/Development/the prior knowledge-server project`) and `the internal call-pipeline project` contain production, eval-gated **Swift** IP for almost every requirement. The MVP is mostly *lift, generalise, and reskin behind a native shell* — not greenfield.
+The strategic unlock from exploration: we are **not** building this from scratch. Two prior internal projects (a knowledge server and a call pipeline, both private) contain production, eval-gated **Swift** IP for almost every requirement. The MVP is mostly *lift, generalise, and reskin behind a native shell* — not greenfield.
 
 **Key decisions (from Kev, 2026-06-06):**
 - **LLM runtime:** keep options open — build **both** an MLX-Swift (Gemma 4) and a **LiteRT-LM (Gemma 4)** backend behind one provider protocol, so we can compare support/capability. **Apple Foundation Models** handles cheap/basic turns. Embeddings stay on MLX-Swift (already proven in the prior knowledge-server project).
 - **TTS:** native `AVSpeechSynthesizer` now, behind a protocol; swap in Kokoro post-MVP.
 - **Target:** **macOS 26 Tahoe only** → real SwiftUI Liquid Glass + on-device Foundation Models.
 - **Avatar:** 3D via **RealityKit/SceneKit**.
-- **Call transcription + log (NEW):** M1K3 records/transcribes calls with a searchable, summarised log — exactly like the prior call-pipeline. North star is **one model for all complex work** (ASR + reasoning + summary). Transcription sits behind a **provider protocol** (the prior call-pipeline already has one), WhisperKit/AppleSpeech is the reliable default, and a `GemmaAudioTranscriber` is the spike toward the single-model goal — promote it when it wins on latency/accuracy. *(Superseded in part — see the Gemma 4 update below.)*
+- **Call transcription + log (NEW):** M1K3 records/transcribes calls with a searchable, summarised log — exactly like the prior call-pipeline project. North star is **one model for all complex work** (ASR + reasoning + summary). Transcription sits behind a **provider protocol** (the prior call pipeline already has one), WhisperKit/AppleSpeech is the reliable default, and a `GemmaAudioTranscriber` is the spike toward the single-model goal — promote it when it wins on latency/accuracy. *(Superseded in part — see the Gemma 4 update below.)*
 
 ---
 
@@ -450,7 +450,7 @@ re-running — no rebuild. Full findings: `scratch/afm-native-spike-2026-06-15/F
 
 ## Architecture
 
-A new SwiftUI app `M1K3.app` (macOS 26), composed of focused local SwiftPM packages. Business logic lives in testable packages (TDD); the app target is a thin shell. Proven files are **vendored** from the internal prior projects into M1K3 packages (not cross-repo path deps — the prior knowledge-server project's core drags in Hummingbird/InternalServerKit we don't need), each carrying a MurphySig review documenting the port.
+A new SwiftUI app `M1K3.app` (macOS 26), composed of focused local SwiftPM packages. Business logic lives in testable packages (TDD); the app target is a thin shell. Proven files are **vendored** from the prior internal projects into M1K3 packages (not cross-repo path deps — the prior server's core drags in Hummingbird and other server scaffolding we don't need), each carrying a MurphySig review documenting the port.
 
 ```
 m1k3/macos/                         ← NEW (sibling to app/iosApp)
@@ -459,7 +459,7 @@ m1k3/macos/                         ← NEW (sibling to app/iosApp)
 │   ├── M1K3Inference/              ← provider protocol + 3 backends
 │   ├── M1K3Knowledge/              ← embeddings + semantic store + graph + docs
 │   ├── M1K3Voice/                  ← transcription protocol + TTS protocol
-│   ├── M1K3Calls/                  ← call session model, log, diarization, summary (← the prior call-pipeline)
+│   ├── M1K3Calls/                  ← call session model, log, diarization, summary (← prior call pipeline)
 │   ├── M1K3Agent/                  ← ReAct loop + tools
 │   ├── M1K3MCP/                    ← MCP server exposing the knowledge graph
 │   └── M1K3Avatar/                 ← RealityKit emotion-driven avatar
@@ -468,7 +468,7 @@ m1k3/macos/                         ← NEW (sibling to app/iosApp)
 
 ### The pluggable inference layer (the crux)
 
-Unify on **the prior call-pipeline's `InferenceProvider`** (cleaner than the prior knowledge-server project's `InferenceService` for swap/benchmark):
+Unify on **the prior call-pipeline's `InferenceProvider`** (cleaner than the prior knowledge-server's `InferenceService` for swap/benchmark):
 
 ```swift
 public protocol InferenceProvider: Sendable {
@@ -480,12 +480,12 @@ public protocol InferenceProvider: Sendable {
 ```
 
 Backends (all conform; router picks by task + availability):
-- **`AppleFoundationModelsProvider`** — lift from `internal-call-pipeline-sources/Providers/AppleFoundationModelsProvider.swift`. Cheap/basic turns, `LanguageModelSession` streaming. macOS 26 native.
-- **`MLXGemmaProvider`** — Gemma 4 generation via `MLXLLM`/`MLXLMCommon` from `mlx-swift-lm` (same package family the prior knowledge-server project uses for `MLXEmbedders`). Truly in-process, Metal.
+- **`AppleFoundationModelsProvider`** — lift from the prior call-pipeline's `AppleFoundationModelsProvider` (private sources). Cheap/basic turns, `LanguageModelSession` streaming. macOS 26 native.
+- **`MLXGemmaProvider`** — Gemma 4 generation via `MLXLLM`/`MLXLMCommon` from `mlx-swift-lm` (same package family the prior knowledge-server uses for `MLXEmbedders`). Truly in-process, Metal.
 - **`LiteRTGemmaProvider`** — Gemma 4 via LiteRT-LM. **Greenfield, highest risk** (no Swift IP, C++ engine). MVP approach: spike in `m1k3/macos/scratch/litert/` first (C-bridge or local sidecar), promote to a real provider only once it generates. Until then it reports `isAvailable = false` and the router skips it — nothing else blocks on it.
 - A `RuntimeBenchmark` harness drives the same prompt set through MLX vs LiteRT vs AFM to capture the comparison Kev wants (tokens/sec, latency, quality).
 
-### Knowledge core (lift from the prior knowledge-server project, near-verbatim)
+### Knowledge core (lift from the prior knowledge-server, near-verbatim)
 
 - **Embeddings:** `MLXEmbeddingService.swift` (+ `EmbeddingService`, `EmbeddingWorker`) — `MLXEmbedders`, Metal GPU, `nomic-embed-text-v1.5` (bge_small fallback). API: `embed/embedBatch/isAvailable`.
 - **Semantic store / KG:** `SemanticStore.swift`, `SemanticStore+Documents.swift`, `SemanticModels.swift`, `SemanticMigrator.swift`, `VectorMath.swift`, `RRFFusion.swift` — GRDB SQLite, FTS5 + vector cosine, Reciprocal Rank Fusion hybrid search. `KnowledgeGraphBuilder.swift` → nodes/edges.
@@ -494,17 +494,17 @@ Backends (all conform; router picks by task + availability):
 
 ### Voice — transcription behind a provider protocol
 
-Reuse **the prior call-pipeline's `TranscriptionProvider` + `TranscriptionRouter`** (`internal-call-pipeline-sources/Transcription/`, `Providers/{WhisperKitProvider,AppleSpeechTranscriber}.swift`) rather than the prior knowledge-server project's single engine — the prior call-pipeline's is already pluggable and gives us the swap/compare seam Kev wants:
+Reuse **the prior call-pipeline's `TranscriptionProvider` + `TranscriptionRouter`** (internal call-pipeline sources, private) rather than the prior knowledge-server's single engine — the call-pipeline's is already pluggable and gives us the swap/compare seam Kev wants:
 
 - **`WhisperKitProvider`** (default, reliable) — live streaming, isolated in `M1K3WhisperKit`. Plus `AppleSpeechTranscriber` (on-device `SFSpeechRecognizer`, the day-one path) in `M1K3Voice`; `TranscriptionRouter` selects. **✅ Shipped 2026-06-06 (Phase 6).**
 - **`GemmaAudioTranscriber`** (spike → the single-model north star) — **Gemma 4 E4B** native audio via **MLX-Swift** (`gemma-4-swift-mlx`) or **LiteRT-LM**. Same `TranscriptionProvider` seam, so it drops in once it beats WhisperKit on a benchmark. Scaffolded in `scratch/gemma4-audio-spike/`, `isAvailable=false` until proven — nothing blocks on it.
-- **TTS:** new `SpeechProvider` protocol → `AVSpeechProvider` (wrap the prior knowledge-server project's `SpeechSynthesizer.swift`) for MVP; `KokoroSpeechProvider` (bridge to m1k3 Python TTS) post-MVP. Avatar lip-sync off TTS amplitude/word callbacks.
+- **TTS:** new `SpeechProvider` protocol → `AVSpeechProvider` (wrap the prior knowledge-server's `SpeechSynthesizer.swift`) for MVP; `KokoroSpeechProvider` (bridge to m1k3 Python TTS) post-MVP. Avatar lip-sync off TTS amplitude/word callbacks.
 
 ### Call transcription & log (lift the prior call-pipeline's call subsystem whole)
 
-M1K3 records and logs calls with searchable, summarised history — the prior call-pipeline already *is* this system. Lift near-verbatim into `M1K3Calls`:
+M1K3 records and logs calls with searchable, summarised history — the prior call pipeline already *is* this system. Lift near-verbatim into `M1K3Calls`:
 
-- **Data model:** `CallSession`, `TranscriptSegment`, `QuickSummary`/`CallSummary`, `KeyMoment`, `ReasoningStep`, `SpeakerSegment`/`SpeakerProfile` (`internal-call-pipeline-sources/{Models,Protocols}/`).
+- **Data model:** `CallSession`, `TranscriptSegment`, `QuickSummary`/`CallSummary`, `KeyMoment`, `ReasoningStep`, `SpeakerSegment`/`SpeakerProfile` (internal call-pipeline model/protocol sources, private).
 - **Persistence:** `SQLiteCallPersistence` + `EncryptedCallPersistence` (AES-256-GCM, Keychain key) — privacy-by-default, matches the M1K3 ethos.
 - **Diarization (who-said-what):** `DiarizationRouter` → `FluidDiarizationProvider` (CoreML/ANE) + stereo fallback + `DiarizationAligner`. *Revised 2026-06-06: Gemma 4 diarizes natively, so the dedicated engine is no longer a given — if the E4B spike's diarization quality holds, this whole sub-stack could fold into the one model. Lift the prior call-pipeline's diarization for the MVP, but benchmark Gemma 4 before committing to maintain it.*
 - **Summarisation:** `SummarizationPipeline` two-stage — Tier 1 quick summary via **Apple Foundation Models** (<1s), Tier 2 deep analysis (action items, risk flags) via **Gemma 4** through our `InferenceProvider`. This is the "single model for complex work" payoff: Gemma 4 does the reasoning/summary; AFM does the cheap first pass.
@@ -513,7 +513,7 @@ M1K3 records and logs calls with searchable, summarised history — the prior ca
 
 ### Local agent + tools
 
-Generalise the prior call-pipeline's `the prior domain ReAct agent` ReAct loop into `LocalAgent` (Thought→Action→Observation, `maxIterations` default 5). Reuse the `AgentTool` protocol verbatim:
+Generalise the prior call-pipeline's domain ReAct agent loop into `LocalAgent` (Thought→Action→Observation, `maxIterations` default 5). Reuse the `AgentTool` protocol verbatim:
 
 ```swift
 public protocol AgentTool: Sendable {
@@ -534,7 +534,7 @@ prompt-ReAct today; native per-backend dialects are Phase 12 (see the 2026-06-10
 
 ### MCP server (so Claude can pull from M1K3)
 
-New `M1K3MCP` package using the official **`modelcontextprotocol/swift-sdk`**, stdio transport. Exposes the same knowledge-tools as MCP tools/resources: `search_knowledge`, `query_graph`, `get_document`, `list_documents`. Registers into Claude Desktop/Code via config. (PriorKnowledgeServer's existing `/v1/graph`, `/v1/documents`, `/v1/search` HTTP routes are the behavioural reference for what each tool returns.)
+New `M1K3MCP` package using the official **`modelcontextprotocol/swift-sdk`**, stdio transport. Exposes the same knowledge-tools as MCP tools/resources: `search_knowledge`, `query_graph`, `get_document`, `list_documents`. Registers into Claude Desktop/Code via config. (The prior knowledge-server's existing `/v1/graph`, `/v1/documents`, `/v1/search` HTTP routes are the behavioural reference for what each tool returns.)
 
 ### Avatar
 
@@ -696,14 +696,14 @@ several didn't survive contact with the live codebase:
 
 | Capability | Source (read-only IP) |
 |---|---|
-| Inference protocol, AFM provider, ReAct loop, AgentTool | `the internal call-pipeline project/Sources/the internal call-pipeline core/{Providers/AppleFoundationModelsProvider,Agent/the prior domain ReAct agent}.swift` |
-| Embeddings (MLX) | `the prior knowledge-server project/PriorKnowledgeServerServer/Sources/the internal knowledge-server core/{MLXEmbeddingService,EmbeddingService,EmbeddingWorker}.swift` |
-| Semantic store + hybrid search + KG | `the prior knowledge-server project/.../the internal knowledge-server core/{SemanticStore,SemanticStore+Documents,SemanticModels,SemanticMigrator,VectorMath,RRFFusion,KnowledgeGraphBuilder}.swift` |
-| Documents + RAG prompt | `the prior knowledge-server project/.../the internal knowledge-server core/{DocumentChunker,PDFTextExtractor,DocumentStore,CitationValidator,ChatPromptBuilder,ChatRAGRetriever}.swift` |
-| Transcription (pluggable) | `internal-call-pipeline-sources/Transcription/TranscriptionRouter.swift`, `Providers/{WhisperKitProvider,AppleSpeechTranscriber}.swift` |
-| Call log: model + persistence | `internal-call-pipeline-sources/{Models/{TranscriptSegment,Summary,ReasoningStep,SpeakerModels,SpeakerGroup,KeyMoment},Protocols/CallPersistence,Persistence/{SQLiteCallPersistence,EncryptedCallPersistence}}.swift` |
-| Call log: diarization + summary + UI | `internal-call-pipeline-sources/{Diarization/*,Summarization/SummarizationPipeline,Views/{TranscriptView,SummaryView,History/*,Agent/AgentReasoningView}}.swift` |
-| TTS seed | `the prior knowledge-server project/.../the internal knowledge-server core/SpeechSynthesizer.swift` |
+| Inference protocol, AFM provider, ReAct loop, AgentTool | internal call-pipeline project sources (private) |
+| Embeddings (MLX) | internal knowledge-server project sources (private) |
+| Semantic store + hybrid search + KG | internal knowledge-server project sources (private) |
+| Documents + RAG prompt | internal knowledge-server project sources (private) |
+| Transcription (pluggable) | internal call-pipeline project sources (private) |
+| Call log: model + persistence | internal call-pipeline project sources (private) |
+| Call log: diarization + summary + UI | internal call-pipeline project sources (private) |
+| TTS seed | internal knowledge-server project sources (private) |
 | Avatar model + emotion mapping | `m1k3/src/web-avatar/` (GLB→USDZ), `m1k3/app/.../avatar/ToolEmotionMap.kt` (concept) |
 
 **Provenance:** vendored files keep their original MurphySig and gain a review block documenting the macOS port. New files get `Signed: Kev + claude-opus-4-8, 2026-06-06, Prior: Unknown` per the no-fabrication rule.
@@ -713,7 +713,7 @@ several didn't survive contact with the live codebase:
 ## Risks / open items
 
 - **LiteRT on macOS/Swift is unproven** — no official Swift bindings; the C++ LiteRT-LM engine likely needs a C-shim or sidecar. De-risked by phasing it as a spike behind the protocol (MLX is the reliable Gemma path; LiteRT can fail without blocking the MVP).
-- **mlx-swift-lm LLM generation** — ✅ *de-risked at compile level* (2026-06-06). `MLXLLM` (`ChatSession` + `LLMModelFactory`) is wired in `MLXGemmaProvider` (default Gemma 3 1B QAT-4bit) and the app builds with it linked. ⏳ remaining: **first on-device generation** (download + stream). **Gemma 4 now exists** (shipped 2026-06-03 — see the Gemma 4 update at the top); the wired generation model is still `gemma-3-1b-qat-4bit`, with **Gemma 4 E4B as the upgrade target** (and the unification candidate for ASR + diarization + summary). **Two gotchas locked in:** (1) embeddings default to `.bge_small` not nomic — MLXEmbedders' nomic loader has a weight-key mismatch (the prior knowledge-server project's lesson); (2) `xcodebuild` needs `xcodebuild -downloadComponent MetalToolchain` once (`swift build` doesn't). The MLX backends live in one isolated **`M1K3MLX`** target (both embedder + provider), not the originally-sketched `M1K3Embeddings`.
+- **mlx-swift-lm LLM generation** — ✅ *de-risked at compile level* (2026-06-06). `MLXLLM` (`ChatSession` + `LLMModelFactory`) is wired in `MLXGemmaProvider` (default Gemma 3 1B QAT-4bit) and the app builds with it linked. ⏳ remaining: **first on-device generation** (download + stream). **Gemma 4 now exists** (shipped 2026-06-03 — see the Gemma 4 update at the top); the wired generation model is still `gemma-3-1b-qat-4bit`, with **Gemma 4 E4B as the upgrade target** (and the unification candidate for ASR + diarization + summary). **Two gotchas locked in:** (1) embeddings default to `.bge_small` not nomic — MLXEmbedders' nomic loader has a weight-key mismatch (the prior knowledge-server's lesson); (2) `xcodebuild` needs `xcodebuild -downloadComponent MetalToolchain` once (`swift build` doesn't). The MLX backends live in one isolated **`M1K3MLX`** target (both embedder + provider), not the originally-sketched `M1K3Embeddings`.
 - **"Single model" for ASR — now real, pending benchmark (revised 2026-06-06).** Gemma 4 E2B/E4B do native audio ASR **+ diarization** on-device via MLX-Swift or LiteRT. The MVP still **ships on WhisperKit + Apple Speech** (proven, low-latency streaming today); Gemma 4 E4B is a **tracked spike behind the `TranscriptionProvider` seam**, not an MVP dependency. Promote it only if it beats WhisperKit on latency/accuracy (and its diarization holds for P7). Risk if we unify: one model gates ASR, chat, and calls — benchmark before betting the stack.
 - **Tool-call dialect is per-model (learned on-device 2026-06-10).** Prompt-ReAct works as the floor everywhere but compliance varies (AFM follows it; Gemma-3n announces tools in prose — mitigated with format reminders + observation-rescue fallback). Native dialects (Phase 12) raise the ceiling. **Update (source probe, 2026-06-10):** for MLX the per-backend *parsing* surface we feared owning is **already in `mlx-swift-lm` 2.30.6** (`ToolCallProcessor` + `GemmaFunctionParser` + 6 other dialects, emitting structured `.toolCall`) — so 12c is wiring, not parsing, and needs no version bump. The remaining empirical risk is **12d only**: whether Gemma-3n-E4B actually *emits* the `call:name{…}` format on-device (a runtime benchmark). The seam keeps ReAct as the fallback so no model is ever locked out. Benchmark before promoting, same doctrine as transcription.
 - **RAG grounding relevance — ✅ SHIPPED 2026-06-10 (`feat/ttft-reasoning-retrieval`).** `GroundingGate` filters retrieve-first injection on vector cosine similarity (NOT rrfScore — rank fusion carries no absolute relevance); `searchHybrid` backfills similarity onto fused hits. Nothing topical → nothing injected, and the prompt tells the model its documents are NOT in context and to call `search_knowledge` (now full hybrid search; the hits it retrieves flow into sources + the citation allow-list via `ToolSourceCollector`). Thresholds (`GroundingGate.chunkThreshold`, 0.45 starting point for bge-small) are logged per-hit (category `responder`) — **tune on real queries at ⌘R, then update the constants.**

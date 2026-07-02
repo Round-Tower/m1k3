@@ -5,12 +5,12 @@
 //  Thin PDFKit adapter: a PDF (data or file) → ordered [DocumentPage] for the
 //  chunker. PDFKit ships with macOS, so this adds no third-party dependency.
 //
-//  Mirrors the prior knowledge-server project's PDFTextExtractor. Kept deliberately minimal — the testable
+//  Mirrors the prior knowledge-server's PDFTextExtractor. Kept deliberately minimal — the testable
 //  logic (boilerplate strip, sectioning, windowing) lives in DocumentChunker;
 //  this is the I/O boundary, verified by a generated-PDF round-trip.
 //
 //  Signed: Kev + claude-opus-4-8, 2026-06-06, Confidence 0.85,
-//  Prior: the prior knowledge-server project the internal knowledge-server core/PDFTextExtractor.swift (Kev)
+//  Prior: internal knowledge-server project, PDFTextExtractor.swift (Kev)
 
 import Foundation
 import PDFKit

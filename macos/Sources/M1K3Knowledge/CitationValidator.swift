@@ -6,7 +6,7 @@
 //  response against what's actually indexed. Strips the ones the model invented
 //  and reports them separately so an audit trail can record fabrication.
 //
-//  Generalised from the prior knowledge-server project's CitationValidator: the existence check is *injected*
+//  Generalised from the prior knowledge-server's CitationValidator: the existence check is *injected*
 //  (a predicate) rather than hard-wired to the store, so the parsing/stripping
 //  logic is pure and testable with no database. A store-backed predicate wires
 //  in at the call site.
@@ -17,7 +17,7 @@
 //  markdown link. Accepting either keeps the audit honest without fighting style.
 //
 //  Signed: Kev + claude-opus-4-8, 2026-06-06, Confidence 0.85,
-//  Prior: the prior knowledge-server project the internal knowledge-server core/CitationValidator.swift (Kev)
+//  Prior: internal knowledge-server project, CitationValidator.swift (Kev)
 //  Review: Kev + claude-fable-5, 2026-06-12, Confidence 0.9 — patterns
 //  broadened from single-token ALL-CAPS sources to any-title-before-§
 //  (citationLabel renders titles verbatim, so real citations were invisible
@@ -128,7 +128,7 @@ public enum CitationValidator {
     }
 
     /// Extract every bracket- and paren-delimited citation, in document order
-    /// (brackets first, then parens — matching the prior knowledge-server project's collection order).
+    /// (brackets first, then parens — matching the prior knowledge-server's collection order).
     static func citationHits(in text: String) -> [Hit] {
         // The § is the discriminator (the same rule SpeechTextPolish strips
         // by) — titles match VERBATIM as citationLabel renders them, mixed

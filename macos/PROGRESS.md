@@ -22,7 +22,7 @@ Update this file as phases move. Keep it scannable.
 | 4 | Documents + RAG | 🟢 logic done | ingest (chunk/PDF/embed/store) + RAG (embed→hybrid→prompt→answer+sources, streaming); ⏳ citation validation wiring (needs citation-scheme decision) |
 | 5 | Chat UI + Liquid Glass | 🟢 shell done | XcodeGen app target; chat→RAG, drop→ingest, speak, settings; real `.glassEffect`. ⏳ voice input (P6) |
 | 6 | Transcription (pluggable) | ⬜ not started | WhisperKit dep (heavy) |
-| 7 | Call log (M1K3Calls) | ⬜ not started | lift the prior call-pipeline call subsystem |
+| 7 | Call log (M1K3Calls) | ⬜ not started | lift the prior call-pipeline's call subsystem |
 | 8 | TTS (AVSpeech) | 🟢 done | SpeechProvider + AVSpeechProvider + SpeechUtterance; ⏳ Kokoro swap (post-MVP) |
 | 9 | Avatar (RealityKit) | 🟡 core done, ⌘R pending | `M1K3Avatar` target: 26 tests (emotion/activity/state/tool-map/animation-resolver/controller); `AvatarView` (app target, RealityKit+SF Symbol placeholder); avatar wired into AppEnvironment (listening→thinking→speaking→idle); Sparrow.usdz conversion (Step 0) still needed |
 | 10 | Local agent + MCP | 🟢 agent + MCP done | ReAct LocalAgent + AgentTool + search/list/get tools; **M1K3MCP stdio server** (swift-sdk) live — Claude pulls search_knowledge/list_documents/get_document; ⏳ QueryGraphTool (blocked on entity extraction / NER) |
@@ -41,7 +41,7 @@ Legend: ✅ done · 🟢 logic done (deferred adapter) · 🟡 partial · ⬜ no
 | `M1K3Agent` | M1K3Inference | AgentTool + ToolParameter/ToolResult, LocalAgent (ReAct loop) |
 | `M1K3KnowledgeTools` | M1K3Agent + M1K3Knowledge | SearchKnowledgeTool, ListDocumentsTool, GetDocumentTool (⏳ hybrid search variant; QueryGraphTool) |
 | `M1K3Chat` | M1K3Knowledge + M1K3Inference | ChatPromptBuilder (in Knowledge) + RAGResponder (embed→hybrid→prompt→answer+sources, streaming) + `RAGResponding` seam + `ChatSession` (@MainActor @Observable, self-normalising token fold) |
-| `M1K3MLX` | M1K3Knowledge + M1K3Inference + mlx-swift-lm | ✅ `MLXEmbeddingService` (bge_small, [Float]) + `MLXGemmaProvider` (Gemma 3 1B 4-bit, MLXLLM). Heavy Metal target, isolated. Default embedder NOT nomic (the prior knowledge-server project weight-key gotcha). ⏳ on-device runtime verify |
+| `M1K3MLX` | M1K3Knowledge + M1K3Inference + mlx-swift-lm | ✅ `MLXEmbeddingService` (bge_small, [Float]) + `MLXGemmaProvider` (Gemma 3 1B 4-bit, MLXLLM). Heavy Metal target, isolated. Default embedder NOT nomic (the prior knowledge-server's weight-key gotcha). ⏳ on-device runtime verify |
 | `M1K3MCPKit` / `M1K3MCP` | swift-sdk + M1K3Knowledge | ✅ stdio server (library + thin executable) exposing search_knowledge/list_documents/get_document; FTS-only (no embedder in CLI); container-aware store path (`M1K3_STORE_PATH` override). Verified live. |
 | `M1K3Voice` | AVFoundation (+ WhisperKit later) | SpeechProvider + SpeechUtterance + AVSpeechProvider; ⏳ TranscriptionProvider (WhisperKit, heavy) |
 | `M1K3Calls` | M1K3Knowledge + … | ⏳ CallSession, encrypted SQLite, diarization, summary |
@@ -166,7 +166,7 @@ no engine linked, **18 tests / 4 suites green** (→ 177/37 total).
   `MicAudioRecorder` (AVAudioEngine → `.caf`, lock-not-held-across-`engine.stop()`, verify-by-launch).
   App: consent-gated **Record call** toolbar button + confirmation dialog ("you're responsible for
   consent; on-device only") + a red **Recording** indicator. Stop holds the audio file.
-- **Engines deferred** (the heavy/device parts): WhisperKit-batch + FluidAudio (the prior call-pipeline lift) — the
+- **Engines deferred** (the heavy/device parts): WhisperKit-batch + FluidAudio (prior call-pipeline lift) — the
   transcribe-on-stop step that turns a recording into a `CallSession` (feeds the SAME pipeline the
   import path proves). Gemma-4-shadow (post-benchmark).
 
@@ -174,7 +174,7 @@ no engine linked, **18 tests / 4 suites green** (→ 177/37 total).
 
 1. **MLX runtime session** — `M1K3Embeddings` (nomic-embed-text-v1.5) + `MLXGemmaProvider` + LiteRT spike + `RuntimeBenchmark`. Heavy first build (`mlx-swift-lm`, MetalToolchain, weight downloads). Wires into the runtime picker (already stubbed in `SettingsView`).
 2. ~~**App shell**~~ ✅ done — XcodeGen target, Liquid Glass, chat on AFM.
-3. **Heavy-dep features** — WhisperKit transcription (P6), the prior call-pipeline call subsystem (P7), RealityKit avatar (P9), swift-sdk MCP server (P10b).
+3. **Heavy-dep features** — WhisperKit transcription (P6), the prior call-pipeline's call subsystem (P7), RealityKit avatar (P9), swift-sdk MCP server (P10b).
 4. **First *signed sandboxed launch*** — the real milestone the unit tests can't see (challenger's flag). Confirm GRDB writes into the App-Support container, FoundationModels availability under entitlements, AVSpeech under sandbox. Build compiles today; runtime not yet exercised on-device.
 
 ---

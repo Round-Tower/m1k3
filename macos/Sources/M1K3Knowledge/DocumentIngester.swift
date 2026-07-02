@@ -10,7 +10,7 @@
 //  backfilled afterwards.
 //
 //  Dedupe: if `sourceRef` is already indexed, ingest is a no-op and returns the
-//  existing item id (the prior knowledge-server project's sha256-dedupe pattern, generalised).
+//  existing item id (the prior knowledge-server's sha256-dedupe pattern, generalised).
 //
 //  Signed: Kev + claude-opus-4-8, 2026-06-06, Confidence 0.85, Prior: Unknown
 

@@ -50,7 +50,7 @@ struct DocumentChunkerTests {
 
     @Test("paragraph numbers like 2.11 are NOT treated as headings")
     func paragraphNumberNotHeading() {
-        // N.NN is a paragraph number per the SOP tuning, not a section heading.
+        // N.NN is a paragraph number per the procedure-document tuning, not a section heading.
         let chunks = DocumentChunker.chunk(pages: [
             page(1, "1.1 Real Heading\n2.11 this is body, not a heading, it continues."),
         ])
@@ -72,7 +72,7 @@ struct DocumentChunkerTests {
 
     @Test("a letter-led single-level heading is still recognised")
     func bareIntegerHeadingStillWorks() {
-        // The fix must not lose legitimate single-level SOP headings.
+        // The fix must not lose legitimate single-level procedure headings.
         #expect(DocumentChunker.parseHeading("3 Cleaning Procedure") == "3 Cleaning Procedure")
         #expect(DocumentChunker.parseHeading("4.1.2 Cleaning") == "4.1.2 Cleaning")
     }

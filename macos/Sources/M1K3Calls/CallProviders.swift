@@ -14,7 +14,7 @@
 //  then processed, so a URL in / segments out is the honest, dependency-light shape.
 //
 //  Signed: Kev + claude-opus-4-8, 2026-06-06, Confidence 0.85,
-//  Prior: the internal call-pipeline project {TranscriptionProvider, DiarizationProvider} (Kev) —
+//  Prior: internal call-pipeline project, {TranscriptionProvider, DiarizationProvider} (Kev) —
 //  generalised to file-based batch, PowerEfficiency/buffer methods dropped.
 
 import Foundation

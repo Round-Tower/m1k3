@@ -6,7 +6,7 @@
 //  declared dimension) with no model load — runs in CI / the normal loop. The
 //  integration tier actually downloads + runs the model and is gated behind the
 //  M1K3_MLX_INTEGRATION env var, because it needs network + Metal + ~minutes on
-//  first run. Same split the prior knowledge-server project uses to keep its fast loop fast.
+//  first run. Same split the prior knowledge-server uses to keep its fast loop fast.
 //
 //  KNOWN LIMIT (2026-06-06): the integration tier does NOT run under CLI
 //  `swift test` — MLX aborts with "Failed to load the default metallib (library

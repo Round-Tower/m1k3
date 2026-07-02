@@ -10,7 +10,7 @@
 //  pipeline so a flaky deep pass still leaves a usable quick summary.
 //
 //  Signed: Kev + claude-opus-4-8, 2026-06-06, Confidence 0.85,
-//  Prior: the internal call-pipeline project SummarizationPipeline (Kev) — neutral output, no agent.
+//  Prior: internal call-pipeline project, SummarizationPipeline (Kev) — neutral output, no agent.
 
 import Foundation
 import M1K3Inference

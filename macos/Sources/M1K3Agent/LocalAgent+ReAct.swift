@@ -10,7 +10,7 @@
 //  is obtained differs (text-scraping here, structured ToolTurns there).
 //
 //  Signed: Kev + claude-opus-4-8, 2026-06-06, Confidence 0.9,
-//  Prior: the internal call-pipeline project the prior domain ReAct agent (Kev)
+//  Prior: internal call-pipeline project, domain ReAct agent (Kev)
 //
 //  Review: Kev + claude-opus-4-8, 2026-06-10, Confidence 0.85 — extracted
 //  verbatim from LocalAgent.run() when the native tool-calling path landed

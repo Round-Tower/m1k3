@@ -86,17 +86,17 @@ only**, chunk into 30s windows, transcribe each with prompt *"Transcribe and lab
 
 ## Decision gate + guardrails (from the challenger)
 
-- **Do NOT** adopt the dep into `macos/Package.swift`, delete anything from the prior call-pipeline, or extract IP —
+- **Do NOT** adopt the dep into `macos/Package.swift`, delete anything from the prior call pipeline, or extract IP —
   until the continuity probe passes AND a separate **compatibility proof** shows the forced
   `mlx-swift-lm`@main / `mlx-swift`≥0.31.3 bump does **not** perturb embedding output (re-embed a
   fixed doc set, assert vectors unchanged — else RAG silently breaks).
 - **Bank the safe win regardless:** use Gemma 4 as the **text-only deep-summary tier** (already
   `PLAN.md` Tier-2) via the `InferenceProvider` seam — zero 30s-cap problem, LLMs are proven here.
-- **Ship M1K3's P7 on the the prior call-pipeline lift NOW;** treat Gemma audio as a **shadow** `BatchTranscriptionProvider`
+- **Ship M1K3's P7 on the prior call-pipeline lift NOW;** treat Gemma audio as a **shadow** `BatchTranscriptionProvider`
   (`isAvailable=false`), run alongside WhisperKit+FluidAudio on real calls, log WER/DER deltas to a
   file, promote only on logged evidence.
 - **IP:** the reusable asset is the **seam** (`TranscriptionProvider`/`DiarizationProvider`/
-  `SummarizationRouterProtocol`) — model-agnostic, fallback-chained, already shared by M1K3 + the prior call-pipeline.
+  `SummarizationRouterProtocol`) — model-agnostic, fallback-chained, already shared by M1K3 + the prior call pipeline.
   Extract the seam, **never the volatile model**, and not until 2+ consumers ship in production.
 - **P6 stays on WhisperKit** unconditionally (no streaming audio in Gemma 4).
 

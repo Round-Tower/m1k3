@@ -36,7 +36,7 @@ import MLXLMCommon
 import MLXNN
 
 /// `@unchecked Sendable`: `modelContainer` is an MLX actor; all model access is
-/// actor-isolated inside `perform`. Same guarantee the prior knowledge-server project's service relies on.
+/// actor-isolated inside `perform`. Same guarantee the prior knowledge-server's service relies on.
 public final class MLXEmbeddingService: EmbeddingService, @unchecked Sendable {
     private var modelContainer: EmbedderModelContainer?
     private let configuration: ModelConfiguration

@@ -4,7 +4,7 @@
 //
 //  GRDB-backed semantic store: knowledge items + chunks + FTS5 + vector
 //  embeddings + RRF hybrid search. The reusable mechanism is lifted from
-//  the prior knowledge-server project's SemanticStore (FTS5 BM25 + brute-force cosine KNN + Reciprocal
+//  the prior knowledge-server's SemanticStore (FTS5 BM25 + brute-force cosine KNN + Reciprocal
 //  Rank Fusion); the schema is generalised to M1K3's domain-neutral model.
 //
 //  Embeddings are computed by the caller via an EmbeddingService and passed in
@@ -12,10 +12,10 @@
 //  embed, so it carries no MLX dependency.
 //
 //  Concurrency: GRDB's DatabaseQueue is internally serialized; the class is
-//  @unchecked Sendable for the same reason the prior knowledge-server project's SemanticStore is.
+//  @unchecked Sendable for the same reason the prior knowledge-server's SemanticStore is.
 //
 //  Signed: Kev + claude-opus-4-8, 2026-06-06, Confidence 0.8,
-//  Prior: the prior knowledge-server project SemanticStore + SemanticStore+Documents (Kev)
+//  Prior: internal knowledge-server project, SemanticStore + SemanticStore+Documents (Kev)
 //  Review: Kev + claude-opus-4-8, 2026-06-13, Confidence 0.9 — optional `kinds`
 //  filter on searchFTS/searchVector/searchHybrid + two-lane `searchGrounding`
 //  (separate doc/memory budgets) so the document corpus can't crowd short
@@ -354,7 +354,7 @@ public final class KnowledgeStore: @unchecked Sendable {
 /// same-file extension shares the type's private access (no visibility widening).
 public extension KnowledgeStore {
     /// FTS5 BM25 search over chunk text. Each query word is double-quoted to
-    /// neutralise FTS5 operators (same sanitisation as the prior knowledge-server project).
+    /// neutralise FTS5 operators (same sanitisation as the prior knowledge-server).
     ///
     /// Precision first, recall fallback: FTS5's implicit AND demands every token
     /// in one chunk, so a natural multi-term question can starve retrieval to

@@ -3,7 +3,7 @@
 // M1K3 — Mac-native MVP.
 // Multi-module Swift package consumed by the SwiftUI app shell (added at the UI
 // phase). Business logic lives here so `swift test` drives the TDD loop without
-// the Xcode/simulator storm — same split as the prior knowledge-server project's the internal knowledge-server core.
+// the Xcode/simulator storm — same split as the prior internal server package.
 //
 // Target platform is macOS 26 (Tahoe): SwiftUI Liquid Glass + on-device
 // Foundation Models. Heavy deps (MLX, GRDB, WhisperKit, swift-sdk) are added
@@ -69,7 +69,7 @@ let package = Package(
     dependencies: [
         .package(url: "https://github.com/groue/GRDB.swift.git", from: "7.0.0"),
         // On-device embeddings + Gemma generation on Apple Silicon (Metal).
-        // Same package family the prior knowledge-server project ships MLXEmbedders from; isolated to the
+        // Same package family the prior knowledge-server ships MLXEmbedders from; isolated to the
         // M1K3MLX target so the heavy Metal build never touches the core tests.
         // upToNextMinor deliberately when on a tag: 3.x majors AND minors have
         // carried API + mlx-swift kernel changes (kernel change = embedder

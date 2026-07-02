@@ -10,7 +10,7 @@
 //  without a microphone.
 //
 //  Signed: Kev + claude-opus-4-8, 2026-06-06, Confidence 0.85,
-//  Prior: the internal call-pipeline project TranscriptSegment (Kev) — generalised + slimmed.
+//  Prior: internal call-pipeline project, TranscriptSegment (Kev) — generalised + slimmed.
 
 import Foundation
 

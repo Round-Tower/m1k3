@@ -7,9 +7,9 @@
 //  list_documents); they're injected, so the agent stays decoupled from the
 //  store and testable against fakes.
 //
-//  Ported from the internal call-pipeline project's AgentTool / ToolParameter / ToolResult.
+//  Ported from the prior call-pipeline's AgentTool / ToolParameter / ToolResult.
 //  Signed: Kev + claude-opus-4-8, 2026-06-06, Confidence 0.9,
-//  Prior: the internal call-pipeline project AgentTool + ToolResult (Kev)
+//  Prior: internal call-pipeline project, AgentTool + ToolResult (Kev)
 
 import Foundation
 

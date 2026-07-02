@@ -14,7 +14,7 @@
 //  pure static func, unit-tested without a model.
 //
 //  Signed: Kev + claude-opus-4-8, 2026-06-07, Confidence 0.7,
-//  Prior: the internal call-pipeline project WhisperKit-batch (Kev) — re-pointed at M1K3's
+//  Prior: internal call-pipeline project, WhisperKit-batch (Kev) — re-pointed at M1K3's
 //  file-based BatchTranscriptionProvider seam; buffer/PowerEfficiency surface dropped.
 //  Review: claude-opus-4-8, 2026-06-09 — single-flight the model load through
 //  SingleFlightLoader to kill a check-then-act double-download race (a Settings

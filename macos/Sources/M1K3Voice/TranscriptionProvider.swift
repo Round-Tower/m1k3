@@ -13,7 +13,7 @@
 //  One active session per provider; the provider owns the mic/engine lifecycle.
 //
 //  Signed: Kev + claude-opus-4-8, 2026-06-06, Confidence 0.85,
-//  Prior: the internal call-pipeline project TranscriptionProvider (Kev) — generalised to a live
+//  Prior: internal call-pipeline project, TranscriptionProvider (Kev) — generalised to a live
 //  session API (the prior call-pipeline's is buffer-pump + call-domain), PerformanceMonitor and
 //  PowerEfficiency dropped as MVP-irrelevant.
 

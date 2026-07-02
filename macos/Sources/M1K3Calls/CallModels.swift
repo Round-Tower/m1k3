@@ -2,7 +2,7 @@
 //  CallModels.swift
 //  M1K3Calls
 //
-//  Domain models for call intelligence — deliberately neutral (not insurance-
+//  Domain models for call intelligence — deliberately neutral (not domain-
 //  specific like the prior call-pipeline's). A call is recorded, transcribed, diarized, aligned,
 //  and summarized; the finished `CallSession` becomes a node in M1K3's knowledge
 //  graph so calls are searchable via RAG alongside documents.
@@ -13,7 +13,7 @@
 //  "generalise per domain" call as the rest of M1K3.
 //
 //  Signed: Kev + claude-opus-4-8, 2026-06-06, Confidence 0.85,
-//  Prior: the internal call-pipeline project {TranscriptSegment, SpeakerModels, Summary} (Kev) —
+//  Prior: internal call-pipeline project, {TranscriptSegment, SpeakerModels, Summary} (Kev) —
 //  generalised + slimmed to neutral fields.
 
 import Foundation
@@ -92,7 +92,7 @@ public struct QuickSummary: Sendable, Equatable, Codable {
 }
 
 /// Tier-2 deep analysis (the strong model, Gemma as a TEXT model — the safe win):
-/// overview + key points + action items. Neutral fields, no insurance domain.
+/// overview + key points + action items. Neutral fields, no domain-specific carry-over.
 public struct CallSummary: Sendable, Equatable, Codable {
     public let overview: String
     public let keyPoints: [String]

@@ -15,7 +15,7 @@
 //  unit-tested.
 //
 //  Signed: Kev + claude-opus-4-8, 2026-06-06, Confidence 0.7,
-//  Prior: the internal call-pipeline project AppleSpeechTranscriber + LiveTranscriptionSession
+//  Prior: internal call-pipeline project, AppleSpeechTranscriber + LiveTranscriptionSession
 //  (Kev) — collapsed to one live-session provider, cumulative text, on-device
 //  forced, device-picker + call-domain fields dropped.
 

@@ -8,7 +8,7 @@ echo "CI_WORKFLOW:          ${CI_WORKFLOW:-unknown}"
 echo "CI_BRANCH:            ${CI_BRANCH:-unknown}"
 echo "CI_COMMIT:            ${CI_COMMIT:-unknown}"
 
-# M1K3 is privacy-first — NO Firebase/analytics plist to verify (unlike the prior knowledge-server project).
+# M1K3 is privacy-first — NO Firebase/analytics plist to verify (unlike the prior knowledge-server app).
 # Just confirm xcodegen actually produced the project in post-clone.
 #
 # CI_PRIMARY_REPOSITORY_PATH is NOT exported in every action phase — in the

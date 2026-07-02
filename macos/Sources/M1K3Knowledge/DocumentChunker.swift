@@ -7,12 +7,12 @@
 //  header/footer + page-number boilerplate is stripped by frequency before
 //  sectioning.
 //
-//  Ported from the prior knowledge-server project's DocumentChunker (named on the prior knowledge-server project's canonical pure-layer
-//  list). Heading detection stays tuned for N.N(.N) SOP-style numbering; a
+//  Ported from the prior knowledge-server's DocumentChunker (named on its canonical pure-layer
+//  list). Heading detection stays tuned for N.N(.N) procedure-document numbering; a
 //  future M1K3 tweak may broaden it, but the mechanism is unchanged.
 //
 //  Signed: Kev + claude-opus-4-8, 2026-06-06, Confidence 0.95,
-//  Prior: the prior knowledge-server project the internal knowledge-server core/DocumentChunker.swift (Kev, HIGH confidence)
+//  Prior: internal knowledge-server project, DocumentChunker.swift (Kev, HIGH confidence)
 
 import Foundation
 
@@ -117,7 +117,7 @@ public enum DocumentChunker {
 
     /// Matches lines like `3.2 Pressure Differential` / `4.1.2 Cleaning`. Anchored
     /// to the whole trimmed line; each level after the first is a SINGLE digit
-    /// (tuned for N.N(.N) SOP numbering — rejects paragraph numbers like `2.11`).
+    /// (tuned for N.N(.N) procedure-document numbering — rejects paragraph numbers like `2.11`).
     ///
     /// The title must be LETTER-LED: a real heading reads "3 Cleaning Procedure",
     /// whereas a numbered body/math/list line reads "3 * 10 = 30 miles" — leading

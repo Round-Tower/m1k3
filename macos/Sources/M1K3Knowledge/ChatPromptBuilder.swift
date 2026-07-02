@@ -3,17 +3,17 @@
 //  M1K3Knowledge
 //
 //  Pure prompt assembly for grounded (RAG) chat: retrieved chunks + the user's
-//  message → one prompt. Generalised from the prior knowledge-server project's ChatPromptBuilder (which had a
-//  the prior knowledge-server project-specific FLOOR OBSERVATIONS block); M1K3 has a single KNOWLEDGE block.
+//  message → one prompt. Generalised from the prior knowledge-server's ChatPromptBuilder (which had a
+//  domain-specific observations block); M1K3 has a single KNOWLEDGE block.
 //
-//  Carries the prior knowledge-server project's hard-won prompt lessons forward:
+//  Carries the prior knowledge-server's hard-won prompt lessons forward:
 //   - Documents-first: authoritative knowledge leads, then how-to-answer rules.
 //   - Citation tokens, NOT markdown links — Apple Foundation Models treats bare
 //     [X] as a half-formed link, so we tell it explicitly these are citations.
 //   - When the knowledge doesn't cover the question, say so rather than invent.
 //
 //  Signed: Kev + claude-opus-4-8, 2026-06-06, Confidence 0.85,
-//  Prior: the prior knowledge-server project the internal knowledge-server core/ChatPromptBuilder.swift (Kev)
+//  Prior: internal knowledge-server project, ChatPromptBuilder.swift (Kev)
 //  Review: Kev + claude-opus-4-8, 2026-06-29, Confidence 0.85 — the empty-context
 //  branch unconditionally told the model to "say you found nothing in the user's
 //  own documents", framing EVERY no-context turn as a failed lookup — so a

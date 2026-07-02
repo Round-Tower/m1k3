@@ -4,12 +4,12 @@
 //
 //  The one seam every LLM backend implements — Apple Foundation Models (cheap
 //  turns), MLX Gemma 3 (the main brain), and the LiteRT Gemma spike all conform.
-//  Lifted from the internal call-pipeline project's InferenceProvider; chosen over the prior knowledge-server project's
+//  Lifted from the prior call-pipeline's InferenceProvider; chosen over the prior knowledge-server's
 //  heavier InferenceService because swap-and-benchmark is the whole point of
 //  M1K3's "keep both runtimes open" decision.
 //
 //  Signed: Kev + claude-opus-4-8, 2026-06-06, Confidence 0.9,
-//  Prior: the internal call-pipeline project InferenceProvider (Kev)
+//  Prior: internal call-pipeline project, InferenceProvider (Kev)
 
 import Foundation
 

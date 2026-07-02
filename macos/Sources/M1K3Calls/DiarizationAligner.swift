@@ -13,7 +13,7 @@
 //  overlap ratio and the diarizer's own confidence.
 //
 //  Signed: Kev + claude-opus-4-8, 2026-06-06, Confidence 0.85,
-//  Prior: the internal call-pipeline project DiarizationAligner (Kev) — retargeted to M1K3's
+//  Prior: internal call-pipeline project, DiarizationAligner (Kev) — retargeted to M1K3's
 //  CallTranscriptSegment / SpeakerSegment.
 
 import Foundation

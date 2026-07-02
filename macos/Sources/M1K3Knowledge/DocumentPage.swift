@@ -6,9 +6,9 @@
 //  (PDFKit, added with the document-ingest pipeline) produces these; the
 //  chunker turns them into embedding-friendly chunks. Plain value type, no I/O.
 //
-//  Ported from the prior knowledge-server project's DocumentPage.
+//  Ported from the prior knowledge-server's DocumentPage.
 //  Signed: Kev + claude-opus-4-8, 2026-06-06, Confidence 0.95,
-//  Prior: the prior knowledge-server project the internal knowledge-server core/DocumentPage.swift (Kev)
+//  Prior: internal knowledge-server project, DocumentPage.swift (Kev)
 
 import Foundation
 

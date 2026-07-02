@@ -12,7 +12,7 @@
 //  with no Double↔Float conversion at the storage boundary.
 //
 //  Signed: Kev + claude-opus-4-8, 2026-06-06, Confidence 0.85, Prior: Unknown
-//  Context: Generalised from the prior knowledge-server project's EmbeddingServiceProtocol ([Double], Ollama
+//  Context: Generalised from the prior knowledge-server's EmbeddingServiceProtocol ([Double], Ollama
 //  + MLX impls). M1K3 standardises on [Float] and a single on-device backend.
 
 import Foundation

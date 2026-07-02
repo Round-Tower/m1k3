@@ -7,8 +7,8 @@
 //  embedded and searched. Documents (Phase 4) and calls (Phase 7) both land here
 //  so a single hybrid search spans everything the assistant knows.
 //
-//  Generalised from the prior knowledge-server project's IndexedDocument/IndexedDocumentChunk (which were
-//  SOP/PDF-specific). GRDB record types; persistence lives in KnowledgeStore.
+//  Generalised from the prior knowledge-server's IndexedDocument/IndexedDocumentChunk (which were
+//  domain-record/PDF-specific). GRDB record types; persistence lives in KnowledgeStore.
 //
 //  Signed: Kev + claude-opus-4-8, 2026-06-06, Confidence 0.8, Prior: Unknown
 

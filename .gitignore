@@ -207,7 +207,7 @@ bundletool-all-*.jar
 !macos/M1K3.icon/Assets/**
 !app/3d/**/*.png
 # Durable project memory should travel with the repo, even though the global
-# gitignore ignores all of .claude/. Anchored re-include (the prior knowledge-server project pattern).
+# gitignore ignores all of .claude/. Anchored re-include pattern.
 !/.claude/
 /.claude/*
 !/.claude/project-memory.md

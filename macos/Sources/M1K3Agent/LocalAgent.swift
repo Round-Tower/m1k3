@@ -11,10 +11,10 @@
 //  (repeat-guard, unknown-tool steering, activity events, bookkeeping), the
 //  reasoning trace, and conclusion cleanup.
 //
-//  Generalised from the internal call-pipeline project's the prior domain ReAct agent.
+//  Generalised from the prior call-pipeline's domain ReAct agent.
 //
 //  Signed: Kev + claude-opus-4-8, 2026-06-06, Confidence 0.85,
-//  Prior: the internal call-pipeline project the prior domain ReAct agent (Kev)
+//  Prior: internal call-pipeline project, domain ReAct agent (Kev)
 //
 //  Review: Kev + claude-fable-5, 2026-06-09 — hardened for always-on chat with
 //  small on-device models: onEvent loop callbacks, quote/markdown-tolerant

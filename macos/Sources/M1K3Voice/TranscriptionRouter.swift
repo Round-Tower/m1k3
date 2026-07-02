@@ -15,7 +15,7 @@
 //  WhisperKit's model finished loading mid-session).
 //
 //  Signed: Kev + claude-opus-4-8, 2026-06-06, Confidence 0.85,
-//  Prior: the internal call-pipeline project TranscriptionRouter (Kev) — simplified to a plain
+//  Prior: internal call-pipeline project, TranscriptionRouter (Kev) — simplified to a plain
 //  availability-ordered selector (no PerformanceMonitor, no buffer fallback chain).
 
 import Foundation

@@ -9,7 +9,7 @@
 //  a speaker — so "the ratio is 3:1" and "https://x" don't get mis-parsed.
 //
 //  Signed: Kev + claude-opus-4-8, 2026-06-06, Confidence 0.85,
-//  Prior: the internal call-pipeline project PlainTextTranscriptParser (Kev, concept).
+//  Prior: internal call-pipeline project, PlainTextTranscriptParser (Kev, concept).
 
 import Foundation
 

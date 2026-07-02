@@ -8,7 +8,7 @@
 //  at rest" is a one-line swap with no store changes.
 //
 //  Signed: Kev + claude-opus-4-8, 2026-06-06, Confidence 0.85,
-//  Prior: the internal call-pipeline project CallPersistence (Kev) — neutral, coder-pluggable.
+//  Prior: internal call-pipeline project, CallPersistence (Kev) — neutral, coder-pluggable.
 
 import Foundation
 

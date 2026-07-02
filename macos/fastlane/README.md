@@ -1,6 +1,6 @@
 # M1K3 macOS — distribution automation
 
-Three tools, each doing only what it's best at (the prior knowledge-server project's proven split):
+Three tools, each doing only what it's best at (the prior knowledge-server's proven split):
 
 | Job | Tool | Where |
 |---|---|---|
@@ -33,7 +33,7 @@ Fastlane uses it automatically — no 2FA prompts.
 The `ci_scripts/` sit next to `M1K3.xcodeproj` so Xcode Cloud finds them.
 `ci_post_clone.sh` runs **`xcodegen generate` first** — M1K3's pbxproj is
 gitignored, so without it Xcode Cloud has no project to build (the one real
-difference from the prior knowledge-server project, which commits its pbxproj).
+difference from the prior knowledge-server, which commits its pbxproj).
 
 To turn it on: App Store Connect → your app → **Xcode Cloud** → create a workflow,
 point it at this repo, scheme **M1K3**. Suggested:

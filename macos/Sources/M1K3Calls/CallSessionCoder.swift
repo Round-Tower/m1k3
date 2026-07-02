@@ -10,7 +10,7 @@
 //  pass a fixed key), so the crypto is deterministically testable headless.
 //
 //  Signed: Kev + claude-opus-4-8, 2026-06-06, Confidence 0.85,
-//  Prior: the internal call-pipeline project EncryptedCallPersistence (Kev, concept) — refactored to
+//  Prior: internal call-pipeline project, EncryptedCallPersistence (Kev, concept) — refactored to
 //  a pluggable coder rather than a persistence decorator.
 
 import CryptoKit

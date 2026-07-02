@@ -10,10 +10,10 @@
 //  #1-only hit.
 //
 //  ── Review ───────────────────────────────────────────────────────────────
-//  Ported verbatim into M1K3Knowledge from the prior knowledge-server project's the internal knowledge-server core/RRFFusion.swift
+//  Ported verbatim into M1K3Knowledge from the prior knowledge-server's RRFFusion.swift
 //  to back the Mac-native hybrid search. Logic unchanged.
 //  Signed: Kev + claude-opus-4-8, 2026-06-06, Confidence 0.95,
-//  Prior: the prior knowledge-server project the internal knowledge-server core/RRFFusion.swift (Kev)
+//  Prior: internal knowledge-server project, RRFFusion.swift (Kev)
 
 import Foundation
 

@@ -1,7 +1,7 @@
 # M1K3 — Fastlane (METADATA-ONLY).
 #
 # Build / archive / sign / notarize live in bash (tools/release/release-macos.sh
-# for the direct DMG, release-mas.sh for the App Store .pkg) — exactly the prior knowledge-server project's
+# for the direct DMG, release-mas.sh for the App Store .pkg) — exactly the prior knowledge-server's
 # split. This file is ONLY the App Store Connect metadata/screenshots/TestFlight
 # API surface, where `deliver` + Spaceship beat bash.
 #
@@ -10,7 +10,7 @@
 #   APP_STORE_CONNECT_API_KEY_PATH / _KEY_ID / _ISSUER_ID
 # and Fastlane picks it up automatically.
 #
-# MurphySig: Metadata-only Fastlane mirroring the prior knowledge-server project's proven split. Confidence: HIGH.
+# MurphySig: Metadata-only Fastlane mirroring the prior knowledge-server's proven split. Confidence: HIGH.
 # https://murphysig.dev
 
 default_platform(:mac)

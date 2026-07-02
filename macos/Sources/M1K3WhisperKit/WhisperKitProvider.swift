@@ -16,7 +16,7 @@
 //  entitlement; the seam it plugs into (router, accumulator) is unit-tested.
 //
 //  Signed: Kev + claude-opus-4-8, 2026-06-06, Confidence 0.6,
-//  Prior: the internal call-pipeline project WhisperKitProvider (Kev) — re-pointed at M1K3's live
+//  Prior: internal call-pipeline project, WhisperKitProvider (Kev) — re-pointed at M1K3's live
 //  TranscriptionProvider seam + AudioStreamTranscriber (the prior call-pipeline's was buffer-pump),
 //  ModelManaged/PowerEfficiency surface dropped.
 //  Review: claude-opus-4-8, 2026-06-09 — single-flight the model load through

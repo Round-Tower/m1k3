@@ -9,7 +9,7 @@
 //  the indexing orchestration (embed + store) lives in CallIngester.
 //
 //  Signed: Kev + claude-opus-4-8, 2026-06-06, Confidence 0.85,
-//  Prior: the internal call-pipeline project CallChunker (Kev, concept) — speaker-grouped chunking.
+//  Prior: internal call-pipeline project, CallChunker (Kev, concept) — speaker-grouped chunking.
 
 import Foundation
 

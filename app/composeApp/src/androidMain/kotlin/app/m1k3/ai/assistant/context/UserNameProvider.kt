@@ -32,7 +32,7 @@ class UserNameProvider(private val context: Context) {
                 ?: accountManager.accounts.firstOrNull()?.name
                 ?: return null
 
-            // name might be "user@example.com" → extract "Kevin"
+            // name might be "jane.doe@example.com" → extract "Jane"
             // or "Kevin Murphy" → extract "Kevin"
             val displayName = if (name.contains('@')) {
                 name.substringBefore('@')

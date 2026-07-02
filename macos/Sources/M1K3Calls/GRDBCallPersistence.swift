@@ -10,7 +10,7 @@
 //  sensitive is readable in the database file.
 //
 //  Signed: Kev + claude-opus-4-8, 2026-06-06, Confidence 0.85,
-//  Prior: the prior knowledge-server project SemanticStore (GRDB idiom) + the prior call-pipeline SQLiteCallPersistence (Kev).
+//  Prior: internal knowledge-server project SemanticStore (GRDB idiom) + internal call-pipeline SQLiteCallPersistence (Kev).
 
 import Foundation
 import GRDB

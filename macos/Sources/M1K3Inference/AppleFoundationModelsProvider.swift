@@ -9,10 +9,10 @@
 //  against the macOS 26 SDK + a name check, not by invoking the model (which
 //  needs Apple Intelligence hardware).
 //
-//  Mirrors the internal call-pipeline project's AppleFoundationModelsProvider.
+//  Mirrors the prior call-pipeline's AppleFoundationModelsProvider.
 //
 //  Signed: Kev + claude-opus-4-8, 2026-06-06, Confidence 0.75,
-//  Prior: the internal call-pipeline project AppleFoundationModelsProvider (Kev)
+//  Prior: internal call-pipeline project, AppleFoundationModelsProvider (Kev)
 
 import Foundation
 
