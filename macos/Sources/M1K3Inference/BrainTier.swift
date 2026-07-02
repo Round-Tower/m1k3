@@ -2,10 +2,10 @@
 //  BrainTier.swift
 //  M1K3Inference
 //
-//  The four brains the user chooses between at onboarding — Mini / Lil / Big /
-//  Huge M1K3 — echoing the KMP app's tier concept (app/.../domain/ai/M1K3Tier.kt).
-//  Mini is Apple Foundation Models (instant, on-device, no download); Lil, Big
-//  and Huge are local MLX models that download once. Pure value type in the seam
+//  The three brains the user chooses between at onboarding — Mini / Lil / Big
+//  M1K3 — echoing the KMP app's tier concept (app/.../domain/ai/M1K3Tier.kt).
+//  Mini is Apple Foundation Models (instant, on-device, no download); Lil and
+//  Big are local MLX models that download once. Pure value type in the seam
 //  module (no MLX import), so its metadata + the device recommendation + the
 //  selection gate + persistence are `swift test`-able; AppEnvironment maps
 //  `.backing` to a concrete provider.
@@ -36,6 +36,14 @@
 //  to .json tools (NOT xmlFunction) and does NOT pre-open <think> (verified vs the
 //  real Qwen3 template); quantized KV stays safe (attentionWithCacheUpdate path).
 //  See macos/docs/MODEL_CHOICES.md.
+//  Review: Kev + claude-fable-5, 2026-07-02 — HUGE RETIRED (the all-gemma
+//  reshuffle, step 1). Qwen3-8B was the weakest tool-caller and nobody's
+//  favourite at anything; gemma-4 native tool-calling is Kev-verified live on
+//  3.31.4. Three tiers again. A persisted "huge" migrates to .big via
+//  `init(persisted:)` — never a silent Mini downgrade. The memory-floor /
+//  isSelectable seam is KEPT (returns nil today): gemma-4-12B takes the Big
+//  slot with a floor once upstream fixes RotatingKVCache.temporalOrder.
+//
 
 import Foundation
 
@@ -47,19 +55,32 @@ public enum BrainBacking: Sendable, Equatable {
     case mlx(modelID: String)
 }
 
-/// One of the four M1K3 brains. `rawValue` ("mini"/"lil"/"big"/"huge") is the
-/// stable persistence key — pre-Huge installs persisted the first three.
+/// One of the three M1K3 brains. `rawValue` ("mini"/"lil"/"big") is the
+/// stable persistence key — decode stored values through `init(persisted:)`,
+/// which also migrates the retired "huge" (2026-07-02) to `.big`.
 public enum BrainTier: String, CaseIterable, Identifiable, Sendable, Comparable {
     case mini
     case lil
     case big
-    case huge
 
     public var id: String {
         rawValue
     }
 
-    /// Capability/resource ordering: mini < lil < big < huge. Explicit (NOT the
+    /// Decode a persisted tier string, migrating retired tiers instead of
+    /// failing: "huge" (retired 2026-07-02, was Qwen3-8B) → `.big` — the Huge
+    /// user is exactly who wants the biggest remaining brain, and a nil at the
+    /// read site would silently default them to Mini. Junk still returns nil;
+    /// the caller owns the default.
+    public init?(persisted raw: String) {
+        if raw == "huge" {
+            self = .big
+            return
+        }
+        self.init(rawValue: raw)
+    }
+
+    /// Capability/resource ordering: mini < lil < big. Explicit (NOT the
     /// `allCases` declaration order) so a future reorder can't silently change it.
     /// Drives `capped` and any "is this a heavier brain?" comparison.
     private var weight: Int {
@@ -67,7 +88,6 @@ public enum BrainTier: String, CaseIterable, Identifiable, Sendable, Comparable 
         case .mini: 0
         case .lil: 1
         case .big: 2
-        case .huge: 3
         }
     }
 
@@ -80,7 +100,6 @@ public enum BrainTier: String, CaseIterable, Identifiable, Sendable, Comparable 
         case .mini: "Mini"
         case .lil: "Lil"
         case .big: "Big"
-        case .huge: "Huge"
         }
     }
 
@@ -99,7 +118,6 @@ public enum BrainTier: String, CaseIterable, Identifiable, Sendable, Comparable 
         case .mini: "Fast and focused"
         case .lil: "Sharp and capable"
         case .big: "Full intelligence"
-        case .huge: "Frontier-class, fully local"
         }
     }
 
@@ -115,9 +133,6 @@ public enum BrainTier: String, CaseIterable, Identifiable, Sendable, Comparable 
         case .big:
             "Maximum capability for most Macs — deeper reasoning and longer "
                 + "context, fully local. The full M1K3."
-        case .huge:
-            "The biggest brain that fits on a Mac — for machines with 32GB+ "
-                + "of memory. Everything Big does, with more headroom."
         }
     }
 
@@ -128,7 +143,6 @@ public enum BrainTier: String, CaseIterable, Identifiable, Sendable, Comparable 
         case .mini: "hare.fill"
         case .lil: "bolt.fill"
         case .big: "brain.head.profile.fill"
-        case .huge: "sparkles"
         }
     }
 
@@ -141,9 +155,6 @@ public enum BrainTier: String, CaseIterable, Identifiable, Sendable, Comparable 
         // See macos/docs/MODEL_CHOICES.md.
         case .lil: .mlx(modelID: "mlx-community/Qwen3-4B-4bit")
         case .big: .mlx(modelID: "mlx-community/gemma-4-e4b-it-4bit")
-        // Gate B — gemma-4-12B is `gemma4_unified`, unregistered in mlx-swift-lm
-        // 3.31.3 (won't load); dense Qwen3-8B fills huge until upstream does.
-        case .huge: .mlx(modelID: "mlx-community/Qwen3-8B-4bit")
         }
     }
 
@@ -155,14 +166,13 @@ public enum BrainTier: String, CaseIterable, Identifiable, Sendable, Comparable 
 
     /// Approx one-time download in MB, or `nil` for the no-download Apple tier.
     /// Rough estimates surfaced as "~NN MB"; the real size shows on the progress
-    /// bar at download time. lil/huge are dense Qwen3 (HF tree API, 2026-06-22);
+    /// bar at download time. lil is dense Qwen3 (HF tree API, 2026-06-22);
     /// big is gemma-4-e4b (HF usedStorage, 2026-06-10).
     public var approxDownloadMB: Int? {
         switch self {
         case .mini: nil
         case .lil: 2270
         case .big: 5250
-        case .huge: 4620
         }
     }
 
@@ -176,7 +186,7 @@ public enum BrainTier: String, CaseIterable, Identifiable, Sendable, Comparable 
     /// - `mini` (Apple Foundation Models): a conservative ~4K until measured —
     ///   AFM manages its own window and overflows are surfaced as errors, so
     ///   under-estimating is the safe direction.
-    /// - `lil`/`huge` (dense Qwen3, `maxKVSize == nil` → `KVCacheSimple`): the
+    /// - `lil` (dense Qwen3, `maxKVSize == nil` → `KVCacheSimple`): the
     ///   native ~32K window; growth is MEMORY-bounded, never silently truncated.
     /// - `big` (gemma-4-e4b, `RotatingKVCache(maxSize: 8192)`): a HARD 8192-token
     ///   sliding window — past it the head (persona + grounding) rotates OUT
@@ -184,7 +194,7 @@ public enum BrainTier: String, CaseIterable, Identifiable, Sendable, Comparable 
     public var approximateContextTokens: Int {
         switch self {
         case .mini: 4096
-        case .lil, .huge: 32768
+        case .lil: 32768
         case .big: 8192
         }
     }
@@ -193,7 +203,7 @@ public enum BrainTier: String, CaseIterable, Identifiable, Sendable, Comparable 
     /// (`RotatingKVCache`): exceeding `approximateContextTokens` silently drops the
     /// prompt HEAD rather than erroring, so the budget layer must clamp BELOW it
     /// (with margin for the char≈token estimate). Only `big` (gemma-4-e4b) today;
-    /// the dense-Qwen tiers use an unbounded `KVCacheSimple`. Verified against
+    /// the dense-Qwen lil uses an unbounded `KVCacheSimple`. Verified against
     /// `MLXGemmaProvider`'s per-family cache config (see docs/MODEL_CHOICES.md).
     public var usesRotatingKVCache: Bool {
         self == .big
@@ -202,12 +212,11 @@ public enum BrainTier: String, CaseIterable, Identifiable, Sendable, Comparable 
     /// The memory floor below which this brain shouldn't even be SELECTABLE
     /// (the card disables with a "needs NN GB" badge), or nil for no gate.
     /// Distinct from `recommended` — selection is permissive, recommendation
-    /// is comfortable.
+    /// is comfortable. No live tier carries a floor since Huge retired
+    /// (2026-07-02); the seam stays because gemma-4-12B takes the Big slot
+    /// with a floor once upstream fixes RotatingKVCache.temporalOrder.
     public var minimumPhysicalMemoryGB: Double? {
-        switch self {
-        case .mini, .lil, .big: nil
-        case .huge: 32
-        }
+        nil
     }
 
     /// Whether this Mac has enough memory to offer the tier at all.
@@ -219,11 +228,10 @@ public enum BrainTier: String, CaseIterable, Identifiable, Sendable, Comparable 
     /// The brain best matched to this Mac's memory, echoing KMP's device tiers.
     /// Big is a ~7GB-at-inference model in the Gemma 4 era — recommending it
     /// on a 16GB Mac that also runs a browser would be hostile, so its floor
-    /// is 24GB; Huge is recommended only with real headroom (48GB+) though
-    /// selectable from 32GB. Tunable thresholds.
+    /// is 24GB. Big is the ceiling for every larger Mac (Huge retired
+    /// 2026-07-02). Tunable thresholds.
     public static func recommended(forPhysicalMemoryGB gigabytes: Double) -> BrainTier {
         switch gigabytes {
-        case 48...: .huge
         case 24...: .big
         case 16...: .lil
         default: .mini

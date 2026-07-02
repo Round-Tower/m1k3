@@ -33,29 +33,29 @@ struct HistoryBudgetPolicyTests {
         #expect(budget.perTurnChars <= budget.totalChars)
     }
 
-    @Test("wide tier (huge) gets a strictly larger window than big for the same reserves")
+    @Test("wide tier (lil) gets a strictly larger window than big for the same reserves")
     func wideTierIsWiderThanRotating() {
         let reserved = 1500
         let gen = 1024
         let big = HistoryBudgetPolicy.budget(for: .big, reservedTokens: reserved, generationTokens: gen)
-        let huge = HistoryBudgetPolicy.budget(for: .huge, reservedTokens: reserved, generationTokens: gen)
-        #expect(huge.totalChars > big.totalChars)
+        let lil = HistoryBudgetPolicy.budget(for: .lil, reservedTokens: reserved, generationTokens: gen)
+        #expect(lil.totalChars > big.totalChars)
     }
 
-    @Test("the latency ceiling caps even a huge-context tier (prefill cost stays bounded)")
+    @Test("the latency ceiling caps even a wide-context tier (prefill cost stays bounded)")
     func latencyCeilingCapsWideTier() {
-        let huge = HistoryBudgetPolicy.budget(
-            for: .huge, reservedTokens: 1500, generationTokens: 1024,
+        let lil = HistoryBudgetPolicy.budget(
+            for: .lil, reservedTokens: 1500, generationTokens: 1024,
             latencyCeilingTokens: 8000
         )
-        // huge's context budget is ~30K, so the 8000-token ceiling binds, not the window.
-        #expect(historyTokens(huge) == 8000)
+        // lil's context budget is ~30K, so the 8000-token ceiling binds, not the window.
+        #expect(historyTokens(lil) == 8000)
         // A tighter ceiling shrinks it further — the knob actually bites.
         let tighter = HistoryBudgetPolicy.budget(
-            for: .huge, reservedTokens: 1500, generationTokens: 1024,
+            for: .lil, reservedTokens: 1500, generationTokens: 1024,
             latencyCeilingTokens: 4000
         )
-        #expect(tighter.totalChars < huge.totalChars)
+        #expect(tighter.totalChars < lil.totalChars)
     }
 
     @Test("a tier whose reserves swamp its window yields an empty (not negative) budget")
@@ -70,9 +70,9 @@ struct HistoryBudgetPolicyTests {
     @Test("mini's small window yields a small budget, well under the wide tiers")
     func miniIsSmallButPositive() {
         let mini = HistoryBudgetPolicy.budget(for: .mini, reservedTokens: 1000, generationTokens: 1024)
-        let huge = HistoryBudgetPolicy.budget(for: .huge, reservedTokens: 1000, generationTokens: 1024)
+        let lil = HistoryBudgetPolicy.budget(for: .lil, reservedTokens: 1000, generationTokens: 1024)
         #expect(mini.totalChars > 0)
-        #expect(mini.totalChars < huge.totalChars)
+        #expect(mini.totalChars < lil.totalChars)
     }
 
     @Test("the conservative mini budget is non-zero, under the wide default, and fits AFM's window")
@@ -108,14 +108,14 @@ struct HistoryBudgetPolicyTests {
 
     @Test("linear-KV tiers keep the default generation budget — no cap needed")
     func linearTiersKeepDefaultGeneration() {
-        for tier in [BrainTier.mini, .lil, .huge] {
+        for tier in [BrainTier.mini, .lil] {
             #expect(HistoryBudgetPolicy.generationTokenCap(for: tier) == 4096, "\(tier.rawValue)")
         }
     }
 
     @Test("per-turn cap and turn ceiling are HistoryWindow's own constants — one home, no drift")
     func perTurnConstantsShareOneHome() {
-        let budget = HistoryBudgetPolicy.budget(for: .huge, reservedTokens: 1000, generationTokens: 1024)
+        let budget = HistoryBudgetPolicy.budget(for: .lil, reservedTokens: 1000, generationTokens: 1024)
         #expect(budget.perTurnChars == HistoryWindow.maxCharsPerTurn)
         #expect(budget.maxTurns == HistoryWindow.maxTurns)
     }

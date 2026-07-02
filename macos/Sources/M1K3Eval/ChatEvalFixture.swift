@@ -3,7 +3,7 @@
 //  M1K3Eval
 //
 //  The fixture set for the chat-quality evals (M1K3_SELFTEST_CHATEVAL). Each
-//  brain in the catalogue (Mini/Lil/Big/Huge) is run against these and scored,
+//  brain in the catalogue (Mini/Lil/Big) is run against these and scored,
 //  so the routing policy stops being by-feel and becomes data-driven: the
 //  AFM-vs-floor gap Kev hit by hand, proven with numbers.
 //

@@ -4,7 +4,7 @@
 //
 //  The per-turn "what's true right now" grounding line: the precise date (so the
 //  model can state the weekday/day the cached month+year persona can't) and which
-//  brain is answering (mini/lil/big/huge share one persona).
+//  brain is answering (mini/lil/big share one persona).
 //
 //  Signed: Kev + claude-opus-4-8, 2026-06-21, Confidence 0.85. Prior: this file.
 

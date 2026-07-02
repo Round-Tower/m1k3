@@ -4,7 +4,7 @@
 //
 //  Four-step first-run flow: You → Brain → Ears → Voice.
 //    You    — who M1K3 is talking to (seeds the persona; skippable).
-//    Brain  — Mini / Lil / Big / Huge M1K3. Download for Lil+, instant for Mini.
+//    Brain  — Mini / Lil / Big M1K3. Download for Lil+, instant for Mini.
 //    Ears   — STT: Apple Speech (default, built-in) or WhisperKit (higher accuracy).
 //    Voice  — TTS: built-in or the richer on-device M1K3 Voice.
 //  (Enum cases keep their original names — you/brain/voice/speech — the rename
@@ -68,7 +68,7 @@ struct OnboardingView: View {
     }
 
     var body: some View {
-        // ScrollView: the four brain cards (plus header and button) outgrow
+        // ScrollView: the brain cards (plus header and button) outgrow
         // the window on smaller screens — the download button must never be
         // clipped behind a resize.
         ScrollView {

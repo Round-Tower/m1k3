@@ -224,24 +224,24 @@ extension AppEnvironment {
                 // The persisted brain tier, read fresh each turn so a runtime
                 // hot-swap names the new brain on the next answer. Empty → omitted.
                 let raw = UserDefaults.standard.string(forKey: Self.selectedBrainKey) ?? ""
-                return BrainTier(rawValue: raw)?.displayName ?? ""
+                return BrainTier(persisted: raw)?.displayName ?? ""
             },
             fastThinkingProvider: {
                 // Speed tiers (Mini/Lil) skip the think phase on plain grounded
                 // lookups — read fresh each turn so a hot-swap applies immediately.
                 let raw = UserDefaults.standard.string(forKey: Self.selectedBrainKey) ?? ""
-                return BrainTier(rawValue: raw)?.prefersFastThinking ?? false
+                return BrainTier(persisted: raw)?.prefersFastThinking ?? false
             },
             historyBudgetProvider: {
                 // Brain-aware long context: a wide conversation replay on the
-                // dense-Qwen tiers (lil/huge, ~32K window), a hard clamp on gemma-4
+                // dense-Qwen lil (~32K window), a hard clamp on gemma-4
                 // (big, whose RotatingKVCache silently rotates the persona/grounding
                 // head out past 8192). Read fresh each turn so a hot-swap re-sizes
                 // the window immediately. Mini (Apple Foundation Models) manages its
                 // own window — keep the conservative shipped default there (its real
                 // budget is the named [SPIKE]; don't risk an AFM overflow error).
                 let raw = UserDefaults.standard.string(forKey: Self.selectedBrainKey) ?? ""
-                guard let tier = BrainTier(rawValue: raw), tier != .mini else {
+                guard let tier = BrainTier(persisted: raw), tier != .mini else {
                     // Mini (AFM) + any unknown brain: the fixed conservative replay,
                     // NOT the wide MLX default (which would overflow AFM's ~4K window).
                     return HistoryBudgetPolicy.conservativeMiniBudget

@@ -45,7 +45,7 @@ private func makeHandlers(
             VoiceStatus(
                 providerName: "kokoro",
                 tier: "M1K3 Voice",
-                brain: "Huge",
+                brain: "Big",
                 isSpeaking: false,
                 inConversation: true,
                 micInUse: false,
@@ -133,7 +133,7 @@ struct VoiceMCPToolsTests {
         let decoded = try #require(try JSONSerialization.jsonObject(with: payload) as? [String: Any])
         #expect(decoded["provider"] as? String == "kokoro")
         #expect(decoded["tier"] as? String == "M1K3 Voice")
-        #expect(decoded["brain"] as? String == "Huge")
+        #expect(decoded["brain"] as? String == "Big")
         #expect(decoded["speaking"] as? Bool == false)
         #expect(decoded["in_conversation"] as? Bool == true)
         #expect(decoded["mic_in_use"] as? Bool == false)

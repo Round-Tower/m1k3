@@ -103,10 +103,12 @@ shell that wires concrete backends to the seams; `AppEnvironment` (+ its
 | `M1K3Launch` | Launch-at-login (SMAppService seam) for the menu-bar companion. |
 | `M1K3Preview` | Review-panel router (link/file → `ReviewTarget`); QuickLook/WKWebView renderers live in the app. |
 
-**Brains** (`BrainTier.swift`): user picks one of four at onboarding — **Mini**
+**Brains** (`BrainTier.swift`): user picks one of three at onboarding — **Mini**
 (Apple Foundation Models, instant, no download), **Lil** (`Qwen3-4B-4bit`),
-**Big** (`gemma-4-e4b-it-4bit`), **Huge** (`Qwen3-8B-4bit`). `BrainBacking`
-maps a tier to `appleFoundationModels` or `mlx(modelID:)`. Current model choices
+**Big** (`gemma-4-e4b-it-4bit`). `BrainBacking` maps a tier to
+`appleFoundationModels` or `mlx(modelID:)`. **Huge** (`Qwen3-8B-4bit`) was
+retired 2026-07-02 (weakest tool-caller; the all-gemma reshuffle) — a persisted
+`"huge"` migrates to `.big` via `BrainTier(persisted:)`. Current model choices
 and their hard-won rationale (dense Qwen3 over the Qwen3.5 GatedDeltaNet hybrid;
 gemma-4-12B rejected; OptiQ parked) are in `docs/MODEL_CHOICES.md`.
 

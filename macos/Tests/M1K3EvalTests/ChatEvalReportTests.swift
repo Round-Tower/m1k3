@@ -83,11 +83,11 @@ struct ChatEvalReportTests {
 
     @Test("verbose output names each brain and its pass tally")
     func verboseNamesBrains() {
-        let run = ChatEvalReport.BrainRun(brainID: "huge", scores: [
+        let run = ChatEvalReport.BrainRun(brainID: "big", scores: [
             score("o1", .openChat, passed: true, latency: 100),
         ])
         let out = ChatEvalReport.verbose([run])
-        #expect(out.contains("huge"))
+        #expect(out.contains("big"))
         #expect(out.contains("1/1"))
     }
 

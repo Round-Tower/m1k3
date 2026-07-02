@@ -9,7 +9,7 @@
 //      month+year (kept coarse so the persona-prefix KV cache lives a whole month,
 //      see M1K3Persona.currentDateLine), so without this the model can't say what
 //      DAY it is — it guesses, or pleads "no real-time data".
-//    • WHICH brain is answering. mini/lil/big/huge all share one persona, so the
+//    • WHICH brain is answering. mini/lil/big all share one persona, so the
 //      model otherwise can't honestly answer "which model are you?".
 //
 //  It lives in the PER-TURN grounding, NOT the cached persona prefix — so it

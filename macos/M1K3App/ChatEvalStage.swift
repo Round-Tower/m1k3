@@ -207,7 +207,7 @@ enum ChatEvalStage {
     }
 
     /// Brains to run: M1K3_SELFTEST_CHATEVAL_BRAINS=mini,lil narrows it (a full
-    /// four-brain run loads ~16GB of weights); default is the whole catalogue.
+    /// three-brain run loads ~11.5GB of weights); default is the whole catalogue.
     private static func selectedBrains() -> [BrainTier] {
         guard let raw = SelfTestEnv.value("M1K3_SELFTEST_CHATEVAL_BRAINS") else {
             return BrainTier.allCases

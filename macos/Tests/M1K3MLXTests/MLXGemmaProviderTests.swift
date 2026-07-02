@@ -47,7 +47,7 @@ struct MLXGemmaProviderTests {
         #expect(!MLXGemmaProvider.supportsQuantizedKVCache(
             for: ModelConfiguration(id: "some/unknown-model")
         ))
-        // The WIRED dense tiers (lil/huge): Qwen3 attention routes through
+        // The WIRED dense tier (lil): Qwen3 attention routes through
         // upstream's attentionWithCacheUpdate dispatcher (Qwen3.swift:84), which
         // handles QuantizedKVCache — unlike Gemma4Text's raw cache.update. So
         // quantized KV is SAFE for dense Qwen3 (verified vs mlx-swift-lm 3.31.3).
@@ -76,7 +76,7 @@ struct MLXGemmaProviderTests {
         #expect(thinkOff.context?["enable_thinking"] as? Bool == false)
         #expect(!thinkOff.prefixNeeded)
 
-        // THE FIX — dense Qwen3 (lil/huge): toggles enable_thinking but does NOT
+        // THE FIX — dense Qwen3 (lil): toggles enable_thinking but does NOT
         // pre-open. Fast mode MUST suppress (enable_thinking:false), and a thinking
         // turn must NOT add a synthetic opener (the model emits its own <think>).
         let denseFast = MLXGemmaProvider.toolTurnThinkingDecision(

@@ -42,12 +42,16 @@ struct BrainSwitcherTests {
         #expect(result.filter(\.isActive).map(\.tier) == [.lil])
     }
 
-    @Test("a locked tier is present (not dropped), not a download prompt, and names its floor")
-    func lockedTierShownWithFloor() {
-        let huge = row(.huge, in: rows(active: .mini, locked: [.huge]))
-        #expect(huge.isLocked)
-        #expect(!huge.needsDownload) // a locked row is never a download CTA
-        #expect(huge.menuTitle.contains("32GB"))
+    @Test("a locked tier is present (not dropped) and never a download prompt")
+    func lockedTierShownNotDropped() {
+        // No live tier carries a memory floor since Huge retired (2026-07-02),
+        // so the "· needs NNGB+" hint branch is dormant — it revives when
+        // gemma-4-12B lands as Big with a floor. The lock mechanism itself is
+        // injected, so it stays pinned here.
+        let big = row(.big, in: rows(active: .mini, locked: [.big]))
+        #expect(big.isLocked)
+        #expect(!big.needsDownload) // a locked row is never a download CTA
+        #expect(big.menuTitle == "Big") // floor-less locked row: plain name
     }
 
     @Test("Mini never needs a download and never locks")

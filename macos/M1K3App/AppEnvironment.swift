@@ -53,7 +53,7 @@ import os
 enum RuntimeOption: String, CaseIterable, Identifiable {
     case appleFoundationModels = "Apple Foundation Models"
     // Model-neutral label: the MLX slot now serves whichever brain is chosen
-    // (Qwen3 Lil/Huge, Gemma 4 Big) — not display-persisted, safe to rename.
+    // (Qwen3 Lil, Gemma 4 Big) — not display-persisted, safe to rename.
     case mlxGemma = "MLX (local model)"
     case liteRTGemma = "LiteRT Gemma"
 
@@ -389,8 +389,14 @@ final class AppEnvironment {
         usingMLXEmbeddings = preferMLX
 
         // Restore the chosen brain (default Mini = Apple Foundation Models).
-        let brain = UserDefaults.standard.string(forKey: Self.selectedBrainKey)
-            .flatMap(BrainTier.init(rawValue:)) ?? .mini
+        // Decode via init(persisted:) so a stale "huge" (retired 2026-07-02)
+        // migrates to Big instead of silently defaulting to Mini; write the
+        // migrated value back so every later raw read sees a live tier.
+        let storedBrainRaw = UserDefaults.standard.string(forKey: Self.selectedBrainKey)
+        let brain = storedBrainRaw.flatMap(BrainTier.init(persisted:)) ?? .mini
+        if let storedBrainRaw, storedBrainRaw != brain.rawValue {
+            UserDefaults.standard.set(brain.rawValue, forKey: Self.selectedBrainKey)
+        }
         selectedBrain = brain
 
         // Generation IS swappable. The façade forwards to whichever backend the

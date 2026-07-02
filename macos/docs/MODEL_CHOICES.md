@@ -254,6 +254,20 @@ item its own TDD'd id-swap or eval.
 
 ## Decision log
 
+- **2026-07-02 (later): HUGE RETIRED — Qwen3-8B leaves the catalogue; three tiers (Mini/Lil/Big).**
+  Step 1 of Kev's all-gemma reshuffle (standing intent since the Golden Gate session: mini=AFM ·
+  lil=gemma-4-e4b · big=gemma-4-12B, gated upstream). The gate that mattered cleared: **gemma-4
+  native tool-calling on 3.31.4 is Kev-verified live and performing well**, so Qwen3-8B's one
+  remaining role (the "biggest brain" slot) no longer justified its record — 2/5 on tool-use with
+  130–315 s loop-thrash (the 06-24 bake-off), nobody's favourite at anything. Retirement is
+  unblocked and independent of the 12B gate. Mechanics: `.huge` removed from `BrainTier`; a
+  persisted `"huge"` migrates to `.big` via the new `BrainTier(persisted:)` (never a silent Mini
+  downgrade); 48GB+ Macs now recommend Big; the memory-floor/`isSelectable` seam is KEPT (nil
+  today) for 12B-Big's return. **Side effect:** the MTP entry below named "classic speculative
+  decoding on huge (Qwen3-8B + 0.6B draft)" as the realistic decode-speed experiment — that spike
+  is MOOTED with the tier; a future spec-decode look targets whatever 12B-class model lands in Big.
+  Follow-up (not in this change): stale Qwen3-8B weights (~4.6 GB) linger in the container cache
+  for migrated Huge users until a cache-cleanup pass.
 - **2026-07-02: MTP PARKED for big (gemma-4-e4b) — batch-1 evidence is a regression, not a win.**
   Review triggered by "Python MLX shipped MTP" — which is a conflation: **`mlx-lm` proper has NOT
   shipped MTP** (latest v0.31.3, no MTP commits; only unmerged PR #1161). MTP in the Python ecosystem

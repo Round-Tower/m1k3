@@ -5,7 +5,7 @@
 //  Brain-aware sizing for the conversation replay (the long-context work). The
 //  per-message text replay (HistoryWindow) is correct-by-construction — nothing
 //  to invalidate — but how WIDE it can safely go is a per-tier fact, not a knob:
-//    • dense Qwen3 (lil/huge) hold a ~32K window in an unbounded KVCacheSimple —
+//    • dense Qwen3 (lil) holds a ~32K window in an unbounded KVCacheSimple —
 //      a wide replay costs memory, never truncates.
 //    • gemma-4-e4b (big) holds a HARD RotatingKVCache(maxSize: 8192) — a prompt
 //      over the window silently rotates the persona/grounding HEAD out during
