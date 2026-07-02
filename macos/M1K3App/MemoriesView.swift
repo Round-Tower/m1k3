@@ -48,7 +48,7 @@ struct MemoriesView: View {
     private var header: some View {
         HStack {
             Label("Memories", systemImage: "brain")
-                .font(.headline)
+                .font(.pixelTitle)
             Spacer()
             Text("\(memories.count) memor\(memories.count == 1 ? "y" : "ies")")
                 .font(.caption.monospacedDigit())

@@ -71,7 +71,7 @@ struct CallsView: View {
         HStack {
             Label("Calls", systemImage: "phone.bubble")
                 .symbolRenderingMode(.hierarchical)
-                .font(.headline)
+                .font(.pixelTitle)
             Text("\(env.callCount)") // observable — re-renders the list after import/delete
                 .font(.caption.monospacedDigit()).foregroundStyle(.secondary)
             Spacer()
@@ -95,6 +95,8 @@ struct CallsView: View {
         Button(action: triggerRecordAction) {
             Label(env.isRecording ? "Stop" : "Record",
                   systemImage: env.isRecording ? "stop.circle.fill" : "record.circle")
+                .contentTransition(.symbolEffect(.replace))
+                .animation(.default, value: env.isRecording)
         }
         .tint(env.isRecording ? .red : nil)
         // Can't start a new recording mid-transcription (Stop only shows while

@@ -11,6 +11,9 @@
 //  Signed: Kev + claude-opus-4-8, 2026-06-08, Confidence 0.8, Prior: Unknown
 //  Review: Kev + claude-sonnet-4-6, 2026-06-08 — generalised the single-font
 //  registrar into BundledFonts (Silkscreen + OpenDyslexic) for the reading modes.
+//  Review: Kev + claude-fable-5, 2026-07-02, Confidence 0.85 — added Font.pixelTitle
+//  (the shared 15pt title accent) and codified the house rules (12pt floor, no
+//  dynamic user content, wordmark kerning) from the brand-typography sweep.
 
 import CoreText
 import SwiftUI
@@ -40,8 +43,25 @@ enum BundledFonts {
 extension Font {
     /// M1K3's pixel accent face. `fixedSize` keeps the pixels crisp (Dynamic Type
     /// scaling renders bitmap-style fonts fuzzy) — reserve it for short accents.
+    ///
+    /// House rules (a bitmap-style face degrades fast when misused):
+    ///   • Floor at 12pt — below caption size Silkscreen turns to mush, so badges
+    ///     (e.g. the "Recommended" capsule) stay system.
+    ///   • Never on dynamic user content (conversation titles, file names) or
+    ///     body/reading text — short app-controlled strings only.
+    ///   • The wordmark pairs with `.kerning(2)` — 40pt as onboarding's hero,
+    ///     28pt at caption volume (the chat empty state). 15pt titles stay
+    ///     un-kerned (2pt of tracking at 15pt would be ~2.7× the hero's
+    ///     letterspacing).
     static func pixel(_ size: CGFloat) -> Font {
         .custom(BundledFonts.pixelFamily, fixedSize: size)
+    }
+
+    /// Silkscreen section/card title — short accents only (card names, one-word
+    /// sheet headers, the popover brain name). One size so every title moment
+    /// wears the same face at the same volume.
+    static var pixelTitle: Font {
+        .pixel(15)
     }
 
     /// OpenDyslexic — the dyslexia-friendly reading face. Uses `size:` (not fixed)

@@ -36,6 +36,9 @@ struct MenuBarPopover: View {
             } else {
                 Label("Waking M1K3…", systemImage: "ellipsis.circle")
                     .foregroundStyle(.secondary)
+                    // Only exists while the env is nil, so it cycles exactly
+                    // while waking — honest motion for a state with no spinner.
+                    .symbolEffect(.variableColor.iterative)
                 Divider()
             }
             footer
@@ -52,7 +55,7 @@ struct MenuBarPopover: View {
         return HStack(spacing: 9) {
             Image(nsImage: MenuBarGlyphStyle.pixelM.image(pointSize: 20))
             VStack(alignment: .leading, spacing: 1) {
-                Text(env.selectedBrain.displayName).font(.headline)
+                Text(env.selectedBrain.displayName).font(.pixelTitle)
                 Text(Self.runtimeLabel(env.selectedRuntime))
                     .font(.caption).foregroundStyle(.secondary)
             }

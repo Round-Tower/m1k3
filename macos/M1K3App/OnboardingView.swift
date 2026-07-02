@@ -2,11 +2,13 @@
 //  OnboardingView.swift
 //  M1K3App
 //
-//  Four-step first-run flow: You → Brain → Voice → Speech.
+//  Four-step first-run flow: You → Brain → Ears → Voice.
 //    You    — who M1K3 is talking to (seeds the persona; skippable).
 //    Brain  — Mini / Lil / Big / Huge M1K3. Download for Lil+, instant for Mini.
-//    Voice  — Apple Speech (default, built-in) or WhisperKit (higher accuracy).
-//    Speech — built-in TTS or the richer on-device M1K3 Voice.
+//    Ears   — STT: Apple Speech (default, built-in) or WhisperKit (higher accuracy).
+//    Voice  — TTS: built-in or the richer on-device M1K3 Voice.
+//  (Enum cases keep their original names — you/brain/voice/speech — the rename
+//  is user-facing copy only.)
 //
 //  Re-entry from Settings → "Change brain…" passes `startAtBrain: true`: it opens
 //  on the Brain step and finishes the moment the brain is awake, so a brain change
@@ -17,6 +19,13 @@
 //  Review: Kev + claude-opus-4-8, 2026-06-21, Confidence 0.85 — added the
 //  brain-only re-pick entry (startAtBrain) so "Change brain…" deep-links to the
 //  brain step and completes on wake instead of restarting the whole flow.
+//  Review: Kev + claude-fable-5, 2026-07-02, Confidence 0.85 — fixed the first-run
+//  regression (ed711813 shipped opening on .speech, so You/Brain/Ears were
+//  unreachable and onboarding "completed" with nothing chosen); restored the live
+//  avatar hero, hoisted ABOVE the step switch for stable RealityView identity;
+//  added step dots + spring step transitions (Reduce Motion-gated); copy pass
+//  (STT step → "Ears", the Mike beat moved to the Voice step where "Hear a
+//  sample" pays it off). Look/feel is verify-by-launch.
 
 import M1K3Avatar
 import M1K3Inference
@@ -31,7 +40,7 @@ struct OnboardingView: View {
     /// "Who am I talking to?" screen. Default false = full first-run.
     let startAtBrain: Bool
 
-    private enum Step { case you, brain, voice, speech }
+    private enum Step: CaseIterable { case you, brain, voice, speech }
     private enum VoiceEngine { case apple, whisperKit }
 
     @State private var step: Step
@@ -47,13 +56,14 @@ struct OnboardingView: View {
     @State private var isDownloadingWhisper = false
     @State private var selectedSpeechTier: VoiceTier = .builtin
     @State private var isDownloadingVoice = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private let recommended = BrainTier.recommendedForThisMac
 
     init(startAtBrain: Bool = false, onComplete: @escaping () -> Void) {
         self.startAtBrain = startAtBrain
         self.onComplete = onComplete
-        _step = State(initialValue: startAtBrain ? .brain : .speech)
+        _step = State(initialValue: startAtBrain ? .brain : .you)
     }
 
     var body: some View {
@@ -62,40 +72,59 @@ struct OnboardingView: View {
         // clipped behind a resize.
         ScrollView {
             VStack(spacing: 24) {
-                switch step {
-                case .you:
-                    header(
-                        glyph: "person.crop.circle",
-                        title: "Hello",
-                        subtitle: "I'm M1K3 — your local AI. Who am I talking to?"
-                    )
-                    youStep
-                case .brain:
-                    header(
-                        glyph: "brain.head.profile.fill",
-                        title: "M1K3",
-                        subtitle: "My friends call me Mike"
-                    )
-                    if isWakingBrain { brainAwakening } else { brainPicker }
-                case .voice:
-                    header(
-                        glyph: "waveform",
-                        title: "Voice",
-                        subtitle: "Tap the mic to dictate. Apple Speech works now; WhisperKit is a higher-accuracy upgrade."
-                    )
-                    if isDownloadingWhisper { voiceDownload } else { voicePicker }
-                case .speech:
-                    header(
-                        glyph: "speaker.wave.3.fill",
-                        title: "Speech",
-                        subtitle: "How M1K3 sounds when it speaks. Built-in is instant; "
-                            + "M1K3 Voice is a richer, on-device voice with its own character."
-                    )
-                    if isDownloadingVoice { speechDownload } else { speechPicker }
+                // The LIVE pixel face is the hero — mounted ONCE above the step
+                // switch so the RealityView keeps a stable identity across steps.
+                // Inside the switch (or header()) every step change is a fresh
+                // ConditionalContent identity that tears down and rebuilds the
+                // scene — the documented rebuild-flash trap. One stable mount
+                // lets the per-step setEmotion choreography animate live.
+                AvatarView(controller: env.avatar)
+                    .frame(width: 260, height: 150)
+                    .padding(.bottom, 4)
+                    .accessibilityHidden(true)
+
+                stepDots
+
+                Group {
+                    switch step {
+                    case .you:
+                        header(
+                            title: "Hello",
+                            subtitle: "I'm M1K3 — your local AI. Who am I talking to?"
+                        )
+                        youStep
+                    case .brain:
+                        header(
+                            title: "Brain",
+                            subtitle: "Pick my brain — it runs entirely on this Mac. Change it any time."
+                        )
+                        if isWakingBrain { brainAwakening } else { brainPicker }
+                    case .voice:
+                        header(
+                            title: "Ears",
+                            subtitle: "How I hear you. Tap the mic anywhere to dictate."
+                        )
+                        if isDownloadingWhisper { voiceDownload } else { voicePicker }
+                    case .speech:
+                        header(
+                            title: "Voice",
+                            subtitle: "How I sound when I speak — my friends call me Mike. "
+                                + "Built-in is instant; M1K3 Voice has its own character."
+                        )
+                        if isDownloadingVoice { speechDownload } else { speechPicker }
+                    }
                 }
+                // A step advance should breathe, not zoom — the subtler cousin of
+                // voice mode's 0.88 hero transition. The avatar above stays put
+                // while the cards glide: the continuity anchor.
+                .transition(.scale(scale: 0.96, anchor: .top).combined(with: .opacity))
             }
             .padding(32)
             .frame(maxWidth: .infinity)
+            .animation(
+                reduceMotion ? nil : .spring(response: 0.42, dampingFraction: 0.82),
+                value: step
+            )
         }
         .frame(minWidth: 580, minHeight: 640)
         .glassBackdrop()
@@ -131,10 +160,28 @@ struct OnboardingView: View {
 
     // MARK: - Shared header
 
-    /// The LIVE pixel face is the hero — M1K3 is present from the first
-    /// screen, not represented by a static glyph. (`glyph` is kept in the
-    /// step call sites' spirit via the per-step EMOTION instead.)
-    private func header(glyph _: String, title: String, subtitle: String) -> some View {
+    /// Passive progress dots — answer "how much is left" without wizard chrome.
+    /// Hidden on a brain-only re-pick, where a four-dot trail would lie.
+    @ViewBuilder
+    private var stepDots: some View {
+        if !startAtBrain {
+            HStack(spacing: 6) {
+                ForEach(Step.allCases, id: \.self) { s in
+                    Circle()
+                        .fill(s == step ? AnyShapeStyle(.tint) : AnyShapeStyle(.quaternary))
+                        .frame(width: 6, height: 6)
+                }
+            }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(
+                "Step \((Step.allCases.firstIndex(of: step) ?? 0) + 1) of \(Step.allCases.count)"
+            )
+        }
+    }
+
+    /// Title + subtitle under the live face. The steps speak through the
+    /// per-step EMOTION on the hoisted avatar above, not static glyphs.
+    private func header(title: String, subtitle: String) -> some View {
         VStack(spacing: 8) {
             Text(title)
                 .font(.pixel(40))
@@ -163,7 +210,7 @@ struct OnboardingView: View {
 
 //
 // Same-file extension (keeps the OnboardingView struct body under SwiftLint's
-// type_body_length now that there are three steps). Step views read the struct's
+// type_body_length now that there are four steps). Step views read the struct's
 // @State directly — private members of a same-file extension are visible to `body`.
 
 private extension OnboardingView {
@@ -357,7 +404,7 @@ private extension OnboardingView {
             .buttonStyle(.glassProminent)
             .padding(.top, 4)
 
-            Button("Skip — set up voice later in Settings") { step = .speech }
+            Button("Skip — set up hearing later in Settings") { step = .speech }
                 .buttonStyle(.plain)
                 .font(.caption)
                 .foregroundStyle(.secondary)
@@ -445,7 +492,7 @@ private extension OnboardingView {
                 .buttonStyle(.glass)
                 .font(.callout)
 
-            Button("Skip — choose a voice later in Settings") {
+            Button("Skip — pick a voice later in Settings") {
                 env.selectVoiceTier(.builtin)
                 onComplete()
             }

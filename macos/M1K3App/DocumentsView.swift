@@ -48,7 +48,7 @@ struct DocumentsView: View {
     private var header: some View {
         HStack {
             Label("Documents", systemImage: "books.vertical")
-                .font(.headline)
+                .font(.pixelTitle)
             Spacer()
             Text("\(docs.count) item\(docs.count == 1 ? "" : "s")")
                 .font(.caption.monospacedDigit())

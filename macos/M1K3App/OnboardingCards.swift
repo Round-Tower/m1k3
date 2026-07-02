@@ -2,16 +2,37 @@
 //  OnboardingCards.swift
 //  M1K3App
 //
-//  The selectable cards for the first-run flow — Brain (Mini/Lil/Big), Voice input
-//  (Apple Speech / WhisperKit), and Voice output (Built-in / M1K3 Voice). Extracted
-//  from OnboardingView so that file stays within length limits; all three share the
-//  same glass-card layout.
+//  The selectable cards for the first-run flow — Brain (Auto + Mini/Lil/Big/Huge),
+//  Voice input (Apple Speech / WhisperKit), and Voice output (Built-in / M1K3
+//  Voice). Extracted from OnboardingView so that file stays within length limits;
+//  all three share the same glass-card layout and SelectionRadio.
 //
 //  Signed: Kev + claude-sonnet-4-6, 2026-06-08, Confidence 0.85, Prior: Unknown
+//  Review: Kev + claude-fable-5, 2026-07-02, Confidence 0.9 — extracted the 4×
+//  duplicated selection radio into SelectionRadio with a symbol-replace
+//  transition; card titles moved to the shared Font.pixelTitle.
 
 import M1K3Inference
 import M1K3Voice
 import SwiftUI
+
+// MARK: - Selection radio
+
+/// The shared card-selection radio. The checkmark draws in with a symbol
+/// replace so picking a card reads as confirmation, not a hard pop.
+struct SelectionRadio: View {
+    let isSelected: Bool
+
+    var body: some View {
+        Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+            .symbolRenderingMode(.hierarchical)
+            .foregroundStyle(isSelected ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
+            .font(.title3)
+            .contentTransition(.symbolEffect(.replace))
+            .animation(.default, value: isSelected)
+            .accessibilityHidden(true)
+    }
+}
 
 // MARK: - Brain card
 
@@ -39,7 +60,7 @@ struct BrainCard: View {
 
                 VStack(alignment: .leading, spacing: 4) {
                     HStack(spacing: 8) {
-                        Text(tier.displayName).font(.pixel(15))
+                        Text(tier.displayName).font(.pixelTitle)
                         if isRecommended { recommendedBadge }
                     }
                     .padding(.bottom, 2)
@@ -56,11 +77,7 @@ struct BrainCard: View {
                         .padding(.top, 2)
                 }
                 Spacer(minLength: 0)
-                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                    .symbolRenderingMode(.hierarchical)
-                    .foregroundStyle(isSelected ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
-                    .font(.title3)
-                    .accessibilityHidden(true)
+                SelectionRadio(isSelected: isSelected)
             }
             .padding(16)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -122,7 +139,7 @@ struct AutoBrainCard: View {
                     .accessibilityHidden(true)
 
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("Let M1K3 choose").font(.pixel(15)).padding(.bottom, 2)
+                    Text("Let M1K3 choose").font(.pixelTitle).padding(.bottom, 2)
                     Text("Recommended for most people")
                         .font(.subheadline.weight(.medium))
                         .foregroundStyle(.tint)
@@ -133,11 +150,7 @@ struct AutoBrainCard: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 Spacer(minLength: 0)
-                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                    .symbolRenderingMode(.hierarchical)
-                    .foregroundStyle(isSelected ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
-                    .font(.title3)
-                    .accessibilityHidden(true)
+                SelectionRadio(isSelected: isSelected)
             }
             .padding(16)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -207,7 +220,7 @@ struct VoiceCard: View {
                     .accessibilityHidden(true)
 
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(engine.displayName).font(.pixel(15)).padding(.bottom, 2)
+                    Text(engine.displayName).font(.pixelTitle).padding(.bottom, 2)
                     Text(engine.tagline)
                         .font(.subheadline.weight(.medium))
                         .foregroundStyle(.tint)
@@ -217,11 +230,7 @@ struct VoiceCard: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 Spacer(minLength: 0)
-                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                    .symbolRenderingMode(.hierarchical)
-                    .foregroundStyle(isSelected ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
-                    .font(.title3)
-                    .accessibilityHidden(true)
+                SelectionRadio(isSelected: isSelected)
             }
             .padding(16)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -256,7 +265,7 @@ struct SpeechVoiceCard: View {
                     .accessibilityHidden(true)
 
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(tier.displayName).font(.pixel(15)).padding(.bottom, 2)
+                    Text(tier.displayName).font(.pixelTitle).padding(.bottom, 2)
                     Text(tier.tagline)
                         .font(.subheadline.weight(.medium))
                         .foregroundStyle(.tint)
@@ -266,11 +275,7 @@ struct SpeechVoiceCard: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 Spacer(minLength: 0)
-                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                    .symbolRenderingMode(.hierarchical)
-                    .foregroundStyle(isSelected ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
-                    .font(.title3)
-                    .accessibilityHidden(true)
+                SelectionRadio(isSelected: isSelected)
             }
             .padding(16)
             .frame(maxWidth: .infinity, alignment: .leading)

@@ -41,6 +41,11 @@ struct MessageView: View {
     @State private var showSources = false
     @State private var showReasoning = false
     @State private var didCopy = false
+    /// Monotonic token for the Speak button's acknowledge bounce — an Int, not a
+    /// Bool, so repeat taps re-fire (Bool value effects double-fire; the
+    /// speakDownbeat precedent in VoiceModeView).
+    @State private var speakTaps = 0
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         rows
@@ -158,11 +163,17 @@ struct MessageView: View {
             if case .complete = message.status, !message.text.isEmpty {
                 HStack(spacing: 6) {
                     Button {
+                        speakTaps += 1
                         onSpeak(message.text)
                     } label: {
+                        // The bounce acknowledges the tap — TTS spin-up has real
+                        // latency (especially Kokoro), so the button answers first.
+                        // Pinning the token to 0 under Reduce Motion means the
+                        // effect simply never fires (bounce is motion).
                         Image(systemName: "speaker.wave.2")
                             .symbolRenderingMode(.hierarchical)
                             .font(.caption)
+                            .symbolEffect(.bounce, value: reduceMotion ? 0 : speakTaps)
                     }
                     .buttonStyle(.glass)
                     .accessibilityLabel("Speak this answer")
@@ -232,6 +243,9 @@ struct MessageView: View {
                 .font(.caption.weight(.medium))
                 .foregroundStyle(.secondary)
                 .contentTransition(.opacity)
+                // The bubble's dots iterate like a typing indicator while the
+                // model reasons; the collapsed resting state stays still.
+                .symbolEffect(.variableColor.iterative, isActive: isThinkingLive)
         }
         .padding(.horizontal, 6)
     }

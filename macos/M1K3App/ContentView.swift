@@ -28,6 +28,7 @@ import UniformTypeIdentifiers
 
 struct ContentView: View {
     @Environment(AppEnvironment.self) private var env
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     @State private var draft = ""
     @State private var showDocuments = false
@@ -271,6 +272,12 @@ struct ContentView: View {
                         .imageScale(.large)
                         .fontWeight(.semibold)
                         .frame(width: 22, height: 22)
+                        // Same listening state as the voice-mode mic — same life:
+                        // breathe while hot, smooth fill/outline swap. Breathe
+                        // scales, so it sits out under Reduce Motion.
+                        .contentTransition(.symbolEffect(.replace))
+                        .symbolEffect(.breathe, isActive: env.isListening && !reduceMotion)
+                        .animation(.default, value: env.isListening)
                 }
                 .buttonStyle(.glass)
                 .buttonBorderShape(.circle)
@@ -340,8 +347,11 @@ struct ContentView: View {
     @ViewBuilder
     private var statusContent: some View {
         if env.isRecording {
+            // "Tape is rolling": the pill only mounts while recording, so the
+            // pulse runs its whole lifetime — the live-capture privacy signal.
             Label("Recording", systemImage: "record.circle.fill")
                 .symbolRenderingMode(.hierarchical)
+                .symbolEffect(.pulse)
                 .font(.caption)
                 .foregroundStyle(.red)
         } else if env.modelLoad.isActive {
@@ -396,6 +406,8 @@ struct ContentView: View {
                     env.isVoiceModeActive ? "Leave voice mode" : "Voice mode",
                     systemImage: env.isVoiceModeActive ? "person.wave.2.fill" : "person.wave.2"
                 )
+                .contentTransition(.symbolEffect(.replace))
+                .animation(.default, value: env.isVoiceModeActive)
             }
             .keyboardShortcut("v", modifiers: [.command, .shift])
             .disabled(!env.isVoiceModeActive
@@ -506,6 +518,8 @@ struct ContentView: View {
             } label: {
                 Label(env.isRecording ? "Stop recording" : "Record call",
                       systemImage: env.isRecording ? "stop.circle.fill" : "record.circle")
+                    .contentTransition(.symbolEffect(.replace))
+                    .animation(.default, value: env.isRecording)
             }
             .tint(env.isRecording ? .red : nil)
 
@@ -527,7 +541,12 @@ struct ContentView: View {
 private struct EmptyChatView: View {
     var body: some View {
         ContentUnavailableView {
+            // The wordmark wears the brand face, at caption volume — 28pt keeps
+            // the deliberately quiet empty state quiet (the 40pt hero size is
+            // onboarding's). Taste-gate at ⌘R.
             Text("M1K3")
+                .font(.pixel(28))
+                .kerning(2)
         } description: {
             Text("Drop a PDF or text file to give M1K3 something to remember, then ask away.")
         }
@@ -535,12 +554,22 @@ private struct EmptyChatView: View {
 }
 
 private struct DropHintView: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     var body: some View {
         RoundedRectangle(cornerRadius: 20)
             .strokeBorder(.tint, style: StrokeStyle(lineWidth: 2, dash: [8]))
             .overlay {
                 Label("Drop to ingest", systemImage: "tray.and.arrow.down")
                     .font(.title3.weight(.semibold))
+                    // A gentle beckon while the drag hovers — self-limiting, the
+                    // view unmounts when the drag ends. Keep the delay ≥1.5s.
+                    // Wiggle moves, so it sits out under Reduce Motion.
+                    .symbolEffect(
+                        .wiggle.down,
+                        options: .repeat(.periodic(delay: 1.5)),
+                        isActive: !reduceMotion
+                    )
                     .padding(20)
                     .glassEffect(.regular, in: .rect(cornerRadius: 16))
             }
@@ -632,11 +661,16 @@ private struct IngestBanner: View {
             if busy {
                 ProgressView().controlSize(.small)
             } else {
-                Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
+                // Insertion transition, not a Bool-keyed bounce (Bools
+                // double-fire and the view is freshly inserted on the flip).
+                Image(systemName: "checkmark.circle.fill")
+                    .foregroundStyle(.green)
+                    .transition(.symbolEffect)
             }
             Text(text).font(.callout).lineLimit(2)
             Spacer()
         }
+        .animation(.default, value: busy)
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
         .glassEffect(.regular, in: .rect(cornerRadius: 12))

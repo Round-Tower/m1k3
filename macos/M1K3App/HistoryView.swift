@@ -31,7 +31,7 @@ struct HistoryView: View {
         HStack {
             Label("History", systemImage: "clock.arrow.circlepath")
                 .symbolRenderingMode(.hierarchical)
-                .font(.headline)
+                .font(.pixelTitle)
             Text("\(summaries.count)")
                 .font(.caption.monospacedDigit()).foregroundStyle(.secondary)
             Spacer()
