@@ -218,6 +218,9 @@ bundletool-all-*.jar
 # Private planning/marketing notes and scratch space never travel.
 /marketing/
 /scratch/
+# Nested per-surface session dirs (agent memory) stay local too.
+/macos/.claude/
+/app/.claude/
 
 # --- Private runtime data: must NEVER be committed (access-readiness) ---
 # Personal conversation history / vector store
