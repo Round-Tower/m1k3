@@ -14,7 +14,7 @@ Edge AI you actually own: no cloud, no telemetry, no network cable it never asks
 <p align="center">
   <a href="https://github.com/Round-Tower/m1k3/releases/latest/download/M1K3.dmg"><strong>⬇ Download for macOS</strong></a>
   · <a href="https://m1k3.app">m1k3.app</a>
-  · <a href="https://testflight.apple.com/join/UCUJGbJe">TestFlight beta</a>
+  · <a href="https://testflight.apple.com/join/Fxp2F5Je">TestFlight beta</a>
 </p>
 
 <p align="center"><em>Requires macOS 26 Tahoe · Apple Silicon · signed & notarized (Developer ID).</em></p>
@@ -55,7 +55,7 @@ one-time model download and an optional, explicitly-enabled web search.
 
 ## Get M1K3
 
-- **[TestFlight beta](https://testflight.apple.com/join/UCUJGbJe)** — the easiest way in.
+- **[TestFlight beta](https://testflight.apple.com/join/Fxp2F5Je)** — the easiest way in.
 - **[Download the DMG](https://github.com/Round-Tower/m1k3/releases/latest/download/M1K3.dmg)** — signed & notarized.
 - **Build from source** — [`macos/README.md`](./macos/README.md): clone → `xcodegen generate` → ⌘R.
 
