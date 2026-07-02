@@ -22,9 +22,10 @@
 //  Review: Kev + claude-fable-5, 2026-07-02, Confidence 0.85 — fixed the first-run
 //  regression (ed711813 shipped opening on .speech, so You/Brain/Ears were
 //  unreachable and onboarding "completed" with nothing chosen); restored the live
-//  avatar hero, hoisted ABOVE the step switch for stable RealityView identity;
-//  added step dots + spring step transitions (Reduce Motion-gated); copy pass
-//  (STT step → "Ears", the Mike beat moved to the Voice step where "Hear a
+//  avatar as the FULL-WINDOW reactive backdrop (AvatarChatBackground — Kev's ⌘R
+//  call over the first-cut 260×150 header mount), receding on download/waking
+//  states; added step dots + spring step transitions (Reduce Motion-gated); copy
+//  pass (STT step → "Ears", the Mike beat moved to the Voice step where "Hear a
 //  sample" pays it off). Look/feel is verify-by-launch.
 
 import M1K3Avatar
@@ -72,17 +73,6 @@ struct OnboardingView: View {
         // clipped behind a resize.
         ScrollView {
             VStack(spacing: 24) {
-                // The LIVE pixel face is the hero — mounted ONCE above the step
-                // switch so the RealityView keeps a stable identity across steps.
-                // Inside the switch (or header()) every step change is a fresh
-                // ConditionalContent identity that tears down and rebuilds the
-                // scene — the documented rebuild-flash trap. One stable mount
-                // lets the per-step setEmotion choreography animate live.
-                AvatarView(controller: env.avatar)
-                    .frame(width: 260, height: 150)
-                    .padding(.bottom, 4)
-                    .accessibilityHidden(true)
-
                 stepDots
 
                 Group {
@@ -127,6 +117,16 @@ struct OnboardingView: View {
             )
         }
         .frame(minWidth: 580, minHeight: 640)
+        .background {
+            // The LIVE face is the room, not a picture on the wall: the same
+            // full-window reactive backdrop the chat uses (bloom while you
+            // choose, recede while text needs reading), mounted ONCE outside
+            // the step switch so the RealityView keeps a stable identity across
+            // steps and the per-step setEmotion choreography animates live at
+            // full bloom. `isTyping` maps to the download/waking screens —
+            // M1K3 steps back while he's working so the progress copy reads.
+            AvatarChatBackground(env: env, isTyping: backdropRecedes)
+        }
         .glassBackdrop()
         .onAppear {
             // A brain-only re-pick highlights the brain you're already running —
@@ -160,6 +160,13 @@ struct OnboardingView: View {
 
     // MARK: - Shared header
 
+    /// The backdrop's recede cue: while a download / brain wake fills the step
+    /// with progress copy, the face steps back (dim + blur) so the text reads;
+    /// it blooms again the moment the pickers return.
+    private var backdropRecedes: Bool {
+        isWakingBrain || isDownloadingWhisper || isDownloadingVoice
+    }
+
     /// Passive progress dots — answer "how much is left" without wizard chrome.
     /// Hidden on a brain-only re-pick, where a four-dot trail would lie.
     @ViewBuilder
@@ -179,8 +186,8 @@ struct OnboardingView: View {
         }
     }
 
-    /// Title + subtitle under the live face. The steps speak through the
-    /// per-step EMOTION on the hoisted avatar above, not static glyphs.
+    /// Title + subtitle over the live backdrop. The steps speak through the
+    /// per-step EMOTION on the full-window face behind, not static glyphs.
     private func header(title: String, subtitle: String) -> some View {
         VStack(spacing: 8) {
             Text(title)
