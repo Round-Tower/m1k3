@@ -61,7 +61,10 @@ let mlxTTFTLog = Logger(subsystem: "app.m1k3", category: "ttft")
 /// Log one generation's completion metrics. Free function taking only params
 /// (the swiftformat↔Logger autoclosure landmine: never interpolate members).
 /// Internal by design — called from MLXToolCalling.swift too.
-func logGenerationInfo(_ info: GenerateCompletionInfo, label: String, model: String) {
+func logGenerationInfo(
+    _ info: GenerateCompletionInfo, label: String, model: String,
+    totalContextTokens: Int? = nil
+) {
     let promptTokens = info.promptTokenCount
     let prefillMS = Int(info.promptTime * 1000)
     let decodeTokens = info.generationTokenCount
@@ -70,9 +73,13 @@ func logGenerationInfo(_ info: GenerateCompletionInfo, label: String, model: Str
     mlxTTFTLog.notice(
         "\(label, privacy: .public) [\(model, privacy: .public)]: prompt=\(promptTokens)tok prefill=\(prefillMS)ms decode=\(decodeTokens)tok @\(tokensPerSecond)tok/s"
     )
-    // Also surface to the in-app testing readout (no-op unless the app installed a sink).
+    // The user-facing readout wants TRUE context (window pressure), not this
+    // call's prefill: with the persona-prefix KV cache warm, promptTokenCount
+    // is only the suffix past the cache — a fully-grounded turn read "2%" while
+    // actually carrying ~1.3K cached persona tokens. Callers that know the full
+    // rendered length pass it; the log line above stays per-call (prefill cost).
     GenerationMetricsReporter.report(GenerationMetrics(
-        promptTokens: promptTokens,
+        promptTokens: totalContextTokens ?? promptTokens,
         generationTokens: decodeTokens,
         tokensPerSecond: info.tokensPerSecond
     ))
@@ -259,11 +266,16 @@ public final class MLXGemmaProvider: InferenceProvider, ModelPreloading, @unchec
         // Return cached Metal buffers after every generation — without this the
         // process-global MLX cache holds each generation's peak forever.
         defer { MLXMemoryBudget.reclaim(label: "generate") }
-        let session = await makeUpstreamSession(container)
+        let (session, seedTokens) = await makeUpstreamSession(container)
         var raw = ""
         for try await event in session.streamDetails(to: prompt, images: [], videos: []) {
             if let piece = event.chunk { raw += piece }
-            if let info = event.info { logGenerationInfo(info, label: "generate", model: modelIdentifier) }
+            if let info = event.info {
+                logGenerationInfo(
+                    info, label: "generate", model: modelIdentifier,
+                    totalContextTokens: seedTokens + info.promptTokenCount
+                )
+            }
         }
         return Self.normaliseThinkPrefix(raw, preOpened: thinkPrefixNeeded)
     }
@@ -276,7 +288,7 @@ public final class MLXGemmaProvider: InferenceProvider, ModelPreloading, @unchec
                 defer { MLXMemoryBudget.reclaim(label: "generateStreaming") }
                 do {
                     let container = try await ensureLoaded()
-                    let session = await makeUpstreamSession(container)
+                    let (session, seedTokens) = await makeUpstreamSession(container)
                     // Qwen3.5's template pre-opens <think>, so the stream's
                     // first real token is already chain-of-thought — surface
                     // the opener so live reasoning splitting engages from
@@ -284,7 +296,12 @@ public final class MLXGemmaProvider: InferenceProvider, ModelPreloading, @unchec
                     if thinkPrefixNeeded { continuation.yield("<think>") }
                     for try await event in session.streamDetails(to: prompt, images: [], videos: []) {
                         if let chunk = event.chunk { continuation.yield(chunk) }
-                        if let info = event.info { logGenerationInfo(info, label: "stream", model: modelIdentifier) }
+                        if let info = event.info {
+                            logGenerationInfo(
+                                info, label: "stream", model: modelIdentifier,
+                                totalContextTokens: seedTokens + info.promptTokenCount
+                            )
+                        }
                     }
                     continuation.finish()
                 } catch {
@@ -321,25 +338,34 @@ public final class MLXGemmaProvider: InferenceProvider, ModelPreloading, @unchec
     /// persona prefix cache when available (instructions stay nil — the cache
     /// IS the system turn), falling back to plain instructions. Thinking
     /// toggle rendered when the family supports it.
-    private func makeUpstreamSession(_ container: ModelContainer) async -> ChatSession {
+    /// Also returns how many tokens the seeded persona prefix already holds, so
+    /// callers can report TRUE context (seed + this call's prefill) rather than
+    /// the suffix-only count the completion info carries. 0 when unseeded (the
+    /// persona rides inline and is counted by the prefill itself).
+    private func makeUpstreamSession(
+        _ container: ModelContainer
+    ) async -> (session: ChatSession, seedTokens: Int) {
         let session: ChatSession
+        let seedTokens: Int
         if let seed = await personaPrefixSnapshot(container: container, specs: nil, toolNames: []) {
             session = ChatSession(
                 container,
                 cache: seed.cache,
                 generateParameters: generateParameters
             )
+            seedTokens = seed.tokenIDs.count
         } else {
             session = ChatSession(
                 container,
                 instructions: M1K3Persona.systemPrompt,
                 generateParameters: generateParameters
             )
+            seedTokens = 0
         }
         if let context = thinkingAdditionalContext {
             session.additionalContext = context
         }
-        return session
+        return (session, seedTokens)
     }
 
     /// Get-or-build the persona prefix for this model + tool set. Best-effort:

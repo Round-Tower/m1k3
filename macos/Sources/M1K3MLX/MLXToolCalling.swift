@@ -505,7 +505,13 @@ final class MLXToolTurnSession: ToolTurnSession, @unchecked Sendable {
                 case let .toolCall(libraryCall):
                     calls.append(MLXToolMapping.parsedToolCall(from: libraryCall))
                 case let .info(info):
-                    logGenerationInfo(info, label: "toolTurnSession", model: modelID)
+                    // fullIDs.count = the whole rendered conversation — the true
+                    // context for the readout; info's own count is suffix-only
+                    // when the cache held a prefix.
+                    logGenerationInfo(
+                        info, label: "toolTurnSession", model: modelID,
+                        totalContextTokens: fullIDs.count
+                    )
                 @unknown default:
                     break
                 }

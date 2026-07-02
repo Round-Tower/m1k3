@@ -43,6 +43,11 @@ struct ContentView: View {
     /// Settings updates the chat toolbar live.
     @AppStorage(AppEnvironment.autoRouteBrainKey) private var autoRouteBrain = false
 
+    /// Readable measure for the chat column on large windows: transcript and
+    /// input bar cap at this width and centre, instead of stretching edge to
+    /// edge (~90+ chars/line reads badly, and worse in the dyslexia modes).
+    private static let chatContentMaxWidth: CGFloat = 760
+
     var body: some View {
         VStack(spacing: 0) {
             avatarPanel
@@ -143,6 +148,10 @@ struct ContentView: View {
         )) {
             ReviewPanel(review: env.review)
                 .inspectorColumnWidth(min: 320, ideal: 420, max: 720)
+                // Fill the inspector to the WINDOW top: under .hiddenTitleBar the
+                // column otherwise insets below the toolbar strip and the window
+                // background shows as a black band above the panel.
+                .ignoresSafeArea(.container, edges: .top)
         }
         .confirmationDialog("Record this call?", isPresented: $showConsentDialog, titleVisibility: .visible) {
             Button("Record once") { Task { await env.affirmConsentAndRecord(scope: .once) } }
@@ -210,6 +219,8 @@ struct ContentView: View {
                         }
                     }
                     .padding(20)
+                    .frame(maxWidth: Self.chatContentMaxWidth)
+                    .frame(maxWidth: .infinity) // centre the capped column
                 }
                 .onChange(of: env.chat.messages.last?.text) { followLatest(proxy) }
                 // Follow the live reasoning too — during the think phase `text` is
@@ -283,6 +294,8 @@ struct ContentView: View {
                 .accessibilityLabel("Send")
             }
             .padding(16)
+            .frame(maxWidth: Self.chatContentMaxWidth)
+            .frame(maxWidth: .infinity) // centre with the transcript column
         }
     }
 
