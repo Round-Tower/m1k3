@@ -8,11 +8,10 @@ import asyncio
 import sys
 import os
 import json
-from typing import Any
 import traceback
 
-# Add project root to path
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+# Add project root to path (this file lives in _legacy/, one level below root)
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 try:
     from mcp.server.models import InitializationOptions
@@ -24,7 +23,7 @@ except ImportError:
     sys.exit(1)
 
 # M1K3 TTS imports
-from src.engines.voice.intelligent_tts_engine import IntelligentTTSEngine, TTSQuality
+from src.engines.voice.intelligent_tts_engine import IntelligentTTSEngine
 from src.tts.controllers.piper_tts_manager import PiperTTSManager
 from src.tts.controllers.kokoro_tts_manager import KokoroTTSManager
 from src.tts.effects.audio_effects import (
@@ -48,7 +47,7 @@ except ImportError:
     AVATAR_SERVER_AVAILABLE = False
 
 # M1K3 STT imports
-from src.engines.stt.stt_manager import STTManager, STTStatus
+from src.engines.stt.stt_manager import STTManager
 
 # ============================================================================
 # Global State
@@ -701,7 +700,7 @@ async def main():
     initialize_stt()  # Optional, don't fail if unavailable
 
     print("M1K3 Unified MCP Server ready", file=sys.stderr)
-    print(f"  TTS: Kokoro + Piper", file=sys.stderr)
+    print("  TTS: Kokoro + Piper", file=sys.stderr)
     print(f"  Avatar: {len(AVATAR_MODELS)} models", file=sys.stderr)
     print(f"  STT: {stt_manager.get_available_engines() if stt_manager and stt_manager.is_available() else 'unavailable'}", file=sys.stderr)
 

@@ -1,10 +1,9 @@
-.PHONY: install download test test-voice demo run run-silent benchmark clean help
+.PHONY: install test test-voice demo run run-silent benchmark clean help
 
 help:
 	@echo "M1K3 Local AI CLI with Voice - Available Commands:"
 	@echo ""
 	@echo "  install     - Install Python dependencies"
-	@echo "  download    - Download SmolLM-135M model" 
 	@echo "  test        - Run quick functionality test"
 	@echo "  test-voice  - Test voice synthesis"
 	@echo "  demo        - Run voice & greeting demonstration"
@@ -19,10 +18,6 @@ install:
 	@echo "📦 Installing dependencies..."
 	pip install -r requirements.txt
 
-download:
-	@echo "⬇️  Downloading SmolLM-135M model..."
-	python download_model.py
-
 test:
 	@echo "🧪 Running functionality test..."
 	python _legacy/cli.py --no-voice --query "Hello M1K3!"
@@ -33,7 +28,7 @@ test-voice:
 
 demo:
 	@echo "🎮 Running M1K3 PlayStation 1 voice demo..."
-	python retro_demo.py
+	python demos/retro_demo.py
 
 run:
 	@echo "🎮 Starting M1K3 with PlayStation 1 retro voice..."
@@ -45,14 +40,14 @@ run-silent:
 
 benchmark:
 	@echo "📊 Running performance benchmarks..."
-	python benchmark.py
+	python src/utils/performance/benchmark.py
 
 clean:
 	@echo "🧹 Cleaning up models..."
 	rm -rf models/
 
 # Quick setup for new users
-setup: install download
+setup: install
 	@echo "✅ M1K3 setup complete! Run 'make run' to start."
 site:
 	@echo "🦊 Serving launch site → http://localhost:8002"

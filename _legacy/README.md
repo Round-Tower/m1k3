@@ -15,17 +15,23 @@ PYTHONPATH=. python _legacy/cli.py
 
 ## What was intentionally NOT moved
 
-- **`mcp_unified_server.py`** — still live; referenced by `.mcp.json`. Stays at the
-  repo root.
 - **`src/web-avatar/` and `src/avatar-popover/`** — the live web-avatar and Tauri
   popover surfaces remain under `src/`.
 
 These were left in place on purpose; do not assume they are part of the legacy
 archive.
 
+## Archived later
+
+- **`mcp_unified_server.py`** — archived here 2026-07-02. It was live and
+  `.mcp.json`-referenced when this archive was made (2026-06-22), but `.mcp.json`
+  switched to the Mac app's in-app HTTP MCP server (`http://127.0.0.1:4242/mcp`)
+  on 2026-06-30, orphaning it.
+
 <!--
 Signed: Kev + claude-opus-4-8 (via subagent), 2026-06-21, Confidence 0.85, Prior: Unknown
 Reversible quarantine of the dormant root-level Python CLI into _legacy/ to declutter
 the repo root so macos/ reads clearly as the product. git mv preserved history for the
 13 tracked files; voice_input_processor.py was untracked and moved with plain mv.
+Review: Kev + claude-fable-5, 2026-07-02 — corrected the mcp_unified_server.py carve-out: .mcp.json repointed to the in-app HTTP server on 2026-06-30; file archived here in the same lean pass.
 -->

@@ -40,7 +40,10 @@ xcodebuild -scheme M1K3 -destination 'platform=macOS' build | xcbeautify   # alw
 
 - **CI** (`../.github/workflows/ci.yml`) runs `swift test --parallel` on a
   `macos-26` runner with `M1K3_MLX_INTEGRATION=0`, plus a curated Python smoke
-  subset for the legacy tree. The app target builds via Xcode Cloud →
+  subset for the legacy tree. PR CI also runs an `app-build` job (xcodegen
+  generate + unsigned `xcodebuild -scheme M1K3` on `macos-26`) so app-shell
+  compile breaks in `M1K3App/` fail at PR time, not only at release. The app
+  target builds for distribution via Xcode Cloud →
   TestFlight; pushing to `master` triggers that pipeline (a deliberate,
   user-gated action).
 - Tests use the **swift-testing** framework (`import Testing`, `@Test`), not
@@ -62,7 +65,7 @@ built `.app` bundle. So MLX/WhisperKit code is verified two ways:
    Keys: `M1K3_SELFTEST=1`, `M1K3_SELFTEST_MODEL`, `M1K3_SELFTEST_MEMLOOP=N`,
    `M1K3_SELFTEST_CHATEVAL=1` + `_CHATEVAL_BRAINS`/`_CHATEVAL_MLX_MODEL` (A/B
    override), `M1K3_SELFTEST_OUT=<container path>`. This is the cleanest verify
-   path — no UI, no MCP 50s cap.
+   path — no UI, no MCP grace window or job deadline.
 
 When a change touches MLX/Metal/RealityKit/voice, the convention is
 **verify-by-launch**: state it as a named "verify-owed" rather than claiming it
@@ -109,16 +112,18 @@ gemma-4-12B rejected; OptiQ parked) are in `docs/MODEL_CHOICES.md`.
 
 **Tool-calling routing** (`LocalAgent.run`): a brain with a resolvable tool-call
 format runs **native** (`runNative`); otherwise the **ReAct** floor
-(`runReAct`). Qwen3 → `.json`; gemma-4 → `.gemma4` (requires the mlx-swift-lm
-`main` revision pin — see `Package.swift`).
+(`runReAct`). Qwen3 → `.json`; gemma-4 → `.gemma4` (requires mlx-swift-lm ≥
+3.31.4 — see `Package.swift`).
 
 **MCP exposure (two surfaces):**
 - **In-app HTTP MCP server** (`M1K3App/MCPHostController.swift`) — serves on
   `127.0.0.1:4242/mcp` while the app runs. This is the live way agents reach
   M1K3's voice/RAG/memory.
 - **`M1K3MCP` stdio binary** — registered into Claude Desktop/Code; reads the
-  app's sandbox store. See `docs/MCP_SETUP.md`. (Note the 50s MCP timeout —
-  verbose thinking models can exceed it; test those in-app or via SelfTest.)
+  app's sandbox store. See `docs/MCP_SETUP.md`. (`ask_m1k3` is submit-and-poll:
+  ~8s inline grace, then a job id polled via `get_answer`, with a ~120s
+  server-side job deadline — see `Sources/M1K3MCPKit/IntelligenceMCPTools.swift`.
+  Long/thinking turns can blow the 120s cap; test those in-app or via SelfTest.)
 
 ## Conventions specific to this repo
 
@@ -128,11 +133,12 @@ format runs **native** (`runNative`); otherwise the **ReAct** floor
   (`~/Library/Containers/app.m1k3/Data/Library/Caches/models/<org>/<repo>/`),
   not `~/Library/Caches`. `DEVELOPMENT_TEAM` is pinned in `project.yml` because a
   stable signing identity is load-bearing for persistent Keychain/TCC grants.
-- **`Package.swift` mlx-swift-lm is temporarily pinned to a `main` revision**
-  (not a tag) to get gemma-4 tool-calling; swap back to `.upToNextMinor` when
-  upstream cuts a release > 3.31.3 (an armed release-watch routine pings when it
-  lands). Dep bumps are probe-first (`swift package resolve`) because of the
-  WhisperKit/swift-transformers `Tokenizers` clash landmine.
+- **`Package.swift` mlx-swift-lm is back on tag 3.31.4** (`.upToNextMinor`,
+  since 2026-07-01 — the temporary main-revision pin for gemma-4 tool-calling is
+  resolved; the parser shipped in 3.31.4). Dep bumps are probe-first
+  (`swift package resolve`) because of the WhisperKit/swift-transformers
+  `Tokenizers` clash landmine, and any bump owes a gemma-4 NATIVE tool-call
+  smoke (tool-calling is why this dep moves).
 - **`rg -rn` is a footgun** — `-r` is `--replace`, so `-rn "pat"` rewrites every
   match to "n". Use `rg -n` (recursive is the default). This trap has bitten
   repeatedly.

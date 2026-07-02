@@ -39,22 +39,13 @@ pip install -r requirements.txt
 
 ```bash
 # Download required models (TinyLlama, embeddings, etc.)
-python download_models.py
+python src/models/loaders/download_models.py
 
 # Check what models are available
-python download_models.py --check
+python src/models/loaders/download_models.py --check
 ```
 
-### 5. Generate Knowledge Base (Optional - for RAG)
-
-```bash
-# Generate comprehensive knowledge base (1,341+ documents)
-python generate_comprehensive_kb.py
-
-# This creates knowledge/comprehensive_knowledge_base.json
-```
-
-### 6. Test Installation
+### 5. Test Installation
 
 > **Note (legacy):** The `m1k3.py` / `cli.py` Python CLI has been archived under
 > `_legacy/` (superseded by the macOS app under `macos/`). The `python m1k3.py …`
@@ -72,7 +63,7 @@ python _legacy/m1k3.py --rag --query "How do I fix slow WiFi?"
 python _legacy/m1k3.py --tui
 
 # Test validation suite
-python test_rag_practical.py
+python -m pytest tests/python/test_rag_practical.py -v
 ```
 
 ## Verification
@@ -83,7 +74,7 @@ After setup, you should have:
 - ✅ `knowledge/comprehensive_knowledge_base.json` (if generated)
 - ✅ Working CLI: `python _legacy/m1k3.py --help`
 - ✅ Working RAG: `python _legacy/m1k3.py --rag`
-- ✅ Web interfaces: `rag_knowledge_viewer.html`, `rag_admin.html`
+- ✅ Web interfaces: `web/static/rag_knowledge_viewer.html`, `web/static/rag_admin.html`
 
 ## Troubleshooting
 
@@ -111,7 +102,6 @@ pip install --upgrade -r requirements.txt
 
 # Test specific imports
 python -c "import transformers, torch; print('✅ Core AI libraries OK')"
-python -c "from m1k3_rag_engine import M1K3RAGEngine; print('✅ RAG engine OK')"
 ```
 
 ### Memory Issues
@@ -127,14 +117,8 @@ python -c "import psutil; print(f'RAM: {psutil.virtual_memory().available // (10
 ### RAG System Issues
 
 ```bash
-# Regenerate knowledge base
-python generate_comprehensive_kb.py
-
 # Test RAG components
-python test_rag_quick_validation.py
-
-# Check knowledge base
-python -c "import json; data=json.load(open('knowledge/comprehensive_knowledge_base.json')); print(f'Documents: {len(data[\"documents\"])}')"
+python -m pytest tests/python/test_rag_quick_validation.py -v
 ```
 
 ## Optional Components
@@ -172,10 +156,10 @@ docker-compose up --build
 
 ```bash
 # Run quick validation
-python test_rag_practical.py
+python -m pytest tests/python/test_rag_practical.py -v
 
 # Run comprehensive tests
-python test_rag_quick_validation.py
+python -m pytest tests/python/test_rag_quick_validation.py -v
 
 # Run specific test suites
 python -m pytest tests/ -v
@@ -185,24 +169,11 @@ python -m pytest tests/ -v
 
 ```bash
 # Web-based knowledge management
-open rag_admin.html  # Admin panel
-open rag_knowledge_viewer.html  # Browse/search
-
-# Generate specific categories
-python expanded_synthetic_generator.py --category device_technology
+open web/static/rag_admin.html  # Admin panel
+open web/static/rag_knowledge_viewer.html  # Browse/search
 ```
 
 ## Production Deployment
-
-### Docker
-
-```bash
-# Build container
-docker build -t m1k3-ai .
-
-# Run container
-docker run -p 8080:8080 m1k3-ai
-```
 
 ### Environment Variables
 
@@ -216,9 +187,9 @@ export M1K3_RAG_ENABLED=true
 
 ## Support
 
-- **Documentation**: See `CLAUDE.md` for full feature list
-- **Issues**: Check `BUGS.md` for known issues
-- **Testing**: Run `test_rag_practical.py` for system validation
+- **Documentation**: See `README.md` for full feature list
+- **Issues**: Check `tests/CI_TRIAGE.md` for known CI issues
+- **Testing**: Run `python -m pytest tests/python/test_rag_practical.py -v` for system validation
 - **GitHub**: [Round-Tower/m1k3](https://github.com/Round-Tower/m1k3)
 
 ## Quick Start Summary
@@ -227,7 +198,7 @@ export M1K3_RAG_ENABLED=true
 # Essential 4-step setup:
 git clone https://github.com/Round-Tower/m1k3.git && cd m1k3
 pip install -r requirements.txt
-python download_models.py
+python src/models/loaders/download_models.py
 python _legacy/m1k3.py --rag --query "Hello M1K3!"
 ```
 

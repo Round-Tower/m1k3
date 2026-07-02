@@ -169,14 +169,19 @@ tests/python/test_*.py
 !tests/python/test_vosk_recognition.py
 !tests/python/test_warm_voice_update.py
 
+# Local MLX integration test — tracked, referenced by README + docs/MLX_SETUP.md;
+# NOT part of the CI smoke set
+!tests/python/test_mlx_integration.py
+
 # Development and diagnostic files
 *_diagnostic.py
 system_analysis.py
 hardware_insights.py
 startup_profiler.py
 voice_diagnostic.py
-voice_input_processor.py
-voice_truncation_tracker.py# Large model files - download separately
+voice_truncation_tracker.py
+
+# Large model files - download separately
 models/SmolLM-135M.Q4_K_M.gguf
 pwa-deployment/frontend/models/embeddings-tiny/model.onnx
 
@@ -185,6 +190,7 @@ VibeVoice/
 
 # Android/Kotlin build artifacts
 *.jar
+!app/gradle/wrapper/gradle-wrapper.jar
 *.apk
 *.aab
 bundletool-all-*.jar

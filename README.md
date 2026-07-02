@@ -37,7 +37,7 @@ one-time model download and an optional, explicitly-enabled web search.
 |---|---|---|---|
 | **macOS native** | [`macos/`](./macos) | Swift 6.2, SwiftUI, MLX-Swift | **Flagship** — on-device knowledge · RAG · agent · voice · calls. See [`macos/PLAN.md`](./macos/PLAN.md). |
 | **Desktop CLI / MCP** | repo root, `src/` | Python 3.12, MLX-LM | Runs. The original surface (documented below). |
-| **間 AI mobile** | [`app/`](./app) | Kotlin Multiplatform | Active — Android first, iOS next. See [`app/README.md`](./app/README.md). |
+| **間 AI mobile** | [`app/`](./app) | Kotlin Multiplatform | Slow burn — Android first, iOS next. See [`app/README.md`](./app/README.md). |
 
 ---
 
@@ -91,8 +91,8 @@ runs — even with nothing installed (the mock fallback answers).
 - **Voice input (STT)** — multi-engine with fallbacks: macOS native (0 MB),
   Vosk (offline), Web Speech, Whisper. Engines in `src/engines/stt/`.
 - **3D avatar** — THREE.js companion with 13 animated models and emotion state.
-  Web demo: `cd src/web-avatar && npm run dev` → <http://localhost:5174/demo.html>.
-  Standalone Tauri popover: `cd src/avatar-popover && cargo tauri dev` (⌘⇧M).
+  Web demo: `cd src/web-avatar && npm run dev` → <http://localhost:5174/demo-legacy.html>.
+  Standalone Tauri popover: `cd src/avatar-popover && cargo tauri dev` (⌘⇧M) (legacy demo — dormant since 2026-02, superseded by the native Mac companion).
 - **MCP server** — exposes M1K3 to Claude Desktop (below).
 
 ## MCP integration
@@ -102,16 +102,15 @@ The live MCP surface is the **Mac app's in-app HTTP server** — see
 [`docs/MCP_SETUP.md`](./macos/docs/MCP_SETUP.md). `.mcp.json` at the repo root
 points Claude Code at `http://127.0.0.1:4242/mcp` while the app is running.
 
-[`mcp_unified_server.py`](./mcp_unified_server.py) is the legacy Python MCP
+[`mcp_unified_server.py`](./_legacy/mcp_unified_server.py) is the legacy Python MCP
 server (pre-Mac-app) — it's no longer referenced by `.mcp.json` and isn't the
-active path, though the file is still present at the repo root.
+active path.
 
 ## Layout
 
 ```
 m1k3/
 ├── _legacy/                  # Legacy Python CLI (m1k3.py, cli.py, …) — archived
-├── mcp_unified_server.py      # MCP server (TTS + Avatar + STT)
 ├── src/
 │   ├── engines/ai/            # AI backends (MLX, SmolLM2, …)
 │   ├── engines/tts/           # Text-to-speech (Kokoro, Piper)

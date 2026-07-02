@@ -382,6 +382,8 @@ ships** (no rebuild — just re-run). New branch: `feat/afm-native-tools-spike`.
 
 ### Edge E — On-device fine-tuning (LoRA): lil now, AFM adapters later (Phase 16) — *unlocked by the evals harness*
 
+Background — why voice goes in the weights but memory never does: [`docs/lora-vs-qlora-and-memory.md`](docs/lora-vs-qlora-and-memory.md).
+
 The evals enclave (Phase 14) turns fine-tuning from vibes into a measurable loop: train an
 adapter, run `CHATEVAL`, read the **before/after delta** in the matrix. That is the unlock — a LoRA
 without a way to score it is just fiddling. M1K3's own AI principle is evaluation-driven development;
