@@ -62,6 +62,17 @@ struct EchoTool: AgentTool {
     }
 }
 
+struct ThrowingTool: AgentTool {
+    struct Boom: Error {}
+    let name = "boom"
+    let description = "always fails"
+    let parameters = [ToolParameter(name: "query", description: "the query")]
+
+    func execute(input _: [String: String]) async throws -> ToolResult {
+        throw Boom()
+    }
+}
+
 // MARK: - Tests
 
 struct LocalAgentTests {
@@ -93,6 +104,26 @@ struct LocalAgentTests {
         #expect(result.reasoningTrace.count == 2)
         #expect(result.reasoningTrace[0].action == "search(hydraulic seal)")
         #expect(result.reasoningTrace[0].observation?.contains("failed under load") == true)
+    }
+
+    @Test("a tool that THROWS still counts as used — downstream error-filtering depends on it")
+    func throwingToolCountsAsUsed() async throws {
+        // A dispatched-but-throwing tool must land in toolsUsed exactly like a
+        // tool that RETURNS an error string: the responder suppresses the loose
+        // in-loop conclusion the moment a tool dispatches (.actionStarted), and
+        // routes through synthesis only when result.toolsUsed is non-empty. If
+        // the two diverge on a throw, the model's raw post-error conclusion
+        // surfaces — the unreliable output the suppression exists to stop.
+        let provider = ScriptedProvider([
+            "I should look this up. ACTION: boom(anything)",
+            "CONCLUSION: Could not retrieve it.",
+        ])
+        let agent = LocalAgent(inferenceProvider: provider, tools: [ThrowingTool()])
+        let result = try await agent.run(goal: "Will it fail?")
+
+        #expect(result.toolsUsed == ["boom"])
+        // The error still reaches the loop as an observation it can adapt to.
+        #expect(result.reasoningTrace[0].observation?.contains("Error executing boom") == true)
     }
 
     @Test("the tool receives the positional argument under the first parameter name")

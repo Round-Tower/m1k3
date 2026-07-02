@@ -403,7 +403,15 @@ final class AppEnvironment {
         runtimeSelection = selection
         let afm = AppleFoundationModelsProvider()
         let initialMLXModelID = brain.mlxModelID ?? BrainTier.big.mlxModelID ?? ""
-        let gemma = MLXGemmaProvider(modelID: initialMLXModelID)
+        // Generation cap follows the tier whose MODEL fills the slot (Big's when
+        // Mini is active), not the selected brain: on a rotating-KV tier an
+        // uncapped decode crosses the 8192 window mid-answer and silently
+        // rotates the persona/grounding head out.
+        let slotTier = brain.mlxModelID != nil ? brain : BrainTier.big
+        let gemma = MLXGemmaProvider(
+            modelID: initialMLXModelID,
+            maxTokens: HistoryBudgetPolicy.generationTokenCap(for: slotTier)
+        )
         currentMLXProvider = gemma
         let mlxSlot = SwappableInferenceProvider(gemma)
         swappableMLX = mlxSlot
@@ -709,7 +717,12 @@ final class AppEnvironment {
         UserDefaults.standard.set(true, forKey: Self.hasChosenBrainKey)
         let oldMLX = currentMLXProvider
         if let modelID = tier.mlxModelID {
-            let mlx = MLXGemmaProvider(modelID: modelID)
+            // Rotating-KV tiers get a capped decode so prefill + generation fit
+            // the window together (see HistoryBudgetPolicy.rotatingGenerationTokenCap).
+            let mlx = MLXGemmaProvider(
+                modelID: modelID,
+                maxTokens: HistoryBudgetPolicy.generationTokenCap(for: tier)
+            )
             currentMLXProvider = mlx
             swappableMLX.setProvider(mlx)
             selectedRuntime = .mlxGemma // didSet warms it + streams progress

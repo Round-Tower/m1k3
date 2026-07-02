@@ -171,7 +171,7 @@ public struct ChatTranscriptStore: Sendable {
 @MainActor
 @Observable
 public final class ChatSession {
-    private static let log = Logger(subsystem: "app.m1k3", category: "responder")
+    private static let log = Logger(subsystem: "app.m1k3", category: "chat-session")
     public private(set) var messages: [ChatMessage] = []
     public private(set) var isResponding = false
 

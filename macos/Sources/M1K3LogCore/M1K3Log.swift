@@ -49,6 +49,10 @@ public enum M1K3Log {
         case agentLoop = "agent-loop"
         /// RAG chat brain (embed → search → ground → generate).
         case responder
+        /// Conversation persistence lifecycle (GRDB save, conversation identity,
+        /// history revision) — kept separate from `responder` so retrieval/
+        /// grounding events and persistence events are each isolable in a stream.
+        case chatSession = "chat-session"
         /// Background memory distillation from conversations.
         case memoryDistill = "memory-distill"
         /// Chat route selection (which brain / path a turn takes).

@@ -719,6 +719,20 @@ struct AgentRAGResponderTests {
         )
     }
 
+    @Test("memory-only grounding still counts as grounded for the think-phase decision")
+    func memoryOnlyGroundingEarnsThinking() {
+        // Memory hits ride a separate retrieval lane from doc chunks; a turn
+        // grounded ONLY by a memory (0 chunks) is still a grounded answer and
+        // must earn CoT on the heavy tiers — not skip the think branch.
+        let memory = ChunkHit(
+            chunkID: UUID(), itemID: UUID(), itemTitle: "Memory", kind: .memory,
+            heading: nil, content: "Kev's sister is called Ada."
+        )
+        #expect(AgentRAGResponder.hasGroundedKnowledge(chunks: [], memories: [memory]))
+        #expect(AgentRAGResponder.hasGroundedKnowledge(chunks: [groundingChunk()], memories: []))
+        #expect(!AgentRAGResponder.hasGroundedKnowledge(chunks: [], memories: []))
+    }
+
     @Test("native-path rules carry NO ReAct scaffolding (no CONCLUSION:, no call budget)")
     func nativeRulesDropReActScaffold() {
         let rules = AgentRAGResponder.grounding(

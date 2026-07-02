@@ -153,9 +153,12 @@ public final class MLXGemmaProvider: InferenceProvider, ModelPreloading, @unchec
             params.quantizedKVStart = 0
         } else {
             // Hard-bound KV-cache growth (the cache rotates past this) so a long
-            // agent transcript can't balloon memory without limit. 8192 leaves the
-            // full 4096-token think-act-answer budget PLUS grounding/tools without
-            // ever rotating the prompt out mid-generation.
+            // agent transcript can't balloon memory without limit. The 4096
+            // maxTokens above is only this class's DEFAULT: the live app caps a
+            // rotating-KV tier (gemma/big) at HistoryBudgetPolicy.
+            // rotatingGenerationTokenCap (2048) so prefill + decode fit 8192
+            // together — an uncapped 4096 decode can cross the window mid-answer
+            // and silently rotate the persona/grounding head out.
             params.maxKVSize = 8192
         }
         generateParameters = params
@@ -291,7 +294,10 @@ public final class MLXGemmaProvider: InferenceProvider, ModelPreloading, @unchec
                     // that's normal, so only a genuine failure is worth an error
                     // line (else every stop emits a false error).
                     if !(error is CancellationError) {
-                        mlxLoadLog.error("""
+                        // ttft, not mlx-load: this is a RUNTIME generation
+                        // failure — filtering the load/swap category shouldn't
+                        // surface it, and generation telemetry should.
+                        mlxTTFTLog.error("""
                         generateStreaming failed [\(self.modelIdentifier, privacy: .public)]: \
                         \(error.localizedDescription, privacy: .public)
                         """)

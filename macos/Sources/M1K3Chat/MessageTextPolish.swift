@@ -20,6 +20,13 @@
 //  fences is flattened for ReadingText now. (Limitation: UNfenced code can't be
 //  told from prose, so it's still flattened — models reliably fence code blocks,
 //  and the app surfaces the first fence in a code webview regardless.)
+//  Review: Kev + claude-fable-5, 2026-07-02, Confidence 0.9 — fence pairing is
+//  now LINE-BASED (CommonMark run-length), replacing the non-greedy regex that
+//  split early on an inline ``` in the fence body and dropped UNCLOSED
+//  (token-truncated) fences into prose polishing — both mangled code. Unclosed
+//  fences/artifacts now run verbatim to the end, and CRLF pairs correctly
+//  (\r\n is ONE grapheme — search \.isNewline, never == "\n"; the pin test
+//  caught this). Review-debt paydown: #109-2, #109-14.
 
 import Foundation
 
@@ -31,13 +38,19 @@ public enum MessageTextPolish {
         // Regions left byte-for-byte: fenced code blocks AND <artifact>…</artifact>
         // document blocks — the markdown inside an artifact must survive verbatim so
         // the review panel can render it (flattening would strip its structure first).
-        var ranges: [Range<String.Index>] = []
-        for match in text.matches(of: /```(?s:.*?)```/) {
-            ranges.append(match.range)
-        }
+        var ranges = fencedCodeRanges(in: text)
         for match in text.matches(of: /<artifact(?:[^>]*)>(?s:.*?)<\/artifact>/.ignoresCase()) {
             ranges.append(match.range)
         }
+        if let truncated = unclosedArtifactStart(in: text, coveredBy: ranges) {
+            ranges.append(truncated ..< text.endIndex)
+        }
+        // Ranges may OVERLAP (an unclosed <artifact> spans to the end, superset
+        // of any fence inside it) — the nested-region guard in the emit loop
+        // below is what restores the no-overlap invariant, not this sort. A
+        // range STRADDLING a prior range's end (a fence crossing an artifact's
+        // closing tag) is dropped by the same guard; its tail flattens as prose
+        // — contrived enough to accept rather than special-case.
         ranges.sort { $0.lowerBound < $1.lowerBound }
 
         var result = ""
@@ -52,6 +65,79 @@ public enum MessageTextPolish {
         }
         result += polishProse(String(text[cursor...]))
         return result.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    /// Line-based fence pairing (CommonMark run-length rules, replacing an
+    /// earlier non-greedy regex): an opening fence is a line whose first
+    /// non-whitespace run is 3+ backticks (any indent — see below), and it
+    /// closes only on a LINE-LEADING run at least as long with nothing after
+    /// but whitespace. Two failure modes of the regex
+    /// this kills: an inline ``` inside the fence body split the block early, and
+    /// an UNCLOSED fence (max-token truncation mid-code) matched nothing at all —
+    /// both dropped the code tail into `polishProse`, which eats `#`-comment
+    /// lines and strips backticks/bold. An unclosed fence now runs verbatim to
+    /// the end: raw markdown beats mangled code.
+    private static func fencedCodeRanges(in text: String) -> [Range<String.Index>] {
+        var ranges: [Range<String.Index>] = []
+        var openStart: String.Index?
+        var openRun = 0
+        var lineStart = text.startIndex
+        while lineStart < text.endIndex {
+            // \.isNewline, not == "\n": Swift folds "\r\n" into ONE grapheme, so
+            // a literal-\n search would see a CRLF text as a single line and
+            // never pair its fences.
+            let newline = text[lineStart...].firstIndex(where: \.isNewline)
+            let contentEnd = newline ?? text.endIndex
+            let nextLine = newline.map { text.index(after: $0) } ?? text.endIndex
+            let line = text[lineStart ..< contentEnd]
+            // ANY leading whitespace is tolerated (wider than CommonMark's
+            // 3-space rule, on purpose): models nest fences 4+ deep under list
+            // items, and this file's job is "don't mangle code" — a too-strict
+            // net drops real code into polishProse.
+            let unindented = line.drop { $0 == " " || $0 == "\t" }
+            let run = unindented.prefix { $0 == "`" }.count
+            if let start = openStart {
+                if run >= openRun, unindented.dropFirst(run).allSatisfy(\.isWhitespace) {
+                    ranges.append(start ..< contentEnd)
+                    openStart = nil
+                }
+            } else if run >= 3, !unindented.dropFirst(run).contains("`") {
+                // The no-backticks-after condition is CommonMark's own: a fence
+                // opener's info string may not contain backticks. It keeps a
+                // line-leading same-line span (```code``` prose…) OUT of fence
+                // detection — misreading one as an unclosed opener would swallow
+                // the rest of the message verbatim. It stays prose, and
+                // polishProse's same-line span pass flattens it.
+                openStart = lineStart
+                openRun = run
+            }
+            lineStart = nextLine
+        }
+        if let start = openStart {
+            ranges.append(start ..< text.endIndex)
+        }
+        return ranges
+    }
+
+    /// A truncated `<artifact …>` with no closing tag anywhere after it (the
+    /// generation hit its token limit mid-document): verbatim from the tag to
+    /// the end, same rule as an unclosed fence. Occurrences already inside a
+    /// covered region (a fence, or a closed artifact) don't count.
+    private static func unclosedArtifactStart(
+        in text: String, coveredBy ranges: [Range<String.Index>]
+    ) -> String.Index? {
+        var search = text.startIndex
+        while let open = text.range(
+            of: "<artifact", options: .caseInsensitive, range: search ..< text.endIndex
+        ) {
+            search = open.upperBound
+            if ranges.contains(where: { $0.contains(open.lowerBound) }) { continue }
+            let rest = open.lowerBound ..< text.endIndex
+            if text.range(of: "</artifact>", options: .caseInsensitive, range: rest) == nil {
+                return open.lowerBound
+            }
+        }
+        return nil
     }
 
     /// The flattening pass, applied only to non-code prose.
@@ -79,6 +165,10 @@ public enum MessageTextPolish {
         output = output.replacing(
             /(^|[\s(\[])\*(\S(?:[^*\n]*\S)?|\S)\*(?=$|[\s).,;:!?\]])/.anchorsMatchLineEndings()
         ) { "\($0.1)\($0.2)" }
+        // ```code``` (same-line span, NOT a fence — those are line-based and
+        // never reach prose) → code. Must run before the single-backtick pass,
+        // whose innermost-pair match would leave stray ``doubles`` behind.
+        output = output.replacing(/```([^`\n]+)```/) { String($0.1) }
         // `code` → code
         output = output.replacing(/`([^`\n]+)`/) { String($0.1) }
         // Line-leading "* " bullets → real bullets.

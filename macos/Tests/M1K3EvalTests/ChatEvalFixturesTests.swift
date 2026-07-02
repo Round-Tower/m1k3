@@ -54,6 +54,20 @@ struct ChatEvalFixturesTests {
         #expect(citing.count >= 4)
     }
 
+    @Test("plausible-but-wrong fixtures exist and never demand a citation (nothing citable)")
+    func falsePremiseShape() {
+        let ids: Set = ["ground-wrong-author", "ground-wrong-nobel", "ground-fictional-accord"]
+        let fixtures = ChatEvalFixtures.groundedQ.filter { ids.contains($0.id) }
+        #expect(fixtures.count == 3)
+        for fixture in fixtures {
+            #expect(!fixture.expectation.mustCite, "\(fixture.id) has nothing citable")
+            #expect(
+                !fixture.expectation.mustContainAny.isEmpty,
+                "\(fixture.id) needs a correction/abstention marker"
+            )
+        }
+    }
+
     @Test("tool-use fixtures each name a required tool")
     func toolShape() {
         for fixture in ChatEvalFixtures.toolUse {

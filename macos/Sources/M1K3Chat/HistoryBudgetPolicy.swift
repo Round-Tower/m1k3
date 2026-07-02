@@ -26,6 +26,13 @@
 //  Signed: Kev + claude-opus-4-8, 2026-06-30, Confidence 0.8 (the gemma-8192
 //  clamp invariant is TDD-pinned; the real-token guarantee for dense/URL text is
 //  the verify-owed the margin hedges). Prior: the long-context design memo.
+//  Review: Kev + claude-fable-5, 2026-07-02, Confidence 0.85 — added
+//  rotatingGenerationTokenCap + generationTokenCap(for:): the budget above
+//  bounds PREFILL only, so the live provider's DECODE must be capped to the
+//  same figure the budget reserves (the uncapped 4096 default crossed gemma's
+//  window mid-answer and silently rotated the persona head out — the #112
+//  review blocker). perTurn/maxTurns now reference HistoryWindow's constants
+//  (one home, no silent divergence). Review-debt paydown: #112-1, #112-3.
 //
 
 import Foundation
@@ -51,10 +58,14 @@ public enum HistoryBudgetPolicy {
     /// worst-case ≈3 chars/token; a CJK-heavy replay still needs real token
     /// counting (named residual — the gemma cliff is silent, so we over-reserve).
     static let rotatingSafetyMarginTokens = 1024
-    /// Per-turn fidelity cap (one long answer can't swallow the whole budget).
-    static let perTurnCharCap = 1500
-    /// Turn-count ceiling.
-    static let maxTurns = 16
+    /// Generation cap for the LIVE chat provider on a rotating-KV tier. The
+    /// budget above only bounds PREFILL; gemma's 8192 window holds only if
+    /// prefill + decode fit together, so the decode side must be capped to the
+    /// same figure the budget reserves. An uncapped 4096 default crosses the
+    /// window ~3K tokens into a routine long answer and silently rotates the
+    /// persona/grounding head out. (The eval harness already ran at 2048; this
+    /// aligns the live path with it.)
+    public static let rotatingGenerationTokenCap = 2048
 
     /// Apple Foundation Models (mini) manages its OWN ~4K window and fails LOUDLY
     /// on overflow, and its real effective budget is unmeasured (the [SPIKE]). So
@@ -83,9 +94,18 @@ public enum HistoryBudgetPolicy {
         )
         let historyTokens = min(contextTokens, max(0, latencyCeilingTokens))
         let totalChars = Int(Double(historyTokens) * charsPerToken)
-        let perTurnChars = min(perTurnCharCap, totalChars)
+        // Per-turn fidelity cap and turn ceiling are HistoryWindow's own
+        // constants — one home, so tuning the window can't strand the policy.
+        let perTurnChars = min(HistoryWindow.maxCharsPerTurn, totalChars)
         return HistoryWindow.Budget(
-            totalChars: totalChars, perTurnChars: perTurnChars, maxTurns: maxTurns
+            totalChars: totalChars, perTurnChars: perTurnChars, maxTurns: HistoryWindow.maxTurns
         )
+    }
+
+    /// The `maxTokens` the app should construct the MLX provider with for
+    /// `tier` — capped on a rotating-KV tier (see `rotatingGenerationTokenCap`),
+    /// the provider's default elsewhere.
+    public static func generationTokenCap(for tier: BrainTier, defaultCap: Int = 4096) -> Int {
+        tier.usesRotatingKVCache ? min(rotatingGenerationTokenCap, defaultCap) : defaultCap
     }
 }

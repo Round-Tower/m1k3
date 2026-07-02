@@ -465,6 +465,15 @@ final class MLXToolTurnSession: ToolTurnSession, @unchecked Sendable {
             let reusable = CrossTurnCacheReuse.cacheReusable(
                 layersTrimmable: self.kvCache?.map(\.isTrimmable) ?? []
             )
+            // Keep the cachedIDs mirror truthful at EVERY throw point: if
+            // generate() below throws (cancellation, model error) the end-of-
+            // turn mirror update never runs, and a stale mirror against a
+            // trimmed/fresh cache corrupts the NEXT turn's reuse computation —
+            // a suffix-only prefill into a cache that doesn't hold the prefix.
+            // If generate() throws AFTER partially prefilling, the mirror
+            // UNDERSTATES the cache — safe: the next turn computes a shorter
+            // reuse and trims against layer.offset (the cache's real state).
+            // Only an OVERSTATED mirror corrupts, and no path produces one.
             if reuse > 0, reusable, let existing = self.kvCache {
                 // Keep the reusable prefix; trim past it (the prior turn's
                 // generated tail + any divergence) and prefill only the rest.
@@ -473,9 +482,11 @@ final class MLXToolTurnSession: ToolTurnSession, @unchecked Sendable {
                     if extra > 0 { _ = layer.trim(extra) }
                 }
                 cache = existing
+                self.cachedIDs = Array(fullIDs[..<reuse])
                 input = LMInput(tokens: MLXArray(Array(fullIDs[reuse...])))
             } else {
                 cache = context.model.newCache(parameters: parameters)
+                self.cachedIDs = []
                 input = prepared
             }
             self.logPrefillReuse(reused: reuse, total: fullIDs.count)

@@ -229,10 +229,14 @@ public actor LocalAgent {
         }
         onEvent?(.actionStarted(tool: site.toolName, argument: site.eventArgument))
         executedActions.insert(site.displayDescription)
+        // Used means DISPATCHED, success or throw — mirroring the .actionStarted
+        // event consumers key on. A throw that skipped the insert would leave
+        // toolsUsed empty while the responder's tool-ran flag is already true,
+        // and the raw post-error conclusion would surface instead of routing
+        // through synthesis (which filters errors and degrades to plain RAG).
+        usedTools.insert(site.toolName)
         do {
-            let output = try await execute(tool)
-            usedTools.insert(site.toolName)
-            return output
+            return try await execute(tool)
         } catch {
             return "Error executing \(site.toolName): \(error)"
         }

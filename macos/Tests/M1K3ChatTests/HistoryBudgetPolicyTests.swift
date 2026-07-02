@@ -90,6 +90,36 @@ struct HistoryBudgetPolicyTests {
         #expect(mini.perTurnChars <= mini.totalChars)
     }
 
+    @Test("rotating tier (big): live generation is capped so prefill + decode fit the window TOGETHER")
+    func rotatingTierGenerationCapped() {
+        #expect(HistoryBudgetPolicy.generationTokenCap(for: .big) == HistoryBudgetPolicy.rotatingGenerationTokenCap)
+        // The window guarantee end-to-end, at the REAL live numbers: a budget
+        // sized with the cap as its generation reserve + a decode that can never
+        // exceed that same cap stays under 8192 — including the safety margin.
+        // (The earlier test's gen=1024 modelled a value the live path never used.)
+        let budget = HistoryBudgetPolicy.budget(
+            for: .big, reservedTokens: 3000,
+            generationTokens: HistoryBudgetPolicy.rotatingGenerationTokenCap
+        )
+        let total = 3000 + HistoryBudgetPolicy.rotatingGenerationTokenCap
+            + historyTokens(budget) + HistoryBudgetPolicy.rotatingSafetyMarginTokens
+        #expect(total <= BrainTier.big.approximateContextTokens)
+    }
+
+    @Test("linear-KV tiers keep the default generation budget — no cap needed")
+    func linearTiersKeepDefaultGeneration() {
+        for tier in [BrainTier.mini, .lil, .huge] {
+            #expect(HistoryBudgetPolicy.generationTokenCap(for: tier) == 4096, "\(tier.rawValue)")
+        }
+    }
+
+    @Test("per-turn cap and turn ceiling are HistoryWindow's own constants — one home, no drift")
+    func perTurnConstantsShareOneHome() {
+        let budget = HistoryBudgetPolicy.budget(for: .huge, reservedTokens: 1000, generationTokens: 1024)
+        #expect(budget.perTurnChars == HistoryWindow.maxCharsPerTurn)
+        #expect(budget.maxTurns == HistoryWindow.maxTurns)
+    }
+
     @Test("the rotating margin actually costs big some headroom vs an equivalent non-rotating window")
     func rotatingMarginIsApplied() {
         // big and a hypothetical 8192 non-rotating tier would differ by exactly the

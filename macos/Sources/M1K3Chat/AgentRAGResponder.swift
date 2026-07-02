@@ -230,6 +230,13 @@ public struct AgentRAGResponder: RAGResponding, Sendable {
         return (chunks + memories, stream)
     }
 
+    /// Grounding for the think-phase decision counts BOTH retrieval lanes: a
+    /// turn grounded only by a memory hit (0 doc chunks) is still a grounded
+    /// answer and earns CoT on the heavy tiers, same as a document hit.
+    static func hasGroundedKnowledge(chunks: [ChunkHit], memories: [ChunkHit]) -> Bool {
+        !chunks.isEmpty || !memories.isEmpty
+    }
+
     /// One full agent turn into `continuation`: run the loop (conclusion tail
     /// streams live), then the web-sources tail, with the plain-RAG fallback
     /// on throw or empty.
@@ -270,7 +277,7 @@ public struct AgentRAGResponder: RAGResponding, Sendable {
         // entirely (instant answers); grounded/analytic asks keep it.
         let thinkingEnabled = ThinkingPolicy.shouldThink(
             question: question,
-            hasGroundedKnowledge: !chunks.isEmpty,
+            hasGroundedKnowledge: Self.hasGroundedKnowledge(chunks: chunks, memories: memories),
             mode: thinkingModeProvider(),
             fastByDefault: fastThinkingProvider()
         )
