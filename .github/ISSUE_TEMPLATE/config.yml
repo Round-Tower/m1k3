@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Security or privacy report
+    url: https://github.com/Round-Tower/m1k3/security/advisories/new
+    about: Anything involving data leaving the machine, sandbox escapes, or PII — report privately, never as a public issue.
+  - name: Join the TestFlight beta
+    url: https://m1k3.app
+    about: The easiest way to run M1K3 without building from source.
