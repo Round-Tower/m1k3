@@ -190,8 +190,11 @@ struct ContentView: View {
     @ViewBuilder
     private var transcript: some View {
         if env.chat.messages.isEmpty {
-            EmptyChatView(itemCount: env.indexedItemCount)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            VStack {
+                Spacer()
+                EmptyChatView()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
         } else {
             ScrollViewReader { proxy in
                 ScrollView {
@@ -509,15 +512,11 @@ struct ContentView: View {
 // MARK: - Supporting views
 
 private struct EmptyChatView: View {
-    let itemCount: Int
-
     var body: some View {
         ContentUnavailableView {
-            Label("M1K3", systemImage: "brain")
+            Text("M1K3")
         } description: {
-            Text(itemCount == 0
-                ? "Drop a PDF or text file to give M1K3 something to remember, then ask away."
-                : "\(itemCount) item\(itemCount == 1 ? "" : "s") in memory. Ask a question to begin.")
+            Text("Drop a PDF or text file to give M1K3 something to remember, then ask away.")
         }
     }
 }
