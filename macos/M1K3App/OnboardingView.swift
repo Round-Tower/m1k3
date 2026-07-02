@@ -306,15 +306,12 @@ private extension OnboardingView {
         }
     }
 
+    /// Quiet by design (Kev's ⌘R call): no tier glyph, no "Waking up…" title —
+    /// the receded avatar backdrop already says who's working. A download shows
+    /// its honest progress bar; everything else is just the spinner.
     private var brainAwakening: some View {
         VStack(spacing: 20) {
             Spacer()
-            Image(systemName: selectedBrain.glyph)
-                .font(.system(size: 44, weight: .semibold))
-                .foregroundStyle(.tint)
-                .symbolEffect(.pulse)
-            Text("Waking up \(selectedBrain.displayName)…")
-                .font(.title2.weight(.semibold))
 
             switch env.modelLoad {
             case let .downloading(fraction):
@@ -344,7 +341,7 @@ private extension OnboardingView {
                     .foregroundStyle(.secondary)
                 }
             case .idle, .ready, .preparing:
-                ProgressView()
+                ProgressView().controlSize(.large)
             }
 
             Spacer()
@@ -364,19 +361,26 @@ private extension OnboardingView {
         // Auto-route: M1K3 resolves the concrete brain for this Mac, then we drive
         // the SAME download/wake path as a manual pick (the resolved tier may need
         // a download — e.g. Lil — so the wake screen shows what it chose).
+        let alreadyAwake: Bool
         if autoSelected {
-            selectedBrain = env.enableAutoRouteForOnboarding()
+            let resolved = env.enableAutoRouteForOnboarding()
+            selectedBrain = resolved.tier
+            alreadyAwake = resolved.alreadyAwake
         } else {
             // A specific pick is sovereign — turn auto-route off so it isn't
             // overridden on the next turn (matters on a Settings → "Change brain…"
             // re-pick where auto-route was previously on).
             UserDefaults.standard.set(false, forKey: AppEnvironment.autoRouteBrainKey)
-            env.selectBrain(selectedBrain)
+            alreadyAwake = env.selectBrain(selectedBrain)
         }
-        if selectedBrain.requiresDownload {
-            isWakingBrain = true
-        } else {
+        // Already loaded → selectBrain no-opped and modelLoad will NEVER
+        // transition to .ready (it already is), so the waking screen's onChange
+        // would spin forever. Advance now. Common case: the launch warm-up made
+        // the picked brain ready before the user reached this step.
+        if alreadyAwake || !selectedBrain.requiresDownload {
             advanceAfterBrain()
+        } else {
+            isWakingBrain = true
         }
     }
 

@@ -697,7 +697,12 @@ final class AppEnvironment {
     /// Choose a brain: persist it, re-point the active provider, and (for Lil/Big)
     /// warm the model so onboarding / Settings show a real download bar. Mini is
     /// instant — Apple Foundation Models, no download.
-    func selectBrain(_ tier: BrainTier) {
+    ///
+    /// Returns `true` when the pick was the already-loaded no-op — `modelLoad`
+    /// will NOT transition (it's already .ready), so a caller waiting on an
+    /// onChange for readiness (onboarding's waking screen) must advance itself.
+    @discardableResult
+    func selectBrain(_ tier: BrainTier) -> Bool {
         // Already on this exact MLX brain and it's loaded — re-selecting would spin up
         // a fresh MLXGemmaProvider (cold persona-KV prefix) and release the warm one,
         // repaying a multi-GB load + persona prefill for nothing. A non-ready state
@@ -709,7 +714,7 @@ final class AppEnvironment {
            modelID == currentMLXProvider.modelIdentifier
         {
             Self.brainLog.notice("selectBrain \(tier.rawValue, privacy: .public): already loaded, no-op")
-            return
+            return true
         }
         Self.brainLog.notice("selectBrain \(tier.rawValue, privacy: .public): model=\(tier.mlxModelID ?? "appleFoundationModels", privacy: .public)")
         selectedBrain = tier
@@ -730,6 +735,7 @@ final class AppEnvironment {
             selectedRuntime = .appleFoundationModels // didSet clears the bar
         }
         oldMLX.releaseMemory()
+        return false
     }
 
     /// Deep-link the next OnboardingView to the brain-picker step (the honest

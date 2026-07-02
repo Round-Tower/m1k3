@@ -80,13 +80,15 @@ extension AppEnvironment {
 
     /// Onboarding "Let M1K3 choose": turn auto-route ON and resolve the concrete
     /// starting brain so the first-run flow can drive the SAME download/wake UI a
-    /// manual pick uses. Returns the resolved tier so the caller can show it.
+    /// manual pick uses. Returns the resolved tier plus whether it was already
+    /// loaded (selectBrain's no-op — the caller must advance itself; no
+    /// modelLoad transition is coming).
     @discardableResult
-    func enableAutoRouteForOnboarding() -> BrainTier {
+    func enableAutoRouteForOnboarding() -> (tier: BrainTier, alreadyAwake: Bool) {
         UserDefaults.standard.set(true, forKey: Self.autoRouteBrainKey)
         let tier = resolvedAutoRouteTier()
-        selectBrain(tier)
-        return tier
+        let alreadyAwake = selectBrain(tier)
+        return (tier, alreadyAwake)
     }
 
     /// Memory auto-capture consent (Settings "Learn from conversations").
