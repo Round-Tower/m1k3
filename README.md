@@ -31,8 +31,7 @@ one-time model download and an optional, explicitly-enabled web search.
 > **Repo map:** this is a multi-surface monorepo. The flagship is the native
 > **macOS app** under [`macos/`](./macos). The repo root is the original **Python
 > desktop CLI / MCP server** (documented below). The mobile app lives in
-> [`app/`](./app). For the live state of anything, `CLAUDE.md` and
-> `.claude/project-memory.md` lead this file.
+> [`app/`](./app). For the live state of anything, `CLAUDE.md` leads this file.
 
 | Surface | Where | Stack | Status |
 |---|---|---|---|
