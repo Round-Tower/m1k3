@@ -14,6 +14,7 @@ no cloud, no telemetry, no network cable it never asks for.
 [![CI](https://github.com/Round-Tower/m1k3/actions/workflows/ci.yml/badge.svg)](https://github.com/Round-Tower/m1k3/actions/workflows/ci.yml)
 [![Security](https://github.com/Round-Tower/m1k3/actions/workflows/security.yml/badge.svg)](https://github.com/Round-Tower/m1k3/actions/workflows/security.yml)
 [![Mac review](https://github.com/Round-Tower/m1k3/actions/workflows/claude-code-review-mac.yml/badge.svg)](https://github.com/Round-Tower/m1k3/actions/workflows/claude-code-review-mac.yml)
+[![MurphySig: signed](https://murphysig.dev/badge/Round-Tower/m1k3.svg)](https://murphysig.dev/signed/Round-Tower/m1k3/)
 
 ## What's inside
 
