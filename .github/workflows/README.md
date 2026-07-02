@@ -9,12 +9,13 @@ and never covered the Swift Mac MVP — the active surface. It was removed.
 
 | File | Purpose | Triggers |
 |------|---------|----------|
-| **`ci.yml`** | Tests. `swift-mac` runs `swift test` on the macOS MVP; `python-smoke` runs the curated green Python subset. | push to `master`/`develop`, all PRs |
-| **`security.yml`** | TruffleHog (verified secrets) + Bandit (Python SAST, high/high gate). | push to `master`/`develop`, all PRs |
+| **`ci.yml`** | Tests. `swift-mac` runs `swift test` on the macOS MVP; `app-build` compiles the app shell; `scheme-drift` guards the test scheme. | push to `master`/`develop`, all PRs |
+| **`attic.yml`** | The archived Python surface: curated smoke subset + Bandit (high/high gate). | pushes/PRs touching `attic/**` only |
+| **`security.yml`** | TruffleHog (verified secrets, repo-wide). | push to `master`/`develop`, all PRs |
+| **`nightly-dmg.yml`** | Signed/notarized DMG → GitHub Release (skips until signing secrets are set). | nightly cron, manual |
 | **`claude.yml`** | `@claude` assistant on issues/PRs. | `@claude` mentions |
 | **`claude-code-review.yml`** | Auto Claude review of **Android/Kotlin** changes. | PRs touching `app/**/*.kt` |
 | **`claude-code-review-mac.yml`** | Auto Claude review of **Swift/Mac** changes. | PRs touching `macos/**` |
-| **`repo-visualizer.yml`** | Updates `diagram.svg`. | push to `main` |
 
 ## Notes & gotchas
 
@@ -23,12 +24,11 @@ and never covered the Swift Mac MVP — the active surface. It was removed.
   the image; pin a `macos-26` runner if the hosted image lags. MLX/Metal +
   WhisperKit integration tests are env-gated **off** (they only run from a
   bundled `.app`, never the CLI — see `macos/` project memory).
-- **`python-smoke` runs a curated subset, not the whole suite.** The legacy
-  Python tests are a swamp; see **`tests/CI_TRIAGE.md`** for the green list
-  (`tests/ci_smoke.txt`), the quarantine backlog, and the rehabilitation task.
-  Slim deps live in `requirements-ci.txt`.
+- **`attic.yml`'s smoke job runs a curated subset, not the whole suite.** The
+  legacy Python tests are a swamp; see **`attic/tests/CI_TRIAGE.md`** for the
+  green list (`attic/tests/ci_smoke.txt`), the quarantine backlog, and the
+  rehabilitation task. Slim deps live in `attic/requirements-ci.txt`.
 - **Dropped CodeQL** (needed repo "Code Security" enabled + noisy here) and
   **npm-audit** (no real Node app — root `package.json` is a stub).
-- The root `package.json` shields.io badges point at the removed
-  `unified-tests.yml` / `quick-tests.yml` and will read "unknown" — update or
-  drop them next time the README is touched.
+- The stub `package.json` (Playwright-era test dashboard) lives in `attic/`
+  with the rest of the archived Python/Node surface.

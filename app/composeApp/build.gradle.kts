@@ -332,7 +332,7 @@ tasks.register<Exec>("installWebAvatarDeps") {
     group = "web-avatar"
     description = "Install npm dependencies for web-avatar"
 
-    val webAvatarDir = layout.projectDirectory.dir("../../src/web-avatar")
+    val webAvatarDir = layout.projectDirectory.dir("../../attic/src/web-avatar")
     val nodeModulesDir = webAvatarDir.dir("node_modules")
     val packageJson = webAvatarDir.file("package.json")
     val packageLockJson = webAvatarDir.file("package-lock.json")
@@ -352,7 +352,7 @@ tasks.register<Exec>("buildWebAvatar") {
 
     dependsOn("installWebAvatarDeps")
 
-    val webAvatarDir = layout.projectDirectory.dir("../../src/web-avatar")
+    val webAvatarDir = layout.projectDirectory.dir("../../attic/src/web-avatar")
     val distAppDir = webAvatarDir.dir("dist-app")
 
     workingDir = webAvatarDir.asFile
@@ -377,7 +377,7 @@ tasks.register<Copy>("copyWebAvatarToAndroid") {
 
     dependsOn("buildWebAvatar")
 
-    from("../../src/web-avatar/dist-app") {
+    from("../../attic/src/web-avatar/dist-app") {
         include("**/*")
     }
     into("src/androidMain/assets/web-avatar")
@@ -403,7 +403,7 @@ tasks.register<Copy>("copyWebAvatarToIOS") {
 
     dependsOn("buildWebAvatar")
 
-    from("../../src/web-avatar/dist-app") {
+    from("../../attic/src/web-avatar/dist-app") {
         include("**/*")
     }
     into("../iosApp/iosApp/Resources/web-avatar")

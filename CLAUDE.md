@@ -4,32 +4,32 @@
 
 > **⚠️ Orientation (2026-07-02):** The **live product** is the Mac-native SwiftUI
 > app under **`macos/`** — see `macos/CLAUDE.md`, `macos/PLAN.md` and
-> `macos/.claude/project-memory.md`. The Python CLI is **legacy** (pre-Mac-app,
-> last meaningful work Jan 2026), archived under **`_legacy/`**. The live MCP
-> surface is the Mac app's in-app HTTP server (`.mcp.json` points at
-> `127.0.0.1:4242/mcp` as of 2026-06-30); `mcp_unified_server.py` was orphaned by
-> that switch and now lives in `_legacy/` too.
+> `macos/.claude/project-memory.md`. The entire legacy Python surface (CLI, RAG
+> engine, web avatar, PWA, Tauri popover — pre-Mac-app, last meaningful work
+> Jan 2026) is archived under **`attic/`**, which preserves the old repo-root
+> layout so it still runs as-is (`cd attic` first). The live MCP surface is the
+> Mac app's in-app HTTP server (`.mcp.json` points at `127.0.0.1:4242/mcp`);
+> the orphaned Python `mcp_unified_server.py` is in `attic/_legacy/`.
 
-Privacy-focused local AI with voice synthesis, RAG, 3D avatars, and CLI interfaces.
+Privacy-focused local AI companion for macOS — MLX inference, live voice,
+knowledge graph + RAG, and an MCP server.
 
 ## Pointers
 
 - **`macos/CLAUDE.md`** — the live product: build, test, architecture. Start here.
-- **`README.md`** — repo map + the legacy Python surface (run commands, AI backends, layout).
-- **`_legacy/README.md`** — the archived CLI: what moved, what stayed, how to revive.
-- **`SETUP.md`** — legacy Python environment setup.
-- **`app/CLAUDE.md`** — 間 AI mobile (Kotlin Multiplatform, slow burn).
-- **`docs/`** — `MLX_SETUP.md` (legacy mlx-lm server), `STT_QUICK_START.md`, `plans/`.
-- Avatar web demo (legacy): `cd src/web-avatar && npm run dev` →
-  `http://localhost:5174/demo-legacy.html`. The Tauri popover (`src/avatar-popover/`)
-  is dormant since 2026-02, superseded by the native Mac companion.
+- **`macos/README.md`** — human-facing build-from-source.
+- **`app/CLAUDE.md`** — 間 AI mobile (Kotlin Multiplatform, slow burn — the next surface).
+- **`attic/README.md`** — the archive tour: the original Python CLI, avatar
+  experiments, era docs (`attic/docs/`), and how to run any of it.
+- **`CONTRIBUTING.md` / `SECURITY.md`** — public-repo contributor surface.
 
-## Test (legacy Python)
+## Test (attic Python, only when touching attic/)
 
 ```bash
+cd attic
 pip install duckdb                    # required by tests/conftest.py
 python -m pytest tests/               # full legacy suite
-# CI runs only the curated smoke subset: tests/ci_smoke.txt (see tests/CI_TRIAGE.md)
+# CI (attic.yml, path-filtered) runs only the smoke subset: tests/ci_smoke.txt
 ```
 
 ## graphify

@@ -11,7 +11,7 @@ an embedded agent, call transcription, a 3D avatar, and an MCP server. It target
 written in **Swift 6.2**.
 
 The parent `../CLAUDE.md` documents the **legacy Python CLI** (archived under
-`../_legacy/`, last meaningful work Jan 2026). When working under `macos/`, this
+`../attic/`, last meaningful work Jan 2026). When working under `macos/`, this
 file is the relevant one. Durable session history lives in
 `.claude/project-memory.md` (read it for in-flight threads and hard-won gotchas);
 the roadmap is `PLAN.md` (append-only, signed — reconcile additively, never rewrite
