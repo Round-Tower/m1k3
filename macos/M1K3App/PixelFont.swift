@@ -53,6 +53,10 @@ extension Font {
     ///     28pt at caption volume (the chat empty state). 15pt titles stay
     ///     un-kerned (2pt of tracking at 15pt would be ~2.7× the hero's
     ///     letterspacing).
+    ///   • Accepted trade-off: `fixedSize` opts these accents OUT of Dynamic
+    ///     Type (scaling a bitmap-style face goes fuzzy). That's tolerable
+    ///     precisely because usage is confined to short, decorative accents —
+    ///     body/reading text (which must scale) never wears this face.
     static func pixel(_ size: CGFloat) -> Font {
         .custom(BundledFonts.pixelFamily, fixedSize: size)
     }
