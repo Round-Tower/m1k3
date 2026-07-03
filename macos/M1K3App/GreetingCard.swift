@@ -35,6 +35,11 @@ struct GreetingCard: View {
     let userName: String?
     /// The LIVE brain's display name for the disclosure caption.
     let brainName: String
+    /// True when the capability ladder has a rung above the live brain on
+    /// this Mac — the caption then says the ladder EXISTS (plants the idea at
+    /// minute one without stealing the moment; the actual offer waits for the
+    /// first answer).
+    let hasLadderRung: Bool
     /// First session ever (no completed turn yet) → the full greeting;
     /// otherwise the quiet returning-user variant.
     let isFirstSession: Bool
@@ -83,7 +88,9 @@ struct GreetingCard: View {
                 }
             }
 
-            Text("Running on \(brainName) · change anytime in Settings")
+            Text(hasLadderRung
+                ? "Running on \(brainName), my quickest brain — sharper ones are a click away in Settings"
+                : "Running on \(brainName) · change anytime in Settings")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }

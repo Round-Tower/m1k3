@@ -603,9 +603,14 @@ extension SettingsView {
         }
     }
 
-    /// The background upgrade's quiet home: live % while Lil fetches invisibly,
-    /// the failure reason when it gave up (the chat stays silent about both —
-    /// this row is where "what's it doing?" gets an answer).
+    /// The ladder rung the background upgrade currently targets, for row copy.
+    private var upgradeTargetName: String {
+        env.brainUpgradeTarget?.displayName ?? "brain"
+    }
+
+    /// The background upgrade's quiet home: live % while the target fetches
+    /// invisibly, the failure reason when it gave up (the chat stays silent
+    /// about both — this row is where "what's it doing?" gets an answer).
     @ViewBuilder private var brainUpgradeRow: some View {
         switch env.brainUpgrade {
         case let .fetching(fraction):
@@ -613,14 +618,14 @@ extension SettingsView {
                 ProgressView(value: fraction)
                     .controlSize(.small)
                     .frame(maxWidth: 160)
-                Text("Fetching Lil in the background… \(Int((fraction * 100).rounded()))%")
+                Text("Fetching \(upgradeTargetName) in the background… \(Int((fraction * 100).rounded()))%")
                     .font(.caption.monospacedDigit()).foregroundStyle(.secondary)
             }
         case let .failed(_, transient):
             Label(
                 transient
-                    ? "Background Lil fetch paused — will retry."
-                    : "Background Lil fetch failed. Use “Change brain…” to download directly.",
+                    ? "Background \(upgradeTargetName) fetch paused — will retry."
+                    : "Background \(upgradeTargetName) fetch failed. Use “Change brain…” to download directly.",
                 systemImage: "exclamationmark.triangle"
             )
             .symbolRenderingMode(.hierarchical)

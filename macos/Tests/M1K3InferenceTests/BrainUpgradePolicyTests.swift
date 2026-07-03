@@ -9,7 +9,8 @@
 //      repo's signed promise is "downloads only when you ask"
 //    · a staged-but-unconsented Lil (installed at launch) OFFERS a switch,
 //      never auto-swaps a brain the user didn't ask for this session
-//    · `dismissed` is terminal for nudging — Settings stays the manual path
+//    · `dismissed` parks nudging (DismissalParkPolicy decides when — struggle-
+//      earned re-offers, terminal after three); Settings stays the manual path
 //    · state is never persisted: `recomputed` rebuilds it from disk facts, so
 //      a failure self-heals next launch
 //    · SwapSafety: a hot-swap fires only with the app fully idle.
@@ -26,45 +27,43 @@ struct BrainUpgradePolicyTests {
 
     // MARK: - Recompute (launch + external brain change): disk facts are the truth
 
-    @Test("non-Mini brain → done, the policy has nothing to sell")
-    func recomputeNonMini() {
-        #expect(next(.idle, .recomputed(lilInstalled: false, dismissed: false, currentBrain: .big)) == .done)
-        #expect(next(.fetching(fraction: 0.4), .recomputed(lilInstalled: true, dismissed: false, currentBrain: .lil)) == .done)
+    @Test("no rung above the current brain → done, the policy has nothing to sell")
+    func recomputeNoRung() {
+        #expect(next(.idle, .recomputed(targetInstalled: false, dismissed: false, hasRung: false)) == .done)
+        #expect(next(.fetching(fraction: 0.4), .recomputed(targetInstalled: true, dismissed: false, hasRung: false)) == .done)
     }
 
-    @Test("dismissed persists across launches → never re-nudge")
+    @Test("parked by a dismissal → dismissed until the park lifts")
     func recomputeDismissed() {
-        #expect(next(.idle, .recomputed(lilInstalled: false, dismissed: true, currentBrain: .mini)) == .dismissed)
+        #expect(next(.idle, .recomputed(targetInstalled: false, dismissed: true, hasRung: true)) == .dismissed)
     }
 
-    @Test("Lil already on disk at launch → staged WITHOUT consent (offer, don't auto-swap)")
+    @Test("target already on disk at launch → staged WITHOUT consent (offer, don't auto-swap)")
     func recomputeInstalled() {
         #expect(
-            next(.idle, .recomputed(lilInstalled: true, dismissed: false, currentBrain: .mini))
+            next(.idle, .recomputed(targetInstalled: true, dismissed: false, hasRung: true))
                 == .staged(consented: false)
         )
     }
 
-    @Test("Mini, nothing installed, not dismissed → idle, waiting for the first answer")
+    @Test("rung available, nothing installed, not parked → idle, waiting for the first answer")
     func recomputeFresh() {
-        #expect(next(.done, .recomputed(lilInstalled: false, dismissed: false, currentBrain: .mini)) == .idle)
+        #expect(next(.done, .recomputed(targetInstalled: false, dismissed: false, hasRung: true)) == .idle)
     }
 
-    @Test("dismissed wins over installed — a dismissal is a dismissal even once weights exist")
+    @Test("a park wins over installed — parked is parked even once weights exist")
     func recomputeDismissedWinsOverInstalled() {
-        #expect(next(.idle, .recomputed(lilInstalled: true, dismissed: true, currentBrain: .mini)) == .dismissed)
+        #expect(next(.idle, .recomputed(targetInstalled: true, dismissed: true, hasRung: true)) == .dismissed)
     }
 
-    @Test("the non-Mini short-circuit is TOTAL — done regardless of installed/dismissed. Pinned because selectBrain's no-op path leans on it")
-    func recomputeNonMiniShortCircuitIsTotal() {
-        for tier in [BrainTier.lil, .big] {
-            for installed in [true, false] {
-                for dismissed in [true, false] {
-                    #expect(
-                        next(.idle, .recomputed(lilInstalled: installed, dismissed: dismissed, currentBrain: tier))
-                            == .done
-                    )
-                }
+    @Test("the no-rung short-circuit is TOTAL — done regardless of installed/parked. Pinned because selectBrain's no-op path leans on it")
+    func recomputeNoRungShortCircuitIsTotal() {
+        for installed in [true, false] {
+            for dismissed in [true, false] {
+                #expect(
+                    next(.idle, .recomputed(targetInstalled: installed, dismissed: dismissed, hasRung: false))
+                        == .done
+                )
             }
         }
     }
@@ -166,8 +165,8 @@ struct BrainUpgradePolicyTests {
     // MARK: - Offer eligibility (the gate on even SHOWING the nudge)
 
     private func eligible(
-        currentBrain: BrainTier = .mini,
-        lilInstalled: Bool = false,
+        target: BrainTier? = .lil,
+        targetInstalled: Bool = false,
         completedAnswers: Int = 1,
         isResponding: Bool = false,
         freeDiskBytes: Int64 = 50_000_000_000,
@@ -175,12 +174,11 @@ struct BrainUpgradePolicyTests {
         networkConstrained: Bool = false
     ) -> Bool {
         OfferEligibility.isEligible(
-            currentBrain: currentBrain,
-            lilInstalled: lilInstalled,
+            target: target,
+            targetInstalled: targetInstalled,
             completedAnswers: completedAnswers,
             isResponding: isResponding,
             freeDiskBytes: freeDiskBytes,
-            requiredBytes: OfferEligibility.lilDownloadBytes,
             networkExpensive: networkExpensive,
             networkConstrained: networkConstrained
         )
@@ -201,19 +199,22 @@ struct BrainUpgradePolicyTests {
         #expect(!eligible(isResponding: true))
     }
 
-    @Test("only upsells from Mini, and never re-sells installed weights")
-    func onlyFromMini() {
-        #expect(!eligible(currentBrain: .lil))
-        #expect(!eligible(currentBrain: .big))
-        #expect(!eligible(lilInstalled: true))
+    @Test("no rung (nil target) or a no-download target → never eligible; installed weights never re-sold")
+    func targetGates() {
+        #expect(!eligible(target: nil))
+        #expect(!eligible(target: .mini)) // no download — nothing to offer
+        #expect(!eligible(targetInstalled: true))
     }
 
-    @Test("disk floor: ceil(bytes × 1.2) + 1GB headroom, boundary-exact")
-    func diskFloorBoundary() {
-        let required = OfferEligibility.lilDownloadBytes
+    @Test("disk floor: ceil(bytes × 1.2) + 1GB headroom, boundary-exact — and Big's bigger floor is respected")
+    func diskFloorBoundary() throws {
+        let required = try #require(OfferEligibility.downloadBytes(for: .lil))
         let floor = Int64((Double(required) * 1.2).rounded(.up)) + 1_000_000_000
         #expect(eligible(freeDiskBytes: floor))
         #expect(!eligible(freeDiskBytes: floor - 1))
+        let bigFloor = try Int64((Double(#require(OfferEligibility.downloadBytes(for: .big))) * 1.2).rounded(.up)) + 1_000_000_000
+        #expect(eligible(target: .big, freeDiskBytes: bigFloor))
+        #expect(!eligible(target: .big, freeDiskBytes: bigFloor - 1))
     }
 
     @Test("metered or constrained networks are never offered a 2.3GB pull")

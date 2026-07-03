@@ -44,7 +44,10 @@ public enum BrainUpgradeState: Sendable, Equatable {
 /// Everything that can happen to the upgrade journey.
 public enum BrainUpgradeEvent: Sendable, Equatable {
     /// Launch (or external brain change): rebuild state from disk facts.
-    case recomputed(lilInstalled: Bool, dismissed: Bool, currentBrain: BrainTier)
+    /// `hasRung` = UpgradeTarget found a next tier for this Mac (the ladder
+    /// generalization — the machine no longer knows or cares WHICH tier);
+    /// `dismissed` = DismissalParkPolicy's live park decision, not a raw flag.
+    case recomputed(targetInstalled: Bool, dismissed: Bool, hasRung: Bool)
     /// A chat answer finished; the coordinator already ran `OfferEligibility`.
     case answerCompleted(eligible: Bool)
     case userAccepted
@@ -59,14 +62,14 @@ public enum BrainUpgradeEvent: Sendable, Equatable {
 public enum BrainUpgradePolicy {
     public static func transition(_ state: BrainUpgradeState, on event: BrainUpgradeEvent) -> BrainUpgradeState {
         switch event {
-        case let .recomputed(lilInstalled, dismissed, currentBrain):
+        case let .recomputed(targetInstalled, dismissed, hasRung):
             // Disk facts outrank whatever the machine was doing. Order matters:
-            // a non-Mini brain means there's nothing to sell; a dismissal is a
-            // dismissal even once weights exist (a Settings-side download must
-            // not resurrect the nudge).
-            if currentBrain != .mini { return .done }
+            // no rung above the current brain means there's nothing to sell; a
+            // park is a park even once weights exist (a Settings-side download
+            // must not resurrect the nudge).
+            if !hasRung { return .done }
             if dismissed { return .dismissed }
-            if lilInstalled { return .staged(consented: false) }
+            if targetInstalled { return .staged(consented: false) }
             return .idle
 
         case let .answerCompleted(eligible):
@@ -141,11 +144,11 @@ public enum SwapSafety {
 /// The gate on even SHOWING the upgrade nudge. All-or-nothing: an ineligible
 /// moment simply stays quiet (the machine remains `idle`, a later answer
 /// re-evaluates), so a temporarily-full disk or a hotspot never burns the
-/// one-shot offer.
+/// offer.
 public enum OfferEligibility {
-    /// Lil's approximate download, in bytes (BrainTier.approxDownloadMB).
-    public static var lilDownloadBytes: Int64 {
-        Int64(BrainTier.lil.approxDownloadMB ?? 0) * 1_000_000
+    /// A tier's approximate download in bytes, or nil for no-download tiers.
+    public static func downloadBytes(for tier: BrainTier) -> Int64? {
+        tier.approxDownloadMB.map { Int64($0) * 1_000_000 }
     }
 
     /// Disk floor: the download itself plus 20% working margin, plus a flat
@@ -155,20 +158,19 @@ public enum OfferEligibility {
     }
 
     public static func isEligible(
-        currentBrain: BrainTier,
-        lilInstalled: Bool,
+        target: BrainTier?,
+        targetInstalled: Bool,
         completedAnswers: Int,
         isResponding: Bool,
         freeDiskBytes: Int64,
-        requiredBytes: Int64,
         networkExpensive: Bool,
         networkConstrained: Bool
     ) -> Bool {
-        currentBrain == .mini
-            && !lilInstalled
+        guard let target, let bytes = downloadBytes(for: target) else { return false }
+        return !targetInstalled
             && completedAnswers >= 1
             && !isResponding
-            && freeDiskBytes >= requiredFreeDiskBytes(for: requiredBytes)
+            && freeDiskBytes >= requiredFreeDiskBytes(for: bytes)
             && !networkExpensive
             && !networkConstrained
     }
