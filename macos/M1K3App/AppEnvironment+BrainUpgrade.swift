@@ -96,15 +96,26 @@ extension AppEnvironment {
         answerFailed: Bool,
         generationHitTokenCap: Bool
     ) {
+        // Note on generationHitTokenCap: the metrics ride a detached stamp
+        // task and record only the LAST generation of a multi-call agent turn
+        // — both mean the signal can under-detect (reads false), never
+        // over-detect. Fail-safe by construction; failed turns and long asks
+        // carry the load. Documented, not fixed (re-plumbing chat.send's
+        // return for a bonus signal isn't worth the churn).
+        var justUnparked = false
         if StrugglePolicy.isStruggle(
             brain: selectedBrain,
             questionCharacters: questionCharacters,
             answerFailed: answerFailed,
             generationHitTokenCap: generationHitTokenCap
         ) {
-            recordStruggle()
+            justUnparked = recordStruggle()
         }
-        guard !answerFailed else { return }
+        // Never offer on a failed turn — and never in the same breath as the
+        // struggle that lifted a park (a capped/garbled answer READS like a
+        // failure even when its status is success; the earned re-offer waits
+        // for the NEXT clean answer).
+        guard !answerFailed, !justUnparked else { return }
         startNetworkMonitorIfNeeded()
         let path = brainUpgradeNetworkPath
         let eligible = OfferEligibility.isEligible(
@@ -122,20 +133,22 @@ extension AppEnvironment {
 
     /// A felt limitation. Increments the persisted counter and, when it lifts
     /// the park, recomputes so the machine re-enters `idle` — the NEXT
-    /// successful answer then raises the earned re-offer.
-    private func recordStruggle() {
+    /// successful answer then raises the earned re-offer. Returns true when
+    /// this exact struggle lifted the park (the caller skips offering on the
+    /// same turn).
+    private func recordStruggle() -> Bool {
         let defaults = UserDefaults.standard
         let struggles = defaults.integer(forKey: Self.brainUpgradeStrugglesKey) + 1
         defaults.set(struggles, forKey: Self.brainUpgradeStrugglesKey)
-        guard brainUpgrade == .dismissed else { return }
+        guard brainUpgrade == .dismissed else { return false }
         let parked = DismissalParkPolicy.isParked(
             dismissals: defaults.integer(forKey: Self.brainUpgradeDismissCountKey),
             strugglesSinceLastDismissal: struggles
         )
-        if !parked {
-            Self.upgradeLog.notice("brain upgrade re-armed after \(struggles) felt struggles")
-            recomputeBrainUpgradeState()
-        }
+        guard !parked else { return false }
+        Self.upgradeLog.notice("brain upgrade re-armed after \(struggles) felt struggles")
+        recomputeBrainUpgradeState()
+        return true
     }
 
     // MARK: - User actions (the nudge card's two buttons)
@@ -265,7 +278,10 @@ extension AppEnvironment {
         showBrainUpgradeNotice("\(target.displayName)'s awake — switched you over.")
     }
 
-    private func showBrainUpgradeNotice(_ text: String) {
+    /// Internal (not private): the voice earned-moment path reuses the same
+    /// toast slot and MUST get the auto-clear — a directly-set notice would
+    /// permanently mask the ingest banner behind it (review catch, 2026-07-03).
+    func showBrainUpgradeNotice(_ text: String) {
         brainUpgradeNotice = text
         Task { @MainActor [weak self] in
             try? await Task.sleep(for: .seconds(6))

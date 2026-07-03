@@ -204,6 +204,10 @@ extension AppEnvironment {
         UserDefaults.standard.set(false, forKey: Self.voiceModeActiveKey)
         avatar.resetToIdle()
         speechHighlight.clear()
+        // An exit mid-turn evaluates on a tally that misses that turn's
+        // exchange (recordSpokenExchange fires when the answer lands) — the
+        // exchange banks for the NEXT exit. Deliberate: an undercount can
+        // only delay the offer, never mis-fire it.
         evaluateVoiceUpgradeOffer()
     }
 
@@ -233,10 +237,12 @@ extension AppEnvironment {
     }
 
     /// "Get M1K3 Voice" — rides the existing prepareM1K3Voice path (voiceLoad
-    /// drives Settings' progress; the speech façade swaps when ready).
+    /// drives Settings' progress; the speech façade swaps when ready). The
+    /// toast goes through showBrainUpgradeNotice for its auto-clear — a
+    /// directly-set notice would mask the ingest banner forever.
     func acceptVoiceUpgrade() {
         voiceUpgradeOffered = false
-        brainUpgradeNotice = "Fetching my proper voice — I'll switch over when it's ready."
+        showBrainUpgradeNotice("Fetching my proper voice — I'll switch over when it's ready.")
         Task { [weak self] in await self?.prepareM1K3Voice() }
     }
 
