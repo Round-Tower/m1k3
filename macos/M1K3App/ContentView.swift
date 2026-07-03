@@ -43,6 +43,14 @@ struct ContentView: View {
     /// next turn, so the switcher disables itself. Reactive so toggling Auto-route in
     /// Settings updates the chat toolbar live.
     @AppStorage(AppEnvironment.autoRouteBrainKey) private var autoRouteBrain = false
+    /// First completed turn ever — flips the GreetingCard from the full
+    /// first-session greeting to the quiet returning-user variant (a veteran's
+    /// every new conversation must not replay "Nice to meet you").
+    @AppStorage("greeting.firstTurnDone") private var greetingFirstTurnDone = false
+    /// Voice mode's toolbar button stays LABELED ("Voice mode", not icon-only)
+    /// until the first entry — the headline feature must not hide behind an
+    /// unlabeled wave glyph for someone who's never found it.
+    @AppStorage(AppEnvironment.hasEnteredVoiceModeKey) private var hasEnteredVoiceMode = false
 
     /// Readable measure for the chat column on large windows: transcript and
     /// input bar cap at this width and centre, instead of stretching edge to
@@ -53,6 +61,17 @@ struct ContentView: View {
         VStack(spacing: 0) {
             avatarPanel
             transcript
+            // The upgrade encore — after the first whoa, never before or during
+            // (BrainUpgradePolicy gates the offer to between-turns moments).
+            if showsBrainUpgradeNudge, !env.isVoiceModeActive {
+                BrainUpgradeNudgeCard(
+                    isStagedSwitch: env.brainUpgrade == .staged(consented: false),
+                    onAccept: { env.acceptBrainUpgrade() },
+                    onDismiss: { env.dismissBrainUpgrade() }
+                )
+                .frame(maxWidth: Self.chatContentMaxWidth)
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
             // The input bar hides while voice owns the conversation — the dock
             // below IS the bottom chrome then, so there's no typed-vs-spoken clash.
             if !env.isVoiceModeActive {
@@ -60,6 +79,7 @@ struct ContentView: View {
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
+        .animation(.spring(duration: 0.35), value: showsBrainUpgradeNudge)
         .animation(.spring(duration: 0.35), value: avatarDisplay)
         .frame(minWidth: 600, minHeight: 520)
         // Voice-first as a FULL-WINDOW hero: the avatar fills the window with the
@@ -90,7 +110,10 @@ struct ContentView: View {
             if !env.isReady {
                 ModelGateView(
                     readiness: env.readiness,
-                    brainName: env.downloadingBrainName
+                    brainName: env.downloadingBrainName,
+                    switchToLil: env.isBrainDownloaded(.lil) && env.selectedBrain == .mini
+                        ? { env.selectBrain(.lil) }
+                        : nil
                 ) { Task { await env.warmUpSelectedBrainOnLaunch() } }
                     .transition(.opacity)
             }
@@ -174,10 +197,42 @@ struct ContentView: View {
             }
         }
         .safeAreaInset(edge: .top, spacing: 0) {
-            if let status = env.lastIngestStatus {
+            // The mic/speech recovery outranks ingest status — it's the only
+            // way back from a denied grant (which used to fail silently).
+            if env.voicePermissionRecovery != nil {
+                VoicePermissionBanner(
+                    onOpenSettings: { env.openVoicePermissionSettings() },
+                    onDismiss: { env.voicePermissionRecovery = nil }
+                )
+            }
+            // The swap toast ("Lil's awake") rides the same banner slot.
+            else if let notice = env.brainUpgradeNotice {
+                IngestBanner(text: notice, busy: false)
+            }
+            // Suppressed while the GreetingCard is up — its hero zone shows the
+            // same busy/indexed beat where the user is actually looking; two
+            // simultaneous "Indexed" surfaces is noise.
+            else if let status = env.lastIngestStatus, !greetingCardVisible {
                 IngestBanner(text: status, busy: env.isIngesting)
             }
         }
+        // The first completed turn retires the full first-session greeting.
+        .onChange(of: env.chat.messages.isEmpty) { _, isEmpty in
+            if !isEmpty { greetingFirstTurnDone = true }
+        }
+    }
+
+    /// One flag for both consumers (card mount + banner suppression) so the
+    /// conditions can't drift apart.
+    private var greetingCardVisible: Bool {
+        env.chat.messages.isEmpty
+    }
+
+    /// The nudge shows for a fresh offer AND for the rarer "Lil's already on
+    /// disk but you're on Mini" one-tap switch (staged without this-session
+    /// consent — e.g. downloaded once via the picker, then switched back).
+    private var showsBrainUpgradeNudge: Bool {
+        env.brainUpgrade == .offered || env.brainUpgrade == .staged(consented: false)
     }
 
     // MARK: - Avatar panel
@@ -202,8 +257,17 @@ struct ContentView: View {
         if env.chat.messages.isEmpty {
             VStack {
                 Spacer()
-                EmptyChatView()
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                GreetingCard(
+                    userName: UserDefaults.standard.string(forKey: AppEnvironment.userDisplayNameKey),
+                    brainName: env.selectedBrain.displayName,
+                    isFirstSession: !greetingFirstTurnDone,
+                    isIngesting: env.isIngesting,
+                    lastIngestedTitle: env.lastIngestedTitle,
+                    onImport: { showImporter = true },
+                    onSend: { text in Task { await env.send(text) } },
+                    onSpeakSample: { Task { await env.speakSample() } }
+                )
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         } else {
             ScrollViewReader { proxy in
@@ -402,12 +466,22 @@ struct ContentView: View {
                     env.enterVoiceMode()
                 }
             } label: {
-                Label(
-                    env.isVoiceModeActive ? "Leave voice mode" : "Voice mode",
-                    systemImage: env.isVoiceModeActive ? "person.wave.2.fill" : "person.wave.2"
-                )
-                .contentTransition(.symbolEffect(.replace))
-                .animation(.default, value: env.isVoiceModeActive)
+                // Text + icon until the user has entered voice mode once — the
+                // headline feature earns a label while it's undiscovered, then
+                // steps back to the toolbar's default icon-only rendering.
+                Group {
+                    let label = Label(
+                        env.isVoiceModeActive ? "Leave voice mode" : "Voice mode",
+                        systemImage: env.isVoiceModeActive ? "person.wave.2.fill" : "person.wave.2"
+                    )
+                    .contentTransition(.symbolEffect(.replace))
+                    .animation(.default, value: env.isVoiceModeActive)
+                    if hasEnteredVoiceMode {
+                        label
+                    } else {
+                        label.labelStyle(.titleAndIcon)
+                    }
+                }
             }
             .keyboardShortcut("v", modifiers: [.command, .shift])
             .disabled(!env.isVoiceModeActive
@@ -538,20 +612,8 @@ struct ContentView: View {
 
 // MARK: - Supporting views
 
-private struct EmptyChatView: View {
-    var body: some View {
-        ContentUnavailableView {
-            // The wordmark wears the brand face, at caption volume — 28pt keeps
-            // the deliberately quiet empty state quiet (the 40pt hero size is
-            // onboarding's). Taste-gate at ⌘R.
-            Text("M1K3")
-                .font(.pixel(28))
-                .kerning(2)
-        } description: {
-            Text("Drop a PDF or text file to give M1K3 something to remember, then ask away.")
-        }
-    }
-}
+// EmptyChatView retired 2026-07-03 — GreetingCard (its own file) owns the
+// empty-transcript slot now, with an actual guided affordance.
 
 private struct DropHintView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -585,6 +647,9 @@ private struct DropHintView: View {
 private struct ModelGateView: View {
     let readiness: AppReadiness
     let brainName: String
+    /// Non-nil when Lil's weights are on disk — the `.unavailable` dead-end
+    /// gains a one-tap way out (AFM turned off post-onboarding).
+    var switchToLil: (() -> Void)?
     let retry: () -> Void
 
     var body: some View {
@@ -637,6 +702,13 @@ private struct ModelGateView: View {
                     .font(.callout)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
+                // The rescue: Apple Intelligence turned off AFTER first run,
+                // but Lil's weights are already on disk — one tap out of the
+                // dead end instead of a Settings expedition.
+                if let switchToLil {
+                    Button("Switch to Lil (already downloaded)", action: switchToLil)
+                        .buttonStyle(.borderedProminent)
+                }
                 SettingsLink { Text("Open Settings") }
             }
         case .ready:
@@ -649,6 +721,78 @@ private struct ModelGateView: View {
     private func loadingLabel(_ state: ModelLoadState) -> String {
         let label = state.label(modelName: brainName)
         return label.isEmpty ? "Loading \(brainName)…" : label
+    }
+}
+
+/// The invitation-first upgrade encore, in M1K3's voice. One appearance per
+/// journey (dismiss persists); the fetch it starts is disk-only and invisible —
+/// consent lives HERE, the swap is the payoff at the next idle moment.
+private struct BrainUpgradeNudgeCard: View {
+    /// True for the rarer one-tap switch (Lil already on disk, no fetch needed).
+    let isStagedSwitch: Bool
+    let onAccept: () -> Void
+    let onDismiss: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(isStagedSwitch
+                ? "Lil's already here — my sharper brain is sitting on disk."
+                : "That was Mini, my quickest brain.")
+                .font(.callout.weight(.semibold))
+            Text(isStagedSwitch
+                ? "Want me to switch over? Takes a few seconds, everything stays on this Mac."
+                : "Lil is sharper — a 2.3 GB one-time fetch. I'll grab it in the background while we keep talking.")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            HStack(spacing: 12) {
+                Button(isStagedSwitch ? "Switch to Lil" : "Fetch Lil", action: onAccept)
+                    .buttonStyle(.glassProminent)
+                Button("Maybe later", action: onDismiss)
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.top, 4)
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .glassEffect(.regular, in: .rect(cornerRadius: 16))
+        .padding(.horizontal, 20)
+        .padding(.bottom, 8)
+        .accessibilityElement(children: .combine)
+    }
+}
+
+/// The mic/speech denial recovery — today's silent empty listen made loud and
+/// fixable. Three short lines (dyslexia-friendly), one honest action.
+private struct VoicePermissionBanner: View {
+    let onOpenSettings: () -> Void
+    let onDismiss: () -> Void
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "mic.slash")
+                .symbolRenderingMode(.hierarchical)
+                .foregroundStyle(.orange)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("I can't hear you yet.")
+                    .font(.callout.weight(.semibold))
+                Text("Your Mac is blocking the mic. Flip M1K3 on in System Settings, then try me again.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
+            Button("Open System Settings", action: onOpenSettings)
+                .buttonStyle(.glassProminent)
+            Button("Not now", action: onDismiss)
+                .buttonStyle(.plain)
+                .foregroundStyle(.secondary)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .glassEffect(.regular, in: .rect(cornerRadius: 12))
+        .padding(.horizontal, 16)
+        .padding(.top, 8)
     }
 }
 

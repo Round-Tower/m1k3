@@ -24,11 +24,11 @@ struct M1K3App: App {
     /// Stable id so the menu-bar item can re-open the main window after it's closed.
     static let mainWindowID = "main"
 
-    /// When true, the next OnboardingView is a brain-only re-pick (Settings →
-    /// "Change brain…"): it opens on the brain step and finishes on wake, rather
-    /// than replaying the full flow from the empty "Who am I talking to?" screen.
-    /// Kept here (not on AppEnvironment) so the Scene and Settings share it without
-    /// reaching into the store; reset to false when onboarding completes.
+    /// When true, the first-run gate shows BrainPickerView (Settings → "Change
+    /// brain…" / the toolbar switcher's download route) instead of HelloView:
+    /// a brain re-pick, finishing on wake, never replaying the hello. Kept here
+    /// (not on AppEnvironment) so the Scene and Settings share it without
+    /// reaching into the store; reset to false when the picker completes.
     static let onboardingStartAtBrainKey = "onboarding.startAtBrain"
 
     /// Sets the activation policy (Dock icon vs accessory) before the first
@@ -43,7 +43,7 @@ struct M1K3App: App {
     /// First-run gate: show "choose your brain" until a brain has been picked.
     @AppStorage(AppEnvironment.hasChosenBrainKey) private var hasChosenBrain = false
     /// Brain-only re-pick flag: when set by Settings → "Change brain…", the
-    /// re-shown OnboardingView opens on the brain step and finishes on wake.
+    /// gate shows BrainPickerView, which finishes on wake.
     @AppStorage(Self.onboardingStartAtBrainKey) private var onboardingStartAtBrain = false
     /// Menu-bar mark (favicon "M" by default) and whether to live in the menu bar
     /// only (no Dock icon, no window forced open at launch).
@@ -68,13 +68,28 @@ struct M1K3App: App {
                             exit(0)
                         }
                 } else if let env = appDelegate.environment {
+                    // Three-way first-run gate (SelfTest branch above MUST stay
+                    // first — headless runs land on fresh containers where these
+                    // keys are unset). Order below matters too: a pending
+                    // brain-repick deep link (`onboardingStartAtBrain`) outranks
+                    // the HelloView fallback, so a user who deep-linked then
+                    // relaunched lands back in the picker, not the hello.
+                    // These closures are the ONLY writers of `hasChosenBrain =
+                    // true` — selectBrain deliberately doesn't touch it (a write
+                    // mid-download would swap the view out from under its own
+                    // progress UI).
                     if hasChosenBrain {
                         ContentView()
                             .environment(env)
-                    } else {
-                        OnboardingView(startAtBrain: onboardingStartAtBrain) {
+                    } else if onboardingStartAtBrain {
+                        BrainPickerView {
                             hasChosenBrain = true
                             onboardingStartAtBrain = false
+                        }
+                        .environment(env)
+                    } else {
+                        HelloView {
+                            hasChosenBrain = true
                         }
                         .environment(env)
                     }

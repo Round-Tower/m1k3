@@ -2,10 +2,11 @@
 //  OnboardingCards.swift
 //  M1K3App
 //
-//  The selectable cards for the first-run flow — Brain (Auto + Mini/Lil/Big/Huge),
-//  Voice input (Apple Speech / WhisperKit), and Voice output (Built-in / M1K3
-//  Voice). Extracted from OnboardingView so that file stays within length limits;
-//  all three share the same glass-card layout and SelectionRadio.
+//  The selectable cards for the brain picker — Auto + Mini/Lil/Big — plus the
+//  shared SelectionRadio vocabulary (CompanionSettings reuses it). VoiceCard and
+//  SpeechVoiceCard were removed 2026-07-03 with the one-screen onboarding
+//  collapse: their only consumers were the cut Ears/Voice wizard steps, and
+//  Settings' Form-native controls cover both choices.
 //
 //  Signed: Kev + claude-sonnet-4-6, 2026-06-08, Confidence 0.85, Prior: Unknown
 //  Review: Kev + claude-fable-5, 2026-07-02, Confidence 0.9 — extracted the 4×
@@ -13,7 +14,6 @@
 //  transition; card titles moved to the shared Font.pixelTitle.
 
 import M1K3Inference
-import M1K3Voice
 import SwiftUI
 
 // MARK: - Selection radio
@@ -163,131 +163,6 @@ struct AutoBrainCard: View {
         .buttonStyle(.plain)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("Let M1K3 choose. Recommended for most people.")
-        .accessibilityAddTraits(isSelected ? [.isSelected] : [])
-    }
-}
-
-// MARK: - Voice-input card
-
-struct VoiceCard: View {
-    enum Engine {
-        case apple, whisperKit
-
-        var glyph: String {
-            switch self {
-            case .apple: "waveform"
-            case .whisperKit: "waveform.badge.star"
-            }
-        }
-
-        var displayName: String {
-            switch self {
-            case .apple: "Apple Speech"
-            case .whisperKit: "WhisperKit"
-            }
-        }
-
-        var tagline: String {
-            switch self {
-            case .apple: "Ready now · no download"
-            case .whisperKit: "Higher accuracy · ~142 MB"
-            }
-        }
-
-        var detail: String {
-            switch self {
-            case .apple:
-                "Built into macOS. Works immediately, always on-device."
-            case .whisperKit:
-                "Open-source model. More accurate in noise and with accents. "
-                    + "One download, then always offline."
-            }
-        }
-    }
-
-    let engine: Engine
-    let isSelected: Bool
-    let onTap: () -> Void
-
-    var body: some View {
-        Button(action: onTap) {
-            HStack(alignment: .top, spacing: 16) {
-                Image(systemName: engine.glyph)
-                    .symbolRenderingMode(.hierarchical)
-                    .font(.system(size: 26, weight: .semibold))
-                    .foregroundStyle(.tint)
-                    .frame(width: 40)
-                    .accessibilityHidden(true)
-
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(engine.displayName).font(.pixelTitle).padding(.bottom, 2)
-                    Text(engine.tagline)
-                        .font(.subheadline.weight(.medium))
-                        .foregroundStyle(.tint)
-                    Text(engine.detail)
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                Spacer(minLength: 0)
-                SelectionRadio(isSelected: isSelected)
-            }
-            .padding(16)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .glassEffect(
-                isSelected ? .regular.tint(.accentColor.opacity(0.22)) : .regular,
-                in: .rect(cornerRadius: 18)
-            )
-            .contentShape(.rect)
-        }
-        .buttonStyle(.plain)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(engine.displayName), \(engine.tagline)")
-        .accessibilityAddTraits(isSelected ? [.isSelected] : [])
-    }
-}
-
-// MARK: - Voice-output card
-
-struct SpeechVoiceCard: View {
-    let tier: VoiceTier
-    let isSelected: Bool
-    let onTap: () -> Void
-
-    var body: some View {
-        Button(action: onTap) {
-            HStack(alignment: .top, spacing: 16) {
-                Image(systemName: tier.glyph)
-                    .symbolRenderingMode(.hierarchical)
-                    .font(.system(size: 26, weight: .semibold))
-                    .foregroundStyle(.tint)
-                    .frame(width: 40)
-                    .accessibilityHidden(true)
-
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(tier.displayName).font(.pixelTitle).padding(.bottom, 2)
-                    Text(tier.tagline)
-                        .font(.subheadline.weight(.medium))
-                        .foregroundStyle(.tint)
-                    Text(tier.detail)
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                Spacer(minLength: 0)
-                SelectionRadio(isSelected: isSelected)
-            }
-            .padding(16)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .glassEffect(
-                isSelected ? .regular.tint(.accentColor.opacity(0.22)) : .regular,
-                in: .rect(cornerRadius: 18)
-            )
-            .contentShape(.rect)
-        }
-        .buttonStyle(.plain)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(tier.displayName), \(tier.tagline)")
         .accessibilityAddTraits(isSelected ? [.isSelected] : [])
     }
 }

@@ -55,6 +55,7 @@ struct SettingsView: View {
                             .symbolRenderingMode(.hierarchical)
                     }
                     modelLoadRow
+                    brainUpgradeRow
                     Button("Change brain…") {
                         // Brain-only re-pick: deep-link to the brain step and finish on
                         // wake, instead of replaying the empty "Who am I talking to?"
@@ -378,14 +379,15 @@ struct SettingsView: View {
             titleVisibility: .visible
         ) {
             Button("Re-run onboarding", role: .destructive) {
-                // Full flow from the start (You → Brain → Voice → Speech) — NOT the
-                // brain-only re-pick. Saved profile + downloaded models are kept.
+                // The one-screen hello again — NOT the brain-only re-pick.
+                // Honest to the message below: a blank name won't clear the
+                // saved profile, and a non-Mini brain is kept as-is.
                 UserDefaults.standard.set(false, forKey: M1K3App.onboardingStartAtBrainKey)
                 UserDefaults.standard.set(false, forKey: AppEnvironment.hasChosenBrainKey)
             }
         } message: {
-            Text("Shows the full You → Brain → Voice → Speech flow again. "
-                + "Your saved profile and downloaded models are kept.")
+            Text("Shows the first-run hello again. "
+                + "Your saved profile, brain and downloaded models are kept.")
         }
         // Re-read the live login-item status each time Settings opens, so a grant
         // the user just made in System Settings (which we can't observe) is
@@ -597,6 +599,33 @@ extension SettingsView {
                 .symbolRenderingMode(.hierarchical)
                 .font(.caption).foregroundStyle(.orange)
         case .idle, .ready:
+            EmptyView()
+        }
+    }
+
+    /// The background upgrade's quiet home: live % while Lil fetches invisibly,
+    /// the failure reason when it gave up (the chat stays silent about both —
+    /// this row is where "what's it doing?" gets an answer).
+    @ViewBuilder private var brainUpgradeRow: some View {
+        switch env.brainUpgrade {
+        case let .fetching(fraction):
+            HStack(spacing: 8) {
+                ProgressView(value: fraction)
+                    .controlSize(.small)
+                    .frame(maxWidth: 160)
+                Text("Fetching Lil in the background… \(Int((fraction * 100).rounded()))%")
+                    .font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+            }
+        case let .failed(_, transient):
+            Label(
+                transient
+                    ? "Background Lil fetch paused — will retry."
+                    : "Background Lil fetch failed. Use “Change brain…” to download directly.",
+                systemImage: "exclamationmark.triangle"
+            )
+            .symbolRenderingMode(.hierarchical)
+            .font(.caption).foregroundStyle(.orange)
+        case .idle, .offered, .staged, .done, .dismissed:
             EmptyView()
         }
     }

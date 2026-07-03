@@ -15,13 +15,20 @@
 //  test-pinned loop + seams; verify-at-⌘R for the full beat). Prior: Unknown.
 //
 
+import AppKit
+import AVFoundation
 import Foundation
 import M1K3Voice
+import Speech
 
 extension AppEnvironment {
     /// Transient flag consulted by thinkingModeProvider (voice mode swaps the
     /// global Reasoning setting for the in-mode thinking toggle).
     nonisolated static let voiceModeActiveKey = "voiceMode.active"
+
+    /// Flipped on the first successful voice-mode entry — the toolbar button
+    /// stays LABELED until then (discoverability for the headline feature).
+    nonisolated static let hasEnteredVoiceModeKey = "voiceMode.hasEntered"
 
     /// Persisted voice-mode thinking toggle (default off = fast replies).
     /// While voice mode is active this REPLACES the Settings Reasoning picker
@@ -118,11 +125,54 @@ extension AppEnvironment {
         voiceLoop != nil
     }
 
+    /// The live TCC grants, in the policy's platform-neutral terms. Synchronous
+    /// reads — no prompt is triggered by reading a status.
+    nonisolated static func currentVoiceAuthStates()
+        -> (speech: VoicePermissionPolicy.AuthState, mic: VoicePermissionPolicy.AuthState)
+    {
+        let speech: VoicePermissionPolicy.AuthState = switch SFSpeechRecognizer.authorizationStatus() {
+        case .authorized: .authorized
+        case .denied: .denied
+        case .restricted: .restricted
+        case .notDetermined: .notDetermined
+        @unknown default: .notDetermined
+        }
+        let mic: VoicePermissionPolicy.AuthState = switch AVCaptureDevice.authorizationStatus(for: .audio) {
+        case .authorized: .authorized
+        case .denied: .denied
+        case .restricted: .restricted
+        case .notDetermined: .notDetermined
+        @unknown default: .notDetermined
+        }
+        return (speech, mic)
+    }
+
+    /// Pre-flight for any voice gesture: a known-denied grant gets the recovery
+    /// banner immediately instead of a silent empty listen. `.notDetermined`
+    /// passes through — the system dialog fires naturally mid-gesture.
+    func voicePermissionPreflight() -> Bool {
+        let auth = Self.currentVoiceAuthStates()
+        if let recovery = VoicePermissionPolicy.preflightRecovery(speechAuth: auth.speech, micAuth: auth.mic) {
+            voicePermissionRecovery = recovery
+            return false
+        }
+        return true
+    }
+
+    /// Open the exact System Settings pane the recovery names.
+    func openVoicePermissionSettings() {
+        guard let recovery = voicePermissionRecovery,
+              let url = URL(string: recovery.settingsPaneURL) else { return }
+        NSWorkspace.shared.open(url)
+    }
+
     /// Enter voice-first mode and start listening. Refuses while a typed turn
     /// is streaming or chat-mode dictation is live (the toolbar button is
     /// disabled in both states — this guard is the belt to that suspender).
     func enterVoiceMode() {
         guard voiceLoop == nil, !chat.isResponding, !isListening else { return }
+        guard voicePermissionPreflight() else { return }
+        UserDefaults.standard.set(true, forKey: Self.hasEnteredVoiceModeKey)
         UserDefaults.standard.set(true, forKey: Self.voiceModeActiveKey)
         soundEffects.play(.voiceEnter) // M1K3 materialising
         let controller = VoiceLoopController(dependencies: makeVoiceLoopDependencies())
@@ -155,12 +205,39 @@ extension AppEnvironment {
         var activeProvider: (any TranscriptionProvider)?
         return VoiceLoopController.Dependencies(
             startListening: { [weak self] in
-                guard let provider = self?.transcription.activeProvider else {
+                // Strong-bind up front: nested @Sendable closures below may not
+                // reference a weak (mutable) capture under strict concurrency,
+                // and holding the app-lifetime environment for a listen is fine.
+                guard let self, let provider = transcription.activeProvider else {
                     throw VoiceTurnFailure(message: "No speech recogniser is available.")
                 }
                 let stream = try provider.startListening()
                 activeProvider = provider
-                return stream
+                // Zero-segment backstop (the silent-denial fix's second layer):
+                // a listen that drains with NO segments while a grant reads
+                // blocked means the user hit notDetermined→deny mid-gesture or
+                // revoked mid-session. Voice mode can't work at all then — exit
+                // it and raise the recovery banner instead of looping silently.
+                return AsyncStream { continuation in
+                    let forwarder = Task {
+                        var sawSegments = false
+                        for await segment in stream {
+                            sawSegments = true
+                            continuation.yield(segment)
+                        }
+                        continuation.finish()
+                        let auth = Self.currentVoiceAuthStates()
+                        if let recovery = VoicePermissionPolicy.backstopRecovery(
+                            speechAuth: auth.speech, micAuth: auth.mic, sawSegments: sawSegments
+                        ) {
+                            Task { @MainActor in
+                                self.voicePermissionRecovery = recovery
+                                self.exitVoiceMode()
+                            }
+                        }
+                    }
+                    continuation.onTermination = { _ in forwarder.cancel() }
+                }
             },
             stopListening: {
                 activeProvider?.stopListening()

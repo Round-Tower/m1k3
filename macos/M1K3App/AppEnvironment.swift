@@ -44,6 +44,7 @@ import M1K3MLX
 import M1K3Preview
 import M1K3Voice
 import M1K3WhisperKit
+import Network
 import Observation
 import os
 
@@ -171,6 +172,12 @@ final class AppEnvironment {
     /// in the input bar as the user speaks.
     private(set) var isListening = false
     private(set) var liveTranscript = ""
+    /// Set when a voice gesture hit a denied/restricted mic or speech grant —
+    /// the silent-denial fix. Drives the recovery banner (which System Settings
+    /// pane to open); cleared on dismiss or a later successful listen. Written
+    /// by the pre-flight in enterVoiceMode/startDictation and the zero-segment
+    /// backstop (AppEnvironment+VoiceMode).
+    var voicePermissionRecovery: VoicePermissionPolicy.Recovery?
     /// WhisperKit model-load state — mirrors `modelLoad` for the brain tier.
     private(set) var whisperLoad: ModelLoadState = .idle
     private var isPreparingWhisper = false
@@ -318,12 +325,33 @@ final class AppEnvironment {
     /// The in-flight MLX warm-up, so switching away can cancel it (idempotent).
     private var preloadTask: Task<Void, Never>?
 
+    /// The background brain-upgrade journey (pure machine in M1K3Inference;
+    /// coordinator in AppEnvironment+BrainUpgrade — internal setter because the
+    /// coordinator lives in its own file; route every write through
+    /// `BrainUpgradePolicy.transition`). ⚠️ Its download progress must NEVER be
+    /// written to `modelLoad` — that drives the readiness gate, and this
+    /// download is supposed to be invisible to a working chat.
+    var brainUpgrade: BrainUpgradeState = .idle
+    /// One-line transient notice ("Lil's awake — switched you over."), shown in
+    /// the top banner slot and self-clearing.
+    var brainUpgradeNotice: String?
+    /// The in-flight background fetch, so `selectBrain`/the picker route can
+    /// cancel it synchronously (single writer to the Hub cache dir).
+    @ObservationIgnored var brainUpgradeFetchTask: Task<Void, Never>?
+    /// Live network-path snapshot for OfferEligibility (expensive/constrained).
+    @ObservationIgnored var brainUpgradePathMonitor: NWPathMonitor?
+    @ObservationIgnored var brainUpgradeNetworkPath: NWPath?
+
     /// Progress of warming the MLX Gemma weights, surfaced in Settings (and the
     /// chat send path). Stays `.idle` for the Apple Foundation Models default.
     private(set) var modelLoad: ModelLoadState = .idle
 
     /// Last ingest outcome, surfaced to the UI.
     private(set) var lastIngestStatus: String?
+    /// The last successfully ingested document's title, threaded properly for
+    /// GreetingCard's ask-state ("Ask me about it") — never parsed back out of
+    /// the display string above. Nil until a first success; survives failures.
+    private(set) var lastIngestedTitle: String?
     private(set) var isIngesting = false
     /// Count of indexed knowledge items, for the document drawer / settings.
     private(set) var indexedItemCount = 0
@@ -556,6 +584,7 @@ final class AppEnvironment {
             }
             let dedup = result.wasDeduped ? " (already indexed)" : ""
             lastIngestStatus = "Indexed “\(title)” — \(result.chunkCount) chunks\(dedup)."
+            lastIngestedTitle = title
             refreshCounts()
         } catch {
             lastIngestStatus = "Couldn’t index “\(title)”: \(error.localizedDescription)"
@@ -607,6 +636,10 @@ final class AppEnvironment {
                 duration: clock.now - started,
                 appActive: NSApplication.shared.isActive
             )
+            // The between-turns beat: maybe offer the background brain upgrade
+            // (invitation-first, eligibility-gated), or complete a consented
+            // staged swap now that the app is idle.
+            evaluateBrainUpgradeAfterAnswer()
         }
         // Only reset to idle if the avatar isn't already in a speaking state
         // (e.g. auto-TTS path sets .speaking before we return here).
@@ -723,9 +756,19 @@ final class AppEnvironment {
             return true
         }
         Self.brainLog.notice("selectBrain \(tier.rawValue, privacy: .public): model=\(tier.mlxModelID ?? "appleFoundationModels", privacy: .public)")
+        // Single writer to the Hub cache: any explicit brain change cancels the
+        // background upgrade fetch FIRST (the partial snapshot survives and
+        // resumes wherever it's next wanted). State recomputes below.
+        cancelBrainUpgradeFetch()
         selectedBrain = tier
         UserDefaults.standard.set(tier.rawValue, forKey: Self.selectedBrainKey)
-        UserDefaults.standard.set(true, forKey: Self.hasChosenBrainKey)
+        // Deliberately NOT writing hasChosenBrainKey here (removed 2026-07-03):
+        // that key is the first-run WINDOW GATE, and M1K3App binds it via
+        // @AppStorage — a write mid-download would swap HelloView/BrainPickerView
+        // out from under their own progress UI. The gate is owned exclusively by
+        // the onComplete closures in M1K3App (and routeToOnboardingBrainPicker /
+        // Settings re-run for the false direction). Note the old write was also
+        // unreachable on the no-op path above — the guard returns first.
         let oldMLX = currentMLXProvider
         if let modelID = tier.mlxModelID {
             // Rotating-KV tiers get a capped decode so prefill + generation fit
@@ -741,6 +784,7 @@ final class AppEnvironment {
             selectedRuntime = .appleFoundationModels // didSet clears the bar
         }
         oldMLX.releaseMemory()
+        recomputeBrainUpgradeState()
         return false
     }
 
@@ -751,6 +795,9 @@ final class AppEnvironment {
     /// actual brain write still happens via `selectBrain` inside onboarding. One
     /// home for the two-key dance so it can't drift between call sites.
     func routeToOnboardingBrainPicker() {
+        // The picker will drive its own download — hand it sole ownership of
+        // the Hub cache before the window swaps.
+        cancelBrainUpgradeFetch()
         UserDefaults.standard.set(true, forKey: M1K3App.onboardingStartAtBrainKey)
         UserDefaults.standard.set(false, forKey: Self.hasChosenBrainKey)
     }
@@ -1045,6 +1092,9 @@ extension AppEnvironment {
     /// into the persona, the one-time embedder re-index check, then pre-warm the
     /// embedder so the first chat turn doesn't pay a cold model load.
     func runStartupMaintenance() async {
+        // Rebuild the background-upgrade state from disk facts (never persisted
+        // — a mid-download quit or failure self-heals here).
+        recomputeBrainUpgradeState()
         M1K3Persona.setUserProfile(try? store.meta(key: Self.userProfileMetaKey))
         installGenerationMetricsSink()
         await reindexIfEmbedderChanged()
@@ -1120,6 +1170,26 @@ extension AppEnvironment {
     /// cited; it only rides the persona's About-the-user block.
     nonisolated static var userProfileMetaKey: String {
         "user.profile"
+    }
+
+    /// The user's display name as HelloView collected it — a dedicated key so
+    /// GreetingCard can greet by name without parsing the free-text profile
+    /// blob back apart (the blob is Settings-editable and un-parseable).
+    nonisolated static let userDisplayNameKey = "user.displayName"
+
+    /// HelloView's name save. Two stores, deliberately asymmetric:
+    /// - the display-name key always updates (it's presentation, cheap to redo);
+    /// - the persona profile blob is seeded ONLY when no profile exists yet — a
+    ///   re-run overwrite would destroy notes the user added in Settings
+    ///   ("About you" owns the blob after first run).
+    func saveFirstRunName(_ name: String) {
+        let trimmed = name.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return }
+        UserDefaults.standard.set(trimmed, forKey: Self.userDisplayNameKey)
+        let existing = (try? store.meta(key: Self.userProfileMetaKey)) ?? nil
+        if existing?.isEmpty != false {
+            saveUserProfile("Name: \(trimmed).")
+        }
     }
 
     /// Persist + apply the profile. Empty input clears it. The persona prefix
@@ -1350,6 +1420,9 @@ extension AppEnvironment {
 
     private func startDictation() {
         guard let provider = transcription.activeProvider else { return }
+        // Known-denied grants get the recovery banner up front, not a silent
+        // empty listen (`.notDetermined` passes — the system dialog is the ask).
+        guard voicePermissionPreflight() else { return }
         dictationTask?.cancel() // belt-and-suspenders: never leave a prior consumer running
         dictationProvider = provider
         liveTranscript = ""

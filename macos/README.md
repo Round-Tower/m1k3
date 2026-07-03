@@ -35,8 +35,11 @@ Or from the command line:
 xcodebuild -scheme M1K3 -destination 'platform=macOS' build | xcbeautify
 ```
 
-First launch walks you through onboarding: pick a brain (model tier), a name,
-and a voice. Model weights download on demand.
+First launch is one screen: say hello (a name is optional) and you're talking —
+M1K3 starts on Mini, Apple's built-in on-device model, so there's nothing to
+download. Sharper local brains (Lil / Big) are one click away in Settings, or
+via the in-chat offer after your first answer; weights download only when you
+ask.
 
 > **Signing note:** run with your personal development team. Building with
 > `CODE_SIGNING_ALLOWED=NO` compiles fine (CI does it) but the app then runs
