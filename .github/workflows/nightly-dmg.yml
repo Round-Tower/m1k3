@@ -17,6 +17,8 @@ name: Nightly DMG
 #
 # Until those secrets exist the job SKIPS cleanly (it never reddens the Actions
 # tab — same philosophy as ci.yml's Slack notify). Once set, it just works.
+# Note: on the fresh public repo (2026-07-02) all secrets start absent — this
+# file doubles as the checklist for restoring them.
 
 on:
   schedule:
