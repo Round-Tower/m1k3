@@ -55,6 +55,20 @@ struct BrainUpgradePolicyTests {
         #expect(next(.idle, .recomputed(lilInstalled: true, dismissed: true, currentBrain: .mini)) == .dismissed)
     }
 
+    @Test("the non-Mini short-circuit is TOTAL — done regardless of installed/dismissed. Pinned because selectBrain's no-op path leans on it")
+    func recomputeNonMiniShortCircuitIsTotal() {
+        for tier in [BrainTier.lil, .big] {
+            for installed in [true, false] {
+                for dismissed in [true, false] {
+                    #expect(
+                        next(.idle, .recomputed(lilInstalled: installed, dismissed: dismissed, currentBrain: tier))
+                            == .done
+                    )
+                }
+            }
+        }
+    }
+
     // MARK: - Offering
 
     @Test("eligible answer completion from idle → offered")

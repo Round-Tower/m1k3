@@ -226,6 +226,11 @@ extension AppEnvironment {
                             continuation.yield(segment)
                         }
                         continuation.finish()
+                        // finish() fires onTermination → forwarder.cancel() on
+                        // THIS task — safe because there's deliberately no
+                        // cancellation checkpoint between here and the backstop
+                        // below. Adding Task.checkCancellation() here would
+                        // silently disable the silent-denial backstop.
                         let auth = Self.currentVoiceAuthStates()
                         if let recovery = VoicePermissionPolicy.backstopRecovery(
                             speechAuth: auth.speech, micAuth: auth.mic, sawSegments: sawSegments

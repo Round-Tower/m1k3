@@ -23,6 +23,7 @@
 
 import M1K3Avatar
 import M1K3Inference
+import M1K3Voice
 import SwiftUI
 import UniformTypeIdentifiers
 
@@ -199,8 +200,9 @@ struct ContentView: View {
         .safeAreaInset(edge: .top, spacing: 0) {
             // The mic/speech recovery outranks ingest status — it's the only
             // way back from a denied grant (which used to fail silently).
-            if env.voicePermissionRecovery != nil {
+            if let recovery = env.voicePermissionRecovery {
                 VoicePermissionBanner(
+                    recovery: recovery,
                     onOpenSettings: { env.openVoicePermissionSettings() },
                     onDismiss: { env.voicePermissionRecovery = nil }
                 )
@@ -211,8 +213,12 @@ struct ContentView: View {
             }
             // Suppressed while the GreetingCard is up — its hero zone shows the
             // same busy/indexed beat where the user is actually looking; two
-            // simultaneous "Indexed" surfaces is noise.
-            else if let status = env.lastIngestStatus, !greetingCardVisible {
+            // simultaneous "Indexed" surfaces is noise. FAILURES pierce the
+            // suppression: the card has no failure state, so without this a
+            // failed drop would be silent (or revert to a stale "Got it").
+            else if let status = env.lastIngestStatus,
+                    !greetingCardVisible || env.lastIngestFailed
+            {
                 IngestBanner(text: status, busy: env.isIngesting)
             }
         }
@@ -759,13 +765,19 @@ private struct BrainUpgradeNudgeCard: View {
         .glassEffect(.regular, in: .rect(cornerRadius: 16))
         .padding(.horizontal, 20)
         .padding(.bottom, 8)
-        .accessibilityElement(children: .combine)
+        // No .accessibilityElement(children: .combine) here: it would merge the
+        // accept/decline buttons into one opaque element — VoiceOver users must
+        // be able to reach each independently (review catch, 2026-07-03).
     }
 }
 
 /// The mic/speech denial recovery — today's silent empty listen made loud and
-/// fixable. Three short lines (dyslexia-friendly), one honest action.
+/// fixable. Three short lines (dyslexia-friendly), one honest action. The copy
+/// names the ACTUAL blocked grant (the policy distinguishes them for a reason —
+/// telling a mic-granted user "the mic is blocked" would send them to fix the
+/// wrong thing).
 private struct VoicePermissionBanner: View {
+    let recovery: VoicePermissionPolicy.Recovery
     let onOpenSettings: () -> Void
     let onDismiss: () -> Void
 
@@ -777,7 +789,9 @@ private struct VoicePermissionBanner: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text("I can't hear you yet.")
                     .font(.callout.weight(.semibold))
-                Text("Your Mac is blocking the mic. Flip M1K3 on in System Settings, then try me again.")
+                Text(recovery == .microphone
+                    ? "Your Mac is blocking the mic. Flip M1K3 on in System Settings, then try me again."
+                    : "Your Mac is blocking Speech Recognition for M1K3. Flip it on in System Settings, then try me again.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
             }

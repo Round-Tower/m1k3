@@ -152,9 +152,13 @@ extension AppEnvironment {
         )
         // Silent to the chat (the whoa is not interrupted by our retries);
         // Settings' brain section shows the failed row. Backoff then retry.
+        // The sleeper is TRACKED (brainUpgradeRetryTask) so a manual brain
+        // change cancels it — otherwise it could fire mid-picker-download and
+        // become a second, invisible writer to the same Hub cache.
         guard BrainUpgradePolicy.shouldRetry(attempts: attempt, transient: transient) else { return }
-        Task { @MainActor [weak self] in
+        brainUpgradeRetryTask = Task { @MainActor [weak self] in
             try? await Task.sleep(for: .seconds(Double(attempt) * 15))
+            guard !Task.isCancelled else { return }
             guard let self, case .failed = brainUpgrade else { return }
             brainUpgrade = BrainUpgradePolicy.transition(brainUpgrade, on: .retryStarted)
             runBrainUpgradeFetch(attempt: attempt + 1)
@@ -162,11 +166,14 @@ extension AppEnvironment {
     }
 
     /// Synchronous cancel — called FIRST by selectBrain / routeToOnboarding-
-    /// BrainPicker so there's exactly one writer to the Hub cache dir. The
-    /// partial snapshot stays on disk and resumes wherever it's next wanted.
+    /// BrainPicker so there's exactly one writer to the Hub cache dir (the
+    /// scheduled retry counts as a writer-to-be). The partial snapshot stays
+    /// on disk and resumes wherever it's next wanted.
     func cancelBrainUpgradeFetch() {
         brainUpgradeFetchTask?.cancel()
         brainUpgradeFetchTask = nil
+        brainUpgradeRetryTask?.cancel()
+        brainUpgradeRetryTask = nil
     }
 
     // MARK: - Swap

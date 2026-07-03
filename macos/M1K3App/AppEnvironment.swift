@@ -338,6 +338,11 @@ final class AppEnvironment {
     /// The in-flight background fetch, so `selectBrain`/the picker route can
     /// cancel it synchronously (single writer to the Hub cache dir).
     @ObservationIgnored var brainUpgradeFetchTask: Task<Void, Never>?
+    /// The scheduled retry-backoff sleeper. Tracked SEPARATELY so
+    /// `cancelBrainUpgradeFetch` kills it too — an untracked backoff could
+    /// outlive a manual brain change and silently start a second Hub-cache
+    /// writer (review catch, 2026-07-03).
+    @ObservationIgnored var brainUpgradeRetryTask: Task<Void, Never>?
     /// Live network-path snapshot for OfferEligibility (expensive/constrained).
     @ObservationIgnored var brainUpgradePathMonitor: NWPathMonitor?
     @ObservationIgnored var brainUpgradeNetworkPath: NWPath?
@@ -352,6 +357,11 @@ final class AppEnvironment {
     /// GreetingCard's ask-state ("Ask me about it") — never parsed back out of
     /// the display string above. Nil until a first success; survives failures.
     private(set) var lastIngestedTitle: String?
+    /// True when the LAST ingest failed. Lets the failure banner pierce the
+    /// GreetingCard's IngestBanner suppression — otherwise a failed drop while
+    /// the card is up would be silent (or worse, revert to a stale earlier
+    /// "Got it" ask-state as if the new file had landed).
+    private(set) var lastIngestFailed = false
     private(set) var isIngesting = false
     /// Count of indexed knowledge items, for the document drawer / settings.
     private(set) var indexedItemCount = 0
@@ -585,9 +595,11 @@ final class AppEnvironment {
             let dedup = result.wasDeduped ? " (already indexed)" : ""
             lastIngestStatus = "Indexed “\(title)” — \(result.chunkCount) chunks\(dedup)."
             lastIngestedTitle = title
+            lastIngestFailed = false
             refreshCounts()
         } catch {
             lastIngestStatus = "Couldn’t index “\(title)”: \(error.localizedDescription)"
+            lastIngestFailed = true
         }
     }
 
@@ -753,6 +765,10 @@ final class AppEnvironment {
            modelID == currentMLXProvider.modelIdentifier
         {
             Self.brainLog.notice("selectBrain \(tier.rawValue, privacy: .public): already loaded, no-op")
+            // Defense-in-depth: keep the upgrade machine consistent even on the
+            // no-op path, rather than relying on the policy's non-Mini
+            // short-circuit staying total (an implicit cross-file coupling).
+            recomputeBrainUpgradeState()
             return true
         }
         Self.brainLog.notice("selectBrain \(tier.rawValue, privacy: .public): model=\(tier.mlxModelID ?? "appleFoundationModels", privacy: .public)")

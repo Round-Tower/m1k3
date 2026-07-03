@@ -157,7 +157,9 @@ struct GreetingCard: View {
         }
         .buttonStyle(.plain)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("Drop a PDF or text file on the window, or activate to pick one. Files are read on this Mac only.")
+        .accessibilityLabel(
+            "Drop a PDF or text file on the window, or activate to pick one. Files are read on this Mac only."
+        )
         .accessibilityAddTraits(.isButton)
     }
 
