@@ -179,6 +179,91 @@ struct IntelligenceMCPToolsTests {
         #expect(text(done) == "delayed answer [Doc §Heading]")
     }
 
+    @Test("ask_m1k3 with a job_id self-redeems like get_answer — the stale-tool-list escape hatch")
+    func askSelfRedeemsJobId() async throws {
+        // Issue #2: a client whose cached tool list predates get_answer has no
+        // advertised way to redeem a job id. The tool that ISSUED the ticket must
+        // be able to redeem it: ask_m1k3 with a job_id behaves as get_answer.
+        let gate = Gate()
+        let store = AskJobStore(makeID: { "job-x" })
+        let handlers = IntelligenceToolHandlers(
+            ask: { _ in
+                await gate.wait()
+                return "delayed answer [Doc §Heading]"
+            },
+            remember: { _, _ in "noop" }
+        )
+        let registry = MCPToolRegistry(
+            makeIntelligenceToolDefinitions(handlers: handlers, jobStore: store, graceSeconds: 0.2)
+        )
+
+        let submit = await registry.call(name: "ask_m1k3", arguments: ["question": .string("the slow one")])
+        #expect(text(submit)?.contains("job-x") == true)
+
+        // Still gated → self-redeem reports it's working, not an error.
+        let pending = await registry.call(name: "ask_m1k3", arguments: ["job_id": .string("job-x")])
+        #expect(pending.isError != true)
+        #expect(text(pending)?.contains("still working") == true)
+
+        // Release, let the detached task write back, then redeem via ask_m1k3.
+        await gate.open()
+        try await Task.sleep(for: .milliseconds(150))
+        let done = await registry.call(name: "ask_m1k3", arguments: ["job_id": .string("job-x")])
+        #expect(done.isError != true)
+        #expect(text(done) == "delayed answer [Doc §Heading]")
+    }
+
+    @Test("a job_id wins over a question — a stale client re-sending both redeems, never re-asks")
+    func askJobIdWinsOverQuestion() async {
+        // A stale client's cached schema still marks question required, so its
+        // redemption call may carry both. Redeeming must not spawn a second job.
+        let log = CallLog()
+        let store = AskJobStore(makeID: { "job-x" })
+        let registry = MCPToolRegistry(
+            makeIntelligenceToolDefinitions(handlers: makeHandlers(log: log), jobStore: store, graceSeconds: 5)
+        )
+        let submit = await registry.call(name: "ask_m1k3", arguments: ["question": .string("first ask")])
+        #expect(text(submit) == "Grounded answer [Doc §Heading]")
+
+        let redeem = await registry.call(
+            name: "ask_m1k3",
+            arguments: ["question": .string("first ask"), "job_id": .string("job-x")]
+        )
+        #expect(redeem.isError != true)
+        #expect(text(redeem) == "Grounded answer [Doc §Heading]")
+        #expect(log.all == ["ask:first ask"]) // exactly one generation — no re-ask
+    }
+
+    @Test("ask_m1k3 with an unknown job_id is a clean isError, not a new generation")
+    func askSelfRedeemUnknownJob() async {
+        let log = CallLog()
+        let registry = MCPToolRegistry(makeIntelligenceToolDefinitions(handlers: makeHandlers(log: log)))
+        let result = await registry.call(name: "ask_m1k3", arguments: ["job_id": .string("ghost")])
+        #expect(result.isError == true)
+        #expect(text(result)?.contains("No such job") == true)
+        #expect(log.all.isEmpty)
+    }
+
+    @Test("the job-id handoff message names the ask_m1k3 fallback for stale tool lists")
+    func jobIdMessageCarriesFallbackHint() async {
+        let store = AskJobStore(makeID: { "job-x" })
+        let handlers = IntelligenceToolHandlers(
+            ask: { _ in
+                try await Task.sleep(for: .seconds(60))
+                return "never arrives in time"
+            },
+            remember: { _, _ in "noop" }
+        )
+        let registry = MCPToolRegistry(
+            makeIntelligenceToolDefinitions(handlers: handlers, jobStore: store, graceSeconds: 0.2)
+        )
+        let result = await registry.call(name: "ask_m1k3", arguments: ["question": .string("the slow one")])
+        // The hint must name BOTH redemption paths: get_answer for current
+        // clients, ask_m1k3-with-job_id for clients with a stale tool list.
+        #expect(text(result)?.contains("get_answer") == true)
+        #expect(text(result)?.contains("ask_m1k3") == true)
+    }
+
     @Test("get_answer for an unknown job is a clean isError")
     func getAnswerUnknownJob() async {
         let registry = MCPToolRegistry(makeIntelligenceToolDefinitions(handlers: makeHandlers(log: CallLog())))
