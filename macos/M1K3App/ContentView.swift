@@ -218,9 +218,10 @@ struct ContentView: View {
                     onDismiss: { env.dismissVoiceUpgrade() }
                 )
             }
-            // The swap toast ("Lil's awake") rides the same banner slot.
+            // The swap toast ("Lil's awake") rides the same banner slot with
+            // its own glyph.
             else if let notice = env.brainUpgradeNotice {
-                IngestBanner(text: notice, busy: false)
+                IngestBanner(text: notice, busy: false, icon: "sparkles", iconColor: .accentColor)
             }
             // Suppressed while the GreetingCard is up — its hero zone shows the
             // same busy/indexed beat where the user is actually looking; two
@@ -277,7 +278,6 @@ struct ContentView: View {
                 GreetingCard(
                     userName: UserDefaults.standard.string(forKey: AppEnvironment.userDisplayNameKey),
                     brainName: env.selectedBrain.displayName,
-                    hasLadderRung: env.brainUpgradeTarget != nil,
                     isFirstSession: !greetingFirstTurnDone,
                     isIngesting: env.isIngesting,
                     lastIngestedTitle: env.lastIngestedTitle,
@@ -807,12 +807,12 @@ private struct BrainUpgradeNudgeCard: View {
     private var pitch: String {
         if isStagedSwitch {
             "Want me to switch over? Takes a few seconds, everything stays on this Mac."
-        } else if isReOffer {
-            "\(target.displayName) would do that properly — a \(sizeText) one-time fetch, "
-                + "grabbed in the background while we keep talking."
         } else {
-            "\(target.displayName) is sharper — a \(sizeText) one-time fetch. "
-                + "I'll grab it in the background while we keep talking."
+            // ONE download pitch (reduction pass, 2026-07-03): the headlines
+            // carry the flavour; two near-identical pitches were saying the
+            // same thing twice.
+            "\(target.displayName) is sharper — a \(sizeText) one-time fetch, "
+                + "grabbed in the background while we keep talking."
         }
     }
 
@@ -889,6 +889,11 @@ private struct VoicePermissionBanner: View {
 private struct IngestBanner: View {
     let text: String
     let busy: Bool
+    /// The idle glyph. Defaults to the ingest success tick; the brain-swap /
+    /// voice-fetch toasts pass their own so a swap doesn't read as "document
+    /// indexed" (reduction pass, 2026-07-03).
+    var icon = "checkmark.circle.fill"
+    var iconColor: Color = .green
 
     var body: some View {
         HStack(spacing: 8) {
@@ -897,8 +902,8 @@ private struct IngestBanner: View {
             } else {
                 // Insertion transition, not a Bool-keyed bounce (Bools
                 // double-fire and the view is freshly inserted on the flip).
-                Image(systemName: "checkmark.circle.fill")
-                    .foregroundStyle(.green)
+                Image(systemName: icon)
+                    .foregroundStyle(iconColor)
                     .transition(.symbolEffect)
             }
             Text(text).font(.callout).lineLimit(2)

@@ -35,11 +35,6 @@ struct GreetingCard: View {
     let userName: String?
     /// The LIVE brain's display name for the disclosure caption.
     let brainName: String
-    /// True when the capability ladder has a rung above the live brain on
-    /// this Mac — the caption then says the ladder EXISTS (plants the idea at
-    /// minute one without stealing the moment; the actual offer waits for the
-    /// first answer).
-    let hasLadderRung: Bool
     /// First session ever (no completed turn yet) → the full greeting;
     /// otherwise the quiet returning-user variant.
     let isFirstSession: Bool
@@ -81,16 +76,14 @@ struct GreetingCard: View {
                     }
                 }
                 if sampleSpoken {
-                    Text("That's my everyday voice. My proper voice is a download away in Settings.")
+                    Text("That's my everyday voice.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .transition(.opacity)
                 }
             }
 
-            Text(hasLadderRung
-                ? "Running on \(brainName), my quickest brain — sharper ones are a click away in Settings"
-                : "Running on \(brainName) · change anytime in Settings")
+            Text("Running on \(brainName) · change anytime in Settings")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
@@ -138,20 +131,12 @@ struct GreetingCard: View {
                 Image(systemName: "tray.and.arrow.down")
                     .font(.system(size: 30, weight: .semibold))
                     .foregroundStyle(.tint)
-                    .symbolEffect(
-                        .wiggle.down,
-                        options: .repeat(.periodic(delay: 2.5)),
-                        isActive: !reduceMotion
-                    )
                 Text("Drop a file on me.")
                     .font(.title3.weight(.semibold))
-                Text("PDF or text. I read it here on your Mac — it never leaves.")
+                Text("PDF or text — read here, never uploaded.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
-                Text("(or click to pick one)")
-                    .font(.caption)
-                    .foregroundStyle(.tertiary)
             }
             .padding(.vertical, 28)
             .padding(.horizontal, 24)
