@@ -176,6 +176,11 @@ final class AppEnvironment {
     /// once VoiceUpgradeOfferPolicy says the user has genuinely heard the
     /// everyday voice). Drives the one-line banner; cleared on accept/dismiss.
     var voiceUpgradeOffered = false
+    /// The user-intro earned moment is live (IntroductionOfferPolicy: a few
+    /// real exchanges in, M1K3 doesn't know them yet, never asked before).
+    /// Accepting just focuses the input — the intro is a conversation, not a
+    /// form; memory auto-capture learns from whatever they say.
+    var introductionOffered = false
     /// Set when a voice gesture hit a denied/restricted mic or speech grant —
     /// the silent-denial fix. Drives the recovery banner (which System Settings
     /// pane to open); cleared on dismiss or a later successful listen. Written
@@ -667,6 +672,8 @@ final class AppEnvironment {
             answerFailed: answerFailed,
             generationHitTokenCap: metrics.map { $0.generationTokens >= cap } ?? false
         )
+        // The intro invitation rides the same beat but only counts wins.
+        if !answerFailed { evaluateIntroductionOfferAfterAnswer() }
         // Only reset to idle if the avatar isn't already in a speaking state
         // (e.g. auto-TTS path sets .speaking before we return here).
         if case .speaking = avatar.state.activity { return }

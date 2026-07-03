@@ -39,6 +39,8 @@ struct ContentView: View {
     @State private var showImporter = false
     @State private var showConsentDialog = false
     @State private var isDropTargeted = false
+    /// Set by the intro card's "Introduce yourself" — the floor is theirs.
+    @FocusState private var inputFocused: Bool
     @AppStorage(AppEnvironment.avatarDisplayKey) private var avatarDisplay = AvatarDisplay.panel
     /// Auto-route on → M1K3 picks the brain → a manual toolbar pick would snap back
     /// next turn, so the switcher disables itself. Reactive so toggling Auto-route in
@@ -72,6 +74,20 @@ struct ContentView: View {
                     isReOffer: env.brainUpgradeIsReOffer,
                     onAccept: { env.acceptBrainUpgrade() },
                     onDismiss: { env.dismissBrainUpgrade() }
+                )
+                .frame(maxWidth: Self.chatContentMaxWidth)
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+            // The intro invitation shares the ONE bottom earned-offer slot —
+            // the brain nudge outranks it (coordinator guarantees they never
+            // both raise; this else-if is the belt to that suspender).
+            else if env.introductionOffered, !env.isVoiceModeActive {
+                IntroductionOfferCard(
+                    onAccept: {
+                        env.acceptIntroductionOffer()
+                        inputFocused = true
+                    },
+                    onDismiss: { env.dismissIntroductionOffer() }
                 )
                 .frame(maxWidth: Self.chatContentMaxWidth)
                 .transition(.move(edge: .bottom).combined(with: .opacity))
@@ -329,6 +345,7 @@ struct ContentView: View {
                         .glassEffect(.regular, in: .rect(cornerRadius: 22))
                 } else {
                     TextField("Ask M1K3…", text: $draft, axis: .vertical)
+                        .focused($inputFocused)
                         .textFieldStyle(.plain)
                         .lineLimit(1 ... 5)
                         .padding(.horizontal, 16)
@@ -739,6 +756,39 @@ private struct ModelGateView: View {
     private func loadingLabel(_ state: ModelLoadState) -> String {
         let label = state.label(modelName: brainName)
         return label.isEmpty ? "Loading \(brainName)…" : label
+    }
+}
+
+/// The user-intro earned moment — a few real exchanges in, when M1K3 doesn't
+/// know them yet. Accepting just hands over the floor (focuses the input):
+/// the intro is a conversation memory auto-capture learns from, not a form.
+/// One dismissal is terminal.
+private struct IntroductionOfferCard: View {
+    let onAccept: () -> Void
+    let onDismiss: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("I remember things — properly, on this Mac.")
+                .font(.callout.weight(.semibold))
+            Text("Tell me a bit about yourself and I'll keep what matters in mind.")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            HStack(spacing: 12) {
+                Button("Introduce yourself", action: onAccept)
+                    .buttonStyle(.glassProminent)
+                Button("Not now", action: onDismiss)
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.top, 4)
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .glassEffect(.regular, in: .rect(cornerRadius: 16))
+        .padding(.horizontal, 20)
+        .padding(.bottom, 8)
     }
 }
 

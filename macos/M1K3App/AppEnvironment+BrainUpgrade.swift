@@ -54,6 +54,45 @@ extension AppEnvironment {
 
     private static let upgradeLog = Logger(subsystem: "app.m1k3", category: "mlx-load")
 
+    /// User-intro earned moment (IntroductionOfferPolicy inputs): completed
+    /// exchanges, and the single terminal dismissal.
+    nonisolated static let introductionTurnsKey = "introduction.completedTurns"
+    nonisolated static let introductionDismissedKey = "introduction.dismissed"
+
+    /// The user-intro beat, same rhythm as the ladder: counted on every
+    /// successful answer, offered once when earned. The brain nudge outranks
+    /// it (one earned offer at a time — the reduction pass's bottom-slot rule),
+    /// so the intro simply waits for a later turn when both qualify.
+    func evaluateIntroductionOfferAfterAnswer() {
+        let defaults = UserDefaults.standard
+        let turns = defaults.integer(forKey: Self.introductionTurnsKey) + 1
+        defaults.set(turns, forKey: Self.introductionTurnsKey)
+        guard !introductionOffered,
+              brainUpgrade != .offered,
+              brainUpgrade != .staged(consented: false)
+        else { return }
+        let profile = (try? store.meta(key: Self.userProfileMetaKey)) ?? nil
+        introductionOffered = IntroductionOfferPolicy.shouldOffer(
+            profileIsSubstantial: IntroductionOfferPolicy.profileIsSubstantial(profile),
+            completedTurns: turns,
+            dismissed: defaults.bool(forKey: Self.introductionDismissedKey)
+        )
+    }
+
+    /// Accepting is just "the floor is yours" — clear the card; ContentView
+    /// focuses the input. Whatever they type is a real turn; auto-capture
+    /// remembers it. No form, no second surface.
+    func acceptIntroductionOffer() {
+        introductionOffered = false
+    }
+
+    /// One dismissal is terminal — asking twice is creepy, not caring.
+    /// Settings → About You remains the manual path.
+    func dismissIntroductionOffer() {
+        UserDefaults.standard.set(true, forKey: Self.introductionDismissedKey)
+        introductionOffered = false
+    }
+
     /// The rung the ladder currently offers on this Mac, or nil at the top.
     var brainUpgradeTarget: BrainTier? {
         UpgradeTarget.nextForThisMac(from: selectedBrain)
