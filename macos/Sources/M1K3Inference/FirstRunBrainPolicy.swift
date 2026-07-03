@@ -1,0 +1,67 @@
+//
+//  FirstRunBrainPolicy.swift
+//  M1K3Inference
+//
+//  The one-screen onboarding's brain decision. Mini-first is the product call
+//  (time-to-first-whoa: talking in seconds beats a download bar) — but Mini is
+//  Apple Foundation Models, and its availability has three flavours that
+//  deserve three different answers. Pure so the whole table is `swift test`-able;
+//  HelloView supplies the live `AFMAvailability` and acts on the outcome.
+//
+//  Invariants:
+//    · a re-run never silently switches a non-Mini brain (Settings promises
+//      "your brain is kept")
+//    · `.notReady` is a transient asset sync — wait for Mini, never answer it
+//      with a 2.3GB download
+//    · only a genuinely blocked AFM falls back to the Lil download; the
+//      user-fixable flavour (Apple Intelligence switched off) also offers the
+//      OS-settings fix alongside.
+//
+//  Signed: Kev + claude-fable-5, 2026-07-03, Confidence 0.9. Prior: none (new file).
+
+import Foundation
+
+/// Apple Foundation Models availability, in product terms. Mapped from
+/// `SystemLanguageModel.default.availability` by `AppleFoundationModelsProvider`
+/// (SDK reasons verified 2026-07-03: deviceNotEligible /
+/// appleIntelligenceNotEnabled / modelNotReady); pure here so policy tests
+/// never need the framework.
+public enum AFMAvailability: Sendable, Equatable {
+    /// Ready to serve right now.
+    case available
+    /// Present but warming (model assets still syncing) — transient.
+    case notReady
+    /// Not serving on this Mac. `userFixable` when flipping Apple Intelligence
+    /// on in System Settings would cure it; false for ineligible hardware
+    /// (and unknown future reasons, where a settings pointer could mislead).
+    case blocked(userFixable: Bool)
+}
+
+/// Decides which brain serves the first session when "Say hello" is tapped.
+public enum FirstRunBrainPolicy {
+    public enum Outcome: Sendable, Equatable {
+        /// Re-run with a non-Mini brain already chosen — keep it untouched.
+        case keepCurrent(BrainTier)
+        /// AFM serves — complete instantly, no download.
+        case useMini
+        /// AFM is warming — stay on Mini and re-poll; don't download anything.
+        case waitForMini
+        /// AFM is blocked — fall back to a one-time download of the given tier,
+        /// optionally offering the Apple Intelligence settings fix beside it.
+        case downloadFallback(BrainTier, offerAppleIntelligenceFix: Bool)
+    }
+
+    public static func resolve(afm: AFMAvailability, currentBrain: BrainTier) -> Outcome {
+        // A re-pick/re-run with a heavier brain already chosen is sovereign —
+        // first-run policy never overrides an explicit earlier choice.
+        guard currentBrain == .mini else { return .keepCurrent(currentBrain) }
+        switch afm {
+        case .available:
+            return .useMini
+        case .notReady:
+            return .waitForMini
+        case let .blocked(userFixable):
+            return .downloadFallback(.lil, offerAppleIntelligenceFix: userFixable)
+        }
+    }
+}
