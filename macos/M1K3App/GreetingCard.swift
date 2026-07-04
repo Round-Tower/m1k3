@@ -76,7 +76,7 @@ struct GreetingCard: View {
                     }
                 }
                 if sampleSpoken {
-                    Text("That's my everyday voice. My proper voice is a download away in Settings.")
+                    Text("That's my everyday voice.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .transition(.opacity)
@@ -131,20 +131,12 @@ struct GreetingCard: View {
                 Image(systemName: "tray.and.arrow.down")
                     .font(.system(size: 30, weight: .semibold))
                     .foregroundStyle(.tint)
-                    .symbolEffect(
-                        .wiggle.down,
-                        options: .repeat(.periodic(delay: 2.5)),
-                        isActive: !reduceMotion
-                    )
                 Text("Drop a file on me.")
                     .font(.title3.weight(.semibold))
-                Text("PDF or text. I read it here on your Mac — it never leaves.")
+                Text("PDF or text — read here, never uploaded.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
-                Text("(or click to pick one)")
-                    .font(.caption)
-                    .foregroundStyle(.tertiary)
             }
             .padding(.vertical, 28)
             .padding(.horizontal, 24)

@@ -30,6 +30,13 @@ extension AppEnvironment {
     /// stays LABELED until then (discoverability for the headline feature).
     nonisolated static let hasEnteredVoiceModeKey = "voiceMode.hasEntered"
 
+    /// M1K3 Voice earned-moment counters (VoiceUpgradeOfferPolicy's inputs):
+    /// completed spoken exchanges on the built-in voice, offers dismissed, and
+    /// exchanges since the last dismissal (the re-offer currency).
+    nonisolated static let voiceUpgradeExchangesKey = "voiceUpgrade.exchanges"
+    nonisolated static let voiceUpgradeDismissalsKey = "voiceUpgrade.dismissals"
+    nonisolated static let voiceUpgradeSinceDismissalKey = "voiceUpgrade.exchangesSinceDismissal"
+
     /// Persisted voice-mode thinking toggle (default off = fast replies).
     /// While voice mode is active this REPLACES the Settings Reasoning picker
     /// (see VoiceThinkingPolicy). The VoiceDock's brain button writes it.
@@ -197,6 +204,54 @@ extension AppEnvironment {
         UserDefaults.standard.set(false, forKey: Self.voiceModeActiveKey)
         avatar.resetToIdle()
         speechHighlight.clear()
+        // An exit mid-turn evaluates on a tally that misses that turn's
+        // exchange (recordSpokenExchange fires when the answer lands) — the
+        // exchange banks for the NEXT exit. Deliberate: an undercount can
+        // only delay the offer, never mis-fire it.
+        evaluateVoiceUpgradeOffer()
+    }
+
+    // MARK: - M1K3 Voice earned moment
+
+    /// A completed spoken exchange on the BUILT-IN voice — the currency that
+    /// earns the M1K3 Voice offer. Called from the loop's successful turns.
+    func recordSpokenExchange() {
+        guard selectedVoiceTier == .builtin else { return }
+        let defaults = UserDefaults.standard
+        defaults.set(defaults.integer(forKey: Self.voiceUpgradeExchangesKey) + 1,
+                     forKey: Self.voiceUpgradeExchangesKey)
+        defaults.set(defaults.integer(forKey: Self.voiceUpgradeSinceDismissalKey) + 1,
+                     forKey: Self.voiceUpgradeSinceDismissalKey)
+    }
+
+    /// On leaving voice mode: the honest pitch moment — the user has just
+    /// HEARD the everyday voice in real conversation. Never mid-session.
+    private func evaluateVoiceUpgradeOffer() {
+        let defaults = UserDefaults.standard
+        voiceUpgradeOffered = VoiceUpgradeOfferPolicy.shouldOffer(
+            spokenExchanges: defaults.integer(forKey: Self.voiceUpgradeExchangesKey),
+            m1k3VoiceActiveOrStaged: selectedVoiceTier == .m1k3Voice || voiceLoad.isActive,
+            dismissals: defaults.integer(forKey: Self.voiceUpgradeDismissalsKey),
+            exchangesSinceLastDismissal: defaults.integer(forKey: Self.voiceUpgradeSinceDismissalKey)
+        )
+    }
+
+    /// "Get M1K3 Voice" — rides the existing prepareM1K3Voice path (voiceLoad
+    /// drives Settings' progress; the speech façade swaps when ready). The
+    /// toast goes through showBrainUpgradeNotice for its auto-clear — a
+    /// directly-set notice would mask the ingest banner forever.
+    func acceptVoiceUpgrade() {
+        voiceUpgradeOffered = false
+        showBrainUpgradeNotice("Fetching my proper voice — I'll switch over when it's ready.")
+        Task { [weak self] in await self?.prepareM1K3Voice() }
+    }
+
+    func dismissVoiceUpgrade() {
+        let defaults = UserDefaults.standard
+        defaults.set(defaults.integer(forKey: Self.voiceUpgradeDismissalsKey) + 1,
+                     forKey: Self.voiceUpgradeDismissalsKey)
+        defaults.set(0, forKey: Self.voiceUpgradeSinceDismissalKey)
+        voiceUpgradeOffered = false
     }
 
     private func makeVoiceLoopDependencies() -> VoiceLoopController.Dependencies {
@@ -262,6 +317,7 @@ extension AppEnvironment {
                 guard !last.text.isEmpty else {
                     return .failure(VoiceTurnFailure(message: "The model had nothing to say."))
                 }
+                recordSpokenExchange()
                 return .success(last.text)
             },
             speak: { [weak self] answer in

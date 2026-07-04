@@ -2,10 +2,15 @@
 //  AppEnvironment+BrainUpgrade.swift
 //  M1K3App
 //
-//  Coordinator for the invitation-first background brain upgrade: "That was
-//  Mini, my quickest brain. Lil is sharper — I'll grab it in the background
-//  while we keep talking." All decisions live in the PURE, tested layer
-//  (BrainUpgradePolicy / OfferEligibility / SwapSafety, M1K3Inference); this
+//  Coordinator for the invitation-first background brain upgrade — now the
+//  CAPABILITY LADDER: the offer targets the next rung for THIS Mac
+//  (UpgradeTarget: mini → the recommended tier, lil → Big where comfortable),
+//  and a "Maybe later" parks the offer instead of burying it — it re-arms
+//  only when the small brain visibly struggles (StrugglePolicy: failed turn,
+//  long-form ask on Mini, capped-out generation), and three dismissals is a
+//  permanent answer (DismissalParkPolicy). Pressure tracks reality, never a
+//  timer. All decisions live in the PURE, tested layer (BrainUpgradePolicy /
+//  OfferEligibility / SwapSafety / CapabilityLadder, M1K3Inference); this
 //  file only gathers live inputs and runs side effects.
 //
 //  The hard rules, enforced here:
@@ -26,6 +31,12 @@
 //  over 25 pinned transitions; download/swap behaviour is verify-by-launch —
 //  named: nudge beat, Settings %, kill-mid-download resume, swap-at-idle toast).
 //  Prior: none (new file).
+//  Review: Kev + claude-fable-5, 2026-07-03 (capability ladder) — Kev's call:
+//  "we've built capabilities, we need to push people towards them." One-shot
+//  terminal dismissal → struggle-earned re-offers; hardcoded Lil → the
+//  UpgradeTarget rung (Big offered directly on 24GB+ Macs). Two persisted
+//  ints replace the dismissal bool; the state machine is unchanged — the park
+//  decision arrives through its existing recompute input.
 
 import Foundation
 import M1K3Inference
@@ -34,10 +45,64 @@ import Network
 import os
 
 extension AppEnvironment {
-    /// Persisted "Maybe later" — never re-nudge; Settings stays the manual path.
-    nonisolated static let brainUpgradeDismissedKey = "brainUpgrade.dismissed"
+    /// Persisted "Maybe later" count — DismissalParkPolicy turns it into the
+    /// live park decision (terminal at three).
+    nonisolated static let brainUpgradeDismissCountKey = "brainUpgrade.dismissCount"
+    /// Felt struggles since the LAST dismissal — the currency that earns a
+    /// re-offer (reset on every dismissal).
+    nonisolated static let brainUpgradeStrugglesKey = "brainUpgrade.strugglesSinceDismissal"
 
     private static let upgradeLog = Logger(subsystem: "app.m1k3", category: "mlx-load")
+
+    /// User-intro earned moment (IntroductionOfferPolicy inputs): completed
+    /// exchanges, and the single terminal dismissal.
+    nonisolated static let introductionTurnsKey = "introduction.completedTurns"
+    nonisolated static let introductionDismissedKey = "introduction.dismissed"
+
+    /// The user-intro beat, same rhythm as the ladder: counted on every
+    /// successful answer, offered once when earned. The brain nudge outranks
+    /// it (one earned offer at a time — the reduction pass's bottom-slot rule),
+    /// so the intro simply waits for a later turn when both qualify.
+    func evaluateIntroductionOfferAfterAnswer() {
+        let defaults = UserDefaults.standard
+        let turns = defaults.integer(forKey: Self.introductionTurnsKey) + 1
+        defaults.set(turns, forKey: Self.introductionTurnsKey)
+        guard !introductionOffered,
+              brainUpgrade != .offered,
+              brainUpgrade != .staged(consented: false)
+        else { return }
+        let profile = (try? store.meta(key: Self.userProfileMetaKey)) ?? nil
+        introductionOffered = IntroductionOfferPolicy.shouldOffer(
+            profileIsSubstantial: IntroductionOfferPolicy.profileIsSubstantial(profile),
+            completedTurns: turns,
+            dismissed: defaults.bool(forKey: Self.introductionDismissedKey)
+        )
+    }
+
+    /// Accepting is just "the floor is yours" — clear the card; ContentView
+    /// focuses the input. Whatever they type is a real turn; auto-capture
+    /// remembers it. No form, no second surface.
+    func acceptIntroductionOffer() {
+        introductionOffered = false
+    }
+
+    /// One dismissal is terminal — asking twice is creepy, not caring.
+    /// Settings → About You remains the manual path.
+    func dismissIntroductionOffer() {
+        UserDefaults.standard.set(true, forKey: Self.introductionDismissedKey)
+        introductionOffered = false
+    }
+
+    /// The rung the ladder currently offers on this Mac, or nil at the top.
+    var brainUpgradeTarget: BrainTier? {
+        UpgradeTarget.nextForThisMac(from: selectedBrain)
+    }
+
+    /// Whether the current offer is a struggle-earned RE-offer (drives the
+    /// "That one stretched me" copy variant).
+    var brainUpgradeIsReOffer: Bool {
+        UserDefaults.standard.integer(forKey: Self.brainUpgradeDismissCountKey) > 0
+    }
 
     // MARK: - State recompute (launch + any explicit brain change)
 
@@ -45,27 +110,59 @@ extension AppEnvironment {
     /// is the self-healing entry: quit mid-download → partial resumes on the
     /// next accepted fetch; failure → clean slate next launch.
     func recomputeBrainUpgradeState() {
+        let defaults = UserDefaults.standard
+        let target = brainUpgradeTarget
+        let parked = DismissalParkPolicy.isParked(
+            dismissals: defaults.integer(forKey: Self.brainUpgradeDismissCountKey),
+            strugglesSinceLastDismissal: defaults.integer(forKey: Self.brainUpgradeStrugglesKey)
+        )
         brainUpgrade = BrainUpgradePolicy.transition(brainUpgrade, on: .recomputed(
-            lilInstalled: isBrainDownloaded(.lil),
-            dismissed: UserDefaults.standard.bool(forKey: Self.brainUpgradeDismissedKey),
-            currentBrain: selectedBrain
+            targetInstalled: target.map { isBrainDownloaded($0) } ?? false,
+            dismissed: parked,
+            hasRung: target != nil
         ))
     }
 
     // MARK: - The between-turns beat
 
-    /// Called after each successful typed answer: maybe raise the offer, or
-    /// complete a consented staged swap now that the app is idle.
-    func evaluateBrainUpgradeAfterAnswer() {
+    /// Called after EVERY typed turn (success or failure): count struggles
+    /// (which can lift a park), then — on successful answers only — maybe
+    /// raise the offer, or complete a consented staged swap now that the app
+    /// is idle. Failures never trigger an offer on top of the error message;
+    /// they just accrue toward the earned re-offer.
+    func evaluateBrainUpgradeAfterAnswer(
+        questionCharacters: Int,
+        answerFailed: Bool,
+        generationHitTokenCap: Bool
+    ) {
+        // Note on generationHitTokenCap: the metrics ride a detached stamp
+        // task and record only the LAST generation of a multi-call agent turn
+        // — both mean the signal can under-detect (reads false), never
+        // over-detect. Fail-safe by construction; failed turns and long asks
+        // carry the load. Documented, not fixed (re-plumbing chat.send's
+        // return for a bonus signal isn't worth the churn).
+        var justUnparked = false
+        if StrugglePolicy.isStruggle(
+            brain: selectedBrain,
+            questionCharacters: questionCharacters,
+            answerFailed: answerFailed,
+            generationHitTokenCap: generationHitTokenCap
+        ) {
+            justUnparked = recordStruggle()
+        }
+        // Never offer on a failed turn — and never in the same breath as the
+        // struggle that lifted a park (a capped/garbled answer READS like a
+        // failure even when its status is success; the earned re-offer waits
+        // for the NEXT clean answer).
+        guard !answerFailed, !justUnparked else { return }
         startNetworkMonitorIfNeeded()
         let path = brainUpgradeNetworkPath
         let eligible = OfferEligibility.isEligible(
-            currentBrain: selectedBrain,
-            lilInstalled: isBrainDownloaded(.lil),
+            target: brainUpgradeTarget,
+            targetInstalled: brainUpgradeTarget.map { isBrainDownloaded($0) } ?? false,
             completedAnswers: 1, // this call IS an answer completion
             isResponding: chat.isResponding,
             freeDiskBytes: Self.freeDiskBytes(),
-            requiredBytes: OfferEligibility.lilDownloadBytes,
             networkExpensive: path?.isExpensive ?? false,
             networkConstrained: path?.isConstrained ?? false
         )
@@ -73,9 +170,29 @@ extension AppEnvironment {
         attemptAutoSwapIfStaged()
     }
 
+    /// A felt limitation. Increments the persisted counter and, when it lifts
+    /// the park, recomputes so the machine re-enters `idle` — the NEXT
+    /// successful answer then raises the earned re-offer. Returns true when
+    /// this exact struggle lifted the park (the caller skips offering on the
+    /// same turn).
+    private func recordStruggle() -> Bool {
+        let defaults = UserDefaults.standard
+        let struggles = defaults.integer(forKey: Self.brainUpgradeStrugglesKey) + 1
+        defaults.set(struggles, forKey: Self.brainUpgradeStrugglesKey)
+        guard brainUpgrade == .dismissed else { return false }
+        let parked = DismissalParkPolicy.isParked(
+            dismissals: defaults.integer(forKey: Self.brainUpgradeDismissCountKey),
+            strugglesSinceLastDismissal: struggles
+        )
+        guard !parked else { return false }
+        Self.upgradeLog.notice("brain upgrade re-armed after \(struggles) felt struggles")
+        recomputeBrainUpgradeState()
+        return true
+    }
+
     // MARK: - User actions (the nudge card's two buttons)
 
-    /// "Fetch Lil" — consent captured; the download starts now, invisibly.
+    /// "Fetch {target}" — consent captured; the download starts now, invisibly.
     /// From an unconsented staged state this is the one-tap switch instead.
     func acceptBrainUpgrade() {
         let before = brainUpgrade
@@ -90,17 +207,21 @@ extension AppEnvironment {
         }
     }
 
-    /// "Maybe later" — terminal for nudging (persisted). Deliberate cost:
-    /// a dismissed user stays on Mini until they visit Settings/the toolbar.
+    /// "Maybe later" — parks the offer (persisted count, struggle counter
+    /// reset). Re-arms only through felt struggles; three dismissals is a
+    /// permanent answer. Settings/toolbar remain the manual path throughout.
     func dismissBrainUpgrade() {
-        UserDefaults.standard.set(true, forKey: Self.brainUpgradeDismissedKey)
+        let defaults = UserDefaults.standard
+        defaults.set(defaults.integer(forKey: Self.brainUpgradeDismissCountKey) + 1,
+                     forKey: Self.brainUpgradeDismissCountKey)
+        defaults.set(0, forKey: Self.brainUpgradeStrugglesKey)
         brainUpgrade = BrainUpgradePolicy.transition(brainUpgrade, on: .userDismissed)
     }
 
     // MARK: - Fetch
 
     private func runBrainUpgradeFetch(attempt: Int) {
-        guard let modelID = BrainTier.lil.mlxModelID else { return }
+        guard let target = brainUpgradeTarget, let modelID = target.mlxModelID else { return }
         Self.upgradeLog.notice("background upgrade fetch start (attempt \(attempt)): \(modelID, privacy: .public)")
         // Strong-bind immediately in each closure (weak captures are mutable,
         // so a NESTED @Sendable closure referencing one trips Swift 6 strict
@@ -124,7 +245,7 @@ extension AppEnvironment {
                 guard !Task.isCancelled else { return }
                 // Believe disk, not the downloader's return (it falls back
                 // to a local partial on offline/auth instead of throwing).
-                if self.isBrainDownloaded(.lil) {
+                if self.isBrainDownloaded(target) {
                     Self.upgradeLog.notice("background upgrade staged: \(modelID, privacy: .public)")
                     self.brainUpgrade = BrainUpgradePolicy.transition(self.brainUpgrade, on: .fetchSucceeded)
                     self.attemptAutoSwapIfStaged()
@@ -184,18 +305,22 @@ extension AppEnvironment {
     /// load; the toast says what happened).
     func attemptAutoSwapIfStaged() {
         guard BrainUpgradePolicy.wantsAutoSwap(brainUpgrade) else { return }
+        guard let target = brainUpgradeTarget else { return }
         guard SwapSafety.canSwap(
             isResponding: chat.isResponding,
             isVoiceModeActive: isVoiceModeActive,
             isListening: isListening,
             modelLoadActive: modelLoad.isActive
         ) else { return } // stay staged; the next answer completion retries
-        Self.upgradeLog.notice("background upgrade: swapping to lil at idle")
-        selectBrain(.lil) // its hook recomputes brainUpgrade → .done
-        showBrainUpgradeNotice("Lil's awake — switched you over.")
+        Self.upgradeLog.notice("background upgrade: swapping to \(target.rawValue, privacy: .public) at idle")
+        selectBrain(target) // its hook recomputes brainUpgrade → .done
+        showBrainUpgradeNotice("\(target.displayName)'s awake — switched you over.")
     }
 
-    private func showBrainUpgradeNotice(_ text: String) {
+    /// Internal (not private): the voice earned-moment path reuses the same
+    /// toast slot and MUST get the auto-clear — a directly-set notice would
+    /// permanently mask the ingest banner behind it (review catch, 2026-07-03).
+    func showBrainUpgradeNotice(_ text: String) {
         brainUpgradeNotice = text
         Task { @MainActor [weak self] in
             try? await Task.sleep(for: .seconds(6))

@@ -39,6 +39,8 @@ struct ContentView: View {
     @State private var showImporter = false
     @State private var showConsentDialog = false
     @State private var isDropTargeted = false
+    /// Set by the intro card's "Introduce yourself" — the floor is theirs.
+    @FocusState private var inputFocused: Bool
     @AppStorage(AppEnvironment.avatarDisplayKey) private var avatarDisplay = AvatarDisplay.panel
     /// Auto-route on → M1K3 picks the brain → a manual toolbar pick would snap back
     /// next turn, so the switcher disables itself. Reactive so toggling Auto-route in
@@ -64,11 +66,28 @@ struct ContentView: View {
             transcript
             // The upgrade encore — after the first whoa, never before or during
             // (BrainUpgradePolicy gates the offer to between-turns moments).
-            if showsBrainUpgradeNudge, !env.isVoiceModeActive {
+            if showsBrainUpgradeNudge, !env.isVoiceModeActive, let target = env.brainUpgradeTarget {
                 BrainUpgradeNudgeCard(
+                    target: target,
+                    currentBrainName: env.selectedBrain.displayName,
                     isStagedSwitch: env.brainUpgrade == .staged(consented: false),
+                    isReOffer: env.brainUpgradeIsReOffer,
                     onAccept: { env.acceptBrainUpgrade() },
                     onDismiss: { env.dismissBrainUpgrade() }
+                )
+                .frame(maxWidth: Self.chatContentMaxWidth)
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+            // The intro invitation shares the ONE bottom earned-offer slot —
+            // the brain nudge outranks it (coordinator guarantees they never
+            // both raise; this else-if is the belt to that suspender).
+            else if env.introductionOffered, !env.isVoiceModeActive {
+                IntroductionOfferCard(
+                    onAccept: {
+                        env.acceptIntroductionOffer()
+                        inputFocused = true
+                    },
+                    onDismiss: { env.dismissIntroductionOffer() }
                 )
                 .frame(maxWidth: Self.chatContentMaxWidth)
                 .transition(.move(edge: .bottom).combined(with: .opacity))
@@ -207,9 +226,18 @@ struct ContentView: View {
                     onDismiss: { env.voicePermissionRecovery = nil }
                 )
             }
-            // The swap toast ("Lil's awake") rides the same banner slot.
+            // The M1K3 Voice earned moment — raised only on LEAVING voice mode,
+            // after the user has actually heard the everyday voice.
+            else if env.voiceUpgradeOffered {
+                VoiceUpgradeBanner(
+                    onAccept: { env.acceptVoiceUpgrade() },
+                    onDismiss: { env.dismissVoiceUpgrade() }
+                )
+            }
+            // The swap toast ("Lil's awake") rides the same banner slot with
+            // its own glyph.
             else if let notice = env.brainUpgradeNotice {
-                IngestBanner(text: notice, busy: false)
+                IngestBanner(text: notice, busy: false, icon: "sparkles", iconColor: .accentColor)
             }
             // Suppressed while the GreetingCard is up — its hero zone shows the
             // same busy/indexed beat where the user is actually looking; two
@@ -317,6 +345,7 @@ struct ContentView: View {
                         .glassEffect(.regular, in: .rect(cornerRadius: 22))
                 } else {
                     TextField("Ask M1K3…", text: $draft, axis: .vertical)
+                        .focused($inputFocused)
                         .textFieldStyle(.plain)
                         .lineLimit(1 ... 5)
                         .padding(.horizontal, 16)
@@ -730,30 +759,127 @@ private struct ModelGateView: View {
     }
 }
 
-/// The invitation-first upgrade encore, in M1K3's voice. One appearance per
-/// journey (dismiss persists); the fetch it starts is disk-only and invisible —
-/// consent lives HERE, the swap is the payoff at the next idle moment.
-private struct BrainUpgradeNudgeCard: View {
-    /// True for the rarer one-tap switch (Lil already on disk, no fetch needed).
-    let isStagedSwitch: Bool
+/// The user-intro earned moment — a few real exchanges in, when M1K3 doesn't
+/// know them yet. Accepting just hands over the floor (focuses the input):
+/// the intro is a conversation memory auto-capture learns from, not a form.
+/// One dismissal is terminal.
+private struct IntroductionOfferCard: View {
     let onAccept: () -> Void
     let onDismiss: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(isStagedSwitch
-                ? "Lil's already here — my sharper brain is sitting on disk."
-                : "That was Mini, my quickest brain.")
+            Text("I remember things — properly, on this Mac.")
                 .font(.callout.weight(.semibold))
-            Text(isStagedSwitch
-                ? "Want me to switch over? Takes a few seconds, everything stays on this Mac."
-                : "Lil is sharper — a 2.3 GB one-time fetch. I'll grab it in the background while we keep talking.")
+            Text("Tell me a bit about yourself and I'll keep what matters in mind.")
                 .font(.callout)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
             HStack(spacing: 12) {
-                Button(isStagedSwitch ? "Switch to Lil" : "Fetch Lil", action: onAccept)
+                Button("Introduce yourself", action: onAccept)
                     .buttonStyle(.glassProminent)
+                Button("Not now", action: onDismiss)
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.top, 4)
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .glassEffect(.regular, in: .rect(cornerRadius: 16))
+        .padding(.horizontal, 20)
+        .padding(.bottom, 8)
+    }
+}
+
+/// The M1K3 Voice earned moment — one line, two honest actions, shown only
+/// after real spoken exchanges on the built-in voice (never mid-session).
+private struct VoiceUpgradeBanner: View {
+    let onAccept: () -> Void
+    let onDismiss: () -> Void
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "waveform.badge.plus")
+                .symbolRenderingMode(.hierarchical)
+                .foregroundStyle(.tint)
+            Text("That was my everyday voice. Want to hear my proper one?")
+                .font(.callout)
+            Spacer()
+            Button("Get M1K3 Voice", action: onAccept)
+                .buttonStyle(.glassProminent)
+            Button("Not now", action: onDismiss)
+                .buttonStyle(.plain)
+                .foregroundStyle(.secondary)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .glassEffect(.regular, in: .rect(cornerRadius: 12))
+        .padding(.horizontal, 16)
+        .padding(.top, 8)
+    }
+}
+
+/// The capability ladder's invitation, in M1K3's voice. Three flavours: the
+/// first offer (after the first answer), the struggle-earned re-offer ("that
+/// one stretched me" — only shown when a past "Maybe later" was lifted by
+/// felt limitations, never by a timer), and the one-tap switch for weights
+/// already on disk. Consent lives HERE; the fetch is disk-only and invisible;
+/// the swap is the payoff at the next idle moment.
+private struct BrainUpgradeNudgeCard: View {
+    /// The rung being offered (Lil on 16GB Macs, Big directly on 24GB+).
+    let target: BrainTier
+    let currentBrainName: String
+    /// True for the one-tap switch (weights already on disk, no fetch needed).
+    let isStagedSwitch: Bool
+    /// True when a prior dismissal was lifted by felt struggles.
+    let isReOffer: Bool
+    let onAccept: () -> Void
+    let onDismiss: () -> Void
+
+    private var sizeText: String {
+        guard let mb = target.approxDownloadMB else { return "" }
+        return String(format: "%.1f GB", Double(mb) / 1000)
+    }
+
+    private var headline: String {
+        if isStagedSwitch {
+            "\(target.displayName)'s already here — my sharper brain is sitting on disk."
+        } else if isReOffer {
+            "That one stretched me."
+        } else if target == .big {
+            "That was \(currentBrainName) — and this Mac can run my full brain."
+        } else {
+            "That was \(currentBrainName), my quickest brain."
+        }
+    }
+
+    private var pitch: String {
+        if isStagedSwitch {
+            "Want me to switch over? Takes a few seconds, everything stays on this Mac."
+        } else {
+            // ONE download pitch (reduction pass, 2026-07-03): the headlines
+            // carry the flavour; two near-identical pitches were saying the
+            // same thing twice.
+            "\(target.displayName) is sharper — a \(sizeText) one-time fetch, "
+                + "grabbed in the background while we keep talking."
+        }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(headline)
+                .font(.callout.weight(.semibold))
+            Text(pitch)
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            HStack(spacing: 12) {
+                Button(
+                    isStagedSwitch ? "Switch to \(target.displayName)" : "Fetch \(target.displayName)",
+                    action: onAccept
+                )
+                .buttonStyle(.glassProminent)
                 Button("Maybe later", action: onDismiss)
                     .buttonStyle(.plain)
                     .foregroundStyle(.secondary)
@@ -813,6 +939,11 @@ private struct VoicePermissionBanner: View {
 private struct IngestBanner: View {
     let text: String
     let busy: Bool
+    /// The idle glyph. Defaults to the ingest success tick; the brain-swap /
+    /// voice-fetch toasts pass their own so a swap doesn't read as "document
+    /// indexed" (reduction pass, 2026-07-03).
+    var icon = "checkmark.circle.fill"
+    var iconColor: Color = .green
 
     var body: some View {
         HStack(spacing: 8) {
@@ -821,8 +952,8 @@ private struct IngestBanner: View {
             } else {
                 // Insertion transition, not a Bool-keyed bounce (Bools
                 // double-fire and the view is freshly inserted on the flip).
-                Image(systemName: "checkmark.circle.fill")
-                    .foregroundStyle(.green)
+                Image(systemName: icon)
+                    .foregroundStyle(iconColor)
                     .transition(.symbolEffect)
             }
             Text(text).font(.callout).lineLimit(2)

@@ -172,6 +172,15 @@ final class AppEnvironment {
     /// in the input bar as the user speaks.
     private(set) var isListening = false
     private(set) var liveTranscript = ""
+    /// The M1K3 Voice earned-moment offer is live (set on leaving voice mode
+    /// once VoiceUpgradeOfferPolicy says the user has genuinely heard the
+    /// everyday voice). Drives the one-line banner; cleared on accept/dismiss.
+    var voiceUpgradeOffered = false
+    /// The user-intro earned moment is live (IntroductionOfferPolicy: a few
+    /// real exchanges in, M1K3 doesn't know them yet, never asked before).
+    /// Accepting just focuses the input — the intro is a conversation, not a
+    /// form; memory auto-capture learns from whatever they say.
+    var introductionOffered = false
     /// Set when a voice gesture hit a denied/restricted mic or speech grant —
     /// the silent-denial fix. Drives the recovery banner (which System Settings
     /// pane to open); cleared on dismiss or a later successful listen. Written
@@ -636,9 +645,12 @@ final class AppEnvironment {
         advance.cancel()
         // A failed turn earns the error earcon (the gate mutes it if M1K3 is
         // mid-speech, which a failure here never is).
+        let answerFailed: Bool
         if case .failed = chat.messages.last?.status {
+            answerFailed = true
             soundEffects.play(.error)
         } else {
+            answerFailed = false
             if let responseText = chat.messages.last?.text {
                 surfaceCodeArtifact(from: responseText)
             }
@@ -648,11 +660,20 @@ final class AppEnvironment {
                 duration: clock.now - started,
                 appActive: NSApplication.shared.isActive
             )
-            // The between-turns beat: maybe offer the background brain upgrade
-            // (invitation-first, eligibility-gated), or complete a consented
-            // staged swap now that the app is idle.
-            evaluateBrainUpgradeAfterAnswer()
         }
+        // The between-turns beat for the capability ladder: failures and
+        // long/capped turns count as felt struggles (which can re-arm a parked
+        // offer); a successful answer may raise the offer or complete a
+        // consented staged swap at this idle moment.
+        let metrics = chat.messages.last?.metrics
+        let cap = HistoryBudgetPolicy.generationTokenCap(for: selectedBrain)
+        evaluateBrainUpgradeAfterAnswer(
+            questionCharacters: text.count,
+            answerFailed: answerFailed,
+            generationHitTokenCap: metrics.map { $0.generationTokens >= cap } ?? false
+        )
+        // The intro invitation rides the same beat but only counts wins.
+        if !answerFailed { evaluateIntroductionOfferAfterAnswer() }
         // Only reset to idle if the avatar isn't already in a speaking state
         // (e.g. auto-TTS path sets .speaking before we return here).
         if case .speaking = avatar.state.activity { return }
