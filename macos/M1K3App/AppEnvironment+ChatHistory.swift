@@ -31,6 +31,14 @@ extension AppEnvironment {
     /// mid-session Apple-Intelligence change is honoured.
     private static let afmAvailabilityProbe = AppleFoundationModelsProvider()
 
+    /// Apple Foundation Models availability in product terms — HelloView's
+    /// FirstRunBrainPolicy input. Lives here (not on the class body) because the
+    /// probe is file-private to this extension. Live read per call, same as the
+    /// auto-route path above.
+    var afmAvailability: AFMAvailability {
+        Self.afmAvailabilityProbe.availabilityState
+    }
+
     /// Apply the EscalationLadder's brain choice when auto-routing is on (ADR 0001).
     /// A NO-OP when off, so default behaviour is unchanged and the feature is fully
     /// reversible. Reuses `selectBrain`, so the routed pick drives the same proven

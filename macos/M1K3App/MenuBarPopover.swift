@@ -21,6 +21,9 @@ struct MenuBarPopover: View {
 
     @Environment(\.openWindow) private var openWindow
     @AppStorage(AppEnvironment.webSearchEnabledKey) private var webSearchEnabled = true
+    /// First-run gate mirror: the popover mustn't open a side-door conversation
+    /// before HelloView has run (Mini-first makes readiness instant).
+    @AppStorage(AppEnvironment.hasChosenBrainKey) private var hasChosenBrain = false
     @State private var question = ""
     @FocusState private var askFocused: Bool
 
@@ -29,10 +32,26 @@ struct MenuBarPopover: View {
             if let env {
                 header(env)
                 Divider()
-                askSection(env)
-                Divider()
-                toggles(env)
-                Divider()
+                // Under Mini-first the environment can be READY before the user
+                // has ever said hello — without this guard the first conversation
+                // could happen in the menu bar while the main window still shows
+                // HelloView (and the guided first action never fires).
+                if hasChosenBrain {
+                    askSection(env)
+                    Divider()
+                    toggles(env)
+                    Divider()
+                } else {
+                    Button {
+                        openWindow(id: M1K3App.mainWindowID)
+                        NSApp.activate()
+                    } label: {
+                        Label("Say hello in the main window first", systemImage: "hand.wave")
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.secondary)
+                    Divider()
+                }
             } else {
                 Label("Waking M1K3…", systemImage: "ellipsis.circle")
                     .foregroundStyle(.secondary)

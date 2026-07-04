@@ -59,6 +59,30 @@ public struct AppleFoundationModelsProvider: InferenceProvider {
         }
     }
 
+    /// The product-facing availability (FirstRunBrainPolicy's input). Unlike the
+    /// Bool above, this keeps the WHY: `.modelNotReady` is a transient asset sync
+    /// (wait, don't download), `.appleIntelligenceNotEnabled` is user-fixable in
+    /// System Settings, `.deviceNotEligible` is a hard block. Case names verified
+    /// against the macOS 26 SDK swiftinterface (2026-07-03); unknown future
+    /// reasons map to the hard block — a settings pointer could mislead there.
+    public var availabilityState: AFMAvailability {
+        switch SystemLanguageModel.default.availability {
+        case .available:
+            return .available
+        case let .unavailable(reason):
+            switch reason {
+            case .modelNotReady:
+                return .notReady
+            case .appleIntelligenceNotEnabled:
+                return .blocked(userFixable: true)
+            case .deviceNotEligible:
+                return .blocked(userFixable: false)
+            @unknown default:
+                return .blocked(userFixable: false)
+            }
+        }
+    }
+
     public func generate(prompt: String) async throws -> String {
         let session = LanguageModelSession(instructions: instructions())
         let response = try await session.respond(to: prompt)
