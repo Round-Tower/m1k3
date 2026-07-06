@@ -46,20 +46,37 @@ public struct MLXMemoryBudget: Sendable, Equatable {
     /// freed-buffer cache is bounded by `cacheLimit`, but the allocator's
     /// ACTIVE memory (model weights + KV caches + intermediates) fills
     /// `memoryLimit` because MLX uses back-pressure, not refusal.
-    private static let companionCeilingBytes = 12 * mebibyte * 1024 // 12 GB
+    /// Which class of device the budget is for. macOS shares the machine with the
+    /// user's real work (the 12 GB companion ceiling); iOS/visionOS must stay well
+    /// under a per-app jetsam limit that is a FRACTION of physical RAM, so a far
+    /// lower ceiling makes MLX back-pressure engage before the OS jetsams the app.
+    public enum DeviceProfile: Sendable, Equatable {
+        case desktop
+        case mobile
+    }
 
-    /// The budget for a machine with the given physical RAM.
-    public static func budget(forPhysicalMemory physicalMemoryBytes: UInt64) -> MLXMemoryBudget {
+    private static let companionCeilingBytes = 12 * mebibyte * 1024 // 12 GB (macOS)
+    /// iOS/visionOS ceiling: a 4-bit 4B brain + KV lives under 4 GB. iPhones stay on
+    /// Mini (no MLX footprint), so this only bites on ≥16 GB iPads / Vision Pro.
+    /// Tunable — verify against os_proc_available_memory() when the shell lands.
+    private static let mobileCeilingBytes = 4 * mebibyte * 1024 // 4 GB (iOS/visionOS)
+
+    /// The budget for a machine with the given physical RAM and device class.
+    public static func budget(
+        forPhysicalMemory physicalMemoryBytes: UInt64,
+        profile: DeviceProfile = .desktop
+    ) -> MLXMemoryBudget {
         let physicalGB = Double(physicalMemoryBytes) / Double(gibibyte)
         let cacheMB = switch physicalGB {
         case 32...: 128
         case 12...: 64
         default: 32
         }
+        let ceiling = profile == .mobile ? mobileCeilingBytes : companionCeilingBytes
         let threeQuarters = Int(physicalMemoryBytes / 4 * 3)
         return MLXMemoryBudget(
             cacheLimitBytes: cacheMB * mebibyte,
-            memoryLimitBytes: min(threeQuarters, companionCeilingBytes)
+            memoryLimitBytes: min(threeQuarters, ceiling)
         )
     }
 
@@ -73,7 +90,12 @@ public struct MLXMemoryBudget: Sendable, Equatable {
     }
 
     private static let applied: Void = {
-        let budget = Self.budget(forPhysicalMemory: ProcessInfo.processInfo.physicalMemory)
+        #if os(iOS) || os(visionOS)
+            let profile = DeviceProfile.mobile
+        #else
+            let profile = DeviceProfile.desktop
+        #endif
+        let budget = Self.budget(forPhysicalMemory: ProcessInfo.processInfo.physicalMemory, profile: profile)
         MLX.Memory.cacheLimit = budget.cacheLimitBytes
         MLX.Memory.memoryLimit = budget.memoryLimitBytes
         let cacheMB = budget.cacheLimitBytes / mebibyte

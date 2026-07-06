@@ -17,7 +17,14 @@
 //  an emoting face per Kev's feedback; same fixed-grid / mutate-emission renderer,
 //  AvatarScene stays non-@Observable (the mutate-during-update crash fix).
 
-import AppKit
+// AppKit on macOS, UIKit on iOS/visionOS — the avatar is brand-default and now
+// cross-platform (the pixel face is pure RealityKit + SwiftUI; only the accent
+// colour extraction is platform-specific). See the `rgb(of:)` helper below.
+#if canImport(AppKit)
+    import AppKit
+#elseif canImport(UIKit)
+    import UIKit
+#endif
 import M1K3Avatar
 import RealityKit
 import SwiftUI
@@ -114,7 +121,7 @@ struct AvatarView: View {
 
     private func animate(at time: Double) {
         let state = controller.state
-        let accent = NSColor(state.emotion.accentColor).usingColorSpace(.deviceRGB) ?? .white
+        let accent = Self.rgb(of: state.emotion.accentColor)
 
         for index in scene.cubes.indices {
             let cell = scene.cells[index]
@@ -177,13 +184,27 @@ struct AvatarView: View {
         return SIMD3(xPos, yPos, 0)
     }
 
-    /// Blend a colour toward black by `1 - brightness` so low emission reads dim.
-    private static func scaled(_ color: NSColor, by brightness: Float) -> NSColor {
+    /// The accent as device RGB (0...1), cross-platform. `RealityKit.Material.Color` is
+    /// `NSColor` on macOS and `UIColor` on iOS/visionOS, and only NSColor exposes
+    /// `.usingColorSpace`/`.redComponent`, so the extraction branches by platform.
+    private static func rgb(of color: Color) -> (r: CGFloat, g: CGFloat, b: CGFloat) {
+        #if canImport(AppKit)
+            let ns = NSColor(color).usingColorSpace(.deviceRGB) ?? .white
+            return (ns.redComponent, ns.greenComponent, ns.blueComponent)
+        #else
+            var r: CGFloat = 1, g: CGFloat = 1, b: CGFloat = 1, a: CGFloat = 1
+            UIColor(color).getRed(&r, green: &g, blue: &b, alpha: &a)
+            return (r, g, b)
+        #endif
+    }
+
+    /// Blend the accent toward black by `1 - brightness` so low emission reads dim.
+    private static func scaled(_ rgb: (r: CGFloat, g: CGFloat, b: CGFloat), by brightness: Float) -> RealityKit.Material.Color {
         let clamped = CGFloat(min(max(brightness, 0), 1))
-        return NSColor(
-            red: color.redComponent * clamped,
-            green: color.greenComponent * clamped,
-            blue: color.blueComponent * clamped,
+        return RealityKit.Material.Color(
+            red: rgb.r * clamped,
+            green: rgb.g * clamped,
+            blue: rgb.b * clamped,
             alpha: 1
         )
     }

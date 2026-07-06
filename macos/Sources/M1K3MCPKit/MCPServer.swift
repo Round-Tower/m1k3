@@ -30,7 +30,14 @@ public func resolveStorePath(environment: [String: String] = ProcessInfo.process
     if let override = environment["M1K3_STORE_PATH"], !override.isEmpty {
         return override
     }
-    let home = fm.homeDirectoryForCurrentUser
+    // `homeDirectoryForCurrentUser` is macOS-only; on iOS/visionOS the app's home
+    // IS its sandbox container, so NSHomeDirectory() is the right root. macOS keeps
+    // byte-identical behaviour (resolves the real user home to find the app container).
+    #if os(macOS)
+        let home = fm.homeDirectoryForCurrentUser
+    #else
+        let home = URL(fileURLWithPath: NSHomeDirectory())
+    #endif
     let container = home.appendingPathComponent(
         "Library/Containers/app.m1k3/Data/Library/Application Support/M1K3/knowledge.sqlite"
     )

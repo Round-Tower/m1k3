@@ -32,7 +32,11 @@ let fm27Settings: [SwiftSetting] = fm27 ? [.define("M1K3_FM27")] : []
 
 let package = Package(
     name: "M1K3",
-    platforms: [.macOS(.v26)],
+    // iOS/visionOS added for the multiplatform derisk spike (2026-07-06): the app
+    // shell (M1K3App/) is still macOS-only, but the library graph is protocol-seam
+    // first, so the products build for iOS 26 / visionOS 26 to prove portability
+    // ahead of the shared adaptive shell. macOS stays the shipping surface.
+    platforms: [.macOS(.v26), .iOS(.v26), .visionOS(.v26)],
     products: [
         .library(name: "M1K3LogCore", targets: ["M1K3LogCore"]),
         .library(name: "M1K3Knowledge", targets: ["M1K3Knowledge"]),

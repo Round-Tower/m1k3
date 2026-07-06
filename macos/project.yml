@@ -129,6 +129,49 @@ targets:
         # accidental mis-answer. Flip to true only if non-exempt crypto is ever added.
         ITSAppUsesNonExemptEncryption: false
 
+  # On-device iOS/visionOS DERISK HARNESS (2026-07-06) — NOT the shipping app.
+  # A minimal SwiftUI shell over the real M1K3 engine (brain load + text chat + the
+  # real pixel-face avatar) so the port can be RUN on a device, not just compiled.
+  # No voice/RAG/MCP/menu-bar; the shipping iOS app is the Phase-2 shared adaptive
+  # shell (docs/IOS_VISIONOS_PORT.md). Inherits DEVELOPMENT_TEAM + Automatic signing
+  # from the project base, so it provisions to a connected device with no extra config.
+  M1K3iOS:
+    type: application
+    platform: iOS
+    deploymentTarget: "26.0"
+    sources:
+      - path: M1K3iOSApp
+      # Shared, cross-platform look-and-feel lifted from the macOS app target:
+      # the procedural pixel-face avatar (now #if-guarded for UIColor), its
+      # emotion→colour map (pure SwiftUI), and the Silkscreen pixel brand font.
+      - path: M1K3App/AvatarView.swift
+      - path: M1K3App/AvatarEmotion+SwiftUI.swift
+      - path: M1K3App/PixelFont.swift
+      - path: M1K3App/Resources/Fonts/Silkscreen-Regular.ttf
+        buildPhase: resources
+      - path: M1K3App/Resources/Fonts/Silkscreen-Bold.ttf
+        buildPhase: resources
+    dependencies:
+      - package: M1K3
+        product: M1K3Inference
+      - package: M1K3
+        product: M1K3MLX
+      - package: M1K3
+        product: M1K3Avatar
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: app.m1k3.ios
+        PRODUCT_NAME: M1K3iOS
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        TARGETED_DEVICE_FAMILY: "1,2"
+        SWIFT_VERSION: "6.2"
+    info:
+      path: M1K3iOSApp/Info.generated.plist
+      properties:
+        CFBundleDisplayName: M1K3
+        ITSAppUsesNonExemptEncryption: false
+
 # A SHARED M1K3 scheme, explicit so xcodegen emits it to xcshareddata/xcschemes/.
 # Without this, Xcode only auto-creates an ephemeral user scheme — invisible to
 # Xcode Cloud (which can build only shared schemes). Because the pbxproj is
@@ -142,6 +185,19 @@ schemes:
     run:
       config: Debug
     test:
+      config: Debug
+    profile:
+      config: Release
+    analyze:
+      config: Debug
+    archive:
+      config: Release
+  # The on-device derisk harness scheme — select this + your iPhone, then ⌘R.
+  M1K3iOS:
+    build:
+      targets:
+        M1K3iOS: all
+    run:
       config: Debug
     profile:
       config: Release
