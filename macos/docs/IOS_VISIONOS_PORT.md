@@ -134,3 +134,108 @@ non-regression; the two guards + memory band are the only source changes and are
 TDD-pinned. Honest caveats: builds are compile-green only — AVAudioSession, the UI shell,
 and on-device MLX memory behaviour are Phase-2 verify-by-launch; the 4 GB mobile ceiling
 and the ≥16 GB Lil threshold are tunable constants, not yet device-measured). Prior: Unknown._
+
+---
+
+## 2026-07-06 (later) — the shared shell SHIPPED (Phase A + C, iOS **and** visionOS compile-green)
+
+The derisk harness has grown into the **real, multi-screen shared adaptive shell** —
+not a mock, not the throwaway harness. The lead call was deliberate: rather than the
+risky keystone surgery on the Mac's `AppEnvironment` (the shipping product's composition
+root, AppKit-bound and only tested through the Mac app — I can't runtime-verify it without
+a device), the shell gets its **own** portable composition root that wires the SAME
+`swift test`-covered package graph. **The macOS `AppEnvironment` is untouched → zero
+regression risk to the shipping Mac product** (proved: 1749/258 still green).
+
+### What shipped (`M1K3iOSApp/`, one target per platform)
+
+- **`AppCore.swift`** — the mobile composition root. Wires `KnowledgeStore` (hybrid RAG),
+  the temporal `MemoryStore`, `HashingEmbeddingService`, a `SwappableInferenceProvider`
+  slot (Mini = Apple Foundation Models, Lil = MLX Qwen3-4B, re-pointed on brain switch so
+  the transcript survives), the always-on tool-calling `AgentRAGResponder` (its own iOS
+  factory — knowledge + web tools; no CoolHead/voice plumbing), a persisted `ChatSession`
+  (`GRDBChatHistoryStore` + `ProviderConversationTitler`), `DocumentIngester`, and the
+  pixel-face avatar. Container paths use `NSHomeDirectory()`/`applicationSupportDirectory`
+  (no macOS-only `homeDirectoryForCurrentUser`).
+- **`ChatScreen.swift`** — the spine: real grounded streaming chat over `ChatSession`, the
+  avatar as hero→dock, brain-load progress, asymmetric bubbles.
+- **`RootView.swift`** — first-run onboarding gate → `TabView` (Chat / Memories / Documents
+  / Settings), iOS-native navigation (not a port of the menu-bar companion).
+- **`DocumentsScreen`** (list + `fileImporter` ingest + delete over the real ingester),
+  **`MemoriesScreen`** (live count + hybrid `MemoryStore.recall`), **`SettingsScreen`**
+  (mobile-safe brain picker, web-search toggle, AFM availability, about),
+  **`OnboardingScreen`** (`BrainTier.recommended(platform:.mobile)` — iPhones land on Mini,
+  ≥16 GB iPad Pro / Vision Pro can pick Lil), **`MessageBubble`**, **`GlassCompat`**.
+- **`project.yml`** — `M1K3iOS` deps expanded to the full portable pipeline; new
+  **`M1K3visionOS`** target + scheme sharing the exact source list & deps (YAML anchors).
+
+### The three portability fixes this pass found (compile-verified, not asserted)
+
+1. **`IOKit` is macOS-only** — `M1K3AgentTools/SystemStatusProviding.swift` imported
+   `IOKit.ps` for the battery lane (the spike's table never covered `M1K3AgentTools`). Now
+   `#if canImport(IOKit)`-guarded; macOS byte-identical, iOS/visionOS return `nil` battery
+   (already `Optional` — nil on a desktop Mac too, so the tool degrades cleanly). A
+   `UIDevice` battery lane is a follow (it needs MainActor hops the nonisolated seam avoids).
+2. **`glassEffect(_:in:)` is unavailable on visionOS** — the shell's glass chips route
+   through a `.m1k3Glass(cornerRadius:tint:)` helper: Liquid Glass on iOS, `.regularMaterial`
+   on visionOS. One call site to evolve when the Phase-D spatial treatment lands.
+3. **`@Sendable` responder closures can't read MainActor statics** — the persistence keys
+   are `nonisolated static let` (the Mac `AppEnvironment`'s own fix).
+
+### Verification (this session)
+
+| Gate | Result |
+|---|---|
+| `xcodebuild -scheme M1K3iOS -destination 'generic/platform=iOS Simulator'` | **BUILD SUCCEEDED**, 0 errors |
+| `xcodebuild -scheme M1K3visionOS -destination 'generic/platform=visionOS Simulator'` | **BUILD SUCCEEDED**, 0 errors |
+| `swift test --parallel` (macOS non-regression) | **1749 tests / 258 suites passed** |
+
+The MLX Metal graph links for **both** the iOS and visionOS simulators (the storm ran per
+arch). Verification ceiling is **compile-green** — the simulator can't run MLX (no Metal
+for it), so on-device run is verify-owed, same as the spike.
+
+### Still to do (honestly device/runtime-gated — NOT claimed done)
+
+- **Phase B — Voice.** `AVAudioSession` lifecycle behind the `SpeechProvider`/
+  `TranscriptionProvider` seams; Kokoro TTS (iOS ✓; visionOS needs the ONNX xrOS slice or
+  an AVSpeech fallback), WhisperKit/Apple STT. Not wired in the shell.
+- **On-device run** — MLX generation, memory behaviour under the 4 GB mobile ceiling, the
+  streaming feel, first-run onboarding, AFM availability on real AI-off hardware.
+- **Phase D — Spatial (visionOS flagship)** — volumetric avatar + walkable memory
+  constellation. The shell renders as a window today; `m1k3Glass` is the seam to upgrade.
+- **Phase E — Distribution** — iOS/visionOS icons, entitlements, an Xcode Cloud →
+  TestFlight lane (the current lane is macOS-only), device-tune the memory cap.
+- Trivial: the entry file is still named `M1K3iOSHarnessApp.swift` (now holds
+  `struct M1K3iOSApp`); a rename is cosmetic and deferred to avoid re-verifying both builds.
+
+### Review pass (folded before sign-off)
+
+A `code-quality-reviewer` pass on `AppCore` + the screens caught that the hand-ported
+brain-swap flow had dropped the Mac's hard-won guards. Fixed (all re-compiled green):
+- **Data-loss (critical):** Return-key `send()` only checked non-empty, not `canSend` — a
+  Return while warming/streaming cleared the draft then no-op'd, eating the message. Now
+  guarded on `canSend`.
+- **Stale progress clobber:** a `warmGeneration` token now invalidates an abandoned warm's
+  late progress callbacks (a switch-to-Mini mid-download could otherwise render "Waking
+  Mini… N%").
+- **No-op guard:** re-selecting the already-warm brain no longer tears down its KV/persona
+  cache; **`releaseMemory()`** is called on every discarded MLX provider (it was leaking a
+  Metal allocation against the 4 GB mobile ceiling); the cold-launch double-instance is
+  gone (warm reuses the slot's provider).
+- **Readiness honesty:** Chat now shows *why* it can't answer (AFM unavailable / brain
+  warming) instead of a silently-disabled button; the ingest banner auto-dismisses and a
+  0-chunk ingest reads as "no indexable text," not a success.
+
+Deferred (noted, non-blocking): make AFM availability Observation-tracked (poll on
+foreground); the reviewer's principled call — extract the brain-swap state machine into a
+shared, `swift test`-covered package type both apps use, rather than hand-porting the Mac's
+logic a third time. That's the right next refactor.
+
+_Signed: Kev + claude-fable-5, 2026-07-06 (shell delivery), Confidence 0.85 (both platforms
+BUILD SUCCEEDED via real xcodebuild with the true exit code read from the log — NOT a
+wrapper's exit, per the standing false-success trap; macOS 1749/258 green proves the one
+package edit is non-regressive; every API was pinned against the Mac's ground-truth wiring
+before writing. Honest caveats: compile-green only — on-device MLX run, voice, and the
+spatial flagship are named verify-owed, not done; the shell is uncommitted in the working
+tree, as the goal framed it — committing fires the TestFlight-adjacent pipeline and is
+Kev's call). Prior: Kev + claude-fable-5 (the spike + harness)._

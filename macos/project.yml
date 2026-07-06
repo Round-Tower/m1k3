@@ -83,6 +83,8 @@ targets:
       - package: M1K3
         product: M1K3MCPKit
       - package: M1K3
+        product: M1K3MCPLog
+      - package: M1K3
         product: M1K3Eval
       - package: M1K3
         product: M1K3Launch
@@ -129,17 +131,24 @@ targets:
         # accidental mis-answer. Flip to true only if non-exempt crypto is ever added.
         ITSAppUsesNonExemptEncryption: false
 
-  # On-device iOS/visionOS DERISK HARNESS (2026-07-06) — NOT the shipping app.
-  # A minimal SwiftUI shell over the real M1K3 engine (brain load + text chat + the
-  # real pixel-face avatar) so the port can be RUN on a device, not just compiled.
-  # No voice/RAG/MCP/menu-bar; the shipping iOS app is the Phase-2 shared adaptive
-  # shell (docs/IOS_VISIONOS_PORT.md). Inherits DEVELOPMENT_TEAM + Automatic signing
-  # from the project base, so it provisions to a connected device with no extra config.
+  # The iOS shipping shell — the shared adaptive app (2026-07-06). Grew out of the
+  # on-device derisk harness into the real, tabbed app (Chat / Memories / Documents
+  # / Settings) over the SAME package pipeline the Mac ships (AppCore.swift wires
+  # it; the Mac's AppEnvironment is untouched). Voice (AVAudioSession) + the in-app
+  # MCP server are the Phase-B/E follow-ons (docs/IOS_VISIONOS_PORT.md). Inherits
+  # DEVELOPMENT_TEAM + Automatic signing from the project base, so it provisions to
+  # a connected device with no extra config.
+  #
+  # The visionOS sibling target (M1K3visionOS) shares this exact source list +
+  # dependency set — the shell renders as a spatial window; the volumetric-avatar /
+  # walkable-constellation flagship is the Phase-D follow. Kept as two XcodeGen
+  # targets (one platform each) rather than one multi-platform target so each gets
+  # a clean, unambiguous Xcode Cloud archive lane.
   M1K3iOS:
     type: application
     platform: iOS
     deploymentTarget: "26.0"
-    sources:
+    sources: &mobileShellSources
       - path: M1K3iOSApp
       # Shared, cross-platform look-and-feel lifted from the macOS app target:
       # the procedural pixel-face avatar (now #if-guarded for UIColor), its
@@ -151,9 +160,25 @@ targets:
         buildPhase: resources
       - path: M1K3App/Resources/Fonts/Silkscreen-Bold.ttf
         buildPhase: resources
-    dependencies:
+    dependencies: &mobileShellDeps
+      # The portable package pipeline (protocol-seam first, so it cross-compiles):
+      # RAG chat + knowledge + memory + inference + MLX + the agent tool loop +
+      # the avatar. NO Kokoro/WhisperKit/Calls/MCP — voice + the in-app server are
+      # Phase-B. M1K3Preview links transitively via M1K3AgentTools.
+      - package: M1K3
+        product: M1K3Chat
+      - package: M1K3
+        product: M1K3Knowledge
+      - package: M1K3
+        product: M1K3Memory
       - package: M1K3
         product: M1K3Inference
+      - package: M1K3
+        product: M1K3Agent
+      - package: M1K3
+        product: M1K3AgentTools
+      - package: M1K3
+        product: M1K3KnowledgeTools
       - package: M1K3
         product: M1K3MLX
       - package: M1K3
@@ -165,6 +190,28 @@ targets:
         GENERATE_INFOPLIST_FILE: YES
         INFOPLIST_KEY_UILaunchScreen_Generation: YES
         TARGETED_DEVICE_FAMILY: "1,2"
+        SWIFT_VERSION: "6.2"
+    info:
+      path: M1K3iOSApp/Info.generated.plist
+      properties:
+        CFBundleDisplayName: M1K3
+        ITSAppUsesNonExemptEncryption: false
+
+  # visionOS sibling — same shell, same portable graph, rendered spatially as a
+  # window. The Kokoro visionOS gap (no xrOS ONNX slice) does NOT bite here: voice
+  # isn't wired in the shell yet. The Phase-D spatial flagship (volumetric avatar +
+  # walkable memory constellation) is the differentiated follow.
+  M1K3visionOS:
+    type: application
+    platform: visionOS
+    deploymentTarget: "26.0"
+    sources: *mobileShellSources
+    dependencies: *mobileShellDeps
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: app.m1k3.visionos
+        PRODUCT_NAME: M1K3visionOS
+        GENERATE_INFOPLIST_FILE: YES
         SWIFT_VERSION: "6.2"
     info:
       path: M1K3iOSApp/Info.generated.plist
@@ -192,11 +239,24 @@ schemes:
       config: Debug
     archive:
       config: Release
-  # The on-device derisk harness scheme — select this + your iPhone, then ⌘R.
+  # The iOS shell scheme — select this + your iPhone (or a Simulator), then ⌘R.
   M1K3iOS:
     build:
       targets:
         M1K3iOS: all
+    run:
+      config: Debug
+    profile:
+      config: Release
+    analyze:
+      config: Debug
+    archive:
+      config: Release
+  # The visionOS shell scheme — select this + a Vision Pro (or its Simulator).
+  M1K3visionOS:
+    build:
+      targets:
+        M1K3visionOS: all
     run:
       config: Debug
     profile:

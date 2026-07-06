@@ -15,6 +15,34 @@ import Foundation
 import MCP
 import os
 
+/// One recorded MCP tool call — the request (tool + arguments) and its response.
+/// This is the readable-chat unit the agent-interaction log stores. It carries
+/// the arguments and response text verbatim, so it only exists when a sink is
+/// wired (opt-in) — the registry never builds one otherwise.
+public struct MCPCallLogEntry: Sendable {
+    public let tool: String
+    public let arguments: [String: Value]?
+    public let responseText: String
+    public let isError: Bool
+    public let durationMS: Int
+
+    public init(tool: String, arguments: [String: Value]?, responseText: String, isError: Bool, durationMS: Int) {
+        self.tool = tool
+        self.arguments = arguments
+        self.responseText = responseText
+        self.isError = isError
+        self.durationMS = durationMS
+    }
+}
+
+/// Where recorded calls go. The concrete implementation (a GRDB store) lives in
+/// the app shell and self-gates on the user's opt-in toggle; the registry just
+/// hands it every call it dispatches. Kept dependency-free here so the core
+/// stays testable without persistence.
+public protocol MCPCallLogSink: Sendable {
+    func record(_ entry: MCPCallLogEntry)
+}
+
 /// One tool: its MCP declaration plus the handler that runs it.
 public struct MCPToolDefinition: Sendable {
     public let tool: Tool
@@ -30,9 +58,11 @@ public struct MCPToolDefinition: Sendable {
 public struct MCPToolRegistry: Sendable {
     private static let log = Logger(subsystem: "app.m1k3", category: "mcp")
     private let definitions: [MCPToolDefinition]
+    private let logSink: (any MCPCallLogSink)?
 
-    public init(_ definitions: [MCPToolDefinition]) {
+    public init(_ definitions: [MCPToolDefinition], logSink: (any MCPCallLogSink)? = nil) {
         self.definitions = definitions
+        self.logSink = logSink
     }
 
     /// Declarations in registration order (ListTools).
@@ -42,7 +72,26 @@ public struct MCPToolRegistry: Sendable {
 
     /// Run a tool by name. Unknown names and handler throws both surface as
     /// `isError` results — observations for the client, never crashes.
+    ///
+    /// When a log sink is wired (opt-in), every dispatch is recorded verbatim
+    /// (request + response) for the agent-interaction log. With no sink this is
+    /// byte-for-byte the original dispatch — zero capture, zero overhead.
     public func call(name: String, arguments: [String: Value]?) async -> CallTool.Result {
+        guard let logSink else { return await dispatch(name: name, arguments: arguments) }
+
+        let start = Date()
+        let result = await dispatch(name: name, arguments: arguments)
+        logSink.record(MCPCallLogEntry(
+            tool: name,
+            arguments: arguments,
+            responseText: Self.firstText(of: result) ?? "",
+            isError: result.isError == true,
+            durationMS: Int(Date().timeIntervalSince(start) * 1000)
+        ))
+        return result
+    }
+
+    private func dispatch(name: String, arguments: [String: Value]?) async -> CallTool.Result {
         guard let definition = definitions.first(where: { $0.tool.name == name }) else {
             return CallTool.Result(
                 content: [.text(text: "Unknown tool: \(name)", annotations: nil, _meta: nil)],
@@ -61,6 +110,11 @@ public struct MCPToolRegistry: Sendable {
                 isError: true
             )
         }
+    }
+
+    private static func firstText(of result: CallTool.Result) -> String? {
+        if case let .text(text, _, _) = result.content.first { return text }
+        return nil
     }
 }
 

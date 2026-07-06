@@ -9,7 +9,14 @@
 //  Signed: Kev + claude-fable-5, 2026-06-09, Confidence 0.8, Prior: Unknown
 
 import Foundation
-import IOKit.ps
+
+// IOKit is macOS-only. The battery lane is the ONLY IOKit user; guarding the
+// import (rather than the whole file) keeps the disk/uptime lanes — and every
+// pure snapshot type — portable to iOS/visionOS for the shared shell. macOS
+// compiles the exact same code as before (byte-identical behaviour).
+#if canImport(IOKit)
+    import IOKit.ps
+#endif
 
 public struct BatterySnapshot: Sendable, Equatable {
     public let percentage: Int
@@ -42,20 +49,27 @@ public struct LiveSystemStatusProvider: SystemStatusProviding {
     public init() {}
 
     public func batterySnapshot() -> BatterySnapshot? {
-        guard let blob = IOPSCopyPowerSourcesInfo()?.takeRetainedValue(),
-              let sources = IOPSCopyPowerSourcesList(blob)?.takeRetainedValue() as? [CFTypeRef]
-        else { return nil }
+        #if canImport(IOKit)
+            guard let blob = IOPSCopyPowerSourcesInfo()?.takeRetainedValue(),
+                  let sources = IOPSCopyPowerSourcesList(blob)?.takeRetainedValue() as? [CFTypeRef]
+            else { return nil }
 
-        for source in sources {
-            guard let info = IOPSGetPowerSourceDescription(blob, source)?
-                .takeUnretainedValue() as? [String: Any],
-                let capacity = info[kIOPSCurrentCapacityKey] as? Int,
-                let max = info[kIOPSMaxCapacityKey] as? Int, max > 0
-            else { continue }
-            let charging = (info[kIOPSIsChargingKey] as? Bool) ?? false
-            return BatterySnapshot(percentage: capacity * 100 / max, isCharging: charging)
-        }
-        return nil
+            for source in sources {
+                guard let info = IOPSGetPowerSourceDescription(blob, source)?
+                    .takeUnretainedValue() as? [String: Any],
+                    let capacity = info[kIOPSCurrentCapacityKey] as? Int,
+                    let max = info[kIOPSMaxCapacityKey] as? Int, max > 0
+                else { continue }
+                let charging = (info[kIOPSIsChargingKey] as? Bool) ?? false
+                return BatterySnapshot(percentage: capacity * 100 / max, isCharging: charging)
+            }
+            return nil
+        #else
+            // iOS/visionOS: no IOKit power-sources API. Battery is optional (nil on a
+            // desktop Mac too), so the tool degrades cleanly. A UIDevice-based lane is
+            // a Phase-B follow — it needs MainActor hops this nonisolated seam avoids.
+            return nil
+        #endif
     }
 
     public func diskSnapshot() throws -> DiskSnapshot {

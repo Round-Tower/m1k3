@@ -58,6 +58,12 @@ let package = Package(
         // Exported for the app's in-process MCP host (the stdio executable
         // reaches the target directly; the app needs the product).
         .library(name: "M1K3MCPKit", targets: ["M1K3MCPKit"]),
+        // The opt-in Agent Interaction Log store — conforms to M1K3MCPKit's
+        // MCPCallLogSink, capturing full request+response text ONLY when the
+        // app's Settings toggle is on. Separate target (not folded into
+        // M1K3MCPKit) so the PII-bearing capture/persistence logic — and its
+        // own GRDB store file — stays out of the tool-dispatch core.
+        .library(name: "M1K3MCPLog", targets: ["M1K3MCPLog"]),
         // Launch-at-login policy (SMAppService seam) for the always-resident
         // menu-bar companion. Pure controller + thin ServiceManagement adapter.
         .library(name: "M1K3Launch", targets: ["M1K3Launch"]),
@@ -346,6 +352,23 @@ let package = Package(
             name: "M1K3MCP",
             dependencies: ["M1K3MCPKit"],
             path: "Sources/M1K3MCP"
+        ),
+        // The Agent Interaction Log: an MCPCallLogSink that persists every MCP
+        // tool call (request + response) to its own GRDB store, opt-in and
+        // capped at the newest 500 rows. See ConversationLogStore.swift for the
+        // full design rationale.
+        .target(
+            name: "M1K3MCPLog",
+            dependencies: [
+                "M1K3MCPKit",
+                .product(name: "GRDB", package: "GRDB.swift"),
+            ],
+            path: "Sources/M1K3MCPLog"
+        ),
+        .testTarget(
+            name: "M1K3MCPLogTests",
+            dependencies: ["M1K3MCPLog", "M1K3MCPKit"],
+            path: "Tests/M1K3MCPLogTests"
         ),
         // Launch-at-login. The LaunchAtLogin policy is pure (TDD against a fake);
         // SMAppServiceLoginItem wraps the system ServiceManagement framework

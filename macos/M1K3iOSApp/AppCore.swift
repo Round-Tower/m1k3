@@ -1,0 +1,400 @@
+//
+//  AppCore.swift
+//  M1K3iOS / M1K3visionOS — the shared adaptive shell's composition root
+//
+//  The iOS/visionOS sibling of the macOS `AppEnvironment`: it wires the SAME
+//  protocol-seam package graph (`swift test`-covered) into one observable object
+//  the SwiftUI screens read. It deliberately does NOT touch the macOS
+//  AppEnvironment — that's the shipping product's composition root, AppKit-bound
+//  and only tested through the Mac app. Instead this is a fresh, mobile-native
+//  root that wires the portable targets (Knowledge, Memory, Inference, MLX, Chat,
+//  Agent, AgentTools, Avatar). Everything here is a thin assembly of types the
+//  package already tests — no business logic lives in the app target.
+//
+//  What's wired (Phase A — the spine): KnowledgeStore + hybrid RAG, the temporal
+//  MemoryStore, the swappable inference slot (Mini = Apple Foundation Models,
+//  Lil = MLX Qwen3-4B), the always-on tool-calling `AgentRAGResponder`, a
+//  persisted `ChatSession`, `DocumentIngester`, and the pixel-face avatar.
+//  NOT wired (Phase B+, device/runtime-gated): voice (AVAudioSession), the
+//  in-app MCP server, call intelligence, Kokoro TTS. The mobile ladder tops out
+//  at Lil (BrainTier.recommended(platform: .mobile)) — iPhones stay on Mini.
+//
+//  Signed: Kev + claude-fable-5, 2026-07-06, Confidence 0.75 (compile-verified
+//  for iOS/visionOS; on-device RUN is the Phase-B verify-owed — MLX needs Metal,
+//  which the simulator can't run). Prior: Unknown.
+//
+
+import Foundation
+import M1K3Agent
+import M1K3AgentTools
+import M1K3Avatar
+import M1K3Chat
+import M1K3Inference
+import M1K3Knowledge
+import M1K3KnowledgeTools
+import M1K3Memory
+import M1K3MLX
+import Observation
+import os
+import SwiftUI
+
+@MainActor
+@Observable
+final class AppCore {
+    // MARK: - Stores & pipeline (all portable package types)
+
+    let store: KnowledgeStore
+    /// The temporal memory graph — atomic facts + typed edges, SEPARATE from the
+    /// RAG corpus. Best-effort: a hiccup opening it leaves memory read/recall inert.
+    let memoryStore: MemoryStore?
+    /// Hashing embeddings for v1 (offline, instant, self-consistent vector space).
+    /// Semantic MLX embeddings — a ~600 MB download — are a Phase-B follow behind
+    /// the same `EmbeddingService` seam (the Mac app's swappable wrapper is
+    /// app-target-only and deliberately not pulled in here).
+    let embedder: any EmbeddingService
+    let ingester: DocumentIngester
+    let chat: ChatSession
+    /// The pixel-cube companion, shared verbatim with the Mac app (AvatarView).
+    let avatar = AvatarController()
+
+    /// The single inference slot the responder holds. Re-pointed on brain switch
+    /// (Mini = AFM, Lil = MLX) so the transcript is preserved across a swap.
+    private let activeProvider: SwappableInferenceProvider
+    private let afm = AppleFoundationModelsProvider()
+    private var currentMLX: MLXGemmaProvider?
+    private var warmTask: Task<Void, Never>?
+    /// Monotonic token: a late-arriving warm progress hop only applies if it still
+    /// matches the current generation, so a brain switch mid-warm can't be clobbered
+    /// by the abandoned download's callbacks (the Mac AppEnvironment's stale-hop guard).
+    private var warmGeneration = 0
+
+    // MARK: - Observable UI state
+
+    private(set) var selectedBrain: BrainTier
+    /// Warm-up state for the MLX brain (Lil). Stays `.idle` for Mini (AFM).
+    private(set) var brainLoad: ModelLoadState = .idle
+    private(set) var indexedItemCount = 0
+    private(set) var lastIngestStatus: String?
+    /// A transient note about the brain choice (e.g. "Lil runs on a real device"
+    /// on the Simulator). Surfaced in Settings under the picker.
+    private(set) var brainNote: String?
+
+    // MARK: - Persistence keys (shared spelling with the Mac app so a brain
+
+    // choice reads back consistently in the responder's brain-name provider).
+
+    // `nonisolated` (like the Mac AppEnvironment's keys) so the responder's
+    // @Sendable per-turn closures can read them off the main actor.
+    nonisolated static let selectedBrainKey = "selectedBrain"
+    nonisolated static let hasChosenBrainKey = "hasChosenBrain"
+    nonisolated static let webSearchEnabledKey = "webSearchEnabled"
+
+    private static let log = Logger(subsystem: "app.m1k3", category: "ios-core")
+
+    var hasChosenBrain: Bool {
+        UserDefaults.standard.bool(forKey: Self.hasChosenBrainKey)
+    }
+
+    /// Ready to answer? Mini (AFM) manages its own availability at generate-time;
+    /// an MLX brain is ready only once its weights are warm.
+    var isReady: Bool {
+        switch selectedBrain.backing {
+        case .appleFoundationModels: afm.isAvailable
+        case .mlx: brainLoad == .ready
+        }
+    }
+
+    /// MLX needs a real Metal GPU. The iOS/visionOS **Simulator has none**, and
+    /// merely SETTING MLX's cache limit force-initialises the Metal device, which
+    /// aborts (`mlx::core::metal::Device` → `std::__libcpp_verbose_abort`). So on
+    /// the Simulator we never touch MLX at all: Mini (Apple Foundation Models) is
+    /// the only brain, and the memory budget is skipped. A real device (proven on
+    /// iPhone 17 Pro) runs the full Mini + Lil ladder. Verified: the crash stack
+    /// bottomed out at `MLXMemoryBudget.applyOnce()` from `AppCore.init`.
+    static let mlxAvailable: Bool = {
+        #if targetEnvironment(simulator)
+            return false
+        #else
+            return true
+        #endif
+    }()
+
+    init() throws {
+        // Bound the process-global MLX Metal cache before ANY MLX work (4 GB mobile
+        // ceiling). Skipped on the Simulator — see `mlxAvailable`; touching MLX there
+        // aborts the process.
+        if Self.mlxAvailable {
+            MLXMemoryBudget.applyOnce()
+        }
+
+        let base = try Self.appSupportDirectory()
+        store = try KnowledgeStore(path: base.appendingPathComponent("knowledge.sqlite").path)
+        memoryStore = try? MemoryStore(path: base.appendingPathComponent("memory.sqlite").path)
+
+        // Hashing embeddings by default — no ~600 MB embedder download on the
+        // first-run critical path.
+        let baseEmbedder = HashingEmbeddingService()
+        embedder = baseEmbedder
+        ingester = DocumentIngester(store: store, embedder: baseEmbedder)
+
+        // Restore the chosen brain (default Mini). Decode via init(persisted:) so a
+        // stale "huge" migrates to Big — though the mobile ladder never offers Big.
+        // On the Simulator, an MLX pick falls back to Mini for this launch (the
+        // persisted choice is untouched, so a real device honours it).
+        let restored = UserDefaults.standard.string(forKey: Self.selectedBrainKey)
+            .flatMap(BrainTier.init(persisted:)) ?? .mini
+        let brain = (restored.mlxModelID != nil && !Self.mlxAvailable) ? .mini : restored
+        selectedBrain = brain
+
+        // Build the inference slot on the chosen brain's backend. Mini uses AFM
+        // directly; an MLX brain starts on a provider that's warmed below.
+        let initialBackend: any InferenceProvider
+        if let modelID = brain.mlxModelID, Self.mlxAvailable {
+            let mlx = MLXGemmaProvider(modelID: modelID)
+            currentMLX = mlx
+            initialBackend = mlx
+        } else {
+            initialBackend = afm
+        }
+        let slot = SwappableInferenceProvider(initialBackend)
+        activeProvider = slot
+
+        let responder = Self.makeResponder(store: store, embedder: baseEmbedder, provider: slot)
+        let history = try? GRDBChatHistoryStore(
+            path: base.appendingPathComponent("chat-history.sqlite").path
+        )
+        chat = ChatSession(
+            responder: responder,
+            history: history,
+            titler: ProviderConversationTitler(provider: slot)
+        )
+
+        refreshCounts()
+        // Warm a restored MLX brain so it's ready to answer (Mini needs nothing;
+        // never on the Simulator, where MLX aborts).
+        if brain.mlxModelID != nil, Self.mlxAvailable {
+            warmSelectedBrain()
+        }
+    }
+
+    // MARK: - Brain selection
+
+    /// Choose a brain. Mini re-points the slot at AFM instantly; an MLX brain
+    /// warms its weights (streaming download progress into `brainLoad`) and swaps
+    /// in when ready. The chat transcript is preserved (the slot is swapped, not
+    /// the responder rebuilt).
+    func selectBrain(_ tier: BrainTier) {
+        // Simulator: MLX can't run (no Metal GPU — touching it aborts). Record the
+        // note and stay on Mini so chat still works; a real device runs Lil.
+        if tier.mlxModelID != nil, !Self.mlxAvailable {
+            brainNote = "\(tier.displayName) runs on a real device — the Simulator has no GPU for MLX. Staying on Mini."
+            selectBrain(.mini)
+            return
+        }
+        brainNote = nil
+
+        // No-op guard (the Mac AppEnvironment's fix): re-selecting the SAME,
+        // already-settled brain would tear down a warm KV/persona cache and repay a
+        // multi-GB load for nothing. Re-tapping Mini when already on Mini is also a
+        // no-op. A switch that's mid-warm still falls through (lets the user cancel).
+        if tier == selectedBrain {
+            switch tier.mlxModelID {
+            case nil where brainLoad == .idle:
+                return
+            case let modelID? where brainLoad == .ready && currentMLX?.modelIdentifier == modelID:
+                return
+            default:
+                break
+            }
+        }
+
+        selectedBrain = tier
+        UserDefaults.standard.set(tier.rawValue, forKey: Self.selectedBrainKey)
+        UserDefaults.standard.set(true, forKey: Self.hasChosenBrainKey)
+
+        warmTask?.cancel()
+        warmGeneration += 1 // invalidate any in-flight warm's progress hops
+        if tier.mlxModelID == nil {
+            // Switching to Mini: release the MLX weights we were holding so the
+            // Metal-backed persona-KV allocation doesn't fight the mobile budget.
+            currentMLX?.releaseMemory()
+            currentMLX = nil
+            activeProvider.setProvider(afm)
+            brainLoad = .idle
+        } else {
+            warmSelectedBrain()
+        }
+    }
+
+    private func warmSelectedBrain() {
+        guard let modelID = selectedBrain.mlxModelID else { return }
+        let tierName = selectedBrain.displayName
+        warmGeneration += 1
+        let generation = warmGeneration
+        warmTask = Task { [weak self] in
+            guard let self, generation == warmGeneration else { return }
+            brainLoad = .preparing
+            // Reuse the provider already built for this exact model (cold launch made
+            // one as the slot's initial backend); only build fresh on a model change,
+            // releasing the outgoing weights first — never leak two Metal instances.
+            let mlx: MLXGemmaProvider
+            if let existing = currentMLX, existing.modelIdentifier == modelID {
+                mlx = existing
+            } else {
+                currentMLX?.releaseMemory()
+                mlx = MLXGemmaProvider(modelID: modelID)
+            }
+            do {
+                try await mlx.prepare { fraction in
+                    Task { @MainActor [weak self] in
+                        guard let self, generation == warmGeneration else { return }
+                        brainLoad = .progress(fraction)
+                    }
+                }
+                guard generation == warmGeneration else { return }
+                currentMLX = mlx
+                activeProvider.setProvider(mlx)
+                brainLoad = .ready
+                Self.log.notice("brain warm: \(tierName, privacy: .public) ready")
+            } catch {
+                guard generation == warmGeneration else { return }
+                brainLoad = .failed(message: error.localizedDescription)
+                Self.log.error("brain warm failed: \(error.localizedDescription, privacy: .public)")
+            }
+        }
+    }
+
+    /// Whether Apple Intelligence (Mini) can serve on this device right now —
+    /// drives the onboarding / settings availability hint.
+    var miniAvailability: AFMAvailability {
+        afm.availabilityState
+    }
+
+    // MARK: - Send (drives the avatar around ChatSession's streaming send)
+
+    func send(_ text: String) async {
+        guard isReady else { return }
+        avatar.setActivity(.thinking)
+        await chat.send(text)
+        if case .failed? = chat.messages.last?.status {
+            avatar.setActivity(.error)
+        } else {
+            avatar.setEmotion(.happy)
+            avatar.resetToIdle()
+        }
+    }
+
+    // MARK: - Documents
+
+    /// Ingest a user-picked file (PDF or UTF-8 text) into the RAG store.
+    func ingest(url: URL) async {
+        let scoped = url.startAccessingSecurityScopedResource()
+        defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+        let title = url.deletingPathExtension().lastPathComponent
+        do {
+            let result: DocumentIngester.IngestResult
+            if url.pathExtension.lowercased() == "pdf" {
+                let data = try Data(contentsOf: url)
+                result = try await ingester.ingestPDF(title: title, data: data, sourceRef: url.absoluteString)
+            } else {
+                let content = try String(contentsOf: url, encoding: .utf8)
+                result = try await ingester.ingest(title: title, text: content, sourceRef: url.absoluteString)
+            }
+            let dedup = result.wasDeduped ? " (already indexed)" : ""
+            // A 0-chunk ingest indexed nothing searchable — say so, don't imply success.
+            lastIngestStatus = result.chunkCount == 0
+                ? "“\(title)” had no indexable text."
+                : "Indexed “\(title)” — \(result.chunkCount) chunks\(dedup)."
+            refreshCounts()
+        } catch {
+            lastIngestStatus = "Couldn’t index “\(title)”: \(error.localizedDescription)"
+        }
+        scheduleIngestStatusClear()
+    }
+
+    /// Auto-dismiss the ingest banner so it isn't a permanent fixture on the
+    /// Documents tab — clears only if the status hasn't since been replaced.
+    private func scheduleIngestStatusClear() {
+        let status = lastIngestStatus
+        Task { [weak self] in
+            try? await Task.sleep(for: .seconds(6))
+            guard let self, lastIngestStatus == status else { return }
+            lastIngestStatus = nil
+        }
+    }
+
+    func documents(limit: Int = 200) -> [KnowledgeItem] {
+        (try? store.allItems(limit: limit)) ?? []
+    }
+
+    func deleteDocument(id: UUID) {
+        _ = try? store.deleteItem(id: id)
+        refreshCounts()
+    }
+
+    private func refreshCounts() {
+        indexedItemCount = (try? store.itemCount()) ?? 0
+    }
+
+    // MARK: - Responder factory (the iOS mirror of makeAgentResponder — simpler:
+
+    // no CoolHead/voice-mode/history-budget plumbing, all of which default safely)
+
+    private static func makeResponder(
+        store: KnowledgeStore,
+        embedder: any EmbeddingService,
+        provider: any InferenceProvider
+    ) -> any RAGResponding {
+        let sourceCollector = ToolSourceCollector()
+        return AgentRAGResponder(
+            store: store,
+            embedder: embedder,
+            provider: provider,
+            toolsProvider: {
+                var tools: [any AgentTool] = [
+                    DateTimeTool(),
+                    SystemStatusTool(),
+                    SearchKnowledgeTool(
+                        store: store,
+                        embedder: embedder,
+                        onHits: { hits in sourceCollector.record(hits) }
+                    ),
+                    ListDocumentsTool(store: store),
+                    GetDocumentTool(store: store),
+                ]
+                let defaults = UserDefaults.standard
+                let webAllowed = defaults.object(forKey: Self.webSearchEnabledKey) == nil
+                    || defaults.bool(forKey: Self.webSearchEnabledKey)
+                if webAllowed {
+                    tools.insert(WikipediaTool(), at: 0)
+                    tools.insert(FetchPageTool(), at: 0)
+                    let deepReader = FetchPageTool(fetcher: URLSessionHTTPFetcher(timeout: 8))
+                    tools.insert(WebSearchTool(deepReader: deepReader), at: 0)
+                }
+                return tools
+            },
+            sourceCollector: sourceCollector,
+            brainNameProvider: {
+                let raw = UserDefaults.standard.string(forKey: Self.selectedBrainKey) ?? ""
+                return BrainTier(persisted: raw)?.displayName ?? ""
+            },
+            fastThinkingProvider: {
+                let raw = UserDefaults.standard.string(forKey: Self.selectedBrainKey) ?? ""
+                return BrainTier(persisted: raw)?.prefersFastThinking ?? false
+            }
+        )
+    }
+
+    // MARK: - Container path
+
+    /// The app's Application Support directory (inside the iOS/visionOS sandbox
+    /// container — no `homeDirectoryForCurrentUser`, which is macOS-only).
+    private static func appSupportDirectory() throws -> URL {
+        let dir = try FileManager.default.url(
+            for: .applicationSupportDirectory, in: .userDomainMask,
+            appropriateFor: nil, create: true
+        ).appendingPathComponent("M1K3", isDirectory: true)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir
+    }
+}

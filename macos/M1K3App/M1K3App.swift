@@ -120,13 +120,24 @@ struct M1K3App: App {
         .defaultLaunchBehavior(
             StartupVisibility(menuBarOnly: menuBarOnly).suppressesLaunchWindow ? .suppressed : .automatic
         )
-        .commands { ConstellationCommands() }
+        .commands {
+            ConstellationCommands()
+            AgentLogCommands()
+        }
 
         // The 3D memory constellation — memories as motes, edges as threads, the
         // field accreting as the store grows. A single-instance Window summoned
         // from the Window menu; rebuilds its snapshot from the live store each open.
         Window("Memory Constellation", id: Self.constellationWindowID) {
             ConstellationWindowContent(env: appDelegate.environment)
+        }
+        .windowResizability(.contentSize)
+
+        // The Agent Interaction Log — a scrollable review of every MCP tool
+        // call captured while the opt-in Settings toggle is on (off by
+        // default). Single-instance Window, summoned from the Window menu.
+        Window("Agent Log", id: Self.agentLogWindowID) {
+            AgentLogWindowContent(env: appDelegate.environment)
         }
         .windowResizability(.contentSize)
 

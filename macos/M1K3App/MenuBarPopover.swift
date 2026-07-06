@@ -160,8 +160,6 @@ struct MenuBarPopover: View {
         HStack {
             Button("Open M1K3") { openMainWindow() }
             Spacer()
-            Button("Constellation") { openConstellation() }
-            Spacer()
             SettingsLink { Text("Settings") }
             Spacer()
             Button("Quit") { NSApplication.shared.terminate(nil) }
@@ -211,11 +209,6 @@ struct MenuBarPopover: View {
     private func openMainWindow() {
         NSApplication.shared.activate()
         openWindow(id: M1K3App.mainWindowID)
-    }
-
-    private func openConstellation() {
-        NSApplication.shared.activate()
-        openWindow(id: M1K3App.constellationWindowID)
     }
 
     private static func runtimeLabel(_ runtime: RuntimeOption) -> String {

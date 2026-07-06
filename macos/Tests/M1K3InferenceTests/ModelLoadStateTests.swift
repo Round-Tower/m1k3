@@ -70,4 +70,16 @@ struct ModelLoadStateTests {
         #expect(ModelLoadState.progress(0.994).label(modelName: "M") == "Downloading M… 99%")
         #expect(ModelLoadState.progress(0.999).label(modelName: "M") == "Downloading M… 100%")
     }
+
+    @Test("compactLabel is just the number while downloading, empty otherwise")
+    func compactLabel() {
+        // The toolbar pill keeps only the percentage; the spinner beside it says "loading".
+        #expect(ModelLoadState.progress(0.42).compactLabel == "42%")
+        #expect(ModelLoadState.progress(1).compactLabel == "100%")
+        // No frozen number where there's no honest fraction — the spinner alone carries it.
+        #expect(ModelLoadState.preparing.compactLabel == "")
+        #expect(ModelLoadState.idle.compactLabel == "")
+        #expect(ModelLoadState.ready.compactLabel == "")
+        #expect(ModelLoadState.failed(message: "x").compactLabel == "")
+    }
 }

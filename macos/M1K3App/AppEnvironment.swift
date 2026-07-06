@@ -39,6 +39,7 @@ import M1K3Inference
 import M1K3Knowledge
 import M1K3KnowledgeTools
 import M1K3Kokoro
+import M1K3MCPLog
 import M1K3Memory
 import M1K3MLX
 import M1K3Preview
@@ -93,6 +94,13 @@ final class AppEnvironment {
     /// recall_memory/related_memory tools read it. Best-effort: a MemoryStore
     /// hiccup never breaks the existing KnowledgeStore remember path.
     let memoryStore: MemoryStore?
+    /// The Agent Interaction Log: an MCPCallLogSink that persists every MCP
+    /// tool call's request + response when the user opts in (Settings toggle,
+    /// OFF by default). Wired into `MCPHostController.start()` as the
+    /// registry's log sink; self-gates live on `conversationLogEnabledKey`, so
+    /// flipping the toggle takes effect with no server restart. Best-effort,
+    /// same inert-on-open-failure stance as `memoryStore`.
+    let conversationLog: ConversationLogStore?
     let provider: any InferenceProvider
     let responder: any RAGResponding
     /// The review panel's shared state: the inspector, chat link-chips, the MCP
@@ -255,6 +263,12 @@ final class AppEnvironment {
     nonisolated static let showGenerationStatsKey = "showGenerationStats"
     /// Settings: reasoning budget — ThinkingMode rawValue (auto/always/fast).
     nonisolated static let thinkingModeKey = "thinkingMode"
+    /// Agent Interaction Log: OPT-IN, OFF BY DEFAULT. When true, `conversationLog`
+    /// captures every MCP tool call's full request + response text (on-device
+    /// only, capped at the newest 500, one-tap Clear). `nonisolated` so the
+    /// store's `isEnabled` predicate — read from the server's dispatch path —
+    /// can check it off the main actor.
+    nonisolated static let conversationLogEnabledKey = "mcp.conversationLog.enabled"
     /// Whether the user has made a voice-output choice (onboarding speech step).
     static let hasChosenVoiceKey = "hasChosenVoice"
     /// One-shot: the call-encryption key has been migrated to Touch-ID protection.
@@ -421,6 +435,24 @@ final class AppEnvironment {
             // related/constellation — keep the inert nil fallback, but say why.
             memoryStore = nil
             Self.memoryLog.error("memory store open failed — memory tools inert: \(error.localizedDescription, privacy: .public)")
+        }
+
+        // The Agent Interaction Log lives in its own file, sibling to
+        // memory.sqlite — same reasoning (separate consent/lifecycle: opt-in,
+        // one-tap Clear, excluded from diagnostics). `isEnabled` reads the
+        // Settings toggle live, off the main actor, so flipping it takes
+        // effect immediately with no server restart. Best-effort: if it can't
+        // open, MCP calls simply go uncaptured (byte-identical to logging
+        // being off).
+        let conversationLogURL = url.deletingLastPathComponent().appendingPathComponent("mcp-log.sqlite")
+        do {
+            conversationLog = try ConversationLogStore(
+                path: conversationLogURL.path,
+                isEnabled: { UserDefaults.standard.bool(forKey: Self.conversationLogEnabledKey) }
+            )
+        } catch {
+            conversationLog = nil
+            Self.memoryLog.error("conversation log store open failed — agent log inert: \(error.localizedDescription, privacy: .public)")
         }
 
         // Embeddings define the stored vector space, so the choice must persist
@@ -857,7 +889,15 @@ final class AppEnvironment {
                 // write below; the guard makes that stale hop a no-op instead of
                 // regressing the bar to 99% forever.
                 Task { @MainActor in
-                    if case .downloading = self.modelLoad { self.modelLoad = .progress(fraction) }
+                    // While downloading, reflect the fraction. The moment the
+                    // download completes (fraction reaches 1.0) the slow part
+                    // begins — loading the weights into Metal, with no honest
+                    // fraction — so switch to the indeterminate `.preparing`
+                    // spinner instead of leaving a frozen "…100%" bar that reads
+                    // as a blocked app.
+                    if case .downloading = self.modelLoad {
+                        self.modelLoad = fraction >= 1 ? .preparing : .progress(fraction)
+                    }
                 }
             }
             if Task.isCancelled { return }
