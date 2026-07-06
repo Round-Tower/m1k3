@@ -53,6 +53,9 @@
             <BuildableReference BuildableIdentifier = "primary" BlueprintIdentifier = "M1K3MCPKitTests" BuildableName = "M1K3MCPKitTests" BlueprintName = "M1K3MCPKitTests" ReferencedContainer = "container:"></BuildableReference>
          </TestableReference>
          <TestableReference skipped = "NO">
+            <BuildableReference BuildableIdentifier = "primary" BlueprintIdentifier = "M1K3MCPLogTests" BuildableName = "M1K3MCPLogTests" BlueprintName = "M1K3MCPLogTests" ReferencedContainer = "container:"></BuildableReference>
+         </TestableReference>
+         <TestableReference skipped = "NO">
             <BuildableReference BuildableIdentifier = "primary" BlueprintIdentifier = "M1K3LaunchTests" BuildableName = "M1K3LaunchTests" BlueprintName = "M1K3LaunchTests" ReferencedContainer = "container:"></BuildableReference>
          </TestableReference>
          <TestableReference skipped = "NO">
