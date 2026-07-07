@@ -41,6 +41,7 @@ import M1K3KnowledgeTools
 import M1K3Kokoro
 import M1K3MCPLog
 import M1K3Memory
+import M1K3MemoryChatBridge
 import M1K3MLX
 import M1K3Preview
 import M1K3Voice

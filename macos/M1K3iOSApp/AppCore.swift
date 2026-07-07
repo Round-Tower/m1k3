@@ -33,6 +33,7 @@ import M1K3Inference
 import M1K3Knowledge
 import M1K3KnowledgeTools
 import M1K3Memory
+import M1K3MemoryChatBridge
 import M1K3MLX
 import Observation
 import os
@@ -88,6 +89,14 @@ final class AppCore {
     nonisolated static let selectedBrainKey = "selectedBrain"
     nonisolated static let hasChosenBrainKey = "hasChosenBrain"
     nonisolated static let webSearchEnabledKey = "webSearchEnabled"
+    /// Memory auto-capture toggle — default ON (matches the Mac). Off = M1K3
+    /// never distils durable facts from your chat.
+    nonisolated static let memoryAutoCaptureKey = "memoryAutoCapture"
+    nonisolated static func memoryAutoCaptureEnabled() -> Bool {
+        let defaults = UserDefaults.standard
+        return defaults.object(forKey: memoryAutoCaptureKey) == nil
+            || defaults.bool(forKey: memoryAutoCaptureKey)
+    }
 
     private static let log = Logger(subsystem: "app.m1k3", category: "ios-core")
 
@@ -163,10 +172,23 @@ final class AppCore {
         let history = try? GRDBChatHistoryStore(
             path: base.appendingPathComponent("chat-history.sqlite").path
         )
+        // Memory auto-capture: distil durable facts from chat into the corpus AND
+        // mirror them into the temporal graph (via the shared M1K3MemoryChatBridge
+        // adapter). Reuses the SAME baseEmbedder recall queries with, so dedup +
+        // graph-node vectors stay in one space (hashing for now; the MLX embedder
+        // swap in Phase B must be passed here too). Off if the user opts out.
         chat = ChatSession(
             responder: responder,
             history: history,
-            titler: ProviderConversationTitler(provider: slot)
+            titler: ProviderConversationTitler(provider: slot),
+            distillation: Self.makeMemoryDistillation(
+                store: store,
+                embedder: baseEmbedder,
+                ingester: ingester,
+                fallback: slot,
+                graph: memoryStore.map { DistilledFactGraphAdapter(store: $0) as any DistilledFactGraphWriting }
+            ),
+            autoCaptureEnabled: { Self.memoryAutoCaptureEnabled() }
         )
 
         refreshCounts()
@@ -382,6 +404,30 @@ final class AppCore {
                 let raw = UserDefaults.standard.string(forKey: Self.selectedBrainKey) ?? ""
                 return BrainTier(persisted: raw)?.prefersFastThinking ?? false
             }
+        )
+    }
+
+    // MARK: - Memory distillation factory (the iOS mirror of the Mac's
+
+    // makeMemoryDistillation — AFM distils, the corpus is source of truth, the
+    // graph adapter mirrors facts into the temporal graph best-effort)
+
+    private static func makeMemoryDistillation(
+        store: KnowledgeStore,
+        embedder: any EmbeddingService,
+        ingester: DocumentIngester,
+        fallback: any InferenceProvider,
+        graph: (any DistilledFactGraphWriting)?
+    ) -> MemoryDistillationCoordinator {
+        MemoryDistillationCoordinator(
+            distiller: ProviderMemoryDistiller(
+                primary: AppleFoundationModelsProvider(instructions: { MemoryDistillationPrompt.instructions }),
+                fallback: fallback
+            ),
+            ingester: ingester,
+            store: store,
+            embedder: embedder,
+            graph: graph
         )
     }
 

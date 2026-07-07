@@ -49,6 +49,11 @@ let package = Package(
         .library(name: "M1K3KnowledgeTools", targets: ["M1K3KnowledgeTools"]),
         .library(name: "M1K3AgentTools", targets: ["M1K3AgentTools"]),
         .library(name: "M1K3Chat", targets: ["M1K3Chat"]),
+        // Leaf bridge: adapts M1K3Memory's graph to M1K3Chat's
+        // DistilledFactGraphWriting seam so chat memory auto-capture reaches the
+        // temporal graph WITHOUT Chat↔Memory depending on each other. Shared by
+        // both the macOS app and the iOS/visionOS shell.
+        .library(name: "M1K3MemoryChatBridge", targets: ["M1K3MemoryChatBridge"]),
         .library(name: "M1K3Voice", targets: ["M1K3Voice"]),
         .library(name: "M1K3MLX", targets: ["M1K3MLX"]),
         .library(name: "M1K3WhisperKit", targets: ["M1K3WhisperKit"]),
@@ -291,6 +296,20 @@ let package = Package(
             name: "M1K3ChatTests",
             dependencies: ["M1K3Chat"],
             path: "Tests/M1K3ChatTests"
+        ),
+        // Leaf bridge (Chat + Memory only): DistilledFactGraphAdapter, the
+        // Chat→graph dual-write. Nothing depends back on it but the two app
+        // shells, so it adds no cycle and leaks no heavy deps (both closures are
+        // Foundation + GRDB). Relocated out of M1K3App so iOS/visionOS reuse it.
+        .target(
+            name: "M1K3MemoryChatBridge",
+            dependencies: ["M1K3Chat", "M1K3Memory"],
+            path: "Sources/M1K3MemoryChatBridge"
+        ),
+        .testTarget(
+            name: "M1K3MemoryChatBridgeTests",
+            dependencies: ["M1K3MemoryChatBridge"],
+            path: "Tests/M1K3MemoryChatBridgeTests"
         ),
         // Voice. TTS now (AVSpeech behind SpeechProvider; Kokoro later);
         // transcription (WhisperKit) joins this module in the heavy-dep session.

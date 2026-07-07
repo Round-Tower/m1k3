@@ -34,12 +34,12 @@ struct MemoriesScreen: View {
                     ContentUnavailableView {
                         Label("\(liveCount) memories", systemImage: "brain")
                     } description: {
-                        // Honest for this phase: recall works; automatic capture from
-                        // chat isn't wired into the mobile shell yet (the Mac's
-                        // MemoryDistillationCoordinator is the follow-on). Don't
-                        // promise learning that doesn't happen here.
+                        // Now true on mobile: AppCore wires the shared
+                        // MemoryDistillationCoordinator, so durable facts are
+                        // distilled from chat into the corpus + the temporal graph,
+                        // all on device. (Runtime firing is verify-by-launch.)
                         Text(liveCount == 0
-                            ? "Nothing here yet. On this early build, memories aren’t captured from chat on mobile — that’s coming. Everything stays on your device."
+                            ? "Nothing here yet — memories build up as you chat, all on your device."
                             : "Search what M1K3 remembers — all on your device.")
                     }
                 } else if hits.isEmpty, !searching {

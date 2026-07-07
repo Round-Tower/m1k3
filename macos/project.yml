@@ -91,6 +91,8 @@ targets:
       - package: M1K3
         product: M1K3Memory
       - package: M1K3
+        product: M1K3MemoryChatBridge
+      - package: M1K3
         product: M1K3MemoryViz
       - package: M1K3
         product: M1K3Preview
@@ -171,6 +173,8 @@ targets:
         product: M1K3Knowledge
       - package: M1K3
         product: M1K3Memory
+      - package: M1K3
+        product: M1K3MemoryChatBridge
       - package: M1K3
         product: M1K3Inference
       - package: M1K3
