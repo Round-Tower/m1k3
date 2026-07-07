@@ -19,6 +19,7 @@ import SwiftUI
 
 @main
 struct M1K3iOSApp: App {
+    @Environment(\.scenePhase) private var scenePhase
     @State private var core: AppCore?
     @State private var bootError: String?
 
@@ -39,6 +40,16 @@ struct M1K3iOSApp: App {
                 }
             }
             .preferredColorScheme(.dark)
+            .onChange(of: scenePhase) { _, phase in
+                // Shed MLX weights on a true background (jetsam hygiene), re-warm on
+                // return. `.inactive` (notification banner / Control Center) is
+                // deliberately ignored so transient interruptions don't churn the model.
+                switch phase {
+                case .background: core?.releaseForBackground()
+                case .active: core?.warmForForeground()
+                default: break
+                }
+            }
         }
     }
 
