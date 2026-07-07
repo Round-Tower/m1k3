@@ -109,21 +109,41 @@ public enum MarkdownToHTML {
 
     /// Escape first, then emit inline markup so a raw tag can't become live HTML.
     /// Order: links → code → bold → italic (bold before italic so `**` isn't eaten
-    /// by the single-asterisk pass; code before emphasis so `*` inside code is inert).
+    /// by the single-asterisk pass). A link's URL and a whole inline-code span are
+    /// STASHED behind sentinels before the emphasis passes run, so a `*` inside a
+    /// URL or code stays literal (the emphasis regexes would otherwise inject
+    /// `<em>` into an `href` or code content and corrupt it) — the label text is
+    /// left inline so `[**bold**](url)` still emphasises. Sentinels are restored
+    /// last, so none survive into the output.
     private static func renderInline(_ text: String) -> String {
         var output = escape(text)
-        output = output.replacing(/\[([^\]]+)\]\(([^)\s]+)\)/) { "<a href=\"\($0.2)\">\($0.1)</a>" }
-        output = output.replacing(/`([^`]+)`/) { "<code>\($0.1)</code>" }
+        var stashed: [String] = []
+        func stash(_ html: String) -> String {
+            defer { stashed.append(html) }
+            return "\u{E000}\(stashed.count)\u{E001}"
+        }
+        output = output.replacing(/\[([^\]]+)\]\(([^)\s]+)\)/) {
+            "<a href=\"\(stash(String($0.2)))\">\($0.1)</a>"
+        }
+        output = output.replacing(/`([^`]+)`/) { stash("<code>\($0.1)</code>") }
         output = output.replacing(/\*\*([^*]+)\*\*/) { "<strong>\($0.1)</strong>" }
         output = output.replacing(/\*([^*\n]+)\*/) { "<em>\($0.1)</em>" }
+        for (index, html) in stashed.enumerated() {
+            output = output.replacingOccurrences(of: "\u{E000}\(index)\u{E001}", with: html)
+        }
         return output
     }
 
+    /// Escape for BOTH element-content and double-quoted attribute-value contexts
+    /// (URLs land in `href="…"`), so `"`/`'` are covered, not just `& < >`. `&`
+    /// must be replaced first so the entities we introduce aren't double-escaped.
     private static func escape(_ source: String) -> String {
         source
             .replacingOccurrences(of: "&", with: "&amp;")
             .replacingOccurrences(of: "<", with: "&lt;")
             .replacingOccurrences(of: ">", with: "&gt;")
+            .replacingOccurrences(of: "\"", with: "&quot;")
+            .replacingOccurrences(of: "'", with: "&#39;")
     }
 
     // MARK: - Block predicates
