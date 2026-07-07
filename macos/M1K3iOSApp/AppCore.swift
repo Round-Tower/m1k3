@@ -330,6 +330,12 @@ final class AppCore {
 
     /// Re-warm the chosen MLX brain if it was shed while backgrounded. No-op when
     /// Mini is the choice or the brain is already warm/warming.
+    ///
+    /// The `.idle` guard is deliberate: a brain that FAILED to warm (`.failed` — a
+    /// gated repo, a full disk, unavailable weights) is NOT retried by a
+    /// background→foreground bounce, only by an explicit shed (`.idle` via
+    /// `releaseForBackground`) or a user re-selection. Retrying a persistent failure
+    /// on every app-switch would be a retry-storm; the failure surfaces once and stays.
     func warmForForeground() {
         guard selectedBrain.mlxModelID != nil, currentMLX == nil, brainLoad == .idle else { return }
         warmSelectedBrain()
