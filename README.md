@@ -50,7 +50,8 @@ one-time model download and an optional, explicitly-enabled web search.
 | Surface | Where | Stack | Status |
 |---|---|---|---|
 | **macOS native** | [`macos/`](./macos) | Swift 6.2, SwiftUI, MLX-Swift | **The product** — on-device knowledge · RAG · agent · voice · calls. Build it: [`macos/README.md`](./macos/README.md). |
-| **間 AI mobile** | [`app/`](./app) | Kotlin Multiplatform | **Next** — Android first, iOS after. See [`app/README.md`](./app/README.md). |
+| **iOS + visionOS** | [`macos/M1K3iOSApp/`](./macos/M1K3iOSApp) | Swift 6.2, SwiftUI | Native SwiftUI shell on the **same** `macos/Sources/` package graph — chat · RAG · memories · docs. Ladder tops out at Lil on-device. See [`macos/docs/IOS_VISIONOS_PORT.md`](./macos/docs/IOS_VISIONOS_PORT.md). |
+| **間 AI mobile** | [`app/`](./app) | Kotlin Multiplatform | **Next** — the **Android** surface (KMP). See [`app/README.md`](./app/README.md). |
 | **The attic** | [`attic/`](./attic) | Python, THREE.js, Tauri | Where M1K3 grew up — the original CLI, avatar experiments, and ideas. Still boots. |
 
 ## Get M1K3

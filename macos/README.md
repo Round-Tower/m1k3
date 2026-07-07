@@ -33,6 +33,9 @@ Or from the command line:
 
 ```bash
 xcodebuild -scheme M1K3 -destination 'platform=macOS' build | xcbeautify
+# The same package graph also drives the iOS + visionOS shell (M1K3iOSApp/):
+xcodebuild -scheme M1K3iOS       -destination 'generic/platform=iOS Simulator'      build | xcbeautify
+xcodebuild -scheme M1K3visionOS  -destination 'generic/platform=visionOS Simulator' build | xcbeautify
 ```
 
 First launch is one screen: say hello (a name is optional) and you're talking —
@@ -64,7 +67,8 @@ generates; Apple Silicon only).
 
 | | |
 |---|---|
-| `M1K3App/` | App shell: SwiftUI views, `AppEnvironment`, settings |
+| `M1K3App/` | macOS app shell: SwiftUI views, `AppEnvironment`, settings |
+| `M1K3iOSApp/` | iOS + visionOS SwiftUI shell (`M1K3iOS`/`M1K3visionOS` schemes) on the shared `Sources/` graph |
 | `Sources/` | SwiftPM modules: agent, inference, knowledge/RAG, voice, MCP |
 | `Tests/` | swift-testing suites per module |
 | `project.yml` | XcodeGen spec (the `.xcodeproj` is a build artifact) |

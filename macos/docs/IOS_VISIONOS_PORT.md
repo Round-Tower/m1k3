@@ -239,3 +239,27 @@ before writing. Honest caveats: compile-green only — on-device MLX run, voice,
 spatial flagship are named verify-owed, not done; the shell is uncommitted in the working
 tree, as the goal framed it — committing fires the TestFlight-adjacent pipeline and is
 Kev's call). Prior: Kev + claude-fable-5 (the spike + harness)._
+
+---
+
+## Addendum — 2026-07-07: the DRY relocation + mobile memory ON (commit 1fcf13f5)
+
+The "refactor a third time" the delivery block flagged got done. Two app-target-only
+helpers moved DOWN into the package so both shells share one copy:
+
+- **`SwappableEmbeddingService`** → `M1K3Knowledge` (beside the `EmbeddingService`
+  protocol; the last stranded member of the Swappable\* family). No new dep edge.
+- **`DistilledFactGraphAdapter`** → a **new leaf module `M1K3MemoryChatBridge`**
+  (deps exactly `[M1K3Chat, M1K3Memory]`). NOT folded into `M1K3Chat` — that would
+  force `Chat→Memory` and break the documented "Chat must not depend on Memory" seam.
+  Nothing depends back on the bridge, so it's cycle-free.
+
+With the adapter shared, **`AppCore` now wires the same `MemoryDistillationCoordinator`
+the Mac uses** (`memoryAutoCaptureKey`, default ON): durable facts distil from chat into
+the corpus AND mirror into the temporal graph. `MemoriesScreen` recall is the read side;
+this is the write side. So the Memories tab is real on mobile now, not a placeholder.
+(Runtime firing is verify-by-launch — the `ChatSession` scheduling is package-pinned,
+the `AppCore` glue has no iOS test bundle.) Verified: `swift test` 1752/260 + Mac/iOS/
+visionOS xcodebuild all BUILD SUCCEEDED.
+
+_Signed: Kev + claude-opus-4-8, 2026-07-07 (DRY + mobile memory), Confidence 0.85._

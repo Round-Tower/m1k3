@@ -50,8 +50,9 @@ final class AppCore {
     let memoryStore: MemoryStore?
     /// Hashing embeddings for v1 (offline, instant, self-consistent vector space).
     /// Semantic MLX embeddings — a ~600 MB download — are a Phase-B follow behind
-    /// the same `EmbeddingService` seam (the Mac app's swappable wrapper is
-    /// app-target-only and deliberately not pulled in here).
+    /// the same `EmbeddingService` seam. The runtime swap façade
+    /// (`SwappableEmbeddingService`) now lives in M1K3Knowledge (shared with the
+    /// Mac app), so wiring it here when the MLX embedder lands is a one-liner.
     let embedder: any EmbeddingService
     let ingester: DocumentIngester
     let chat: ChatSession

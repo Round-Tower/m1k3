@@ -4,16 +4,19 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Orientation
 
-This directory (`macos/`) is the **live product**: M1K3, a Mac-native SwiftUI app —
-a local, private AI companion with live voice, a knowledge graph, document memory,
-an embedded agent, call transcription, a 3D avatar, and an MCP server. It targets
-**macOS 26 (Tahoe) only** (real Liquid Glass + on-device Foundation Models) and is
-written in **Swift 6.2**.
+This directory (`macos/`) is the **live product**: M1K3, a private AI companion
+with live voice, a knowledge graph, document memory, an embedded agent, call
+transcription, a 3D avatar, and an MCP server. The **macOS 26 (Tahoe)** app
+(`M1K3App/`, real Liquid Glass + on-device Foundation Models) is the primary
+shipping surface, written in **Swift 6.2**. The same portable `Sources/` package
+graph also drives a native **iOS 26 / visionOS 26** SwiftUI shell under
+`M1K3iOSApp/` (the `M1K3iOS` / `M1K3visionOS` targets in `project.yml`) — a
+distinct surface from the KMP `../app/` (that's the Android effort).
 
 The parent `../CLAUDE.md` documents the **legacy Python CLI** (archived under
 `../attic/`, last meaningful work Jan 2026). When working under `macos/`, this
 file is the relevant one. Durable session history lives in
-`.claude/project-memory.md` (read it for in-flight threads and hard-won gotchas);
+`../.claude/project-memory.md` (read it for in-flight threads and hard-won gotchas);
 the roadmap is `PLAN.md` (append-only, signed — reconcile additively, never rewrite
 signed blocks).
 
@@ -84,7 +87,8 @@ shell that wires concrete backends to the seams; `AppEnvironment` (+ its
 
 | Target | Role |
 |---|---|
-| `M1K3Knowledge` | RAG corpus: GRDB store, embeddings, hybrid (vector + FTS) search, RRF fusion, grounding gate. The knowledge primitives. |
+| `M1K3LogCore` | Single source of truth for unified logging: the `app.m1k3` subsystem + category catalogue + `LogPreview`. Dependency-free so every target references it. |
+| `M1K3Knowledge` | RAG corpus: GRDB store, embeddings, hybrid (vector + FTS) search, RRF fusion, grounding gate. The knowledge primitives. Also `SwappableEmbeddingService` (the runtime embedder-swap façade). |
 | `M1K3Memory` | Temporal memory **graph** (atomic facts + typed edges + recursive-CTE traversal). Separate DB/consent lifecycle from the corpus. |
 | `M1K3MemoryViz` | 3D memory constellation (RealityKit over a pure layout model). |
 | `M1K3Inference` | The `InferenceProvider` seam + `BrainTier`. Backends are thin adapters. No external deps. |
@@ -92,7 +96,8 @@ shell that wires concrete backends to the seams; `AppEnvironment` (+ its
 | `M1K3LanguageModel` | WWDC26 LanguageModel bridge (ADR 0001) — local mirror of Apple's FoundationModels surface + escalation-ladder policy. |
 | `M1K3Eval` | Model-evals enclave: fixtures + deterministic heuristic scorer + cross-brain report (pure; the model-running half rides SelfTest). |
 | `M1K3KnowledgeTools` / `M1K3AgentTools` | Knowledge-backed agent tools (search/list/get document). |
-| `M1K3Chat` | RAG chat brain: embed → hybrid search → documents-first prompt → generate; multi-conversation history. |
+| `M1K3Chat` | RAG chat brain: embed → hybrid search → documents-first prompt → generate; multi-conversation history. Also the `MemoryDistillationCoordinator` (distils durable facts from chat). |
+| `M1K3MemoryChatBridge` | Leaf bridge (deps `[M1K3Chat, M1K3Memory]`): `DistilledFactGraphAdapter`, the Chat→memory-graph dual-write. Shared by BOTH the macOS app and the iOS/visionOS shell (relocated out of the app target). |
 | `M1K3Voice` | TTS (`SpeechProvider`) + transcription (`TranscriptionProvider`) seams (system AVFoundation/Speech only). |
 | `M1K3MLX` | **Heavy.** MLX embeddings + Gemma/Qwen generation on Metal. Conforms to the `EmbeddingService`/`InferenceProvider` seams. |
 | `M1K3WhisperKit` | **Heavy.** WhisperKit on-device transcription (CoreML). Apple Speech is the always-available fallback behind the same seam. |
@@ -100,12 +105,18 @@ shell that wires concrete backends to the seams; `AppEnvironment` (+ its
 | `M1K3Calls` | Model-agnostic call intelligence: batch transcription + diarization + two-stage summarization protocols. |
 | `M1K3Avatar` | 3D companion (RealityKit) + pure emotion/animation types + earcons. Per-clip companion USDZs as resources. |
 | `M1K3MCPKit` / `M1K3MCP` | MCP server: testable tool handlers (`-Kit`) + the thin stdio executable (`M1K3MCP`) Claude spawns. |
+| `M1K3MCPLog` | Opt-in Agent Interaction Log: a GRDB sink (conforms to `MCPCallLogSink`) capturing full MCP request+response text ONLY when the Settings toggle is on. Separate target so the PII-bearing capture stays out of the tool-dispatch core. |
 | `M1K3Launch` | Launch-at-login (SMAppService seam) for the menu-bar companion. |
 | `M1K3Preview` | Review-panel router (link/file → `ReviewTarget`); QuickLook/WKWebView renderers live in the app. |
+| `M1K3Diagnostics` | Privacy scrub + issue-report formatting + the diagnostic log partition for the secret-free "Report an issue" flow. Pure/dependency-free so the redaction rules are unit-pinned. |
 
-**Brains** (`BrainTier.swift`): user picks one of three at onboarding — **Mini**
-(Apple Foundation Models, instant, no download), **Lil** (`Qwen3-4B-4bit`),
-**Big** (`gemma-4-e4b-it-4bit`). `BrainBacking` maps a tier to
+**Brains** (`BrainTier.swift`): three tiers — **Mini** (Apple Foundation Models,
+instant, no download), **Lil** (`Qwen3-4B-4bit`), **Big** (`gemma-4-e4b-it-4bit`).
+First run is **Mini-first** (one screen, `HelloView` — instant AFM, nothing to
+download); Lil/Big are opt-in upgrades surfaced after the first answer or in
+Settings (`BrainPickerView`), not a three-way onboarding picker. The mobile
+(iOS/visionOS) ladder tops out at Lil — Big is excluded on-device.
+`BrainBacking` maps a tier to
 `appleFoundationModels` or `mlx(modelID:)`. **Huge** (`Qwen3-8B-4bit`) was
 retired 2026-07-02 (weakest tool-caller; the all-gemma reshuffle) — a persisted
 `"huge"` migrates to `.big` via `BrainTier(persisted:)`. Current model choices
@@ -150,3 +161,11 @@ format runs **native** (`runNative`); otherwise the **ReAct** floor
   (`git add -A` sweeps other sessions' uncommitted files).
 - SwiftLint pre-commit is **advisory** (warnings/errors don't block). Pre-existing
   length/cyclomatic violations on large files are a standing "don't chase" set.
+- **Keep docs fresh in the SAME commit as the code.** When you add/remove a
+  `Package.swift` `.library` product, add a new app surface (an `M1K3iOSApp/`-style
+  shell), or move a type between the app target and `Sources/`, update the matching
+  doc — the Module map (this file), the surface tables (`../README.md`,
+  `../CONTRIBUTING.md`), and `docs/IOS_VISIONOS_PORT.md` — and keep relative doc
+  pointers resolving on disk. The `doc-drift` CI job
+  (`tools/ci/check_doc_drift.py`) enforces the Module-map ↔ Package.swift half
+  automatically (red→green like the scheme-drift guard); the prose half is on you.
