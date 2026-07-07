@@ -128,6 +128,36 @@ struct MemoryStoreThresholdTests {
     }
 }
 
+struct MemoryStoreHybridBackfillTests {
+    /// An FTS-lane keyword hit that ranks OUTSIDE the vector top-K must still be
+    /// judged on its STORED embedding before the cutoff — not dropped unscored
+    /// (the KnowledgeStore.searchHybrid "Golden Gate miss", ported to the graph
+    /// lane). Embeddings are passed explicitly so vector rank and FTS rank are
+    /// decoupled the way a real embedder makes them; the hashing embedder couples
+    /// token overlap across both signals, so a hand-built vector is the clear way
+    /// to exercise exactly this "keyword-in, vector-out" seam.
+    @Test("a keyword-exact hit outside the vector top-K is scored on its stored embedding, not dropped")
+    func ftsOnlyHitJudgedOnStoredEmbedding() throws {
+        let store = try MemoryStore()
+        let query: [Float] = [1, 0, 0]
+
+        // Six decoys: NO keyword overlap with the query text, but embeddings
+        // point straight at the query → they saturate the vector top-K (2·limit).
+        for i in 1 ... 6 {
+            let decoy = Memory(kind: .note, text: "banana\(i)", source: "test")
+            try store.remember(decoy, embedding: [1, 0, 0])
+        }
+        // Target: FTS-matches "zeta", stored-embedding cosine 0.6 (clears the
+        // 0.51 bar) but ranks below every decoy → absent from the vector top-K,
+        // so pre-fix its similarity stays nil and the cutoff drops it.
+        let target = Memory(kind: .profile, text: "zeta is the answer", source: "test")
+        try store.remember(target, embedding: [0.6, 0.8, 0])
+
+        let hits = try store.recall(query: "zeta", queryVector: query, limit: 2)
+        #expect(hits.contains { $0.memory.id == target.id })
+    }
+}
+
 struct MemoryStoreSupersessionTests {
     @Test("a superseded memory drops out of recall; the corrector takes its place")
     func supersededExcludedFromRecall() async throws {
