@@ -139,6 +139,11 @@ public enum MarkdownToHTML {
     /// must be replaced first so the entities we introduce aren't double-escaped.
     private static func escape(_ source: String) -> String {
         source
+            // Strip the stash sentinels (U+E000/U+E001, renderInline's delimiters)
+            // FIRST so raw model-emitted PUA can't impersonate a stash token and
+            // splice in another span's HTML — escape() runs before any stashing.
+            .replacingOccurrences(of: "\u{E000}", with: "")
+            .replacingOccurrences(of: "\u{E001}", with: "")
             .replacingOccurrences(of: "&", with: "&amp;")
             .replacingOccurrences(of: "<", with: "&lt;")
             .replacingOccurrences(of: ">", with: "&gt;")

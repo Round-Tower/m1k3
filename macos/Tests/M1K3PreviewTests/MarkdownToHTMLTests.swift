@@ -106,6 +106,16 @@ struct MarkdownToHTMLTests {
             == "<p>run <code>a * b * c</code></p>")
     }
 
+    @Test("raw private-use sentinel characters can't impersonate a stash token")
+    func stripsStashSentinels() {
+        // U+E000/U+E001 are the internal stash delimiters. If model output carries
+        // them raw they must be stripped at escape time, or a "\u{E000}0\u{E001}"
+        // in the text would collide with the real link's stash token and splice its
+        // <a href> in (content-integrity, not XSS behind the no-JS+CSP webview).
+        let out = MarkdownToHTML.render("before \u{E000}0\u{E001} after [x](https://m1k3.app)")
+        #expect(out == "<p>before 0 after <a href=\"https://m1k3.app\">x</a></p>")
+    }
+
     @Test("a realistic document renders its structure")
     func document() {
         let md = """

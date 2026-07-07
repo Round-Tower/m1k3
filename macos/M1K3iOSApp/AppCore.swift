@@ -309,8 +309,16 @@ final class AppCore {
     /// serves chat while Lil re-warms. Cheap when already on Mini (currentMLX nil).
     /// Only call on a true `.background` transition — NOT `.inactive` (a notification
     /// banner / Control Center), which must not churn the model.
+    ///
+    /// Gated on `.ready`, NOT merely `currentMLX != nil`: at cold launch the slot's
+    /// provider is assigned BEFORE its first load finishes, and the underlying
+    /// SingleFlightLoader keeps running through Task cancellation (by design). If we
+    /// shed mid-load we couldn't actually stop that allocation, and nilling
+    /// currentMLX would make warmForForeground build a SECOND provider racing the
+    /// first on the same cache (review catch). So mid-load we leave it be — only a
+    /// fully-warm brain holds the reclaimable buffers this is here to shed.
     func releaseForBackground() {
-        guard currentMLX != nil else { return }
+        guard brainLoad == .ready, currentMLX != nil else { return }
         warmTask?.cancel()
         warmGeneration += 1 // invalidate any in-flight warm's progress hops
         currentMLX?.releaseMemory()
