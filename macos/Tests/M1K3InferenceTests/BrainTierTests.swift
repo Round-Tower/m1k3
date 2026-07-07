@@ -85,6 +85,24 @@ struct BrainTierTests {
         #expect(BrainTier.recommended(forPhysicalMemoryGB: 64) == .big)
     }
 
+    @Test("mobile recommendation is conservative — never Big, Lil only on iPad-Pro/Vision-Pro RAM")
+    func recommendationOnMobile() {
+        // Physical RAM OVERSTATES the per-app jetsam budget on iOS/visionOS, and
+        // Big (gemma-4-e4b, ~7GB at inference) exceeds any current mobile budget —
+        // so the mobile ladder tops out at Lil and only on ≥16GB devices.
+        #expect(BrainTier.recommended(forPhysicalMemoryGB: 6, platform: .mobile) == .mini)
+        #expect(BrainTier.recommended(forPhysicalMemoryGB: 8, platform: .mobile) == .mini)
+        #expect(BrainTier.recommended(forPhysicalMemoryGB: 15.9, platform: .mobile) == .mini)
+        // iPad Pro / Vision Pro (16GB+) comfortably run the 4-bit 4B Lil.
+        #expect(BrainTier.recommended(forPhysicalMemoryGB: 16, platform: .mobile) == .lil)
+        // Big is NEVER recommended on mobile, even at high RAM.
+        #expect(BrainTier.recommended(forPhysicalMemoryGB: 24, platform: .mobile) == .lil)
+        #expect(BrainTier.recommended(forPhysicalMemoryGB: 64, platform: .mobile) == .lil)
+        // The Mac ladder is unchanged (regression guard): default platform is .mac.
+        #expect(BrainTier.recommended(forPhysicalMemoryGB: 24) == .big)
+        #expect(BrainTier.recommended(forPhysicalMemoryGB: 24, platform: .mac) == .big)
+    }
+
     @Test("tiers order by capability — mini < lil < big")
     func tierOrdering() {
         #expect(BrainTier.mini < .lil)

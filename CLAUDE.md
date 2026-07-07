@@ -2,9 +2,12 @@
 
 @.claude/project-memory.md
 
-> **⚠️ Orientation (2026-07-02):** The **live product** is the Mac-native SwiftUI
-> app under **`macos/`** — see `macos/CLAUDE.md`, `macos/PLAN.md` and
-> `macos/.claude/project-memory.md`. The entire legacy Python surface (CLI, RAG
+> **⚠️ Orientation (2026-07-07):** The **live product** is the Mac-native SwiftUI
+> app under **`macos/`** (`M1K3App/`) — see `macos/CLAUDE.md`, `macos/PLAN.md` and
+> `.claude/project-memory.md`. The same portable `macos/Sources/` package graph now
+> also drives a native **iOS + visionOS** SwiftUI shell under `macos/M1K3iOSApp/`
+> (`M1K3iOS` / `M1K3visionOS` targets) — see `macos/docs/IOS_VISIONOS_PORT.md`.
+> The entire legacy Python surface (CLI, RAG
 > engine, web avatar, PWA, Tauri popover — pre-Mac-app, last meaningful work
 > Jan 2026) is archived under **`attic/`**, which preserves the old repo-root
 > layout so it still runs as-is (`cd attic` first). The live MCP surface is the
@@ -18,7 +21,10 @@ knowledge graph + RAG, and an MCP server.
 
 - **`macos/CLAUDE.md`** — the live product: build, test, architecture. Start here.
 - **`macos/README.md`** — human-facing build-from-source.
-- **`app/CLAUDE.md`** — 間 AI mobile (Kotlin Multiplatform, slow burn — the next surface).
+- **`macos/docs/IOS_VISIONOS_PORT.md`** — the native iOS + visionOS SwiftUI shell
+  (`macos/M1K3iOSApp/`) on the shared package graph. This — not `app/` — is the
+  Apple mobile/spatial surface.
+- **`app/CLAUDE.md`** — 間 AI mobile (Kotlin Multiplatform, slow burn — the **Android** surface).
 - **`attic/README.md`** — the archive tour: the original Python CLI, avatar
   experiments, era docs (`attic/docs/`), and how to run any of it.
 - **`CONTRIBUTING.md` / `SECURITY.md`** — public-repo contributor surface.
@@ -34,10 +40,10 @@ python -m pytest tests/               # full legacy suite
 
 ## graphify
 
-This project has a knowledge graph at graphify-out/ with god nodes, community structure, and cross-file relationships.
+This project *can* carry a knowledge graph at graphify-out/ (god nodes, community structure, cross-file relationships) — but it's gitignored/regenerable, so a fresh clone has none.
 
 Rules:
-- ⚠️ Graph last built 2026-06-14 and materially stale for the live Mac app (indexes 322 of ~475 current macos/ Swift files, plus gitignored build junk). There is no `graphify` binary on PATH — it runs via the graphify *skill*, not a shell command. Prefer direct reads under `macos/` until the graph is rebuilt.
+- ⚠️ **Only if `graphify-out/graph.json` exists.** The last local build (2026-06-14) is materially stale — it predates the entire iOS/visionOS shell and the `M1K3MemoryChatBridge`/`M1K3MCPLog` modules. There is no `graphify` binary on PATH — it runs via the graphify *skill*, not a shell command. Until rebuilt (via the skill), prefer direct reads under `macos/`.
 - For codebase questions, first run `graphify query "<question>"` when graphify-out/graph.json exists. Use `graphify path "<A>" "<B>"` for relationships and `graphify explain "<concept>"` for focused concepts. These return a scoped subgraph, usually much smaller than GRAPH_REPORT.md or raw grep output.
 - If graphify-out/wiki/index.md exists, use it for broad navigation instead of raw source browsing.
 - Read graphify-out/GRAPH_REPORT.md only for broad architecture review or when query/path/explain do not surface enough context.

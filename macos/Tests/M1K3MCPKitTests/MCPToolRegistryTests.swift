@@ -16,7 +16,10 @@ private struct FakeToolError: Error, CustomStringConvertible {
     let description = "the seal failed"
 }
 
-private func makeRegistry(recorder: @escaping @Sendable ([String: Value]?) -> Void = { _ in }) -> MCPToolRegistry {
+private func makeRegistry(
+    logSink: (any MCPCallLogSink)? = nil,
+    recorder: @escaping @Sendable ([String: Value]?) -> Void = { _ in }
+) -> MCPToolRegistry {
     MCPToolRegistry([
         MCPToolDefinition(
             tool: Tool(name: "alpha", description: "first", inputSchema: ["type": "object"]),
@@ -29,7 +32,19 @@ private func makeRegistry(recorder: @escaping @Sendable ([String: Value]?) -> Vo
             tool: Tool(name: "beta", description: "second", inputSchema: ["type": "object"]),
             handler: { _ in throw FakeToolError() }
         ),
-    ])
+    ], logSink: logSink)
+}
+
+/// Test sink that captures every recorded entry.
+private final class CollectingLogSink: MCPCallLogSink, @unchecked Sendable {
+    private let box = Locked<[MCPCallLogEntry]>([])
+    var entries: [MCPCallLogEntry] {
+        box.get()
+    }
+
+    func record(_ entry: MCPCallLogEntry) {
+        box.set(box.get() + [entry])
+    }
 }
 
 struct MCPToolRegistryTests {
@@ -70,6 +85,47 @@ struct MCPToolRegistryTests {
         let result = await registry.call(name: "beta", arguments: nil)
         #expect(result.isError == true)
         #expect(resultText(result)?.contains("the seal failed") == true)
+    }
+
+    @Test("a successful call is recorded to the log sink with args and response")
+    func recordsSuccess() async {
+        let sink = CollectingLogSink()
+        let registry = makeRegistry(logSink: sink)
+        _ = await registry.call(name: "alpha", arguments: ["query": .string("seals")])
+        #expect(sink.entries.count == 1)
+        let entry = sink.entries.first
+        #expect(entry?.tool == "alpha")
+        #expect(entry?.arguments?["query"] == .string("seals"))
+        #expect(entry?.responseText == "alpha says hi")
+        #expect(entry?.isError == false)
+    }
+
+    @Test("a throwing call is still recorded, marked isError")
+    func recordsError() async {
+        let sink = CollectingLogSink()
+        let registry = makeRegistry(logSink: sink)
+        _ = await registry.call(name: "beta", arguments: nil)
+        #expect(sink.entries.count == 1)
+        #expect(sink.entries.first?.tool == "beta")
+        #expect(sink.entries.first?.isError == true)
+    }
+
+    @Test("an unknown tool is recorded, marked isError")
+    func recordsUnknown() async {
+        let sink = CollectingLogSink()
+        let registry = makeRegistry(logSink: sink)
+        _ = await registry.call(name: "gamma", arguments: nil)
+        #expect(sink.entries.count == 1)
+        #expect(sink.entries.first?.tool == "gamma")
+        #expect(sink.entries.first?.isError == true)
+    }
+
+    @Test("with no sink, nothing is recorded — today's behaviour is unchanged")
+    func noSinkNoRecord() async {
+        // A registry built the old way (no logSink) must dispatch exactly as before.
+        let registry = makeRegistry()
+        let result = await registry.call(name: "alpha", arguments: nil)
+        #expect(resultText(result) == "alpha says hi")
     }
 
     @Test("argument helpers extract typed values")

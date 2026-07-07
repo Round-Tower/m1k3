@@ -68,6 +68,17 @@ public enum ModelLoadState: Sendable, Equatable {
         }
     }
 
+    /// A minimal status for cramped chrome (the toolbar pill): just the percentage
+    /// while downloading — the spinner beside it already reads as "loading" — and
+    /// nothing while preparing (the spinner alone carries it, there's no honest
+    /// number). Keeps the toolbar quiet instead of jamming in "Downloading X… N%".
+    public var compactLabel: String {
+        switch self {
+        case let .downloading(fraction): "\(percent(fraction))%"
+        case .idle, .preparing, .ready, .failed: ""
+        }
+    }
+
     private func percent(_ fraction: Double) -> Int {
         Int((fraction * 100).rounded())
     }

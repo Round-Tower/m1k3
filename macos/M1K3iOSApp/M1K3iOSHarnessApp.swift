@@ -1,0 +1,71 @@
+//
+//  M1K3iOSApp.swift  (was: the 2026-07-06 derisk harness)
+//  M1K3iOS / M1K3visionOS — the shipping shell's entry point
+//
+//  History: this file began as the on-device derisk harness — a minimal shell
+//  that ran the real engine + the pixel-cube avatar on an iPhone 17 Pro to move
+//  the port from "compiles" to "runs like M1K3" (both Mini and Lil verified on
+//  device, 2026-07-06). It has since grown up into the real shared adaptive
+//  shell: it builds the `AppCore` composition root and mounts the tabbed
+//  `RootView` (Chat / Memories / Documents / Settings) over the SAME package
+//  pipeline the Mac app ships. The Mac's `AppEnvironment` is untouched.
+//
+//  Signed: Kev + claude-fable-5, 2026-07-06, Confidence 0.8 (compile-verified for
+//  iOS + visionOS; on-device run is the Phase-B verify-owed — MLX needs Metal,
+//  absent on the simulator). Prior: Kev + claude-fable-5 (the harness form).
+//
+
+import SwiftUI
+
+@main
+struct M1K3iOSApp: App {
+    @State private var core: AppCore?
+    @State private var bootError: String?
+
+    init() {
+        BundledFonts.register() // Silkscreen — the pixel wordmark face.
+    }
+
+    var body: some Scene {
+        WindowGroup {
+            Group {
+                if let core {
+                    RootView(startOnboarded: core.hasChosenBrain)
+                        .environment(core)
+                } else if let bootError {
+                    bootErrorView(bootError)
+                } else {
+                    bootLoadingView.task { boot() }
+                }
+            }
+            .preferredColorScheme(.dark)
+        }
+    }
+
+    @MainActor
+    private func boot() {
+        do {
+            core = try AppCore()
+        } catch {
+            bootError = error.localizedDescription
+        }
+    }
+
+    private var bootLoadingView: some View {
+        ZStack {
+            Color.black.ignoresSafeArea()
+            ProgressView().controlSize(.large).tint(.white)
+        }
+    }
+
+    private func bootErrorView(_ message: String) -> some View {
+        ZStack {
+            Color.black.ignoresSafeArea()
+            ContentUnavailableView(
+                "M1K3 couldn't start",
+                systemImage: "exclamationmark.triangle",
+                description: Text(message)
+            )
+        }
+    }
+}

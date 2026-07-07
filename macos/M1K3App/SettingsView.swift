@@ -32,6 +32,7 @@ struct SettingsView: View {
     @AppStorage(AppEnvironment.preferAppleOnDeviceKey) private var preferAppleOnDevice = false
     @AppStorage(AppEnvironment.coolHeadEaseKey) private var coolHeadEase = false
     @AppStorage(AppEnvironment.showGenerationStatsKey) private var showGenerationStats = false
+    @AppStorage(AppEnvironment.conversationLogEnabledKey) private var conversationLogEnabled = false
     @AppStorage(StartupPreferences.menuBarOnlyKey) private var menuBarOnly = false
     @AppStorage(MenuBarGlyphStyle.storageKey) private var glyphStyle = MenuBarGlyphStyle.pixelM
     @State private var profileDraft = ""
@@ -272,6 +273,8 @@ struct SettingsView: View {
                 }
 
                 mcpSection
+
+                conversationLogSection
 
                 aboutYouSection
 
@@ -518,6 +521,26 @@ extension SettingsView {
                 + "http://127.0.0.1:\(env.mcpHost.port)/mcp")
                 .font(.caption).foregroundStyle(.secondary)
                 .textSelection(.enabled)
+        }
+    }
+
+    /// The Agent Interaction Log opt-in: full MCP request+response text is
+    /// captured only while this is on (default OFF). Own property, same
+    /// type-checker-budget reason as mcpSection.
+    private var conversationLogSection: some View {
+        Section {
+            Toggle("Log agent conversations", isOn: $conversationLogEnabled)
+            Button("Clear log", role: .destructive) {
+                try? env.conversationLog?.clear()
+            }
+            .buttonStyle(.glass)
+        } header: {
+            Text("Agent conversation log")
+        } footer: {
+            Text("On-device only, off by default. When on, M1K3 keeps the last "
+                + "500 tool calls a connected agent makes — see them in Window → "
+                + "Agent Log.")
+                .font(.caption).foregroundStyle(.secondary)
         }
     }
 

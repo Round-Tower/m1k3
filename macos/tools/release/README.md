@@ -58,11 +58,14 @@ Remaining to ship on MAS (all phase-2, in order):
 Everything else (network client+server for the loopback MCP, mic, screen-recording
 via TCC for calls) is MAS-compatible.
 
-## 3. iOS — **later**
+## 3. iOS + visionOS — **native, in-repo**
 
-The KMP app (`app/`) already targets iOS-future. Separate effort: an iOS
-`EmbeddingEngine` impl, the three-brain story on iOS (FM + MLX + Ma), App Store
-Connect for iPhone/iPad. Tracked in `app/PLAN_IOS.md`.
+The Apple mobile/spatial surface is the native SwiftUI shell under
+`../../M1K3iOSApp/` (`M1K3iOS` / `M1K3visionOS` targets), built on the SAME
+`Sources/` package graph as the Mac app — NOT the KMP `app/` (that's the Android
+effort). The on-device ladder is **Mini + Lil only** (Big is excluded on mobile;
+`M1K3iOSApp/AppCore.swift`). Release path: App Store Connect for iPhone/iPad/Vision
+Pro. See `../../docs/IOS_VISIONOS_PORT.md`.
 
 ---
 *Bundle/app ID is `app.m1k3` across platforms (reverse-DNS of m1k3.app). It's

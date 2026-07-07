@@ -32,7 +32,11 @@ let fm27Settings: [SwiftSetting] = fm27 ? [.define("M1K3_FM27")] : []
 
 let package = Package(
     name: "M1K3",
-    platforms: [.macOS(.v26)],
+    // iOS/visionOS added for the multiplatform derisk spike (2026-07-06): the app
+    // shell (M1K3App/) is still macOS-only, but the library graph is protocol-seam
+    // first, so the products build for iOS 26 / visionOS 26 to prove portability
+    // ahead of the shared adaptive shell. macOS stays the shipping surface.
+    platforms: [.macOS(.v26), .iOS(.v26), .visionOS(.v26)],
     products: [
         .library(name: "M1K3LogCore", targets: ["M1K3LogCore"]),
         .library(name: "M1K3Knowledge", targets: ["M1K3Knowledge"]),
@@ -45,6 +49,11 @@ let package = Package(
         .library(name: "M1K3KnowledgeTools", targets: ["M1K3KnowledgeTools"]),
         .library(name: "M1K3AgentTools", targets: ["M1K3AgentTools"]),
         .library(name: "M1K3Chat", targets: ["M1K3Chat"]),
+        // Leaf bridge: adapts M1K3Memory's graph to M1K3Chat's
+        // DistilledFactGraphWriting seam so chat memory auto-capture reaches the
+        // temporal graph WITHOUT Chat↔Memory depending on each other. Shared by
+        // both the macOS app and the iOS/visionOS shell.
+        .library(name: "M1K3MemoryChatBridge", targets: ["M1K3MemoryChatBridge"]),
         .library(name: "M1K3Voice", targets: ["M1K3Voice"]),
         .library(name: "M1K3MLX", targets: ["M1K3MLX"]),
         .library(name: "M1K3WhisperKit", targets: ["M1K3WhisperKit"]),
@@ -54,6 +63,12 @@ let package = Package(
         // Exported for the app's in-process MCP host (the stdio executable
         // reaches the target directly; the app needs the product).
         .library(name: "M1K3MCPKit", targets: ["M1K3MCPKit"]),
+        // The opt-in Agent Interaction Log store — conforms to M1K3MCPKit's
+        // MCPCallLogSink, capturing full request+response text ONLY when the
+        // app's Settings toggle is on. Separate target (not folded into
+        // M1K3MCPKit) so the PII-bearing capture/persistence logic — and its
+        // own GRDB store file — stays out of the tool-dispatch core.
+        .library(name: "M1K3MCPLog", targets: ["M1K3MCPLog"]),
         // Launch-at-login policy (SMAppService seam) for the always-resident
         // menu-bar companion. Pure controller + thin ServiceManagement adapter.
         .library(name: "M1K3Launch", targets: ["M1K3Launch"]),
@@ -282,6 +297,20 @@ let package = Package(
             dependencies: ["M1K3Chat"],
             path: "Tests/M1K3ChatTests"
         ),
+        // Leaf bridge (Chat + Memory only): DistilledFactGraphAdapter, the
+        // Chat→graph dual-write. Nothing depends back on it but the two app
+        // shells, so it adds no cycle and leaks no heavy deps (both closures are
+        // Foundation + GRDB). Relocated out of M1K3App so iOS/visionOS reuse it.
+        .target(
+            name: "M1K3MemoryChatBridge",
+            dependencies: ["M1K3Chat", "M1K3Memory"],
+            path: "Sources/M1K3MemoryChatBridge"
+        ),
+        .testTarget(
+            name: "M1K3MemoryChatBridgeTests",
+            dependencies: ["M1K3MemoryChatBridge"],
+            path: "Tests/M1K3MemoryChatBridgeTests"
+        ),
         // Voice. TTS now (AVSpeech behind SpeechProvider; Kokoro later);
         // transcription (WhisperKit) joins this module in the heavy-dep session.
         // AVFoundation is a system framework — no third-party dep.
@@ -342,6 +371,23 @@ let package = Package(
             name: "M1K3MCP",
             dependencies: ["M1K3MCPKit"],
             path: "Sources/M1K3MCP"
+        ),
+        // The Agent Interaction Log: an MCPCallLogSink that persists every MCP
+        // tool call (request + response) to its own GRDB store, opt-in and
+        // capped at the newest 500 rows. See ConversationLogStore.swift for the
+        // full design rationale.
+        .target(
+            name: "M1K3MCPLog",
+            dependencies: [
+                "M1K3MCPKit",
+                .product(name: "GRDB", package: "GRDB.swift"),
+            ],
+            path: "Sources/M1K3MCPLog"
+        ),
+        .testTarget(
+            name: "M1K3MCPLogTests",
+            dependencies: ["M1K3MCPLog", "M1K3MCPKit"],
+            path: "Tests/M1K3MCPLogTests"
         ),
         // Launch-at-login. The LaunchAtLogin policy is pure (TDD against a fake);
         // SMAppServiceLoginItem wraps the system ServiceManagement framework

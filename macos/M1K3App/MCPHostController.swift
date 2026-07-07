@@ -113,7 +113,12 @@ final class MCPHostController {
                 + makeVoiceToolDefinitions(handlers: makeVoiceHandlers())
                 + makeIntelligenceToolDefinitions(handlers: makeIntelligenceHandlers(), jobStore: intelligenceJobStore)
                 + makeOpenLinkToolDefinitions(handlers: makeOpenLinkHandlers())
-                + memoryToolDefinitions()
+                + memoryToolDefinitions(),
+            // Opt-in Agent Interaction Log (Settings toggle, OFF by default —
+            // the store self-gates on every call). Only this in-app HTTP
+            // surface is wired for v1; the stdio M1K3MCP binary's registry
+            // carries no sink — a follow-up if that surface wants the log too.
+            logSink: env.conversationLog
         )
         let host = LocalMCPHTTPServer(
             port: port,

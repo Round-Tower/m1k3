@@ -44,6 +44,9 @@
             <BuildableReference BuildableIdentifier = "primary" BlueprintIdentifier = "M1K3ChatTests" BuildableName = "M1K3ChatTests" BlueprintName = "M1K3ChatTests" ReferencedContainer = "container:"></BuildableReference>
          </TestableReference>
          <TestableReference skipped = "NO">
+            <BuildableReference BuildableIdentifier = "primary" BlueprintIdentifier = "M1K3MemoryChatBridgeTests" BuildableName = "M1K3MemoryChatBridgeTests" BlueprintName = "M1K3MemoryChatBridgeTests" ReferencedContainer = "container:"></BuildableReference>
+         </TestableReference>
+         <TestableReference skipped = "NO">
             <BuildableReference BuildableIdentifier = "primary" BlueprintIdentifier = "M1K3VoiceTests" BuildableName = "M1K3VoiceTests" BlueprintName = "M1K3VoiceTests" ReferencedContainer = "container:"></BuildableReference>
          </TestableReference>
          <TestableReference skipped = "NO">
@@ -51,6 +54,9 @@
          </TestableReference>
          <TestableReference skipped = "NO">
             <BuildableReference BuildableIdentifier = "primary" BlueprintIdentifier = "M1K3MCPKitTests" BuildableName = "M1K3MCPKitTests" BlueprintName = "M1K3MCPKitTests" ReferencedContainer = "container:"></BuildableReference>
+         </TestableReference>
+         <TestableReference skipped = "NO">
+            <BuildableReference BuildableIdentifier = "primary" BlueprintIdentifier = "M1K3MCPLogTests" BuildableName = "M1K3MCPLogTests" BlueprintName = "M1K3MCPLogTests" ReferencedContainer = "container:"></BuildableReference>
          </TestableReference>
          <TestableReference skipped = "NO">
             <BuildableReference BuildableIdentifier = "primary" BlueprintIdentifier = "M1K3LaunchTests" BuildableName = "M1K3LaunchTests" BlueprintName = "M1K3LaunchTests" ReferencedContainer = "container:"></BuildableReference>

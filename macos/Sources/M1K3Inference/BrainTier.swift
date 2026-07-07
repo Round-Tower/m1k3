@@ -230,12 +230,36 @@ public enum BrainTier: String, CaseIterable, Identifiable, Sendable, Comparable 
     /// on a 16GB Mac that also runs a browser would be hostile, so its floor
     /// is 24GB. Big is the ceiling for every larger Mac (Huge retired
     /// 2026-07-02). Tunable thresholds.
-    public static func recommended(forPhysicalMemoryGB gigabytes: Double) -> BrainTier {
-        switch gigabytes {
-        case 24...: .big
-        case 16...: .lil
-        default: .mini
+    public static func recommended(
+        forPhysicalMemoryGB gigabytes: Double,
+        platform: DevicePlatform = .mac
+    ) -> BrainTier {
+        switch platform {
+        case .mac:
+            switch gigabytes {
+            case 24...: .big
+            case 16...: .lil
+            default: .mini
+            }
+        case .mobile:
+            // Physical RAM OVERSTATES the per-app jetsam budget on iOS/visionOS, and
+            // Big (gemma-4-e4b, ~7GB at inference) exceeds any current mobile budget —
+            // so the mobile ladder tops out at Lil, and only on ≥16GB iPad Pro /
+            // Vision Pro. Everything smaller stays on Mini (Apple Foundation Models,
+            // no MLX footprint). Tunable, and verify-by-launch on real devices.
+            switch gigabytes {
+            case 16...: .lil
+            default: .mini
+            }
         }
+    }
+
+    /// Which platform class a memory-based recommendation is for. The RAM→tier
+    /// ladder differs: on iOS/visionOS physical RAM overstates the usable budget,
+    /// so the mobile ladder is deliberately more conservative (see `recommended`).
+    public enum DevicePlatform: Sendable, Equatable {
+        case mac
+        case mobile
     }
 
     /// Convenience: the recommendation for the machine we're running on.

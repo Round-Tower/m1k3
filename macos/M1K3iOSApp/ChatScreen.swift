@@ -1,0 +1,213 @@
+//
+//  ChatScreen.swift
+//  M1K3iOS / M1K3visionOS
+//
+//  The spine: a real grounded chat over the shared `ChatSession` pipeline
+//  (streaming, RAG, native tool-calling, documents-first). The pixel-face avatar
+//  is the hero when the conversation is empty and shrinks to a compact dock once
+//  it's underway (the Mac's hero→dock evolution). Nothing here is a mock — every
+//  answer runs the same `AgentRAGResponder` the Mac app ships.
+//
+//  Signed: Kev + claude-fable-5, 2026-07-06, Confidence 0.8 (compile-verified;
+//  on-device streaming feel is Phase-B verify-owed). Prior: Unknown.
+//
+
+import M1K3Avatar
+import M1K3Chat
+import M1K3Inference
+import SwiftUI
+
+struct ChatScreen: View {
+    @Environment(AppCore.self) private var core
+    @State private var draft = ""
+    @FocusState private var inputFocused: Bool
+
+    private var chatting: Bool {
+        !core.chat.messages.isEmpty
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            hero
+            transcript
+            inputBar
+        }
+        .background(backdrop)
+        .navigationTitle("M1K3")
+        #if os(iOS)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbarBackground(.hidden, for: .navigationBar)
+        #endif
+    }
+
+    // MARK: - Backdrop
+
+    private var backdrop: some View {
+        LinearGradient(
+            colors: [Color(red: 0.05, green: 0.05, blue: 0.11), .black],
+            startPoint: .top, endPoint: .bottom
+        )
+        .ignoresSafeArea()
+    }
+
+    // MARK: - Hero avatar
+
+    private var hero: some View {
+        VStack(spacing: 6) {
+            AvatarView(controller: core.avatar)
+                .frame(height: chatting ? 76 : 168)
+                .padding(.horizontal, chatting ? 140 : 56)
+            if !chatting {
+                Text("M1K3")
+                    .font(.pixel(28))
+                    .kerning(2)
+                    .foregroundStyle(.white)
+                Text(brainSubtitle)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+            if core.brainLoad.isActive {
+                brainLoadRow
+            } else if let hint = readinessHint {
+                Text(hint)
+                    .font(.caption2)
+                    .foregroundStyle(.orange)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 24)
+            }
+        }
+        .padding(.top, 8)
+        .padding(.bottom, 4)
+        .animation(.spring(duration: 0.45), value: chatting)
+    }
+
+    /// A short human-readable reason the brain can't answer right now — otherwise
+    /// the send button is silently disabled with no cross-reference to Settings.
+    private var readinessHint: String? {
+        guard !core.isReady else { return nil }
+        switch core.selectedBrain.backing {
+        case .appleFoundationModels:
+            switch core.miniAvailability {
+            case .available: return nil
+            case .notReady: return "Apple Intelligence is still downloading on this device…"
+            case let .blocked(userFixable):
+                return userFixable
+                    ? "Turn on Apple Intelligence in Settings — or pick Lil in Settings."
+                    : "This device can't run Apple Intelligence — pick Lil in Settings."
+            }
+        case .mlx:
+            if case let .failed(message) = core.brainLoad { return message }
+            return "\(core.selectedBrain.displayName) isn't ready yet."
+        }
+    }
+
+    private var brainLoadRow: some View {
+        Group {
+            if let fraction = core.brainLoad.fraction {
+                ProgressView(value: fraction) {
+                    Text("Waking \(core.selectedBrain.displayName)… \(Int(fraction * 100))%")
+                        .font(.caption2)
+                }
+                .frame(maxWidth: 240)
+            } else {
+                HStack(spacing: 6) {
+                    ProgressView().controlSize(.small)
+                    Text("Waking \(core.selectedBrain.displayName)…").font(.caption2)
+                }
+            }
+        }
+        .padding(.horizontal, 24)
+    }
+
+    private var brainSubtitle: String {
+        switch core.selectedBrain.backing {
+        case .appleFoundationModels: "Apple Intelligence"
+        case .mlx: core.selectedBrain.mlxModelID?.contains("Qwen") == true ? "MLX · Qwen3-4B" : "MLX · local"
+        }
+    }
+
+    // MARK: - Transcript
+
+    private var transcript: some View {
+        ScrollViewReader { proxy in
+            ScrollView {
+                LazyVStack(spacing: 16) {
+                    if core.chat.messages.isEmpty {
+                        emptyState
+                    }
+                    ForEach(core.chat.messages) { message in
+                        MessageBubble(message: message).id(message.id)
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+                .frame(maxWidth: 760)
+                .frame(maxWidth: .infinity)
+            }
+            .onChange(of: core.chat.messages.last?.text) {
+                if let last = core.chat.messages.last {
+                    withAnimation { proxy.scrollTo(last.id, anchor: .bottom) }
+                }
+            }
+        }
+    }
+
+    private var emptyState: some View {
+        VStack(spacing: 8) {
+            Text("Ask me anything.")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+            Text("Grounded in your documents and memories — on device.")
+                .font(.caption)
+                .foregroundStyle(.tertiary)
+                .multilineTextAlignment(.center)
+        }
+        .padding(.top, 28)
+    }
+
+    // MARK: - Input bar
+
+    private var inputBar: some View {
+        HStack(spacing: 10) {
+            TextField("Ask M1K3…", text: $draft, axis: .vertical)
+                .lineLimit(1 ... 4)
+                .focused($inputFocused)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
+                .m1k3Glass(cornerRadius: 20)
+                .onSubmit(send)
+            Button(action: send) {
+                if core.chat.isResponding {
+                    ProgressView().frame(width: 28, height: 28)
+                } else {
+                    Image(systemName: "arrow.up.circle.fill")
+                        .font(.system(size: 30))
+                        .symbolRenderingMode(.hierarchical)
+                }
+            }
+            .buttonStyle(.plain)
+            .disabled(!canSend)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .frame(maxWidth: 760)
+        .frame(maxWidth: .infinity)
+    }
+
+    private var canSend: Bool {
+        !core.chat.isResponding
+            && core.isReady
+            && !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private func send() {
+        // Guard on the SAME condition the Button uses — otherwise a Return key while
+        // the brain is warming or a prior answer is streaming would clear `draft` and
+        // then no-op in core.send/ChatSession.send, silently eating the message.
+        guard canSend else { return }
+        let text = draft.trimmingCharacters(in: .whitespacesAndNewlines)
+        draft = ""
+        inputFocused = false
+        Task { await core.send(text) }
+    }
+}

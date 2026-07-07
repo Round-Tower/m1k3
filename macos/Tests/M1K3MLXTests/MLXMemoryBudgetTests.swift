@@ -52,6 +52,27 @@ struct MLXMemoryBudgetTests {
         #expect(onetwentyeight.memoryLimitBytes == Int(gigabytes(12)))
     }
 
+    @Test("mobile profile caps the memory limit far below the desktop ceiling")
+    func mobileProfileUsesLowerCeiling() {
+        // iPad Pro / Vision Pro (16GB physical): the desktop path would allow 12GB,
+        // but the iOS/visionOS per-app jetsam budget is a fraction of physical RAM —
+        // the mobile ceiling (4GB) must win so MLX back-pressure engages BEFORE the
+        // OS jetsams the app. A 4-bit 4B brain + KV lives comfortably under it.
+        let mobile16 = MLXMemoryBudget.budget(forPhysicalMemory: gigabytes(16), profile: .mobile)
+        #expect(mobile16.memoryLimitBytes == Int(gigabytes(4)))
+        // iPhone (8GB): 75% would be 6GB desktop, still clamped to the 4GB ceiling.
+        let mobile8 = MLXMemoryBudget.budget(forPhysicalMemory: gigabytes(8), profile: .mobile)
+        #expect(mobile8.memoryLimitBytes == Int(gigabytes(4)))
+        // Below the ceiling the 75%-of-RAM rule still applies (small device).
+        let mobile4 = MLXMemoryBudget.budget(forPhysicalMemory: gigabytes(4), profile: .mobile)
+        #expect(mobile4.memoryLimitBytes == Int(gigabytes(3)))
+        // Desktop is the default and is unchanged (regression guard for the Mac path).
+        let desktop16 = MLXMemoryBudget.budget(forPhysicalMemory: gigabytes(16))
+        #expect(desktop16.memoryLimitBytes == Int(gigabytes(12)))
+        let desktop16Explicit = MLXMemoryBudget.budget(forPhysicalMemory: gigabytes(16), profile: .desktop)
+        #expect(desktop16Explicit.memoryLimitBytes == Int(gigabytes(12)))
+    }
+
     @Test("budget never shrinks as physical memory grows")
     func budgetIsMonotonic() {
         let samples = stride(from: 4.0, through: 128.0, by: 4.0)

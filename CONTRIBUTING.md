@@ -8,8 +8,9 @@ you from clone to green tests, and explains how we work.
 | Surface | Where | Status |
 |---|---|---|
 | **macOS app** (the flagship) | [`macos/`](./macos) | Active — this is where contributions land |
+| iOS + visionOS shell | [`macos/M1K3iOSApp/`](./macos/M1K3iOSApp) | Active — native SwiftUI on the shared `macos/Sources/` graph (`M1K3iOS`/`M1K3visionOS` targets). This is the Apple mobile/spatial path, **not** `app/`. |
 | Python CLI / MCP (the origins) | [`attic/`](./attic) | Archived, best-effort |
-| 間 AI mobile (KMP) | [`app/`](./app) | Slow burn |
+| 間 AI mobile (KMP) | [`app/`](./app) | Slow burn — the **Android** surface |
 
 Build-from-source instructions for the Mac app live in
 [`macos/README.md`](./macos/README.md).

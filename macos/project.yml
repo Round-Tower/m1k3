@@ -83,11 +83,15 @@ targets:
       - package: M1K3
         product: M1K3MCPKit
       - package: M1K3
+        product: M1K3MCPLog
+      - package: M1K3
         product: M1K3Eval
       - package: M1K3
         product: M1K3Launch
       - package: M1K3
         product: M1K3Memory
+      - package: M1K3
+        product: M1K3MemoryChatBridge
       - package: M1K3
         product: M1K3MemoryViz
       - package: M1K3
@@ -129,6 +133,96 @@ targets:
         # accidental mis-answer. Flip to true only if non-exempt crypto is ever added.
         ITSAppUsesNonExemptEncryption: false
 
+  # The iOS shipping shell — the shared adaptive app (2026-07-06). Grew out of the
+  # on-device derisk harness into the real, tabbed app (Chat / Memories / Documents
+  # / Settings) over the SAME package pipeline the Mac ships (AppCore.swift wires
+  # it; the Mac's AppEnvironment is untouched). Voice (AVAudioSession) + the in-app
+  # MCP server are the Phase-B/E follow-ons (docs/IOS_VISIONOS_PORT.md). Inherits
+  # DEVELOPMENT_TEAM + Automatic signing from the project base, so it provisions to
+  # a connected device with no extra config.
+  #
+  # The visionOS sibling target (M1K3visionOS) shares this exact source list +
+  # dependency set — the shell renders as a spatial window; the volumetric-avatar /
+  # walkable-constellation flagship is the Phase-D follow. Kept as two XcodeGen
+  # targets (one platform each) rather than one multi-platform target so each gets
+  # a clean, unambiguous Xcode Cloud archive lane.
+  M1K3iOS:
+    type: application
+    platform: iOS
+    deploymentTarget: "26.0"
+    sources: &mobileShellSources
+      - path: M1K3iOSApp
+      # Shared, cross-platform look-and-feel lifted from the macOS app target:
+      # the procedural pixel-face avatar (now #if-guarded for UIColor), its
+      # emotion→colour map (pure SwiftUI), and the Silkscreen pixel brand font.
+      - path: M1K3App/AvatarView.swift
+      - path: M1K3App/AvatarEmotion+SwiftUI.swift
+      - path: M1K3App/PixelFont.swift
+      - path: M1K3App/Resources/Fonts/Silkscreen-Regular.ttf
+        buildPhase: resources
+      - path: M1K3App/Resources/Fonts/Silkscreen-Bold.ttf
+        buildPhase: resources
+    dependencies: &mobileShellDeps
+      # The portable package pipeline (protocol-seam first, so it cross-compiles):
+      # RAG chat + knowledge + memory + inference + MLX + the agent tool loop +
+      # the avatar. NO Kokoro/WhisperKit/Calls/MCP — voice + the in-app server are
+      # Phase-B. M1K3Preview links transitively via M1K3AgentTools.
+      - package: M1K3
+        product: M1K3Chat
+      - package: M1K3
+        product: M1K3Knowledge
+      - package: M1K3
+        product: M1K3Memory
+      - package: M1K3
+        product: M1K3MemoryChatBridge
+      - package: M1K3
+        product: M1K3Inference
+      - package: M1K3
+        product: M1K3Agent
+      - package: M1K3
+        product: M1K3AgentTools
+      - package: M1K3
+        product: M1K3KnowledgeTools
+      - package: M1K3
+        product: M1K3MLX
+      - package: M1K3
+        product: M1K3Avatar
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: app.m1k3.ios
+        PRODUCT_NAME: M1K3iOS
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        TARGETED_DEVICE_FAMILY: "1,2"
+        SWIFT_VERSION: "6.2"
+    info:
+      path: M1K3iOSApp/Info.generated.plist
+      properties:
+        CFBundleDisplayName: M1K3
+        ITSAppUsesNonExemptEncryption: false
+
+  # visionOS sibling — same shell, same portable graph, rendered spatially as a
+  # window. The Kokoro visionOS gap (no xrOS ONNX slice) does NOT bite here: voice
+  # isn't wired in the shell yet. The Phase-D spatial flagship (volumetric avatar +
+  # walkable memory constellation) is the differentiated follow.
+  M1K3visionOS:
+    type: application
+    platform: visionOS
+    deploymentTarget: "26.0"
+    sources: *mobileShellSources
+    dependencies: *mobileShellDeps
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: app.m1k3.visionos
+        PRODUCT_NAME: M1K3visionOS
+        GENERATE_INFOPLIST_FILE: YES
+        SWIFT_VERSION: "6.2"
+    info:
+      path: M1K3iOSApp/Info.generated.plist
+      properties:
+        CFBundleDisplayName: M1K3
+        ITSAppUsesNonExemptEncryption: false
+
 # A SHARED M1K3 scheme, explicit so xcodegen emits it to xcshareddata/xcschemes/.
 # Without this, Xcode only auto-creates an ephemeral user scheme — invisible to
 # Xcode Cloud (which can build only shared schemes). Because the pbxproj is
@@ -142,6 +236,32 @@ schemes:
     run:
       config: Debug
     test:
+      config: Debug
+    profile:
+      config: Release
+    analyze:
+      config: Debug
+    archive:
+      config: Release
+  # The iOS shell scheme — select this + your iPhone (or a Simulator), then ⌘R.
+  M1K3iOS:
+    build:
+      targets:
+        M1K3iOS: all
+    run:
+      config: Debug
+    profile:
+      config: Release
+    analyze:
+      config: Debug
+    archive:
+      config: Release
+  # The visionOS shell scheme — select this + a Vision Pro (or its Simulator).
+  M1K3visionOS:
+    build:
+      targets:
+        M1K3visionOS: all
+    run:
       config: Debug
     profile:
       config: Release

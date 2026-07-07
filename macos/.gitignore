@@ -1,5 +1,7 @@
 # Swift Package Manager
 .build/
+# xcodebuild -clonedSourcePackagesDirPath cache (local build artifact).
+.spm-cache/
 .swiftpm/
 # NOTE: Package.resolved IS committed (not ignored). Xcode Cloud disables
 # automatic package resolution and requires a committed lockfile; ci_post_clone.sh
@@ -15,6 +17,7 @@ xcuserdata/
 # project + generated plist with `xcodegen generate`.
 M1K3.xcodeproj/
 M1K3App/Info.generated.plist
+M1K3iOSApp/Info.generated.plist
 
 # macOS
 .DS_Store

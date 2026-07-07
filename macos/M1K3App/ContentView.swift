@@ -29,6 +29,7 @@ import UniformTypeIdentifiers
 
 struct ContentView: View {
     @Environment(AppEnvironment.self) private var env
+    @Environment(\.openWindow) private var openWindow
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     @State private var draft = ""
@@ -456,9 +457,14 @@ struct ContentView: View {
         } else if env.modelLoad.isActive {
             HStack(spacing: 6) {
                 ProgressView().controlSize(.small)
-                Text(env.modelLoad.label(modelName: env.downloadingBrainName))
-                    .font(.caption.monospacedDigit())
-                    .foregroundStyle(.secondary)
+                // Minimal chrome: just the percentage while downloading; the
+                // spinner alone carries "preparing" (there's no honest number).
+                let compact = env.modelLoad.compactLabel
+                if !compact.isEmpty {
+                    Text(compact)
+                        .font(.caption.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                }
             }
         } else if !env.providerAvailable {
             Label("Model unavailable", systemImage: "exclamationmark.triangle")
@@ -589,6 +595,11 @@ struct ContentView: View {
                 Label("History", systemImage: "clock.arrow.circlepath")
             }
             .help("Browse and switch between past conversations")
+
+            Button { openWindow(id: M1K3App.agentLogWindowID) } label: {
+                Label("Agent Log", systemImage: "bubble.left.and.bubble.right")
+            }
+            .help("Review MCP tool calls captured from connected agents (opt-in)")
 
             // One control for the avatar: panel / full-window background / off.
             Menu {

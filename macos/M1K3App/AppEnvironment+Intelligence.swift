@@ -190,15 +190,5 @@ extension AppEnvironment {
     }
 }
 
-/// Adapts the concrete `MemoryStore` graph to M1K3Chat's `DistilledFactGraphWriting`
-/// seam, so the distillation coordinator mirrors NEW facts into the graph without
-/// M1K3Chat depending on M1K3Memory. Distilled facts land as `.note` nodes tagged
-/// `distilled` — the same shape as the explicit remember dual-write above. The
-/// embedding is the coordinator's (computed with the shared `swappable` embedder
-/// recall also queries with), so graph writes and recall share one space.
-struct DistilledFactGraphAdapter: DistilledFactGraphWriting {
-    let store: MemoryStore
-    func writeDistilledFact(_ text: String, embedding: [Float]) async throws {
-        try store.rememberConnected(Memory(kind: .note, text: text, source: "distilled"), embedding: embedding)
-    }
-}
+// DistilledFactGraphAdapter moved to the M1K3MemoryChatBridge package target
+// (2026-07-07) so the iOS/visionOS shell reuses the same Chat→graph dual-write.
