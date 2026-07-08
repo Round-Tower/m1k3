@@ -57,15 +57,17 @@ extension AppEnvironment {
     /// "Let M1K3 choose" can ask "what would auto-route pick?" without committing.
     func resolvedAutoRouteTier() -> BrainTier {
         let defaults = UserDefaults.standard
-        // TODO: (ADR 0001 Edge A): replace with a DEDICATED egress-consent key when the
-        // network rungs are wired. The web-search toggle is a provisional proxy only —
-        // third-party cloud escalation (chat → Claude/Gemini) is a far bigger privacy
-        // step than a web search and needs its own per-request consent flow.
-        let webAllowed = defaults.object(forKey: Self.webSearchEnabledKey) == nil
-            || defaults.bool(forKey: Self.webSearchEnabledKey)
+        // Phase 17a (resolves the old Edge-A placeholder): the ladder's egress gate reads
+        // its own DEDICATED default-OFF consent key — never the web-search toggle,
+        // which defaults ON and governs web TOOLS (a different egress category).
+        // No UI writes this yet by design; the consent surface ships WITH the PCC
+        // rung (17b) so no dead control reaches macOS 26 builds.
+        let egressAllowed = ChatEgressConsent.networkAllowed(
+            persisted: defaults.object(forKey: ChatEgressConsent.defaultsKey) as? Bool
+        )
         let route = M1K3BrainRouter.route(
             appleIntelligenceAvailable: Self.afmAvailabilityProbe.isAvailable,
-            networkAllowed: webAllowed,
+            networkAllowed: egressAllowed,
             preferAppleOnDevice: defaults.bool(forKey: Self.preferAppleOnDeviceKey)
         )
 

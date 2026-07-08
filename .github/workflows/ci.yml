@@ -108,6 +108,64 @@ jobs:
             CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
             build | xcbeautify
 
+  mobile-build:
+    name: Swift · iOS + visionOS shells (xcodebuild)
+    # The iOS/visionOS shell (M1K3iOSApp/ on the portable package graph) was
+    # local-verify-only since PR #9 — a PR could break the mobile compile and
+    # first fail at release. Builds both schemes unsigned against the SIMULATOR
+    # SDKs (generic destination, no boot) purely to prove compile + link. One
+    # job, two steps: the checkout/xcodegen/SPM-resolve cost is paid once and
+    # the visionOS build reuses the shared clone cache. The macos-26 runner
+    # image ships the visionOS SDK + simulators (verified 2026-07-08).
+    runs-on: macos-26
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Select Xcode (26.x, pinned)
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: "26" # same deliberate-bump rule as app-build
+
+      - name: Cache resolved packages
+        uses: actions/cache@v4
+        with:
+          path: macos/.spm-cache
+          key: xcodebuild-spm-mobile-${{ runner.os }}-${{ hashFiles('macos/Package.resolved') }}
+          restore-keys: xcodebuild-spm-mobile-${{ runner.os }}-
+
+      - name: Install xcodegen + xcbeautify
+        run: brew install xcodegen xcbeautify
+
+      - name: Generate Xcode project
+        working-directory: macos
+        run: xcodegen generate
+
+      - name: Build iOS app (unsigned, simulator SDK)
+        working-directory: macos
+        run: |
+          xcodebuild \
+            -project M1K3.xcodeproj \
+            -scheme M1K3iOS \
+            -destination 'generic/platform=iOS Simulator' \
+            -clonedSourcePackagesDirPath .spm-cache \
+            -skipPackagePluginValidation \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            build | xcbeautify
+
+      - name: Build visionOS app (unsigned, simulator SDK)
+        working-directory: macos
+        run: |
+          xcodebuild \
+            -project M1K3.xcodeproj \
+            -scheme M1K3visionOS \
+            -destination 'generic/platform=visionOS Simulator' \
+            -clonedSourcePackagesDirPath .spm-cache \
+            -skipPackagePluginValidation \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            build | xcbeautify
+
   scheme-drift:
     # The native Xcode Cloud Test action runs the test targets hand-listed in the
     # M1K3-Tests workspace scheme (the app project can't reference package test
@@ -143,7 +201,7 @@ jobs:
   # SLACK_WEBHOOK_URL = a Slack incoming-webhook URL (posts to its bound channel).
   notify:
     name: Notify Slack
-    needs: [swift-mac, app-build, scheme-drift, doc-drift]
+    needs: [swift-mac, app-build, mobile-build, scheme-drift, doc-drift]
     runs-on: ubuntu-latest
     if: always()
     env:
@@ -153,12 +211,13 @@ jobs:
         if: env.SLACK_WEBHOOK_URL != ''
         uses: act10ns/slack@v2.2.0
         with:
-          status: ${{ (needs.swift-mac.result == 'success' && needs.app-build.result == 'success' && needs.scheme-drift.result == 'success' && needs.doc-drift.result == 'success') && 'success' || 'failure' }}
+          status: ${{ (needs.swift-mac.result == 'success' && needs.app-build.result == 'success' && needs.mobile-build.result == 'success' && needs.scheme-drift.result == 'success' && needs.doc-drift.result == 'success') && 'success' || 'failure' }}
           message: |
             M1K3 CI · ${{ github.ref_name }} (${{ github.event_name }})
 
             ${{ needs.swift-mac.result == 'success' && '✅' || '❌' }} : Swift · Mac MVP (swift test)
             ${{ needs.app-build.result == 'success' && '✅' || '❌' }} : Swift · App shell (xcodebuild)
+            ${{ needs.mobile-build.result == 'success' && '✅' || '❌' }} : Swift · iOS + visionOS shells (xcodebuild)
             ${{ needs.scheme-drift.result == 'success' && '✅' || '❌' }} : Test scheme covers all targets
             ${{ needs.doc-drift.result == 'success' && '✅' || '❌' }} : Docs match the code (module map)
 

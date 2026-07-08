@@ -45,8 +45,10 @@ xcodebuild -scheme M1K3 -destination 'platform=macOS' build | xcbeautify   # alw
   `macos-26` runner with `M1K3_MLX_INTEGRATION=0`, plus a curated Python smoke
   subset for the legacy tree. PR CI also runs an `app-build` job (xcodegen
   generate + unsigned `xcodebuild -scheme M1K3` on `macos-26`) so app-shell
-  compile breaks in `M1K3App/` fail at PR time, not only at release. The app
-  target builds for distribution via Xcode Cloud →
+  compile breaks in `M1K3App/` fail at PR time, not only at release, and a
+  `mobile-build` job (unsigned `M1K3iOS` + `M1K3visionOS` against the
+  simulator SDKs) so the iOS/visionOS shell can't silently break either.
+  The app target builds for distribution via Xcode Cloud →
   TestFlight; pushing to `master` triggers that pipeline (a deliberate,
   user-gated action).
 - Tests use the **swift-testing** framework (`import Testing`, `@Test`), not

@@ -9,6 +9,7 @@
 
 import Foundation
 @testable import M1K3MCPKit
+import M1K3Memory
 import MCP
 import Testing
 
@@ -36,8 +37,8 @@ private func makeHandlers(log: CallLog, askThrows: Bool = false) -> Intelligence
             log.add("ask:\(question)")
             return "Grounded answer [Doc §Heading]"
         },
-        remember: { title, text in
-            log.add("remember:\(title):\(text.count)")
+        remember: { title, text, kind in
+            log.add("remember:\(title):\(text.count):\(kind.rawValue)")
             return "Indexed “\(title)” — 2 chunks."
         }
     )
@@ -113,7 +114,7 @@ struct IntelligenceMCPToolsTests {
                 try await Task.sleep(for: .seconds(60))
                 return "arrives after the grace window"
             },
-            remember: { _, _ in "noop" }
+            remember: { _, _, _ in "noop" }
         )
         let registry = MCPToolRegistry(
             makeIntelligenceToolDefinitions(handlers: handlers, graceSeconds: 0.2)
@@ -155,7 +156,7 @@ struct IntelligenceMCPToolsTests {
                 await gate.wait()
                 return "delayed answer [Doc §Heading]"
             },
-            remember: { _, _ in "noop" }
+            remember: { _, _, _ in "noop" }
         )
         let registry = MCPToolRegistry(
             makeIntelligenceToolDefinitions(handlers: handlers, jobStore: store, graceSeconds: 0.2)
@@ -191,7 +192,7 @@ struct IntelligenceMCPToolsTests {
                 await gate.wait()
                 return "delayed answer [Doc §Heading]"
             },
-            remember: { _, _ in "noop" }
+            remember: { _, _, _ in "noop" }
         )
         let registry = MCPToolRegistry(
             makeIntelligenceToolDefinitions(handlers: handlers, jobStore: store, graceSeconds: 0.2)
@@ -252,7 +253,7 @@ struct IntelligenceMCPToolsTests {
                 try await Task.sleep(for: .seconds(60))
                 return "never arrives in time"
             },
-            remember: { _, _ in "noop" }
+            remember: { _, _, _ in "noop" }
         )
         let registry = MCPToolRegistry(
             makeIntelligenceToolDefinitions(handlers: handlers, jobStore: store, graceSeconds: 0.2)
@@ -291,7 +292,49 @@ struct IntelligenceMCPToolsTests {
         )
         #expect(result.isError != true)
         #expect(text(result)?.contains("Session notes") == true)
-        #expect(log.all == ["remember:Session notes:27"])
+        #expect(log.all == ["remember:Session notes:27:note"])
+    }
+
+    @Test("remember passes a catalogued kind through to the handler")
+    func rememberCataloguedKind() async {
+        let log = CallLog()
+        let registry = MCPToolRegistry(makeIntelligenceToolDefinitions(handlers: makeHandlers(log: log)))
+        let result = await registry.call(
+            name: "remember",
+            arguments: [
+                "title": .string("Kev's sister"), "text": .string("Kev's sister is called Aoife."),
+                "kind": .string("profile"),
+            ]
+        )
+        #expect(result.isError != true)
+        #expect(log.all == ["remember:Kev's sister:29:profile"])
+    }
+
+    @Test("an unknown kind label misclassifies to note — it never rejects the fact")
+    func rememberUnknownKindFallsBackToNote() async {
+        let log = CallLog()
+        let registry = MCPToolRegistry(makeIntelligenceToolDefinitions(handlers: makeHandlers(log: log)))
+        let result = await registry.call(
+            name: "remember",
+            arguments: [
+                "title": .string("t1"), "text": .string("a durable fact"),
+                "kind": .string("banana"),
+            ]
+        )
+        #expect(result.isError != true)
+        #expect(log.all == ["remember:t1:14:note"])
+    }
+
+    @Test("the remember schema advertises the catalogued kind vocabulary")
+    func rememberSchemaAdvertisesKinds() {
+        let registry = MCPToolRegistry(makeIntelligenceToolDefinitions(handlers: makeHandlers(log: CallLog())))
+        let remember = registry.tools.first { $0.name == "remember" }
+        let schema = String(describing: remember?.inputSchema)
+        for kind in MemoryKind.catalogued {
+            #expect(schema.contains(kind.rawValue))
+        }
+        // Optional param: stale clients that don't send it keep working.
+        #expect(!schema.contains("\"required\": [\"title\", \"text\", \"kind\"]"))
     }
 
     @Test("remember requires both title and text")

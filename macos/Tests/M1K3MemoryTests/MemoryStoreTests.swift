@@ -105,6 +105,33 @@ struct MemoryStoreWriteRecallTests {
     }
 }
 
+struct MemoryKindCataloguedTests {
+    // The catalogued vocabulary is the closed set external surfaces (MCP tools,
+    // UIs) may offer; the open string-backed enum stays open for storage. An
+    // externally-supplied label parses to a catalogued kind or falls back to
+    // .note — a bad label never rejects a fact (the distiller's own doctrine).
+
+    @Test("every catalogued label round-trips")
+    func cataloguedLabelsRoundTrip() {
+        for kind in MemoryKind.catalogued {
+            #expect(MemoryKind(catalogued: kind.rawValue) == kind)
+        }
+    }
+
+    @Test("unknown, empty, and absent labels fall back to note")
+    func unknownFallsBackToNote() {
+        #expect(MemoryKind(catalogued: "banana") == .note)
+        #expect(MemoryKind(catalogued: "") == .note)
+        #expect(MemoryKind(catalogued: nil) == .note)
+    }
+
+    @Test("labels are case-insensitive and whitespace-tolerant")
+    func labelsNormalized() {
+        #expect(MemoryKind(catalogued: "PROFILE") == .profile)
+        #expect(MemoryKind(catalogued: " decision ") == .decision)
+    }
+}
+
 struct MemoryStoreThresholdTests {
     // The GroundingGate.filter lesson applied at source: a keyword-only hit that
     // fails the cosine bar must NOT sneak through recall.

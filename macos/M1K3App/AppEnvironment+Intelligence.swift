@@ -152,9 +152,13 @@ extension AppEnvironment {
     /// Persist a fact to memory — the core behind the MCP `remember` tool and the
     /// Remember App Intent: KnowledgeStore (`.memory`) ingest + best-effort
     /// dual-write into the temporal memory graph. `provenance` tags the graph
-    /// fact's source (`mcp:remember` / `intent:remember`). Returns a human
-    /// confirmation. Dedup-safe: remembering identical text collapses to one row.
-    func intelligenceRemember(title: String, text: String, provenance: String) async throws -> String {
+    /// fact's source (`mcp:remember` / `intent:remember`); `kind` is the caller's
+    /// classification for the graph node (defaults `.note` — the App Intent
+    /// doesn't classify yet). Returns a human confirmation. Dedup-safe:
+    /// remembering identical text collapses to one row.
+    func intelligenceRemember(
+        title: String, text: String, provenance: String, kind: MemoryKind = .note
+    ) async throws -> String {
         let result = try await ingester.ingest(
             title: title,
             text: text,
@@ -167,7 +171,7 @@ extension AppEnvironment {
         // retry stays silent and skips the (additive, best-effort) dual-write.
         if !result.wasDeduped {
             soundEffects.play(.save)
-            await dualWriteRememberedFact(text: text, provenance: provenance)
+            await dualWriteRememberedFact(text: text, provenance: provenance, kind: kind)
         }
         let dedup = result.wasDeduped ? " (already remembered)" : ""
         return "Remembered “\(title)”\(dedup)."
@@ -176,11 +180,11 @@ extension AppEnvironment {
     /// Best-effort write of a remembered fact into the temporal memory graph.
     /// Embeds via the SAME embedder the recall tools query with (shared space).
     /// Swallows every error — never a gate on the proven KnowledgeStore remember.
-    private func dualWriteRememberedFact(text: String, provenance: String) async {
+    private func dualWriteRememberedFact(text: String, provenance: String, kind: MemoryKind) async {
         guard let memoryStore else { return }
         do {
             let vector = try await embedder.embed(text)
-            let fact = Memory(kind: .note, text: text, source: provenance)
+            let fact = Memory(kind: kind, text: text, source: provenance)
             try memoryStore.rememberConnected(fact, embedding: vector)
         } catch {
             Self.memoryLog.error(

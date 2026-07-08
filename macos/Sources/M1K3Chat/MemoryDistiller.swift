@@ -150,8 +150,11 @@ public enum MemoryFactParser {
     /// Split one "FACT: …" / "FACT(<kind>): …" line. An unrecognized kind
     /// label falls back to `.note` when the line is otherwise well-formed,
     /// and whitespace around the delimiters is tolerated ("FACT (kind) : …")
-    /// — a sloppy model misclassifies, it never loses a fact. A line that
-    /// isn't a FACT line at all (no colon, unclosed paren) returns nil.
+    /// — a sloppy model misclassifies, it never loses a fact. Any
+    /// FACT-prefixed word ("FACTUAL:") enters provisionally and is rejected
+    /// by the delimiter guards — a bare `hasPrefix("FACT:")` can't coexist
+    /// with the whitespace tolerance, so the guards ARE the boundary. A line
+    /// that isn't a FACT line at all (no colon, unclosed paren) returns nil.
     private static func factLine(_ line: String) -> (kind: DistilledFactKind, fact: String)? {
         guard line.hasPrefix("FACT") else { return nil }
         var rest = line.dropFirst("FACT".count).drop(while: \.isWhitespace)
