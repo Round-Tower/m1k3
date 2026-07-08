@@ -101,10 +101,22 @@ public struct MemoryKind: RawRepresentable, Hashable, Sendable, Codable {
     public static let episode = MemoryKind(rawValue: "episode")
     /// Anything else worth keeping.
     public static let note = MemoryKind(rawValue: "note")
-    // The distilled write path classifies as of 2026-07-08 (DistilledFactKind
-    // in M1K3Chat, mapped across the bridge). The explicit MCP `remember`
-    // dual-write still tags `.note` — an agent-supplied kind on that tool is
-    // the remaining half.
+    // Both write paths classify as of 2026-07-08: the distiller via
+    // DistilledFactKind (M1K3Chat, mapped across the bridge) and the explicit
+    // MCP `remember` tool via an agent-supplied catalogued label.
+
+    /// The catalogued vocabulary — the closed set external surfaces (MCP tools,
+    /// UIs) may offer. The enum itself stays open for storage/migration; this
+    /// is what gets advertised.
+    public static let catalogued: [MemoryKind] = [.profile, .preference, .decision, .episode, .note]
+
+    /// Parse an externally-supplied kind label: a catalogued match
+    /// (case-insensitive, trimmed) or `.note`. A bad label misclassifies,
+    /// it never rejects a fact — the same doctrine as the distiller's parser.
+    public init(catalogued raw: String?) {
+        let label = raw?.trimmingCharacters(in: .whitespaces).lowercased() ?? ""
+        self = Self.catalogued.first { $0.rawValue == label } ?? .note
+    }
 }
 
 /// One atomic memory. Small, deletable, supersedable.

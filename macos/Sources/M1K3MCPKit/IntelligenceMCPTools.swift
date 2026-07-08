@@ -42,6 +42,7 @@
 //
 
 import Foundation
+import M1K3Memory
 import MCP
 
 /// The app-injected implementations behind the intelligence tools.
@@ -50,12 +51,14 @@ public struct IntelligenceToolHandlers: Sendable {
     /// reasoning stripped, sources appended).
     public var ask: @Sendable (_ question: String) async throws -> String
     /// Index text into the knowledge store. Returns a human confirmation
-    /// ("Indexed "Title" — 4 chunks.").
-    public var remember: @Sendable (_ title: String, _ text: String) async throws -> String
+    /// ("Indexed "Title" — 4 chunks."). `kind` is the caller's classification
+    /// for the memory-graph node — already validated to the catalogued set
+    /// (an off-vocabulary label arrives here as `.note`).
+    public var remember: @Sendable (_ title: String, _ text: String, _ kind: MemoryKind) async throws -> String
 
     public init(
         ask: @escaping @Sendable (_ question: String) async throws -> String,
-        remember: @escaping @Sendable (_ title: String, _ text: String) async throws -> String
+        remember: @escaping @Sendable (_ title: String, _ text: String, _ kind: MemoryKind) async throws -> String
     ) {
         self.ask = ask
         self.remember = remember
@@ -143,6 +146,16 @@ private func rememberDefinition(handlers: IntelligenceToolHandlers) -> MCPToolDe
                 "properties": [
                     "title": ["type": "string", "description": "a short title for the entry"],
                     "text": ["type": "string", "description": "the content to index"],
+                    "kind": [
+                        "type": "string",
+                        "enum": .array(MemoryKind.catalogued.map { .string($0.rawValue) }),
+                        "description": .string(
+                            "what kind of fact this is: profile (a stable fact "
+                                + "about the user), preference (a standing preference), decision "
+                                + "(a decision and why), episode (something that happened), or "
+                                + "note (anything else — the default when omitted)"
+                        ),
+                    ],
                 ],
                 "required": ["title", "text"],
             ]
@@ -153,7 +166,10 @@ private func rememberDefinition(handlers: IntelligenceToolHandlers) -> MCPToolDe
             guard !title.isEmpty, !text.isEmpty else {
                 throw MCPVoiceError("remember requires both a title and text")
             }
-            return try await handlers.remember(title, text)
+            // Off-vocabulary labels misclassify to .note, never reject — the
+            // same doctrine as the distiller's parser.
+            let kind = MemoryKind(catalogued: stringArg(args, "kind"))
+            return try await handlers.remember(title, text, kind)
         }
     )
 }

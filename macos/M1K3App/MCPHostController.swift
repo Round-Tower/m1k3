@@ -205,10 +205,10 @@ final class MCPHostController {
                 guard let self else { throw MCPVoiceError("M1K3 is shutting down") }
                 return try await self.env.intelligenceAsk(question)
             },
-            remember: { [weak self] title, text in
+            remember: { [weak self] title, text, kind in
                 guard let self else { throw MCPVoiceError("M1K3 is shutting down") }
                 return try await self.env.intelligenceRemember(
-                    title: title, text: text, provenance: "mcp:remember"
+                    title: title, text: text, provenance: "mcp:remember", kind: kind
                 )
             }
         )
