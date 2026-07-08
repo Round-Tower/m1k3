@@ -108,6 +108,14 @@ struct MemoryStoreWriteRecallTests {
 struct MemoryStoreThresholdTests {
     // The GroundingGate.filter lesson applied at source: a keyword-only hit that
     // fails the cosine bar must NOT sneak through recall.
+    //
+    // Review (2026-07-08, Kev + claude-fable-5): the recall floor moved from
+    // chunkThreshold (0.51) to memoryThreshold (0.39) — memories are atomic
+    // facts, and query→short-fact cosines sit lower in the cone than
+    // query→chunk (the MEMEVAL rationale on GroundingGate.memoryThreshold).
+    // The old exclusion case (1/√6 ≈ 0.408) is now the INCLUSION case, and the
+    // exclusion contract re-pins at 1/√7 ≈ 0.378 — keyword-only hits below the
+    // bar still never sneak through; only the bar itself moved.
 
     @Test("an exact-overlap hit clears the cosine bar and is returned")
     func aboveThresholdIncluded() async throws {
@@ -117,12 +125,24 @@ struct MemoryStoreThresholdTests {
         #expect(hits.contains { $0.memory.id == m.id })
     }
 
-    @Test("a keyword-only hit below the cosine bar is excluded")
+    @Test("an atomic fact above the memory floor (0.39) but under the chunk bar is recalled")
+    func atomicFactAboveMemoryFloorIncluded() async throws {
+        let f = try Fixture()
+        // Shares exactly ONE token with the query out of six → cosine = 1/√6 ≈ 0.408:
+        // above memoryThreshold (0.39), below chunkThreshold (0.51). This is the
+        // identity-fact class ("Kev lives in Cork" scored 0.393 on device) whose
+        // live recall-failure drove the parity fix.
+        let m = try await f.remember("alpha beta gamma delta epsilon zeta")
+        let hits = try f.store.recall(query: "alpha", queryVector: await f.vec("alpha"))
+        #expect(hits.contains { $0.memory.id == m.id })
+    }
+
+    @Test("a keyword-only hit below the memory floor is excluded")
     func keywordOnlyBelowThresholdExcluded() async throws {
         let f = try Fixture()
-        // Shares exactly ONE token with the query out of six → cosine = 1/√6 ≈ 0.408,
-        // under chunkThreshold (0.51). FTS MATCH "alpha" still hits it.
-        let m = try await f.remember("alpha beta gamma delta epsilon zeta")
+        // Shares exactly ONE token with the query out of seven → cosine = 1/√7 ≈ 0.378,
+        // under memoryThreshold (0.39). FTS MATCH "alpha" still hits it.
+        let m = try await f.remember("alpha beta gamma delta epsilon zeta eta")
         let hits = try f.store.recall(query: "alpha", queryVector: await f.vec("alpha"))
         #expect(!hits.contains { $0.memory.id == m.id })
     }

@@ -10,7 +10,7 @@
 //  fill on visionOS — same rounded-rect shape, one call site to evolve when the
 //  spatial flagship (Phase D) gives these a proper volumetric treatment.
 //
-//  Signed: Kev + claude-fable-5, 2026-07-06, Confidence 0.8. Prior: Unknown.
+//  Signed: Kev + claude-opus-4-8, 2026-07-06, Confidence 0.8. Prior: Unknown.
 //
 
 import SwiftUI

@@ -40,7 +40,7 @@ public enum ForgetOutcome: Sendable, Equatable {
 
 /// Decides whether a recall result is a confident-enough match to hard-delete.
 public enum ForgetResolver {
-    /// The forget bar. Higher than recall's `GroundingGate.chunkThreshold` (0.51)
+    /// The forget bar. Well above recall's `GroundingGate.memoryThreshold` (0.39)
     /// because deletion is irreversible — a recall match that's merely "relevant"
     /// must not be enough to erase a fact. 0.6 ≈ "clearly the same fact".
     public static let floor: Float = 0.6

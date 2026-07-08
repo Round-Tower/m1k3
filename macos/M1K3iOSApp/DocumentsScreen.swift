@@ -6,7 +6,7 @@
 //  delete. Ingest runs the SAME DocumentIngester the Mac app uses (embed → chunk →
 //  index), so anything added here becomes retrievable by the chat's grounding.
 //
-//  Signed: Kev + claude-fable-5, 2026-07-06, Confidence 0.8. Prior: Unknown.
+//  Signed: Kev + claude-opus-4-8, 2026-07-06, Confidence 0.8. Prior: Unknown.
 //
 
 import M1K3Knowledge

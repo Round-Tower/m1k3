@@ -10,7 +10,7 @@
 //  `RootView` (Chat / Memories / Documents / Settings) over the SAME package
 //  pipeline the Mac app ships. The Mac's `AppEnvironment` is untouched.
 //
-//  Signed: Kev + claude-fable-5, 2026-07-06, Confidence 0.8 (compile-verified for
+//  Signed: Kev + claude-opus-4-8, 2026-07-06, Confidence 0.8 (compile-verified for
 //  iOS + visionOS; on-device run is the Phase-B verify-owed — MLX needs Metal,
 //  absent on the simulator). Prior: Kev + claude-fable-5 (the harness form).
 //

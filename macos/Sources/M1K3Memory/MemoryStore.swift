@@ -42,9 +42,13 @@
 //  4. Same EmbedderReindexPolicy doctrine as KnowledgeStore: vectors carry an
 //     embedder fingerprint in a meta table; kernel bump → one-time re-index.
 //
-//  5. Retrieval cutoff: reuse GroundingGate.chunkThreshold. FTS-only hits must
-//     NOT bypass the bar when recall is implicit — the exact leak
-//     GroundingGate.filter fixed.
+//  5. Retrieval cutoff: reuse GroundingGate.memoryThreshold (0.39) — memories
+//     are atomic facts, and query→short-fact cosines sit lower in the cone
+//     than query→chunk (the MEMEVAL rationale on that constant). Was
+//     chunkThreshold (0.51) until 2026-07-08; the stricter chunk bar silently
+//     dropped the identity-fact class the corpus memory lane already recalls.
+//     FTS-only hits still must NOT bypass the bar when recall is implicit —
+//     the exact leak GroundingGate.filter fixed; only the bar moved.
 //
 //  6. SEPARATE DATABASE FILE (memory.sqlite), not new tables in knowledge.db.
 //     Different lifecycle (sync/export/forget-all), different consent story,
@@ -97,8 +101,10 @@ public struct MemoryKind: RawRepresentable, Hashable, Sendable, Codable {
     public static let episode = MemoryKind(rawValue: "episode")
     /// Anything else worth keeping.
     public static let note = MemoryKind(rawValue: "note")
-    // TODO: both write paths currently tag every fact `.note`; the richer kinds
-    // above stay unused until the distiller classifies (profile/preference/…).
+    // The distilled write path classifies as of 2026-07-08 (DistilledFactKind
+    // in M1K3Chat, mapped across the bridge). The explicit MCP `remember`
+    // dual-write still tags `.note` — an agent-supplied kind on that tool is
+    // the remaining half.
 }
 
 /// One atomic memory. Small, deletable, supersedable.
@@ -313,9 +319,14 @@ public final class MemoryStore: @unchecked Sendable {
     /// facts above `threshold`, capped at `maxLinks`. This is what makes the
     /// store an actual graph as it grows — plain `remember` only ever creates a
     /// node (and a supersedes edge on correction), which left `related` and the
-    /// constellation edgeless in production. The cosine bar (default = the recall
-    /// cutoff) keeps unrelated facts unlinked; `maxLinks` caps degree so a common
-    /// topic can't hairball. Returns the number of edges created.
+    /// constellation edgeless in production. The cosine bar keeps unrelated
+    /// facts unlinked — DELIBERATELY stricter than recall's memoryThreshold
+    /// (0.39) since 2026-07-08: a weak recall hit is one extra line in a
+    /// prompt, a weak edge is permanent graph structure feeding traversal, so
+    /// edges keep the chunk bar (0.51) to avoid hairballing. Revisit if the
+    /// constellation looks under-linked for identity facts. `maxLinks` caps
+    /// degree so a common topic can't hairball. Returns the number of edges
+    /// created.
     ///
     /// Node + edges are SEPARATE writes (not one transaction): a crash mid-loop
     /// leaves the node intact and recallable with some edges missing — acceptable
@@ -384,7 +395,7 @@ public final class MemoryStore: @unchecked Sendable {
         query: String,
         queryVector: [Float],
         limit: Int = 5,
-        threshold: Float = GroundingGate.chunkThreshold
+        threshold: Float = GroundingGate.memoryThreshold
     ) throws -> [MemoryHit] {
         let ftsHits = try recallFTS(query: query, limit: limit * 2)
         let vectorHits = try recallVector(queryVector: queryVector, limit: limit * 2)

@@ -38,7 +38,7 @@ import os
 // The whole recorder is guarded so the M1K3Calls library compiles on iOS/visionOS;
 // the shared adaptive shell reaches call-recording only on macOS. On mobile the
 // feature is simply absent (a Phase-2 decision, not a silent stub).
-// Signed: Kev + claude-fable-5, 2026-07-06, Confidence 0.8, Prior: Kev + claude-opus-4-8
+// Signed: Kev + claude-opus-4-8, 2026-07-06, Confidence 0.8, Prior: Kev + claude-opus-4-8
 #if canImport(ScreenCaptureKit)
     import ScreenCaptureKit
 

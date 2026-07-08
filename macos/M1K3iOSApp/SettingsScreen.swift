@@ -7,7 +7,7 @@
 //  Qwen3-4B); Big (gemma-4-e4b, ~7 GB at inference) exceeds any current mobile
 //  budget and is deliberately not offered (BrainTier.recommended(platform:.mobile)).
 //
-//  Signed: Kev + claude-fable-5, 2026-07-06, Confidence 0.8. Prior: Unknown.
+//  Signed: Kev + claude-opus-4-8, 2026-07-06, Confidence 0.8. Prior: Unknown.
 //
 
 import M1K3Inference

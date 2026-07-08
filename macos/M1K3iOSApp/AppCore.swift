@@ -19,7 +19,7 @@
 //  in-app MCP server, call intelligence, Kokoro TTS. The mobile ladder tops out
 //  at Lil (BrainTier.recommended(platform: .mobile)) — iPhones stay on Mini.
 //
-//  Signed: Kev + claude-fable-5, 2026-07-06, Confidence 0.75 (compile-verified
+//  Signed: Kev + claude-opus-4-8, 2026-07-06, Confidence 0.75 (compile-verified
 //  for iOS/visionOS; on-device RUN is the Phase-B verify-owed — MLX needs Metal,
 //  which the simulator can't run). Prior: Unknown.
 //

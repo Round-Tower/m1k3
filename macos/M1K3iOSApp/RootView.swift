@@ -10,7 +10,7 @@
 //  Documents), Settings at the foot. The spatial flagship (volumetric avatar +
 //  walkable constellation) is the Phase-D follow.
 //
-//  Signed: Kev + claude-fable-5, 2026-07-06, Confidence 0.8. Prior: Kev +
+//  Signed: Kev + claude-opus-4-8, 2026-07-06, Confidence 0.8. Prior: Kev +
 //  claude-fable-5 (the TabView form).
 //
 

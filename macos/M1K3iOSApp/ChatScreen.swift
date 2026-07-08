@@ -8,7 +8,7 @@
 //  it's underway (the Mac's hero→dock evolution). Nothing here is a mock — every
 //  answer runs the same `AgentRAGResponder` the Mac app ships.
 //
-//  Signed: Kev + claude-fable-5, 2026-07-06, Confidence 0.8 (compile-verified;
+//  Signed: Kev + claude-opus-4-8, 2026-07-06, Confidence 0.8 (compile-verified;
 //  on-device streaming feel is Phase-B verify-owed). Prior: Unknown.
 //
 

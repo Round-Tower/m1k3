@@ -8,7 +8,7 @@
 //  iPad Pro / Vision Pro can pick Lil. No GB download bar on the entry screen:
 //  Mini is instant, and Lil's download is honest and deferred to first use.
 //
-//  Signed: Kev + claude-fable-5, 2026-07-06, Confidence 0.75. Prior: Unknown.
+//  Signed: Kev + claude-opus-4-8, 2026-07-06, Confidence 0.75. Prior: Unknown.
 //
 
 import M1K3Avatar
