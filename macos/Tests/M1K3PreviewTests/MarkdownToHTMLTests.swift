@@ -73,6 +73,49 @@ struct MarkdownToHTMLTests {
             == "<p>&lt;script&gt;alert(1)&lt;/script&gt;</p>")
     }
 
+    @Test("a double-quote in prose is escaped (attribute-safe)")
+    func escapesQuotesInProse() {
+        #expect(MarkdownToHTML.render("she said \"hi\" it's fine")
+            == "<p>she said &quot;hi&quot; it&#39;s fine</p>")
+    }
+
+    @Test("a quote inside a link URL is escaped, never an href breakout")
+    func escapesQuoteInLinkURL() {
+        // A model-emitted URL containing a quote must not break out of href="…".
+        let html = MarkdownToHTML.render("[x](https://ok\"bad)")
+        #expect(html.contains("&quot;")) // the quote is escaped
+        #expect(!html.contains("ok\"bad")) // no raw quote reaches the attribute
+    }
+
+    @Test("asterisks inside a link URL stay literal (no emphasis injected)")
+    func emphasisSkipsLinkURL() {
+        let html = MarkdownToHTML.render("[docs](https://host/path/*v1*/api)")
+        #expect(html.contains("href=\"https://host/path/*v1*/api\""))
+        #expect(!html.contains("<em>")) // the URL's *v1* was not turned into <em>
+    }
+
+    @Test("emphasis inside a link label still renders")
+    func emphasisInLinkLabel() {
+        #expect(MarkdownToHTML.render("[**bold** link](https://m1k3.app)")
+            == "<p><a href=\"https://m1k3.app\"><strong>bold</strong> link</a></p>")
+    }
+
+    @Test("asterisks inside inline code stay literal")
+    func emphasisSkipsCode() {
+        #expect(MarkdownToHTML.render("run `a * b * c`")
+            == "<p>run <code>a * b * c</code></p>")
+    }
+
+    @Test("raw private-use sentinel characters can't impersonate a stash token")
+    func stripsStashSentinels() {
+        // U+E000/U+E001 are the internal stash delimiters. If model output carries
+        // them raw they must be stripped at escape time, or a "\u{E000}0\u{E001}"
+        // in the text would collide with the real link's stash token and splice its
+        // <a href> in (content-integrity, not XSS behind the no-JS+CSP webview).
+        let out = MarkdownToHTML.render("before \u{E000}0\u{E001} after [x](https://m1k3.app)")
+        #expect(out == "<p>before 0 after <a href=\"https://m1k3.app\">x</a></p>")
+    }
+
     @Test("a realistic document renders its structure")
     func document() {
         let md = """

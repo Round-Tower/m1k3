@@ -233,7 +233,12 @@ final class AppCore {
 
         selectedBrain = tier
         UserDefaults.standard.set(tier.rawValue, forKey: Self.selectedBrainKey)
-        UserDefaults.standard.set(true, forKey: Self.hasChosenBrainKey)
+        // The first-run gate (hasChosenBrainKey) is written by the onboarding
+        // completion closure (RootView), NOT here: the no-op guard above can
+        // early-return before this line (picking Mini — the default AND the
+        // recommended tier — while idle), so a gate write here would never fire
+        // for the recommended brain and onboarding would repeat on every launch.
+        // The onDone closure is the sole gate writer, mirroring the Mac contract.
 
         warmTask?.cancel()
         warmGeneration += 1 // invalidate any in-flight warm's progress hops
@@ -274,17 +279,66 @@ final class AppCore {
                         brainLoad = .progress(fraction)
                     }
                 }
-                guard generation == warmGeneration else { return }
+                guard generation == warmGeneration else {
+                    // A switch superseded this warm mid-prepare. Release the freshly
+                    // built weights we're abandoning (unless they became the active
+                    // provider) so their Metal buffers are reclaimed now, not left
+                    // for the next MLX reclaim — the Mac releases oldMLX synchronously.
+                    if mlx !== currentMLX { mlx.releaseMemory() }
+                    return
+                }
                 currentMLX = mlx
                 activeProvider.setProvider(mlx)
                 brainLoad = .ready
                 Self.log.notice("brain warm: \(tierName, privacy: .public) ready")
             } catch {
+                if mlx !== currentMLX { mlx.releaseMemory() }
                 guard generation == warmGeneration else { return }
                 brainLoad = .failed(message: error.localizedDescription)
                 Self.log.error("brain warm failed: \(error.localizedDescription, privacy: .public)")
             }
         }
+    }
+
+    // MARK: - Background lifecycle (iOS jetsam hygiene)
+
+    /// Shed the multi-GB MLX weights when backgrounded. Unlike macOS (no per-app
+    /// jetsam), iOS aggressively reclaims a backgrounded process sitting on GBs of
+    /// Metal buffers — so we release now and re-warm on return, rather than being
+    /// killed and cold-booted. Falls back to Mini (AFM) so a brief foreground still
+    /// serves chat while Lil re-warms. Cheap when already on Mini (currentMLX nil).
+    /// Only call on a true `.background` transition — NOT `.inactive` (a notification
+    /// banner / Control Center), which must not churn the model.
+    ///
+    /// Gated on `.ready`, NOT merely `currentMLX != nil`: at cold launch the slot's
+    /// provider is assigned BEFORE its first load finishes, and the underlying
+    /// SingleFlightLoader keeps running through Task cancellation (by design). If we
+    /// shed mid-load we couldn't actually stop that allocation, and nilling
+    /// currentMLX would make warmForForeground build a SECOND provider racing the
+    /// first on the same cache (review catch). So mid-load we leave it be — only a
+    /// fully-warm brain holds the reclaimable buffers this is here to shed.
+    func releaseForBackground() {
+        guard brainLoad == .ready, currentMLX != nil else { return }
+        warmTask?.cancel()
+        warmGeneration += 1 // invalidate any in-flight warm's progress hops
+        currentMLX?.releaseMemory()
+        currentMLX = nil
+        activeProvider.setProvider(afm)
+        brainLoad = .idle
+        Self.log.notice("brain shed for background; will re-warm on foreground")
+    }
+
+    /// Re-warm the chosen MLX brain if it was shed while backgrounded. No-op when
+    /// Mini is the choice or the brain is already warm/warming.
+    ///
+    /// The `.idle` guard is deliberate: a brain that FAILED to warm (`.failed` — a
+    /// gated repo, a full disk, unavailable weights) is NOT retried by a
+    /// background→foreground bounce, only by an explicit shed (`.idle` via
+    /// `releaseForBackground`) or a user re-selection. Retrying a persistent failure
+    /// on every app-switch would be a retry-storm; the failure surfaces once and stays.
+    func warmForForeground() {
+        guard selectedBrain.mlxModelID != nil, currentMLX == nil, brainLoad == .idle else { return }
+        warmSelectedBrain()
     }
 
     /// Whether Apple Intelligence (Mini) can serve on this device right now —

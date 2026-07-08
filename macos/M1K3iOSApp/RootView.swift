@@ -34,8 +34,15 @@ struct RootView: View {
         if onboarded {
             home
         } else {
-            OnboardingScreen { withAnimation { onboarded = true } }
-                .transition(.opacity)
+            OnboardingScreen {
+                // Sole writer of the first-run gate: selectBrain can no-op
+                // early-return (picking Mini at idle) before it could persist this,
+                // so onboarding must record its own completion or it repeats every
+                // launch (startOnboarded reads hasChosenBrain at init).
+                UserDefaults.standard.set(true, forKey: AppCore.hasChosenBrainKey)
+                withAnimation { onboarded = true }
+            }
+            .transition(.opacity)
         }
     }
 

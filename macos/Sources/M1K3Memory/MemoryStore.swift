@@ -399,13 +399,31 @@ public final class MemoryStore: @unchecked Sendable {
             vectorHits.compactMap { hit in hit.similarity.map { (hit.memory.id, $0) } },
             uniquingKeysWith: { first, _ in first }
         )
-        return fused
-            .map { item, score -> MemoryHit in
-                var hit = item
-                hit.rrfScore = score
-                if hit.similarity == nil { hit.similarity = similarityByID[hit.memory.id] }
-                return hit
+        var scored = fused.map { item, score -> MemoryHit in
+            var hit = item
+            hit.rrfScore = score
+            if hit.similarity == nil { hit.similarity = similarityByID[hit.memory.id] }
+            return hit
+        }
+        // An FTS-lane hit OUTSIDE the vector top-K still has similarity == nil
+        // here, and the cutoff drops nil UNJUDGED — which discarded a
+        // keyword-exact memory whose embedding was one read away (the same
+        // Golden Gate miss KnowledgeStore.searchHybrid was fixed for; this graph
+        // lane never got the second half). Judge those on their STORED
+        // embeddings before the cutoff: a bounded handful of blob reads, and
+        // genuinely irrelevant keyword matches still fall to the threshold — the
+        // no-keyword-flood rule survives, now enforced on real scores.
+        let unscored = scored.filter { $0.similarity == nil }.map(\.memory.id)
+        if !unscored.isEmpty, !queryVector.isEmpty {
+            let stored = try storedEmbeddings(forMemoryIDs: unscored)
+            for index in scored.indices where scored[index].similarity == nil {
+                guard let blob = stored[scored[index].memory.id] else { continue }
+                scored[index].similarity = VectorMath.cosineSimilarity(
+                    queryVector, VectorMath.deserialize(blob)
+                )
             }
+        }
+        return scored
             .filter { ($0.similarity ?? 0) >= threshold } // the cutoff — no exceptions
             .sorted {
                 if $0.rrfScore != $1.rrfScore { return ($0.rrfScore ?? 0) > ($1.rrfScore ?? 0) }
@@ -469,6 +487,27 @@ public final class MemoryStore: @unchecked Sendable {
         }
         scored.sort { ($0.similarity ?? 0) > ($1.similarity ?? 0) }
         return Array(scored.prefix(limit))
+    }
+
+    /// Embedding blobs for specific memories — the hybrid backfill's single read
+    /// (mirrors KnowledgeStore.storedEmbeddings(forChunkIDs:)). Lets recall score
+    /// an FTS-only hit that ranks outside the vector top-K without re-embedding.
+    private func storedEmbeddings(forMemoryIDs ids: [UUID]) throws -> [UUID: Data] {
+        try dbQueue.read { db in
+            let placeholders = ids.map { _ in "?" }.joined(separator: ", ")
+            let rows = try Row.fetchAll(
+                db,
+                sql: "SELECT memory_id, embedding FROM memory_embeddings WHERE memory_id IN (\(placeholders))",
+                arguments: StatementArguments(ids.map(\.uuidString))
+            )
+            var blobs: [UUID: Data] = [:]
+            for row in rows {
+                guard let raw: String = row["memory_id"], let id = UUID(uuidString: raw),
+                      let blob: Data = row["embedding"] else { continue }
+                blobs[id] = blob
+            }
+            return blobs
+        }
     }
 
     // MARK: - Graph traversal (the recursive CTE)

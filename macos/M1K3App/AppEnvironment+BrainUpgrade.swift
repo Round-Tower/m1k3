@@ -121,6 +121,10 @@ extension AppEnvironment {
             dismissed: parked,
             hasRung: target != nil
         ))
+        // The ladder is terminal once the swap lands (.done, the sole .done entry
+        // — via selectBrain's hook → here). Tear down the path monitor so it isn't
+        // left running for the session with no consumer; a fresh offer re-arms it.
+        if brainUpgrade == .done { stopBrainUpgradePathMonitor() }
     }
 
     // MARK: - The between-turns beat
@@ -331,6 +335,7 @@ extension AppEnvironment {
     // MARK: - Inputs
 
     private func startNetworkMonitorIfNeeded() {
+        guard brainUpgrade != .done else { return } // terminal — no offer left to inform
         guard brainUpgradePathMonitor == nil else { return }
         let monitor = NWPathMonitor()
         monitor.pathUpdateHandler = { [weak self] path in
@@ -339,6 +344,14 @@ extension AppEnvironment {
         }
         monitor.start(queue: DispatchQueue(label: "app.m1k3.brain-upgrade-path"))
         brainUpgradePathMonitor = monitor
+    }
+
+    /// Tear down the path monitor when the ladder is terminal — mirrors
+    /// `cancelBrainUpgradeFetch` / `disarmThermalRecovery`. `startNetworkMonitorIfNeeded`
+    /// re-arms it when a fresh offer becomes live.
+    private func stopBrainUpgradePathMonitor() {
+        brainUpgradePathMonitor?.cancel()
+        brainUpgradePathMonitor = nil
     }
 
     private nonisolated static func freeDiskBytes() -> Int64 {
