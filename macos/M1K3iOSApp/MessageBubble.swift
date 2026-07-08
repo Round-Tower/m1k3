@@ -7,7 +7,7 @@
 //  no card — sitting on the backdrop so the words read cleanly (the same rule the
 //  Mac app follows so reading modes work on words, not markup).
 //
-//  Signed: Kev + claude-fable-5, 2026-07-06, Confidence 0.8. Prior: Unknown.
+//  Signed: Kev + claude-opus-4-8, 2026-07-06, Confidence 0.8. Prior: Unknown.
 //
 
 import M1K3Chat

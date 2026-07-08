@@ -7,7 +7,7 @@
 //  query the MCP recall_memory tool runs). Read-only for v1; capture happens
 //  through chat auto-distillation, not a form.
 //
-//  Signed: Kev + claude-fable-5, 2026-07-06, Confidence 0.75. Prior: Unknown.
+//  Signed: Kev + claude-opus-4-8, 2026-07-06, Confidence 0.75. Prior: Unknown.
 //
 
 import M1K3Knowledge

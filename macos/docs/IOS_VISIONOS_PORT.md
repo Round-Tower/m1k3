@@ -128,7 +128,7 @@ Sequencing: keystone → A is the spine; B and C parallelize once the core exist
 flagship follow; E rides alongside. Not ported: the in-app MCP HTTP server (meaningless
 on iOS — no desktop agents dialing in); stays macOS (+ visionOS-windowed).
 
-_Signed: Kev + claude-fable-5, 2026-07-06, Confidence 0.9 (every "compiles for iOS" row
+_Signed: Kev + claude-opus-4-8, 2026-07-06, Confidence 0.9 (every "compiles for iOS" row
 verified by an actual `xcodebuild` per product; macOS `swift test` 1749/258 green proves
 non-regression; the two guards + memory band are the only source changes and are
 TDD-pinned. Honest caveats: builds are compile-green only — AVAudioSession, the UI shell,
@@ -231,7 +231,7 @@ foreground); the reviewer's principled call — extract the brain-swap state mac
 shared, `swift test`-covered package type both apps use, rather than hand-porting the Mac's
 logic a third time. That's the right next refactor.
 
-_Signed: Kev + claude-fable-5, 2026-07-06 (shell delivery), Confidence 0.85 (both platforms
+_Signed: Kev + claude-opus-4-8, 2026-07-06 (shell delivery), Confidence 0.85 (both platforms
 BUILD SUCCEEDED via real xcodebuild with the true exit code read from the log — NOT a
 wrapper's exit, per the standing false-success trap; macOS 1749/258 green proves the one
 package edit is non-regressive; every API was pinned against the Mac's ground-truth wiring
