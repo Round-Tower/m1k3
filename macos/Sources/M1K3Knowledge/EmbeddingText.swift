@@ -35,17 +35,30 @@ public enum EmbeddingText {
 
     /// The text a chunk is embedded as: title-prefixed unless the content
     /// already leads with the title (case-insensitive; a trailing "…" from
-    /// word-boundary truncation is ignored) or the title is empty.
+    /// word-boundary truncation is ignored) or the title is empty. "Leads
+    /// with" requires a word boundary after the match — "Cork" is not the
+    /// head of "Corker Ltd…" (the review-caught silent-skip class).
     public static func forChunk(title: String, content: String) -> String {
         let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedTitle.isEmpty else { return content }
         var head = trimmedTitle
         if head.hasSuffix("…") { head = String(head.dropLast()) }
         head = head.trimmingCharacters(in: .whitespaces)
-        if !head.isEmpty, content.lowercased().hasPrefix(head.lowercased()) {
+        if !head.isEmpty, content.lowercased().hasPrefix(head.lowercased()),
+           wordBoundaryFollows(head: head, in: content)
+        {
             return content
         }
         return "\(trimmedTitle)\n\(content)"
+    }
+
+    /// True when the content ends exactly at the head, or the character right
+    /// after it is not alphanumeric — so a title matching mid-word never
+    /// counts as the content's own head.
+    private static func wordBoundaryFollows(head: String, in content: String) -> Bool {
+        guard content.count > head.count else { return true }
+        let next = content[content.index(content.startIndex, offsetBy: head.count)]
+        return !(next.isLetter || next.isNumber)
     }
 
     /// The fingerprint recorded with (and compared against) the store's

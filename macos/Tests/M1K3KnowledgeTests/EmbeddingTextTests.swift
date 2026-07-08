@@ -38,6 +38,22 @@ struct EmbeddingTextTests {
         #expect(EmbeddingText.forChunk(title: title, content: fact) == fact)
     }
 
+    @Test("a title that is a mere word-prefix of the content still prefixes — no boundary, no match")
+    func wordPrefixIsNotTheTitle() {
+        // "Cork" vs "Corker Ltd…": shared letters, different word — the title
+        // adds context and must be prefixed (the review-caught boundary gap).
+        let text = EmbeddingText.forChunk(
+            title: "Cork", content: "Corker Ltd was founded in 1998."
+        )
+        #expect(text == "Cork\nCorker Ltd was founded in 1998.")
+    }
+
+    @Test("a boundary right after the title head still counts as leading")
+    func punctuationBoundaryCounts() {
+        let content = "Kev lives in Cork, near the coast."
+        #expect(EmbeddingText.forChunk(title: "Kev lives in Cork", content: content) == content)
+    }
+
     @Test("title matching is case-insensitive")
     func caseInsensitiveHead() {
         let content = "the seal failed under load."
