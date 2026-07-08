@@ -112,12 +112,13 @@ private final class RecordingDistiller: MemoryDistilling, Sendable {
         state = Mutex(State(script: script))
     }
 
-    func distill(turns: [ChatTurn]) async throws -> [String] {
+    func distill(turns: [ChatTurn]) async throws -> [DistilledFact] {
         let result = state.withLock { state -> Result<[String], Error> in
             state.calls.append(turns)
             return state.script.count > 1 ? state.script.removeFirst() : state.script[0]
         }
-        return try result.get()
+        // Untyped scripts land as `.note`, exactly like a bare "FACT:" line.
+        return try result.get().map { DistilledFact(text: $0) }
     }
 
     var calls: [[ChatTurn]] {

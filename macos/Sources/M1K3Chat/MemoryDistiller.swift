@@ -8,17 +8,47 @@
 //  SummarizationPipeline two-tier shape, sequential because one output is
 //  consumed, not two).
 //
-//  Output contract is line-based — "FACT: <one sentence>" or exactly "NONE" —
-//  because small local models fumble JSON (CallSummaryParser precedent) and
-//  FACT: lines parse with zero ambiguity. The parser is the defence layer:
-//  whatever persona-flavoured chatter a model emits, only FACT: lines survive.
+//  Output contract is line-based — "FACT(<kind>): <one sentence>" or exactly
+//  "NONE" — because small local models fumble JSON (CallSummaryParser
+//  precedent) and FACT: lines parse with zero ambiguity. The parser is the
+//  defence layer: whatever persona-flavoured chatter a model emits, only FACT
+//  lines survive, and any malformed/unknown kind label degrades to `.note`,
+//  never to a dropped fact.
 //
 //  Signed: Kev + claude-fable-5, 2026-06-12, Confidence 0.85 (pure cores
 //  tested; real-model fact quality is verify-at-⌘R). Prior: Unknown
+//
+//  Review (2026-07-08, Kev + claude-fable-5): the distiller now CLASSIFIES —
+//  facts carry a DistilledFactKind (profile/preference/decision/episode/note)
+//  parsed from a FACT(<kind>): label, closing the "both write paths tag .note"
+//  TODO: on MemoryKind. Bare FACT: lines still parse (kind = .note), so a model
+//  that ignores the new label loses nothing. Kev's product call, 2026-07-08.
 
 import Foundation
 import M1K3Inference
 import os
+
+// MARK: - Typed fact
+
+/// The distiller's kind vocabulary — a Chat-local mirror of the memory graph's
+/// open `MemoryKind` (M1K3Chat must not depend on M1K3Memory; the
+/// M1K3MemoryChatBridge adapter maps rawValue across). `note` is the fallback
+/// for a bare `FACT:` line or an unrecognized label: misclassification
+/// degrades to the old untyped behaviour, never to a dropped fact.
+public enum DistilledFactKind: String, Sendable, Codable, CaseIterable {
+    case profile, preference, decision, episode, note
+}
+
+/// One distilled fact: the sentence plus the distiller's own classification.
+public struct DistilledFact: Sendable, Equatable, Codable {
+    public let text: String
+    public let kind: DistilledFactKind
+
+    public init(text: String, kind: DistilledFactKind = .note) {
+        self.text = text
+        self.kind = kind
+    }
+}
 
 // MARK: - Protocol
 
@@ -26,7 +56,7 @@ import os
 /// generation failure — the caller withholds the distillation watermark on
 /// throw so the same slice is retried at the next trigger.
 public protocol MemoryDistilling: Sendable {
-    func distill(turns: [ChatTurn]) async throws -> [String]
+    func distill(turns: [ChatTurn]) async throws -> [DistilledFact]
 }
 
 // MARK: - Prompt
@@ -70,8 +100,12 @@ public enum MemoryDistillationPrompt {
         is M1K3, is named M1K3, or is an AI/assistant/program; those describe \
         the assistant, not the user.
 
-        Reply with one line per fact, each starting with exactly "FACT: ". \
-        Each fact must be one short standalone sentence about the user. \
+        Reply with one line per fact, each starting with exactly \
+        "FACT(<kind>): " where <kind> is one of: profile (a stable fact about \
+        the user), preference (a standing preference), decision (a decision \
+        the user made and why), episode (something that happened), or note \
+        (anything else durable). Each fact must be one short standalone \
+        sentence about the user. \
         If there is nothing durable, reply with exactly "NONE".
 
         CONVERSATION:
@@ -87,18 +121,16 @@ public enum MemoryFactParser {
     static let maxFactLength = 200
     static let minFactLength = 10
 
-    /// Keep only well-formed FACT: lines. Garbage in → [] out, never a throw:
+    /// Keep only well-formed FACT lines. Garbage in → [] out, never a throw:
     /// the parser is the defence against off-format model output.
-    public static func parse(_ raw: String) -> [String] {
+    public static func parse(_ raw: String) -> [DistilledFact] {
         // Reasoning models think first — the facts live in the answer half.
         let answer = ReasoningSplit.split(raw).answer
         var seen = Set<String>()
-        var facts: [String] = []
+        var facts: [DistilledFact] = []
         for line in answer.split(separator: "\n") {
             let trimmed = line.trimmingCharacters(in: .whitespaces)
-            guard trimmed.hasPrefix("FACT:") else { continue }
-            let fact = trimmed.dropFirst("FACT:".count)
-                .trimmingCharacters(in: .whitespaces)
+            guard let (kind, fact) = factLine(trimmed) else { continue }
             // Overlong = the model rambled mid-line; drop rather than cut a
             // fact mid-thought. Tiny = no information ("FACT: yes").
             guard fact.count >= minFactLength, fact.count <= maxFactLength else { continue }
@@ -106,11 +138,35 @@ public enum MemoryFactParser {
             // "the user" ("the user's name is M1K3"). The prompt asks it not to;
             // this is the deterministic backstop that the prompt can't guarantee.
             guard MemoryFactValidator.isAcceptable(fact) else { continue }
+            // Dedupe on TEXT alone — the same fact under two labels is one
+            // fact; the first classification wins.
             guard seen.insert(MemoryFactNormalizer.normalize(fact)).inserted else { continue }
-            facts.append(fact)
+            facts.append(DistilledFact(text: fact, kind: kind))
             if facts.count == maxFacts { break }
         }
         return facts
+    }
+
+    /// Split one "FACT: …" / "FACT(<kind>): …" line. An unrecognized kind
+    /// label falls back to `.note` when the line is otherwise well-formed,
+    /// and whitespace around the delimiters is tolerated ("FACT (kind) : …")
+    /// — a sloppy model misclassifies, it never loses a fact. A line that
+    /// isn't a FACT line at all (no colon, unclosed paren) returns nil.
+    private static func factLine(_ line: String) -> (kind: DistilledFactKind, fact: String)? {
+        guard line.hasPrefix("FACT") else { return nil }
+        var rest = line.dropFirst("FACT".count).drop(while: \.isWhitespace)
+        var kind = DistilledFactKind.note
+        if rest.first == "(" {
+            guard let close = rest.firstIndex(of: ")") else { return nil }
+            let label = rest[rest.index(after: rest.startIndex) ..< close]
+                .trimmingCharacters(in: .whitespaces)
+                .lowercased()
+            kind = DistilledFactKind(rawValue: label) ?? .note
+            rest = rest[rest.index(after: close)...].drop(while: \.isWhitespace)
+        }
+        guard rest.first == ":" else { return nil }
+        let fact = rest.dropFirst().trimmingCharacters(in: .whitespaces)
+        return (kind, fact)
     }
 
     /// True when the model explicitly said there is nothing durable.
@@ -197,7 +253,7 @@ public struct ProviderMemoryDistiller: MemoryDistilling {
         self.fallback = fallback
     }
 
-    public func distill(turns: [ChatTurn]) async throws -> [String] {
+    public func distill(turns: [ChatTurn]) async throws -> [DistilledFact] {
         let prompt = MemoryDistillationPrompt.build(turns: turns)
         if primary.isAvailable {
             do {

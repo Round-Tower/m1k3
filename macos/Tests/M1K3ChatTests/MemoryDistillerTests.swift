@@ -49,7 +49,8 @@ struct MemoryDistillationPromptTests {
         ]))
         #expect(prompt.contains("USER: My sister is called Aoife"))
         #expect(prompt.contains("ASSISTANT: Lovely name — noted."))
-        #expect(prompt.contains("FACT: "))
+        #expect(prompt.contains("FACT(<kind>): "))
+        #expect(prompt.contains("preference"))
         #expect(prompt.contains("NONE"))
     }
 
@@ -82,9 +83,64 @@ struct MemoryFactParserTests {
         FACT: The user prefers metric units.
         Hope that helps!
         """
-        #expect(MemoryFactParser.parse(raw) == [
+        #expect(MemoryFactParser.parse(raw).map(\.text) == [
             "Kev's sister is called Aoife.",
             "The user prefers metric units.",
+        ])
+    }
+
+    @Test("FACT(<kind>): lines carry the distiller's classification")
+    func parsesKinds() {
+        let raw = """
+        FACT(profile): Kev's sister is called Aoife.
+        FACT(preference): The user prefers metric units.
+        FACT(decision): Kev chose RRF over learned fusion.
+        FACT(episode): Kev shipped the companion on Friday.
+        """
+        #expect(MemoryFactParser.parse(raw) == [
+            DistilledFact(text: "Kev's sister is called Aoife.", kind: .profile),
+            DistilledFact(text: "The user prefers metric units.", kind: .preference),
+            DistilledFact(text: "Kev chose RRF over learned fusion.", kind: .decision),
+            DistilledFact(text: "Kev shipped the companion on Friday.", kind: .episode),
+        ])
+    }
+
+    @Test("a bare FACT: line and an unknown label fall back to note; labels are case-insensitive")
+    func kindFallbackAndCase() {
+        let raw = """
+        FACT: Kev lives in Cork.
+        FACT(mood): The user enjoys sea swimming.
+        FACT(PREFERENCE): The user likes tabs over spaces.
+        """
+        #expect(MemoryFactParser.parse(raw) == [
+            DistilledFact(text: "Kev lives in Cork.", kind: .note),
+            DistilledFact(text: "The user enjoys sea swimming.", kind: .note),
+            DistilledFact(text: "The user likes tabs over spaces.", kind: .preference),
+        ])
+    }
+
+    @Test("the same fact under two labels dedupes to one — the first classification wins")
+    func dedupeIgnoresKind() {
+        let raw = "FACT(profile): Kev lives in Cork.\nFACT(episode): Kev lives in Cork."
+        #expect(MemoryFactParser.parse(raw) == [DistilledFact(text: "Kev lives in Cork.", kind: .profile)])
+    }
+
+    @Test("a FACT( line with no closing paren is malformed — dropped, not misread")
+    func malformedKindDropped() {
+        #expect(MemoryFactParser.parse("FACT(profile Kev lives in Cork.").isEmpty)
+    }
+
+    @Test("whitespace around the delimiters is tolerated — a sloppy model loses no facts")
+    func whitespaceAroundDelimitersTolerated() {
+        let raw = """
+        FACT (profile): Kev lives in Cork.
+        FACT(preference) : The user likes tabs over spaces.
+        FACT : The user enjoys sea swimming.
+        """
+        #expect(MemoryFactParser.parse(raw) == [
+            DistilledFact(text: "Kev lives in Cork.", kind: .profile),
+            DistilledFact(text: "The user likes tabs over spaces.", kind: .preference),
+            DistilledFact(text: "The user enjoys sea swimming.", kind: .note),
         ])
     }
 
@@ -97,7 +153,7 @@ struct MemoryFactParserTests {
     @Test("a <think> block is stripped before parsing")
     func thinkStripped() {
         let raw = "<think>FACT: not a real fact, just thinking</think>FACT: Kev lives in Cork."
-        #expect(MemoryFactParser.parse(raw) == ["Kev lives in Cork."])
+        #expect(MemoryFactParser.parse(raw).map(\.text) == ["Kev lives in Cork."])
     }
 
     @Test("caps: at most 8 facts, overlong and tiny facts dropped, duplicates collapsed")
@@ -126,7 +182,7 @@ struct MemoryFactParserTests {
         FACT: The user's name is M1K3.
         FACT: The user prefers metric units.
         """
-        #expect(MemoryFactParser.parse(raw) == ["The user prefers metric units."])
+        #expect(MemoryFactParser.parse(raw).map(\.text) == ["The user prefers metric units."])
     }
 }
 
@@ -191,7 +247,7 @@ struct ProviderMemoryDistillerTests {
             fallback: FakeProvider(name: "mlx", isAvailable: true, result: .failure(Boom()))
         )
         let facts = try await distiller.distill(turns: turns([("I live in Cork", "Noted")]))
-        #expect(facts == ["Kev lives in Cork."])
+        #expect(facts.map(\.text) == ["Kev lives in Cork."])
     }
 
     @Test("a clean NONE from the primary is a valid empty — no fall-through")
@@ -211,7 +267,7 @@ struct ProviderMemoryDistillerTests {
             fallback: FakeProvider(name: "mlx", isAvailable: true, result: .success("FACT: From the fallback model."))
         )
         let facts = try await distiller.distill(turns: turns([("a", "b")]))
-        #expect(facts == ["From the fallback model."])
+        #expect(facts.map(\.text) == ["From the fallback model."])
     }
 
     @Test("primary throws → fallback runs")
@@ -221,7 +277,7 @@ struct ProviderMemoryDistillerTests {
             fallback: FakeProvider(name: "mlx", isAvailable: true, result: .success("FACT: From the fallback model."))
         )
         let facts = try await distiller.distill(turns: turns([("a", "b")]))
-        #expect(facts == ["From the fallback model."])
+        #expect(facts.map(\.text) == ["From the fallback model."])
     }
 
     @Test("primary garbage (not NONE, no facts) → fallback runs")
@@ -231,7 +287,7 @@ struct ProviderMemoryDistillerTests {
             fallback: FakeProvider(name: "mlx", isAvailable: true, result: .success("FACT: From the fallback model."))
         )
         let facts = try await distiller.distill(turns: turns([("a", "b")]))
-        #expect(facts == ["From the fallback model."])
+        #expect(facts.map(\.text) == ["From the fallback model."])
     }
 
     @Test("both throw → the error propagates (caller keeps the watermark and retries)")

@@ -28,10 +28,11 @@ import os
 /// the graph through the same coordinator that writes the corpus, instead of the
 /// corpus-only path that left the graph empty and `related_memory` edgeless.
 public protocol DistilledFactGraphWriting: Sendable {
-    /// Persist a newly distilled fact as a node in the memory graph. Best-effort:
-    /// the corpus write is the source of truth, so a graph-write failure must
-    /// never fail distillation.
-    func writeDistilledFact(_ text: String, embedding: [Float]) async throws
+    /// Persist a newly distilled fact as a node in the memory graph, carrying
+    /// the distiller's classification (the bridge maps it onto MemoryKind).
+    /// Best-effort: the corpus write is the source of truth, so a graph-write
+    /// failure must never fail distillation.
+    func writeDistilledFact(_ text: String, kind: DistilledFactKind, embedding: [Float]) async throws
 }
 
 public struct MemoryDistillationCoordinator: Sendable {
@@ -76,24 +77,24 @@ public struct MemoryDistillationCoordinator: Sendable {
         for fact in facts {
             // Embed ONCE: the same vector gates semantic dedup AND seeds the graph
             // node, so the dual-write costs no extra embed.
-            let vector = await embed(fact)
+            let vector = await embed(fact.text)
             if let vector, try hasSemanticDuplicate(vector) {
-                Self.log.debug("skip (semantic dup): \(LogPreview.preview(fact, max: 60), privacy: .public)")
+                Self.log.debug("skip (semantic dup): \(LogPreview.preview(fact.text, max: 60), privacy: .public)")
                 continue
             }
             let result = try await ingester.ingest(
-                title: Self.title(for: fact),
-                text: fact,
-                sourceRef: Self.factSourceRef(fact),
+                title: Self.title(for: fact.text),
+                text: fact.text,
+                sourceRef: Self.factSourceRef(fact.text),
                 kind: .memory,
                 source: .distilled
             )
             if result.wasDeduped {
-                Self.log.debug("skip (exact dup): \(LogPreview.preview(fact, max: 60), privacy: .public)")
+                Self.log.debug("skip (exact dup): \(LogPreview.preview(fact.text, max: 60), privacy: .public)")
                 continue
             }
             written += 1
-            Self.log.info("remembered: \(LogPreview.preview(fact, max: 80), privacy: .public)")
+            Self.log.info("remembered: \(LogPreview.preview(fact.text, max: 80), privacy: .public)")
             await dualWriteToGraph(fact, vector: vector)
         }
         Self.log.info("distillation wrote \(written)/\(facts.count) fact(s)")
@@ -122,9 +123,9 @@ public struct MemoryDistillationCoordinator: Sendable {
 
     /// Mirror a freshly-written fact into the memory graph. Best-effort: a graph
     /// failure is logged, never thrown — the corpus already holds the fact.
-    private func dualWriteToGraph(_ fact: String, vector: [Float]?) async {
+    private func dualWriteToGraph(_ fact: DistilledFact, vector: [Float]?) async {
         guard let graph, let vector else { return }
-        do { try await graph.writeDistilledFact(fact, embedding: vector) } catch {
+        do { try await graph.writeDistilledFact(fact.text, kind: fact.kind, embedding: vector) } catch {
             Self.log.notice("graph dual-write failed (corpus write stands): \(error.localizedDescription, privacy: .public)")
         }
     }

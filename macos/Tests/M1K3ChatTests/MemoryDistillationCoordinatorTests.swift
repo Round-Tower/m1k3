@@ -17,9 +17,19 @@ import Foundation
 import Testing
 
 private struct FakeDistiller: MemoryDistilling {
-    let result: Result<[String], Error>
+    let result: Result<[DistilledFact], Error>
 
-    func distill(turns _: [ChatTurn]) async throws -> [String] {
+    /// Most tests only care about texts — untyped facts land as `.note`,
+    /// exactly like a bare "FACT:" line from a model.
+    init(result: Result<[String], Error>) {
+        self.result = result.map { $0.map { DistilledFact(text: $0) } }
+    }
+
+    init(typed: [DistilledFact]) {
+        result = .success(typed)
+    }
+
+    func distill(turns _: [ChatTurn]) async throws -> [DistilledFact] {
         try result.get()
     }
 }
@@ -27,22 +37,26 @@ private struct FakeDistiller: MemoryDistilling {
 private struct Boom: Error {}
 
 /// Records every graph dual-write so a test can assert WHICH distilled facts
-/// reached the graph (and with an embedding). Optionally throws to prove the
-/// dual-write is best-effort.
+/// reached the graph (and with which kind + embedding). Optionally throws to
+/// prove the dual-write is best-effort.
 private actor FakeGraphWriter: DistilledFactGraphWriting {
-    private(set) var writes: [(text: String, embedding: [Float])] = []
+    private(set) var writes: [(text: String, kind: DistilledFactKind, embedding: [Float])] = []
     let shouldThrow: Bool
     init(shouldThrow: Bool = false) {
         self.shouldThrow = shouldThrow
     }
 
-    func writeDistilledFact(_ text: String, embedding: [Float]) async throws {
+    func writeDistilledFact(_ text: String, kind: DistilledFactKind, embedding: [Float]) async throws {
         if shouldThrow { throw Boom() }
-        writes.append((text, embedding))
+        writes.append((text, kind, embedding))
     }
 
     func texts() -> [String] {
         writes.map(\.text)
+    }
+
+    func kinds() -> [DistilledFactKind] {
+        writes.map(\.kind)
     }
 }
 
@@ -171,6 +185,25 @@ struct MemoryDistillationCoordinatorTests {
         let graphed = await graph.texts() // graph
         #expect(Set(graphed) == ["Kev's sister is called Aoife.", "The user prefers metric units."])
         #expect(await graph.writes.allSatisfy { !$0.embedding.isEmpty })
+    }
+
+    @Test("the distiller's classification rides the dual-write into the graph")
+    func kindReachesGraph() async throws {
+        let graph = FakeGraphWriter()
+        let store = try KnowledgeStore()
+        let embedder = HashingEmbeddingService()
+        let coordinator = MemoryDistillationCoordinator(
+            distiller: FakeDistiller(typed: [
+                DistilledFact(text: "Kev's sister is called Aoife.", kind: .profile),
+                DistilledFact(text: "The user prefers metric units.", kind: .preference),
+            ]),
+            ingester: DocumentIngester(store: store, embedder: embedder),
+            store: store,
+            embedder: embedder,
+            graph: graph
+        )
+        _ = try await coordinator.distillAndStore(turns: someTurns)
+        #expect(await graph.kinds() == [.profile, .preference])
     }
 
     @Test("a deduped fact is NOT written to the graph (dedup is respected on the seam)")
