@@ -731,3 +731,65 @@ several didn't survive contact with the live codebase:
 5. From Claude Code, connect to the `M1K3MCP` stdio server → call `search_knowledge` → confirm it returns documents **and** logged calls from M1K3's graph.
 6. Open the runtime picker, run `RuntimeBenchmark` → review the MLX vs LiteRT vs AFM comparison (and Whisper vs Gemma-audio if the spike landed).
 7. `swift test` green across all packages; no new warnings.
+
+## Update — 2026-07-08: Phase 17 — the egress seam + the PCC rung (Edge A phased; challenger-shaped)
+
+**Context:** First external TestFlight submission went to Beta App Review this morning. Kev's product
+call: PCC ships **off by default but easily opt-in-able**. Proposed sequencing (escalation UI first,
+PCC wiring behind the FM27 gate) was challenger-tested; two findings flipped the order — adopted here.
+
+**The challenger findings that shaped this (both verified in source):**
+1. **The "hard egress gate" is soft today.** `LadderContext.networkAllowed` is sourced from the
+   web-search toggle, which **defaults ON** (`AppEnvironment+ChatHistory.swift:64` — its own TODO
+   calls it "a provisional proxy only"). Wire a runnable network rung against that and chat egress is
+   governed by a toggle most users left on to search the web. The dedicated egress-consent key is not
+   polish — it is the prerequisite.
+2. **No dead controls reach Tahoe externals.** On macOS 26 the `.privateCloud` rung resolves
+   `?? local` (`EscalationLadder.swift:80`); an escalation control shipped before its rung either
+   hides for months or silently returns the local answer — and a gated-but-present egress path in the
+   externals binary is a privacy-label liability (our own SECURITY.md ranks data-egress above RCE).
+
+### Phase 17a — the dedicated egress-consent key (NOW; Tahoe-safe; ships to externals)
+- Replace the web-search proxy as the ladder's `networkAllowed` source with a dedicated,
+  **default-OFF** chat-egress consent key (closes the in-source TODO at
+  `AppEnvironment+ChatHistory.swift:60-63`). Web search keeps its own toggle; the two consents are
+  different categories and never share a switch again.
+- Pure policy + persistence; unit-testable off-device; strengthens the shipped "nothing leaves"
+  promise rather than spending it. **This lands before any network backend exists**, so flipping it
+  changes nothing user-visible yet — it is the wall built before the door.
+
+### Phase 17b — PCC executor + escalation control + consent UX (macOS-27 branch, M1K3_FM27; NOT in Tahoe externals builds)
+- **Executor lane:** `PrivateCloudComputeLanguageModel` already conforms in the macOS 27 SDK, but
+  selection ≠ execution — everything downstream is `BrainTier`-shaped; PCC needs its own
+  `LanguageModelSession(model:)` lane. New work, honest scope (challenger: "an order of magnitude
+  more than wiring").
+- **The consent UX (Kev's "easily opt-in-able", challenger-tempered):** off by default, easy to turn
+  on, but **NOT struggle-triggered** — egress is a category boundary the earned-moment/struggle
+  pattern was never tested against, and a frustration moment is the wrong time to weigh privacy.
+  Surface: a calm, discoverable invitation (Settings + a non-frustration in-flow moment, e.g. the
+  brain picker's "when you want more" context) with a one-look explainer of exactly what leaves
+  (the prompt, attested, stateless) and what stays (documents, memories, history). Per-request
+  escalation stays explicit on top of the 17a gate; a no parks it (terminal-dismissal doctrine holds).
+- **The escalation control ("go deeper") ships WITH the reachable rung, never before it** — 27-only,
+  same branch, so no dead control and no label mismatch ever reaches a Tahoe external.
+- **Honest target:** "wired and beta-smoked on non-launch hardware; GM runtime verify-owed" — NOT
+  "live day-one." Betas drift (the Xcode-Cloud float lesson); re-verify at GM is the plan, not the
+  failure case.
+- **Pre-flight:** App Privacy nutrition label reviewed for PCC egress BEFORE the rung is runnable in
+  any externals-reachable build (Apple-attested ≠ non-disclosable). PCC rides the Small Business
+  Program (<2M downloads — free rung; ladder stays on-device → PCC → BYO-key).
+
+### Held
+- **Claude/Gemini rung:** product decision (whether / how loud) before any engineering. 17a's key is
+  deliberately its prerequisite too — one gate, every network rung behind it.
+
+**Sequencing rationale in one line:** build the wall (17a, now), then the door with the porch light
+(17b, on 27), and only then decide who else gets a key (held).
+
+<!-- Signed: Kev + claude-fable-5, 2026-07-08, Confidence 0.85 — Edge A phased after a challenger
+     pass whose two blocking findings (default-ON egress proxy at AppEnvironment+ChatHistory.swift:64;
+     dead-control/privacy-label risk on Tahoe) were verified in source and folded; the struggle-trigger
+     rejection for egress consent is a doctrine boundary call (earned-moments stay local), Kev's
+     "easily opt-in-able" preserved via the calm-surface shape. Unproven: PCC executor scope is
+     estimated from the SDK surface, not built; GM drift risk named not sized. Prior: Kev +
+     claude-opus-4-8 (this file, Edge A analysis 2026-06-14). -->
