@@ -65,7 +65,12 @@ public struct DocumentIngester: Sendable {
 
         let embeddings: [[Float]]?
         if let embedder, !knowledgeChunks.isEmpty {
-            embeddings = try await embedder.embedBatch(knowledgeChunks.map(\.content))
+            // B5 layer 3: chunks embed WITH their document title (EmbeddingText)
+            // so title-carried context reaches the vector. Reindex composes
+            // identically — one composition point, both write paths.
+            embeddings = try await embedder.embedBatch(
+                knowledgeChunks.map { EmbeddingText.forChunk(title: title, content: $0.content) }
+            )
         } else {
             embeddings = nil
         }

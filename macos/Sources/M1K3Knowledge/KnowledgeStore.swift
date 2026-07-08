@@ -190,21 +190,31 @@ public final class KnowledgeStore: @unchecked Sendable {
         using embedder: any EmbeddingService,
         fingerprint: String? = nil
     ) async throws -> Int {
-        // Snapshot (chunkID, itemID, content) for every chunk first, so the async
-        // embed happens outside any DB transaction.
-        let rows: [(chunkID: UUID, itemID: UUID, content: String)] = try await dbQueue.read { db in
-            try Row.fetchAll(db, sql: "SELECT id, item_id, content FROM knowledge_chunks")
-                .compactMap { row -> (chunkID: UUID, itemID: UUID, content: String)? in
-                    guard let cid: String = row["id"], let chunkID = UUID(uuidString: cid),
-                          let iid: String = row["item_id"], let itemID = UUID(uuidString: iid)
-                    else { return nil }
-                    let content: String = row["content"] ?? ""
-                    return (chunkID, itemID, content)
-                }
+        // Snapshot (chunkID, itemID, embed-text) for every chunk first, so the
+        // async embed happens outside any DB transaction. The embed text is the
+        // SAME title-prefixed composition ingest uses (EmbeddingText) — a
+        // reindex that composed differently would silently fork the space.
+        let rows: [(chunkID: UUID, itemID: UUID, text: String)] = try await dbQueue.read { db in
+            try Row.fetchAll(
+                db,
+                sql: """
+                SELECT c.id, c.item_id, c.content, i.title
+                FROM knowledge_chunks c
+                JOIN knowledge_items i ON i.id = c.item_id
+                """
+            )
+            .compactMap { row -> (chunkID: UUID, itemID: UUID, text: String)? in
+                guard let cid: String = row["id"], let chunkID = UUID(uuidString: cid),
+                      let iid: String = row["item_id"], let itemID = UUID(uuidString: iid)
+                else { return nil }
+                let content: String = row["content"] ?? ""
+                let title: String = row["title"] ?? ""
+                return (chunkID, itemID, EmbeddingText.forChunk(title: title, content: content))
+            }
         }
         guard !rows.isEmpty else { return 0 }
 
-        let vectors = try await embedder.embedBatch(rows.map(\.content))
+        let vectors = try await embedder.embedBatch(rows.map(\.text))
         guard vectors.count == rows.count else {
             throw KnowledgeStoreError.embeddingCountMismatch(chunks: rows.count, embeddings: vectors.count)
         }

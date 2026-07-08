@@ -37,6 +37,86 @@ private func makePDF(pages: [String]) -> Data {
     return data as Data
 }
 
+// MARK: - Recording embedder (test helper)
+
+/// Wraps the deterministic hashing embedder but records every text it is asked
+/// to embed — so a test can assert WHAT was embedded, not just that it was.
+private final class RecordingEmbedder: EmbeddingService, @unchecked Sendable {
+    private let inner = HashingEmbeddingService()
+    private let lock = NSLock()
+    private(set) var embedded: [String] = []
+
+    var fingerprint: String {
+        inner.fingerprint
+    }
+
+    var dimension: Int {
+        inner.dimension
+    }
+
+    func isAvailable() async -> Bool {
+        await inner.isAvailable()
+    }
+
+    func embed(_ text: String) async throws -> [Float] {
+        record([text])
+        return try await inner.embed(text)
+    }
+
+    func embedBatch(_ texts: [String]) async throws -> [[Float]] {
+        record(texts)
+        return try await inner.embedBatch(texts)
+    }
+
+    private func record(_ texts: [String]) {
+        lock.lock()
+        embedded.append(contentsOf: texts)
+        lock.unlock()
+    }
+}
+
+// MARK: - B5 layer 3: chunks embed WITH their title
+
+struct TitlePrefixedEmbeddingTests {
+    @Test("ingest embeds the chunk title-prefixed when the title adds context")
+    func ingestEmbedsTitlePrefixed() async throws {
+        let store = try KnowledgeStore()
+        let embedder = RecordingEmbedder()
+        let ingester = DocumentIngester(store: store, embedder: embedder)
+        _ = try await ingester.ingest(
+            title: "Golden Gate derisk",
+            text: "The full-graph beta build passed at every rung."
+        )
+        #expect(embedder.embedded.contains(
+            "Golden Gate derisk\nThe full-graph beta build passed at every rung."
+        ))
+    }
+
+    @Test("a memory fact whose title IS the text embeds bare — no doubled fact")
+    func factEmbedsBare() async throws {
+        let store = try KnowledgeStore()
+        let embedder = RecordingEmbedder()
+        let ingester = DocumentIngester(store: store, embedder: embedder)
+        let fact = "Kev lives in Cork."
+        _ = try await ingester.ingest(title: fact, text: fact, kind: .memory)
+        #expect(embedder.embedded == [fact])
+    }
+
+    @Test("reindexEmbeddings re-embeds with the SAME title-prefixed composition")
+    func reindexUsesComposition() async throws {
+        let store = try KnowledgeStore()
+        let ingestEmbedder = RecordingEmbedder()
+        let ingester = DocumentIngester(store: store, embedder: ingestEmbedder)
+        _ = try await ingester.ingest(
+            title: "Golden Gate derisk",
+            text: "The full-graph beta build passed at every rung."
+        )
+        let reindexEmbedder = RecordingEmbedder()
+        _ = try await store.reindexEmbeddings(using: reindexEmbedder)
+        #expect(reindexEmbedder.embedded == ingestEmbedder.embedded)
+    }
+}
+
 // MARK: - PDF extraction
 
 struct PDFTextExtractorTests {

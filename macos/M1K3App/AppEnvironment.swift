@@ -937,7 +937,8 @@ final class AppEnvironment {
         embedder.setEmbedder(newEmbedder)
         do {
             let count = try await store.reindexEmbeddings(
-                using: newEmbedder, fingerprint: newEmbedder.fingerprint
+                using: newEmbedder,
+                fingerprint: EmbeddingText.storeFingerprint(embedder: newEmbedder.fingerprint)
             )
             usingMLXEmbeddings = useMLX
             UserDefaults.standard.set(useMLX, forKey: Self.embedderPrefersMLXKey)
@@ -1289,7 +1290,11 @@ extension AppEnvironment {
     /// serving mid-reindex; vector ranks are briefly mixed-space, acceptable
     /// for a minutes-long one-time migration.
     func reindexIfEmbedderChanged() async {
-        let current = embedder.fingerprint
+        // Salted with the EmbeddingText composition version: a composition
+        // change (B5 layer 3, title-prefixed chunks) re-embeds the corpus
+        // exactly like an embedder swap — mixed composition in one store
+        // would compare incompatible vectors forever.
+        let current = EmbeddingText.storeFingerprint(embedder: embedder.fingerprint)
         let stored = (try? store.meta(key: KnowledgeStore.embedderFingerprintKey)) ?? nil
         let vectorCount = (try? store.embeddingCount()) ?? 0
         guard EmbedderReindexPolicy.needsReindex(
