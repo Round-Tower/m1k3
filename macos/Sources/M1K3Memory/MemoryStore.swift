@@ -50,6 +50,10 @@
 //     dropped the identity-fact class the corpus memory lane already recalls.
 //     FTS-only hits still must NOT bypass the bar when recall is implicit —
 //     the exact leak GroundingGate.filter fixed; only the bar moved.
+//     NOTE (07-09 title composition): only the VECTOR lane gets the B5
+//     title rescue — memory_fts indexes fact text alone (matching
+//     knowledge_chunk_fts, which never indexes item titles either), so a
+//     keyword whose only match is the title rides the vector lane.
 //
 //  6. SEPARATE DATABASE FILE (memory.sqlite), not new tables in knowledge.db.
 //     Different lifecycle (sync/export/forget-all), different consent story,
@@ -133,6 +137,12 @@ public struct Memory: Identifiable, Equatable, Sendable, Codable {
     /// The fact itself. Atomic — one idea per row. Soft cap at write time
     /// (~500 chars); bigger inputs should be split/summarised by the caller.
     public var text: String
+    /// Optional discriminating context (B5 layer 3, ported to the graph lane
+    /// 2026-07-09): an MCP `remember` carries a user title whose context the
+    /// bare fact text may lack ("Golden Gate milestone — …"), and the vector
+    /// embeds COMPOSED via `embeddingText` so keyword queries can find long
+    /// facts. Distilled facts are their own titles → nil, embeds bare.
+    public var title: String?
     /// Who/what wrote it: "mcp:remember", "chat:auto-distill", "user:settings".
     /// The provenance half of the consent story — Settings can show it.
     public var source: String
@@ -146,6 +156,7 @@ public struct Memory: Identifiable, Equatable, Sendable, Codable {
         id: UUID = UUID(),
         kind: MemoryKind,
         text: String,
+        title: String? = nil,
         source: String,
         createdAt: Date = Date(),
         supersededBy: UUID? = nil
@@ -153,9 +164,19 @@ public struct Memory: Identifiable, Equatable, Sendable, Codable {
         self.id = id
         self.kind = kind
         self.text = text
+        self.title = title
         self.source = source
         self.createdAt = createdAt
         self.supersededBy = supersededBy
+    }
+
+    /// The text this memory's vector is derived from: title-prefixed through
+    /// the SAME `EmbeddingText.forChunk` rules the corpus lane uses (empty/nil
+    /// title or content leading with the title → bare). Every writer and the
+    /// reindex MUST embed this, never `text` — mixed composition in one store
+    /// compares incompatible vectors.
+    public var embeddingText: String {
+        EmbeddingText.forChunk(title: title ?? "", content: text)
     }
 }
 
@@ -259,6 +280,13 @@ public final class MemoryStore: @unchecked Sendable {
                 t.column("value", .text).notNull()
             }
         }
+        // v2 (2026-07-09): optional title — B5 layer-3 composition for the
+        // graph lane. Nullable, so every v1 row reads back unchanged.
+        migrator.registerMigration("v2-title") { db in
+            try db.alter(table: "memories") { t in
+                t.add(column: "title", .text)
+            }
+        }
         try migrator.migrate(dbQueue)
     }
 
@@ -281,11 +309,11 @@ public final class MemoryStore: @unchecked Sendable {
         try dbQueue.write { db in
             try db.execute(
                 sql: """
-                INSERT INTO memories (id, kind, text, source, created_at, superseded_by)
-                VALUES (?, ?, ?, ?, ?, NULL)
+                INSERT INTO memories (id, kind, text, title, source, created_at, superseded_by)
+                VALUES (?, ?, ?, ?, ?, ?, NULL)
                 """,
                 arguments: [
-                    memory.id.uuidString, memory.kind.rawValue, memory.text,
+                    memory.id.uuidString, memory.kind.rawValue, memory.text, memory.title,
                     memory.source, memory.createdAt.timeIntervalSince1970,
                 ]
             )
@@ -586,6 +614,12 @@ public final class MemoryStore: @unchecked Sendable {
 
     public static let embedderFingerprintKey = "embedder.fingerprint"
 
+    /// Set BEFORE any title backfill writes and cleared only after the
+    /// vector-repairing reindex completes — a crash between the two phases
+    /// leaves this flag, and the next pass forces the reindex it still owes
+    /// (otherwise: titled rows + matching fingerprint = stranded bare vectors).
+    public static let titleBackfillPendingKey = "title.backfill.pending"
+
     /// Re-embed everything when the embedder changes — same atomic
     /// vectors+fingerprint contract as KnowledgeStore.reindexEmbeddings.
     ///
@@ -605,14 +639,32 @@ public final class MemoryStore: @unchecked Sendable {
         using embedder: any EmbeddingService,
         fingerprint: String? = nil
     ) async throws -> Int {
-        let rows: [(id: String, text: String)] = try await dbQueue.read { db in
-            try Row.fetchAll(db, sql: "SELECT id, text FROM memories").compactMap { row in
+        // Re-embed the COMPOSED text (title-prefixed via the forChunk rules),
+        // never the bare row text — same doctrine as KnowledgeStore's reindex.
+        let rows: [(id: String, composed: String)] = try await dbQueue.read { db in
+            try Row.fetchAll(db, sql: "SELECT id, text, title FROM memories").compactMap { row in
                 guard let id: String = row["id"] else { return nil }
-                return (id, row["text"] ?? "")
+                return (id, EmbeddingText.forChunk(title: row["title"] ?? "", content: row["text"] ?? ""))
             }
         }
-        guard !rows.isEmpty else { return 0 }
-        let vectors = try await embedder.embedBatch(rows.map(\.text))
+        guard !rows.isEmpty else {
+            // An empty store still adopts the marker — "zero vectors in this
+            // space" is a true statement, and a markerless fresh graph would
+            // otherwise re-enter the reindex decision every launch.
+            if let fingerprint {
+                try await dbQueue.write { db in
+                    try db.execute(
+                        sql: """
+                        INSERT INTO memory_meta (key, value) VALUES (?, ?)
+                        ON CONFLICT(key) DO UPDATE SET value = excluded.value
+                        """,
+                        arguments: [Self.embedderFingerprintKey, fingerprint]
+                    )
+                }
+            }
+            return 0
+        }
+        let vectors = try await embedder.embedBatch(rows.map(\.composed))
         try await dbQueue.write { db in
             for (row, vector) in zip(rows, vectors) {
                 try db.execute(
@@ -634,6 +686,65 @@ public final class MemoryStore: @unchecked Sendable {
             }
         }
         return rows.count
+    }
+
+    /// Stored meta value (the app wiring reads the embedder fingerprint to
+    /// drive the reindex decision — the corpus store's `meta(key:)` twin).
+    public func meta(key: String) throws -> String? {
+        try dbQueue.read { db in
+            try String.fetchOne(db, sql: "SELECT value FROM memory_meta WHERE key = ?", arguments: [key])
+        }
+    }
+
+    /// Write a meta value (the corpus store's `setMeta` twin).
+    public func setMeta(key: String, value: String) throws {
+        try dbQueue.write { db in
+            try db.execute(
+                sql: """
+                INSERT INTO memory_meta (key, value) VALUES (?, ?)
+                ON CONFLICT(key) DO UPDATE SET value = excluded.value
+                """,
+                arguments: [key, value]
+            )
+        }
+    }
+
+    /// Remove a meta value (clears one-shot flags like the backfill pending
+    /// marker).
+    public func deleteMeta(key: String) throws {
+        try dbQueue.write { db in
+            try db.execute(sql: "DELETE FROM memory_meta WHERE key = ?", arguments: [key])
+        }
+    }
+
+    /// How many vectors exist — the reindex policy's "is there anything to
+    /// migrate" input.
+    public func embeddingCount() throws -> Int {
+        try dbQueue.read { db in
+            try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM memory_embeddings") ?? 0
+        }
+    }
+
+    /// Memories with no title yet — the one-time backfill's work list (the
+    /// app copies titles across from the corpus twins written by the same
+    /// `remember`, so pre-v2 facts get their discriminating context back).
+    public func memoriesWithoutTitle() throws -> [Memory] {
+        try dbQueue.read { db in
+            try Row.fetchAll(db, sql: "SELECT * FROM memories WHERE title IS NULL ORDER BY created_at")
+                .compactMap(Self.memory(from:))
+        }
+    }
+
+    /// Backfill a title. Touches the ROW only — the vector is repaired by the
+    /// reindex that follows the backfill (composition changes the embedding
+    /// text, and only the reindex owns vector writes).
+    public func setTitle(_ title: String, for id: UUID) throws {
+        try dbQueue.write { db in
+            try db.execute(
+                sql: "UPDATE memories SET title = ? WHERE id = ?",
+                arguments: [title, id.uuidString]
+            )
+        }
     }
 
     /// Live (non-superseded) memory count — the Settings "M1K3 remembers
@@ -725,6 +836,7 @@ public final class MemoryStore: @unchecked Sendable {
             id: id,
             kind: MemoryKind(rawValue: row["kind"] ?? "note"),
             text: row["text"] ?? "",
+            title: row["title"],
             source: row["source"] ?? "unknown",
             createdAt: Date(timeIntervalSince1970: row["created_at"] ?? 0),
             supersededBy: (row["superseded_by"] as String?).flatMap(UUID.init(uuidString:))

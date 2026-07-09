@@ -171,7 +171,7 @@ extension AppEnvironment {
         // retry stays silent and skips the (additive, best-effort) dual-write.
         if !result.wasDeduped {
             soundEffects.play(.save)
-            await dualWriteRememberedFact(text: text, provenance: provenance, kind: kind)
+            await dualWriteRememberedFact(title: title, text: text, provenance: provenance, kind: kind)
         }
         let dedup = result.wasDeduped ? " (already remembered)" : ""
         return "Remembered “\(title)”\(dedup)."
@@ -180,11 +180,14 @@ extension AppEnvironment {
     /// Best-effort write of a remembered fact into the temporal memory graph.
     /// Embeds via the SAME embedder the recall tools query with (shared space).
     /// Swallows every error — never a gate on the proven KnowledgeStore remember.
-    private func dualWriteRememberedFact(text: String, provenance: String, kind: MemoryKind) async {
+    /// The graph node keeps the caller's TITLE (B5 layer 3, graph lane): the
+    /// vector embeds `embeddingText` (title-composed), so keyword queries can
+    /// find long facts the way the corpus twin already allows.
+    private func dualWriteRememberedFact(title: String, text: String, provenance: String, kind: MemoryKind) async {
         guard let memoryStore else { return }
         do {
-            let vector = try await embedder.embed(text)
-            let fact = Memory(kind: kind, text: text, source: provenance)
+            let fact = Memory(kind: kind, text: text, title: title, source: provenance)
+            let vector = try await embedder.embed(fact.embeddingText)
             try memoryStore.rememberConnected(fact, embedding: vector)
         } catch {
             Self.memoryLog.error(
