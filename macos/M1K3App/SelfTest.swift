@@ -249,6 +249,19 @@ enum SelfTest {
             await runSeparationEval()
         }
 
+        // 6b. Optional query-style eval (M1K3_SELFTEST_KEYEVAL=1): the
+        //    keyword-query gap instrument. Embeds the probe targets exactly as
+        //    production stores them, then scores keyword and question queries
+        //    in TWO arms — bare (today's behaviour) vs instructed
+        //    (EmbeddingText.forQuery, Qwen3-Embedding's official asymmetric
+        //    convention) — plus keyword-register noise, in one run. The data
+        //    that decides whether the instruction ships and where the
+        //    GroundingGate floors move (challenger doctrine: floors are
+        //    re-DERIVED from the prefixed distributions, not assumed stable).
+        if SelfTestEnv.value("M1K3_SELFTEST_KEYEVAL") == "1" {
+            await runQueryStyleEval()
+        }
+
         // 7. Optional chat-quality eval (M1K3_SELFTEST_CHATEVAL=1): run the
         //    task-kind fixtures against each brain through the REAL providers
         //    and score them with the pure M1K3Eval scorer — the cross-brain
@@ -362,6 +375,70 @@ enum SelfTest {
             emit(String(format: "absep %@: %.3f [%@]", label, cosine, String(pair.query.prefix(40))))
         }
         return scores
+    }
+
+    /// 6b. The KEYEVAL pass: every probe target embedded once (production
+    /// composition via EmbeddingText.forChunk), then keyword / question /
+    /// noise queries scored per arm — arm A bare, arm B through
+    /// EmbeddingText.forQuery (the SAME composer a production embedQuery
+    /// override would call; an inlined template here would measure a phantom).
+    private static func runQueryStyleEval() async {
+        emit("• keyeval: \(QueryStyleEvalFixtures.probes.count) probes + "
+            + "\(QueryStyleEvalFixtures.noise.count) noise pairs, bare vs instructed query arms…")
+        do {
+            let embedder = MLXEmbeddingService()
+            let targetVectors = try await embedder.embedBatch(QueryStyleEvalFixtures.probes.map {
+                EmbeddingText.forChunk(title: $0.title, content: $0.content)
+            })
+            let noiseTargetVectors = try await embedder.embedBatch(QueryStyleEvalFixtures.noise.map {
+                EmbeddingText.forChunk(title: $0.title, content: $0.content)
+            })
+
+            var arms: [QueryStyleEvalReport.Arm] = []
+            let armSpecs: [(label: String, compose: (String) -> String)] = [
+                ("bare", { $0 }),
+                ("instructed", EmbeddingText.forQuery),
+            ]
+            for spec in armSpecs {
+                let keywordVectors = try await embedder.embedBatch(
+                    QueryStyleEvalFixtures.probes.map { spec.compose($0.keyword) }
+                )
+                let questionVectors = try await embedder.embedBatch(
+                    QueryStyleEvalFixtures.probes.map { spec.compose($0.question) }
+                )
+                let noiseVectors = try await embedder.embedBatch(
+                    QueryStyleEvalFixtures.noise.map { spec.compose($0.keyword) }
+                )
+                var keyword: [Float] = []
+                var question: [Float] = []
+                var noise: [Float] = []
+                for (index, probe) in QueryStyleEvalFixtures.probes.enumerated() {
+                    let k = VectorMath.cosineSimilarity(keywordVectors[index], targetVectors[index])
+                    let q = VectorMath.cosineSimilarity(questionVectors[index], targetVectors[index])
+                    keyword.append(k)
+                    question.append(q)
+                    emit(String(
+                        format: "keyeval %@ kw %.3f / q %.3f [%@]",
+                        spec.label, k, q, String(probe.keyword.prefix(40))
+                    ))
+                }
+                for (index, pair) in QueryStyleEvalFixtures.noise.enumerated() {
+                    let n = VectorMath.cosineSimilarity(noiseVectors[index], noiseTargetVectors[index])
+                    noise.append(n)
+                    emit(String(
+                        format: "keyeval %@ noise %.3f [%@]",
+                        spec.label, n, String(pair.keyword.prefix(40))
+                    ))
+                }
+                arms.append(.init(label: spec.label, keyword: keyword, question: question, noise: noise))
+            }
+            emit(QueryStyleEvalReport.render(
+                arms,
+                floors: [GroundingGate.memoryThreshold, GroundingGate.chunkThreshold]
+            ))
+        } catch {
+            emit("✗ keyeval: \(error)")
+        }
     }
 
     /// 3d. Optional prompt-cache persistence probe (M1K3_SELFTEST_KVPERSIST=1):
