@@ -40,8 +40,11 @@ not the asset (see gotchas).
 
 ### 2. QA the render
 
+- **Headless image preview** (works with no GUI/locked Mac):
+  `macos/tools/companion-pipeline/preview_usdz.swift "$OUT"/*.usdz -o /tmp/previews`
+  — renders each clip to a PNG; eyeball mesh/materials/pose.
 - **Quick Look** each `.usdz` (it shows mesh + plays the animation), OR
-- headless RealityKit inventory: `cd scratch/usdz-probe/out/rkprobe && swift run -c release rkprobe "$OUT"/*.usdz`.
+- headless RealityKit inventory: `cd scratch/usdz-probe/out/rkprobe && swift run -c release rkprobe "$OUT"/*.usdz` — proves animations were harvested (the Gecko failure mode).
 
 Watch for: missing/black materials, a frozen mesh (no animation harvested), wildly
 wrong scale. If a clip looks broken, re-export just that clip.

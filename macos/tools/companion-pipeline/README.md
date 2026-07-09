@@ -44,9 +44,15 @@ Extra clips are harmless (just bytes — M1K3 only *plays* the gait-mapped subse
 ## Verify
 
 - **Quick Look** each `.usdz` (Finder → space) — confirms mesh, materials,
-  and that the animation plays.
+  and that the animation plays. Needs a GUI session.
 - **Headless RealityKit load + inventory:** `scratch/usdz-probe/out/rkprobe`
-  (`swift run -c release rkprobe <files...>`).
+  (`swift run -c release rkprobe <files...>`) — proves animations were
+  harvested (the Gecko failure mode) but renders nothing.
+- **Headless image preview:** `./preview_usdz.swift <files...> [-o outdir]
+  [--size N] [--time T]` — renders each clip to a PNG (mesh, materials, and
+  the pose at `--time`) with no screen needed: terminal, SSH, CI, or a locked
+  Mac all work. The three checks are complementary — preview shows the look,
+  rkprobe proves the motion data, Quick Look shows the motion itself.
 
 ## Wire into the app
 
