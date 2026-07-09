@@ -10,6 +10,11 @@
   base = "site"
   publish = "."
   command = ""
+  # Skip the build (and the per-PR deploy preview) unless the site itself
+  # changed — most pushes here are app/CI work that can't affect m1k3.app.
+  # `git diff --quiet` exits 0 on "no changes", which tells Netlify to skip.
+  # Path is repo-root-relative even with base = "site".
+  ignore = "git diff --quiet $CACHED_COMMIT_REF $COMMIT_REF -- site/ netlify.toml"
 
 # No CSP so the one external request (Google Fonts) keeps working.
 [[headers]]
