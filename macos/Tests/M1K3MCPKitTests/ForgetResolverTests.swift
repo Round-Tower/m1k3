@@ -46,6 +46,23 @@ struct ForgetResolverTests {
         #expect(closest?.text == "Kev likes tea.")
     }
 
+    @Test("a rock-bottom top hit is NOT offered as a near-miss — no random-fact suggestions")
+    func rockBottomHitNotSuggested() {
+        // With the 07-09 threshold-0 candidate search, recall always returns
+        // SOMETHING from a populated store. A closest at cosine 0.12 is a
+        // random fact, and inviting a word-for-word repeat of it is a consent
+        // hazard — below the suggestion floor the honest answer is "nothing
+        // matching", exactly as if the store were empty.
+        let hits = [hit("Kev drinks his coffee black.", similarity: 0.12)]
+        #expect(ForgetResolver.resolve(hits: hits) == .notConfident(closest: nil))
+    }
+
+    @Test("a hit exactly at the suggestion floor is still offered as closest (>= is inclusive)")
+    func suggestionFloorInclusive() {
+        let hits = [hit("Kev drinks his coffee black.", similarity: ForgetResolver.suggestionFloor)]
+        #expect(ForgetResolver.resolve(hits: hits) == .notConfident(closest: hits[0].memory))
+    }
+
     @Test("no hits at all resolves to notConfident with no closest")
     func nothingMatched() {
         #expect(ForgetResolver.resolve(hits: []) == .notConfident(closest: nil))

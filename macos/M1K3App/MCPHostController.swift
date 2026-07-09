@@ -257,12 +257,12 @@ final class MCPHostController {
         let handlers = MemoryToolHandlers(
             recall: { query in
                 guard let memoryStore else { return [] }
-                let vector = try await embedder.embed(query)
+                let vector = try await embedder.embedQuery(query)
                 return try memoryStore.recall(query: query, queryVector: vector)
             },
             related: { query in
                 guard let memoryStore else { return nil }
-                let vector = try await embedder.embed(query)
+                let vector = try await embedder.embedQuery(query)
                 guard let seed = try memoryStore.recall(query: query, queryVector: vector, limit: 1).first else {
                     return nil
                 }
@@ -274,8 +274,18 @@ final class MCPHostController {
             },
             forget: { query in
                 guard let memoryStore else { return .notConfident(closest: nil) }
+                // Forget is FACT-TO-FACT matching, not retrieval: the caller
+                // repeats the remembered text, so the query embeds BARE (a
+                // verbatim repeat is cosine ≈ 1.0; the instruction would only
+                // depress it) and the ForgetResolver 0.6 confidence bar keeps
+                // its bare-tuned meaning. Candidates search with threshold 0 —
+                // recall (instructed) and forget (bare) rank differently near
+                // the floor, and the graceful chain (surface closest → invite
+                // word-for-word repeat) must never sever just because the
+                // bare cosine dipped under the recall floor. The 0.6 bar, not
+                // this candidate search, gates the actual delete.
                 let vector = try await embedder.embed(query)
-                let hits = try memoryStore.recall(query: query, queryVector: vector, limit: 3)
+                let hits = try memoryStore.recall(query: query, queryVector: vector, limit: 3, threshold: 0)
                 switch ForgetResolver.resolve(hits: hits) {
                 case let .forget(memory):
                     try memoryStore.forget(id: memory.id)

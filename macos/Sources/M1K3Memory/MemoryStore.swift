@@ -42,7 +42,8 @@
 //  4. Same EmbedderReindexPolicy doctrine as KnowledgeStore: vectors carry an
 //     embedder fingerprint in a meta table; kernel bump → one-time re-index.
 //
-//  5. Retrieval cutoff: reuse GroundingGate.memoryThreshold (0.39) — memories
+//  5. Retrieval cutoff: reuse GroundingGate.memoryThreshold (0.35 since the
+//     2026-07-09 instructed-query re-derivation; 0.39 before) — memories
 //     are atomic facts, and query→short-fact cosines sit lower in the cone
 //     than query→chunk (the MEMEVAL rationale on that constant). Was
 //     chunkThreshold (0.51) until 2026-07-08; the stricter chunk bar silently
@@ -339,9 +340,11 @@ public final class MemoryStore: @unchecked Sendable {
     /// node (and a supersedes edge on correction), which left `related` and the
     /// constellation edgeless in production. The cosine bar keeps unrelated
     /// facts unlinked — DELIBERATELY stricter than recall's memoryThreshold
-    /// (0.39) since 2026-07-08: a weak recall hit is one extra line in a
-    /// prompt, a weak edge is permanent graph structure feeding traversal, so
-    /// edges keep the chunk bar (0.51) to avoid hairballing. Revisit if the
+    /// since 2026-07-08: a weak recall hit is one extra line in a prompt, a
+    /// weak edge is permanent graph structure feeding traversal, so edges
+    /// keep their own bar (GroundingGate.edgeThreshold, 0.51 — since 07-09 a
+    /// dedicated constant: fact↔fact cosines carry no query instruction, so
+    /// this bar did not move with the query-side floor re-tune). Revisit if the
     /// constellation looks under-linked for identity facts. `maxLinks` caps
     /// degree so a common topic can't hairball. Returns the number of edges
     /// created.
@@ -357,7 +360,7 @@ public final class MemoryStore: @unchecked Sendable {
         _ memory: Memory,
         embedding: [Float],
         maxLinks: Int = 3,
-        threshold: Float = GroundingGate.chunkThreshold
+        threshold: Float = GroundingGate.edgeThreshold
     ) throws -> Int {
         try remember(memory, embedding: embedding)
         // Nearest live neighbours by cosine — the +1 absorbs the node we just

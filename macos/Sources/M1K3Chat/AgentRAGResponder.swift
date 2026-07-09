@@ -188,7 +188,7 @@ public struct AgentRAGResponder: RAGResponding, Sendable {
         onActivity(.retrieving)
         // Stale tool hits from an aborted prior turn must not leak in.
         _ = sourceCollector?.drain()
-        let queryVector = try await embedder.embed(question)
+        let queryVector = try await embedder.embedQuery(question)
         // Two-lane retrieval: documents and memories get SEPARATE top-K budgets
         // so the larger document corpus can't crowd short memory facts out of a
         // single ranking (the open-chat recall miss — M1K3 forgot the user's

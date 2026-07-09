@@ -53,7 +53,7 @@ public struct RAGResponder: RAGResponding, Sendable {
     /// Retrieve grounding for `question` (shared by the blocking + streaming
     /// paths) — embed, then hybrid-search.
     private func retrieve(for question: String) async throws -> (chunks: [ChunkHit], prompt: String) {
-        let queryVector = try await embedder.embed(question)
+        let queryVector = try await embedder.embedQuery(question)
         let chunks = try store.searchHybrid(query: question, queryVector: queryVector, limit: topK)
         let prompt = ChatPromptBuilder.build(chunks: chunks, userMessage: question)
         return (chunks, prompt)

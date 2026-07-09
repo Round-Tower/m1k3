@@ -202,7 +202,7 @@ public enum MemoryGraphEval {
         }
         switch probe.check {
         case let .recalls(query, expect, absent):
-            let hits = try store.recall(query: query, queryVector: await embedder.embed(query), limit: 10)
+            let hits = try store.recall(query: query, queryVector: await embedder.embedQuery(query), limit: 10)
             let hitIDs = Set(hits.map(\.memory.id))
             let missing = try expect.filter { try !hitIDs.contains(id($0)) }
             let leaked = try absent.filter { try hitIDs.contains(id($0)) }

@@ -3,7 +3,7 @@
 //  M1K3Knowledge
 //
 //  The honest "Sources:" footer. Retrieval is promiscuous by design — top-K plus
-//  a grounding-gate floor (0.51) lets an off-topic chunk ride above the bar (the
+//  a grounding-gate floor (0.51 at the time) lets an off-topic chunk ride above the bar (the
 //  documented sourdough/Chain-of-Thought leak), and on an identity turn ("who are
 //  you") the model answers from persona and cites nothing at all. Rendering the
 //  footer from what was RETRIEVED therefore staples phantom sources onto answers

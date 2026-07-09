@@ -194,7 +194,7 @@ public enum ChatEvalFixtures {
             id: "chat-identity-noisy-corpus", kind: .openChat,
             prompt: "Who are you?",
             // The inverse of grounded-Q: an off-topic academic chunk is seeded so it
-            // clears the 0.51 grounding floor and rides into retrieval. A good brain
+            // clears the chunk grounding floor and rides into retrieval. A good brain
             // answers "who are you" from PERSONA and cites nothing — so no phantom
             // source should reach the footer. Pins the citation-noise abstain fix
             // (HeadlessAsk/MessageView render only what was actually cited).
