@@ -88,13 +88,30 @@ DIRECT_ENTITLEMENTS="$MACOS_DIR/M1K3App/M1K3.entitlements"
 # (deleted/renamed), rather than a cryptic xcodebuild error mid-archive. Mirrors
 # release-mas.sh's check on its MAS_ENTITLEMENTS.
 [ -f "$DIRECT_ENTITLEMENTS" ] || { echo "✗ Missing $DIRECT_ENTITLEMENTS"; exit 1; }
+# ── Signing style ─────────────────────────────────────────────────────────────
+# Local machines carry an Apple Development cert, so the project's Automatic
+# signing archives fine (dev-signs, then re-signs Developer ID at export). CI
+# keychains carry ONLY the Developer ID Application identity — Automatic fails
+# at archive ("No signing certificate 'Mac Development' found", nightly run
+# 29027965918), so M1K3_SIGN_STYLE=manual archives directly with Developer ID
+# (macOS Developer ID needs no provisioning profile; export re-signs as before).
+# Local runs keep Automatic — set nothing.
+SIGN_ARGS=()
+if [ "${M1K3_SIGN_STYLE:-automatic}" = "manual" ]; then
+  echo "▸ Manual signing (Developer ID Application) — single-identity keychain mode"
+  SIGN_ARGS=(CODE_SIGN_STYLE=Manual "CODE_SIGN_IDENTITY=Developer ID Application")
+fi
+
 echo "▸ [1/6] Archiving…"
 rm -rf "$ARCHIVE"
+# ${arr[@]+...} guard: bash 3.2 + set -u treats an EMPTY array expansion as
+# unbound — the guard expands to nothing instead of erroring.
 xcodebuild archive \
   -project "$PROJECT" -scheme "$SCHEME" -configuration Release \
   -archivePath "$ARCHIVE" -destination 'generic/platform=macOS' \
   CODE_SIGN_ENTITLEMENTS="$DIRECT_ENTITLEMENTS" \
-  DEVELOPMENT_TEAM="$TEAM" | beautify
+  DEVELOPMENT_TEAM="$TEAM" \
+  ${SIGN_ARGS[@]+"${SIGN_ARGS[@]}"} | beautify
 
 # ── 2. Export the signed .app ────────────────────────────────────────────────
 echo "▸ [2/6] Exporting (Developer ID)…"
