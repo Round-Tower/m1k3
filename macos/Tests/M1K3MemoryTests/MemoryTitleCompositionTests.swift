@@ -193,6 +193,17 @@ struct MemoryTitleCompositionTests {
         #expect(try f.store.meta(key: MemoryStore.embedderFingerprintKey) == "hashing/v1+title-v1")
     }
 
+    @Test("setMeta/deleteMeta round-trip — the crash-safe backfill flag's storage")
+    func metaWriteSurface() throws {
+        let f = try Fixture()
+        try f.store.setMeta(key: MemoryStore.titleBackfillPendingKey, value: "1")
+        #expect(try f.store.meta(key: MemoryStore.titleBackfillPendingKey) == "1")
+        try f.store.setMeta(key: MemoryStore.titleBackfillPendingKey, value: "2")
+        #expect(try f.store.meta(key: MemoryStore.titleBackfillPendingKey) == "2")
+        try f.store.deleteMeta(key: MemoryStore.titleBackfillPendingKey)
+        #expect(try f.store.meta(key: MemoryStore.titleBackfillPendingKey) == nil)
+    }
+
     @Test("the meta surface the app wiring needs: fingerprint read + embedding count")
     func metaAndCountSurface() async throws {
         let f = try Fixture()

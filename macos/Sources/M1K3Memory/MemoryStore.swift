@@ -614,6 +614,12 @@ public final class MemoryStore: @unchecked Sendable {
 
     public static let embedderFingerprintKey = "embedder.fingerprint"
 
+    /// Set BEFORE any title backfill writes and cleared only after the
+    /// vector-repairing reindex completes — a crash between the two phases
+    /// leaves this flag, and the next pass forces the reindex it still owes
+    /// (otherwise: titled rows + matching fingerprint = stranded bare vectors).
+    public static let titleBackfillPendingKey = "title.backfill.pending"
+
     /// Re-embed everything when the embedder changes — same atomic
     /// vectors+fingerprint contract as KnowledgeStore.reindexEmbeddings.
     ///
@@ -635,7 +641,7 @@ public final class MemoryStore: @unchecked Sendable {
     ) async throws -> Int {
         // Re-embed the COMPOSED text (title-prefixed via the forChunk rules),
         // never the bare row text — same doctrine as KnowledgeStore's reindex.
-        let rows: [(id: String, text: String)] = try await dbQueue.read { db in
+        let rows: [(id: String, composed: String)] = try await dbQueue.read { db in
             try Row.fetchAll(db, sql: "SELECT id, text, title FROM memories").compactMap { row in
                 guard let id: String = row["id"] else { return nil }
                 return (id, EmbeddingText.forChunk(title: row["title"] ?? "", content: row["text"] ?? ""))
@@ -658,7 +664,7 @@ public final class MemoryStore: @unchecked Sendable {
             }
             return 0
         }
-        let vectors = try await embedder.embedBatch(rows.map(\.text))
+        let vectors = try await embedder.embedBatch(rows.map(\.composed))
         try await dbQueue.write { db in
             for (row, vector) in zip(rows, vectors) {
                 try db.execute(
@@ -687,6 +693,27 @@ public final class MemoryStore: @unchecked Sendable {
     public func meta(key: String) throws -> String? {
         try dbQueue.read { db in
             try String.fetchOne(db, sql: "SELECT value FROM memory_meta WHERE key = ?", arguments: [key])
+        }
+    }
+
+    /// Write a meta value (the corpus store's `setMeta` twin).
+    public func setMeta(key: String, value: String) throws {
+        try dbQueue.write { db in
+            try db.execute(
+                sql: """
+                INSERT INTO memory_meta (key, value) VALUES (?, ?)
+                ON CONFLICT(key) DO UPDATE SET value = excluded.value
+                """,
+                arguments: [key, value]
+            )
+        }
+    }
+
+    /// Remove a meta value (clears one-shot flags like the backfill pending
+    /// marker).
+    public func deleteMeta(key: String) throws {
+        try dbQueue.write { db in
+            try db.execute(sql: "DELETE FROM memory_meta WHERE key = ?", arguments: [key])
         }
     }
 

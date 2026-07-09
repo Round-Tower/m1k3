@@ -1375,14 +1375,25 @@ extension AppEnvironment {
         isMemoryGraphReindexing = true
         defer { isMemoryGraphReindexing = false }
 
-        let backfilled = backfillMemoryTitles(into: memoryStore)
+        // A pending flag from a PRIOR pass = titles were written but the
+        // process died before the vector repair — the reindex is still owed
+        // even though this pass backfills nothing and the fingerprint matches.
+        let owedFromPriorCrash =
+            ((try? memoryStore.meta(key: MemoryStore.titleBackfillPendingKey)) ?? nil) != nil
+        // Off the main actor: the backfill is 2–3 synchronous GRDB round-trips
+        // per untitled row (one-time N+1 by design) — background work, not
+        // launch-path UI work. Both stores are Sendable (serialized queues).
+        let knowledgeStore = store
+        let backfilled = await Task.detached(priority: .utility) {
+            Self.backfillMemoryTitles(from: knowledgeStore, into: memoryStore)
+        }.value
         let current = EmbeddingText.storeFingerprint(embedder: embedder.fingerprint)
         let stored = (try? memoryStore.meta(key: MemoryStore.embedderFingerprintKey)) ?? nil
         let vectorCount = (try? memoryStore.embeddingCount()) ?? 0
         let policySaysReindex = EmbedderReindexPolicy.needsReindex(
             stored: stored, current: current, embeddingCount: vectorCount
         )
-        guard policySaysReindex || (backfilled > 0 && vectorCount > 0) else {
+        guard policySaysReindex || ((backfilled > 0 || owedFromPriorCrash) && vectorCount > 0) else {
             if stored != current, vectorCount == 0 {
                 // Adopt the marker on fresh/empty graphs. MemoryStore's
                 // reindexEmbeddings deliberately DIFFERS from KnowledgeStore's
@@ -1395,6 +1406,9 @@ extension AppEnvironment {
         }
         do {
             let count = try await memoryStore.reindexEmbeddings(using: embedder, fingerprint: current)
+            // Vectors repaired — the crash-recovery flag (set before the first
+            // title write) has served its purpose.
+            try? memoryStore.deleteMeta(key: MemoryStore.titleBackfillPendingKey)
             Self.embedLog.notice("memory graph reindexed: \(count) fact(s), \(backfilled) title(s) backfilled")
         } catch {
             Self.embedLog.error("memory-graph reindex failed — retries next launch: \(error.localizedDescription, privacy: .public)")
@@ -1403,17 +1417,25 @@ extension AppEnvironment {
 
     /// Copy corpus-twin titles onto untitled graph facts. Returns how many
     /// rows gained a title. Row-only writes — the caller's reindex owns the
-    /// vector repair (and the caller's thermal gate guarantees the reindex
-    /// runs in the same pass).
-    private func backfillMemoryTitles(into memoryStore: MemoryStore) -> Int {
+    /// vector repair. Crash-safe: the pending flag lands BEFORE the first
+    /// title write and is cleared only after the reindex succeeds, so a kill
+    /// anywhere between leaves the flag and the next pass repairs the vectors.
+    private nonisolated static func backfillMemoryTitles(
+        from knowledgeStore: KnowledgeStore, into memoryStore: MemoryStore
+    ) -> Int {
         guard let untitled = try? memoryStore.memoriesWithoutTitle(), !untitled.isEmpty else { return 0 }
         var backfilled = 0
         for memory in untitled {
             let ref = MemoryDistillationCoordinator.factSourceRef(memory.text)
-            guard let itemID = try? store.itemID(forSourceRef: ref),
-                  let title = (try? store.item(id: itemID))?.title,
+            guard let itemID = try? knowledgeStore.itemID(forSourceRef: ref),
+                  let title = (try? knowledgeStore.item(id: itemID))?.title,
                   !title.isEmpty, title != memory.text
             else { continue }
+            if backfilled == 0 {
+                // First real write of the pass — arm the crash-recovery flag.
+                guard (try? memoryStore.setMeta(key: MemoryStore.titleBackfillPendingKey, value: "1")) != nil
+                else { continue }
+            }
             if (try? memoryStore.setTitle(title, for: memory.id)) != nil {
                 backfilled += 1
             }
