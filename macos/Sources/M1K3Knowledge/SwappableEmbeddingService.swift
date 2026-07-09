@@ -55,6 +55,13 @@ public final class SwappableEmbeddingService: EmbeddingService, @unchecked Senda
         try await active.embedBatch(texts)
     }
 
+    /// Explicit forward — without this the façade would take the protocol
+    /// DEFAULT (its own bare `embed`) and silently strip the active
+    /// embedder's query instruction. Pinned by EmbedQuerySeamTests.
+    public func embedQuery(_ text: String) async throws -> [Float] {
+        try await active.embedQuery(text)
+    }
+
     public func isAvailable() async -> Bool {
         await active.isAvailable()
     }

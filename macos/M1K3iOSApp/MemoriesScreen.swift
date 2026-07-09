@@ -69,7 +69,7 @@ struct MemoriesScreen: View {
         searching = true
         defer { searching = false }
         do {
-            let vector = try await core.embedder.embed(text)
+            let vector = try await core.embedder.embedQuery(text)
             hits = try memoryStore.recall(query: text, queryVector: vector, limit: 20)
         } catch {
             hits = []

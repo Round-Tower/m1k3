@@ -144,14 +144,17 @@ public func makeMemoryToolDefinitions(handlers: MemoryToolHandlers) -> [MCPToolD
                     + "counterpart to remember. Finds the single best-matching memory for the query and "
                     + "HARD-DELETES it from BOTH the memory graph AND the document corpus (no residue). "
                     + "Irreversible: when no memory is a confident match it deletes NOTHING and tells you "
-                    + "the closest, so a vague query can't erase the wrong fact. Use recall_memory's exact "
-                    + "wording for a clean hit.",
+                    + "the closest, so a vague query can't erase the wrong fact. Repeat the remembered "
+                    + "FACT's text word-for-word (as recall_memory returned it) — not your search query.",
                 inputSchema: [
                     "type": "object",
                     "properties": [
                         "query": [
                             "type": "string",
-                            "description": "the fact to forget (use recall_memory's wording for precision)",
+                            "description": .string(
+                                "the fact to forget — repeat the remembered fact's text "
+                                    + "word-for-word (not your search query) for precision"
+                            ),
                         ],
                     ],
                     "required": ["query"],

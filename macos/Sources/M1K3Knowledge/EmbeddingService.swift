@@ -37,11 +37,29 @@ public protocol EmbeddingService: Sendable {
     /// inputs; backends with a native batch path should override.
     func embedBatch(_ texts: [String]) async throws -> [[Float]]
 
+    /// Embed a USER QUERY (as opposed to document/fact content, which always
+    /// goes through `embed`). Instruction-aware embedders (Qwen3-Embedding)
+    /// override this to apply their asymmetric query instruction
+    /// (`EmbeddingText.forQuery`); the default is identical to `embed`, so
+    /// symmetric embedders (hashing fallback, test doubles) are untouched.
+    /// A requirement (not just an extension) so overrides dispatch through
+    /// the witness table on `any EmbeddingService`.
+    ///
+    /// ⚠️ Residual risk, by design: a future QUERY call site that calls
+    /// `embed` instead of `embedQuery` compiles clean and silently
+    /// under-retrieves — no seam shape prevents that; the KEYEVAL harness
+    /// and review are the guard.
+    func embedQuery(_ text: String) async throws -> [Float]
+
     /// Whether the backend is ready to serve (model downloaded/loaded).
     func isAvailable() async -> Bool
 }
 
 public extension EmbeddingService {
+    func embedQuery(_ text: String) async throws -> [Float] {
+        try await embed(text)
+    }
+
     func embedBatch(_ texts: [String]) async throws -> [[Float]] {
         var out: [[Float]] = []
         out.reserveCapacity(texts.count)

@@ -33,7 +33,7 @@ public enum GroundedSearch {
         guard let embedder else {
             return try store.searchFTS(query: query, limit: limit)
         }
-        let queryVector = try await embedder.embed(query)
+        let queryVector = try await embedder.embedQuery(query)
         // Two-lane retrieval (documents + memories get SEPARATE top-K budgets),
         // the same path implicit grounding uses — so a large document corpus
         // can't crowd short memory facts out of one ranking BEFORE the floor.

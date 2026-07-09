@@ -31,6 +31,17 @@
 //  centre, separation doubled vs bge), memoryThreshold 0.54 → 0.39 (recall-
 //  first now that qwen3 dropped the negative ceiling 0.556 → 0.422). See the
 //  per-constant comments for the measured distributions. verify-at-⌘R.
+//  Review: Kev + claude-fable-5, 2026-07-09, Confidence 0.85 — RE-DERIVED for
+//  the query-instruction adoption (EmbeddingService.embedQuery →
+//  EmbeddingText.forQuery), from on-device KEYEVAL (M1K3_SELFTEST_KEYEVAL,
+//  instructed arms of the SAME MEMEVAL/ABSEP fixture sets that set the old
+//  floors): chunkThreshold 0.51 → 0.37 (instructed dead-zone [0.234, 0.510]
+//  centre — 0.51 sat ON the weakest instructed positive), memoryThreshold
+//  0.39 → 0.35 (instructed MEMEVAL: pos min 0.437 / neg max 0.260, CLEAN
+//  separation where bare overlapped; suggested midpoint 0.349). New
+//  edgeThreshold pins rememberConnected's content↔content bar at the old
+//  0.51 — fact-to-fact cosines carry no instruction and did not move.
+//  verify-at-⌘R (live keyword recall + no new noise leaks).
 //
 
 import Foundation
@@ -55,7 +66,26 @@ public enum GroundingGate {
     /// 0.51–0.68 band for no precision gain now that off-domain noise tops out
     /// at 0.315. The "flat pack = no real match" margin heuristic and more
     /// off-domain fixtures (n=6 here) are the durable upgrade paths.
-    public static let chunkThreshold: Float = 0.51
+    ///
+    /// 0.37 from the 2026-07-09 KEYEVAL re-derivation (instructed queries —
+    /// EmbeddingText.forQuery now applies on every query embed): the same
+    /// ABSEP fixtures scored with instructed queries give in-domain floor
+    /// 0.510 / off-domain ceiling 0.234 — the old 0.51 sat EXACTLY on the
+    /// weakest true positive with zero margin. 0.37 is the new dead-zone
+    /// centre (same maximal-margin rule that chose 0.51): 0.14 to the signal
+    /// floor, 0.136 to the noise ceiling. The instruction is why this is
+    /// safe: it cut the off-domain ceiling 0.315 → 0.234 and the
+    /// keyword-register noise ceiling to 0.203 (KEYEVAL probes).
+    public static let chunkThreshold: Float = 0.37
+
+    /// Minimum cosine for a fact→fact EDGE in the memory graph
+    /// (`rememberConnected`). Content↔content cosines carry NO query
+    /// instruction, so this bar deliberately did NOT move with the 07-09
+    /// query-side re-tune — it stays at the value chunkThreshold held when
+    /// the two-bar doctrine pinned edge formation to it (2026-07-08): a weak
+    /// recall hit is one prompt line, a weak edge is permanent graph
+    /// structure feeding traversal.
+    public static let edgeThreshold: Float = 0.51
 
     /// Minimum cosine similarity for a MEMORY hit. Memories are 5–40-token
     /// atomic facts; query-to-short-fact pairs sit LOWER in the cone than
@@ -73,7 +103,16 @@ public enum GroundingGate {
     /// the "I'll remember" promise, a false positive is one do-not-cite line.
     /// The zero-FP alternative is 0.43 (20/22 — loses Cork + UCC); recall-first
     /// chooses 0.39. Per-query normalisation is the upgrade path if strays annoy.
-    public static let memoryThreshold: Float = 0.39
+    ///
+    /// 0.35 from the 2026-07-09 KEYEVAL re-derivation (instructed queries):
+    /// the same MEMEVAL pairs scored with instructed queries give positives
+    /// 0.437–0.841 / negatives 0.068–0.260 — the instruction turned the bare
+    /// overlap (pos min 0.393 vs neg max 0.422) into CLEAN separation.
+    /// Suggested midpoint 0.349 → 0.35: margin 0.087 below the weakest true
+    /// recall and 0.09 above the worst negative, and low enough to admit the
+    /// keyword register (KEYEVAL instructed keyword positives floor at 0.420)
+    /// that the old 0.39 bar was measured missing live on 2026-07-08.
+    public static let memoryThreshold: Float = 0.35
 
     /// Split gated hits for the two prompt blocks: `.memory` hits (cleared
     /// `memoryThreshold`) feed the WHAT-I-KNOW-ABOUT-YOU block; everything

@@ -82,6 +82,20 @@ public final class MLXEmbeddingService: EmbeddingService, @unchecked Sendable {
         self.onLoadProgress = onLoadProgress
     }
 
+    /// Query-side asymmetry (Qwen3-Embedding's official convention): user
+    /// queries carry the retrieval instruction; documents embed bare via
+    /// `embed`. Routes through EmbeddingText.forQuery — the SAME composer the
+    /// KEYEVAL harness measures, so the instrument and production can never
+    /// drift apart. Measured 2026-07-09 (KEYEVAL, on-device): the instruction
+    /// crushes the noise ceiling (mixed 0.432→0.203, memory negatives
+    /// 0.422→0.260, chunk off-domain 0.315→0.234) — which is what let the
+    /// GroundingGate floors move down to admit the keyword register.
+    /// NOT part of `fingerprint`: query composition never touches stored
+    /// vectors, so it must not trigger a corpus re-embed.
+    public func embedQuery(_ text: String) async throws -> [Float] {
+        try await embed(EmbeddingText.forQuery(text))
+    }
+
     public func embed(_ text: String) async throws -> [Float] {
         let container = try await ensureLoaded()
         // Per-embed reclaim is intentional: prefer OS round-trips over peak

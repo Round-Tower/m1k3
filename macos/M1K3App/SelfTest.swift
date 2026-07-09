@@ -395,6 +395,11 @@ enum SelfTest {
             })
 
             var arms: [QueryStyleEvalReport.Arm] = []
+            // Arm A composes bare; arm B composes through EmbeddingText.forQuery
+            // — the SAME composer MLXEmbeddingService.embedQuery calls (the
+            // production query path since the 07-09 adoption), so the harness
+            // measures the live seam's composition, with the before-arm kept
+            // for the ongoing A/B.
             let armSpecs: [(label: String, compose: (String) -> String)] = [
                 ("bare", { $0 }),
                 ("instructed", EmbeddingText.forQuery),

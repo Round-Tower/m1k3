@@ -143,6 +143,13 @@ struct MemoryStoreThresholdTests {
     // The old exclusion case (1/√6 ≈ 0.408) is now the INCLUSION case, and the
     // exclusion contract re-pins at 1/√7 ≈ 0.378 — keyword-only hits below the
     // bar still never sneak through; only the bar itself moved.
+    //
+    // Review (2026-07-09, Kev + claude-fable-5): memoryThreshold re-derived
+    // 0.39 → 0.35 for the query-instruction adoption (instructed MEMEVAL
+    // separates cleanly; see GroundingGate). The exclusion contract re-pins
+    // one rung further down: 1/√8 ≈ 0.354 is the new inclusion case and
+    // 1/√9 ≈ 0.333 the new exclusion — the invariant under test is
+    // unchanged (keyword-only hits below the bar never sneak through).
 
     @Test("an exact-overlap hit clears the cosine bar and is returned")
     func aboveThresholdIncluded() async throws {
@@ -152,14 +159,14 @@ struct MemoryStoreThresholdTests {
         #expect(hits.contains { $0.memory.id == m.id })
     }
 
-    @Test("an atomic fact above the memory floor (0.39) but under the chunk bar is recalled")
+    @Test("an atomic fact above the memory floor (0.35) but under the chunk bar is recalled")
     func atomicFactAboveMemoryFloorIncluded() async throws {
         let f = try Fixture()
-        // Shares exactly ONE token with the query out of six → cosine = 1/√6 ≈ 0.408:
-        // above memoryThreshold (0.39), below chunkThreshold (0.51). This is the
-        // identity-fact class ("Kev lives in Cork" scored 0.393 on device) whose
-        // live recall-failure drove the parity fix.
-        let m = try await f.remember("alpha beta gamma delta epsilon zeta")
+        // Shares exactly ONE token with the query out of eight → cosine = 1/√8 ≈ 0.354:
+        // above memoryThreshold (0.35), below chunkThreshold (0.37). This is the
+        // identity/keyword class whose live recall-failure drove the 07-08
+        // parity fix and the 07-09 instruction adoption.
+        let m = try await f.remember("alpha beta gamma delta epsilon zeta eta theta")
         let hits = try f.store.recall(query: "alpha", queryVector: await f.vec("alpha"))
         #expect(hits.contains { $0.memory.id == m.id })
     }
@@ -167,9 +174,9 @@ struct MemoryStoreThresholdTests {
     @Test("a keyword-only hit below the memory floor is excluded")
     func keywordOnlyBelowThresholdExcluded() async throws {
         let f = try Fixture()
-        // Shares exactly ONE token with the query out of seven → cosine = 1/√7 ≈ 0.378,
-        // under memoryThreshold (0.39). FTS MATCH "alpha" still hits it.
-        let m = try await f.remember("alpha beta gamma delta epsilon zeta eta")
+        // Shares exactly ONE token with the query out of nine → cosine = 1/√9 ≈ 0.333,
+        // under memoryThreshold (0.35). FTS MATCH "alpha" still hits it.
+        let m = try await f.remember("alpha beta gamma delta epsilon zeta eta theta iota")
         let hits = try f.store.recall(query: "alpha", queryVector: await f.vec("alpha"))
         #expect(!hits.contains { $0.memory.id == m.id })
     }
