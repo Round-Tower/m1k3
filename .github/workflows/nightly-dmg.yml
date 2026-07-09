@@ -47,17 +47,34 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v5
 
-      - name: Preflight — are signing secrets configured?
+      - name: Preflight — secrets configured, and anything new to build?
         id: gate
         env:
           CERT: ${{ secrets.MACOS_DEVELOPER_ID_CERT_P12 }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           if [ -z "$CERT" ]; then
             echo "configured=false" >> "$GITHUB_OUTPUT"
             echo "::notice::Signing secrets not set yet — skipping the nightly DMG. See the header of this workflow for the 4 secrets to add."
-          else
-            echo "configured=true" >> "$GITHUB_OUTPUT"
+            exit 0
           fi
+          # Scheduled runs skip when master hasn't moved since the last release —
+          # a nightly of an already-released commit is 40-60 runner-minutes and a
+          # notarization round-trip for a byte-identical artifact. Manual
+          # workflow_dispatch always builds (the "prove the pipeline" path).
+          # Nightly releases are created with `--target $GITHUB_SHA`, so
+          # targetCommitish is a full SHA; a hand-made release may carry a branch
+          # name instead, which simply never matches → we build once, and from
+          # then on the SHA comparison takes over.
+          if [ "$GITHUB_EVENT_NAME" = "schedule" ]; then
+            LAST="$(gh release view --repo "$GITHUB_REPOSITORY" --json targetCommitish -q .targetCommitish 2>/dev/null || true)"
+            if [ "$LAST" = "$GITHUB_SHA" ]; then
+              echo "configured=false" >> "$GITHUB_OUTPUT"
+              echo "::notice::master unchanged since the last release ($GITHUB_SHA) — skipping tonight's DMG."
+              exit 0
+            fi
+          fi
+          echo "configured=true" >> "$GITHUB_OUTPUT"
 
       - name: Select Xcode (26.x, pinned)
         if: steps.gate.outputs.configured == 'true'

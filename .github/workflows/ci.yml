@@ -22,8 +22,37 @@ permissions:
   contents: read
 
 jobs:
+  # Cheap path gate: the three macOS jobs below are the expensive tier (full
+  # MLX/Metal + RealityKit graph on macos-26 runners, 15-30 min each) and can
+  # only break on compilable-surface changes. Docs, site/, attic/, marketing,
+  # and release-script edits skip them entirely — the seconds-cheap ubuntu
+  # guards (scheme-drift, doc-drift) still run on everything, so docs↔code
+  # sync stays enforced. Public-repo runners are free; the spend here is
+  # wall-clock and the shared macOS concurrency queue.
+  changes:
+    name: Detect compilable changes
+    runs-on: ubuntu-latest
+    outputs:
+      swift: ${{ steps.filter.outputs.swift }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+      - name: Filter paths
+        id: filter
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            swift:
+              - '.github/workflows/ci.yml'
+              - 'macos/**'
+              - '!macos/docs/**'
+              - '!macos/tools/release/**'
+              - '!macos/**/*.md'
+
   swift-mac:
     name: Swift · Mac MVP (swift test)
+    needs: changes
+    if: needs.changes.outputs.swift == 'true'
     # macos/ targets .macOS(.v26): the package COMPILES on macos-latest (Xcode 26
     # SDK) but the test binary links FoundationModels.framework, a macOS 26 runtime
     # framework — so the tests must RUN on an actual Tahoe runner. macos-latest's
@@ -56,6 +85,8 @@ jobs:
 
   app-build:
     name: Swift · App shell (xcodebuild)
+    needs: changes
+    if: needs.changes.outputs.swift == 'true'
     # `swift test` compiles only the SwiftPM PACKAGE. The app shell (M1K3App/:
     # AppEnvironment + its extensions, SelfTest, MCPHostController, IssueReporter,
     # every SwiftUI view) is an Xcode target that otherwise compiles ONLY in
@@ -110,6 +141,8 @@ jobs:
 
   mobile-build:
     name: Swift · iOS + visionOS shells (xcodebuild)
+    needs: changes
+    if: needs.changes.outputs.swift == 'true'
     # The iOS/visionOS shell (M1K3iOSApp/ on the portable package graph) was
     # local-verify-only since PR #9 — a PR could break the mobile compile and
     # first fail at release. Builds both schemes unsigned against the SIMULATOR
@@ -201,7 +234,12 @@ jobs:
   # SLACK_WEBHOOK_URL = a Slack incoming-webhook URL (posts to its bound channel).
   notify:
     name: Notify Slack
-    needs: [swift-mac, app-build, mobile-build, scheme-drift, doc-drift]
+    # 'skipped' is healthy here: the changes gate deliberately skips the macOS
+    # jobs on non-compilable diffs (⏭️, and the run still counts as success).
+    # The gate job itself must succeed — a broken gate silently skipping every
+    # build would otherwise read as green.
+    needs:
+      [changes, swift-mac, app-build, mobile-build, scheme-drift, doc-drift]
     runs-on: ubuntu-latest
     if: always()
     env:
@@ -211,13 +249,13 @@ jobs:
         if: env.SLACK_WEBHOOK_URL != ''
         uses: act10ns/slack@v2.2.0
         with:
-          status: ${{ (needs.swift-mac.result == 'success' && needs.app-build.result == 'success' && needs.mobile-build.result == 'success' && needs.scheme-drift.result == 'success' && needs.doc-drift.result == 'success') && 'success' || 'failure' }}
+          status: ${{ (needs.changes.result == 'success' && contains(fromJSON('["success","skipped"]'), needs.swift-mac.result) && contains(fromJSON('["success","skipped"]'), needs.app-build.result) && contains(fromJSON('["success","skipped"]'), needs.mobile-build.result) && needs.scheme-drift.result == 'success' && needs.doc-drift.result == 'success') && 'success' || 'failure' }}
           message: |
             M1K3 CI · ${{ github.ref_name }} (${{ github.event_name }})
 
-            ${{ needs.swift-mac.result == 'success' && '✅' || '❌' }} : Swift · Mac MVP (swift test)
-            ${{ needs.app-build.result == 'success' && '✅' || '❌' }} : Swift · App shell (xcodebuild)
-            ${{ needs.mobile-build.result == 'success' && '✅' || '❌' }} : Swift · iOS + visionOS shells (xcodebuild)
+            ${{ needs.swift-mac.result == 'success' && '✅' || (needs.swift-mac.result == 'skipped' && '⏭️' || '❌') }} : Swift · Mac MVP (swift test)
+            ${{ needs.app-build.result == 'success' && '✅' || (needs.app-build.result == 'skipped' && '⏭️' || '❌') }} : Swift · App shell (xcodebuild)
+            ${{ needs.mobile-build.result == 'success' && '✅' || (needs.mobile-build.result == 'skipped' && '⏭️' || '❌') }} : Swift · iOS + visionOS shells (xcodebuild)
             ${{ needs.scheme-drift.result == 'success' && '✅' || '❌' }} : Test scheme covers all targets
             ${{ needs.doc-drift.result == 'success' && '✅' || '❌' }} : Docs match the code (module map)
 
