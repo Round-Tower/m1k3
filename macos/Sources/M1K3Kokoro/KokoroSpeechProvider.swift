@@ -14,7 +14,8 @@
 //      weights are staged on disk, ready for the spike.
 //    • `speak(_:)` HONESTLY delegates to a private AVSpeech fallback for now. Audio
 //      is still Apple's voice this session; the onboarding copy says "preparing the
-//      neural voice", and nothing claims live neural synthesis. See the TODO below.
+//      neural voice", and nothing claims live neural synthesis. (Superseded — see
+//      the 2026-06-11 review note below.)
 //
 //  The spike replaces ONLY the body of `synthesize(_:)` (phonemize → ONNX → PCM →
 //  AVAudioPlayerNode) — every caller, the onboarding flow, and the seam are unchanged.

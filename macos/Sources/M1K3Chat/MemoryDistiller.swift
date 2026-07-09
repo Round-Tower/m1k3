@@ -35,6 +35,13 @@ import os
 /// M1K3MemoryChatBridge adapter maps rawValue across). `note` is the fallback
 /// for a bare `FACT:` line or an unrecognized label: misclassification
 /// degrades to the old untyped behaviour, never to a dropped fact.
+///
+/// Vocabulary cross-reference — adding a kind means updating ALL of:
+/// `MemoryKind.catalogued` (M1K3Memory/MemoryStore.swift), the prompt's kind
+/// list in `MemoryDistillationPrompt.build` below, the MCP `remember` tool's
+/// description prose (M1K3MCPKit/IntelligenceMCPTools.swift), and the expected
+/// map in DistilledFactGraphAdapterTests. The derived halves (schema enum,
+/// bridge mapping) follow automatically; the prose halves are pinned by tests.
 public enum DistilledFactKind: String, Sendable, Codable, CaseIterable {
     case profile, preference, decision, episode, note
 }
@@ -89,6 +96,9 @@ public enum MemoryDistillationPrompt {
             total += line.count
         }
         let transcript = lines.reversed().joined(separator: "\n")
+        // The "FACT(<kind>)" sentence below enumerates DistilledFactKind.allCases
+        // in prose — keep in sync when adding a kind (pinned by the
+        // allCases-containment test in MemoryDistillerTests).
         return """
         Read the conversation below and extract facts about the user worth \
         remembering long-term: stable personal facts, preferences, decisions, \

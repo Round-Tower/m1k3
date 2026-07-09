@@ -149,6 +149,9 @@ private func rememberDefinition(handlers: IntelligenceToolHandlers) -> MCPToolDe
                     "kind": [
                         "type": "string",
                         "enum": .array(MemoryKind.catalogued.map { .string($0.rawValue) }),
+                        // The description prose mirrors MemoryKind.catalogued —
+                        // update it when the vocabulary changes (the enum above
+                        // derives automatically; pinned by the allCases test).
                         "description": .string(
                             "what kind of fact this is: profile (a stable fact "
                                 + "about the user), preference (a standing preference), decision "

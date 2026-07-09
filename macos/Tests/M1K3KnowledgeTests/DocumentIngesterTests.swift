@@ -69,9 +69,7 @@ private final class RecordingEmbedder: EmbeddingService, @unchecked Sendable {
     }
 
     private func record(_ texts: [String]) {
-        lock.lock()
-        embedded.append(contentsOf: texts)
-        lock.unlock()
+        lock.withLock { embedded.append(contentsOf: texts) }
     }
 }
 

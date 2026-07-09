@@ -54,6 +54,16 @@ struct MemoryDistillationPromptTests {
         #expect(prompt.contains("NONE"))
     }
 
+    @Test("the prompt's kind prose enumerates every DistilledFactKind")
+    func promptEnumeratesAllKinds() {
+        // The prompt sentence is hand-written prose — this pin turns a silently
+        // missing kind into a red test (the vocab cross-reference doctrine).
+        let prompt = MemoryDistillationPrompt.build(turns: [])
+        for kind in DistilledFactKind.allCases {
+            #expect(prompt.contains("\(kind.rawValue) ("))
+        }
+    }
+
     @Test("per-turn text is capped")
     func perTurnCap() {
         let long = String(repeating: "x", count: 2000)
@@ -128,6 +138,13 @@ struct MemoryFactParserTests {
     @Test("a FACT( line with no closing paren is malformed — dropped, not misread")
     func malformedKindDropped() {
         #expect(MemoryFactParser.parse("FACT(profile Kev lives in Cork.").isEmpty)
+    }
+
+    @Test("a FACT-prefixed WORD is not a FACT line — the delimiter guards are the boundary")
+    func factPrefixedWordRejected() {
+        // Pins the deliberate hasPrefix("FACT") + guard design (PR #13 doc
+        // comment): "FACTUAL:" enters provisionally and dies on the guards.
+        #expect(MemoryFactParser.parse("FACTUAL: The user enjoys sea swimming.").isEmpty)
     }
 
     @Test("whitespace around the delimiters is tolerated — a sloppy model loses no facts")
