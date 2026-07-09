@@ -108,6 +108,12 @@ public struct MemoryKind: RawRepresentable, Hashable, Sendable, Codable {
     /// The catalogued vocabulary — the closed set external surfaces (MCP tools,
     /// UIs) may offer. The enum itself stays open for storage/migration; this
     /// is what gets advertised.
+    ///
+    /// Vocabulary cross-reference — adding a kind means also updating
+    /// `DistilledFactKind` + the distiller prompt prose (M1K3Chat/
+    /// MemoryDistiller.swift) and the MCP `remember` description prose
+    /// (M1K3MCPKit/IntelligenceMCPTools.swift); the schema enum and bridge
+    /// mapping derive from this list automatically.
     public static let catalogued: [MemoryKind] = [.profile, .preference, .decision, .episode, .note]
 
     /// Parse an externally-supplied kind label: a catalogued match

@@ -24,6 +24,10 @@
 //  pinned by tests; the retrieval delta + ABSEP/MEMEVAL threshold re-check is
 //  the named on-device verify — layer 3's doctrine is measured, not guessed).
 //  Prior: Unknown
+//  Review: Kev + claude-fable-5, 2026-07-09 — added `forQuery`, the
+//  Qwen3-Embedding asymmetric query instruction (measurement-first: KEYEVAL
+//  measures it before any call site adopts it). Doc-side composition and the
+//  fingerprint salt are untouched. Confidence 0.85.
 //
 
 import Foundation
@@ -59,6 +63,22 @@ public enum EmbeddingText {
         guard content.count > head.count else { return true }
         let next = content[content.index(content.startIndex, offsetBy: head.count)]
         return !(next.isLetter || next.isNumber)
+    }
+
+    /// The text a QUERY is embedded as by an instruction-aware embedder —
+    /// Qwen3-Embedding's official asymmetric convention (card-verbatim,
+    /// including NO space after "Query:"): queries carry the retrieval
+    /// instruction, documents embed bare. Purely query-side: it never touches
+    /// stored vectors, so it does NOT salt the store fingerprint and adopting
+    /// it triggers no corpus re-embed.
+    ///
+    /// ⚠️ Changing this string re-opens the retrieval-floor calibration:
+    /// every query→content cosine shifts with it, and the GroundingGate
+    /// floors were derived from measured distributions. Re-run
+    /// M1K3_SELFTEST_KEYEVAL and re-derive the floors before shipping any
+    /// edit here — there is no CI signal for this (metallib wall).
+    public static func forQuery(_ query: String) -> String {
+        "Instruct: Given a web search query, retrieve relevant passages that answer the query\nQuery:\(query)"
     }
 
     /// The fingerprint recorded with (and compared against) the store's

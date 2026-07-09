@@ -335,6 +335,12 @@ struct IntelligenceMCPToolsTests {
         }
         // Optional param: stale clients that don't send it keep working.
         #expect(!schema.contains("\"required\": [\"title\", \"text\", \"kind\"]"))
+        // The description PROSE glosses each kind as "<kind> (<gloss>" — the
+        // enum array derives from catalogued automatically, but the prose is
+        // hand-written; this pin catches a kind added without its gloss.
+        for kind in MemoryKind.catalogued {
+            #expect(schema.contains("\(kind.rawValue) ("))
+        }
     }
 
     @Test("remember requires both title and text")
