@@ -319,6 +319,10 @@ final class AppEnvironment {
     private(set) var usingMLXEmbeddings = false
     /// True while a full re-embed of the store is in flight.
     private(set) var isReindexing = false
+    /// Memory-graph reindex reentrancy latch — deliberately separate from
+    /// `isReindexing` (switchEmbeddings holds that for its whole body and
+    /// finishes by running the graph pass).
+    private var isMemoryGraphReindexing = false
     /// Set while a background job (reindex/warm) is deferred for heat, so the
     /// cooldown re-run is armed exactly once (Cool Head knob 1). Lives on the main
     /// class body — extensions can't hold stored properties.
@@ -953,6 +957,9 @@ final class AppEnvironment {
             embeddingStatus = "Couldn’t switch embeddings: \(error.localizedDescription)"
         }
         MLXMemoryBudget.reclaim(label: "switchEmbeddings")
+        // The graph's vectors live in the same embedding space — swap them too
+        // (keyed on the same salted fingerprint, so a rollback above no-ops).
+        await reindexMemoryGraphIfNeeded()
     }
 
     /// All indexed items, newest first, for the document manager — or one
@@ -1177,6 +1184,7 @@ extension AppEnvironment {
         M1K3Persona.setUserProfile(try? store.meta(key: Self.userProfileMetaKey))
         installGenerationMetricsSink()
         await reindexIfEmbedderChanged()
+        await reindexMemoryGraphIfNeeded()
         await warmEmbedderOnLaunch()
     }
 
@@ -1228,8 +1236,9 @@ extension AppEnvironment {
         ) { [weak self] _ in
             Task { @MainActor [weak self] in
                 guard let self else { return }
-                // Both self-gate on backgroundWorkAllowed; re-arm stays a no-op.
+                // All self-gate on backgroundWorkAllowed; re-arm stays a no-op.
                 await self.reindexIfEmbedderChanged()
+                await self.reindexMemoryGraphIfNeeded()
                 await self.warmEmbedderOnLaunch()
                 // Cooled back down and the work ran → tear the observer down.
                 if Self.backgroundWorkAllowed() { self.disarmThermalRecovery() }
@@ -1330,6 +1339,86 @@ extension AppEnvironment {
             Self.embedLog.error("reindex failed — retries next launch: \(error.localizedDescription, privacy: .public)")
             embeddingStatus = "Couldn’t update the index: \(error.localizedDescription)"
         }
+    }
+
+    /// The memory GRAPH's twin of `reindexIfEmbedderChanged` (B5 layer 3,
+    /// graph lane, 2026-07-09). Two jobs, in order:
+    ///
+    /// 1. TITLE BACKFILL (one-time per fact): pre-v2 graph rows carry no title,
+    ///    but their corpus twins (written by the same `remember`) do — copy it
+    ///    across so the reindex below embeds the composed text. Idempotent and
+    ///    cheap; facts without a twin stay bare (their vector is unchanged
+    ///    semantics, not a regression).
+    /// 2. REINDEX when the salted fingerprint mismatches (production stores
+    ///    predate ANY memory-graph fingerprint — nil meta + vectors → the
+    ///    policy's deliberate re-embed) OR when the backfill titled anything
+    ///    (a titled row with a bare vector would mix compositions).
+    ///
+    /// Same fingerprint salt as the corpus store: one composition doctrine,
+    /// one marker format.
+    func reindexMemoryGraphIfNeeded() async {
+        guard let memoryStore else { return }
+        // Thermal gate FIRST — the backfill persists titles, and a titled row
+        // must never outlive the pass without its vector repair (the reviewer's
+        // stranding case: backfill lands, reindex deferred, next pass sees
+        // nothing to backfill AND a matching fingerprint → mismatch forever).
+        // armThermalRecovery re-fires this on cooldown, same as the corpus.
+        guard Self.backgroundWorkAllowed() else {
+            Self.embedLog.notice("memory-graph pass deferred — thermal/low-power pressure; retries on cooldown")
+            armThermalRecovery()
+            return
+        }
+        // Own flag, not `isReindexing`: switchEmbeddings holds isReindexing
+        // for its whole body and calls this at its end — sharing the flag
+        // would silently skip the graph on every embedder swap.
+        guard !isMemoryGraphReindexing else { return }
+        isMemoryGraphReindexing = true
+        defer { isMemoryGraphReindexing = false }
+
+        let backfilled = backfillMemoryTitles(into: memoryStore)
+        let current = EmbeddingText.storeFingerprint(embedder: embedder.fingerprint)
+        let stored = (try? memoryStore.meta(key: MemoryStore.embedderFingerprintKey)) ?? nil
+        let vectorCount = (try? memoryStore.embeddingCount()) ?? 0
+        let policySaysReindex = EmbedderReindexPolicy.needsReindex(
+            stored: stored, current: current, embeddingCount: vectorCount
+        )
+        guard policySaysReindex || (backfilled > 0 && vectorCount > 0) else {
+            if stored != current, vectorCount == 0 {
+                // Adopt the marker on fresh/empty graphs. MemoryStore's
+                // reindexEmbeddings deliberately DIFFERS from KnowledgeStore's
+                // sibling here: it records the fingerprint even with zero rows
+                // (pinned by emptyStoreAdoptsMarker) — don't "fix" either to
+                // match the other.
+                _ = try? await memoryStore.reindexEmbeddings(using: embedder, fingerprint: current)
+            }
+            return
+        }
+        do {
+            let count = try await memoryStore.reindexEmbeddings(using: embedder, fingerprint: current)
+            Self.embedLog.notice("memory graph reindexed: \(count) fact(s), \(backfilled) title(s) backfilled")
+        } catch {
+            Self.embedLog.error("memory-graph reindex failed — retries next launch: \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
+    /// Copy corpus-twin titles onto untitled graph facts. Returns how many
+    /// rows gained a title. Row-only writes — the caller's reindex owns the
+    /// vector repair (and the caller's thermal gate guarantees the reindex
+    /// runs in the same pass).
+    private func backfillMemoryTitles(into memoryStore: MemoryStore) -> Int {
+        guard let untitled = try? memoryStore.memoriesWithoutTitle(), !untitled.isEmpty else { return 0 }
+        var backfilled = 0
+        for memory in untitled {
+            let ref = MemoryDistillationCoordinator.factSourceRef(memory.text)
+            guard let itemID = try? store.itemID(forSourceRef: ref),
+                  let title = (try? store.item(id: itemID))?.title,
+                  !title.isEmpty, title != memory.text
+            else { continue }
+            if (try? memoryStore.setTitle(title, for: memory.id)) != nil {
+                backfilled += 1
+            }
+        }
+        return backfilled
     }
 }
 
