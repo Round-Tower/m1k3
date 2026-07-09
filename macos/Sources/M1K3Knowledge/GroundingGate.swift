@@ -42,6 +42,12 @@
 //  edgeThreshold pins rememberConnected's content↔content bar at the old
 //  0.51 — fact-to-fact cosines carry no instruction and did not move.
 //  verify-at-⌘R (live keyword recall + no new noise leaks).
+//  HONEST CAVEAT: these floors are derived for instructed qwen3-embed-512
+//  ONLY. The HashingEmbeddingService fallback (Mac offline; the ONLY iOS
+//  embedder today) shares them un-measured — a pre-existing pragmatism this
+//  re-tune WIDENS (lower floors, no instruction-driven noise suppression on
+//  hashing). Upgrade path: per-embedder floors, or a hashing-arm KEYEVAL
+//  bracket, before iOS retrieval quality is tuned in anger.
 //
 
 import Foundation

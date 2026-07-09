@@ -42,7 +42,8 @@
 //  4. Same EmbedderReindexPolicy doctrine as KnowledgeStore: vectors carry an
 //     embedder fingerprint in a meta table; kernel bump → one-time re-index.
 //
-//  5. Retrieval cutoff: reuse GroundingGate.memoryThreshold (0.39) — memories
+//  5. Retrieval cutoff: reuse GroundingGate.memoryThreshold (0.35 since the
+//     2026-07-09 instructed-query re-derivation; 0.39 before) — memories
 //     are atomic facts, and query→short-fact cosines sit lower in the cone
 //     than query→chunk (the MEMEVAL rationale on that constant). Was
 //     chunkThreshold (0.51) until 2026-07-08; the stricter chunk bar silently

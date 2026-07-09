@@ -27,6 +27,9 @@
 //  Prior: Kev + claude-opus-4-8, 2026-06-06 (bge_small default)
 //  Context: dimension is carried explicitly so callers can size buffers; the
 //  768/1024 native width is MRL-truncated + renormalized to `dimension`.
+//  Review: Kev + claude-fable-5, 2026-07-09 — `embedQuery` override applies
+//  Qwen3-Embedding's asymmetric query instruction via EmbeddingText.forQuery
+//  (KEYEVAL-measured; floors re-derived in GroundingGate). Confidence 0.85.
 
 import Foundation
 import M1K3Knowledge

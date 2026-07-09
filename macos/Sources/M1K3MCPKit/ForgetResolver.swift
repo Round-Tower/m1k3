@@ -40,19 +40,34 @@ public enum ForgetOutcome: Sendable, Equatable {
 
 /// Decides whether a recall result is a confident-enough match to hard-delete.
 public enum ForgetResolver {
-    /// The forget bar. Well above recall's `GroundingGate.memoryThreshold` (0.39)
-    /// because deletion is irreversible — a recall match that's merely "relevant"
-    /// must not be enough to erase a fact. 0.6 ≈ "clearly the same fact".
+    /// The forget bar. Well above recall's `GroundingGate.memoryThreshold`
+    /// (0.35 since the 2026-07-09 re-derivation) because deletion is
+    /// irreversible — a recall match that's merely "relevant" must not be
+    /// enough to erase a fact. 0.6 ≈ "clearly the same fact". Forget queries
+    /// embed BARE (fact-to-fact; a verbatim repeat is cosine ≈ 1.0), so this
+    /// bar deliberately did NOT move with the query-instruction floor re-tune.
     public static let floor: Float = 0.6
+
+    /// The bar for OFFERING a near-miss ("Closest: … repeat it back to
+    /// forget"). Since the 07-09 threshold-0 candidate search, recall always
+    /// returns something from a populated store — below this bar the top hit
+    /// is a random fact, and inviting a word-for-word repeat of a random fact
+    /// is a consent hazard (the repeat would DELETE it). 0.35 mirrors the
+    /// memory recall floor's register: plausibly-the-same-fact wordings sit
+    /// above it, unrelated facts below.
+    public static let suggestionFloor: Float = 0.35
 
     /// Resolve the top recall hit against the forget floor. `hits` are expected
     /// best-first (as `MemoryStore.recall` returns them). A hit with no cosine
-    /// similarity (FTS-only) can never be confident → treated as a near-miss.
+    /// similarity (FTS-only) can never be confident → treated as a near-miss
+    /// (it matched by KEYWORD, so it is a plausible suggestion even without a
+    /// cosine — the pre-existing contract, unchanged).
     public static func resolve(hits: [MemoryHit], floor: Float = ForgetResolver.floor) -> ForgetResolution {
         guard let top = hits.first else { return .notConfident(closest: nil) }
-        guard let similarity = top.similarity, similarity >= floor else {
+        guard let similarity = top.similarity else {
             return .notConfident(closest: top.memory)
         }
-        return .forget(top.memory)
+        if similarity >= floor { return .forget(top.memory) }
+        return .notConfident(closest: similarity >= suggestionFloor ? top.memory : nil)
     }
 }

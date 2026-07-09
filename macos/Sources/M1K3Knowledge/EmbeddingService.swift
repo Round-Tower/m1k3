@@ -14,6 +14,10 @@
 //  Signed: Kev + claude-opus-4-8, 2026-06-06, Confidence 0.85, Prior: Unknown
 //  Context: Generalised from the prior knowledge-server's EmbeddingServiceProtocol ([Double], Ollama
 //  + MLX impls). M1K3 standardises on [Float] and a single on-device backend.
+//  Review: Kev + claude-fable-5, 2026-07-09 — added the `embedQuery`
+//  requirement (bare default) for the query/document asymmetry seam;
+//  instruction-aware backends override, symmetric ones are untouched.
+//  Confidence 0.85.
 
 import Foundation
 

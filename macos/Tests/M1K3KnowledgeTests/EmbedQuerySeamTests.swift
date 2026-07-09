@@ -39,6 +39,8 @@ private struct SymmetricEmbedder: EmbeddingService {
 
 /// An instruction-aware double — overrides `embedQuery` with a sentinel
 /// vector no `embed` call can produce.
+/// @unchecked Sendable: the two mutable arrays are only ever touched inside
+/// `lock.withLock`, and tests read them after awaiting completion.
 private final class InstructedEmbedder: EmbeddingService, @unchecked Sendable {
     var dimension: Int {
         4
