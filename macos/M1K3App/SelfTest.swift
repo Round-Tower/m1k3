@@ -436,6 +436,44 @@ enum SelfTest {
                 arms,
                 floors: [GroundingGate.memoryThreshold, GroundingGate.chunkThreshold]
             ))
+
+            // Per-floor re-derivation data: the SAME fixture sets that
+            // originally tuned each floor, re-scored with instructed queries.
+            // memoryThreshold came from MEMEVAL (query→short-fact) and
+            // chunkThreshold from ABSEP (query→chunk) — a floor move must cite
+            // its own register's instructed distribution, not the mixed probes.
+            for spec in armSpecs {
+                let posQ = try await embedder.embedBatch(
+                    MemoryEvalFixtures.positives.map { spec.compose($0.query) }
+                )
+                let posM = try await embedder.embedBatch(MemoryEvalFixtures.positives.map(\.memory))
+                let negQ = try await embedder.embedBatch(
+                    MemoryEvalFixtures.negatives.map { spec.compose($0.query) }
+                )
+                let negM = try await embedder.embedBatch(MemoryEvalFixtures.negatives.map(\.memory))
+                let pos = zip(posQ, posM).map { VectorMath.cosineSimilarity($0, $1) }
+                let neg = zip(negQ, negM).map { VectorMath.cosineSimilarity($0, $1) }
+                emit("keyeval memeval[\(spec.label)]:")
+                emit(MemoryEvalReport.render(positives: pos, negatives: neg))
+            }
+            var chunkArms: [SeparationEvalReport.Result] = []
+            for spec in armSpecs {
+                let inQ = try await embedder.embedBatch(
+                    SeparationEvalFixtures.inDomain.map { spec.compose($0.query) }
+                )
+                let inD = try await embedder.embedBatch(SeparationEvalFixtures.inDomain.map(\.document))
+                let offQ = try await embedder.embedBatch(
+                    SeparationEvalFixtures.offDomain.map { spec.compose($0.query) }
+                )
+                let offD = try await embedder.embedBatch(SeparationEvalFixtures.offDomain.map(\.document))
+                chunkArms.append(.init(
+                    label: "chunks-\(spec.label)",
+                    inDomain: zip(inQ, inD).map { VectorMath.cosineSimilarity($0, $1) },
+                    offDomain: zip(offQ, offD).map { VectorMath.cosineSimilarity($0, $1) }
+                ))
+            }
+            emit("keyeval absep arms:")
+            emit(SeparationEvalReport.render(chunkArms))
         } catch {
             emit("✗ keyeval: \(error)")
         }

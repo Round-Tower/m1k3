@@ -68,6 +68,13 @@ public enum QueryStyleEvalFixtures {
     /// The keyword/question pairs. The first probe is the live 2026-07-08
     /// failure verbatim (question hit #1, keyword missed); the fact probes are
     /// keyword-ified MEMEVAL positives so the two instruments stay comparable.
+    ///
+    /// The Golden Gate probe's keyword appears VERBATIM in its target title —
+    /// deliberately not "too easy": the production store carried that exact
+    /// title-prefixed text on 07-08 and the bare keyword query still missed
+    /// (a dense symmetric encoder doesn't reward literal token overlap the way
+    /// sparse retrieval would). Maximum-overlap-and-still-missing is the
+    /// hardest-mode evidence for the instruction, not a softball.
     public static let probes: [Probe] = [
         Probe(
             keyword: "Golden Gate milestone",
