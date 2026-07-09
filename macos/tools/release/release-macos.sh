@@ -90,10 +90,17 @@ DIRECT_ENTITLEMENTS="$MACOS_DIR/M1K3App/M1K3.entitlements"
 [ -f "$DIRECT_ENTITLEMENTS" ] || { echo "✗ Missing $DIRECT_ENTITLEMENTS"; exit 1; }
 echo "▸ [1/6] Archiving…"
 rm -rf "$ARCHIVE"
+# Archive signs with Developer ID directly (manual style): the project's
+# Automatic style wants a "Mac Development" cert at archive time, which only
+# exists on a dev Mac's keychain — CI's temp keychain holds Developer ID alone.
+# The export step re-signs to the same identity either way, so local output
+# is unchanged and the script stays runnable on a keychain with one cert.
 xcodebuild archive \
   -project "$PROJECT" -scheme "$SCHEME" -configuration Release \
   -archivePath "$ARCHIVE" -destination 'generic/platform=macOS' \
   CODE_SIGN_ENTITLEMENTS="$DIRECT_ENTITLEMENTS" \
+  CODE_SIGN_STYLE=Manual \
+  CODE_SIGN_IDENTITY="Developer ID Application" \
   DEVELOPMENT_TEAM="$TEAM" | beautify
 
 # ── 2. Export the signed .app ────────────────────────────────────────────────
