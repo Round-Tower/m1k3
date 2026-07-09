@@ -113,6 +113,11 @@ jobs:
 
       - name: Build the notarized DMG
         if: steps.gate.outputs.configured == 'true'
+        env:
+          # The ephemeral keychain holds ONLY Developer ID Application —
+          # Automatic signing can't archive without an Apple Development cert
+          # (proven by run 29027965918), so the script signs manually here.
+          M1K3_SIGN_STYLE: manual
         run: macos/tools/release/release-macos.sh
 
       - name: Publish a DateVer release (stable latest-download URL)
