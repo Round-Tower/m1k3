@@ -8,7 +8,7 @@ animations onto a single rig at runtime (CompanionAvatarView / scratch/usdz-prob
 
 Usage (Blender 4.4+ required; the system usdcat is NOT a substitute):
     /Applications/Blender.app/Contents/MacOS/Blender -b -P export_clips.py -- \
-        <model.glb> <outdir> [Clip1,Clip2,...]
+        <model.glb> <outdir> [Clip1,Clip2,...] [--retime N]
 
   - <model.glb>   source model (e.g. app/3d/.../Gecko_Animations.glb)
   - <outdir>      directory to write <Clip>.usdz files into (created if absent)
@@ -17,6 +17,13 @@ Usage (Blender 4.4+ required; the system usdcat is NOT a substitute):
                   Khronos Fox dialect: Survey,Walk,Run
                   (M1K3 only PLAYS the gait-mapped subset — see ClipMapper —
                    but extra clips are harmless, just bytes.)
+  - --retime N    OPTIONAL keyframe stretch. The Quirky Series pack ships EVERY
+                  take compressed to 11 frames / 0.417 s (GLB, FBX, and the Unity
+                  meta all agree — it's how the pack is authored), so a full walk
+                  cycle plays in under half a second and reads as broken on-device
+                  (the 2026-06-21 Gecko "doesn't animate" failure, root-caused
+                  2026-07-10). N=4 stretches those takes to ~1.67 s. Khronos Fox
+                  has real durations — leave it at the default 1.0.
 
 Output: ~1.3 MB per Quaternius model (8 clips; mesh+texture duplicated per file),
 Fox ~390 KB (3 clips). Models import Z-up (Blender) and M1K3 corrects to RealityKit
@@ -30,6 +37,7 @@ Signed: Kev + claude-opus-4-8, 2026-06-12, Confidence 0.8 (proven on 9 models /
 Prior: Kev + claude-fable-5 (scratch/usdz-probe/export_clips.py).
 """
 
+import os
 import sys
 
 import bpy
@@ -40,11 +48,19 @@ def main() -> int:
         print("PROBE-FAIL: pass args after `--` (see the docstring for usage)")
         return 2
     argv = sys.argv[sys.argv.index("--") + 1 :]
+    retime = 1.0
+    if "--retime" in argv:
+        i = argv.index("--retime")
+        retime = float(argv[i + 1])
+        del argv[i : i + 2]
     if len(argv) < 2:
-        print("PROBE-FAIL: need <model.glb> <outdir> [Clip1,Clip2,...]")
+        print("PROBE-FAIL: need <model.glb> <outdir> [Clip1,Clip2,...] [--retime N]")
         return 2
     src, outdir = argv[0], argv[1]
     wanted = argv[2].split(",") if len(argv) > 2 else None
+    # The docstring promises this; Blender's own error when it's missing is a
+    # baffling "couldn't move from temporary location".
+    os.makedirs(outdir, exist_ok=True)
 
     bpy.ops.wm.read_factory_settings(use_empty=True)
     bpy.ops.import_scene.gltf(filepath=src)
@@ -72,6 +88,15 @@ def main() -> int:
         # Blender 4.4 slotted actions: an action needs its slot assigned too.
         if hasattr(arm.animation_data, "action_slot") and action.slots:
             arm.animation_data.action_slot = action.slots[0]
+        if retime != 1.0:
+            # Stretch in keyframe space (not scene fps) so the USD export still
+            # bakes a sample per frame — Blender's spline interpolation fills the
+            # stretched span instead of RealityKit lerping 11 sparse samples.
+            for fc in action.fcurves:
+                for kp in fc.keyframe_points:
+                    kp.co.x *= retime
+                    kp.handle_left.x *= retime
+                    kp.handle_right.x *= retime
         start, end = action.frame_range
         bpy.context.scene.frame_start = int(start)
         bpy.context.scene.frame_end = max(int(end), int(start) + 1)
@@ -83,7 +108,10 @@ def main() -> int:
             export_materials=True,
             selected_objects_only=False,
         )
-        print(f"PROBE-OK: {out} frames {int(start)}-{int(end)}")
+        fps = bpy.context.scene.render.fps
+        seconds = (bpy.context.scene.frame_end - int(start)) / fps
+        short = "  PROBE-WARN: <0.5s — compressed take? see --retime" if seconds < 0.5 else ""
+        print(f"PROBE-OK: {out} frames {int(start)}-{int(end)} (~{seconds:.2f}s){short}")
         exported += 1
 
     print(f"PROBE-DONE: exported {exported}, skipped {len(skipped)}"

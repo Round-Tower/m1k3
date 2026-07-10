@@ -31,12 +31,14 @@ proven; this skill is the repeatable wire-up so the gotchas don't get rediscover
 OUT="macos/Sources/M1K3Avatar/Companions/<Name>"
 mkdir -p "$OUT"
 /Applications/Blender.app/Contents/MacOS/Blender -b -P macos/tools/companion-pipeline/export_clips.py -- \
-  "<model.glb>" "$OUT" <Clip1,Clip2,...>
+  "<model.glb>" "$OUT" <Clip1,Clip2,...> [--retime N]
 ```
 
 Expect `PROBE-OK` per clip and `PROBE-DONE: exported N`. The system `usdcat` is NOT
 a substitute (keeps only clip 1). Models import Z-up — that's corrected in the view,
-not the asset (see gotchas).
+not the asset (see gotchas). **Quirky Series pack sources need `--retime 4`** —
+the pack ships every take compressed to 0.417 s (the real Gecko failure mode,
+root-caused 2026-07-10); a `PROBE-WARN: <0.5s` line means you forgot it.
 
 ### 2. QA the render
 
@@ -44,7 +46,7 @@ not the asset (see gotchas).
   `macos/tools/companion-pipeline/preview_usdz.swift "$OUT"/*.usdz -o /tmp/previews`
   — renders each clip to a PNG; eyeball mesh/materials/pose.
 - **Quick Look** each `.usdz` (it shows mesh + plays the animation), OR
-- headless RealityKit inventory: `cd scratch/usdz-probe/out/rkprobe && swift run -c release rkprobe "$OUT"/*.usdz` — proves animations were harvested (the Gecko failure mode).
+- headless RealityKit inventory: `cd scratch/usdz-probe/out/rkprobe && swift run -c release rkprobe "$OUT"/*.usdz` — proves animations were harvested. **Check the durations too**: every clip identical at ~0.42 s = the compressed-take trap (re-export with `--retime`); presence alone waved broken clips through on 2026-07-09.
 
 Watch for: missing/black materials, a frozen mesh (no animation harvested), wildly
 wrong scale. If a clip looks broken, re-export just that clip.

@@ -47,7 +47,10 @@ Extra clips are harmless (just bytes — M1K3 only *plays* the gait-mapped subse
   and that the animation plays. Needs a GUI session.
 - **Headless RealityKit load + inventory:** `scratch/usdz-probe/out/rkprobe`
   (`swift run -c release rkprobe <files...>`) — proves animations were
-  harvested (the Gecko failure mode) but renders nothing.
+  harvested (the Gecko failure mode) but renders nothing. **Read the
+  durations, not just the presence:** every clip identical at ~0.42 s is the
+  compressed-take trap (below), and "animations present" alone waved the
+  broken Inkfish/Sparrow clips through on 2026-07-09.
 - **Headless image preview:** `./preview_usdz.swift <files...> [-o outdir]
   [--size N] [--time T]` — renders each clip to a PNG (mesh, materials, and
   the pose at `--time`) with no screen needed: terminal, SSH, CI, or a locked
@@ -67,6 +70,13 @@ Extra clips are harmless (just bytes — M1K3 only *plays* the gait-mapped subse
 
 ## Gotchas (hard-won — do not rediscover)
 
+- **The Quirky pack's takes are compressed — export with `--retime 4`.** Every
+  clip in the Quirky Series FREE pack is an 11-frame / 0.417 s take with the
+  full motion cycle squeezed inside (GLB, FBX, and the Unity meta all agree;
+  both pack downloads identical). Played as-is it reads as broken on-device —
+  this was the REAL cause of the 2026-06-21 "Gecko doesn't animate" drop,
+  root-caused 2026-07-10. `--retime 4` stretches takes to ~1.67 s (tune by
+  eye at ⌘⇧V). Khronos Fox has real per-clip durations — no retime.
 - **Z-up → Y-up:** models import Z-up (Blender) and load standing on their nose
   in RealityKit. The correction is **in the view**
   (`CompanionAvatarView.blenderZUpCorrection`, −90° about X), not baked into the
