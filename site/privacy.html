@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Is M1K3 Really Private? — The Privacy Architecture</title>
+<meta name="description" content="What runs on your Mac, what ever touches the network, and how to verify it. M1K3's privacy is architectural: inference, voice, embeddings, and storage are on-device; the exceptions are documented here." />
+<meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" />
+<link rel="canonical" href="https://m1k3.app/privacy" />
+<link rel="icon" href="favicon.svg" type="image/svg+xml" />
+<link rel="icon" href="icon-192.png" type="image/png" sizes="192x192" />
+<link rel="apple-touch-icon" href="apple-touch-icon.png" />
+<meta name="theme-color" content="#050505" />
+<meta property="og:site_name" content="M1K3" />
+<meta property="og:locale" content="en_IE" />
+<meta property="og:title" content="Is M1K3 Really Private? — The Privacy Architecture" />
+<meta property="og:description" content="What runs on your Mac, what ever touches the network, and how to verify it — including the exceptions." />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://m1k3.app/privacy" />
+<meta property="og:image" content="https://m1k3.app/og.png" />
+<meta property="og:image:width" content="1200" />
+<meta property="og:image:height" content="630" />
+<meta property="og:image:alt" content="M1K3 for Mac — 'Your AI. Your Mac. Nothing leaves.' A wireframe fox on a dark CRT grid; a private, on-device AI companion for macOS." />
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:title" content="Is M1K3 Really Private? — The Privacy Architecture" />
+<meta name="twitter:description" content="What runs on your Mac, what ever touches the network, and how to verify it — including the exceptions." />
+<meta name="twitter:image" content="https://m1k3.app/og.png" />
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "Article",
+  "headline": "Is M1K3 Really Private? — The Privacy Architecture",
+  "description": "What runs on your Mac, what ever touches the network, and how to verify it. M1K3's privacy is architectural — the exceptions are documented plainly.",
+  "url": "https://m1k3.app/privacy",
+  "image": "https://m1k3.app/og.png",
+  "author": { "@type": "Organization", "name": "Round Tower", "url": "https://round-tower.ie" },
+  "publisher": { "@type": "Organization", "name": "Round Tower", "url": "https://round-tower.ie" },
+  "datePublished": "2026-07-10",
+  "dateModified": "2026-07-10"
+}
+</script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "mainEntity": [
+    { "@type": "Question", "name": "Is M1K3 really private?",
+      "acceptedAnswer": { "@type": "Answer", "text": "Yes — by architecture, not by policy. M1K3 runs the whole AI stack on your Mac: LLM inference (Gemma and Qwen via MLX, plus Apple Foundation Models), speech-to-text (WhisperKit), text-to-speech (Kokoro), embeddings, retrieval, and storage all execute on-device inside one sandboxed app, with the store encrypted under a Keychain-held key. The network is used in exactly three documented cases: a one-time model-weights download from Hugging Face when you opt into a bigger brain, an optional web-search tool that is off by default, and app updates via the channel you installed from. No telemetry, no account, no analytics." } },
+    { "@type": "Question", "name": "Does M1K3 ever connect to the internet?",
+      "acceptedAnswer": { "@type": "Answer", "text": "Three documented cases, all user-initiated: (1) downloading model weights from Hugging Face, once, only when you opt into the Lil or Big brain — the default Mini brain is Apple's built-in on-device model, nothing to download; (2) the optional web-search and page-reading agent tools, off by default behind a privacy toggle; (3) updates, via TestFlight or by downloading a new DMG from GitHub — the app has no self-updater. Conversations, documents, voice, and calls never leave the Mac." } },
+    { "@type": "Question", "name": "Where is M1K3's data stored?",
+      "acceptedAnswer": { "@type": "Answer", "text": "In the app's macOS sandbox container, in a GRDB store encrypted with a key held in your Keychain. Documents enter only when you explicitly open or drop them; call transcription is consent-gated and encrypted at rest; the memory store has a forget primitive so consent stays revocable." } },
+    { "@type": "Question", "name": "How can I verify M1K3's privacy claims?",
+      "acceptedAnswer": { "@type": "Answer", "text": "M1K3 is open source (Apache-2.0), so the claims are inspectable rather than takeable on faith: read the sandbox entitlements file in the repo (each entitlement carries a signed comment explaining why it exists), print the shipped app's entitlements with codesign, watch it with a network monitor like Little Snitch, or pull the ethernet cable mid-conversation — M1K3 doesn't notice." } }
+  ]
+}
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=VT323&family=IBM+Plex+Mono:wght@300;400;500&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="geo.css" />
+</head>
+<body>
+
+<div class="scanlines"></div>
+<div class="vignette"></div>
+
+<nav>
+  <a class="wordmark" href="/">M1K3<span class="cursor">_</span></a>
+  <div class="links">
+    <a href="/">Home</a>
+    <a href="/#features">Features</a>
+    <a href="/#faq">FAQ</a>
+    <a href="https://github.com/Round-Tower/m1k3">GitHub</a>
+    <a class="btn btn-ghost" href="/#get" style="padding:10px 18px;">Download</a>
+  </div>
+</nav>
+
+<main class="article">
+  <header class="article-head">
+    <span class="label">// privacy architecture</span>
+    <h1>Is M1K3 really private?</h1>
+    <p class="meta">Updated 2026-07-10 · By Round Tower, the makers of M1K3 — this page exists so the answer is checkable, not just claimable</p>
+  </header>
+
+  <div class="answer">
+    <p><strong>Short answer: yes — by architecture, not by promise.</strong> M1K3 runs the whole AI stack on your Mac: LLM inference (Gemma and Qwen via MLX-Swift on Metal, plus Apple Foundation Models), speech-to-text (WhisperKit), text-to-speech (Kokoro), embeddings, retrieval, and storage all execute on-device inside one sandboxed app, with the knowledge store encrypted under a key held in your Keychain. The MCP server binds to <code>127.0.0.1</code> and is off by default. The network is used in <strong>exactly three documented cases</strong>: a one-time model-weights download from Hugging Face when you opt into a bigger brain, an optional web-search tool that is off by default, and updates via the channel you installed from. No telemetry, no account, no analytics. Pull the ethernet cable mid-conversation — M1K3 doesn't notice.</p>
+  </div>
+
+  <h2>What runs where?</h2>
+  <p>One diagram, no arrows hiding anything. The left column is everything M1K3 does; the right column is the complete list of moments it can touch the network.</p>
+
+  <div class="wrw">
+    <section class="wrw-col mac" aria-labelledby="wrw-mac">
+      <h3 class="wrw-head" id="wrw-mac">On your Mac</h3>
+      <p class="wrw-sub">one sandboxed app · apple silicon · works offline</p>
+      <ul>
+        <li><strong>Chat &amp; inference</strong> Gemma and Qwen on MLX-Swift (Metal), Apple Foundation Models for fast turns — hot-swappable, all local.</li>
+        <li><strong>Voice in</strong> WhisperKit / Apple Speech — streaming speech-to-text, on-device.</li>
+        <li><strong>Voice out</strong> Kokoro neural TTS (ONNX Runtime) — synthesis on-device.</li>
+        <li><strong>Knowledge &amp; memory</strong> Embeddings, the personal knowledge graph, and hybrid RAG over your documents — indexed and searched locally.</li>
+        <li><strong>Call memory</strong> Consent-gated transcription and summaries, encrypted at rest.</li>
+        <li><strong>Storage</strong> App-sandboxed GRDB store, encrypted with a Keychain-held key.</li>
+        <li><strong>MCP server</strong> Loopback only — <code>127.0.0.1:4242</code>, unreachable from the network, off by default in Settings.</li>
+      </ul>
+    </section>
+    <section class="wrw-col" aria-labelledby="wrw-net">
+      <h3 class="wrw-head" id="wrw-net">The network</h3>
+      <p class="wrw-sub">the complete list of crossings · all user-initiated</p>
+      <ul>
+        <li class="crossing"><strong>Model weights, once</strong> Downloaded from Hugging Face only when you opt into the Lil or Big brain. The default Mini brain is Apple's built-in model — nothing to download.</li>
+        <li class="crossing"><strong>Web search &amp; page reading (optional)</strong> Agent tools behind a privacy toggle, off by default. Web off means web off.</li>
+        <li class="crossing"><strong>Updates</strong> Via TestFlight or a new DMG from GitHub Releases. The app has no self-updater phoning home.</li>
+        <li><strong>And that's it.</strong> No telemetry, no analytics, no account, no crash reporting. Your prompts, documents, voice, and calls are not on this list — by construction.</li>
+      </ul>
+      <p class="wrw-note">every crossing above is documented in the repo</p>
+    </section>
+  </div>
+
+  <h2>What ever touches the network?</h2>
+  <p>A privacy page earns its keep in the exceptions, so here they are, plainly:</p>
+  <ol>
+    <li><strong>Model downloads (one-time, opt-in).</strong> M1K3 starts on Mini — Apple's on-device Foundation Model, instant, nothing to download. If you choose a bigger local brain (Lil or Big) or on-device Whisper speech models, the weights download once from <code>huggingface.co</code>; after that, inference runs fully offline. The app's outbound-network entitlement exists for this — the <a href="https://github.com/Round-Tower/m1k3/blob/main/macos/M1K3App/M1K3.entitlements">entitlements file</a> says so in a signed comment.</li>
+    <li><strong>The web tools (opt-in, off by default).</strong> The local agent has web-search and page-reading tools behind a privacy toggle. When the toggle is off, the agent has no web tools at all — it can't quietly decide to search. When you turn it on, your search queries go to the web, as searches do.</li>
+    <li><strong>Updates (via the channel you chose).</strong> There is no Sparkle-style self-updater inside the app. TestFlight builds update through Apple's infrastructure; the DMG updates when you download a new one from <a href="https://github.com/Round-Tower/m1k3/releases">GitHub Releases</a>; a source build updates when you pull and rebuild.</li>
+  </ol>
+  <p>One adjacent honesty, not a network call M1K3 makes: if you connect a <em>cloud-hosted</em> MCP client to M1K3's loopback server, whatever that client retrieves becomes part of the client's own context and travels wherever its conversations go. Local server, client's rules — the full caveat is on the <a href="/mcp-knowledge-server">MCP page</a>.</p>
+
+  <h2>How is data stored on the Mac?</h2>
+  <p>Everything lives inside the app's macOS sandbox container. The knowledge and memory stores are GRDB databases encrypted with a key held in your Keychain — one place your knowledge lives, on hardware you own. Documents enter only when you explicitly open or drop them (the sandbox grants read access to user-selected files, nothing broader). Call transcription is consent-gated and encrypted at rest. Memory has a consent primitive going the other way too: <code>forget_memory</code> permanently deletes a fact, so what M1K3 knows stays revocable.</p>
+  <p>There's no telemetry to store elsewhere. Bug reports are user-initiated: <strong>Settings → Report an issue…</strong> generates a redacted diagnostic that <em>you</em> read and attach to a GitHub issue by hand — nothing is transmitted automatically.</p>
+
+  <h2>How can you verify any of this?</h2>
+  <p>M1K3 is open source (Apache-2.0), which turns this page from marketing into a checklist:</p>
+  <ul>
+    <li><strong>Read the entitlements.</strong> The sandbox entitlements file ships in the repo with a signed comment on every grant explaining why it exists — outbound network for model downloads, inbound listening pinned to loopback for the MCP server, mic access for on-device recognition. Or print what the shipped app actually carries:</li>
+  </ul>
+  <div class="term">
+    <div class="term-bar"><span></span><span></span><span></span></div>
+    <div class="term-body"><pre><span class="p">$</span> codesign -d --entitlements - /Applications/M1K3.app
+<span class="c">com.apple.security.app-sandbox            → true</span>
+<span class="c">com.apple.security.network.client         → true  # model downloads + opt-in web tools</span>
+<span class="c">com.apple.security.network.server         → true  # the 127.0.0.1 MCP server, off by default</span>
+<span class="c">com.apple.security.device.audio-input     → true  # mic, for on-device speech recognition</span></pre></div>
+  </div>
+  <ul>
+    <li><strong>Watch the wire.</strong> Run a network monitor (Little Snitch, LuLu) while you chat, ingest documents, and talk to it. After any model download you've opted into, there's nothing to see.</li>
+    <li><strong>Pull the cable.</strong> The bluntest instrument is the best one: disconnect mid-conversation. Inference, voice, and retrieval carry on, because none of them ever needed the network.</li>
+    <li><strong>Read the source.</strong> The <a href="https://github.com/Round-Tower/m1k3">repo is public</a>, the app is signed and notarized, and the git history carries <a href="https://murphysig.dev">MurphySig</a> provenance — human-and-AI collaboration on the record.</li>
+  </ul>
+
+  <h2>Frequently asked questions</h2>
+  <div class="faq-list">
+    <details>
+      <summary>Does M1K3 send my conversations to a server?</summary>
+      <p>No. Inference, voice, embeddings, and storage are all on-device. Zero bytes of your conversations, documents, or calls go to any server — there's no server in the product to send them to.</p>
+    </details>
+    <details>
+      <summary>Can M1K3 work fully offline?</summary>
+      <p>Yes. The default Mini brain works with nothing to download; once any bigger brain you've opted into has fetched its weights, everything — chat, voice, document search, call memory — runs without a connection.</p>
+    </details>
+    <details>
+      <summary>Is there telemetry, analytics, or a required account?</summary>
+      <p>None of the three. No account, no subscription, no telemetry. Issue reports are user-initiated, redacted before your eyes, and attached to GitHub by hand.</p>
+    </details>
+    <details>
+      <summary>Isn't the MCP server a network hole?</summary>
+      <p>It binds to <code>127.0.0.1</code> — loopback, unreachable from other machines — and it's off by default in Settings. The honest caveat: what a connected client retrieves enters that client's context, so <a href="/mcp-knowledge-server">connect clients you trust</a>.</p>
+    </details>
+  </div>
+
+  <section class="page-cta">
+    <span class="label">// nothing leaves</span>
+    <h2>Privacy you can check.</h2>
+    <p>M1K3 is free, open source, and entirely on-device. Don't take this page's word for it — take the source's.</p>
+    <div class="cta-row">
+      <a class="btn btn-primary" href="https://testflight.apple.com/join/Fxp2F5Je">Join the TestFlight beta</a>
+      <a class="btn btn-ghost" href="https://github.com/Round-Tower/m1k3">Read the source</a>
+    </div>
+  </section>
+
+  <aside class="more">
+    <span class="label">// more answers</span>
+    <div class="more-links">
+      <a href="/vs-ollama">M1K3 vs Ollama</a>
+      <a href="/private-chatgpt-alternative-mac">Private ChatGPT alternative for Mac</a>
+      <a href="/local-llm-mac-guide">Run a local LLM on a Mac</a>
+      <a href="/mcp-knowledge-server">Give Claude a local memory (MCP)</a>
+      <a href="/">M1K3 home</a>
+    </div>
+  </aside>
+</main>
+
+<footer>
+  <span>© 2026 <a href="https://round-tower.ie">ROUND TOWER</a> · MADE IN IRELAND</span>
+  <span><a href="https://github.com/sponsors/Round-Tower" aria-label="Sponsor M1K3 on GitHub">SPONSOR ♥</a> · <a href="https://github.com/Round-Tower/m1k3">GITHUB</a> · NO TRACKING ON THIS PAGE, OBVIOUSLY</span>
+</footer>
+
+<!-- Signed: Kev + claude-fable-5, 2026-07-10, Confidence 0.85.
+     GEO answer page per marketing/04-geo-content.md (page 5, /privacy — the
+     E-E-A-T anchor every "is it really private?" question links to). The
+     what-runs-where diagram is semantic HTML/CSS (.wrw in geo.css), no image,
+     no JS. Every claim grounded: README.md + macos/README.md (Hugging Face
+     one-time downloads, opt-in web search), M1K3.entitlements (signed
+     per-entitlement comments; loopback-pinned MCP server), MCPHostController
+     (server default OFF verified in source), site/index.html + llms.txt
+     (WhisperKit, Kokoro via macos/README, encrypted GRDB + Keychain,
+     pull-the-cable framing). Updates verified: no Sparkle/self-updater in the
+     app target — stated as channel-based (TestFlight / DMG / source). The
+     codesign block shows the real entitlement keys with honest annotations.
+     Prior: none (new file). -->
+</body>
+</html>
