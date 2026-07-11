@@ -70,8 +70,15 @@ def main() -> int:
         print("PROBE-FAIL: no armature found — is this a rigged, animated GLB?")
         return 1
     arm = armatures[0]
-    if arm.animation_data is None:
-        arm.animation_data_create()
+    if arm.name == "Rig":
+        # RealityKit refuses to bind skeletal animation to a SkelRoot prim named
+        # exactly "Rig" (case-sensitive — "rig"/"TheRig"/"Armature" all animate,
+        # proven by controlled A/B on 2026-07-11 with rkprobe --tick; the USD is
+        # otherwise byte-identical modulo names). The Quirky Series pack names
+        # every armature object "Rig", so those companions loaded frozen — the
+        # REAL Gecko failure mode. Blender propagates the rename consistently
+        # across all of a companion's clip exports, so cross-binding still holds.
+        arm.name = "Armature"
 
     actions = {a.name: a for a in bpy.data.actions}
     print("PROBE actions found:", sorted(actions))

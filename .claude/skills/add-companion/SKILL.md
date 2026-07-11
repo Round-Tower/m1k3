@@ -46,7 +46,8 @@ root-caused 2026-07-10); a `PROBE-WARN: <0.5s` line means you forgot it.
   `macos/tools/companion-pipeline/preview_usdz.swift "$OUT"/*.usdz -o /tmp/previews`
   — renders each clip to a PNG; eyeball mesh/materials/pose.
 - **Quick Look** each `.usdz` (it shows mesh + plays the animation), OR
-- headless RealityKit inventory: `cd scratch/usdz-probe/out/rkprobe && swift run -c release rkprobe "$OUT"/*.usdz` — proves animations were harvested. **Check the durations too**: every clip identical at ~0.42 s = the compressed-take trap (re-export with `--retime`); presence alone waved broken clips through on 2026-07-09.
+- **REQUIRED — headless RealityKit playback:** `cd scratch/usdz-probe/out/rkprobe && swift run -c release rkprobe --tick "$OUT"/*.usdz` — every clip must print `MOVES`. `FROZEN` with animations present = a binding trap (e.g. a SkelRoot named `Rig`, which export_clips.py now auto-renames — see the pipeline README gotchas). Presence/duration checks alone waved broken clips through twice (Gecko 06-21, Inkfish/Sparrow 07-09).
+- inventory + durations: `swift run -c release rkprobe "$OUT"/*.usdz` — every clip identical at ~0.42 s = the compressed-take trap (re-export with `--retime`).
 
 Watch for: missing/black materials, a frozen mesh (no animation harvested), wildly
 wrong scale. If a clip looks broken, re-export just that clip.
