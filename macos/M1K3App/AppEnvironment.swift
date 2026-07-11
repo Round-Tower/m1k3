@@ -1220,6 +1220,12 @@ extension AppEnvironment {
     /// Signed: Kev + claude-opus-4-8, 2026-06-30, Confidence 0.8 (TTFT first-turn
     /// fix; the cold-embedder-on-critical-path was traced in code, the win is
     /// verify-by-launch via SelfTest). Prior: this file.
+    /// Review: Kev + claude-fable-5, 2026-07-11 — MEASURED (ledger 113-4 closed):
+    /// SelfTest embedwarm probe ×3 on this M4-class Mac, qwen3-embed 0.6B-4bit —
+    /// cold 3927/4004/4122 ms vs warm 15 ms every run ⇒ this warm removes a
+    /// ~4.0 s tax from the first turn's TTFT. Runs 2–3 had the OS page cache
+    /// warm and still paid ~4 s, so the cost is Metal/container init, not disk
+    /// I/O — a cold relaunch pays it every time without this. Confidence 0.95.
     private func warmEmbedderOnLaunch() async {
         // Background work: skip under thermal/low-power pressure (the embedder
         // lazy-loads on the first query anyway, and the thermal-recovery observer
