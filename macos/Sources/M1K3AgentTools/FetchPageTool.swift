@@ -168,7 +168,9 @@ public struct FetchPageTool: AgentTool {
     /// The core read shared with web_search's deterministic deepen: capped
     /// readable text, or nil when the page can't be read (bad URL, non-OK status,
     /// or a JS-only/empty body). Never throws — the caller degrades gracefully.
-    public func readablePage(at raw: String) async -> String? {
+    /// Internal on purpose: the only caller is WebSearchTool's deepen in this
+    /// module (110 review nit — no protocol witness forces `public`).
+    func readablePage(at raw: String) async -> String? {
         guard let url = Self.validatedURL(raw) else { return nil }
         do {
             let (data, response) = try await fetcher.fetch(Self.pageRequest(for: url))

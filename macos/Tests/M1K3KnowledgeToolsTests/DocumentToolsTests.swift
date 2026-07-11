@@ -48,6 +48,13 @@ struct ListDocumentsToolTests {
 }
 
 struct GetDocumentToolTests {
+    @Test("wire schema requires title only — offset is optional (115 review nit)")
+    func offsetIsOptionalOnTheWire() throws {
+        let definition = try GetDocumentTool(store: KnowledgeStore()).toolDefinition
+        let required = definition.parameters.filter(\.isRequired).map(\.name)
+        #expect(required == ["title"])
+    }
+
     @Test("fetches a document's full text by partial title")
     func fetches() async throws {
         let tool = try GetDocumentTool(store: seededStore())

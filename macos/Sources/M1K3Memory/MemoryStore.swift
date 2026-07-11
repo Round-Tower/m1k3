@@ -86,6 +86,29 @@ import Foundation
 import GRDB
 import M1K3Knowledge // VectorMath, ReciprocalRankFusion, GroundingGate, EmbeddingService
 
+/// A `rememberConnected` link-loop failure AFTER the node was written: the
+/// node is live (and its corpus vector makes the distiller's semantic dedup
+/// skip any retry), but only `edgesLinked` of `edgesPlanned` edges landed.
+/// Carries the partial state so caller breadcrumbs can say exactly that
+/// instead of a misleading "skipped" (112 review nit).
+public struct MemoryGraphPartialWriteError: Error, CustomStringConvertible, LocalizedError {
+    public let memoryID: UUID
+    public let edgesLinked: Int
+    public let edgesPlanned: Int
+    public let underlying: Error
+
+    public var description: String {
+        "graph partial-write: \(edgesLinked)/\(edgesPlanned) edges linked for "
+            + "\(memoryID.uuidString) — node written, retry is dedup-masked: \(underlying)"
+    }
+
+    /// The catch sites breadcrumb `error.localizedDescription` — without this
+    /// they'd log the generic Foundation fallback and lose the X/N state.
+    public var errorDescription: String? {
+        description
+    }
+}
+
 // MARK: - Domain model
 
 /// What kind of fact this is. Open string-backed enum, same pattern as
@@ -380,9 +403,16 @@ public final class MemoryStore: @unchecked Sendable {
     /// Node + edges are SEPARATE writes (not one transaction): a crash mid-loop
     /// leaves the node intact and recallable with some edges missing — acceptable
     /// for a best-effort personal graph, and `link`'s INSERT OR IGNORE keeps
-    /// retries idempotent. Facts distilled before this path existed live in the
-    /// corpus only and are NOT backfilled here — the graph accretes from new
-    /// writes (a one-shot backfill/scrub is a separate, manual step).
+    /// retries idempotent. ⚠️ But a THROW mid-loop is permanently masked one
+    /// layer up: the fact's vector is already in the corpus, so the distiller's
+    /// semantic dedup (`hasSemanticDuplicate` / `wasDeduped`) skips it on every
+    /// retry and the missing edges are never backfilled (112 review nit). That's
+    /// why a mid-loop throw is wrapped in `MemoryGraphPartialWriteError` naming
+    /// the partial X/N state — so the caller's breadcrumb says "node written,
+    /// N−X edges lost", not a misleading "skipped". Facts distilled before this
+    /// path existed live in the corpus only and are NOT backfilled here — the
+    /// graph accretes from new writes (a one-shot backfill/scrub is a separate,
+    /// manual step).
     @discardableResult
     public func rememberConnected(
         _ memory: Memory,
@@ -396,11 +426,18 @@ public final class MemoryStore: @unchecked Sendable {
         let neighbours = try recallVector(queryVector: embedding, limit: maxLinks + 1)
             .filter { $0.memory.id != memory.id && ($0.similarity ?? 0) >= threshold }
             .prefix(maxLinks)
-        for n in neighbours {
-            try link(MemoryEdge(
-                fromID: memory.id, toID: n.memory.id,
-                relation: "related", createdAt: memory.createdAt
-            ))
+        for (index, n) in neighbours.enumerated() {
+            do {
+                try link(MemoryEdge(
+                    fromID: memory.id, toID: n.memory.id,
+                    relation: "related", createdAt: memory.createdAt
+                ))
+            } catch {
+                throw MemoryGraphPartialWriteError(
+                    memoryID: memory.id, edgesLinked: index,
+                    edgesPlanned: neighbours.count, underlying: error
+                )
+            }
         }
         return neighbours.count
     }

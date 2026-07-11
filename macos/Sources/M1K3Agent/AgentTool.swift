@@ -19,10 +19,16 @@ import Foundation
 public struct ToolParameter: Sendable, Equatable {
     public let name: String
     public let description: String
+    /// Whether the wire schema lists this parameter in `required`. Defaults to
+    /// true (the historical contract); optional parameters (e.g. get_document's
+    /// resume `offset`) must say so, or prompt-fragile native tool-callers see
+    /// a schema that contradicts the prose and loop-thrash supplying it.
+    public let isRequired: Bool
 
-    public init(name: String, description: String) {
+    public init(name: String, description: String, isRequired: Bool = true) {
         self.name = name
         self.description = description
+        self.isRequired = isRequired
     }
 }
 

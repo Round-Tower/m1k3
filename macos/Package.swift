@@ -345,6 +345,7 @@ let package = Package(
                 "M1K3MLX",
                 "M1K3Knowledge",
                 "M1K3Inference",
+                "M1K3Chat", // HistoryBudgetPolicy ↔ MLXGemmaProvider default-cap equality pin (116-F1)
                 .product(name: "Transformers", package: "swift-transformers"),
             ],
             path: "Tests/M1K3MLXTests"

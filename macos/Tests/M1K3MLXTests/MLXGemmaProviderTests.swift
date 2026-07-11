@@ -9,6 +9,7 @@
 //  Signed: Kev + claude-opus-4-8, 2026-06-06, Confidence 0.75, Prior: Unknown
 
 import Foundation
+import M1K3Chat
 import M1K3Inference
 @testable import M1K3MLX
 import MLXLMCommon
@@ -20,6 +21,18 @@ struct MLXGemmaProviderTests {
         let provider: any InferenceProvider = MLXGemmaProvider()
         #expect(provider.name == "mlx-gemma")
         #expect(provider.isAvailable)
+    }
+
+    @Test("the provider's default generation ceiling matches HistoryBudgetPolicy's defaultCap (116-F1)")
+    func defaultGenerationCeilingMatchesBudgetPolicy() {
+        // The 4096 figure lives on BOTH sides of the Chat↔MLX boundary: the
+        // policy's generationTokenCap(defaultCap:) mirrors this class's default.
+        // If either moves alone, the window math silently models a value the
+        // live provider never uses — this pin makes the drift loud.
+        #expect(HistoryBudgetPolicy.generationTokenCap(for: .lil) == MLXGemmaProvider.defaultMaxTokens)
+        // And the rotating cap must stay UNDER the default (a cap that exceeds
+        // the ceiling would be a no-op).
+        #expect(HistoryBudgetPolicy.rotatingGenerationTokenCap < MLXGemmaProvider.defaultMaxTokens)
     }
 
     @Test("KV quantization is allow-listed per family — raw cache.update families are excluded")

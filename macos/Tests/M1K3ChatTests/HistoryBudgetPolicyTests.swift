@@ -130,4 +130,23 @@ struct HistoryBudgetPolicyTests {
         let rawContext = BrainTier.big.approximateContextTokens - reserved - gen
         #expect(historyTokens(big) <= rawContext - HistoryBudgetPolicy.rotatingSafetyMarginTokens + 1)
     }
+
+    @Test("optional-tier overload owns the mini/unknown guard (112 review nit)")
+    func optionalTierOverloadGuardsMiniAndUnknown() {
+        // nil (unknown persisted brain string) and .mini both get the fixed
+        // conservative replay — never the MLX-sized computation.
+        let unknown = HistoryBudgetPolicy.budget(
+            for: BrainTier(persisted: "not-a-brain"), reservedTokens: 3000, generationTokens: 2048
+        )
+        #expect(unknown == HistoryBudgetPolicy.conservativeMiniBudget)
+        let mini = HistoryBudgetPolicy.budget(
+            for: BrainTier?.some(.mini), reservedTokens: 3000, generationTokens: 2048
+        )
+        #expect(mini == HistoryBudgetPolicy.conservativeMiniBudget)
+        // A real MLX tier delegates to the non-optional computation unchanged.
+        let big = HistoryBudgetPolicy.budget(
+            for: BrainTier?.some(.big), reservedTokens: 3000, generationTokens: 2048
+        )
+        #expect(big == HistoryBudgetPolicy.budget(for: .big, reservedTokens: 3000, generationTokens: 2048))
+    }
 }

@@ -56,6 +56,11 @@ def main() -> int:
         except (IndexError, ValueError):
             print("PROBE-FAIL: --retime needs a numeric value")
             return 2
+        if retime <= 0:
+            # Zero collapses every keyframe onto frame 0 (a frozen bake);
+            # negative reverses time. Both are silent garbage — fail loud.
+            print(f"PROBE-FAIL: --retime must be > 0 (got {retime})")
+            return 2
         del argv[i : i + 2]
     if len(argv) < 2:
         print("PROBE-FAIL: need <model.glb> <outdir> [Clip1,Clip2,...] [--retime N]")

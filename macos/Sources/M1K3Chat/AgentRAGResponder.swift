@@ -529,6 +529,14 @@ public struct AgentRAGResponder: RAGResponding, Sendable {
             + "use naturally, do not cite):\n\(facts)"
     }
 
+    /// The generative carve-out — the FIRST rule in BOTH prompt styles, shared
+    /// verbatim so the wording can't drift between them (109 review nit; a
+    /// pin test asserts both rendered prompts carry this exact text).
+    static let generativeCarveOut =
+        "- A request to write, create, code, or compose something is a task to "
+            + "DO, not a lookup — just produce it. No tools, no grounding, no citations, "
+            + "no \"found nothing\"; those are for factual questions."
+
     private static func groundingBody(
         chunks: [ChunkHit], memories: [ChunkHit], toolNames: Set<String>, style: PromptStyle
     ) -> String {
@@ -556,9 +564,7 @@ public struct AgentRAGResponder: RAGResponding, Sendable {
         case .react:
             """
             RULES:
-            - A request to write, create, code, or compose something is a task to \
-            DO, not a lookup — just produce it. No tools, no grounding, no citations, \
-            no "found nothing"; those are for factual questions.
+            \(Self.generativeCarveOut)
             - If the KNOWLEDGE already answers the question, reply IMMEDIATELY \
             starting with "CONCLUSION:" — do not use tools.
             - Cite knowledge sources inline with citation tokens like \
@@ -575,9 +581,7 @@ public struct AgentRAGResponder: RAGResponding, Sendable {
         case .native:
             """
             RULES:
-            - A request to write, create, code, or compose something is a task to \
-            DO, not a lookup — just produce it. No tools, no grounding, no citations, \
-            no "found nothing"; those are for factual questions.
+            \(Self.generativeCarveOut)
             - Pure small talk — greetings, banter — needs no tools or knowledge; just reply. \
             A question about the current world is NOT small talk, even phrased casually.
             - If the KNOWLEDGE above answers the question, answer from it directly.

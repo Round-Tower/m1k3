@@ -417,9 +417,12 @@ public final class ChatSession {
 
     /// Mid-session ("rolling") trigger: when the undistilled backlog has outgrown
     /// the live window, capture it now so a long session's early turns survive as
-    /// facts. Called at the tail of `send` (the response is complete, so it skips
-    /// the `isResponding` latch); single-flight + watermark guards in
-    /// `spawnDistillation` keep it from over-firing.
+    /// facts. Called at the tail of `send` — streaming has COMPLETED by then, but
+    /// note the `isResponding` latch is still up (send's defer hasn't fired), so
+    /// the no-contention guarantee is positional (end-of-send), not latch-derived
+    /// (112 review nit: the old comment claimed the latch was already down).
+    /// Single-flight + watermark guards in `spawnDistillation` keep it from
+    /// over-firing.
     func scheduleRollingDistillationIfNeeded() {
         guard let history, distillation != nil, autoCaptureEnabled() else { return }
         let watermark = (try? history.distilledWatermark(id: activeConversationID)) ?? 0
@@ -429,8 +432,10 @@ public final class ChatSession {
 
     /// The distillation worker, deliberately WITHOUT an `isResponding` guard.
     /// ⚠️ Contract: callers must guarantee no response is actively streaming —
-    /// `scheduleDistillationIfNeeded` enforces it for the exit/launch path, and
-    /// the rolling path calls in at end-of-send (streaming already done). A new
+    /// `scheduleDistillationIfNeeded` enforces it via the latch for the
+    /// exit/launch path; the rolling path calls in at end-of-send, where
+    /// streaming is done but `isResponding` is STILL TRUE (so a latch check
+    /// here would wrongly reject it — the guarantee is positional). A new
     /// call site MUST uphold this or distillation will contend with a live turn.
     private func spawnDistillation() {
         guard let history, let distillation, autoCaptureEnabled() else { return }

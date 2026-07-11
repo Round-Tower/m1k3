@@ -102,6 +102,27 @@ public enum HistoryBudgetPolicy {
         )
     }
 
+    /// Tier-optional variant that OWNS the mini/unknown guard: nil (an unknown
+    /// persisted brain string) and .mini both get the fixed conservative replay
+    /// — AFM manages its own ~4K window and the MLX-sized reserves would zero
+    /// it out — everything else delegates to `budget(for:reservedTokens:...)`.
+    /// Composition roots call this one-liner instead of re-implementing the
+    /// guard (112 review nit: brain routing belongs in the package, not app glue).
+    public static func budget(
+        for tier: BrainTier?,
+        reservedTokens: Int,
+        generationTokens: Int,
+        latencyCeilingTokens: Int = defaultLatencyCeilingTokens
+    ) -> HistoryWindow.Budget {
+        guard let tier, tier != .mini else { return conservativeMiniBudget }
+        return budget(
+            for: tier,
+            reservedTokens: reservedTokens,
+            generationTokens: generationTokens,
+            latencyCeilingTokens: latencyCeilingTokens
+        )
+    }
+
     /// The `maxTokens` the app should construct the MLX provider with for
     /// `tier` — capped on a rotating-KV tier (see `rotatingGenerationTokenCap`),
     /// the provider's default elsewhere.

@@ -101,4 +101,14 @@ struct ChatEvalFixturesTests {
             #expect(fixture.expectation.mustNotContain.contains("<think>"))
         }
     }
+
+    @Test("no fixture sets both mustRefuse and mustComply — the scorer renders them as opposing checks")
+    func noFixtureSetsBothRefusalFlags() {
+        for fixture in ChatEvalFixtures.all {
+            #expect(
+                !(fixture.expectation.mustRefuse && fixture.expectation.mustComply),
+                "\(fixture.id) sets mutually exclusive flags"
+            )
+        }
+    }
 }

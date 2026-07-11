@@ -21,6 +21,18 @@ private struct SampleTool: AgentTool {
     }
 }
 
+private struct OptionalParamTool: AgentTool {
+    let name = "paged"
+    let description = "fetches with an optional offset"
+    let parameters = [
+        ToolParameter(name: "title", description: "the title"),
+        ToolParameter(name: "offset", description: "resume offset (optional)", isRequired: false),
+    ]
+    func execute(input _: [String: String]) async throws -> ToolResult {
+        ToolResult(output: "")
+    }
+}
+
 struct AgentToolDefinitionTests {
     @Test("projects name, description, and parameters into a ToolDefinition")
     func projection() {
@@ -32,5 +44,12 @@ struct AgentToolDefinitionTests {
         #expect(definition.parameters.first?.description == "the search query")
         #expect(definition.parameters.first?.isRequired == true)
         #expect(definition.parameters.first?.type == "string")
+    }
+
+    @Test("an optional ToolParameter projects isRequired: false into the wire type")
+    func optionalParameterProjection() {
+        let definition = OptionalParamTool().toolDefinition
+        #expect(definition.parameters.map(\.name) == ["title", "offset"])
+        #expect(definition.parameters.map(\.isRequired) == [true, false])
     }
 }

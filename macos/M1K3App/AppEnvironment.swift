@@ -500,7 +500,9 @@ final class AppEnvironment {
         let slotTier = brain.mlxModelID != nil ? brain : BrainTier.big
         let gemma = MLXGemmaProvider(
             modelID: initialMLXModelID,
-            maxTokens: HistoryBudgetPolicy.generationTokenCap(for: slotTier)
+            maxTokens: HistoryBudgetPolicy.generationTokenCap(
+                for: slotTier, defaultCap: MLXGemmaProvider.defaultMaxTokens
+            )
         )
         currentMLXProvider = gemma
         let mlxSlot = SwappableInferenceProvider(gemma)
@@ -703,7 +705,13 @@ final class AppEnvironment {
         // offer); a successful answer may raise the offer or complete a
         // consented staged swap at this idle moment.
         let metrics = chat.messages.last?.metrics
-        let cap = HistoryBudgetPolicy.generationTokenCap(for: selectedBrain)
+        // Same explicit defaultCap as the provider construction sites — the
+        // composition root passes the MLX truth instead of trusting the
+        // policy's mirrored literal (review nit on #22; the 116-F1 test
+        // still pins the mirror for everyone else).
+        let cap = HistoryBudgetPolicy.generationTokenCap(
+            for: selectedBrain, defaultCap: MLXGemmaProvider.defaultMaxTokens
+        )
         evaluateBrainUpgradeAfterAnswer(
             questionCharacters: text.count,
             answerFailed: answerFailed,
@@ -814,14 +822,13 @@ final class AppEnvironment {
     func selectBrain(_ tier: BrainTier) -> Bool {
         // Already on this exact MLX brain and it's loaded — re-selecting would spin up
         // a fresh MLXGemmaProvider (cold persona-KV prefix) and release the warm one,
-        // repaying a multi-GB load + persona prefill for nothing. A non-ready state
-        // (failed / downloading / idle) falls through so onboarding "Try again" and
-        // first-wake still re-attempt. Mini (no mlxModelID) is cheap, so it's not guarded.
-        if tier == selectedBrain,
-           case .ready = modelLoad,
-           let modelID = tier.mlxModelID,
-           modelID == currentMLXProvider.modelIdentifier
-        {
+        // repaying a multi-GB load + persona prefill for nothing. The predicate is
+        // BrainSwitcher's (unit-pinned there): non-ready falls through so onboarding
+        // "Try again" and first-wake re-attempt; Mini (no mlxModelID) is never guarded.
+        if BrainSwitcher.reselectIsNoOp(
+            tier: tier, selected: selectedBrain, load: modelLoad,
+            loadedModelID: currentMLXProvider.modelIdentifier
+        ) {
             Self.brainLog.notice("selectBrain \(tier.rawValue, privacy: .public): already loaded, no-op")
             // Defense-in-depth: keep the upgrade machine consistent even on the
             // no-op path, rather than relying on the policy's non-Mini
@@ -849,7 +856,9 @@ final class AppEnvironment {
             // the window together (see HistoryBudgetPolicy.rotatingGenerationTokenCap).
             let mlx = MLXGemmaProvider(
                 modelID: modelID,
-                maxTokens: HistoryBudgetPolicy.generationTokenCap(for: tier)
+                maxTokens: HistoryBudgetPolicy.generationTokenCap(
+                    for: tier, defaultCap: MLXGemmaProvider.defaultMaxTokens
+                )
             )
             currentMLXProvider = mlx
             swappableMLX.setProvider(mlx)

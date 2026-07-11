@@ -81,10 +81,14 @@ public enum HistoryWindow {
     /// no usable history. Turns are walked newest→oldest, each truncated to the
     /// per-turn cap, accumulated until the next would exceed the total budget;
     /// the result is re-ordered chronologically. The most recent turn is always
-    /// kept. NOTE the rendered block can exceed `totalChars` by at most one
-    /// `perTurnChars` (the unconditional newest turn) — so a caller that needs a
-    /// hard upper bound (a rotating-KV tier) must keep `perTurnChars ≤ totalChars`
-    /// (`HistoryBudgetPolicy` does), making the block provably ≤ `totalChars`.
+    /// kept. NOTE the accounting counts the header and per-line separators, so
+    /// the rendered block exceeds `totalChars` ONLY via the unconditional newest
+    /// turn (header + one per-turn-capped line, when that alone overflows). A
+    /// caller that needs a hard upper bound (a rotating-KV tier) must keep
+    /// `perTurnChars ≤ totalChars − header − 7` — the 7 is the newest line's
+    /// own overhead (6-char "USER: "/"M1K3: " label + the truncation ellipsis).
+    /// `HistoryBudgetPolicy`'s budgets clear the ~59-char total by thousands,
+    /// making the block provably ≤ `totalChars` at every wired call site.
     static func render(_ turns: [ChatTurn], budget: Budget = .default) -> String? {
         let usable = turns
             .map { ChatTurn(role: $0.role, text: $0.text.trimmingCharacters(in: .whitespacesAndNewlines)) }
@@ -92,21 +96,25 @@ public enum HistoryWindow {
             .suffix(budget.maxTurns)
         guard !usable.isEmpty else { return nil }
 
+        let header = "CONVERSATION SO FAR (context for the new question):\n"
         var kept: [String] = []
-        var total = 0
+        // Seed with the header so `total` tracks the REAL rendered size — the
+        // stated invariant used to omit header + separators (~67 chars of
+        // silent overrun the old tests hid behind slack; 112 review nit).
+        var total = header.count
         for turn in usable.reversed() {
             let label = turn.role == .user ? "USER" : "M1K3"
             let line = "\(label): \(truncate(turn.text, max: budget.perTurnChars))"
+            let cost = line.count + (kept.isEmpty ? 0 : 1) // +1 = the "\n" joiner
             // Keep at least the newest turn even if it alone would exceed the
             // budget (its per-turn cap still bounds it); stop once full.
-            if !kept.isEmpty, total + line.count > budget.totalChars { break }
+            if !kept.isEmpty, total + cost > budget.totalChars { break }
             kept.append(line)
-            total += line.count
+            total += cost
         }
         guard !kept.isEmpty else { return nil }
 
-        return "CONVERSATION SO FAR (context for the new question):\n"
-            + kept.reversed().joined(separator: "\n")
+        return header + kept.reversed().joined(separator: "\n")
     }
 
     private static func truncate(_ text: String, max: Int) -> String {
