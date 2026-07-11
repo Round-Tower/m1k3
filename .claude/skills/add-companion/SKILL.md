@@ -18,6 +18,8 @@ proven; this skill is the repeatable wire-up so the gotchas don't get rediscover
 - **Pick the dialect** (decides which clips to export and how gaits map):
   - `quaternius` → clips `Idle_A,Idle_B,Walk,Run,Jump,Fear,Sit,Clicked`
   - `fox` → clips `Survey,Walk,Run`
+  - `aquatic` (swimmers — Inkfish) → quaternius set + `Swim,Fly`; move→Swim, react→Fly
+  - `avian` (birds — Sparrow) → quaternius set + `Swim,Fly`; move→Fly, react→Jump
   - A new vocabulary → add a `case` to `CompanionDialect.clipName(for:)` first
     (every `CompanionGait` must map to a clip the model actually has).
 - **Confirm Xcode state** if you'll split view files later: `pgrep -x Xcode`. Adding
@@ -31,17 +33,23 @@ proven; this skill is the repeatable wire-up so the gotchas don't get rediscover
 OUT="macos/Sources/M1K3Avatar/Companions/<Name>"
 mkdir -p "$OUT"
 /Applications/Blender.app/Contents/MacOS/Blender -b -P macos/tools/companion-pipeline/export_clips.py -- \
-  "<model.glb>" "$OUT" <Clip1,Clip2,...>
+  "<model.glb>" "$OUT" <Clip1,Clip2,...> [--retime N]
 ```
 
 Expect `PROBE-OK` per clip and `PROBE-DONE: exported N`. The system `usdcat` is NOT
 a substitute (keeps only clip 1). Models import Z-up — that's corrected in the view,
-not the asset (see gotchas).
+not the asset (see gotchas). **Quirky Series pack sources need `--retime 4`** —
+the pack ships every take compressed to 0.417 s (the real Gecko failure mode,
+root-caused 2026-07-10); a `PROBE-WARN: <0.5s` line means you forgot it.
 
 ### 2. QA the render
 
+- **Headless image preview** (works with no GUI/locked Mac):
+  `macos/tools/companion-pipeline/preview_usdz.swift "$OUT"/*.usdz -o /tmp/previews`
+  — renders each clip to a PNG; eyeball mesh/materials/pose.
 - **Quick Look** each `.usdz` (it shows mesh + plays the animation), OR
-- headless RealityKit inventory: `cd scratch/usdz-probe/out/rkprobe && swift run -c release rkprobe "$OUT"/*.usdz`.
+- **REQUIRED — headless RealityKit playback:** `cd scratch/usdz-probe/out/rkprobe && swift run -c release rkprobe --tick "$OUT"/*.usdz` — every clip must print `MOVES`. `FROZEN` with animations present = a binding trap (e.g. a SkelRoot named `Rig`, which export_clips.py now auto-renames — see the pipeline README gotchas). Presence/duration checks alone waved broken clips through twice (Gecko 06-21, Inkfish/Sparrow 07-09).
+- inventory + durations: `swift run -c release rkprobe "$OUT"/*.usdz` — every clip identical at ~0.42 s = the compressed-take trap (re-export with `--retime`).
 
 Watch for: missing/black materials, a frozen mesh (no animation harvested), wildly
 wrong scale. If a clip looks broken, re-export just that clip.

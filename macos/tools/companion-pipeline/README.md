@@ -37,6 +37,8 @@ names:
 |--------------|------------------------------------------------------|------------------------------------------|
 | `quaternius` | `Idle_A,Idle_B,Walk,Run,Jump,Fear,Sit,Clicked`       | `app/3d/Quirky-Series-FREE-Animals.../Animations/<Name>_Animations.glb` |
 | `fox`        | `Survey,Walk,Run`                                    | Khronos Fox (`site/vendor/Fox.glb`)      |
+| `aquatic`    | quaternius set + `Swim,Fly` (move→Swim, react→Fly)   | Quirky pack swimmers (Inkfish)           |
+| `avian`      | quaternius set + `Swim,Fly` (move→Fly, react→Jump)   | Quirky pack birds (Sparrow)              |
 
 Extra clips are harmless (just bytes — M1K3 only *plays* the gait-mapped subset).
 `Sit`/`Clicked` are exported for forward-looking gaits but not yet played.
@@ -44,9 +46,24 @@ Extra clips are harmless (just bytes — M1K3 only *plays* the gait-mapped subse
 ## Verify
 
 - **Quick Look** each `.usdz` (Finder → space) — confirms mesh, materials,
-  and that the animation plays.
+  and that the animation plays. Needs a GUI session.
+- **Headless RealityKit playback — the REQUIRED gate:** `rkprobe --tick
+  <files...>` plays each file's own animation in a headless `RealityRenderer`
+  and reports `MOVES` or `FROZEN` from actual joint deltas. This is ground
+  truth: animation *presence*, durations, AND `controller.isValid` all passed
+  on files that render frozen (the `Rig`-name trap below). Every clip must
+  say `MOVES` before wiring in.
 - **Headless RealityKit load + inventory:** `scratch/usdz-probe/out/rkprobe`
-  (`swift run -c release rkprobe <files...>`).
+  (`swift run -c release rkprobe <files...>`) — lists animations + durations.
+  **Read the durations:** every clip identical at ~0.42 s is the
+  compressed-take trap (below).
+- **Headless image preview:** `./preview_usdz.swift <files...> [-o outdir]
+  [--size N] [--time T]` — renders each clip to a PNG (mesh + materials) with
+  no screen needed. CAVEAT: SceneKit's offscreen snapshot does not evaluate
+  skinned animation, so `--time` shows the bind pose for rigged models —
+  look, not motion (use `rkprobe --tick` for motion). Works from a terminal,
+  SSH, CI, or a locked Mac. The checks are complementary — preview shows the
+  look, `--tick` proves the motion, Quick Look shows the motion to a human.
 
 ## Wire into the app
 
@@ -61,6 +78,23 @@ Extra clips are harmless (just bytes — M1K3 only *plays* the gait-mapped subse
 
 ## Gotchas (hard-won — do not rediscover)
 
+- **RealityKit will NOT bind skeletal animation to a SkelRoot prim named
+  exactly `Rig`** — the mesh loads, `availableAnimations` is populated,
+  `playAnimation` returns a valid controller, and the joints never move.
+  Case-sensitive: `rig`, `TheRig`, `Armature`, `root` all animate; only `Rig`
+  freezes (controlled A/B 2026-07-11, USD byte-identical modulo the name).
+  The Quirky Series pack names every armature object `Rig`, so every Quirky
+  companion hit this — including the 2026-06-21 Gecko drop, whose real cause
+  was this, not the conversion. `export_clips.py` now auto-renames `Rig` →
+  `Armature` before export. If a future source model ships frozen despite
+  `--tick` passing at export time, suspect another reserved name.
+- **The Quirky pack's takes are compressed — export with `--retime 4`.** Every
+  clip in the Quirky Series FREE pack is an 11-frame / 0.417 s take with the
+  full motion cycle squeezed inside (GLB, FBX, and the Unity meta all agree;
+  both pack downloads identical). Played as-is it reads as broken on-device —
+  this was the REAL cause of the 2026-06-21 "Gecko doesn't animate" drop,
+  root-caused 2026-07-10. `--retime 4` stretches takes to ~1.67 s (tune by
+  eye at ⌘⇧V). Khronos Fox has real per-clip durations — no retime.
 - **Z-up → Y-up:** models import Z-up (Blender) and load standing on their nose
   in RealityKit. The correction is **in the view**
   (`CompanionAvatarView.blenderZUpCorrection`, −90° about X), not baked into the

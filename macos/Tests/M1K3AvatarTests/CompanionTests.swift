@@ -53,6 +53,24 @@ struct CompanionTests {
         #expect(CompanionDialect.fox.clipName(for: .distress) == "Run")
     }
 
+    @Test("aquatic dialect: move is Swim and react is Fly — never the land gaits")
+    func aquaticClipNames() {
+        #expect(CompanionDialect.aquatic.clipName(for: .rest) == "Idle_A")
+        #expect(CompanionDialect.aquatic.clipName(for: .alert) == "Idle_B")
+        #expect(CompanionDialect.aquatic.clipName(for: .move) == "Swim") // gliding, never trudging
+        #expect(CompanionDialect.aquatic.clipName(for: .react) == "Fly") // the squid jet
+        #expect(CompanionDialect.aquatic.clipName(for: .distress) == "Fear")
+    }
+
+    @Test("avian dialect: move is Fly and react is Jump")
+    func avianClipNames() {
+        #expect(CompanionDialect.avian.clipName(for: .rest) == "Idle_A")
+        #expect(CompanionDialect.avian.clipName(for: .alert) == "Idle_B")
+        #expect(CompanionDialect.avian.clipName(for: .move) == "Fly") // a bird with something to say takes wing
+        #expect(CompanionDialect.avian.clipName(for: .react) == "Jump") // the happy hop
+        #expect(CompanionDialect.avian.clipName(for: .distress) == "Fear")
+    }
+
     // MARK: - The load-bearing invariant
 
     @Test("every spec ships every clip its mapper can ever emit (no missing-clip crash)")
