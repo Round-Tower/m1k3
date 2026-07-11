@@ -35,8 +35,13 @@ var iterator = CommandLine.arguments.dropFirst().makeIterator()
 while let arg = iterator.next() {
     switch arg {
     case "-o": outDir = iterator.next().map { URL(fileURLWithPath: $0, isDirectory: true) }
-    case "--size": size = iterator.next().flatMap(Int.init) ?? size
-    case "--time": time = iterator.next().flatMap(Double.init) ?? time
+    case "--size", "--time":
+        // A non-numeric value would otherwise be silently eaten (and a .usdz
+        // that followed it dropped from the render list) — fail loudly instead.
+        guard let raw = iterator.next() else { fatalError("\(arg) needs a value") }
+        if arg == "--size", let n = Int(raw) { size = n }
+        else if arg == "--time", let t = Double(raw) { time = t }
+        else { fatalError("\(arg) got a non-numeric value: \(raw)") }
     default: inputs.append(URL(fileURLWithPath: arg))
     }
 }
@@ -75,7 +80,6 @@ for input in inputs {
 
         let renderer = SCNRenderer(device: device, options: nil)
         renderer.scene = scene
-        renderer.autoenablesDefaultLighting = true
         // pointOfView stays nil → SceneKit's default camera frames the scene.
         let image = renderer.snapshot(
             atTime: time,

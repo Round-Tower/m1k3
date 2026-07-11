@@ -18,6 +18,8 @@ proven; this skill is the repeatable wire-up so the gotchas don't get rediscover
 - **Pick the dialect** (decides which clips to export and how gaits map):
   - `quaternius` → clips `Idle_A,Idle_B,Walk,Run,Jump,Fear,Sit,Clicked`
   - `fox` → clips `Survey,Walk,Run`
+  - `aquatic` (swimmers — Inkfish) → quaternius set + `Swim,Fly`; move→Swim, react→Fly
+  - `avian` (birds — Sparrow) → quaternius set + `Swim,Fly`; move→Fly, react→Jump
   - A new vocabulary → add a `case` to `CompanionDialect.clipName(for:)` first
     (every `CompanionGait` must map to a clip the model actually has).
 - **Confirm Xcode state** if you'll split view files later: `pgrep -x Xcode`. Adding

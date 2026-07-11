@@ -37,6 +37,8 @@ names:
 |--------------|------------------------------------------------------|------------------------------------------|
 | `quaternius` | `Idle_A,Idle_B,Walk,Run,Jump,Fear,Sit,Clicked`       | `app/3d/Quirky-Series-FREE-Animals.../Animations/<Name>_Animations.glb` |
 | `fox`        | `Survey,Walk,Run`                                    | Khronos Fox (`site/vendor/Fox.glb`)      |
+| `aquatic`    | quaternius set + `Swim,Fly` (move→Swim, react→Fly)   | Quirky pack swimmers (Inkfish)           |
+| `avian`      | quaternius set + `Swim,Fly` (move→Fly, react→Jump)   | Quirky pack birds (Sparrow)              |
 
 Extra clips are harmless (just bytes — M1K3 only *plays* the gait-mapped subset).
 `Sit`/`Clicked` are exported for forward-looking gaits but not yet played.
