@@ -25,7 +25,15 @@ struct AvatarSurface: View {
         if companion == AppEnvironment.voiceCompanionConstellation {
             MemoryConstellationCanvas(env: env)
         } else if let spec = CompanionSpec.named(companion), CompanionAssets.isInstalled(spec) {
+            // .id(spec.id): a creature→creature switch must REBUILD the RealityView
+            // (fresh identity → fresh CompanionScene + make closure). Without it,
+            // SwiftUI updates the view in place and the previous creature's built
+            // scene survives — the picker appears to do nothing. Pixel↔creature↔
+            // constellation switches change the view TYPE, so only same-type
+            // swaps hit this; it fires only on an actual different companion
+            // (the onboarding per-step-rebuild trap is the opposite failure).
             CompanionAvatarView(controller: env.avatar, companion: spec)
+                .id(spec.id)
         } else {
             AvatarView(controller: env.avatar)
         }
