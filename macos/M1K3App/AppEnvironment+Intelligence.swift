@@ -190,8 +190,10 @@ extension AppEnvironment {
             let vector = try await embedder.embed(fact.embeddingText)
             try memoryStore.rememberConnected(fact, embedding: vector)
         } catch {
+            // "error", not "skipped" — a MemoryGraphPartialWriteError means the
+            // node WAS written and only edges were lost; the error text says so.
             Self.memoryLog.error(
-                "memory-graph dual-write skipped: \(error.localizedDescription, privacy: .public)"
+                "memory-graph dual-write error (corpus write stands): \(error.localizedDescription, privacy: .public)"
             )
         }
     }

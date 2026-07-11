@@ -500,7 +500,9 @@ final class AppEnvironment {
         let slotTier = brain.mlxModelID != nil ? brain : BrainTier.big
         let gemma = MLXGemmaProvider(
             modelID: initialMLXModelID,
-            maxTokens: HistoryBudgetPolicy.generationTokenCap(for: slotTier)
+            maxTokens: HistoryBudgetPolicy.generationTokenCap(
+                for: slotTier, defaultCap: MLXGemmaProvider.defaultMaxTokens
+            )
         )
         currentMLXProvider = gemma
         let mlxSlot = SwappableInferenceProvider(gemma)
@@ -703,7 +705,13 @@ final class AppEnvironment {
         // offer); a successful answer may raise the offer or complete a
         // consented staged swap at this idle moment.
         let metrics = chat.messages.last?.metrics
-        let cap = HistoryBudgetPolicy.generationTokenCap(for: selectedBrain)
+        // Same explicit defaultCap as the provider construction sites — the
+        // composition root passes the MLX truth instead of trusting the
+        // policy's mirrored literal (review nit on #22; the 116-F1 test
+        // still pins the mirror for everyone else).
+        let cap = HistoryBudgetPolicy.generationTokenCap(
+            for: selectedBrain, defaultCap: MLXGemmaProvider.defaultMaxTokens
+        )
         evaluateBrainUpgradeAfterAnswer(
             questionCharacters: text.count,
             answerFailed: answerFailed,
@@ -848,7 +856,9 @@ final class AppEnvironment {
             // the window together (see HistoryBudgetPolicy.rotatingGenerationTokenCap).
             let mlx = MLXGemmaProvider(
                 modelID: modelID,
-                maxTokens: HistoryBudgetPolicy.generationTokenCap(for: tier)
+                maxTokens: HistoryBudgetPolicy.generationTokenCap(
+                    for: tier, defaultCap: MLXGemmaProvider.defaultMaxTokens
+                )
             )
             currentMLXProvider = mlx
             swappableMLX.setProvider(mlx)
