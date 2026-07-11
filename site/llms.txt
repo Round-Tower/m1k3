@@ -19,7 +19,7 @@ Key facts:
 ## Docs
 
 - [Repository and build-from-source](https://github.com/Round-Tower/m1k3): monorepo; the Mac app lives in macos/
-- [macOS app plan](https://github.com/Round-Tower/m1k3/blob/main/macos/PLAN.md): architecture and roadmap
+- [macOS app plan](https://github.com/Round-Tower/m1k3/blob/master/macos/PLAN.md): architecture and roadmap
 
 ## Answers
 
