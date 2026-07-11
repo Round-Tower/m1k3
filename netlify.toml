@@ -13,8 +13,12 @@
   # Skip the build (and the per-PR deploy preview) unless the site itself
   # changed — most pushes here are app/CI work that can't affect m1k3.app.
   # `git diff --quiet` exits 0 on "no changes", which tells Netlify to skip.
-  # Path is repo-root-relative even with base = "site".
-  ignore = "git diff --quiet $CACHED_COMMIT_REF $COMMIT_REF -- site/ netlify.toml"
+  # ⚠️ Netlify runs this from the BASE directory (site/), and git resolves
+  # relative pathspecs against cwd — so bare `site/ netlify.toml` pointed at
+  # site/site/ and site/netlify.toml (neither exists), matched nothing, and
+  # SKIPPED EVERY DEPLOY (2026-07-10 → 07-11: the GEO pages 404'd on prod).
+  # The `:/` magic prefix anchors pathspecs to the repo top level, cwd-proof.
+  ignore = "git diff --quiet $CACHED_COMMIT_REF $COMMIT_REF -- ':/site' ':/netlify.toml'"
 
 # No CSP so the one external request (Google Fonts) keeps working.
 [[headers]]
