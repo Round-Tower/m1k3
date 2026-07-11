@@ -14,6 +14,10 @@
 //
 //  Signed: Kev + claude-opus-4-8, 2026-06-28, Confidence 0.8 (core TDD-pinned;
 //  log capture + clipboard + open are verify-at-⌘R). Prior: Unknown.
+//  Review: Kev + claude-fable-5, 2026-07-11 — buildReportBody's scrub+assembly
+//  orchestration extracted to DiagnosticsReportBuilder (109-12 review nit); this
+//  file now only gathers OS inputs and delegates. Behavior byte-identical; the
+//  canary pass rides the builder's injected scrub seam. Confidence 0.9.
 //
 
 import AppKit
@@ -62,17 +66,15 @@ enum IssueReporter {
         return built.truncated
     }
 
-    /// The redacted markdown body. Pure, non-isolated, no UI — safe to run off-main.
+    /// Gather the OS-facing inputs (log store, bundle, sysctl, ProcessInfo) and
+    /// delegate the scrub + assembly to the unit-pinned DiagnosticsReportBuilder
+    /// (redact → canary scan → markdown; the honeypot pass rides the builder's
+    /// scrub seam since CanaryGuard lives in M1K3Chat, not M1K3Diagnostics).
     private static func buildReportBody(
         whatHappened: String,
         activeBrain: String,
         userProfile: String?
     ) -> String {
-        let redactor = DiagnosticRedactor(homeDirectory: NSHomeDirectory(), userName: userProfile)
-        var logs = redactor.redact(recentLogs())
-        // Honeypot pass (inert unless a local canary is configured) — defence in depth.
-        logs = CanaryGuard.fromLocalConfig().scan(logs).text
-
         let report = IssueReport(
             title: issueTitle,
             whatHappened: whatHappened,
@@ -82,9 +84,14 @@ enum IssueReporter {
             device: deviceModel(),
             memoryGB: Int(ProcessInfo.processInfo.physicalMemory / 1_073_741_824),
             activeBrain: activeBrain,
-            logs: logs
+            logs: recentLogs() // raw — the builder owns redaction order
         )
-        return IssueReportFormatter.markdownBody(report)
+        return DiagnosticsReportBuilder.build(
+            report: report,
+            homeDirectory: NSHomeDirectory(),
+            userName: userProfile,
+            scrubExtra: { CanaryGuard.fromLocalConfig().scan($0).text }
+        )
     }
 
     /// Recent M1K3 log lines (last ~10 minutes, subsystem `app.m1k3`) from this
