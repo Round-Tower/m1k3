@@ -13,8 +13,11 @@
 
 import Foundation
 
-/// A redacted diagnostic bundle. `logs` MUST already be passed through the
-/// redactor + honeypot scan before construction — this type does no scrubbing.
+/// A diagnostic bundle. This type does no scrubbing, and since the 109-12
+/// extraction `logs` may legitimately be RAW at construction: the sanctioned
+/// pipeline is `DiagnosticsReportBuilder.build`, which redacts a copy before
+/// formatting. ⚠️ Never hand a raw-logs report straight to
+/// `IssueReportFormatter.markdownBody` — that skips the PII scrub.
 public struct IssueReport: Sendable, Equatable {
     public var title: String
     public var whatHappened: String
