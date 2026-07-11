@@ -58,10 +58,12 @@ Extra clips are harmless (just bytes — M1K3 only *plays* the gait-mapped subse
   **Read the durations:** every clip identical at ~0.42 s is the
   compressed-take trap (below).
 - **Headless image preview:** `./preview_usdz.swift <files...> [-o outdir]
-  [--size N] [--time T]` — renders each clip to a PNG (mesh, materials, and
-  the pose at `--time`) with no screen needed: terminal, SSH, CI, or a locked
-  Mac all work. The three checks are complementary — preview shows the look,
-  rkprobe proves the motion data, Quick Look shows the motion itself.
+  [--size N] [--time T]` — renders each clip to a PNG (mesh + materials) with
+  no screen needed. CAVEAT: SceneKit's offscreen snapshot does not evaluate
+  skinned animation, so `--time` shows the bind pose for rigged models —
+  look, not motion (use `rkprobe --tick` for motion). Works from a terminal,
+  SSH, CI, or a locked Mac. The checks are complementary — preview shows the
+  look, `--tick` proves the motion, Quick Look shows the motion to a human.
 
 ## Wire into the app
 

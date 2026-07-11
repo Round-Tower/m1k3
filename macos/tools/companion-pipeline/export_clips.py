@@ -51,7 +51,11 @@ def main() -> int:
     retime = 1.0
     if "--retime" in argv:
         i = argv.index("--retime")
-        retime = float(argv[i + 1])
+        try:
+            retime = float(argv[i + 1])
+        except (IndexError, ValueError):
+            print("PROBE-FAIL: --retime needs a numeric value")
+            return 2
         del argv[i : i + 2]
     if len(argv) < 2:
         print("PROBE-FAIL: need <model.glb> <outdir> [Clip1,Clip2,...] [--retime N]")
@@ -70,6 +74,8 @@ def main() -> int:
         print("PROBE-FAIL: no armature found — is this a rigged, animated GLB?")
         return 1
     arm = armatures[0]
+    if arm.animation_data is None:
+        arm.animation_data_create()
     if arm.name == "Rig":
         # RealityKit refuses to bind skeletal animation to a SkelRoot prim named
         # exactly "Rig" (case-sensitive — "rig"/"TheRig"/"Armature" all animate,

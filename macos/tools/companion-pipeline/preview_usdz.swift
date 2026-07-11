@@ -7,7 +7,12 @@
 //  while the Mac is locked (born in the 2026-07-09 companion jam, sending the
 //  Inkfish to a pub). Quick Look shows animation but needs a GUI session;
 //  rkprobe proves animations exist but shows nothing — this shows the MESH,
-//  materials, and the pose a clip strikes at `--time`.
+//  materials, and the pose a clip strikes at `--time`. CAVEAT: SceneKit's
+//  offscreen snapshot does NOT evaluate skinned (skeletal) animation, so for
+//  rigged companions every `--time` renders the bind pose — this tool shows
+//  LOOK, not MOTION. Motion ground truth is `rkprobe --tick` (headless
+//  RealityKit playback); proven 2026-07-11 when identical frames at two times
+//  nearly mis-called the frozen-clip diagnosis.
 //
 //  Usage:
 //    ./preview_usdz.swift <in.usdz>... [-o <outdir>] [--size N] [--time T]
