@@ -132,13 +132,31 @@ enum SelfTest {
             emit("✗ store/AFM stage: \(error)")
         }
 
-        // 2. MLX Qwen3-Embedding (Metal).
+        // 2. MLX Qwen3-Embedding (Metal). The first embed on a fresh service is
+        //    the COLD path (container load + kernel warm) — the exact tax
+        //    warmEmbedderOnLaunch removes from the first chat turn's critical
+        //    path (every turn embeds the query BEFORE retrieval + generation).
+        //    cold − warm = the measured first-turn TTFT win (ledger 113-4).
         emit("• loading MLX Qwen3-Embedding (downloads on first use)…")
         do {
             let mlx = MLXEmbeddingService()
+            let clock = ContinuousClock()
+            let coldStart = clock.now
             let v = try await mlx.embed("hydraulic seal conveyor")
+            let cold = clock.now - coldStart
             let norm = v.reduce(Float(0)) { $0 + $1 * $1 }.squareRoot()
             emit("✓ MLX Qwen3-Embedding embed: dim=\(v.count) ‖v‖=\(String(format: "%.3f", norm))")
+            // Warm cost: best of three, so one GC/thermal hiccup can't skew it.
+            var warmBest: Duration?
+            for _ in 1 ... 3 {
+                let warmStart = clock.now
+                _ = try await mlx.embed("hydraulic seal conveyor")
+                let sample = clock.now - warmStart
+                if warmBest.map({ sample < $0 }) ?? true { warmBest = sample }
+            }
+            let warm = warmBest ?? .zero
+            emit("embedwarm: cold=\(milliseconds(cold))ms warm=\(milliseconds(warm))ms "
+                + "delta=\(milliseconds(cold - warm))ms (delta = first-turn TTFT tax without the launch warm)")
         } catch {
             emit("✗ MLX embed stage: \(error)")
         }
