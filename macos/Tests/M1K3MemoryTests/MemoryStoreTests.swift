@@ -558,4 +558,19 @@ struct MemoryStoreConnectedWriteTests {
         let links = try f.store.rememberConnected(n, embedding: await f.vec(n.text), maxLinks: 3)
         #expect(links == 3)
     }
+
+    @Test("a mid-loop link failure surfaces the partial X/N state through localizedDescription")
+    func partialWriteErrorNamesTheDamage() {
+        // The catch sites (MemoryDistillationCoordinator, AppEnvironment+Intelligence)
+        // breadcrumb `error.localizedDescription` — pin that the wrapped error
+        // carries the partial-write state there, not Foundation's generic fallback.
+        struct Boom: Error {}
+        let id = UUID()
+        let error = MemoryGraphPartialWriteError(
+            memoryID: id, edgesLinked: 1, edgesPlanned: 3, underlying: Boom()
+        )
+        #expect(error.localizedDescription.contains("1/3 edges linked"))
+        #expect(error.localizedDescription.contains(id.uuidString))
+        #expect(error.localizedDescription.contains("node written"))
+    }
 }

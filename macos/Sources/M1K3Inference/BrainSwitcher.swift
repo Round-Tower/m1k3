@@ -76,6 +76,25 @@ public enum BrainSwitcher {
         return String(format: "~%.1f GB", Double(megabytes) / 1000)
     }
 
+    /// TRUE when re-selecting `tier` would be a pure no-op: it is already the
+    /// selected brain, the provider is `.ready`, and the loaded model id matches
+    /// the tier's. This is the "no redundant multi-GB reload" invariant —
+    /// re-selecting a warm brain must never spin up a fresh provider (cold
+    /// persona-KV prefix) for nothing. A non-ready state (failed / downloading /
+    /// preparing / idle) falls through so onboarding "Try again" and first-wake
+    /// re-attempt; Mini (nil `mlxModelID`) is cheap and never guarded.
+    /// Extracted from `AppEnvironment.selectBrain` so the predicate is
+    /// unit-testable (109 review nit — the app target has no test bundle).
+    public static func reselectIsNoOp(
+        tier: BrainTier,
+        selected: BrainTier,
+        load: ModelLoadState,
+        loadedModelID: String?
+    ) -> Bool {
+        guard tier == selected, load == .ready, let modelID = tier.mlxModelID else { return false }
+        return modelID == loadedModelID
+    }
+
     /// The toolbar indicator: the active brain composed WITH the load state, so it
     /// never claims a brain that's still downloading (see the file header).
     public static func indicatorLabel(active: BrainTier, load: ModelLoadState) -> String {

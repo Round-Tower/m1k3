@@ -810,6 +810,16 @@ struct AgentRAGResponderTests {
         #expect(rules.contains("CONCLUSION:"))
     }
 
+    @Test("both prompt styles carry the IDENTICAL generative carve-out (shared constant, no drift)")
+    func generativeCarveOutIsSharedVerbatim() {
+        for style in [AgentRAGResponder.PromptStyle.react, .native] {
+            let rules = AgentRAGResponder.grounding(
+                chunks: [groundingChunk()], toolNames: ["search_knowledge"], style: style
+            )
+            #expect(rules.contains(AgentRAGResponder.generativeCarveOut), "\(style)")
+        }
+    }
+
     @Test("the tools provider is consulted fresh each turn (settings toggles apply immediately)")
     func toolsProviderPerTurn() async throws {
         let (store, embedder) = try await ingestedStore()

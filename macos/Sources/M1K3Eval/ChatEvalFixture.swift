@@ -97,6 +97,10 @@ public struct EvalExpectation: Sendable, Equatable {
         minChars: Int? = nil,
         maxChars: Int? = nil
     ) {
+        // The scorer renders these as opposing checks off the same
+        // RefusalHeuristic call — a fixture setting both can never pass (109
+        // review nit; defence-in-depth on a test-only module).
+        precondition(!(mustRefuse && mustComply), "mustRefuse and mustComply are mutually exclusive")
         self.mustContainAny = mustContainAny
         self.mustContainAll = mustContainAll
         self.mustNotContain = mustNotContain

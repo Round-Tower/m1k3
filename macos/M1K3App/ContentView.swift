@@ -714,11 +714,11 @@ private struct ModelGateView: View {
         case let .loading(state):
             VStack(spacing: 16) {
                 if let fraction = state.fraction {
-                    ProgressView(value: fraction) {
-                        // NO-op
-                    }
-                    .progressViewStyle(.linear)
-                    .frame(maxWidth: 280)
+                    // Unlabeled on purpose: the sibling Text(loadingLabel) below
+                    // is the visible caption (109 review nit — was an empty closure).
+                    ProgressView(value: fraction)
+                        .progressViewStyle(.linear)
+                        .frame(maxWidth: 280)
                 } else {
                     ProgressView().controlSize(.large)
                 }

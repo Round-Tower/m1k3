@@ -54,7 +54,7 @@ public struct GetDocumentTool: AgentTool {
             + "optional offset to continue a long document from a previous call's footer."
     public let parameters = [
         ToolParameter(name: "title", description: "the document title to fetch"),
-        ToolParameter(name: "offset", description: "character offset to resume from (optional)"),
+        ToolParameter(name: "offset", description: "character offset to resume from (optional)", isRequired: false),
     ]
 
     private let store: KnowledgeStore

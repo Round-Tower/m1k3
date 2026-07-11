@@ -100,8 +100,8 @@ public struct WebSearchTool: AgentTool {
                 group.addTask { (index, await deepReader.readablePage(at: result.url)) }
             }
             var byIndex: [Int: String] = [:]
-            for await (index, content) in group where content != nil {
-                byIndex[index] = content
+            for await (index, content) in group {
+                if let content { byIndex[index] = content }
             }
             return byIndex
         }

@@ -76,7 +76,7 @@ struct IssueReportFormatterTests {
             osVersion: "macOS 26.0",
             device: "Mac15,3",
             memoryGB: 32,
-            activeBrain: "Lil M1K3",
+            activeBrain: "Lil", // BrainTier.lil.displayName since the #109 rename — keep the fixture honest
             logs: logs
         )
     }
@@ -87,7 +87,7 @@ struct IssueReportFormatterTests {
         #expect(md.contains("### What happened\nIt crashed"))
         #expect(md.contains("- App: 1.2.0 (42)"))
         #expect(md.contains("- macOS: macOS 26.0"))
-        #expect(md.contains("- Active brain: Lil M1K3"))
+        #expect(md.contains("- Active brain: Lil"))
         #expect(md.contains("```\nline1\nline2\n```"))
     }
 

@@ -251,13 +251,10 @@ extension AppEnvironment {
                 // own window — keep the conservative shipped default there (its real
                 // budget is the named [SPIKE]; don't risk an AFM overflow error).
                 let raw = UserDefaults.standard.string(forKey: Self.selectedBrainKey) ?? ""
-                guard let tier = BrainTier(persisted: raw), tier != .mini else {
-                    // Mini (AFM) + any unknown brain: the fixed conservative replay,
-                    // NOT the wide MLX default (which would overflow AFM's ~4K window).
-                    return HistoryBudgetPolicy.conservativeMiniBudget
-                }
+                // The mini/unknown → conservative-replay guard lives in the
+                // policy's optional-tier overload, not here (unit-pinned there).
                 return HistoryBudgetPolicy.budget(
-                    for: tier,
+                    for: BrainTier(persisted: raw),
                     reservedTokens: Self.historyReserveTokens,
                     generationTokens: Self.historyGenerationReserveTokens
                 )

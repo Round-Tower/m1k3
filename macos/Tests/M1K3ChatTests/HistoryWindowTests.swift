@@ -58,7 +58,7 @@ struct HistoryWindowTests {
         // Bracketed markers so "[1]" can't be a substring of "[11]"/"[16]".
         let turns = (1 ... 16).map { ChatTurn(role: .user, text: "[\($0)]" + big) }
         let text = HistoryWindow.render(turns) ?? ""
-        #expect(text.count < HistoryWindow.maxTotalChars + 100) // bounded (+ header slack)
+        #expect(text.count <= HistoryWindow.maxTotalChars) // header + separators are counted in-budget
         #expect(text.contains("[16]")) // newest survives whole
         #expect(!text.contains("[1]")) // oldest dropped by the budget
     }
@@ -114,20 +114,22 @@ struct HistoryWindowTests {
         let wide = HistoryWindow.render(turns, budget: .init(totalChars: 12000, perTurnChars: 1500, maxTurns: 40)) ?? ""
         let tight = HistoryWindow.render(turns, budget: .init(totalChars: 2000, perTurnChars: 1500, maxTurns: 40)) ?? ""
         #expect(wide.count > tight.count)
-        #expect(wide.count < 12000 + 100) // bounded by the injected total (+ header)
-        #expect(tight.count < 2000 + 100)
+        #expect(wide.count <= 12000) // bounded by the injected total, header counted
+        #expect(tight.count <= 2000)
         #expect(wide.contains("[30]")) // both keep the newest
         #expect(tight.contains("[30]"))
     }
 
-    @Test("with perTurnChars ≤ totalChars the block never exceeds totalChars (the rotating-KV clamp invariant)")
+    @Test("with per-turn headroom for the header the block never exceeds totalChars (the rotating-KV clamp invariant)")
     func renderHonoursHardBound() {
-        // HistoryBudgetPolicy keeps perTurn ≤ total for exactly this guarantee:
+        // HistoryBudgetPolicy's real budgets keep perTurn (≤1500) far below
+        // total (thousands), so header + label + one capped line always fit:
         // even the unconditional newest turn can't push the block over the cap.
+        // ZERO slack here — header and separators are counted in-budget.
         let turns = (1 ... 20).map { _ in ChatTurn(role: .assistant, text: String(repeating: "q", count: 4000)) }
-        let budget = HistoryWindow.Budget(totalChars: 3000, perTurnChars: 3000, maxTurns: 16)
+        let budget = HistoryWindow.Budget(totalChars: 3000, perTurnChars: 2900, maxTurns: 16)
         let text = HistoryWindow.render(turns, budget: budget) ?? ""
-        #expect(text.count <= budget.totalChars + 80) // header slack only
+        #expect(text.count <= budget.totalChars)
     }
 
     @Test("whitespace-only turns are skipped")

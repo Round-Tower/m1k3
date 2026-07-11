@@ -814,14 +814,13 @@ final class AppEnvironment {
     func selectBrain(_ tier: BrainTier) -> Bool {
         // Already on this exact MLX brain and it's loaded — re-selecting would spin up
         // a fresh MLXGemmaProvider (cold persona-KV prefix) and release the warm one,
-        // repaying a multi-GB load + persona prefill for nothing. A non-ready state
-        // (failed / downloading / idle) falls through so onboarding "Try again" and
-        // first-wake still re-attempt. Mini (no mlxModelID) is cheap, so it's not guarded.
-        if tier == selectedBrain,
-           case .ready = modelLoad,
-           let modelID = tier.mlxModelID,
-           modelID == currentMLXProvider.modelIdentifier
-        {
+        // repaying a multi-GB load + persona prefill for nothing. The predicate is
+        // BrainSwitcher's (unit-pinned there): non-ready falls through so onboarding
+        // "Try again" and first-wake re-attempt; Mini (no mlxModelID) is never guarded.
+        if BrainSwitcher.reselectIsNoOp(
+            tier: tier, selected: selectedBrain, load: modelLoad,
+            loadedModelID: currentMLXProvider.modelIdentifier
+        ) {
             Self.brainLog.notice("selectBrain \(tier.rawValue, privacy: .public): already loaded, no-op")
             // Defense-in-depth: keep the upgrade machine consistent even on the
             // no-op path, rather than relying on the policy's non-Mini

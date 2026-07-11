@@ -14,14 +14,19 @@ import M1K3Inference
 
 public extension AgentTool {
     /// The dialect-free description a `ToolCallingProvider` renders into its
-    /// model's native schema. Every parameter is required string-typed today —
-    /// matching the single-positional-argument `execute(input:)` contract.
+    /// model's native schema. Every parameter is string-typed today — matching
+    /// the single-positional-argument `execute(input:)` contract — and carries
+    /// the tool's own required/optional declaration onto the wire.
     var toolDefinition: ToolDefinition {
         ToolDefinition(
             name: name,
             description: description,
             parameters: parameters.map {
-                ToolParameterDefinition(name: $0.name, description: $0.description)
+                ToolParameterDefinition(
+                    name: $0.name,
+                    description: $0.description,
+                    isRequired: $0.isRequired
+                )
             }
         )
     }

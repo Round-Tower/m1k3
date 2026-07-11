@@ -123,14 +123,18 @@ public final class MLXGemmaProvider: InferenceProvider, ModelPreloading, @unchec
     /// from copies instead of re-prefilling the persona every time.
     let personaPrefix = PersonaPrefixCache()
 
+    /// The default generation ceiling, NOT a target — the model stops at EOS
+    /// naturally, so this is free for short replies. Reasoning models (Qwen3)
+    /// spend hundreds of tokens in <think> before the tool call / answer; the
+    /// old 512 cap cut them off mid-thought. 4096 leaves room to think, act,
+    /// AND answer across an agent iteration. ⚠️ `HistoryBudgetPolicy.
+    /// generationTokenCap`'s `defaultCap` mirrors this figure across the
+    /// Chat↔MLX module boundary — an equality test pins them together (116-F1).
+    public static let defaultMaxTokens = 4096
+
     public init(
         configuration: ModelConfiguration = LLMRegistry.gemma3_1B_qat_4bit,
-        // A generous ceiling, NOT a target — the model stops at EOS naturally, so
-        // this is free for short replies. Reasoning models (Qwen3) spend hundreds
-        // of tokens in <think> before the tool call / answer; the old 512 cap cut
-        // them off mid-thought (no call, empty answer). 4096 leaves room to think,
-        // act, AND answer across an agent iteration.
-        maxTokens: Int = 4096,
+        maxTokens: Int = MLXGemmaProvider.defaultMaxTokens,
         name: String = "mlx-gemma",
         thinkingEnabled: Bool = true
     ) {
@@ -224,7 +228,7 @@ public final class MLXGemmaProvider: InferenceProvider, ModelPreloading, @unchec
     /// unknown ids fall back to a plain configuration.
     public convenience init(
         modelID: String,
-        maxTokens: Int = 4096,
+        maxTokens: Int = MLXGemmaProvider.defaultMaxTokens,
         name: String = "mlx-gemma",
         thinkingEnabled: Bool = true
     ) {

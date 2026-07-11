@@ -100,4 +100,49 @@ struct BrainSwitcherTests {
     func indicatorWhenFailed() {
         #expect(BrainSwitcher.indicatorLabel(active: .lil, load: .failed(message: "boom")) == "Lil · failed")
     }
+
+    /// The "no redundant multi-GB reload" invariant (109 review nit): re-selecting
+    /// a warm brain is a no-op; anything less than warm-and-matching falls through.
+    @Test("reselect is a no-op only for the same tier, ready, with the matching loaded model")
+    func reselectNoOpWhenWarm() throws {
+        let modelID = try #require(BrainTier.big.mlxModelID)
+        #expect(BrainSwitcher.reselectIsNoOp(
+            tier: .big, selected: .big, load: .ready, loadedModelID: modelID
+        ))
+    }
+
+    @Test("a non-ready load state falls through (onboarding 'Try again' / first wake)")
+    func reselectFallsThroughWhenNotReady() throws {
+        let modelID = try #require(BrainTier.big.mlxModelID)
+        for load in [ModelLoadState.idle, .preparing, .downloading(fraction: 0.5), .failed(message: "x")] {
+            #expect(!BrainSwitcher.reselectIsNoOp(
+                tier: .big, selected: .big, load: load, loadedModelID: modelID
+            ), "\(load)")
+        }
+    }
+
+    @Test("a different tier falls through — that's a real switch")
+    func reselectFallsThroughForDifferentTier() throws {
+        let modelID = try #require(BrainTier.big.mlxModelID)
+        #expect(!BrainSwitcher.reselectIsNoOp(
+            tier: .lil, selected: .big, load: .ready, loadedModelID: modelID
+        ))
+    }
+
+    @Test("a loaded-model mismatch falls through — the warm provider isn't this tier's")
+    func reselectFallsThroughOnModelMismatch() {
+        #expect(!BrainSwitcher.reselectIsNoOp(
+            tier: .big, selected: .big, load: .ready, loadedModelID: "some/other-model"
+        ))
+        #expect(!BrainSwitcher.reselectIsNoOp(
+            tier: .big, selected: .big, load: .ready, loadedModelID: nil
+        ))
+    }
+
+    @Test("Mini (no MLX model) is never guarded — re-selecting it is cheap")
+    func reselectNeverGuardsMini() {
+        #expect(!BrainSwitcher.reselectIsNoOp(
+            tier: .mini, selected: .mini, load: .ready, loadedModelID: nil
+        ))
+    }
 }
