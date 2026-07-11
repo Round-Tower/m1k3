@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>How to Run a Local LLM on a Mac (2026 Guide)</title>
+<meta name="description" content="An honest 2026 guide to running LLMs locally on Apple Silicon: what hardware you need, and the four main routes — Ollama, LM Studio, Apple's MLX, and M1K3 — with the trade-offs of each." />
+<meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" />
+<link rel="canonical" href="https://m1k3.app/local-llm-mac-guide" />
+<link rel="icon" href="favicon.svg" type="image/svg+xml" />
+<link rel="icon" href="icon-192.png" type="image/png" sizes="192x192" />
+<link rel="apple-touch-icon" href="apple-touch-icon.png" />
+<meta name="theme-color" content="#050505" />
+<meta property="og:site_name" content="M1K3" />
+<meta property="og:locale" content="en_IE" />
+<meta property="og:title" content="How to Run a Local LLM on a Mac (2026 Guide)" />
+<meta property="og:description" content="What hardware you need and the four main routes — Ollama, LM Studio, Apple's MLX, and M1K3 — with honest trade-offs." />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://m1k3.app/local-llm-mac-guide" />
+<meta property="og:image" content="https://m1k3.app/og.png" />
+<meta property="og:image:width" content="1200" />
+<meta property="og:image:height" content="630" />
+<meta property="og:image:alt" content="M1K3 for Mac — 'Your AI. Your Mac. Nothing leaves.' A wireframe fox on a dark CRT grid; a private, on-device AI companion for macOS." />
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:title" content="How to Run a Local LLM on a Mac (2026 Guide)" />
+<meta name="twitter:description" content="What hardware you need and the four main routes — Ollama, LM Studio, Apple's MLX, and M1K3." />
+<meta name="twitter:image" content="https://m1k3.app/og.png" />
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "Article",
+  "headline": "How to Run a Local LLM on a Mac (2026 Guide)",
+  "description": "What hardware you need to run LLMs locally on Apple Silicon and the four main routes — Ollama, LM Studio, Apple's MLX, and M1K3 — with the trade-offs of each.",
+  "url": "https://m1k3.app/local-llm-mac-guide",
+  "image": "https://m1k3.app/og.png",
+  "author": { "@type": "Organization", "name": "Round Tower", "url": "https://round-tower.ie" },
+  "publisher": { "@type": "Organization", "name": "Round Tower", "url": "https://round-tower.ie" },
+  "datePublished": "2026-07-10",
+  "dateModified": "2026-07-10"
+}
+</script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "mainEntity": [
+    { "@type": "Question", "name": "What do I need to run a local LLM on a Mac?",
+      "acceptedAnswer": { "@type": "Answer", "text": "An Apple Silicon Mac (M1 or later) and enough unified memory for the model you want. As a rule of thumb with 4-bit quantized models: 8 GB of RAM runs small models around 1–4B parameters, 16 GB runs the 4–8B class comfortably, and 32 GB or more opens up 8–14B and beyond. Apple Silicon's unified memory lets the GPU address the full RAM pool, which is why Macs are unusually good at this." } },
+    { "@type": "Question", "name": "What is the easiest way to run a local LLM on a Mac?",
+      "acceptedAnswer": { "@type": "Answer", "text": "For a finished assistant: M1K3, a free open-source on-device AI companion for Apple Silicon Macs (requires macOS 26) with chat, voice, and document memory built in — its first-run brain needs no download at all. For a developer tool: Ollama — install it and 'ollama run' a model. For a graphical model browser: LM Studio." } },
+    { "@type": "Question", "name": "Do local LLMs match ChatGPT?",
+      "acceptedAnswer": { "@type": "Answer", "text": "No — frontier cloud models remain more capable than anything a laptop runs, especially for hard reasoning and state-of-the-art coding. But current local models such as Gemma and Qwen are genuinely useful for everyday summarising, drafting, and question-answering over your own documents, and they work offline, cost nothing per query, and keep your data on the machine." } },
+    { "@type": "Question", "name": "Is running a local LLM private?",
+      "acceptedAnswer": { "@type": "Answer", "text": "Yes, structurally: inference happens on your hardware, so prompts and outputs never reach a server. Note that model downloads do use the network, and any optional web-connected tools you enable will too. An app like M1K3 keeps such tools off by default so the no-egress posture is explicit." } }
+  ]
+}
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=VT323&family=IBM+Plex+Mono:wght@300;400;500&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="geo.css" />
+</head>
+<body>
+
+<div class="scanlines"></div>
+<div class="vignette"></div>
+
+<nav>
+  <a class="wordmark" href="/">M1K3<span class="cursor">_</span></a>
+  <div class="links">
+    <a href="/">Home</a>
+    <a href="/#features">Features</a>
+    <a href="/#faq">FAQ</a>
+    <a href="https://github.com/Round-Tower/m1k3">GitHub</a>
+    <a class="btn btn-ghost" href="/#get" style="padding:10px 18px;">Download</a>
+  </div>
+</nav>
+
+<main class="article">
+  <header class="article-head">
+    <span class="label">// guide</span>
+    <h1>How to run a local LLM on a Mac</h1>
+    <p class="meta">Updated 2026-07-10 · By Round Tower, the makers of M1K3 — one of the four routes below is ours; the other three are recommended honestly.</p>
+  </header>
+
+  <div class="answer">
+    <p><strong>Short answer: you need an Apple Silicon Mac and one of four tools.</strong> <a href="#ollama">Ollama</a> if you want a CLI and a local API to build on; <a href="#lm-studio">LM Studio</a> if you want a graphical model browser with an OpenAI-compatible server; <a href="#mlx">Apple's MLX (mlx-lm)</a> if you want the Python framework underneath it all; or <a href="#m1k3">M1K3</a> if you want a finished, private assistant — chat, voice, and memory over your documents — rather than a model runner. Any M-series Mac works for small models; 16 GB of unified memory runs the popular 4–8B class comfortably. All four are free.</p>
+  </div>
+
+  <h2>What do you need to run a local LLM on a Mac?</h2>
+  <p>Two things: <strong>Apple Silicon</strong> (M1 or later — unified memory lets the GPU address the whole RAM pool, which is why Macs punch above their weight here) and <strong>enough RAM for the model you want</strong>. Rules of thumb for 4-bit quantized models:</p>
+  <div class="table-scroll">
+    <table class="cmp">
+      <thead>
+        <tr><th scope="col">Unified memory</th><th scope="col">Comfortable model class (4-bit)</th><th scope="col">What that feels like</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>8 GB</td><td>~1–4B parameters</td><td>Fast small models; good for simple drafting and Q&amp;A, limited depth</td></tr>
+        <tr><td>16 GB</td><td>~4–8B parameters</td><td>The sweet spot for daily assistant work (Gemma / Qwen class)</td></tr>
+        <tr><td>32 GB+</td><td>~8–14B and up</td><td>Deeper reasoning, longer context, room to keep other apps open</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="table-note">Rules of thumb, not laws — quantization, context length, and what else is running all move the line.</p>
+  <p>A model actively generating will use GPU and battery; that's the physics of local AI on any tool below.</p>
+
+  <h2 id="ollama">Option 1: Ollama — the developer default</h2>
+  <p><a href="https://ollama.com">Ollama</a> (open source, MIT) is the most common starting point. Install it, then pull and run a model from its large library — Llama, Gemma, Qwen, Mistral, DeepSeek, and more:</p>
+  <div class="term">
+    <div class="term-bar"><span></span><span></span><span></span></div>
+    <div class="term-body"><pre><span class="c"># install, then:</span>
+<span class="p">$</span> ollama run gemma3
+<span class="c"># it downloads the model, then drops you into a chat</span></pre></div>
+  </div>
+  <p>You get a CLI, a local REST API on port 11434 that a huge ecosystem of chat UIs and libraries builds against, and a desktop chat app. <strong>Best for:</strong> developers, scripting, and anyone who wants maximum model choice. <strong>What it doesn't do:</strong> voice, document memory/RAG, or agent tools — those you assemble from the ecosystem.</p>
+
+  <h2 id="lm-studio">Option 2: LM Studio — the GUI model browser</h2>
+  <p><a href="https://lmstudio.ai">LM Studio</a> is a free desktop app with a polished GUI: browse and download models, chat with them, chat with your documents, and serve an OpenAI-compatible local API. On Apple Silicon it can run MLX-format models as well as GGUF, which makes good use of the hardware. The app itself is proprietary (its CLI and SDK are open source), and it's cross-platform. <strong>Best for:</strong> people who want to explore many models without touching a terminal. <strong>What it doesn't do:</strong> voice, deep OS integration, or an always-on assistant experience.</p>
+
+  <h2 id="mlx">Option 3: MLX and mlx-lm — Apple's own framework</h2>
+  <p><a href="https://github.com/ml-explore/mlx">MLX</a> is Apple's open-source array framework for Apple Silicon; <code>mlx-lm</code> is its LLM toolkit. This is the layer real Mac-native AI apps are built on, and you can drive it directly from Python:</p>
+  <div class="term">
+    <div class="term-bar"><span></span><span></span><span></span></div>
+    <div class="term-body"><pre><span class="p">$</span> pip install mlx-lm
+<span class="p">$</span> mlx_lm.generate --model mlx-community/Qwen3-4B-4bit \
+    --prompt "Explain unified memory in one paragraph."</pre></div>
+  </div>
+  <p>Thousands of pre-quantized models live under <code>mlx-community</code> on Hugging Face. <strong>Best for:</strong> Python developers, researchers, fine-tuners, and the curious. <strong>What it doesn't do:</strong> anything product-shaped — it's a framework, and that's the point.</p>
+
+  <h2 id="m1k3">Option 4: M1K3 — a finished local AI companion</h2>
+  <p>The three options above give you a model. <a href="/">M1K3</a> (free, open source, Apache-2.0, by Round Tower) gives you the <em>assistant</em>: a native SwiftUI app for Apple Silicon Macs that runs Gemma and Qwen via MLX-Swift — the same MLX from option 3, in Swift, on the Metal GPU — plus Apple Foundation Models for instant turns, and builds the rest of the experience around them:</p>
+  <ul>
+    <li><strong>Live voice</strong> — streaming on-device speech recognition and natural speech out.</li>
+    <li><strong>A knowledge graph with RAG</strong> — drop in documents; get answers grounded in your own files.</li>
+    <li><strong>Consent-gated call memory</strong> — encrypted, on-device transcription.</li>
+    <li><strong>A local agent and an MCP server</strong> — so Claude and other agents can <a href="/mcp-knowledge-server">query your local knowledge</a>.</li>
+  </ul>
+  <p>First run starts on an instant brain with nothing to download; larger local brains are an opt-in download. Zero bytes of your data go to any server — the optional web-search tool is off by default. <strong>The honest catch:</strong> it requires macOS 26 Tahoe on Apple Silicon, and its model list is curated rather than a library. <strong>Best for:</strong> people who want private, working AI on their Mac today, not a stack to assemble.</p>
+
+  <h2>Which route should you pick?</h2>
+  <div class="table-scroll">
+    <table class="cmp">
+      <thead>
+        <tr><th scope="col">You want…</th><th scope="col">Pick</th><th scope="col">Why</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>A local API to build against</td><td>Ollama</td><td>The ecosystem standard; huge model library; cross-platform</td></tr>
+        <tr><td>A GUI to explore models</td><td>LM Studio</td><td>Model browser + chat + OpenAI-compatible server, no terminal</td></tr>
+        <tr><td>The framework itself</td><td>MLX / mlx-lm</td><td>Apple's own stack; Python; fine-tuning and research</td></tr>
+        <tr><td>A finished private assistant</td><td>M1K3</td><td>Voice + document memory + agent + MCP, on-device, in one app</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>These aren't rivals so much as layers — M1K3 is literally built on MLX, and plenty of people run Ollama for work and a companion app for everything else. See the full <a href="/vs-ollama">M1K3 vs Ollama comparison</a>.</p>
+
+  <h2>Do local models match ChatGPT?</h2>
+  <p>No — and this guide is more useful if we say that plainly. Frontier cloud models are ahead of anything a laptop runs, particularly for hard reasoning and state-of-the-art coding. What local models offer instead: they work offline, cost nothing per query, and your data never leaves the machine — privacy by architecture rather than by policy. For summarising, drafting, voice interaction, and Q&amp;A over your own documents, the current Gemma/Qwen class is genuinely good. Full argument: <a href="/private-chatgpt-alternative-mac">private ChatGPT alternative for Mac</a>.</p>
+
+  <h2>Frequently asked questions</h2>
+  <div class="faq-list">
+    <details>
+      <summary>What's the easiest way to start?</summary>
+      <p>For a finished assistant: <a href="/">M1K3</a> — its first-run brain needs no download at all (requires macOS 26 on Apple Silicon). For a developer tool: Ollama — install and <code>ollama run</code> a model. For a GUI: LM Studio.</p>
+    </details>
+    <details>
+      <summary>Can an 8 GB Mac run a local LLM?</summary>
+      <p>Yes, in the small-model class (roughly 1–4B parameters, 4-bit quantized). It's usable for light drafting and Q&amp;A; 16 GB is where daily-driver models get comfortable.</p>
+    </details>
+    <details>
+      <summary>Is running a local LLM private?</summary>
+      <p>Structurally yes — inference happens on your hardware. Model downloads use the network, and any web-connected tools you enable will too; M1K3 keeps such tools off by default so the posture is explicit.</p>
+    </details>
+    <details>
+      <summary>Do these tools cost anything?</summary>
+      <p>All four routes are free. Ollama and MLX are open source (MIT); M1K3 is open source (Apache-2.0); LM Studio's desktop app is free but proprietary.</p>
+    </details>
+  </div>
+
+  <section class="page-cta">
+    <span class="label">// skip the assembly</span>
+    <h2>Want the finished thing?</h2>
+    <p>M1K3 is the assistant these building blocks add up to — free, open source, and entirely on your Mac.</p>
+    <div class="cta-row">
+      <a class="btn btn-primary" href="https://testflight.apple.com/join/Fxp2F5Je">Join the TestFlight beta</a>
+      <a class="btn btn-ghost" href="https://github.com/Round-Tower/m1k3">Build from source</a>
+    </div>
+  </section>
+
+  <aside class="more">
+    <span class="label">// more answers</span>
+    <div class="more-links">
+      <a href="/vs-ollama">M1K3 vs Ollama</a>
+      <a href="/private-chatgpt-alternative-mac">Private ChatGPT alternative for Mac</a>
+      <a href="/mcp-knowledge-server">Give Claude a local memory (MCP)</a>
+      <a href="/privacy">Is M1K3 really private?</a>
+      <a href="/">M1K3 home</a>
+    </div>
+  </aside>
+</main>
+
+<footer>
+  <span>© 2026 <a href="https://round-tower.ie">ROUND TOWER</a> · MADE IN IRELAND</span>
+  <span><a href="https://github.com/sponsors/Round-Tower" aria-label="Sponsor M1K3 on GitHub">SPONSOR ♥</a> · <a href="https://github.com/Round-Tower/m1k3">GITHUB</a> · NO TRACKING ON THIS PAGE, OBVIOUSLY</span>
+</footer>
+
+<!-- Signed: Kev + claude-fable-5, 2026-07-10, Confidence 0.8.
+     GEO answer page per marketing/04-geo-content.md (page 3, top-of-funnel
+     evergreen). Genuinely-useful-first: three non-M1K3 routes recommended
+     honestly before ours; RAM table hedged as rules of thumb; frontier-gap
+     conceded. M1K3 claims grounded in README.md / site/llms.txt / index.html.
+     Zero JS; shared geo.css shell. Prior: none (new file). -->
+</body>
+</html>
