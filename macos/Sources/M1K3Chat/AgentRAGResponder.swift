@@ -39,6 +39,12 @@
 //  SUPERSEDED by the gather-then-synthesise approach above (verified on gemma,
 //  the brain that actually fills); the persona-voiced composed answer on Qwen is
 //  a tracked follow-up. Only the history-budget threading survives this merge.
+//  Review: Kev + claude-fable-5, 2026-07-12, Confidence 0.85 — self-query
+//  router (prompt-hardening v2, code-side): SelfQueryGate short-circuits
+//  retrieval and withholds the corpus-reaching tools on questions about M1K3
+//  itself, enforcing persona rule 3 in code. Narrow leak-class classifier,
+//  NOT the general pre-generation router rejected 2026-06-12 — a miss falls
+//  back to the prompt rule (today's behaviour); boundaries pinned in tests.
 
 import Foundation
 import M1K3Agent
@@ -185,28 +191,44 @@ public struct AgentRAGResponder: RAGResponding, Sendable {
             return (sources: [], stream: stream)
         }
 
-        onActivity(.retrieving)
         // Stale tool hits from an aborted prior turn must not leak in.
         _ = sourceCollector?.drain()
-        let queryVector = try await embedder.embedQuery(question)
-        // Two-lane retrieval: documents and memories get SEPARATE top-K budgets
-        // so the larger document corpus can't crowd short memory facts out of a
-        // single ranking (the open-chat recall miss — M1K3 forgot the user's
-        // own city when the query leaned even slightly documentary).
-        let retrieved = try store.searchGrounding(
-            query: question, queryVector: queryVector,
-            documentLimit: topK, memoryLimit: memoryTopK
-        )
-        // Gate on relevance: each lane ALWAYS returns something, even for "what
-        // model are you?" — weak hits pollute the prompt and derail small
-        // models. Below threshold nothing is injected; the model can still
-        // retrieve on its own terms via search_knowledge. Memory hits clear
-        // their own (lower) bar and feed a separate uncited prompt block.
-        let (chunks, memories) = GroundingGate.partition(retrieved)
-        Self.logGateDecision(retrieved: retrieved, kept: chunks + memories)
+        // Self-query router (prompt-hardening v2): a question about M1K3
+        // itself never touches retrieval — nothing embedded, nothing injected
+        // — and the corpus-reaching tools are withheld from the turn below.
+        // Persona rule 3 states this policy; the gate enforces it in code.
+        let isSelfQuery = SelfQueryGate.isSelfQuery(question)
+        let chunks: [ChunkHit]
+        let memories: [ChunkHit]
+        if isSelfQuery {
+            Self.log.notice("self-query gate: retrieval skipped, corpus tools withheld")
+            (chunks, memories) = ([], [])
+        } else {
+            onActivity(.retrieving)
+            let queryVector = try await embedder.embedQuery(question)
+            // Two-lane retrieval: documents and memories get SEPARATE top-K budgets
+            // so the larger document corpus can't crowd short memory facts out of a
+            // single ranking (the open-chat recall miss — M1K3 forgot the user's
+            // own city when the query leaned even slightly documentary).
+            let retrieved = try store.searchGrounding(
+                query: question, queryVector: queryVector,
+                documentLimit: topK, memoryLimit: memoryTopK
+            )
+            // Gate on relevance: each lane ALWAYS returns something, even for "what
+            // model are you?" — weak hits pollute the prompt and derail small
+            // models. Below threshold nothing is injected; the model can still
+            // retrieve on its own terms via search_knowledge. Memory hits clear
+            // their own (lower) bar and feed a separate uncited prompt block.
+            (chunks, memories) = GroundingGate.partition(retrieved)
+            Self.logGateDecision(retrieved: retrieved, kept: chunks + memories)
+        }
         // Resolve the tool list once per turn; the routing rules must match
         // what's actually callable (no advertising a disabled web_search).
-        let tools = toolsProvider()
+        // On a self-query turn the retrieval tools are withheld entirely —
+        // the model cannot call what it is never offered.
+        let tools = isSelfQuery
+            ? toolsProvider().filter { !SelfQueryGate.withheldToolNames.contains($0.name) }
+            : toolsProvider()
 
         let stream = AsyncStream<String> { continuation in
             let turnTask = Task {
@@ -541,13 +563,26 @@ public struct AgentRAGResponder: RAGResponding, Sendable {
         chunks: [ChunkHit], memories: [ChunkHit], toolNames: Set<String>, style: PromptStyle
     ) -> String {
         let hasWebSearch = toolNames.contains("web_search")
-        var routing = hasWebSearch
-            ? "- For current or external information — weather, news, prices, "
-            + "anything happening now — use web_search. search_knowledge only "
-            + "finds documents already stored on this Mac."
-            : "- search_knowledge only finds documents already stored on this "
-            + "Mac. You have no web access — if the stored knowledge can't "
-            + "answer, say so plainly; do not guess."
+        // Every routing line names only tools actually offered THIS turn —
+        // the self-query gate withholds search_knowledge, and a rule that
+        // advertises an uncallable tool invites a doomed dispatch attempt.
+        let hasSearchKnowledge = toolNames.contains("search_knowledge")
+        var routing = switch (hasWebSearch, hasSearchKnowledge) {
+        case (true, true):
+            "- For current or external information — weather, news, prices, "
+                + "anything happening now — use web_search. search_knowledge only "
+                + "finds documents already stored on this Mac."
+        case (true, false):
+            "- For current or external information — weather, news, prices, "
+                + "anything happening now — use web_search."
+        case (false, true):
+            "- search_knowledge only finds documents already stored on this "
+                + "Mac. You have no web access — if the stored knowledge can't "
+                + "answer, say so plainly; do not guess."
+        case (false, false):
+            "- You have no web access — if you don't know, say so plainly; "
+                + "do not guess."
+        }
         if hasWebSearch, toolNames.contains("fetch_page") {
             routing += "\n- web_search returns snippets AND automatically reads the "
                 + "top result's page for you. Use fetch_page only to read a "

@@ -30,6 +30,26 @@ private func seededStore() async throws -> KnowledgeStore {
 }
 
 struct KnowledgeMCPToolsTests {
+    @Test("get_document by id treats a quarantined item as not found")
+    func getDocumentQuarantinedHidden() async throws {
+        let store = try await seededStore()
+        // Quarantined items are excluded from list/search, so their ids never
+        // surface organically — but the by-id path must not be the back door:
+        // a known UUID renders NOTHING, indistinguishable from absent.
+        let quarantinedID = UUID()
+        let text = "Internal QA triage: canary honeypot lives here."
+        try store.index(
+            item: KnowledgeItem(id: quarantinedID, kind: .quarantined, title: "Internal QA"),
+            chunks: [KnowledgeChunk(itemID: quarantinedID, ordinal: 0, content: text)],
+            embeddings: await HashingEmbeddingService().embedBatch([text])
+        )
+        let tools = KnowledgeMCPTools(store: store)
+        let out = try tools.getDocument(idString: quarantinedID.uuidString)
+        #expect(out.contains("No document found"))
+        #expect(!out.contains("canary"))
+        #expect(!out.contains("Internal QA"))
+    }
+
     @Test("search_knowledge returns ranked matching chunks")
     func search() async throws {
         let tools = try await KnowledgeMCPTools(store: seededStore())
