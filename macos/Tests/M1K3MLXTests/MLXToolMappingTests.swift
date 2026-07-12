@@ -18,6 +18,78 @@ import M1K3Inference
 import MLXLMCommon
 import Testing
 
+struct MLXPrefixInputsTests {
+    /// The (specs, toolNames) pair keys the persona-prefix KV cache. ONE
+    /// derivation shared by makeToolTurnSession (the live turn) and
+    /// warmPersonaPrefix (the launch warm) — these pins are what make "the
+    /// warm builds the exact key the first turn asks for" a tested fact.
+    private let tools = [
+        ToolDefinition(
+            name: "web_search", description: "Search the web.",
+            parameters: [ToolParameterDefinition(name: "query", description: "the query")]
+        ),
+        ToolDefinition(
+            name: "get_document", description: "Fetch a document.",
+            parameters: [
+                ToolParameterDefinition(name: "title", description: "the title"),
+                ToolParameterDefinition(name: "offset", description: "resume offset", isRequired: false),
+            ]
+        ),
+    ]
+
+    @Test("tool order is CANONICAL (sorted by name) no matter what the caller passes")
+    func orderIsCanonical() {
+        // Declared web_search-first above; the derivation must sort. The live
+        // agent path arrives pre-sorted, the launch warm arrives in builder
+        // insertion order — this sort is what makes the two render the SAME
+        // tools-JSON token stream (the quality review's must-fix: without it
+        // the warmed KV diverges from the turn at the tools block and the
+        // warm buys nothing).
+        let inputs = MLXToolMapping.prefixInputs(for: tools)
+        #expect(inputs.toolNames == ["get_document", "web_search"])
+    }
+
+    @Test("every permutation of the same tools yields the identical derivation — warm ≡ live turn")
+    func permutationsAreEquivalent() throws {
+        let forward = MLXToolMapping.prefixInputs(for: tools)
+        let backward = MLXToolMapping.prefixInputs(for: tools.reversed())
+        #expect(forward.toolNames == backward.toolNames)
+        let forwardSpecs = try #require(forward.specs)
+        let backwardSpecs = try #require(backward.specs)
+        #expect(forwardSpecs.count == backwardSpecs.count)
+        for (lhs, rhs) in zip(forwardSpecs, backwardSpecs) {
+            let lhsFunction = try #require(lhs["function"] as? [String: any Sendable])
+            let rhsFunction = try #require(rhs["function"] as? [String: any Sendable])
+            #expect(lhsFunction["name"] as? String == rhsFunction["name"] as? String)
+        }
+    }
+
+    @Test("an empty tool list yields nil specs (the bare-persona key), not an empty array")
+    func emptyToolsAreNilSpecs() {
+        let inputs = MLXToolMapping.prefixInputs(for: [])
+        #expect(inputs.specs == nil)
+        #expect(inputs.toolNames.isEmpty)
+    }
+
+    @Test("specs are exactly toolSpec(from:) per tool, in canonical order")
+    func specsMatchTheLiveMapper() throws {
+        let inputs = MLXToolMapping.prefixInputs(for: tools)
+        let specs = try #require(inputs.specs)
+        let canonical = tools.sorted { $0.name < $1.name }
+        #expect(specs.count == 2)
+        for (spec, tool) in zip(specs, canonical) {
+            let function = try #require(spec["function"] as? [String: any Sendable])
+            #expect(function["name"] as? String == tool.name)
+        }
+        // The offset optionality must survive — the warmed prefix renders the
+        // SAME schema the turn renders, or the keys differ byte-wise.
+        // (get_document sorts first.)
+        let function = try #require(specs[0]["function"] as? [String: any Sendable])
+        let parameters = try #require(function["parameters"] as? [String: any Sendable])
+        #expect((parameters["required"] as? [String]) == ["title"])
+    }
+}
+
 struct MLXToolSpecTests {
     @Test("a ToolDefinition becomes a function-typed JSON schema")
     func toolSpecShape() {

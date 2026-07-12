@@ -916,6 +916,7 @@ final class AppEnvironment {
             }
             if Task.isCancelled { return }
             modelLoad = .ready
+            warmPersonaPrefixAfterLoad(mlx)
         } catch is CancellationError {
             // Deliberately switched away mid-load — leave modelLoad to the current
             // selection (the didSet already cleared the bar).
@@ -926,6 +927,40 @@ final class AppEnvironment {
                 Self.brainLog.error("brain load failed [\(mlx.modelIdentifier, privacy: .public)]: \(error.localizedDescription, privacy: .public)")
                 modelLoad = .failed(message: error.localizedDescription)
             }
+        }
+    }
+
+    /// Post-load persona-prefix warm — `warmEmbedderOnLaunch`'s sibling for
+    /// the OTHER half of the measured first-turn tax (embedder ~4.0 s; prefix
+    /// build ~1.9 s on lil / ~3.3 s on big — SelfTest EMBEDWARM/PREFIXWARM,
+    /// 2026-07-11/12). Pre-builds the (persona × tools) KV the interactive
+    /// chat's FIRST turn will ask for, in the background, behind the same
+    /// thermal gate. Best-effort by design:
+    /// - A turn racing the warm queues behind it on the ModelContainer —
+    ///   worst case it pays roughly the build it would have paid anyway.
+    /// - A web-toggle/persona change after the warm is a cache miss (the turn
+    ///   builds inline, pre-warm behavior), never a wrong prefix — the cache
+    ///   is keyed by (model × tools × persona).
+    /// - A brain swap mid-warm wastes the old provider's build; its cache dies
+    ///   with the provider's `releaseMemory()`.
+    /// Key parity with the live turn is structural, not aspirational: the tool
+    /// list comes from the SAME `interactiveAgentTools` builder the responder
+    /// consults each turn (callbacks are no-ops — only definitions render into
+    /// the prefix), and the MLX side shares its key derivation with
+    /// `makeToolTurnSession` (pinned in MLXPrefixInputsTests).
+    private func warmPersonaPrefixAfterLoad(_ mlx: MLXGemmaProvider) {
+        guard Self.backgroundWorkAllowed() else { return }
+        // onOpenLink is non-nil to mirror the interactive responder's list —
+        // open_link renders into the system block, so it is part of the key.
+        let tools = Self.interactiveAgentTools(
+            store: store, embedder: embedder,
+            onHits: { _ in }, onOpenLink: { _ in }
+        ).map(\.toolDefinition)
+        // weak: a brain swap mid-warm must not have this task pin the OUTGOING
+        // provider's multi-GB weights alive while the new brain's are loading
+        // (releaseMemory's reclaim would silently wait on the warm otherwise).
+        Task.detached(priority: .utility) { [weak mlx] in
+            await mlx?.warmPersonaPrefix(tools: tools)
         }
     }
 

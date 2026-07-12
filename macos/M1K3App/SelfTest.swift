@@ -177,8 +177,57 @@ enum SelfTest {
             // a launch prefix-warm would run post-load too). Same question both
             // turns, so delta(first token) is purely the prefix build cost —
             // the number the parked persona-prefix-warm decision needs.
-            if SelfTestEnv.value("M1K3_SELFTEST_PREFIXWARM") == "1" {
+            // Mode "2" is the bare-key API proof: warm FIRST through the
+            // public warmPersonaPrefix entry (bare persona — the key the plain
+            // generateStreaming path asks for), then the "cold" arm below must
+            // land near the warm arm. Cold≈warm under mode 2 IS the pass.
+            // Mode "3" is the TOOL-PATH proof — the path the production launch
+            // warm actually targets: warm with tools passed deliberately OUT of
+            // alphabetical order, then time the first native tool-turn send
+            // (which derives its prefix through the same canonical-order choke
+            // point). first-send ≈ second-send proves the warmed KV is the one
+            // the live agent turn reuses, ordering included.
+            let prefixMode = SelfTestEnv.value("M1K3_SELFTEST_PREFIXWARM")
+            if prefixMode == "3" {
                 try await llm.prepare(progress: { _ in })
+                let toolsOutOfOrder = [
+                    ToolDefinition(
+                        name: "zeta_probe", description: "Report the zeta reading.",
+                        parameters: [ToolParameterDefinition(name: "arg", description: "the arg")]
+                    ),
+                    ToolDefinition(
+                        name: "alpha_probe", description: "Report the alpha reading.",
+                        parameters: [ToolParameterDefinition(name: "arg", description: "the arg")]
+                    ),
+                ]
+                await llm.warmPersonaPrefix(tools: toolsOutOfOrder)
+                emit("prefixwarm: warmed via public API with out-of-order tools (mode 3)")
+                for label in ["first-send", "second-send"] {
+                    let session = try await llm.makeToolTurnSession(
+                        tools: toolsOutOfOrder,
+                        options: ToolTurnOptions(thinkingEnabled: false)
+                    )
+                    let clock = ContinuousClock()
+                    let start = clock.now
+                    nonisolated(unsafe) var firstToken: Duration?
+                    _ = try await session.send(
+                        [.user("In one short sentence, what is a hydraulic seal?")]
+                    ) { chunk in
+                        if firstToken == nil, !chunk.isEmpty, chunk != "<think>" {
+                            firstToken = clock.now - start
+                        }
+                    }
+                    await session.finish()
+                    let ms = firstToken.map { milliseconds($0) } ?? -1
+                    emit("prefixwarm tool-path \(label): first=\(ms)ms")
+                }
+            }
+            if prefixMode == "1" || prefixMode == "2" {
+                try await llm.prepare(progress: { _ in })
+                if prefixMode == "2" {
+                    await llm.warmPersonaPrefix(tools: [])
+                    emit("prefixwarm: warmed via public API before the A/B (mode 2)")
+                }
                 let question = "In one short sentence, what is a hydraulic seal?"
                 var firsts: [Int] = []
                 for label in ["cold", "warm"] {

@@ -39,6 +39,27 @@ enum MLXToolMapping {
     /// Project a dialect-free `ToolDefinition` into the JSON-schema `ToolSpec`
     /// the model's chat template renders (same shape as the library's `Tool`
     /// initializer builds).
+    /// The (specs, toolNames) pair that keys the persona-prefix KV cache —
+    /// ONE derivation shared by `makeToolTurnSession` (the live turn) and
+    /// `warmPersonaPrefix` (the launch warm), so the warmed cache entry is
+    /// byte-identical to the key the first turn asks for. Empty tools → nil
+    /// specs (the bare-persona key the plain-chat path uses).
+    ///
+    /// CANONICAL ORDER: sorted by tool name, HERE, regardless of what callers
+    /// pass. The live agent path arrives pre-sorted (LocalAgent+Native sorts
+    /// its Dictionary values) but the launch warm arrives in tool-builder
+    /// insertion order — without one canonical order at this choke point, the
+    /// warmed KV renders the tools JSON differently than the turn re-renders
+    /// it, the cross-turn common-prefix scan diverges right at the tools
+    /// block, and the warm buys nothing (the exact "tool-JSON ordering drift"
+    /// class LocalAgent+Native's own comment warns about). Tools resolve by
+    /// name; order is behaviourally irrelevant to the model.
+    static func prefixInputs(for tools: [ToolDefinition]) -> (specs: [ToolSpec]?, toolNames: [String]) {
+        let ordered = tools.sorted { $0.name < $1.name }
+        let specs = ordered.map(toolSpec(from:))
+        return (specs.isEmpty ? nil : specs, ordered.map(\.name))
+    }
+
     static func toolSpec(from definition: ToolDefinition) -> ToolSpec {
         var properties: [String: any Sendable] = [:]
         var required: [String] = []
@@ -292,6 +313,39 @@ extension MLXGemmaProvider: ToolCallingProvider {
     /// grounding, tool specs, and every prior generation are already in the
     /// cache (upstream ChatSession's delta-render pattern, with our loop in
     /// control).
+    /// Pre-build the persona-prefix KV for `tools` so the FIRST turn starts
+    /// from a cached copy instead of paying the build on its critical path.
+    /// Measured 2026-07-12 (SelfTest PREFIXWARM, 2 runs/tier): the build costs
+    /// ~1.9 s on lil (Qwen3-4B) and ~3.3 s on big (gemma-4-e4b); a warm turn's
+    /// first token lands in ~150–190 ms. Best-effort and idempotent: any
+    /// failure just logs — the turn falls back to building inline, exactly the
+    /// pre-warm behavior. Key parity with the live turn is structural: both
+    /// route through `MLXToolMapping.prefixInputs` (pinned in tests). A turn
+    /// racing the warm queues behind it on the ModelContainer — worst case it
+    /// pays the build it would have paid anyway.
+    public func warmPersonaPrefix(tools: [ToolDefinition]) async {
+        do {
+            let container = try await ensureLoaded()
+            let inputs = MLXToolMapping.prefixInputs(for: tools)
+            let seed = try await buildPersonaPrefixSnapshot(
+                container: container,
+                specs: inputs.specs,
+                toolNames: inputs.toolNames
+            )
+            if let seed {
+                let model = modelIdentifier
+                mlxToolLog.notice(
+                    "persona prefix warmed [\(model, privacy: .public)]: \(seed.tokenIDs.count) tokens, \(tools.count) tool(s)"
+                )
+            }
+        } catch {
+            let model = modelIdentifier
+            mlxToolLog.notice(
+                "persona prefix warm skipped [\(model, privacy: .public)]: \(String(describing: error), privacy: .public)"
+            )
+        }
+    }
+
     public func makeToolTurnSession(
         tools: [ToolDefinition],
         options: ToolTurnOptions
@@ -304,16 +358,17 @@ extension MLXGemmaProvider: ToolCallingProvider {
             )
         }
         let container = try await ensureLoaded()
-        let specs = tools.map(MLXToolMapping.toolSpec(from:))
-        let normalizedSpecs = specs.isEmpty ? nil : specs
         // Persona (and tools — they render in the SAME system block) prefilled
         // once per (model × tools × persona); this turn starts from a copy.
+        // prefixInputs is the SHARED key derivation with warmPersonaPrefix —
+        // don't inline it here or the launch warm drifts off this key.
         // (enable_thinking only touches the generation suffix, template-probe
         // verified — the cached prefix is identical either way.)
+        let inputs = MLXToolMapping.prefixInputs(for: tools)
         let seed = await personaPrefixSnapshot(
             container: container,
-            specs: normalizedSpecs,
-            toolNames: tools.map(\.name)
+            specs: inputs.specs,
+            toolNames: inputs.toolNames
         )
         // Per-turn thinking, decided ONLY from this turn's flag + the family's
         // toggle capability — never the provider's construction-time thinking
@@ -328,7 +383,7 @@ extension MLXGemmaProvider: ToolCallingProvider {
             modelID: modelIdentifier,
             parameters: generateParameters,
             format: format,
-            specs: normalizedSpecs,
+            specs: inputs.specs,
             thinkingContext: thinking.context,
             prefixNeeded: thinking.prefixNeeded,
             seed: seed

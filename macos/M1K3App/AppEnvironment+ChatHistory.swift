@@ -168,6 +168,46 @@ extension AppEnvironment {
     /// can surface a web page into the review panel mid-answer. Only the
     /// interactive chat responder passes it — the MCP/ask responder (forced
     /// `.fast`, headless) has no panel to drive.
+    /// The interactive agent tool LIST — one builder shared by the responder's
+    /// per-turn `toolsProvider` and the persona-prefix warm, so the warmed
+    /// (persona × tools) cache key can never drift from what the live turn
+    /// renders. The warm passes no-op callbacks: only the tool DEFINITIONS
+    /// (names, descriptions, schemas) reach the prefix; callbacks never render.
+    nonisolated static func interactiveAgentTools(
+        store: KnowledgeStore,
+        embedder: any EmbeddingService,
+        onHits: @escaping @Sendable ([ChunkHit]) -> Void,
+        onOpenLink: (@Sendable (URL) -> Void)?
+    ) -> [any AgentTool] {
+        var tools: [any AgentTool] = [
+            DateTimeTool(),
+            SystemStatusTool(),
+            SearchKnowledgeTool(store: store, embedder: embedder, onHits: onHits),
+            ListDocumentsTool(store: store),
+            GetDocumentTool(store: store),
+        ]
+        let defaults = UserDefaults.standard
+        let webAllowed = defaults.object(forKey: Self.webSearchEnabledKey) == nil
+            || defaults.bool(forKey: Self.webSearchEnabledKey)
+        if webAllowed {
+            tools.insert(WikipediaTool(), at: 0)
+            tools.insert(FetchPageTool(), at: 0)
+            // Deterministic search→read: small models won't chain to
+            // fetch_page themselves, so web_search auto-reads the top
+            // result and feeds real page text back in one observation.
+            // The deep reader uses a tight, no-retry fetch (8s) so a slow
+            // or JS-only top result bails fast instead of blowing the turn
+            // budget. (fetch_page — default 12s+retry — stays available for
+            // the model to read OTHER results in full.)
+            let deepReader = FetchPageTool(fetcher: URLSessionHTTPFetcher(timeout: 8))
+            tools.insert(WebSearchTool(deepReader: deepReader), at: 0)
+        }
+        if let onOpenLink {
+            tools.append(OpenLinkTool(onOpen: onOpenLink))
+        }
+        return tools
+    }
+
     nonisolated static func makeAgentResponder(
         store: KnowledgeStore,
         embedder: any EmbeddingService,
@@ -183,37 +223,12 @@ extension AppEnvironment {
             embedder: embedder,
             provider: provider,
             toolsProvider: {
-                var tools: [any AgentTool] = [
-                    DateTimeTool(),
-                    SystemStatusTool(),
-                    SearchKnowledgeTool(
-                        store: store,
-                        embedder: embedder,
-                        onHits: { hits in sourceCollector.record(hits) }
-                    ),
-                    ListDocumentsTool(store: store),
-                    GetDocumentTool(store: store),
-                ]
-                let defaults = UserDefaults.standard
-                let webAllowed = defaults.object(forKey: Self.webSearchEnabledKey) == nil
-                    || defaults.bool(forKey: Self.webSearchEnabledKey)
-                if webAllowed {
-                    tools.insert(WikipediaTool(), at: 0)
-                    tools.insert(FetchPageTool(), at: 0)
-                    // Deterministic search→read: small models won't chain to
-                    // fetch_page themselves, so web_search auto-reads the top
-                    // result and feeds real page text back in one observation.
-                    // The deep reader uses a tight, no-retry fetch (8s) so a slow
-                    // or JS-only top result bails fast instead of blowing the turn
-                    // budget. (fetch_page — default 12s+retry — stays available for
-                    // the model to read OTHER results in full.)
-                    let deepReader = FetchPageTool(fetcher: URLSessionHTTPFetcher(timeout: 8))
-                    tools.insert(WebSearchTool(deepReader: deepReader), at: 0)
-                }
-                if let onOpenLink {
-                    tools.append(OpenLinkTool(onOpen: onOpenLink))
-                }
-                return tools
+                Self.interactiveAgentTools(
+                    store: store,
+                    embedder: embedder,
+                    onHits: { hits in sourceCollector.record(hits) },
+                    onOpenLink: onOpenLink
+                )
             },
             sourceCollector: sourceCollector,
             thinkingModeProvider: {
