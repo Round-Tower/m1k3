@@ -153,21 +153,6 @@ extension AppEnvironment {
         return store
     }
 
-    /// The tool-calling chat responder: every turn runs the agent loop with
-    /// retrieve-first grounding, plus web search / datetime / system status /
-    /// a second knowledge lookup as tools. The tool list is built fresh each
-    /// turn so the Settings web-search toggle applies immediately — disabled
-    /// means the model never even sees the tool.
-    /// `forcedThinkingMode` pins the reasoning budget regardless of Settings —
-    /// the MCP `ask_m1k3` path passes `.fast`. ask_m1k3 is a grounding tool for
-    /// a visiting agent ("find and cite my private corpus"), not a synthesis
-    /// engine: on these small local brains the think phase is what blows past
-    /// the deadline on anything but a lookup (test-report follow-up, 2026-06-12).
-    /// nil keeps the Settings picker + voice-mode override (the chat/voice UI).
-    /// `onOpenLink`, when supplied, adds the `open_link` agent tool so the model
-    /// can surface a web page into the review panel mid-answer. Only the
-    /// interactive chat responder passes it — the MCP/ask responder (forced
-    /// `.fast`, headless) has no panel to drive.
     /// The interactive agent tool LIST — one builder shared by the responder's
     /// per-turn `toolsProvider` and the persona-prefix warm, so the warmed
     /// (persona × tools) cache key can never drift from what the live turn
@@ -208,6 +193,21 @@ extension AppEnvironment {
         return tools
     }
 
+    /// The tool-calling chat responder: every turn runs the agent loop with
+    /// retrieve-first grounding, plus web search / datetime / system status /
+    /// a second knowledge lookup as tools. The tool list is built fresh each
+    /// turn so the Settings web-search toggle applies immediately — disabled
+    /// means the model never even sees the tool.
+    /// `forcedThinkingMode` pins the reasoning budget regardless of Settings —
+    /// the MCP `ask_m1k3` path passes `.fast`. ask_m1k3 is a grounding tool for
+    /// a visiting agent ("find and cite my private corpus"), not a synthesis
+    /// engine: on these small local brains the think phase is what blows past
+    /// the deadline on anything but a lookup (test-report follow-up, 2026-06-12).
+    /// nil keeps the Settings picker + voice-mode override (the chat/voice UI).
+    /// `onOpenLink`, when supplied, adds the `open_link` agent tool so the model
+    /// can surface a web page into the review panel mid-answer. Only the
+    /// interactive chat responder passes it — the MCP/ask responder (forced
+    /// `.fast`, headless) has no panel to drive.
     nonisolated static func makeAgentResponder(
         store: KnowledgeStore,
         embedder: any EmbeddingService,
