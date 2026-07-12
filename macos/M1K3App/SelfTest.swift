@@ -209,6 +209,9 @@ enum SelfTest {
                     )
                     let clock = ContinuousClock()
                     let start = clock.now
+                    // Safe: MLXToolTurnSession invokes onToken serially from
+                    // inside container.perform, and `send` is awaited to
+                    // completion before this var is read.
                     nonisolated(unsafe) var firstToken: Duration?
                     _ = try await session.send(
                         [.user("In one short sentence, what is a hydraulic seal?")]

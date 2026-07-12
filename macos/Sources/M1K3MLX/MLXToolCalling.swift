@@ -24,6 +24,13 @@
 //  review follow-ups: nil-dialect now guard-throws (was a silent .gemma
 //  fallback) in continueToolTurn + makeToolTurnSession; serial-use contract
 //  comments extended to finish() and the non-seeded fallback path.
+//  Review: Kev + claude-fable-5, 2026-07-12, Confidence 0.9 — the launch-time
+//  persona-prefix warm (PR #27): public warmPersonaPrefix(tools:) + the shared
+//  prefixInputs derivation, which sorts tools CANONICALLY by name — the quality
+//  review caught that an unsorted warm rendered the tools JSON differently than
+//  the live turn (LocalAgent sorts), colliding on the same cache key with
+//  different KV content. Measured win ~1.9 s lil / ~3.3 s big (SelfTest
+//  PREFIXWARM modes 1–3; mode 3 is the out-of-order tool-path proof).
 
 import Foundation
 import M1K3Inference

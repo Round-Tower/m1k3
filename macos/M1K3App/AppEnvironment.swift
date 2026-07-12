@@ -949,7 +949,14 @@ final class AppEnvironment {
     /// the prefix), and the MLX side shares its key derivation with
     /// `makeToolTurnSession` (pinned in MLXPrefixInputsTests).
     private func warmPersonaPrefixAfterLoad(_ mlx: MLXGemmaProvider) {
-        guard Self.backgroundWorkAllowed() else { return }
+        guard Self.backgroundWorkAllowed() else {
+            // Hot right now (the model download itself can heat the Mac):
+            // arm the cooldown retry, or this session would pay the inline
+            // build on its first turn forever — the embedder sibling gets
+            // the same recovery treatment (review fold, #27).
+            armThermalRecovery()
+            return
+        }
         // onOpenLink is non-nil to mirror the interactive responder's list —
         // open_link renders into the system block, so it is part of the key.
         let tools = Self.interactiveAgentTools(
@@ -1290,6 +1297,12 @@ extension AppEnvironment {
                 await self.reindexIfEmbedderChanged()
                 await self.reindexMemoryGraphIfNeeded()
                 await self.warmEmbedderOnLaunch()
+                // The prefix warm's cooldown retry (its hot-skip arms this
+                // observer, same as the reindexes) — only once a brain is
+                // actually warm to seed from. Idempotent: a cache hit no-ops.
+                if case .ready = self.modelLoad {
+                    self.warmPersonaPrefixAfterLoad(self.currentMLXProvider)
+                }
                 // Cooled back down and the work ran → tear the observer down.
                 if Self.backgroundWorkAllowed() { self.disarmThermalRecovery() }
             }
