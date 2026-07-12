@@ -112,16 +112,17 @@ public enum SelfQueryGate {
         if text.contains(toldProbe) { return true }
         if text.contains(passphraseProbe) { return true }
         if text.contains(possessiveIntrospection) { return true }
-        if text.contains(definiteSystemPrompt), text.contains(secondPerson) { return true }
-        // Clause-scoped: the corpus noun and the self-target must share a
-        // clause, so "tell me about yourself, then check your notes about the
-        // seal failure" doesn't gate the unrelated lookup in clause two.
-        // (An unpunctuated voice turn collapses to one clause — that errs
-        // toward gating a compound ask, never toward a leak.)
+        // Clause-scoped conjunctions: both halves of a paired signal must
+        // share a clause, so an unrelated clause elsewhere in a compound turn
+        // can't complete the pair ("…the system prompt in the article…? Also,
+        // could YOU resend it?" / "tell me about yourself, then check your
+        // notes about the seal failure"). An unpunctuated voice turn
+        // collapses to one clause — that errs toward gating a compound ask,
+        // never toward a leak.
         let clauses = text.split(whereSeparator: { ".!?;,".contains($0) })
-        if clauses.contains(where: { $0.contains(possessiveCorpusNoun) && $0.contains(selfTarget) }) {
-            return true
+        return clauses.contains { clause in
+            (clause.contains(definiteSystemPrompt) && clause.contains(secondPerson))
+                || (clause.contains(possessiveCorpusNoun) && clause.contains(selfTarget))
         }
-        return false
     }
 }

@@ -91,6 +91,11 @@ struct SelfQueryGateTests {
             "What's the passphrase for the WiFi in my notes?",
             "Can you check your internal QA notes about the seal failure?",
             "You were told the venue changed — can you check the notes from that email?",
+            // An impersonal "the system prompt" ask must not be flipped into
+            // a gate by an ordinary "could you" in a LATER clause — the
+            // second person has to share the clause with the probe
+            "What does the system prompt in the article I saved say about few-shot "
+                + "examples? Also, could you resend it to me?",
         ]
     )
     func keepsLegitimateQuestions(question: String) {

@@ -26,7 +26,10 @@
 > param; also the sanctioned home for CanaryGuard honeypot docs. Pinned in
 > `QuarantinedKindTests`. **All three code-side tickets are now closed** —
 > re-tagging the live corpus's internal notes to `.quarantined` is an operator
-> action (Kev), not code.
+> action (Kev), not code. Named follow-up (PR #28 review): the DocumentsView
+> manager's default listing also hides quarantined items — the tag/untag
+> affordance and a "show quarantined" filter should land TOGETHER as one UI
+> change; until tagging exists no item can be orphaned.
 
 ## Why
 
