@@ -27,6 +27,13 @@ public struct KnowledgeKind: RawRepresentable, Hashable, Sendable, Codable {
     public static let call = KnowledgeKind(rawValue: "call")
     public static let note = KnowledgeKind(rawValue: "note")
     public static let memory = KnowledgeKind(rawValue: "memory")
+    /// Index segregation (prompt-hardening v2): stored and embedded like any
+    /// item, but invisible to every retrieval surface — search, grounding,
+    /// listing — unless a caller names the kind explicitly. The home for
+    /// internal QA/diagnostic/operational notes and for canary honeypot docs
+    /// (see CanaryGuard): the prompt cannot stop retrieval surfacing a doc
+    /// that is IN the index; only exclusion can.
+    public static let quarantined = KnowledgeKind(rawValue: "quarantined")
 }
 
 /// Who wrote a knowledge item — the provenance half of the memory consent

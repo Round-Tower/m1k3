@@ -18,9 +18,15 @@
 > relevance-threshold ticket was superseded by the 2026-07-09 instructed-query
 > floor re-derivation (KEYEVAL; GroundingGate 0.35/0.37 + two-lane budgets).
 >
-> **Still open (harness/code):** index segregation (data hygiene — internal
-> QA/diagnostic notes out of the retrievable corpus; the `KnowledgeKind` seam
-> exists, no `internal` kind or exclusion is defined yet).
+> **Index segregation also SHIPPED (same day):** `KnowledgeKind.quarantined` —
+> stored/embedded like any item, invisible to EVERY retrieval surface (search
+> nil-kinds default-deny, `searchGrounding` allowlist, `allItems` default
+> listing → so list/get tools and MCP inherit it) unless the kind is named
+> explicitly. Ingest tagging rides the existing `DocumentIngester.ingest(kind:)`
+> param; also the sanctioned home for CanaryGuard honeypot docs. Pinned in
+> `QuarantinedKindTests`. **All three code-side tickets are now closed** —
+> re-tagging the live corpus's internal notes to `.quarantined` is an operator
+> action (Kev), not code.
 
 ## Why
 

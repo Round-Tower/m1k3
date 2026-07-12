@@ -299,7 +299,10 @@ public final class KnowledgeStore: @unchecked Sendable {
         }
     }
 
-    /// List items, newest first. Optionally filter by kind.
+    /// List items, newest first. Optionally filter by kind. The default (nil)
+    /// listing covers every RETRIEVABLE kind — quarantined items appear only
+    /// when asked for by name, same rule as the search surfaces, so the
+    /// agent-facing list/get tools never enumerate them.
     public func allItems(kind: KnowledgeKind? = nil, limit: Int = 200) throws -> [KnowledgeItem] {
         try dbQueue.read { db in
             let rows: [Row]
@@ -312,8 +315,8 @@ public final class KnowledgeStore: @unchecked Sendable {
             } else {
                 rows = try Row.fetchAll(
                     db,
-                    sql: "SELECT * FROM knowledge_items ORDER BY created_at DESC LIMIT ?",
-                    arguments: [limit]
+                    sql: "SELECT * FROM knowledge_items WHERE kind != ? ORDER BY created_at DESC LIMIT ?",
+                    arguments: [KnowledgeKind.quarantined.rawValue, limit]
                 )
             }
             return rows.compactMap { Self.item(from: $0) }
@@ -400,6 +403,11 @@ public extension KnowledgeStore {
                 let placeholders = kinds.map { _ in "?" }.joined(separator: ", ")
                 sql += "\nAND i.kind IN (\(placeholders))"
                 args += kinds.map(\.rawValue)
+            } else {
+                // nil kinds = every RETRIEVABLE kind. Quarantined items are
+                // reachable only by naming the kind (index segregation).
+                sql += "\nAND i.kind != ?"
+                args.append(KnowledgeKind.quarantined.rawValue)
             }
             sql += "\nORDER BY bm25(knowledge_chunk_fts) ASC\nLIMIT ?"
             args.append(limit)
@@ -433,7 +441,12 @@ public extension KnowledgeStore {
             guard let blob: Data = row["embedding"],
                   var hit = Self.hit(from: row, chunkIDColumn: "chunk_id")
             else { continue }
-            if let kinds, !kinds.isEmpty, !kinds.contains(hit.kind) { continue }
+            if let kinds, !kinds.isEmpty {
+                if !kinds.contains(hit.kind) { continue }
+            } else if hit.kind == .quarantined {
+                // nil kinds = every RETRIEVABLE kind (index segregation).
+                continue
+            }
             hit.similarity = VectorMath.cosineSimilarity(queryVector, VectorMath.deserialize(blob))
             scored.append(hit)
         }
