@@ -294,7 +294,12 @@ let package = Package(
         ),
         .testTarget(
             name: "M1K3ChatTests",
-            dependencies: ["M1K3Chat"],
+            // M1K3KnowledgeTools/M1K3AgentTools are TEST-ONLY deps: the
+            // self-query gate names those tools as strings (M1K3Chat cannot
+            // link them — tools are injected by the app layer), so a pin test
+            // guards the names against drift. Same pattern as M1K3MLXTests →
+            // M1K3Chat (the 116-F1 cross-module equality pin).
+            dependencies: ["M1K3Chat", "M1K3KnowledgeTools", "M1K3AgentTools"],
             path: "Tests/M1K3ChatTests"
         ),
         // Leaf bridge (Chat + Memory only): DistilledFactGraphAdapter, the

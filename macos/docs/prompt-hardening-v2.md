@@ -8,9 +8,19 @@
 > a toggled-off tool. Surfaced from a leak-vector test session on Lil; the trained
 > lil-LoRA system prompt already uses the hardened text, so this aligns them.
 >
-> **Still open (harness/code, the prompt can't do alone):** see the three fixes below
-> — index segregation (data hygiene), relevance-threshold tuning, and the self-query
-> short-circuit (currently prompt-enforced via rule 3, not yet a code router).
+> **Update 2026-07-12:** the **self-query router SHIPPED** (`SelfQueryGate` in
+> M1K3Chat, wired into `AgentRAGResponder.answerStreaming`) — a narrow,
+> precision-first leak-class classifier that skips retrieval entirely and
+> withholds `search_knowledge`/`list_documents`/`get_document`/`lookup_fact`
+> from the turn's tool list. Boundaries pinned in `SelfQueryGateTests`
+> (deliberate: bare "what do your notes say?" stays ungated — that vector's
+> harm was corpus contents, which index segregation owns). The
+> relevance-threshold ticket was superseded by the 2026-07-09 instructed-query
+> floor re-derivation (KEYEVAL; GroundingGate 0.35/0.37 + two-lane budgets).
+>
+> **Still open (harness/code):** index segregation (data hygiene — internal
+> QA/diagnostic notes out of the retrievable corpus; the `KnowledgeKind` seam
+> exists, no `internal` kind or exclusion is defined yet).
 
 ## Why
 
