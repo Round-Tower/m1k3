@@ -168,6 +168,38 @@ enum SelfTest {
         emit("• loading MLX generation model \(modelID)…")
         do {
             let llm = MLXGemmaProvider(modelID: modelID, maxTokens: 48)
+
+            // 3-pre. Optional persona-prefix warm A/B (M1K3_SELFTEST_PREFIXWARM=1).
+            // MUST run before ANY generation on this provider — turn A's whole
+            // value is the COLD PersonaPrefixCache build. prepare() loads the
+            // weights first so turn A isolates the prefix prefill from the
+            // weights load (the app's model gate already absorbs the load, and
+            // a launch prefix-warm would run post-load too). Same question both
+            // turns, so delta(first token) is purely the prefix build cost —
+            // the number the parked persona-prefix-warm decision needs.
+            if SelfTestEnv.value("M1K3_SELFTEST_PREFIXWARM") == "1" {
+                try await llm.prepare(progress: { _ in })
+                let question = "In one short sentence, what is a hydraulic seal?"
+                var firsts: [Int] = []
+                for label in ["cold", "warm"] {
+                    let clock = ContinuousClock()
+                    let start = clock.now
+                    var firstToken: Duration?
+                    for await chunk in llm.generateStreaming(prompt: question) {
+                        if firstToken == nil, !chunk.isEmpty, chunk != "<think>" {
+                            firstToken = clock.now - start
+                        }
+                    }
+                    let ms = firstToken.map { milliseconds($0) } ?? -1
+                    firsts.append(ms)
+                    emit("prefixwarm \(label): first=\(ms)ms")
+                }
+                if firsts.count == 2, firsts.allSatisfy({ $0 >= 0 }) {
+                    emit("prefixwarm delta=\(firsts[0] - firsts[1])ms "
+                        + "(what a post-load persona-prefix warm buys the first turn)")
+                }
+            }
+
             let answer = try await llm.generate(prompt: "In one short sentence, what is a hydraulic seal?")
             emit("✓ MLX generate: \(answer.trimmingCharacters(in: .whitespacesAndNewlines).prefix(180))")
 
