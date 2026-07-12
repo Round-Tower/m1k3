@@ -273,6 +273,9 @@ struct AgentRAGResponderTests {
         #expect(!firstPrompt.contains("fixed tool search_knowledge"))
         #expect(!firstPrompt.contains("fixed tool lookup_fact"))
         #expect(firstPrompt.contains("fixed tool web_search"))
+        // The routing rules must not advertise a withheld tool either — the
+        // "search_knowledge only finds documents…" line is gated on presence.
+        #expect(!firstPrompt.contains("search_knowledge only finds documents"))
     }
 
     @Test("ordinary turn: retrieval and the full tool list are untouched by the gate")
@@ -772,7 +775,12 @@ struct AgentRAGResponderTests {
         let provider = AgentScriptedProvider(["CONCLUSION: ok."])
         let responder = AgentRAGResponder(
             store: store, embedder: embedder, provider: provider,
-            tools: [FixedTool(name: "web_search", response: "x")]
+            // search_knowledge rides along as in production — the routing
+            // text names only tools present this turn (self-query gating).
+            tools: [
+                FixedTool(name: "web_search", response: "x"),
+                FixedTool(name: "search_knowledge", response: "k"),
+            ]
         )
         _ = try await collect(await responder.answerStreaming("weather?").stream)
         let prompt = try #require(provider.allPrompts.first)

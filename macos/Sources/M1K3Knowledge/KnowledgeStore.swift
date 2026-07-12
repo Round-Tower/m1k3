@@ -290,6 +290,11 @@ public final class KnowledgeStore: @unchecked Sendable {
     // MARK: - Fetch (for document tools + MCP resources)
 
     /// Fetch a single item by id, or nil if absent.
+    ///
+    /// ⚠️ NO kind filter: a `.quarantined` item IS returned. Any caller that
+    /// renders content to a model or an agent surface must apply its own
+    /// quarantine check (the MCP get_document leak, fixed 2026-07-12, is the
+    /// cautionary tale). The search/list surfaces are already gated.
     public func item(id: UUID) throws -> KnowledgeItem? {
         try dbQueue.read { db in
             guard let row = try Row.fetchOne(
@@ -324,6 +329,9 @@ public final class KnowledgeStore: @unchecked Sendable {
     }
 
     /// Fetch an item's chunks in order.
+    ///
+    /// ⚠️ NO kind filter — same caveat as `item(id:)`: check the owning
+    /// item's kind before rendering these to a model-facing surface.
     public func chunks(forItem itemID: UUID) throws -> [KnowledgeChunk] {
         try dbQueue.read { db in
             let rows = try Row.fetchAll(

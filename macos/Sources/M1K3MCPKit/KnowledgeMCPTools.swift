@@ -74,7 +74,10 @@ struct KnowledgeMCPTools {
         guard let id = UUID(uuidString: idString.trimmingCharacters(in: .whitespacesAndNewlines)) else {
             return "Error: “\(idString)” is not a valid document id."
         }
-        guard let item = try store.item(id: id) else {
+        guard let item = try store.item(id: id), item.kind != .quarantined else {
+            // A quarantined item renders as absent, not as denied — the by-id
+            // path must not confirm existence of what list/search never show
+            // (index segregation; see KnowledgeKind.quarantined).
             return "No document found with id \(id.uuidString)."
         }
         return try DocumentRenderer.render(

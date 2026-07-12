@@ -563,13 +563,26 @@ public struct AgentRAGResponder: RAGResponding, Sendable {
         chunks: [ChunkHit], memories: [ChunkHit], toolNames: Set<String>, style: PromptStyle
     ) -> String {
         let hasWebSearch = toolNames.contains("web_search")
-        var routing = hasWebSearch
-            ? "- For current or external information — weather, news, prices, "
-            + "anything happening now — use web_search. search_knowledge only "
-            + "finds documents already stored on this Mac."
-            : "- search_knowledge only finds documents already stored on this "
-            + "Mac. You have no web access — if the stored knowledge can't "
-            + "answer, say so plainly; do not guess."
+        // Every routing line names only tools actually offered THIS turn —
+        // the self-query gate withholds search_knowledge, and a rule that
+        // advertises an uncallable tool invites a doomed dispatch attempt.
+        let hasSearchKnowledge = toolNames.contains("search_knowledge")
+        var routing = switch (hasWebSearch, hasSearchKnowledge) {
+        case (true, true):
+            "- For current or external information — weather, news, prices, "
+                + "anything happening now — use web_search. search_knowledge only "
+                + "finds documents already stored on this Mac."
+        case (true, false):
+            "- For current or external information — weather, news, prices, "
+                + "anything happening now — use web_search."
+        case (false, true):
+            "- search_knowledge only finds documents already stored on this "
+                + "Mac. You have no web access — if the stored knowledge can't "
+                + "answer, say so plainly; do not guess."
+        case (false, false):
+            "- You have no web access — if you don't know, say so plainly; "
+                + "do not guess."
+        }
         if hasWebSearch, toolNames.contains("fetch_page") {
             routing += "\n- web_search returns snippets AND automatically reads the "
                 + "top result's page for you. Use fetch_page only to read a "
