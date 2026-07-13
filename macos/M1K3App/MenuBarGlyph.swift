@@ -5,30 +5,24 @@
 //  M1K3's status-bar mark. Drawn from a pixel grid (not an asset) so it stays
 //  crisp at any menu-bar height and ships as a TEMPLATE image — macOS tints it
 //  for light/dark + vibrancy. The "M" replicates the website favicon's 5×5
-//  phosphor mark (site/favicon.svg) so the bar matches the brand; the face is an
-//  A/B alternative. VERIFY-BY-LAUNCH: purely visual, judged by eye at ⌘R.
+//  phosphor mark (site/favicon.svg) so the bar matches the brand and ships as
+//  THE glyph (the Settings picker was cut 2026-07-13, Kev-approved — the pixel
+//  M is no longer a choice). `.pixelFace` + its grid are kept as a rendering
+//  path (not deleted with the picker) even though nothing calls it today —
+//  the smallest change that doesn't foreclose bringing the face back.
+//  VERIFY-BY-LAUNCH: purely visual, judged by eye at ⌘R.
 //
 //  Signed: Kev + claude-opus-4-8, 2026-06-16, Confidence 0.7, Prior: Unknown
 
 import AppKit
 
-/// Which mark the menu-bar item shows. Raw values are the persisted @AppStorage
-/// choice; `CaseIterable` drives the Settings picker.
+/// Which mark the menu-bar item shows.
 enum MenuBarGlyphStyle: String, CaseIterable, Identifiable {
     case pixelM
     case pixelFace
 
-    static let storageKey = "menuBar.glyphStyle"
-
     var id: String {
         rawValue
-    }
-
-    var label: String {
-        switch self {
-        case .pixelM: "Pixel M"
-        case .pixelFace: "Pixel face"
-        }
     }
 
     /// Pixel grid, top row first. "#" is a lit pixel, anything else is empty.

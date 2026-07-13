@@ -300,12 +300,11 @@ final class AppEnvironment {
     /// the provider is built from it in `init`, so a change applies on next launch.
     static let whisperModelKey = "transcription.whisperModel"
     /// Auto-route the brain via the EscalationLadder (ADR 0001) instead of a fixed
-    /// manual pick. Default OFF — opt-in, fully reversible. When on, M1K3 picks the
-    /// brain per its policy (the MLX floor by default; Apple-on-device only if opted in).
+    /// manual pick. Default OFF — opt-in, fully reversible. When on, M1K3 picks its
+    /// own tuned model per the policy (the MLX floor) — "Prefer Apple on-device" was
+    /// cut from Settings 2026-07-13 (Kev-approved); the ladder's `preferAppleOnDevice`
+    /// input is now always `false` (see resolvedAutoRouteTier).
     nonisolated static let autoRouteBrainKey = "brain.autoRoute"
-    /// When auto-routing, prefer Apple's on-device model over the M1K3 floor.
-    /// Default OFF (M1K3's own brains are stronger at open chat).
-    nonisolated static let preferAppleOnDeviceKey = "brain.preferAppleOnDevice"
 
     /// The chosen brain (Mini / Lil / Big). Restored on launch, persisted on change.
     private(set) var selectedBrain: BrainTier = .mini
@@ -675,10 +674,10 @@ final class AppEnvironment {
         // Auto-routing (opt-in) picks the brain per the ladder before the turn.
         // No-op when off or when the pick is unchanged, so the default path is intact.
         applyAutoRouteIfEnabled()
-        // Prudent compute (opt-in): fold this turn's thermal/low-power pressure into
-        // the cool-head state so the agent loop eases off when the Mac runs hot.
-        // No-op when off. Never swaps the brain.
-        applyCoolHeadIfEnabled()
+        // Prudent compute (always on, 2026-07-13): fold this turn's thermal/low-power
+        // pressure into the cool-head state so the agent loop eases off when the Mac
+        // runs hot. Never swaps the brain.
+        applyCoolHead()
         let clock = ContinuousClock()
         let started = clock.now
         avatar.setActivity(.thinking)

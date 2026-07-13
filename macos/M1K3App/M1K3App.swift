@@ -45,9 +45,10 @@ struct M1K3App: App {
     /// Brain-only re-pick flag: when set by Settings → "Change brain…", the
     /// gate shows BrainPickerView, which finishes on wake.
     @AppStorage(Self.onboardingStartAtBrainKey) private var onboardingStartAtBrain = false
-    /// Menu-bar mark (favicon "M" by default) and whether to live in the menu bar
-    /// only (no Dock icon, no window forced open at launch).
-    @AppStorage(MenuBarGlyphStyle.storageKey) private var glyphStyle = MenuBarGlyphStyle.pixelM
+    /// Whether to live in the menu bar only (no Dock icon, no window forced
+    /// open at launch). The menu-bar mark is always the pixel M (see
+    /// `MenuBarLabel` below) — the glyph picker was cut from Settings
+    /// 2026-07-13 (Kev-approved).
     @AppStorage(StartupPreferences.menuBarOnlyKey) private var menuBarOnly = false
 
     init() {
@@ -169,7 +170,7 @@ struct M1K3App: App {
         MenuBarExtra {
             MenuBarPopover(env: appDelegate.environment)
         } label: {
-            MenuBarLabel(env: appDelegate.environment, glyphStyle: glyphStyle)
+            MenuBarLabel(env: appDelegate.environment, glyphStyle: .pixelM)
         }
         .menuBarExtraStyle(.window)
     }
