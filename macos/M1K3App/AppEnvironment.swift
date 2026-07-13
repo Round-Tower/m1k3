@@ -334,12 +334,11 @@ final class AppEnvironment {
     /// and hooks live in AppEnvironment+Spotlight.swift. On the main class
     /// body because extensions can't hold stored properties.
     let spotlightIndexer: any SystemSearchIndexing = SpotlightIndexer()
-    /// Re-entrancy latch for `syncSpotlightIndex` (launch + toggle + thermal
-    /// recovery can otherwise overlap a deleteAll with a donate).
-    var isSpotlightSyncing = false
-    /// Coalesce flag: a sync request arriving mid-sync re-runs the reconcile
-    /// once, so the LAST toggle state always wins (never silently dropped).
-    var spotlightSyncNeedsRerun = false
+    /// The unit-pinned reconcile state machine (latch + coalesce + ordering);
+    /// shares the adapter with the per-item donate/deindex hooks.
+    /// @ObservationIgnored: infrastructure, not UI state — and @Observable's
+    /// macro rejects a bare `lazy` stored property.
+    @ObservationIgnored private(set) lazy var spotlightReconciler = SpotlightReconciler(indexer: spotlightIndexer)
 
     /// Runtime picker selection. Changing it re-points the inference façade at
     /// the chosen backend for the next turn — no rebuild, transcript preserved.
@@ -1099,9 +1098,12 @@ final class AppEnvironment {
     @discardableResult
     func deleteCall(id: UUID) -> Bool {
         let removed = (try? callPersistence.delete(id: id)) ?? false
-        _ = try? store.deleteItem(id: id) // the call's graph node shares the call UUID
+        // The call's graph node shares the call UUID; the Spotlight entry
+        // tracks the KNOWLEDGE item, so the deindex gates on this delete —
+        // never leave a ⌘Space ghost, never drop a still-live item either.
+        let knowledgeDeleted = (try? store.deleteItem(id: id)) ?? false
         if removed { refreshCounts() }
-        Task { await spotlightDeindex(id: id) } // never leave a ⌘Space ghost
+        if knowledgeDeleted { Task { await spotlightDeindex(id: id) } }
         return removed
     }
 }

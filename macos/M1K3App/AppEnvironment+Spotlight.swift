@@ -73,70 +73,41 @@ extension AppEnvironment {
         UserDefaults.standard.bool(forKey: Self.spotlightIndexingKey)
     }
 
-    /// Per-kind fetch ceiling for the reconcile. allItems defaults to 200 —
-    /// and with kind: nil the ever-growing distilled .memory rows compete for
-    /// those slots, silently crowding documents/calls out of the sync (the
-    /// quality-review catch). Per-kind fetches at an explicit generous limit
-    /// sidestep the crowding; hitting the cap logs loudly instead of lying.
-    private static let spotlightFetchLimit = 2000
-
     /// The one reconcile every trigger funnels through (launch, Settings
-    /// toggle, thermal recovery). Re-entry coalesces: a call that arrives
-    /// mid-sync marks the state dirty and the running sync loops once more,
-    /// so a rapid ON→OFF (or OFF→ON) toggle always converges on the LAST
-    /// state — a dropped second call would leave the index enforcing a
-    /// stale choice until the next launch.
+    /// toggle, thermal recovery). The state machine — latch, coalesce-rerun
+    /// (a rapid ON→OFF toggle converges on the LAST state), OFF-before-
+    /// thermal ordering, per-kind cap detection — is the unit-pinned
+    /// `SpotlightReconciler` (M1K3Knowledge); this wrapper supplies live
+    /// dependencies and maps outcomes to log lines.
     func syncSpotlightIndex() async {
-        guard !isSpotlightSyncing else {
-            spotlightSyncNeedsRerun = true
-            return
-        }
-        isSpotlightSyncing = true
-        defer { isSpotlightSyncing = false }
-        repeat {
-            spotlightSyncNeedsRerun = false
-            await reconcileSpotlightIndexOnce()
-        } while spotlightSyncNeedsRerun
-    }
-
-    private func reconcileSpotlightIndexOnce() async {
-        guard spotlightIndexingEnabled else {
-            // OFF actively enforces an empty index — a container reset wipes
-            // the store and defaults but NOT the OS index, so "nothing was
-            // ever donated" is not a safe assumption. Cheap domain delete.
-            try? await spotlightIndexer.deleteAll()
-            return
-        }
-        // Rebuild is background work: skip under thermal/low-power pressure;
-        // the recovery observer re-runs this reconcile on cooldown.
-        guard Self.backgroundWorkAllowed() else {
-            armThermalRecovery()
-            return
-        }
-        do {
-            // deleteAll-then-donate every launch: self-heals orphans from
-            // container resets and store rebuilds (the OS index has no
-            // default-deny of its own — full reconcile is the guarantee).
-            // Known narrow race: an ingest/delete hook landing mid-reconcile
-            // can be transiently missed by this snapshot; the next reconcile
-            // trigger (launch at the latest) self-heals it.
-            try await spotlightIndexer.deleteAll()
-            let documents = try store.allItems(kind: .document, limit: Self.spotlightFetchLimit)
-            let calls = try store.allItems(kind: .call, limit: Self.spotlightFetchLimit)
-            let slices = [("documents", documents), ("calls", calls)]
-            for (label, slice) in slices where slice.count == Self.spotlightFetchLimit {
-                Self.spotlightLog.error(
-                    """
-                    spotlight reconcile hit the \(Self.spotlightFetchLimit, privacy: .public) \
-                    \(label, privacy: .public) cap — older items are NOT donated
-                    """
-                )
+        let outcomes = await spotlightReconciler.sync(
+            enabled: { self.spotlightIndexingEnabled },
+            backgroundWorkAllowed: { Self.backgroundWorkAllowed() },
+            fetch: { kind, limit in try self.store.allItems(kind: kind, limit: limit) }
+        )
+        for outcome in outcomes {
+            switch outcome {
+            case .cleared:
+                Self.spotlightLog.notice("spotlight index cleared (indexing off)")
+            case let .clearFailed(message):
+                // The one failure that most needs a breadcrumb: opt-out must
+                // empty the index, and a silent miss leaves titles in ⌘Space.
+                Self.spotlightLog.error("spotlight opt-out deleteAll FAILED: \(message, privacy: .public)")
+            case .deferredForHeat:
+                armThermalRecovery()
+            case let .reconciled(donated, capsHit):
+                for label in capsHit {
+                    Self.spotlightLog.error(
+                        """
+                        spotlight reconcile hit the \(SpotlightReconciler.fetchLimit, privacy: .public) \
+                        \(label, privacy: .public) cap — older items are NOT donated
+                        """
+                    )
+                }
+                Self.spotlightLog.notice("spotlight reconciled: \(donated, privacy: .public) item(s) donated")
+            case let .failed(message):
+                Self.spotlightLog.error("spotlight reconcile failed: \(message, privacy: .public)")
             }
-            let entries = SpotlightDonorPolicy.entries(for: documents + calls)
-            try await spotlightIndexer.donate(entries)
-            Self.spotlightLog.notice("spotlight reconciled: \(entries.count, privacy: .public) item(s) donated")
-        } catch {
-            Self.spotlightLog.error("spotlight reconcile failed: \(error.localizedDescription, privacy: .public)")
         }
     }
 
