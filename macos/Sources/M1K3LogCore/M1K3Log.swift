@@ -97,6 +97,8 @@ public enum M1K3Log {
         case mcp
         /// Launch-at-login (SMAppService).
         case launch
+        /// OS (CoreSpotlight) index donation/reconcile.
+        case spotlight
     }
 
     /// Build a `Logger` on the M1K3 subsystem for a catalogued category.
