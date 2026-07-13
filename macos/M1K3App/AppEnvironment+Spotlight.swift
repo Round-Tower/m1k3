@@ -73,6 +73,21 @@ extension AppEnvironment {
         UserDefaults.standard.bool(forKey: Self.spotlightIndexingKey)
     }
 
+    /// One-shot flag for the calm Spotlight invite (shown once, ever).
+    nonisolated static let spotlightTipShownKey = "spotlight.tipShown"
+
+    /// The earned calm invite (the Phase 17a opt-in pattern): offered ONCE,
+    /// on the ingest-status line right after the user adds a document — the
+    /// moment the offer makes sense — and only while indexing is off. Never
+    /// a modal, never repeated; the default stays OFF.
+    func spotlightTipIfDue() -> String {
+        let defaults = UserDefaults.standard
+        guard !spotlightIndexingEnabled,
+              !defaults.bool(forKey: Self.spotlightTipShownKey) else { return "" }
+        defaults.set(true, forKey: Self.spotlightTipShownKey)
+        return " Tip: M1K3 can make document titles findable in Spotlight — see Settings."
+    }
+
     /// The one reconcile every trigger funnels through (launch, Settings
     /// toggle, thermal recovery). The state machine — latch, coalesce-rerun
     /// (a rapid ON→OFF toggle converges on the LAST state), OFF-before-

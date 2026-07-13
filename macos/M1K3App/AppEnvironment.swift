@@ -651,7 +651,7 @@ final class AppEnvironment {
                 result = try await ingester.ingest(title: title, text: text, sourceRef: url.absoluteString)
             }
             let dedup = result.wasDeduped ? " (already indexed)" : ""
-            lastIngestStatus = "Indexed “\(title)” — \(result.chunkCount) chunks\(dedup)."
+            lastIngestStatus = "Indexed “\(title)” — \(result.chunkCount) chunks\(dedup).\(spotlightTipIfDue())"
             lastIngestedTitle = title
             lastIngestFailed = false
             refreshCounts()
