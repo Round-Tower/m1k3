@@ -152,6 +152,34 @@ struct MemoryConstellationTests {
         #expect(ConstellationLayout.seedPosition(for: id) == p) // stable
     }
 
+    @Test("accessibilitySummary names the field for VoiceOver — counts, correctly pluralised")
+    func accessibilitySummaryPluralises() {
+        let empty = ConstellationLayout.build(memories: [], edges: [])
+        #expect(empty.accessibilitySummary == "Memory constellation — 0 memories, 0 connections")
+
+        let one = mem("solo", at: 1)
+        let onlyOne = ConstellationLayout.build(memories: [one], edges: [])
+        #expect(onlyOne.accessibilitySummary == "Memory constellation — 1 memory, 0 connections")
+
+        let a = mem("a", at: 1)
+        let b = mem("b", at: 2)
+        let c = mem("c", at: 3)
+        let many = ConstellationLayout.build(
+            memories: [a, b, c],
+            edges: [
+                MemoryEdge(fromID: a.id, toID: b.id, relation: "r"),
+                MemoryEdge(fromID: b.id, toID: c.id, relation: "r"),
+            ]
+        )
+        #expect(many.accessibilitySummary == "Memory constellation — 3 memories, 2 connections")
+
+        let oneEdge = ConstellationLayout.build(
+            memories: [a, b],
+            edges: [MemoryEdge(fromID: a.id, toID: b.id, relation: "r")]
+        )
+        #expect(oneEdge.accessibilitySummary == "Memory constellation — 2 memories, 1 connection")
+    }
+
     @Test("every node and surviving edge is represented")
     func countsPreserved() {
         let a = mem("a", at: 1)

@@ -107,6 +107,7 @@ struct MenuBarPopover: View {
                 Button { submit(env) } label: { Image(systemName: "return") }
                     .buttonStyle(.glass)
                     .disabled(trimmed.isEmpty || env.menuBarAsk.isBusy)
+                    .accessibilityLabel("Ask M1K3")
             }
             answerView(env)
         }
@@ -227,10 +228,15 @@ private struct BarToggle: View {
     let isOn: Bool
     let action: () -> Void
 
+    /// Scales with the user's chosen text size (relative to the label below it)
+    /// instead of a fixed 15pt, so Larger Text lifts the glyph along with the
+    /// caption rather than leaving it stranded tiny beside grown text.
+    @ScaledMetric(relativeTo: .caption2) private var iconSize: CGFloat = 15
+
     var body: some View {
         Button(action: action) {
             VStack(spacing: 3) {
-                Image(systemName: systemImage).font(.system(size: 15, weight: .medium))
+                Image(systemName: systemImage).font(.system(size: iconSize, weight: .medium))
                 Text(title).font(.caption2)
             }
             .frame(maxWidth: .infinity)

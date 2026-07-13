@@ -282,6 +282,12 @@ struct ContentView: View {
                 .padding(.horizontal, 12)
                 .padding(.top, 8)
                 .transition(.move(edge: .top).combined(with: .opacity))
+                // The hero, not decoration — a labeled image element (not hidden)
+                // whose label tracks the same activity the visuals animate, so
+                // VoiceOver hears "M1K3 — Thinking" etc. as the state changes.
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(env.avatar.state.activity.accessibilityLabel)
+                .accessibilityAddTraits([.isImage, .updatesFrequently])
         }
     }
 

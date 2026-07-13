@@ -51,6 +51,10 @@ struct AvatarChatBackground: View {
         // A background must never swallow chat/scroll interaction.
         .allowsHitTesting(false)
         .animation(transition(for: resolved), value: resolved)
+        // Decorative here (unlike the avatar panel/voice hero, which ARE the
+        // content) — VoiceOver has nothing useful to say about a bloom/recede
+        // backdrop sitting behind the transcript it must never compete with.
+        .accessibilityHidden(true)
     }
 
     /// Lively spring when blooming, calm ease when receding, and NO transition

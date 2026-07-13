@@ -24,6 +24,15 @@ struct MenuBarLabel: View {
         return env.avatar.state.activity.glyphTreatment(isRecording: env.isRecording)
     }
 
+    /// The pixel glyph carries no VoiceOver name of its own; speak the same signal
+    /// the overlay dot renders. Recording wins over activity here too — the same
+    /// precedence `glyphTreatment(isRecording:)` already encodes for the dot.
+    private var accessibilityLabel: String {
+        guard let env else { return "M1K3" }
+        if env.isRecording { return "M1K3 — Recording" }
+        return env.avatar.state.activity.accessibilityLabel
+    }
+
     var body: some View {
         let treatment = treatment
         Image(nsImage: glyphStyle.image())
@@ -38,6 +47,7 @@ struct MenuBarLabel: View {
                     IndicatorDot(color: .glyphDot(treatment.dotColorName), pulses: treatment.pulses)
                 }
             }
+            .accessibilityLabel(accessibilityLabel)
     }
 }
 

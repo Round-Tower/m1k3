@@ -32,4 +32,21 @@ public enum AvatarActivity: String, CaseIterable, Sendable {
         case .error: "Error"
         }
     }
+
+    /// A VoiceOver-friendly phrase naming M1K3 and what it's doing — same cases as
+    /// `displayName`, but without the trailing ellipsis (VoiceOver reads "…" as
+    /// literal dots, not "in progress"). Composed once here so every surface that
+    /// speaks the avatar's state (the hero panel, voice mode) says the same thing.
+    public var accessibilityLabel: String {
+        let state: String
+        switch self {
+        case .idle: state = "Idle"
+        case .listening: state = "Listening"
+        case .thinking: state = "Thinking"
+        case .generating: state = "Generating"
+        case .speaking: state = "Speaking"
+        case .error: state = "Error"
+        }
+        return "M1K3 — \(state)"
+    }
 }

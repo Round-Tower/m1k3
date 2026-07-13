@@ -77,6 +77,19 @@ public struct ConstellationModel: Sendable, Equatable {
     public func node(_ id: UUID) -> ConstellationNode? {
         nodes.first { $0.id == id }
     }
+
+    /// A VoiceOver summary of the whole 3D field — the pragmatic first cut for a
+    /// scene that has no per-node accessibility elements yet (per-node 3D a11y is
+    /// its own, much bigger, piece of work). Pure + tested so the pluralisation is
+    /// pinned; the RealityKit view just applies it as one combined element's label.
+    public var accessibilitySummary: String {
+        "Memory constellation — \(Self.count(nodes.count, singular: "memory", plural: "memories")), " +
+            "\(Self.count(edges.count, singular: "connection", plural: "connections"))"
+    }
+
+    private static func count(_ n: Int, singular: String, plural: String) -> String {
+        "\(n) \(n == 1 ? singular : plural)"
+    }
 }
 
 public enum ConstellationLayout {

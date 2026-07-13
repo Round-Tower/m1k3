@@ -50,6 +50,9 @@ struct GreetingCard: View {
     /// the Kokoro tier we haven't fetched.
     @State private var sampleSpoken = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// Scales the drop-zone glyph with Dynamic Type instead of a fixed 30pt, so
+    /// Larger Text grows the whole invitation, not just the two text lines under it.
+    @ScaledMetric(relativeTo: .title3) private var dropIconSize: CGFloat = 30
 
     var body: some View {
         VStack(spacing: 20) {
@@ -129,7 +132,7 @@ struct GreetingCard: View {
         Button(action: onImport) {
             VStack(spacing: 8) {
                 Image(systemName: "tray.and.arrow.down")
-                    .font(.system(size: 30, weight: .semibold))
+                    .font(.system(size: dropIconSize, weight: .semibold))
                     .foregroundStyle(.tint)
                 Text("Drop a file on me.")
                     .font(.title3.weight(.semibold))

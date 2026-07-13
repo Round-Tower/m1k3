@@ -39,7 +39,27 @@ extension View {
     /// Lay a sheet of adaptive Liquid Glass behind this view, filling the window
     /// (ignores safe areas). Pair with `.scrollContentBackground(.hidden)` on any
     /// Form / List inside so their opaque backing doesn't cover the glass.
+    ///
+    /// Honours Reduce Transparency: this is the one composition point every
+    /// window-backing surface routes through, so fixing it here covers the whole
+    /// app rather than each of its ~11 call sites individually.
     func glassBackdrop(_ material: NSVisualEffectView.Material = .underWindowBackground) -> some View {
-        background(GlassBackground(material: material).ignoresSafeArea())
+        background(ReduceTransparencyAwareGlassBackground(material: material).ignoresSafeArea())
+    }
+}
+
+/// Swaps the translucent `GlassBackground` for a flat system window colour when
+/// the user has Reduce Transparency on — same "base of the window" role, no
+/// see-through desktop/content bleeding behind it.
+private struct ReduceTransparencyAwareGlassBackground: View {
+    let material: NSVisualEffectView.Material
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+
+    var body: some View {
+        if reduceTransparency {
+            Color(nsColor: .windowBackgroundColor)
+        } else {
+            GlassBackground(material: material)
+        }
     }
 }

@@ -91,6 +91,13 @@ public struct ConstellationView: View {
             .frame(maxWidth: .infinity)
             .clipShape(RoundedRectangle(cornerRadius: 16))
             .gesture(spinGesture)
+            // Pragmatic first cut: the field is opaque to VoiceOver (no per-node 3D
+            // elements — that's its own, bigger, piece of work), so speak the shape
+            // of what's here as one combined element and point at the accessible
+            // list alternative rather than leaving the scene silent.
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(model.accessibilitySummary)
+            .accessibilityHint("For a full accessible list, open Memories from the toolbar.")
         }
     }
 
