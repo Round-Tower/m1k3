@@ -65,10 +65,13 @@ extension AppEnvironment {
         let egressAllowed = ChatEgressConsent.networkAllowed(
             persisted: defaults.object(forKey: ChatEgressConsent.defaultsKey) as? Bool
         )
+        // "Prefer Apple on-device" was cut from Settings (2026-07-13, Kev-approved):
+        // auto-route always prefers M1K3's own tuned model — stronger at open chat —
+        // over Apple's on-device model. Always false, not read from a dead control.
         let route = M1K3BrainRouter.route(
             appleIntelligenceAvailable: Self.afmAvailabilityProbe.isAvailable,
             networkAllowed: egressAllowed,
-            preferAppleOnDevice: defaults.bool(forKey: Self.preferAppleOnDeviceKey)
+            preferAppleOnDevice: false
         )
 
         let routedTier: BrainTier
@@ -275,54 +278,57 @@ extension AppEnvironment {
                 )
             },
             maxIterationsProvider: {
-                // Thermal "ease off" is opt-in; OFF → the plain base, so the
-                // default path is byte-identical. ON → CoolHeadPolicy trims the
-                // agent loop to the LIVE thermal level (read fresh each turn from
-                // the shared state — never snapshotted; the responder is built once
-                // and long-lived). The brain is NEVER swapped (CoolHeadPolicy
-                // doctrine: ease effort, not identity).
-                guard Self.coolHeadEaseEnabled() else { return Self.baseMaxIterations }
-                return CoolHeadPolicy.maxIterations(
+                // Prudent Compute is ALWAYS ON (2026-07-13, Kev-approved — was an
+                // opt-in toggle): CoolHeadPolicy trims the agent loop to the LIVE
+                // thermal level (read fresh each turn from the shared state — never
+                // snapshotted; the responder is built once and long-lived). The
+                // brain is NEVER swapped (CoolHeadPolicy doctrine: ease effort,
+                // not identity). At `.full` (the common case) this is byte-identical
+                // to the old default-OFF path.
+                CoolHeadPolicy.maxIterations(
                     for: Self.coolHead.withLock(\.level),
                     base: Self.baseMaxIterations
                 )
             },
             defersHeavyGenerationProvider: {
-                // Same opt-in as the iteration cap. ON + minimal (critical thermal)
-                // → the turn skips the heavy retrieve+generate and answers with an
-                // honest deferral. OFF or any lighter level → false, so the default
-                // path is byte-identical. Level is the LIVE thermal state advanced by
-                // applyCoolHeadIfEnabled() at the top of THIS send().
-                guard Self.coolHeadEaseEnabled() else { return false }
-                return CoolHeadPolicy.defersHeavyGeneration(Self.coolHead.withLock(\.level))
+                // Same always-on doctrine as the iteration cap above. Only bites at
+                // `.minimal` (critical thermal / low-power) — the turn skips the
+                // heavy retrieve+generate and answers with an honest deferral.
+                // Level is the LIVE thermal state advanced by applyCoolHead() at the
+                // top of THIS send().
+                CoolHeadPolicy.defersHeavyGeneration(Self.coolHead.withLock(\.level))
             }
         )
     }
 
     // MARK: - Cool Head (thermal effort easing — ADR: never swaps the brain)
 
-    /// Opt-in: ease M1K3's EFFORT when the Mac is under thermal / low-power
-    /// pressure (trim the agent loop). Default OFF → byte-identical. It deliberately
-    /// never swaps the chosen brain — a mid-conversation reload would dump the KV +
-    /// persona caches and rename M1K3's own identity for the sake of the room
-    /// temperature (CoolHeadPolicy's signed reasoning).
-    nonisolated static let coolHeadEaseKey = "compute.coolHeadEase"
-
-    nonisolated static func coolHeadEaseEnabled() -> Bool {
-        UserDefaults.standard.bool(forKey: coolHeadEaseKey) // default OFF
-    }
+    // Prudent Compute (2026-07-13, Kev-approved): ALWAYS ON — was an opt-in
+    // Settings toggle ("Ease off when my Mac runs hot"), now standing behaviour.
+    // Eases M1K3's EFFORT when the Mac is under thermal / low-power pressure
+    // (trims the agent loop); at `.full` (the common case) the effect is
+    // byte-identical to the old default-OFF path. It deliberately never swaps
+    // the chosen brain — a mid-conversation reload would dump the KV + persona
+    // caches and rename M1K3's own identity for the sake of the room temperature
+    // (CoolHeadPolicy's signed reasoning).
 
     /// Whether speculative/background work — the launch reindex, the embedder
     /// pre-warm, the constellation poll cadence — should run right now.
     ///
+    /// ALWAYS-ON since the 2026-07-13 cut (was behind the cool-head opt-in, so
+    /// this gate was a no-op for default users): serious/critical heat OR Low
+    /// Power Mode now defers background work for everyone. Every deferring call
+    /// site arms `armThermalRecovery()`, which watches BOTH the thermal AND the
+    /// power-state notifications — a Mac on battery-saver recovers its deferred
+    /// work the moment Low Power Mode lifts, not at the next relaunch.
+    ///
     /// Reads `ProcessInfo` DIRECTLY, not the chat-turn `coolHead.level`: that level
-    /// is only advanced by `applyCoolHeadIfEnabled()` on a `send()`, so at launch
+    /// is only advanced by `applyCoolHead()` on a `send()`, so at launch
     /// and window-open seams (which fire outside any turn) it is stale/default
     /// `.full` — gating background work on it would be a silent no-op. Point-in-time
     /// (`target`, no hysteresis): a background check is one-shot, not a conversation
-    /// to keep from flapping. Opt-in OFF → always allowed (byte-identical default).
+    /// to keep from flapping.
     nonisolated static func backgroundWorkAllowed() -> Bool {
-        guard coolHeadEaseEnabled() else { return true }
         let info = ProcessInfo.processInfo
         let level = CoolHeadPolicy.target(
             thermal: info.thermalState, lowPower: info.isLowPowerModeEnabled
@@ -359,11 +365,11 @@ extension AppEnvironment {
 
     /// Advance the thermal state for this turn — degrade immediately, recover only
     /// after a sustained relief streak (hysteresis, so a bouncing thermalState can't
-    /// flap the effort level). A NO-OP when the opt-in is off. Called beside
-    /// `applyAutoRouteIfEnabled` at the top of `send`, so the level is current for
-    /// the SAME turn's `maxIterationsProvider` read.
-    func applyCoolHeadIfEnabled() {
-        guard Self.coolHeadEaseEnabled() else { return }
+    /// flap the effort level). Called beside `applyAutoRouteIfEnabled` at the top
+    /// of `send`, so the level is current for the SAME turn's
+    /// `maxIterationsProvider` read. Always runs — Prudent Compute is standing
+    /// behaviour, not opt-in (2026-07-13).
+    func applyCoolHead() {
         let info = ProcessInfo.processInfo
         let target = CoolHeadPolicy.target(
             thermal: info.thermalState,
