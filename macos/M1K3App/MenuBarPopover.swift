@@ -30,6 +30,39 @@ struct MenuBarPopover: View {
     @FocusState private var askFocused: Bool
 
     var body: some View {
+        ZStack {
+            // The pet as the WHOLE hero: the companion fills the popover and
+            // reacts — blooming at idle/speaking, receding while you type or
+            // read — via the same TDD'd ChatBackdropTreatment the main chat
+            // backdrop uses (scrim, reduce-motion, low-power, hit-testing
+            // and VoiceOver-hidden all inherited).
+            if let env, hasChosenBrain {
+                AvatarChatBackground(env: env, isTyping: composing(env))
+            }
+            content
+        }
+        .frame(width: 320)
+        .frame(minHeight: heroHeight)
+        .glassBackdrop()
+    }
+
+    /// Room for the pet when it's on stage; automatic (compact) while waking
+    /// or pre-hello, where there is no backdrop to give room to.
+    private var heroHeight: CGFloat? {
+        env != nil && hasChosenBrain ? 400 : nil
+    }
+
+    /// Recede the backdrop whenever legibility matters more than the pet:
+    /// composing a question, or an ask in flight / an answer on screen.
+    private func composing(_ env: AppEnvironment) -> Bool {
+        if !question.isEmpty { return true }
+        switch env.menuBarAsk.state {
+        case .idle: return false
+        case .asking, .answer, .failed: return true
+        }
+    }
+
+    private var content: some View {
         VStack(alignment: .leading, spacing: 12) {
             if let env {
                 header(env)
@@ -62,32 +95,18 @@ struct MenuBarPopover: View {
                     .symbolEffect(.variableColor.iterative)
                 Divider()
             }
+            Spacer(minLength: 0)
             footer
         }
         .padding(14)
-        .frame(width: 320)
-        .glassBackdrop()
     }
 
-    // MARK: Header — the pet · brain · runtime · live activity
+    // MARK: Header — brain · runtime · live activity (the pet is the backdrop)
 
-    /// The companion IS the status: a live, state-reflective avatar strip
-    /// (breathing idle, thinking, red while recording) instead of a static
-    /// glyph — the digital-pet read. Tapping the pet opens the main window
-    /// (the pet-summons-the-home gesture). AvatarSurface self-handles the
-    /// chosen companion, the constellation, and the no-companion fallback.
     private func header(_ env: AppEnvironment) -> some View {
         let treatment = env.avatar.state.activity.glyphTreatment(isRecording: env.isRecording)
-        return HStack(spacing: 10) {
-            Button { openMainWindow() } label: {
-                AvatarSurface(env: env)
-                    .frame(width: 64, height: 64)
-                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel(env.avatar.state.activity.accessibilityLabel)
-            .accessibilityHint("Opens the main window")
-            .help("Open M1K3")
+        return HStack(spacing: 9) {
+            Image(nsImage: MenuBarGlyphStyle.pixelM.image(pointSize: 20))
             VStack(alignment: .leading, spacing: 1) {
                 Text(env.selectedBrain.displayName).font(.pixelTitle)
                 Text(Self.runtimeLabel(env.selectedRuntime))
