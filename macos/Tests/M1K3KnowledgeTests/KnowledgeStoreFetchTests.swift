@@ -57,4 +57,36 @@ struct KnowledgeStoreFetchTests {
         }
         #expect(try store.allItems(limit: 3).count == 3)
     }
+
+    @Test("setKind quarantines a document and hides it from default listing")
+    func setKindQuarantines() throws {
+        let store = try KnowledgeStore()
+        let id = try seed(store, title: "Internal QA", kind: .document, chunks: ["qa"])
+        #expect(try store.allItems().count == 1)
+        let changed = try store.setKind(id: id, newKind: .quarantined)
+        #expect(changed == true)
+        // Invisible from default listing after quarantine
+        #expect(try store.allItems().count == 0)
+        // Visible with explicit kind
+        #expect(try store.allItems(kind: .quarantined).count == 1)
+        // item(id:) still returns it — kind filter is the caller's job
+        #expect(try store.item(id: id)?.kind == .quarantined)
+    }
+
+    @Test("setKind restores a quarantined item and makes it visible again")
+    func setKindRestores() throws {
+        let store = try KnowledgeStore()
+        let id = try seed(store, title: "QA Note", kind: .quarantined, chunks: ["internal"])
+        #expect(try store.allItems().count == 0)
+        let restored = try store.setKind(id: id, newKind: .document)
+        #expect(restored == true)
+        #expect(try store.allItems().count == 1)
+        #expect(try store.allItems(kind: .quarantined).count == 0)
+    }
+
+    @Test("setKind returns false for an unknown id")
+    func setKindMissingId() throws {
+        let store = try KnowledgeStore()
+        #expect(try store.setKind(id: UUID(), newKind: .quarantined) == false)
+    }
 }

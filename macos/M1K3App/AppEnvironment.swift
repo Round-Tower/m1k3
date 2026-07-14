@@ -1050,6 +1050,34 @@ final class AppEnvironment {
         return deleted
     }
 
+    /// Re-tag a document's kind and coordinate Spotlight.
+    ///
+    /// Quarantining always deindexes from ⌘Space (same unconditional rule as
+    /// delete — the OS index survives container resets; a ghost is worse than
+    /// a redundant deindex call). Restoring re-donates if Spotlight is enabled
+    /// and the new kind is donatable (the policy owns the allowlist).
+    ///
+    /// Returns true if the item was found; false if the id was unknown.
+    @discardableResult
+    func tagDocument(id: UUID, kind: KnowledgeKind) -> Bool {
+        let changed = (try? store.setKind(id: id, newKind: kind)) ?? false
+        guard changed else { return false }
+        refreshCounts()
+        // Fire-and-forget like deleteDocument's deindex. Known bound: a rapid
+        // quarantine↔restore on the same id can land its two Spotlight ops out
+        // of order, leaving the OS index briefly opposite to the DB — the next
+        // launch reconcile rebuilds from store state and self-heals it (the
+        // same guarantee that covers container-reset orphans).
+        Task {
+            if kind == .quarantined {
+                await spotlightDeindex(id: id)
+            } else {
+                await spotlightDonate(itemID: id)
+            }
+        }
+        return true
+    }
+
     // MARK: - Calls
 
     /// Import a plain-text transcript as a call: parse → summarise → persist

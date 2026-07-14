@@ -269,6 +269,22 @@ public final class KnowledgeStore: @unchecked Sendable {
         }
     }
 
+    /// Update a persisted item's kind in-place. Returns true if the item was
+    /// found and updated; false if no row matched the id.
+    ///
+    /// Embeddings and FTS are unchanged — index segregation is kind-based, not
+    /// physical removal, so vectors stay valid if the kind is changed back later.
+    @discardableResult
+    public func setKind(id: UUID, newKind: KnowledgeKind) throws -> Bool {
+        try dbQueue.write { db in
+            try db.execute(
+                sql: "UPDATE knowledge_items SET kind = ? WHERE id = ?",
+                arguments: [newKind.rawValue, id.uuidString]
+            )
+            return db.changesCount > 0
+        }
+    }
+
     /// Hard-delete an item and every row it owns (chunks, FTS mirror,
     /// embeddings). Manual cascade — FTS5 doesn't honour ON DELETE CASCADE.
     @discardableResult
