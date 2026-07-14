@@ -300,13 +300,11 @@ struct ContentView: View {
                 Spacer()
                 GreetingCard(
                     userName: UserDefaults.standard.string(forKey: AppEnvironment.userDisplayNameKey),
-                    brainName: env.selectedBrain.displayName,
                     isFirstSession: !greetingFirstTurnDone,
                     isIngesting: env.isIngesting,
                     lastIngestedTitle: env.lastIngestedTitle,
                     onImport: { showImporter = true },
-                    onSend: { text in Task { await env.send(text) } },
-                    onSpeakSample: { Task { await env.speakSample() } }
+                    onSend: { text in Task { await env.send(text) } }
                 )
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }

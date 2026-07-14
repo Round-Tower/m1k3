@@ -58,7 +58,7 @@ struct YouSettingsPane: View {
     private var aboutYouSection: some View {
         Section {
             TextField(
-                "Nothing yet — tell M1K3 who you are",
+                "Tell M1K3 who you are",
                 text: $profileDraft,
                 axis: .vertical
             )
@@ -79,7 +79,7 @@ struct YouSettingsPane: View {
             Text("About you")
         } footer: {
             Text("What M1K3 knows about you — it rides every conversation's "
-                + "system prompt. Stored on this Mac only, never retrieved or "
+                + "system prompt. Stored on this machine only, never retrieved or "
                 + "cited, yours to edit or clear.")
                 .font(.caption).foregroundStyle(.secondary)
         }
@@ -97,7 +97,7 @@ struct YouSettingsPane: View {
         } footer: {
             Text("When a conversation ends, M1K3 extracts durable facts about "
                 + "you — preferences, decisions, people — into its memory. "
-                + "Fully on-device. You can review and delete every memory.")
+                + "Fully on-device. You can review and erase every memory.")
                 .font(.caption).foregroundStyle(.secondary)
         }
         .sheet(isPresented: $showMemories) {
