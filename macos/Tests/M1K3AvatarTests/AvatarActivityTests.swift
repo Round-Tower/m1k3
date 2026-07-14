@@ -27,4 +27,17 @@ struct AvatarActivityTests {
             #expect(!activity.displayName.isEmpty)
         }
     }
+
+    @Test("accessibilityLabel names M1K3 and the activity, without the ellipsis VoiceOver would read literally")
+    func accessibilityLabelIsSpoken() {
+        #expect(AvatarActivity.idle.accessibilityLabel == "M1K3 — Idle")
+        #expect(AvatarActivity.thinking.accessibilityLabel == "M1K3 — Thinking")
+        #expect(AvatarActivity.speaking.accessibilityLabel == "M1K3 — Speaking")
+        #expect(AvatarActivity.listening.accessibilityLabel == "M1K3 — Listening")
+        #expect(AvatarActivity.generating.accessibilityLabel == "M1K3 — Generating")
+        #expect(AvatarActivity.error.accessibilityLabel == "M1K3 — Error")
+        for activity in AvatarActivity.allCases {
+            #expect(!activity.accessibilityLabel.contains("…"))
+        }
+    }
 }

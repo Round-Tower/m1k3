@@ -261,6 +261,9 @@ struct CRTOverlay: View {
             }
         }
         .allowsHitTesting(false)
+        // Purely decorative — scanlines/band/vignette add nothing VoiceOver should
+        // announce; the meaningful label lives on the avatar surface underneath.
+        .accessibilityHidden(true)
     }
 
     /// Thin dark lines every few points; opacity breathes ~8% at a slow beat so
