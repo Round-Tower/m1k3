@@ -55,6 +55,33 @@ struct ChatEvalScorerTests {
         #expect(check(score, "no think-leak")?.outcome == .pass)
     }
 
+    @Test("a FOLLOWUPS trailer is reported (skip, never fails) and stripped before judging")
+    func followUpsReportedAndStripped() {
+        let exp = EvalExpectation(mustContainAny: ["paris"])
+        let score = ChatEvalScorer.score(
+            fixture: fixture(.openChat, exp),
+            observation: EvalObservation(
+                rawText: "The answer is Paris.\nFOLLOWUPS: [\"What about London?\", \"Population?\"]"
+            )
+        )
+        #expect(check(score, "follow-ups")?.outcome == .skip)
+        #expect(check(score, "follow-ups")?.detail == "2 offered")
+        // The trailer must not pollute a content check run against the answer.
+        #expect(check(score, "contains expected")?.outcome == .pass)
+        #expect(score.passed)
+    }
+
+    @Test("no FOLLOWUPS trailer reports zero, never fails — omission can be correct")
+    func noFollowUpsNeverFails() {
+        let score = ChatEvalScorer.score(
+            fixture: fixture(.refusal, .init(mustRefuse: true)),
+            observation: EvalObservation(rawText: "I don't share my own wiring.")
+        )
+        #expect(check(score, "follow-ups")?.outcome == .skip)
+        #expect(check(score, "follow-ups")?.detail == "0 offered")
+        #expect(score.passed)
+    }
+
     // MARK: - Expectation checks
 
     @Test("contains-any passes on a case-insensitive hit and fails when absent")

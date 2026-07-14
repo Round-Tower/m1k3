@@ -112,7 +112,12 @@ struct M1K3PersonaTests {
             core: M1K3Persona.corePrompt + "\n" + M1K3Persona.currentDateLine(september),
             profile: nil
         )
-        #expect(worst.count < 3800) // v2 floor ≈3250 + the 2026-06-30 character pass (≈+270, VOICE breathes); cached on MLX, negligible on mini
+        // v2 floor ≈3250 + the 2026-06-30 character pass (≈+270, VOICE breathes)
+        // + the 2026-07-14 FOLLOW-UPS section (≈+50, always-on across ALL tiers
+        // per Kev's call — including Mini/AFM, which pays this every turn
+        // uncached, not just the cached MLX prefix). Ceiling raised deliberately,
+        // not chased down to fit stale wording.
+        #expect(worst.count < 3900)
     }
 
     @Test("voice exemplars are four illustration beats with no copyable turn scaffolding")

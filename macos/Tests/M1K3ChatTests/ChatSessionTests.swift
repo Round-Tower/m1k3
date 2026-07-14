@@ -236,6 +236,28 @@ struct ChatSessionTests {
         #expect(session.messages.last?.text == "The seal failed")
     }
 
+    @Test("a FOLLOWUPS trailer is parsed into followUps and stripped from the text")
+    func parsesFollowUps() async {
+        let session = ChatSession(responder: DeltaResponder(
+            sources: [],
+            deltas: ["The seal failed.\n", "FOLLOWUPS: ", "[\"Why did it fail?\", \"How do I fix it?\"]"]
+        ))
+        await session.send("what happened?")
+
+        let answer = session.messages.last
+        #expect(answer?.text == "The seal failed.")
+        #expect(answer?.followUps == ["Why did it fail?", "How do I fix it?"])
+    }
+
+    @Test("no FOLLOWUPS trailer means no follow-ups, text unchanged")
+    func noFollowUpsWhenAbsent() async {
+        let session = ChatSession(responder: DeltaResponder(sources: [], deltas: ["ok"]))
+        await session.send("hi")
+
+        #expect(session.messages.last?.followUps == [])
+        #expect(session.messages.last?.text == "ok")
+    }
+
     @Test("attaches retrieved sources to the assistant message")
     func attachesSources() async {
         let src = fixtureSource("The hydraulic seal failed under load.")
