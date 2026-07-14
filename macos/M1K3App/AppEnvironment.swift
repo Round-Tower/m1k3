@@ -326,6 +326,9 @@ final class AppEnvironment {
     /// cooldown re-run is armed exactly once (Cool Head knob 1). Lives on the main
     /// class body — extensions can't hold stored properties.
     private var thermalRecoveryObserver: NSObjectProtocol?
+    /// Companion observer: Low Power Mode toggles fire the power-state
+    /// notification, not the thermal one (see armThermalRecovery).
+    private var powerRecoveryObserver: NSObjectProtocol?
     /// Last embeddings-switch outcome, surfaced to Settings.
     private(set) var embeddingStatus: String?
 
@@ -1300,18 +1303,17 @@ extension AppEnvironment {
 
     // MARK: - Thermal recovery (Cool Head knob 1: pause background work under heat)
 
-    /// Arm a one-shot cooldown re-trigger: when the Mac's thermal state changes to
-    /// one that again allows background work, re-run the deferred reindex + warm.
-    /// Idempotent — only one observer is ever live. Without this, a reindex deferred
-    /// under heat would wait until the NEXT launch (stale vectors until then); this
-    /// closes that window as soon as the machine cools.
+    /// Arm a one-shot cooldown re-trigger: when the Mac's thermal state OR Low
+    /// Power Mode changes such that background work is again allowed, re-run the
+    /// deferred reindex + warm. Idempotent — only one observer pair is ever live.
+    /// Without this, a reindex deferred under heat would wait until the NEXT
+    /// launch (stale vectors until then). BOTH signals matter since the 07-13
+    /// always-on cut: `backgroundWorkAllowed()` defers on Low Power Mode too, and
+    /// battery-saver toggles fire the power notification, not the thermal one —
+    /// watching only thermal would strand a battery-saver Mac's deferred work.
     func armThermalRecovery() {
         guard thermalRecoveryObserver == nil else { return }
-        thermalRecoveryObserver = NotificationCenter.default.addObserver(
-            forName: ProcessInfo.thermalStateDidChangeNotification,
-            object: nil,
-            queue: .main
-        ) { [weak self] _ in
+        let recover: @Sendable (Notification) -> Void = { [weak self] _ in
             Task { @MainActor [weak self] in
                 guard let self else { return }
                 // All self-gate on backgroundWorkAllowed; re-arm stays a no-op.
@@ -1325,16 +1327,32 @@ extension AppEnvironment {
                 if case .ready = self.modelLoad {
                     self.warmPersonaPrefixAfterLoad(self.currentMLXProvider)
                 }
-                // Cooled back down and the work ran → tear the observer down.
+                // Cooled back down and the work ran → tear the observers down.
                 if Self.backgroundWorkAllowed() { self.disarmThermalRecovery() }
             }
         }
+        thermalRecoveryObserver = NotificationCenter.default.addObserver(
+            forName: ProcessInfo.thermalStateDidChangeNotification,
+            object: nil,
+            queue: .main,
+            using: recover
+        )
+        powerRecoveryObserver = NotificationCenter.default.addObserver(
+            forName: Notification.Name.NSProcessInfoPowerStateDidChange,
+            object: nil,
+            queue: .main,
+            using: recover
+        )
     }
 
     private func disarmThermalRecovery() {
         if let observer = thermalRecoveryObserver {
             NotificationCenter.default.removeObserver(observer)
             thermalRecoveryObserver = nil
+        }
+        if let observer = powerRecoveryObserver {
+            NotificationCenter.default.removeObserver(observer)
+            powerRecoveryObserver = nil
         }
     }
 
