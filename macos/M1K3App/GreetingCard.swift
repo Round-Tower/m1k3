@@ -12,7 +12,7 @@
 //  labeled toolbar button).
 //
 //  Three states, driven by the ingest seam:
-//    landing  — hero drop-zone (also clickable → importer) + two smaller chips
+//    landing  — hero drop-zone (also clickable → importer) + one chip
 //    busy     — "Reading it now…" while `isIngesting`
 //    ask      — "Got it." + [Ask me about it]: one tap to the first whoa, no
 //               blank-page "what do I type" moment. The canned ask renders as
@@ -21,8 +21,7 @@
 //  Mounted only while the transcript is empty (the existing EmptyChatView
 //  slot), so it survives ingest (no messages yet) and vanishes on the first
 //  turn. Returning users get the quiet variant — no "Nice to meet you" replay
-//  on every new conversation, and the caption reads the LIVE brain name, never
-//  a hardcoded "Mini".
+//  on every new conversation.
 //
 //  Signed: Kev + claude-fable-5, 2026-07-03, Confidence 0.85 (state logic is
 //  plain; look/feel + the ask-state beat are verify-by-launch). Prior: none
@@ -34,7 +33,6 @@ struct GreetingCard: View {
     /// Display name from HelloView (nil → greet without one).
     let userName: String?
     /// The LIVE brain's display name for the disclosure caption.
-    let brainName: String
     /// First session ever (no completed turn yet) → the full greeting;
     /// otherwise the quiet returning-user variant.
     let isFirstSession: Bool
@@ -119,7 +117,10 @@ struct GreetingCard: View {
             .padding(.vertical, 28)
             .padding(.horizontal, 24)
             .frame(maxWidth: .infinity)
-            .glassEffect()
+            // Explicit shape: bare glassEffect() defaults to a Capsule — every
+            // glass call site in the app passes .rect, and the hit target two
+            // lines down is the same 20pt rect (review catch).
+            .glassEffect(.regular, in: .rect(cornerRadius: 20))
             .contentShape(.rect(cornerRadius: 20))
         }
         .buttonStyle(.plain)

@@ -300,7 +300,6 @@ struct ContentView: View {
                 Spacer()
                 GreetingCard(
                     userName: UserDefaults.standard.string(forKey: AppEnvironment.userDisplayNameKey),
-                    brainName: env.selectedBrain.displayName,
                     isFirstSession: !greetingFirstTurnDone,
                     isIngesting: env.isIngesting,
                     lastIngestedTitle: env.lastIngestedTitle,
