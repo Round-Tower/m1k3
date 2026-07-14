@@ -10,6 +10,9 @@
 //  The tiny menu-bar glyph + popover header are deliberately NOT routed through
 //  here: a live 3D constellation can't render at 16–20px, so those stay M1K3's
 //  pixel-M brand mark (the app's identity, distinct from the companion skin).
+//  (The popover's full-bleed BACKDROP is different — since 2026-07-14 it routes
+//  through here via AvatarChatBackground at hero size, same as the main chat;
+//  the not-at-glyph-size rule above is about tiny renders, not the popover.)
 //
 //  Signed: Kev + claude-opus-4-8, 2026-06-17, Confidence 0.75 (DRY selection +
 //  compiles; the look in each surface is verify-by-run). Prior: VoiceModeView.avatar.
