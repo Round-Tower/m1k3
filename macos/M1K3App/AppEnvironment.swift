@@ -330,6 +330,16 @@ final class AppEnvironment {
     /// Last embeddings-switch outcome, surfaced to Settings.
     private(set) var embeddingStatus: String?
 
+    /// OS (CoreSpotlight) index adapter behind the pure seam — the reconcile
+    /// and hooks live in AppEnvironment+Spotlight.swift. On the main class
+    /// body because extensions can't hold stored properties.
+    let spotlightIndexer: any SystemSearchIndexing = SpotlightIndexer()
+    /// The unit-pinned reconcile state machine (latch + coalesce + ordering);
+    /// shares the adapter with the per-item donate/deindex hooks.
+    /// @ObservationIgnored: infrastructure, not UI state — and @Observable's
+    /// macro rejects a bare `lazy` stored property.
+    @ObservationIgnored private(set) lazy var spotlightReconciler = SpotlightReconciler(indexer: spotlightIndexer)
+
     /// Runtime picker selection. Changing it re-points the inference façade at
     /// the chosen backend for the next turn — no rebuild, transcript preserved.
     var selectedRuntime: RuntimeOption = .appleFoundationModels {
@@ -641,10 +651,11 @@ final class AppEnvironment {
                 result = try await ingester.ingest(title: title, text: text, sourceRef: url.absoluteString)
             }
             let dedup = result.wasDeduped ? " (already indexed)" : ""
-            lastIngestStatus = "Indexed “\(title)” — \(result.chunkCount) chunks\(dedup)."
+            lastIngestStatus = "Indexed “\(title)” — \(result.chunkCount) chunks\(dedup).\(spotlightTipIfDue())"
             lastIngestedTitle = title
             lastIngestFailed = false
             refreshCounts()
+            if !result.wasDeduped { await spotlightDonate(itemID: result.itemID) }
         } catch {
             lastIngestStatus = "Couldn’t index “\(title)”: \(error.localizedDescription)"
             lastIngestFailed = true
@@ -1028,7 +1039,12 @@ final class AppEnvironment {
     @discardableResult
     func deleteDocument(id: UUID) -> Bool {
         let deleted = (try? store.deleteItem(id: id)) ?? false
-        if deleted { refreshCounts() }
+        if deleted {
+            refreshCounts()
+            // A delete must never leave a ⌘Space ghost — deindex regardless
+            // of the Spotlight toggle (always safe, cheap).
+            Task { await spotlightDeindex(id: id) }
+        }
         return deleted
     }
 
@@ -1064,8 +1080,9 @@ final class AppEnvironment {
                 fullSummary: summary.full
             )
             try callPersistence.save(session)
-            try await callIngester.ingest(session)
+            let ingestResult = try await callIngester.ingest(session)
             refreshCounts()
+            if !ingestResult.wasDeduped { await spotlightDonate(itemID: session.id) }
             lastCallStatus = "Imported “\(title)” — \(segments.count) lines, indexed + searchable."
         } catch {
             lastCallStatus = "Couldn’t import “\(title)”: \(error.localizedDescription)"
@@ -1081,8 +1098,12 @@ final class AppEnvironment {
     @discardableResult
     func deleteCall(id: UUID) -> Bool {
         let removed = (try? callPersistence.delete(id: id)) ?? false
-        _ = try? store.deleteItem(id: id) // the call's graph node shares the call UUID
+        // The call's graph node shares the call UUID; the Spotlight entry
+        // tracks the KNOWLEDGE item, so the deindex gates on this delete —
+        // never leave a ⌘Space ghost, never drop a still-live item either.
+        let knowledgeDeleted = (try? store.deleteItem(id: id)) ?? false
         if removed { refreshCounts() }
+        if knowledgeDeleted { Task { await spotlightDeindex(id: id) } }
         return removed
     }
 }
@@ -1237,6 +1258,7 @@ extension AppEnvironment {
         await reindexIfEmbedderChanged()
         await reindexMemoryGraphIfNeeded()
         await warmEmbedderOnLaunch()
+        await syncSpotlightIndex()
     }
 
     /// Route the MLX backend's per-turn stats onto the streaming assistant message
@@ -1284,7 +1306,7 @@ extension AppEnvironment {
     /// Idempotent — only one observer is ever live. Without this, a reindex deferred
     /// under heat would wait until the NEXT launch (stale vectors until then); this
     /// closes that window as soon as the machine cools.
-    private func armThermalRecovery() {
+    func armThermalRecovery() {
         guard thermalRecoveryObserver == nil else { return }
         thermalRecoveryObserver = NotificationCenter.default.addObserver(
             forName: ProcessInfo.thermalStateDidChangeNotification,
@@ -1297,6 +1319,7 @@ extension AppEnvironment {
                 await self.reindexIfEmbedderChanged()
                 await self.reindexMemoryGraphIfNeeded()
                 await self.warmEmbedderOnLaunch()
+                await self.syncSpotlightIndex()
                 // The prefix warm's cooldown retry (its hot-skip arms this
                 // observer, same as the reindexes) — only once a brain is
                 // actually warm to seed from. Idempotent: a cache hit no-ops.

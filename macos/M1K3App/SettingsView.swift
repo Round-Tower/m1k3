@@ -22,6 +22,7 @@ struct SettingsView: View {
     @Environment(LaunchAtLogin.self) private var launchAtLogin
     @AppStorage(ReadingMode.storageKey) private var readingMode: ReadingMode = .standard
     @AppStorage(AppEnvironment.webSearchEnabledKey) private var webSearchEnabled = true
+    @AppStorage(AppEnvironment.spotlightIndexingKey) private var spotlightIndexing = false
     @AppStorage(AppEnvironment.memoryAutoCaptureKey) private var memoryAutoCapture = true
     @AppStorage(AppEnvironment.soundEffectsEnabledKey) private var soundEffectsEnabled = true
     @AppStorage(AppEnvironment.notifyOnLongTurnKey) private var notifyOnLongTurn = false
@@ -268,6 +269,25 @@ struct SettingsView: View {
                     this Mac — every search and page read is shown in the reply as \
                     it happens. Date, time and system status tools stay fully local. \
                     Off means the model can't see the web tools at all.
+                    """)
+                    .font(.caption).foregroundStyle(.secondary)
+                }
+
+                Section {
+                    Toggle("Show documents & calls in Spotlight", isOn: $spotlightIndexing)
+                        .onChange(of: spotlightIndexing) {
+                            Task { await env.syncSpotlightIndex() }
+                        }
+                } header: {
+                    Text("Spotlight")
+                } footer: {
+                    // Multiline literal, not a + chain (see the web-search footer above).
+                    Text("""
+                    Puts the titles of your imported documents and calls into \
+                    this Mac's Spotlight (⌘Space) search — never their contents, \
+                    and never your memories. The index is private to this Mac \
+                    and managed by macOS. Turning this off removes everything \
+                    M1K3 donated.
                     """)
                     .font(.caption).foregroundStyle(.secondary)
                 }
