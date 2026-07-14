@@ -27,6 +27,16 @@ struct AgeBandMappingTests {
         #expect(AgeBand(lowerBound: nil, upperBound: 12) == .under13)
     }
 
+    @Test func nilLowerBoundIsUnder13RegardlessOfBoundConvention() {
+        // Review-caught fail-open: "nil lowerBound = below the lowest gate" is
+        // the API's meaning, full stop. If Apple's upper bound turns out to be
+        // inclusive — (nil, 13), not (nil, 12) — a numeric `< 13` guard would
+        // silently hand the YOUNGEST band full adult capability. Any
+        // (nil, .some) is under13; only (nil, nil) is truly no-signal.
+        #expect(AgeBand(lowerBound: nil, upperBound: 13) == .under13)
+        #expect(AgeBand(lowerBound: nil, upperBound: 5) == .under13)
+    }
+
     @Test func thirteenToFifteen() {
         #expect(AgeBand(lowerBound: 13, upperBound: 15) == .teen13to15)
     }

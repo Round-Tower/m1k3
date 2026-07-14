@@ -41,7 +41,11 @@ public enum AgeBand: String, CaseIterable, Codable, Sendable {
     /// `upperBound == nil` means at/above the highest.
     public init(lowerBound: Int?, upperBound: Int?) {
         switch (lowerBound, upperBound) {
-        case (nil, let .some(upper)) where upper < 13: self = .under13
+        // A nil lowerBound MEANS "below the lowest gate" (the API contract) —
+        // matched without a numeric guard, so an inclusive-vs-exclusive upper
+        // bound ((nil, 13) vs (nil, 12)) can never fail the youngest band OPEN
+        // to adult capability (review-caught). Only (nil, nil) is no-signal.
+        case (nil, .some): self = .under13
         case (.some(13 ... 15), _): self = .teen13to15
         case (.some(16 ... 17), _): self = .teen16to17
         case let (.some(lower), _) where lower >= 18: self = .adult
