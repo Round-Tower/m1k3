@@ -13,6 +13,7 @@
 
 import AppKit
 import M1K3Avatar
+import M1K3Calls
 import M1K3Chat
 import SwiftUI
 
@@ -25,6 +26,7 @@ struct MenuBarPopover: View {
     /// before HelloView has run (Mini-first makes readiness instant).
     @AppStorage(AppEnvironment.hasChosenBrainKey) private var hasChosenBrain = false
     @State private var question = ""
+    @State private var showRecordConsent = false
     @FocusState private var askFocused: Bool
 
     var body: some View {
@@ -67,12 +69,25 @@ struct MenuBarPopover: View {
         .glassBackdrop()
     }
 
-    // MARK: Header — brain · runtime · live activity
+    // MARK: Header — the pet · brain · runtime · live activity
 
+    /// The companion IS the status: a live, state-reflective avatar strip
+    /// (breathing idle, thinking, red while recording) instead of a static
+    /// glyph — the digital-pet read. Tapping the pet opens the main window
+    /// (the pet-summons-the-home gesture). AvatarSurface self-handles the
+    /// chosen companion, the constellation, and the no-companion fallback.
     private func header(_ env: AppEnvironment) -> some View {
         let treatment = env.avatar.state.activity.glyphTreatment(isRecording: env.isRecording)
-        return HStack(spacing: 9) {
-            Image(nsImage: MenuBarGlyphStyle.pixelM.image(pointSize: 20))
+        return HStack(spacing: 10) {
+            Button { openMainWindow() } label: {
+                AvatarSurface(env: env)
+                    .frame(width: 64, height: 64)
+                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(env.avatar.state.activity.accessibilityLabel)
+            .accessibilityHint("Opens the main window")
+            .help("Open M1K3")
             VStack(alignment: .leading, spacing: 1) {
                 Text(env.selectedBrain.displayName).font(.pixelTitle)
                 Text(Self.runtimeLabel(env.selectedRuntime))
@@ -90,7 +105,9 @@ struct MenuBarPopover: View {
             Circle()
                 .fill(active ? Color.glyphDot(treatment.dotColorName) : Color.secondary.opacity(0.4))
                 .frame(width: 6, height: 6)
-            Text(active ? env.avatar.state.activity.displayName : "Ready")
+            // statusLabel carries the same recording-wins precedence as the
+            // dot colour — the old displayName read "Idle" beside a red dot.
+            Text(env.avatar.state.activity.statusLabel(isRecording: env.isRecording))
                 .font(.caption2).foregroundStyle(.secondary)
         }
     }
@@ -141,17 +158,67 @@ struct MenuBarPopover: View {
     // MARK: Quick toggles
 
     private func toggles(_ env: AppEnvironment) -> some View {
+        VStack(spacing: 8) {
+            HStack(spacing: 8) {
+                BarToggle(title: "Voice", systemImage: "waveform", isOn: env.isVoiceModeActive) {
+                    if env.isVoiceModeActive { env.exitVoiceMode() } else { env.enterVoiceMode() }
+                }
+                .keyboardShortcut("v", modifiers: [.command, .shift])
+                BarToggle(title: "Web", systemImage: "globe", isOn: webSearchEnabled) {
+                    webSearchEnabled.toggle()
+                }
+                BarToggle(title: "MCP", systemImage: "powerplug", isOn: env.mcpHost.isRunning) {
+                    env.mcpHost.setEnabled(!env.mcpHost.isEnabled)
+                }
+                BarToggle(
+                    title: env.isRecording ? "Stop" : "Record",
+                    systemImage: env.isRecording ? "stop.circle.fill" : "record.circle",
+                    isOn: env.isRecording,
+                    tint: .red
+                ) {
+                    recordTapped(env)
+                }
+                .accessibilityLabel(env.isRecording ? "Stop recording" : "Record call")
+            }
+            if showRecordConsent {
+                recordConsentRow(env)
+            }
+        }
+    }
+
+    /// Inline consent — a confirmationDialog inside a menu-bar window can
+    /// silently fail to present (the Form/leaf-Button macOS trap), so the
+    /// popover asks in place. Same scopes and copy as the chat toolbar.
+    private func recordConsentRow(_ env: AppEnvironment) -> some View {
         HStack(spacing: 8) {
-            BarToggle(title: "Voice", systemImage: "waveform", isOn: env.isVoiceModeActive) {
-                if env.isVoiceModeActive { env.exitVoiceMode() } else { env.enterVoiceMode() }
+            Text("Record this call?").font(.caption)
+            Spacer()
+            Button("Once") {
+                showRecordConsent = false
+                Task { await env.affirmConsentAndRecord(scope: .once) }
             }
-            .keyboardShortcut("v", modifiers: [.command, .shift])
-            BarToggle(title: "Web", systemImage: "globe", isOn: webSearchEnabled) {
-                webSearchEnabled.toggle()
+            Button("Always") {
+                showRecordConsent = false
+                Task { await env.affirmConsentAndRecord(scope: .remembered) }
             }
-            BarToggle(title: "MCP", systemImage: "powerplug", isOn: env.mcpHost.isRunning) {
-                env.mcpHost.setEnabled(!env.mcpHost.isEnabled)
-            }
+            Button("Cancel") { showRecordConsent = false }
+                .foregroundStyle(.secondary)
+        }
+        .font(.caption)
+        .buttonStyle(.glass)
+    }
+
+    private func recordTapped(_ env: AppEnvironment) {
+        switch CallRecordAction.resolve(
+            isRecording: env.isRecording,
+            isPreAuthorised: env.recordingPreAuthorised
+        ) {
+        case .stop:
+            Task { await env.stopRecording() }
+        case .start:
+            Task { await env.startRecording() }
+        case .requestConsent:
+            showRecordConsent = true
         }
     }
 
@@ -226,6 +293,9 @@ private struct BarToggle: View {
     let title: String
     let systemImage: String
     let isOn: Bool
+    /// The on-state colour — accent for ordinary toggles, red for recording
+    /// (matching the glyph treatment's recording-wins red).
+    var tint: Color = .accentColor
     let action: () -> Void
 
     /// Scales with the user's chosen text size (relative to the label below it)
@@ -240,7 +310,7 @@ private struct BarToggle: View {
                 Text(title).font(.caption2)
             }
             .frame(maxWidth: .infinity)
-            .foregroundStyle(isOn ? Color.accentColor : Color.secondary)
+            .foregroundStyle(isOn ? tint : Color.secondary)
             .padding(.vertical, 6)
         }
         .buttonStyle(.glass)
