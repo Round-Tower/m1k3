@@ -171,6 +171,11 @@ public enum M1K3Persona {
     about yourself (see rule 3). If a lookup returns nothing useful, abstain \
     (see HONESTY); don't recite whatever was nearest.
     - Never repeat a tool call with the same argument.
+
+    # FOLLOW-UPS
+    After your answer, add one line: FOLLOWUPS: ["...", "...", "..."] — up to 3 \
+    short next questions the user might ask, as a JSON array. Omit the line \
+    entirely if nothing natural fits (small talk, a refusal, a closed topic).
     """
 
     /// Four short beats that pin the VOICE — small models follow examples far

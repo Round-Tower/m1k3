@@ -165,7 +165,15 @@ public enum ChatEvalScorer {
     public static func score(
         fixture: ChatEvalFixture, observation: EvalObservation, latencyCeilingMS: Int? = nil
     ) -> ChatEvalScore {
-        let answer = ThinkStripper.strip(observation.rawText)
+        // Strip the FOLLOWUPS trailer (2026-07-14, always-on across all tiers)
+        // BEFORE any content check runs — otherwise "contains expected"/"length
+        // band" would score against text still carrying a raw JSON fragment,
+        // now that every brain is instructed to emit one. followUpCount is
+        // informational only (see the "follow-ups" check below): whether a
+        // GIVEN fixture should have offered one is genuinely fixture-dependent
+        // (a refusal correctly emits none), so it's reported, not pass/failed.
+        let (answer, followUps) = FollowUpSplit.split(ThinkStripper.strip(observation.rawText))
+        let followUpCount = followUps.count
         let lowered = answer.lowercased()
         var checks: [EvalCheck] = []
 
@@ -181,6 +189,16 @@ public enum ChatEvalScorer {
             name: "no think-leak",
             outcome: leaked ? .fail : .pass,
             detail: leaked ? "raw think tag in answer" : ""
+        ))
+        // Never a scoring gate — omitting follow-ups is CORRECT on a refusal or
+        // closed topic (the persona's own instruction). This exists so a
+        // cross-brain CHATEVAL run reports compliance (does this brain offer
+        // any at all, on which fixture kinds) without inventing a per-fixture
+        // "should have" verdict the scorer can't honestly make.
+        checks.append(EvalCheck(
+            name: "follow-ups",
+            outcome: .skip,
+            detail: "\(followUpCount) offered"
         ))
 
         let exp = fixture.expectation

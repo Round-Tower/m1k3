@@ -123,6 +123,13 @@ public struct ChatMessage: Identifiable, Sendable, Equatable, Codable {
     /// so it isn't persisted and old transcripts still decode. MLX tiers only
     /// (Apple Foundation Models / Mini reports no throughput).
     public var metrics: GenerationMetrics?
+    /// Up to 3 tap-to-send follow-up questions, parsed from the model's
+    /// trailing "FOLLOWUPS: [...]" line (see FollowUpSplit). Deliberately NOT
+    /// persisted (Kev's call, 2026-07-14): a reloaded old conversation showing
+    /// stale suggested questions for a topic the chat has moved past would
+    /// read as odd, not helpful. Transient — omitted from `CodingKeys` like
+    /// `citations`/`activityLabel`/`metrics`, so old transcripts still decode.
+    public var followUps: [String] = []
     public var status: Status
 
     enum CodingKeys: String, CodingKey {
@@ -295,6 +302,20 @@ public final class ChatSession {
             // streams into the disclosure as it happens instead of flashing
             // raw <think> text in the bubble until the stream ends.
             var splitter = StreamingReasoningSplitter()
+            // Chained onto the reasoning splitter's live answer: hides the
+            // "FOLLOWUPS: [...]" trailer as it streams in, same reasoning as
+            // the think-tag split — a raw JSON fragment flashing in the
+            // bubble for a frame is the exact leak class this project has
+            // repeatedly hardened against. Fed the CUMULATIVE splitter.answer
+            // each iteration; StreamFold.delta normalises it like any other
+            // cumulative-or-delta source. Known theoretical gap (named, not
+            // fixed): StreamingReasoningSplitter's lone-</think> retro-move
+            // can shrink splitter.answer back to "" (Qwen3.5's pre-opened-
+            // think quirk) — this splitter has no "un-feed" and would go
+            // stale until real growth resumes. Zero live exposure today: Lil
+            // and Big both moved off Qwen3.5 to dense Qwen3 / gemma-4
+            // (2026-06-22), neither of which hits this path.
+            var followUpSplitter = StreamingFollowUpSplitter()
             // Coalesce token updates to ~display rate: a fast model emits chunks
             // faster than the eye (or the transcript ForEach) can keep up, and
             // invalidating @Observable state per token is the visible-reasoning
@@ -303,8 +324,9 @@ public final class ChatSession {
             var flushGate = StreamFlushGate()
             for await chunk in stream {
                 splitter.feed(chunk)
+                followUpSplitter.feed(splitter.answer)
                 guard flushGate.shouldFlush(at: .now) else { continue }
-                let liveAnswer = splitter.answer
+                let liveAnswer = followUpSplitter.answer
                 let liveReasoning = splitter.reasoning
                 update(assistantID) {
                     $0.text = liveAnswer
@@ -315,11 +337,12 @@ public final class ChatSession {
             }
             splitter.finish()
             // Now the full text is in hand. Re-split the RAW stream as the
-            // final authority (the live splitter only drives rendering), then
+            // final authority (the live splitters only drive rendering), then
             // strip invented citations from the ANSWER and record the
             // validated ones. The allow-list covers BOTH the injected sources
             // and whatever the model retrieved itself via search_knowledge.
-            let (reasoning, answer) = ReasoningSplit.split(splitter.raw)
+            let (reasoning, answerWithFollowUps) = ReasoningSplit.split(splitter.raw)
+            let (answer, followUps) = FollowUpSplit.split(answerWithFollowUps)
             let mergedSources = Self.mergeSources(sources, responder.collectedSources())
             let validation = await CitationValidator.validate(responseText: answer, against: mergedSources)
             update(assistantID) {
@@ -329,6 +352,7 @@ public final class ChatSession {
                 $0.text = MessageTextPolish.polish(validation.cleanedText)
                 $0.citations = validation.validated
                 $0.reasoning = reasoning
+                $0.followUps = followUps
                 $0.activityLabel = nil
                 $0.status = .complete
             }

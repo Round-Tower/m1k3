@@ -22,6 +22,11 @@ struct MessageView: View {
     /// Called with a link found in the turn when the user taps its chip — opens it
     /// in the review panel rather than launching an external browser.
     var onOpenLink: (URL) -> Void = { _ in }
+    /// Called with a suggested follow-up's text when the user taps its chip —
+    /// sends it as the next turn immediately, no typing required. The
+    /// accessibility win FOLLOWUPS exists for: fewer keystrokes, fewer chances
+    /// to mistype, a tap instead of a sentence.
+    var onSendFollowUp: (String) -> Void = { _ in }
     /// The active brain's context window, so the stats footer can show how full it
     /// got. 0 = unknown (the footer then shows the raw token count).
     var contextWindow: Int = 0
@@ -84,6 +89,7 @@ struct MessageView: View {
                         sourcesDisclosure
                     }
                     linkChips
+                    followUpChips
                     statsFooter
                 }
                 // Animate the panel's insertion/removal + the live think→answer
@@ -264,6 +270,23 @@ struct MessageView: View {
         }
     }
 
+    /// Up to 3 tap-to-send follow-up questions (FollowUpSplit parsed them from
+    /// the model's trailing FOLLOWUPS: line — see ChatSession.send). Gated on
+    /// `.complete`: they're only ever populated once the stream finishes, but
+    /// this is the same explicit belt-and-braces the reasoning disclosure and
+    /// citation footer already use rather than relying on that alone.
+    @ViewBuilder
+    private var followUpChips: some View {
+        if case .complete = message.status, !message.followUps.isEmpty {
+            VStack(alignment: .leading, spacing: 4) {
+                ForEach(message.followUps, id: \.self) { question in
+                    FollowUpChip(question: question) { onSendFollowUp(question) }
+                }
+            }
+            .padding(.horizontal, 6)
+        }
+    }
+
     /// Only the sources the answer actually cited. Retrieval is promiscuous (top-K
     /// over the grounding floor), so an off-topic chunk can ride along; show what
     /// was REFERENCED, not everything read — matching HeadlessAsk's footer. The
@@ -345,6 +368,30 @@ private struct LinkChip: View {
     private var label: String {
         guard let host = url.host else { return url.absoluteString }
         return host.hasPrefix("www.") ? String(host.dropFirst(4)) : host
+    }
+}
+
+/// A tap-to-send suggested follow-up question — the accessibility win is
+/// fewer keystrokes, so the button's own label says what tapping it DOES
+/// ("Ask: <question>"), not just the question text, matching the #30 a11y
+/// sweep's "say the action, not just the content" idiom.
+private struct FollowUpChip: View {
+    let question: String
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 6) {
+                Image(systemName: "arrow.turn.down.right").imageScale(.small)
+                Text(question)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+            }
+            .font(.caption.weight(.medium))
+        }
+        .buttonStyle(.glass)
+        .help("Ask this")
+        .accessibilityLabel("Ask: \(question)")
     }
 }
 
