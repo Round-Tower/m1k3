@@ -186,13 +186,53 @@ enum ChatEvalStage {
         }
     }
 
+    /// LIVE-PATH arm (M1K3_SELFTEST_CHATEVAL_LIVE_PATH=1): open-chat and
+    /// code-gen fixtures run through AgentRAGResponder — the SAME prompt stack
+    /// the chat UI assembles every turn (retrieve-first grounding head + RULES
+    /// incl. the generative carve-out + the agent loop with tools) — instead of
+    /// bare `provider.generate`. The bare arm isolates the persona; this arm
+    /// measures what a user actually gets. Motivated 2026-07-15: the bare
+    /// code-gen arm scored green while live chat was reported deflecting
+    /// code asks — the gap between the two arms IS the scaffolding's cost.
+    /// Tools are the deterministic canned stubs (same palette as tool-use), so
+    /// a run never touches the network; the store is fresh in-memory and empty
+    /// (closed book, same as the bare arm).
+    private static var livePathRequested: Bool {
+        SelfTestEnv.value("M1K3_SELFTEST_CHATEVAL_LIVE_PATH") == "1"
+    }
+
+    private static func livePathObservation(
+        _ fixture: ChatEvalFixture, provider: any InferenceProvider,
+        start: ContinuousClock.Instant, clock: ContinuousClock
+    ) async throws -> EvalObservation {
+        // path: nil → in-memory GRDB, fresh per fixture (the groundedObservation
+        // pattern). Empty on purpose: retrieval finds nothing, so the prompt
+        // carries the live "No stored knowledge was injected" head — the exact
+        // shape a closed-book code ask meets in production.
+        let store = try KnowledgeStore()
+        let responder = AgentRAGResponder(
+            store: store, embedder: MLXEmbeddingService(), provider: provider,
+            tools: toolPalette, maxIterations: 3
+        )
+        let (_, stream) = try await responder.answerStreaming(fixture.prompt)
+        var raw = ""
+        for await piece in stream {
+            raw += piece
+        }
+        return EvalObservation(
+            rawText: raw,
+            latencyMS: milliseconds(clock.now - start)
+        )
+    }
+
     /// Run the requested brains across the requested fixtures, emit per-fixture
     /// detail live, then the headline matrix.
     static func run(emit: @escaping (String) -> Void) async {
         let kinds = selectedKinds()
         let fixtureCount = ChatEvalFixtures.all.filter { kinds?.contains($0.kind) ?? true }.count
         emit("• chateval: \(fixtureCount) fixture(s) × \(selectedBrains().count) brain(s)"
-            + (kinds.map { " [kinds: \($0.map(\.label).sorted().joined(separator: ","))]" } ?? "") + "…")
+            + (kinds.map { " [kinds: \($0.map(\.label).sorted().joined(separator: ","))]" } ?? "")
+            + (livePathRequested ? " [LIVE PATH: AgentRAGResponder]" : "") + "…")
         var runs: [ChatEvalReport.BrainRun] = []
         for tier in selectedBrains() {
             emit("• chateval brain \(tier.rawValue) (\(tier.displayName))…")
@@ -299,6 +339,17 @@ enum ChatEvalStage {
                     return try await afmNativeToolScore(fixture, start: start, clock: clock)
                 }
                 return try await toolObservationScore(fixture, provider: provider, start: start, clock: clock)
+            // NB: `where` binds per-pattern, so it must be repeated — a single
+            // trailing `where` would leave .openChat matching unconditionally.
+            case .openChat where livePathRequested, .codeGen where livePathRequested:
+                // The live-path arm: the production AgentRAGResponder stack
+                // (grounding head + RULES + agent loop) instead of bare generate.
+                let observation = try await livePathObservation(
+                    fixture, provider: provider, start: start, clock: clock
+                )
+                return ChatEvalScorer.score(
+                    fixture: fixture, observation: observation, latencyCeilingMS: latencyCeilingMS
+                )
             case .openChat, .reasoning, .codeGen, .refusal, .security:
                 // codeGen is closed-book like the others: plain generate, then the
                 // scorer checks artifact markers + must-comply (no tools, no seed).

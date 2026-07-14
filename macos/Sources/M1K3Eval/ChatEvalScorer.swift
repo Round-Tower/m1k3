@@ -200,6 +200,19 @@ public enum ChatEvalScorer {
             outcome: .skip,
             detail: "\(followUpCount) offered"
         ))
+        // Informational, like follow-ups: does the ANSWER BODY end with a
+        // question? Measured on the trailer-stripped answer on purpose —
+        // next-questions belong in the FOLLOWUPS line (rendered as chips), so
+        // a body that still signs off with "Want me to…?" is the over-asking
+        // pattern this column exists to make visible. Never pass/failed: a
+        // trailing question is correct on a genuinely ambiguous ask.
+        let trimmedAnswer = answer.trimmingCharacters(in: .whitespacesAndNewlines)
+        let endsWithQuestion = trimmedAnswer.hasSuffix("?")
+        checks.append(EvalCheck(
+            name: "ends-with-question",
+            outcome: .skip,
+            detail: endsWithQuestion ? "yes — …\(trimmedAnswer.suffix(40))" : "no"
+        ))
 
         let exp = fixture.expectation
 
