@@ -1060,8 +1060,14 @@ final class AppEnvironment {
     /// Returns true if the item was found; false if the id was unknown.
     @discardableResult
     func tagDocument(id: UUID, kind: KnowledgeKind) -> Bool {
-        guard (try? store.setKind(id: id, newKind: kind)) == true else { return false }
+        let changed = (try? store.setKind(id: id, newKind: kind)) ?? false
+        guard changed else { return false }
         refreshCounts()
+        // Fire-and-forget like deleteDocument's deindex. Known bound: a rapid
+        // quarantine↔restore on the same id can land its two Spotlight ops out
+        // of order, leaving the OS index briefly opposite to the DB — the next
+        // launch reconcile rebuilds from store state and self-heals it (the
+        // same guarantee that covers container-reset orphans).
         Task {
             if kind == .quarantined {
                 await spotlightDeindex(id: id)
