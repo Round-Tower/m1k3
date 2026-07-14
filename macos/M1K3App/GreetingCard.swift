@@ -44,15 +44,8 @@ struct GreetingCard: View {
 
     let onImport: () -> Void
     let onSend: (String) -> Void
-    let onSpeakSample: () -> Void
 
-    /// Post-sample honesty beat: pays off "Hear my voice" without overpromising
-    /// the Kokoro tier we haven't fetched.
-    @State private var sampleSpoken = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    /// Scales the drop-zone glyph with Dynamic Type instead of a fixed 30pt, so
-    /// Larger Text grows the whole invitation, not just the two text lines under it.
-    @ScaledMetric(relativeTo: .title3) private var dropIconSize: CGFloat = 30
 
     var body: some View {
         VStack(spacing: 20) {
@@ -73,26 +66,11 @@ struct GreetingCard: View {
             if lastIngestedTitle == nil, !isIngesting {
                 HStack(spacing: 10) {
                     chip("What can you do?") { onSend("What can you do?") }
-                    chip("Hear my voice") {
-                        onSpeakSample()
-                        sampleSpoken = true
-                    }
-                }
-                if sampleSpoken {
-                    Text("That's my everyday voice.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .transition(.opacity)
                 }
             }
-
-            Text("Running on \(brainName) · change anytime in Settings")
-                .font(.caption)
-                .foregroundStyle(.secondary)
         }
         .animation(reduceMotion ? nil : .spring(response: 0.4, dampingFraction: 0.85), value: isIngesting)
         .animation(reduceMotion ? nil : .spring(response: 0.4, dampingFraction: 0.85), value: lastIngestedTitle)
-        .animation(.default, value: sampleSpoken)
         .padding(24)
         .onChange(of: lastIngestedTitle) { _, title in
             // The morph is visual; VoiceOver users need the same beat spoken.
@@ -131,9 +109,6 @@ struct GreetingCard: View {
     private var dropZone: some View {
         Button(action: onImport) {
             VStack(spacing: 8) {
-                Image(systemName: "tray.and.arrow.down")
-                    .font(.system(size: dropIconSize, weight: .semibold))
-                    .foregroundStyle(.tint)
                 Text("Drop a file on me.")
                     .font(.title3.weight(.semibold))
                 Text("PDF or text — read here, never uploaded.")
@@ -144,10 +119,7 @@ struct GreetingCard: View {
             .padding(.vertical, 28)
             .padding(.horizontal, 24)
             .frame(maxWidth: .infinity)
-            .background {
-                RoundedRectangle(cornerRadius: 20)
-                    .strokeBorder(.tint.opacity(0.6), style: StrokeStyle(lineWidth: 2, dash: [8]))
-            }
+            .glassEffect()
             .contentShape(.rect(cornerRadius: 20))
         }
         .buttonStyle(.plain)
