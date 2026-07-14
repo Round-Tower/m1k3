@@ -41,3 +41,23 @@ struct AvatarActivityTests {
         }
     }
 }
+
+struct AvatarActivityStatusLabelTests {
+    @Test func recordingWinsOverEveryActivity() {
+        // The menu-bar badge showed the red recording dot but said "Idle" —
+        // the text must carry the same recording-wins precedence the glyph
+        // treatment already pins.
+        for activity in AvatarActivity.allCases {
+            #expect(activity.statusLabel(isRecording: true) == "Recording")
+        }
+    }
+
+    @Test func idleReadsAsReadyWhenNotRecording() {
+        #expect(AvatarActivity.idle.statusLabel(isRecording: false) == "Ready")
+    }
+
+    @Test func activeStatesUseTheirDisplayNameWhenNotRecording() {
+        #expect(AvatarActivity.thinking.statusLabel(isRecording: false) == "Thinking…")
+        #expect(AvatarActivity.speaking.statusLabel(isRecording: false) == "Speaking…")
+    }
+}

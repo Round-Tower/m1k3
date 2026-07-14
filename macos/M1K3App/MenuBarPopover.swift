@@ -13,6 +13,7 @@
 
 import AppKit
 import M1K3Avatar
+import M1K3Calls
 import M1K3Chat
 import SwiftUI
 
@@ -25,9 +26,43 @@ struct MenuBarPopover: View {
     /// before HelloView has run (Mini-first makes readiness instant).
     @AppStorage(AppEnvironment.hasChosenBrainKey) private var hasChosenBrain = false
     @State private var question = ""
+    @State private var showRecordConsent = false
     @FocusState private var askFocused: Bool
 
     var body: some View {
+        ZStack {
+            // The pet as the WHOLE hero: the companion fills the popover and
+            // reacts — blooming at idle/speaking, receding while you type or
+            // read — via the same TDD'd ChatBackdropTreatment the main chat
+            // backdrop uses (scrim, reduce-motion, low-power, hit-testing
+            // and VoiceOver-hidden all inherited).
+            if let env, hasChosenBrain {
+                AvatarChatBackground(env: env, isTyping: composing(env))
+            }
+            content
+        }
+        .frame(width: 320)
+        .frame(minHeight: heroHeight)
+        .glassBackdrop()
+    }
+
+    /// Room for the pet when it's on stage; automatic (compact) while waking
+    /// or pre-hello, where there is no backdrop to give room to.
+    private var heroHeight: CGFloat? {
+        env != nil && hasChosenBrain ? 400 : nil
+    }
+
+    /// Recede the backdrop whenever legibility matters more than the pet:
+    /// composing a question, or an ask in flight / an answer on screen.
+    private func composing(_ env: AppEnvironment) -> Bool {
+        if !question.isEmpty { return true }
+        switch env.menuBarAsk.state {
+        case .idle: return false
+        case .asking, .answer, .failed: return true
+        }
+    }
+
+    private var content: some View {
         VStack(alignment: .leading, spacing: 12) {
             if let env {
                 header(env)
@@ -60,14 +95,13 @@ struct MenuBarPopover: View {
                     .symbolEffect(.variableColor.iterative)
                 Divider()
             }
+            Spacer(minLength: 0)
             footer
         }
         .padding(14)
-        .frame(width: 320)
-        .glassBackdrop()
     }
 
-    // MARK: Header — brain · runtime · live activity
+    // MARK: Header — brain · runtime · live activity (the pet is the backdrop)
 
     private func header(_ env: AppEnvironment) -> some View {
         let treatment = env.avatar.state.activity.glyphTreatment(isRecording: env.isRecording)
@@ -90,7 +124,9 @@ struct MenuBarPopover: View {
             Circle()
                 .fill(active ? Color.glyphDot(treatment.dotColorName) : Color.secondary.opacity(0.4))
                 .frame(width: 6, height: 6)
-            Text(active ? env.avatar.state.activity.displayName : "Ready")
+            // statusLabel carries the same recording-wins precedence as the
+            // dot colour — the old displayName read "Idle" beside a red dot.
+            Text(env.avatar.state.activity.statusLabel(isRecording: env.isRecording))
                 .font(.caption2).foregroundStyle(.secondary)
         }
     }
@@ -141,17 +177,67 @@ struct MenuBarPopover: View {
     // MARK: Quick toggles
 
     private func toggles(_ env: AppEnvironment) -> some View {
+        VStack(spacing: 8) {
+            HStack(spacing: 8) {
+                BarToggle(title: "Voice", systemImage: "waveform", isOn: env.isVoiceModeActive) {
+                    if env.isVoiceModeActive { env.exitVoiceMode() } else { env.enterVoiceMode() }
+                }
+                .keyboardShortcut("v", modifiers: [.command, .shift])
+                BarToggle(title: "Web", systemImage: "globe", isOn: webSearchEnabled) {
+                    webSearchEnabled.toggle()
+                }
+                BarToggle(title: "MCP", systemImage: "powerplug", isOn: env.mcpHost.isRunning) {
+                    env.mcpHost.setEnabled(!env.mcpHost.isEnabled)
+                }
+                BarToggle(
+                    title: env.isRecording ? "Stop" : "Record",
+                    systemImage: env.isRecording ? "stop.circle.fill" : "record.circle",
+                    isOn: env.isRecording,
+                    tint: .red
+                ) {
+                    recordTapped(env)
+                }
+                .accessibilityLabel(env.isRecording ? "Stop recording" : "Record call")
+            }
+            if showRecordConsent {
+                recordConsentRow(env)
+            }
+        }
+    }
+
+    /// Inline consent — a confirmationDialog inside a menu-bar window can
+    /// silently fail to present (the Form/leaf-Button macOS trap), so the
+    /// popover asks in place. Same scopes and copy as the chat toolbar.
+    private func recordConsentRow(_ env: AppEnvironment) -> some View {
         HStack(spacing: 8) {
-            BarToggle(title: "Voice", systemImage: "waveform", isOn: env.isVoiceModeActive) {
-                if env.isVoiceModeActive { env.exitVoiceMode() } else { env.enterVoiceMode() }
+            Text("Record this call?").font(.caption)
+            Spacer()
+            Button("Once") {
+                showRecordConsent = false
+                Task { await env.affirmConsentAndRecord(scope: .once) }
             }
-            .keyboardShortcut("v", modifiers: [.command, .shift])
-            BarToggle(title: "Web", systemImage: "globe", isOn: webSearchEnabled) {
-                webSearchEnabled.toggle()
+            Button("Always") {
+                showRecordConsent = false
+                Task { await env.affirmConsentAndRecord(scope: .remembered) }
             }
-            BarToggle(title: "MCP", systemImage: "powerplug", isOn: env.mcpHost.isRunning) {
-                env.mcpHost.setEnabled(!env.mcpHost.isEnabled)
-            }
+            Button("Cancel") { showRecordConsent = false }
+                .foregroundStyle(.secondary)
+        }
+        .font(.caption)
+        .buttonStyle(.glass)
+    }
+
+    private func recordTapped(_ env: AppEnvironment) {
+        switch CallRecordAction.resolve(
+            isRecording: env.isRecording,
+            isPreAuthorised: env.recordingPreAuthorised
+        ) {
+        case .stop:
+            Task { await env.stopRecording() }
+        case .start:
+            Task { await env.startRecording() }
+        case .requestConsent:
+            showRecordConsent = true
         }
     }
 
@@ -226,6 +312,9 @@ private struct BarToggle: View {
     let title: String
     let systemImage: String
     let isOn: Bool
+    /// The on-state colour — accent for ordinary toggles, red for recording
+    /// (matching the glyph treatment's recording-wins red).
+    var tint: Color = .accentColor
     let action: () -> Void
 
     /// Scales with the user's chosen text size (relative to the label below it)
@@ -240,7 +329,7 @@ private struct BarToggle: View {
                 Text(title).font(.caption2)
             }
             .frame(maxWidth: .infinity)
-            .foregroundStyle(isOn ? Color.accentColor : Color.secondary)
+            .foregroundStyle(isOn ? tint : Color.secondary)
             .padding(.vertical, 6)
         }
         .buttonStyle(.glass)

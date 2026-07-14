@@ -33,6 +33,15 @@ public enum AvatarActivity: String, CaseIterable, Sendable {
         }
     }
 
+    /// The one-word status a badge shows — with the SAME recording-wins
+    /// precedence `glyphTreatment(isRecording:)` pins for the dot colour, so
+    /// the text can never say "Idle" beside a red recording dot. Idle reads
+    /// as "Ready" (the badge idiom), active states keep their displayName.
+    public func statusLabel(isRecording: Bool) -> String {
+        if isRecording { return "Recording" }
+        return self == .idle ? "Ready" : displayName
+    }
+
     /// A VoiceOver-friendly phrase naming M1K3 and what it's doing — same cases as
     /// `displayName`, but without the trailing ellipsis (VoiceOver reads "…" as
     /// literal dots, not "in progress"). Composed once here so every surface that
