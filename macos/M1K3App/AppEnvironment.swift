@@ -657,10 +657,28 @@ final class AppEnvironment {
             lastIngestedTitle = title
             lastIngestFailed = false
             refreshCounts()
+            scheduleIngestStatusDismissal(of: lastIngestStatus)
             if !result.wasDeduped { await spotlightDonate(itemID: result.itemID) }
         } catch {
+            // Failures deliberately do NOT auto-dismiss — a failed drop must
+            // stay visible until the next ingest replaces it (the banner
+            // pierces the greeting-card suppression for the same reason).
             lastIngestStatus = "Couldn’t index “\(title)”: \(error.localizedDescription)"
             lastIngestFailed = true
+        }
+    }
+
+    /// Success banners are a moment, not a fixture: auto-clear after a beat.
+    /// Compare-and-clear so a newer ingest's status is never clobbered by an
+    /// older banner's timer. Also the fix for the stale-resurrection bug: the
+    /// banner is suppressed while the GreetingCard is up, so an uncleared
+    /// status would POP UP when the first sent message retires the card —
+    /// after the moment has passed — and then never leave.
+    private func scheduleIngestStatusDismissal(of status: String?, after seconds: Double = 8) {
+        Task { [weak self] in
+            try? await Task.sleep(for: .seconds(seconds))
+            guard let self, !self.lastIngestFailed, self.lastIngestStatus == status else { return }
+            self.lastIngestStatus = nil
         }
     }
 
