@@ -22,6 +22,7 @@ import Foundation
 import M1K3Chat
 import M1K3Inference
 import M1K3Knowledge
+import M1K3LanguageModel
 import M1K3MLX
 import MLXEmbedders
 
@@ -88,6 +89,17 @@ enum SelfTest {
     private static func milliseconds(_ duration: Duration) -> Int {
         let parts = duration.components
         return Int(parts.seconds * 1000) + Int(parts.attoseconds / 1_000_000_000_000_000)
+    }
+
+    /// Raw OS thermal + low-power reads, folded through the SAME
+    /// `CoolHeadPolicy.target` the live app calls — so a memloop reading
+    /// `.serious` reports "would cap to .eased" rather than a bare enum name
+    /// the reader has to translate themselves.
+    private static func thermalSnapshotDescription(label: String) -> String {
+        let info = ProcessInfo.processInfo
+        let level = CoolHeadPolicy.target(thermal: info.thermalState, lowPower: info.isLowPowerModeEnabled)
+        return "\(label) thermal: state=\(info.thermalState) lowPower=\(info.isLowPowerModeEnabled) "
+            + "coolHeadTarget=\(level)"
     }
 
     /// Append a line to the report file immediately so progress survives an
@@ -272,15 +284,26 @@ enum SelfTest {
             // runs generations back-to-back, so a growing footprint here is
             // exactly the unbounded-Metal-cache pathology; a flat one means the
             // budget holds.
+            //
+            // Also emits ProcessInfo.thermalState/isLowPowerModeEnabled per
+            // iteration (2026-07-14, the gemma-4-12B-as-Big candidacy): the
+            // reactive safety net (CoolHeadPolicy, live in
+            // AppEnvironment+ChatHistory.swift) is model-agnostic, but nobody
+            // has measured whether a bigger model's sustained decode actually
+            // pushes THIS Mac into .serious/.critical faster than e4b did —
+            // set M1K3_SELFTEST_MODEL to the candidate and a loop count long
+            // enough to see a real thermal trajectory, not just RAM.
             if let loops = SelfTestEnv.value("M1K3_SELFTEST_MEMLOOP")
                 .flatMap(Int.init), loops > 0
             {
                 emit(MLXMemoryBudget.snapshotDescription(label: "memloop start"))
+                emit(thermalSnapshotDescription(label: "memloop start"))
                 for index in 1 ... loops {
                     _ = try await llm.generate(
                         prompt: "In two sentences, explain fact #\(index) about industrial conveyor maintenance."
                     )
                     emit(MLXMemoryBudget.snapshotDescription(label: "memloop gen \(index)"))
+                    emit(thermalSnapshotDescription(label: "memloop gen \(index)"))
                 }
             }
 
@@ -382,7 +405,43 @@ enum SelfTest {
             await MemGraphEvalStage.run(emit: emit)
         }
 
+        // 9. Optional Gemma-4 vision spike (M1K3_SELFTEST_VISION=1 +
+        //    M1K3_SELFTEST_VISION_IMAGE=<path>): loads gemma-4-e4b through
+        //    MLXVLM — NOT the production MLXLLM path MLXGemmaProvider uses,
+        //    which strips vision weights at load — and reports whether it can
+        //    actually see an image, the measured per-image token cost, and RAM
+        //    with the vision tower resident. See GemmaVisionSpike.swift.
+        if SelfTestEnv.value("M1K3_SELFTEST_VISION") == "1" {
+            await runGemmaVisionSpike()
+        }
+
         emit("=== END SELF-TEST ===")
+    }
+
+    /// The GemmaVisionSpike probe: two turns on one MLXVLM-loaded container
+    /// (baseline text-only, then the same-shape question with an image
+    /// attached), reporting the measured per-image prompt-token delta and a
+    /// RAM snapshot with the vision tower resident (MLXLLM's load strips it —
+    /// see docs/MODEL_CHOICES.md's 7.4GB figure, which was measured stripped).
+    private static func runGemmaVisionSpike() async {
+        guard let imagePath = SelfTestEnv.value("M1K3_SELFTEST_VISION_IMAGE") else {
+            emit("✗ vision spike: M1K3_SELFTEST_VISION_IMAGE not set (path to a local image file)")
+            return
+        }
+        let imageURL = URL(fileURLWithPath: imagePath)
+        let modelID = SelfTestEnv.value("M1K3_SELFTEST_VISION_MODEL") ?? GemmaVisionSpike.defaultModelID
+        emit("• vision spike: loading \(modelID) via MLXVLM (image: \(imageURL.lastPathComponent))…")
+        do {
+            let result = try await GemmaVisionSpike.run(imageURL: imageURL, modelID: modelID)
+            emit("✓ vision spike baseline (\(result.baselinePromptTokens) prompt tokens): "
+                + "\(result.baselineAnswer.prefix(180))")
+            emit("✓ vision spike WITH IMAGE (\(result.visionPromptTokens) prompt tokens): "
+                + "\(result.visionAnswer.prefix(180))")
+            emit("vision spike: measured image token cost = \(result.imageTokenCost) tokens")
+            emit(result.ramSnapshot)
+        } catch {
+            emit("✗ vision spike: \(error)")
+        }
     }
 
     /// 4. Optional per-model eval suite (M1K3_SELFTEST_EVAL=1): the same
