@@ -24,6 +24,12 @@
 //
 //  Signed: Kev + claude-sonnet-5, 2026-07-14, Confidence 0.5 (spike; compiles,
 //  on-device run pending), Prior: Unknown
+//  Review: claude-fable-5, 2026-07-14 — the on-device run HAPPENED same day:
+//  e4b FAILS to load under MLXVLM (keyNotFound layers.24.self_attn.v_proj —
+//  upstream Gemma4 VLM lacks the KV-shared-layer sanitize fix; e4b has 18
+//  shared layers, 12B has 0); gemma-4-12B-it-4bit loads + describes the M1K3
+//  app icon correctly, 265 prompt tokens/image, 7333MB peak. Confidence now
+//  0.9 for the instrument itself (measured live, results in PR #39).
 
 import Foundation
 import MLXLMCommon
