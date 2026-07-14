@@ -340,6 +340,14 @@ let package = Package(
                 .product(name: "MLXEmbedders", package: "mlx-swift-lm"),
                 .product(name: "MLXLLM", package: "mlx-swift-lm"),
                 .product(name: "MLXLMCommon", package: "mlx-swift-lm"),
+                // Vision spike (2026-07-14): MLXLLM's Gemma4Model strips vision
+                // weights at load (`vision_tower`/`vision_embedder` sanitize) —
+                // only MLXVLM's separate Gemma4 implementation actually consumes
+                // UserInput.images. Both factories load the SAME HF checkpoint
+                // (mlx-community/gemma-4-e4b-it-4bit) into a common ModelContainer
+                // ChatSession is agnostic to; probe-first before touching the
+                // production MLXGemmaProvider load path.
+                .product(name: "MLXVLM", package: "mlx-swift-lm"),
                 .product(name: "Transformers", package: "swift-transformers"),
             ],
             path: "Sources/M1K3MLX"
