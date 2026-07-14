@@ -315,6 +315,13 @@ extension AppEnvironment {
     /// Whether speculative/background work — the launch reindex, the embedder
     /// pre-warm, the constellation poll cadence — should run right now.
     ///
+    /// ALWAYS-ON since the 2026-07-13 cut (was behind the cool-head opt-in, so
+    /// this gate was a no-op for default users): serious/critical heat OR Low
+    /// Power Mode now defers background work for everyone. Every deferring call
+    /// site arms `armThermalRecovery()`, which watches BOTH the thermal AND the
+    /// power-state notifications — a Mac on battery-saver recovers its deferred
+    /// work the moment Low Power Mode lifts, not at the next relaunch.
+    ///
     /// Reads `ProcessInfo` DIRECTLY, not the chat-turn `coolHead.level`: that level
     /// is only advanced by `applyCoolHead()` on a `send()`, so at launch
     /// and window-open seams (which fire outside any turn) it is stale/default
