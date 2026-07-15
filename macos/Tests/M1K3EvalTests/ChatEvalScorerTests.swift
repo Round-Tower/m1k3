@@ -82,6 +82,54 @@ struct ChatEvalScorerTests {
         #expect(score.passed)
     }
 
+    /// The "asks too many questions" instrument (2026-07-15): informational
+    /// only, like follow-ups — a trailing question is CORRECT on some turns
+    /// (a genuine ambiguity), so the scorer reports the rate rather than
+    /// inventing a per-fixture verdict. The cross-brain run turns "M1K3 keeps
+    /// ending answers with questions" from a feel into a column.
+    @Test("an answer ending in a question is reported, not failed")
+    func endsWithQuestionReported() {
+        let score = ChatEvalScorer.score(
+            fixture: fixture(.openChat, .init()),
+            observation: EvalObservation(rawText: "Grand. Want the chemistry of why?")
+        )
+        #expect(check(score, "ends-with-question")?.outcome == .skip)
+        #expect(check(score, "ends-with-question")?.detail.hasPrefix("yes") == true)
+        #expect(score.passed)
+    }
+
+    @Test("a statement answer reports no trailing question")
+    func noTrailingQuestionReported() {
+        let score = ChatEvalScorer.score(
+            fixture: fixture(.openChat, .init()),
+            observation: EvalObservation(rawText: "Honey never spoils. Chemistry's on your side.")
+        )
+        #expect(check(score, "ends-with-question")?.detail == "no")
+    }
+
+    @Test("questions living only in the FOLLOWUPS trailer do not count as a trailing question")
+    func trailerQuestionsDoNotCount() {
+        // The whole point of FOLLOWUPS: next-questions belong in the trailer
+        // (rendered as chips), not tacked onto the answer body. An answer that
+        // moved its questions there must read as question-free.
+        let score = ChatEvalScorer.score(
+            fixture: fixture(.openChat, .init()),
+            observation: EvalObservation(
+                rawText: "Honey never spoils.\nFOLLOWUPS: [\"Why not?\", \"How old is the oldest jar?\"]"
+            )
+        )
+        #expect(check(score, "ends-with-question")?.detail == "no")
+    }
+
+    @Test("trailing whitespace after the question mark still reads as a trailing question")
+    func trailingWhitespaceQuestion() {
+        let score = ChatEvalScorer.score(
+            fixture: fixture(.openChat, .init()),
+            observation: EvalObservation(rawText: "What are we at?  \n")
+        )
+        #expect(check(score, "ends-with-question")?.detail.hasPrefix("yes") == true)
+    }
+
     // MARK: - Expectation checks
 
     @Test("contains-any passes on a case-insensitive hit and fails when absent")
