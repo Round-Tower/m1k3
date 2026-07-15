@@ -70,15 +70,19 @@ struct MLXGemmaProviderTests {
         #expect(MLXGemmaProvider.supportsQuantizedKVCache(
             for: ModelConfiguration(id: "mlx-community/Qwen3-8B-4bit")
         ))
-        // Ternary Bonsai IS dense Qwen3 under the brand (model_type "qwen3" →
+        // Ternary Bonsai 8B IS dense Qwen3 under the brand (model_type "qwen3" →
         // Qwen3Model → attentionWithCacheUpdate), so quantized KV is safe.
         #expect(MLXGemmaProvider.supportsQuantizedKVCache(
             for: ModelConfiguration(id: "prism-ml/Ternary-Bonsai-8B-mlx-2bit")
         ))
+        // The Qwen3.6-based 27B is unverified → crash-safe default (no quant).
+        #expect(!MLXGemmaProvider.supportsQuantizedKVCache(
+            for: ModelConfiguration(id: "prism-ml/Ternary-Bonsai-27B-mlx-2bit")
+        ))
     }
 
     @Test("Bonsai does NOT claim the thinking toggle — its template has no enable_thinking")
-    func bonsaiThinkingtogglePinnedOff() {
+    func bonsaiThinkingTogglePinnedOff() {
         // Unlike stock Qwen3, prism-ml's Bonsai chat template carries no
         // enable_thinking switch (verified against the HF template 2026-07-15) —
         // claiming toggle support would render a kwarg the template ignores and

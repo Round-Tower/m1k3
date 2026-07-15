@@ -269,6 +269,12 @@ struct MLXToolFormatResolutionTests {
         #expect(MLXGemmaProvider.resolveToolCallFormat(
             for: .init(id: "prism-ml/Ternary-Bonsai-8B-mlx-2bit")
         ) == .json)
+        // The 27B is Qwen3.6-based and UNVERIFIED — it must NOT silently ride
+        // the 8B's verified arm (review catch: a broad "bonsai" match trades one
+        // silent misroute for a structurally identical one). nil → ReAct floor.
+        #expect(MLXGemmaProvider.resolveToolCallFormat(
+            for: .init(id: "prism-ml/Ternary-Bonsai-27B-mlx-2bit")
+        ) == nil)
     }
 
     @Test("an explicit configuration format wins over the family heuristic")
