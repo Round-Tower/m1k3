@@ -61,6 +61,20 @@ is the **current truth** where the log has drifted:
          #100 open carrying the on-device verdict; OptiQ-has-no-Swift-loader and the 12B temporalOrder
          tool-use crash were both verified on-device across the 06-22→06-24 arc). Prior: Kev +
          claude-opus-4-6 (the STATUS 2026-06-22 note above). -->
+  - **STATUS 2026-07-15 (additive — supersedes the 06-24 12B rejection):** **gemma-4-12B is `big` now.**
+    Both 06-24 blockers cleared on the standing tag pin (3.31.4): the `vision_embedder` sanitize fix
+    shipped in the tag, and the `RotatingKVCache.temporalOrder` tool-use crash **did not reproduce**
+    (full tool arm on the rotating cache, exit 0 — what fixed it upstream is unattributed; re-verify on
+    any dep bump). Promotion decided on a ten-run same-morning CHATEVAL (idle GPU; raw data
+    `macos/scratch/eval-2026-07-15-model-runs/`): 12B vs e4b — live-path open-chat 8/8 vs 5/8 · code-gen
+    5/5 vs 4/5 (e4b melted 17 min on one fixture) · reasoning 6/6 vs 3/6 · prompt-leak 7/7 vs 4/7 · the
+    one cost ~2.6× slower tool turns (30.9s vs 11.9s median). Ships with a 16GB selection floor +
+    restore-time easing (`BrainTier.selectableOrEased`). Note `huge` itself retired 2026-07-02 — the
+    06-24 "huge stays Qwen3-8B" line is moot, the slot no longer exists; the 12B question was re-answered
+    for BIG. Full matrix + decision record: `docs/MODEL_CHOICES.md` (2026-07-15 entry).
+    <!-- Signed: Kev + claude-fable-5, 2026-07-15, Confidence 0.9 (both gates verified empirically
+         same-day — tag-source check + crash-free full tool arm; eval is ten single runs, no variance
+         bars; 12B RAM carried from the 06-24 memloop). Prior: Kev + claude-opus-4-8 (the 06-24 note). -->
 
 ---
 

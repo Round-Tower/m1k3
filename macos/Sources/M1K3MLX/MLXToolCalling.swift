@@ -323,8 +323,10 @@ extension MLXGemmaProvider: ToolCallingProvider {
     /// Pre-build the persona-prefix KV for `tools` so the FIRST turn starts
     /// from a cached copy instead of paying the build on its critical path.
     /// Measured 2026-07-12 (SelfTest PREFIXWARM, 2 runs/tier): the build costs
-    /// ~1.9 s on lil (Qwen3-4B) and ~3.3 s on big (gemma-4-e4b); a warm turn's
-    /// first token lands in ~150–190 ms. Best-effort and idempotent: any
+    /// ~1.9 s on lil (Qwen3-4B) and ~3.3 s on big — measured on gemma-4-e4b,
+    /// Big's model AT THE TIME; the 12B that took the slot 2026-07-15 is
+    /// unmeasured here (likely costlier — re-run PREFIXWARM to refresh); a warm
+    /// turn's first token lands in ~150–190 ms. Best-effort and idempotent: any
     /// failure just logs — the turn falls back to building inline, exactly the
     /// pre-warm behavior. Key parity with the live turn is structural: both
     /// route through `MLXToolMapping.prefixInputs` (pinned in tests). A turn

@@ -62,7 +62,12 @@ struct BrainTierTests {
         // through the existing qwen3 path: .json tools, no pre-open-think,
         // quantized KV — verified against the real Qwen3 chat template.
         #expect(BrainTier.lil.mlxModelID == "mlx-community/Qwen3-4B-4bit")
-        #expect(BrainTier.big.mlxModelID == "mlx-community/gemma-4-e4b-it-4bit")
+        // big is gemma-4-12B since 2026-07-15: both June blockers cleared on the
+        // pinned mlx-swift-lm 3.31.4 (vision_embedder sanitize IS in the tag;
+        // the RotatingKVCache.temporalOrder tool-use crash did not reproduce),
+        // and the live-path CHATEVAL swept 13/13 vs e4b's 9/13 — see
+        // macos/scratch/eval-2026-07-15-model-runs/RESULTS.md + MODEL_CHOICES.md.
+        #expect(BrainTier.big.mlxModelID == "mlx-community/gemma-4-12B-it-4bit")
         #expect(BrainTier.mini.mlxModelID == nil)
         for tier in [BrainTier.lil, .big] {
             #expect((tier.approxDownloadMB ?? 0) > 0)
@@ -88,7 +93,7 @@ struct BrainTierTests {
     @Test("mobile recommendation is conservative — never Big, Lil only on iPad-Pro/Vision-Pro RAM")
     func recommendationOnMobile() {
         // Physical RAM OVERSTATES the per-app jetsam budget on iOS/visionOS, and
-        // Big (gemma-4-e4b, ~7GB at inference) exceeds any current mobile budget —
+        // Big (gemma-4-12B, ~7.4GB at inference) exceeds any current mobile budget —
         // so the mobile ladder tops out at Lil and only on ≥16GB devices.
         #expect(BrainTier.recommended(forPhysicalMemoryGB: 6, platform: .mobile) == .mini)
         #expect(BrainTier.recommended(forPhysicalMemoryGB: 8, platform: .mobile) == .mini)
@@ -117,8 +122,9 @@ struct BrainTierTests {
     func cappedDemotesTooHeavy() {
         // Big auto-picked on a 16GB Mac → eased to that Mac's ceiling (Lil).
         #expect(BrainTier.capped(.big, forPhysicalMemoryGB: 16) == .lil)
-        // Big has NO hard memory floor, so without the cap it would ride along on
-        // an 8GB Mac and thrash swap — the named bug. Capped → Mini.
+        // Belt-and-braces with Big's 16GB selection floor (2026-07-15): even if
+        // a persisted .big pick predates the floor, the cap eases an 8GB Mac to
+        // Mini instead of letting it swap-thrash.
         #expect(BrainTier.capped(.big, forPhysicalMemoryGB: 8) == .mini)
     }
 
@@ -138,15 +144,36 @@ struct BrainTierTests {
         #expect(BrainTier.capped(.lil, forPhysicalMemoryGB: 16) == .lil) // exactly Lil's ceiling
     }
 
-    @Test("no live tier carries a hard memory floor (the gate mechanism stays for 12B-Big)")
-    func noSelectionFloorsToday() {
-        // Huge (32GB floor) retired 2026-07-02. The floor/isSelectable seam is
-        // kept deliberately — gemma-4-12B will want it back when upstream fixes
-        // RotatingKVCache.temporalOrder and Big upgrades.
-        for tier in BrainTier.allCases {
+    @Test("Big-12B carries the promised 16GB selection floor; Mini/Lil stay floorless")
+    func bigTwelveBSelectionFloor() {
+        // The seam this test's predecessor kept warm ("gemma-4-12B will want it
+        // back when Big upgrades") is now armed: 12B peaks ~7.4GB at inference
+        // (2026-06-24 memloop, geometry unchanged), which an 8GB Mac physically
+        // cannot hold — the card disables rather than letting an explicit pick
+        // swap-thrash. 16GB is tight-but-runnable: selection stays permissive,
+        // the RECOMMENDATION floor stays 24GB (recommendationByMemory above).
+        #expect(BrainTier.big.minimumPhysicalMemoryGB == 16)
+        #expect(!BrainTier.big.isSelectable(forPhysicalMemoryGB: 8))
+        #expect(BrainTier.big.isSelectable(forPhysicalMemoryGB: 16))
+        for tier in [BrainTier.mini, .lil] {
             #expect(tier.minimumPhysicalMemoryGB == nil)
             #expect(tier.isSelectable(forPhysicalMemoryGB: 8))
         }
+    }
+
+    @Test("a persisted pick below its tier's floor eases down; a selectable pick is never touched")
+    func selectableOrEased() {
+        // The 12B floor (2026-07-15) created a new boundary case: a persisted
+        // .big on a sub-16GB Mac would render as a LOCKED row while still
+        // running — stranded. Ease exactly that case through capped(); an
+        // explicit pick that merely exceeds the RECOMMENDATION ceiling (Big on
+        // a 16GB Mac) is legitimate and must never be demoted (#81's honesty
+        // rule — capped() is for automatic picks only).
+        #expect(BrainTier.selectableOrEased(.big, forPhysicalMemoryGB: 8) == .mini)
+        #expect(BrainTier.selectableOrEased(.big, forPhysicalMemoryGB: 16) == .big)
+        #expect(BrainTier.selectableOrEased(.big, forPhysicalMemoryGB: 64) == .big)
+        #expect(BrainTier.selectableOrEased(.lil, forPhysicalMemoryGB: 8) == .lil)
+        #expect(BrainTier.selectableOrEased(.mini, forPhysicalMemoryGB: 8) == .mini)
     }
 
     @Test("rawValue round-trips for @AppStorage persistence; retired 'huge' is not a live rawValue")
@@ -177,7 +204,7 @@ struct BrainTierTests {
 
     @Test("context-window metadata: big is the hard 8192 rotating window; dense-Qwen lil is wide")
     func contextWindowMetadata() {
-        // big = gemma-4-e4b → RotatingKVCache(maxSize: 8192): the load-bearing fact.
+        // big = gemma-4-12B → RotatingKVCache(maxSize: 8192): the load-bearing fact.
         #expect(BrainTier.big.approximateContextTokens == 8192)
         #expect(BrainTier.big.usesRotatingKVCache)
         // dense Qwen3 lil is unbounded (memory-bound, not truncation-bound) and wide.

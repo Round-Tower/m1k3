@@ -59,7 +59,7 @@ default — zero Mac behaviour change):
   brain + KV fits and MLX yields before the OS jetsams. Applied via `#if os(iOS) ||
   os(visionOS)` in `applyOnce`.
 - **`BrainTier.recommended(…, platform:)`** — `.mobile` never recommends Big
-  (gemma-4-e4b ≈7 GB at inference exceeds any current mobile budget); Lil only on
+  (gemma-4-12B ≈7.4 GB at inference exceeds any current mobile budget); Lil only on
   ≥16 GB (iPad Pro / Vision Pro); everything smaller stays on **Mini** (Apple
   Foundation Models, no MLX footprint). iPhones therefore land on Mini by design.
 

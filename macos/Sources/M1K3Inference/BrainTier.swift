@@ -154,7 +154,14 @@ public enum BrainTier: String, CaseIterable, Identifiable, Sendable, Comparable 
         // the existing qwen3 path (.json tools, no pre-open-think, quantized KV).
         // See macos/docs/MODEL_CHOICES.md.
         case .lil: .mlx(modelID: "mlx-community/Qwen3-4B-4bit")
-        case .big: .mlx(modelID: "mlx-community/gemma-4-e4b-it-4bit")
+        // gemma-4-12B since 2026-07-15 (was e4b): both June blockers cleared on
+        // the pinned mlx-swift-lm 3.31.4 — the vision_embedder sanitize fix IS
+        // in the tag, and the RotatingKVCache.temporalOrder tool-use crash did
+        // not reproduce (full tool arm, exit 0). Live-path CHATEVAL: 13/13 vs
+        // e4b's 9/13 (incl. a 17-min code-gen melt), reasoning 6/6 vs 3/6,
+        // prompt-leak 7/7 vs 4/7. Cost: ~2.6× slower tool turns. See
+        // docs/MODEL_CHOICES.md (2026-07-15 entry) for the full matrix.
+        case .big: .mlx(modelID: "mlx-community/gemma-4-12B-it-4bit")
         }
     }
 
@@ -167,12 +174,14 @@ public enum BrainTier: String, CaseIterable, Identifiable, Sendable, Comparable 
     /// Approx one-time download in MB, or `nil` for the no-download Apple tier.
     /// Rough estimates surfaced as "~NN MB"; the real size shows on the progress
     /// bar at download time. lil is dense Qwen3 (HF tree API, 2026-06-22);
-    /// big is gemma-4-e4b (HF usedStorage, 2026-06-10).
+    /// big is gemma-4-12B (HF index, 2026-07-15 — up from e4b's 5250, so
+    /// existing Big users pay one ~6.7GB re-download on first launch after
+    /// the swap; the model gate's progress bar is the honest surface for it).
     public var approxDownloadMB: Int? {
         switch self {
         case .mini: nil
         case .lil: 2270
-        case .big: 5250
+        case .big: 6740
         }
     }
 
@@ -188,9 +197,11 @@ public enum BrainTier: String, CaseIterable, Identifiable, Sendable, Comparable 
     ///   under-estimating is the safe direction.
     /// - `lil` (dense Qwen3, `maxKVSize == nil` → `KVCacheSimple`): the
     ///   native ~32K window; growth is MEMORY-bounded, never silently truncated.
-    /// - `big` (gemma-4-e4b, `RotatingKVCache(maxSize: 8192)`): a HARD 8192-token
+    /// - `big` (gemma-4-12B, `RotatingKVCache(maxSize: 8192)`): a HARD 8192-token
     ///   sliding window — past it the head (persona + grounding) rotates OUT
-    ///   during prefill with no error. See `usesRotatingKVCache`.
+    ///   during prefill with no error. Same cache geometry as the e4b it
+    ///   replaced (gemma-4 family stays off the quantized-KV allow-list).
+    ///   See `usesRotatingKVCache`.
     public var approximateContextTokens: Int {
         switch self {
         case .mini: 4096
@@ -202,7 +213,7 @@ public enum BrainTier: String, CaseIterable, Identifiable, Sendable, Comparable 
     /// True when the backing model uses a fixed sliding-window KV cache
     /// (`RotatingKVCache`): exceeding `approximateContextTokens` silently drops the
     /// prompt HEAD rather than erroring, so the budget layer must clamp BELOW it
-    /// (with margin for the char≈token estimate). Only `big` (gemma-4-e4b) today;
+    /// (with margin for the char≈token estimate). Only `big` (gemma-4-12B) today;
     /// the dense-Qwen lil uses an unbounded `KVCacheSimple`. Verified against
     /// `MLXGemmaProvider`'s per-family cache config (see docs/MODEL_CHOICES.md).
     public var usesRotatingKVCache: Bool {
@@ -212,11 +223,16 @@ public enum BrainTier: String, CaseIterable, Identifiable, Sendable, Comparable 
     /// The memory floor below which this brain shouldn't even be SELECTABLE
     /// (the card disables with a "needs NN GB" badge), or nil for no gate.
     /// Distinct from `recommended` — selection is permissive, recommendation
-    /// is comfortable. No live tier carries a floor since Huge retired
-    /// (2026-07-02); the seam stays because gemma-4-12B takes the Big slot
-    /// with a floor once upstream fixes RotatingKVCache.temporalOrder.
+    /// is comfortable. The seam kept warm since Huge retired (2026-07-02) is
+    /// armed again for 12B-Big (2026-07-15): ~7.4GB peak at inference is
+    /// physically impossible on an 8GB Mac, so an explicit pick there would
+    /// only swap-thrash. 16GB is tight-but-runnable; the RECOMMENDATION floor
+    /// stays 24GB.
     public var minimumPhysicalMemoryGB: Double? {
-        nil
+        switch self {
+        case .mini, .lil: nil
+        case .big: 16
+        }
     }
 
     /// Whether this Mac has enough memory to offer the tier at all.
@@ -226,8 +242,8 @@ public enum BrainTier: String, CaseIterable, Identifiable, Sendable, Comparable 
     }
 
     /// The brain best matched to this Mac's memory, echoing KMP's device tiers.
-    /// Big is a ~7GB-at-inference model in the Gemma 4 era — recommending it
-    /// on a 16GB Mac that also runs a browser would be hostile, so its floor
+    /// Big (gemma-4-12B) peaks ~7.4GB at inference — recommending it on a
+    /// 16GB Mac that also runs a browser would be hostile, so its floor
     /// is 24GB. Big is the ceiling for every larger Mac (Huge retired
     /// 2026-07-02). Tunable thresholds.
     public static func recommended(
@@ -243,7 +259,7 @@ public enum BrainTier: String, CaseIterable, Identifiable, Sendable, Comparable 
             }
         case .mobile:
             // Physical RAM OVERSTATES the per-app jetsam budget on iOS/visionOS, and
-            // Big (gemma-4-e4b, ~7GB at inference) exceeds any current mobile budget —
+            // Big (gemma-4-12B, ~7.4GB at inference) exceeds any current mobile budget —
             // so the mobile ladder tops out at Lil, and only on ≥16GB iPad Pro /
             // Vision Pro. Everything smaller stays on Mini (Apple Foundation Models,
             // no MLX footprint). Tunable, and verify-by-launch on real devices.
@@ -283,6 +299,21 @@ public enum BrainTier: String, CaseIterable, Identifiable, Sendable, Comparable 
     /// Convenience: `capped` for the machine we're running on.
     public static func cappedForThisMac(_ tier: BrainTier) -> BrainTier {
         capped(tier, forPhysicalMemoryGB: physicalMemoryGB)
+    }
+
+    /// Restore-boundary easing: a persisted pick BELOW its tier's hard floor
+    /// eases down via `capped` (it would otherwise run while its own picker row
+    /// renders locked — stranded); any selectable pick passes through UNTOUCHED.
+    /// Deliberately narrower than `capped` alone: an explicit pick that merely
+    /// exceeds the RECOMMENDATION ceiling (Big on a 16GB Mac) is legitimate —
+    /// demoting it would violate #81's never-touch-an-explicit-pick honesty rule.
+    /// Armed by the 12B floor (2026-07-15); a no-op while no tier carried one.
+    public static func selectableOrEased(
+        _ tier: BrainTier, forPhysicalMemoryGB gigabytes: Double
+    ) -> BrainTier {
+        tier.isSelectable(forPhysicalMemoryGB: gigabytes)
+            ? tier
+            : capped(tier, forPhysicalMemoryGB: gigabytes)
     }
 
     /// Convenience: whether this tier is selectable on the machine we're on.

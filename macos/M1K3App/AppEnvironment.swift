@@ -486,10 +486,17 @@ final class AppEnvironment {
 
         // Restore the chosen brain (default Mini = Apple Foundation Models).
         // Decode via init(persisted:) so a stale "huge" (retired 2026-07-02)
-        // migrates to Big instead of silently defaulting to Mini; write the
-        // migrated value back so every later raw read sees a live tier.
+        // migrates to Big instead of silently defaulting to Mini, then ease a
+        // pick below its tier's hard floor (12B-Big needs 16GB, 2026-07-15) —
+        // without this, a sub-floor Mac would RUN Big while the picker renders
+        // it locked. Selectable picks pass through untouched (#81's honesty
+        // rule). Write any change back so every later raw read sees a live,
+        // selectable tier.
         let storedBrainRaw = UserDefaults.standard.string(forKey: Self.selectedBrainKey)
-        let brain = storedBrainRaw.flatMap(BrainTier.init(persisted:)) ?? .mini
+        let decoded = storedBrainRaw.flatMap(BrainTier.init(persisted:)) ?? .mini
+        let brain = BrainTier.selectableOrEased(
+            decoded, forPhysicalMemoryGB: Double(ProcessInfo.processInfo.physicalMemory) / 1_073_741_824
+        )
         if let storedBrainRaw, storedBrainRaw != brain.rawValue {
             UserDefaults.standard.set(brain.rawValue, forKey: Self.selectedBrainKey)
         }
