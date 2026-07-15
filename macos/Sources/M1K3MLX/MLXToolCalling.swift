@@ -31,6 +31,10 @@
 //  the live turn (LocalAgent sorts), colliding on the same cache key with
 //  different KV content. Measured win ~1.9 s lil / ~3.3 s big (SelfTest
 //  PREFIXWARM modes 1–3; mode 3 is the out-of-order tool-path proof).
+//  Review: Kev + claude-fable-5, 2026-07-15, Confidence 0.9 — Ternary-Bonsai-8B
+//  added to the .json arm by EXACT size id (config model_type "qwen3" +
+//  <tool_call> template verified against HF; the Qwen3.6-based 27B deliberately
+//  stays nil → ReAct floor). Live-proven same day: CHATEVAL tool-use 5/5 native.
 
 import Foundation
 import M1K3Inference

@@ -39,6 +39,10 @@
 //  Review: Kev + claude-fable-5, 2026-06-12, Confidence 0.8 — repetitionPenalty
 //  1.1 / repetitionContextSize 64 as the degenerate-loop guard (values pinned
 //  in tests; effect on think-phase + FACT-line distillation is verify-at-⌘R).
+//  Review: Kev + claude-fable-5, 2026-07-15, Confidence 0.9 — Ternary-Bonsai-8B
+//  joins the quantized-KV allow-list by exact size id (dense Qwen3 under the
+//  brand: Qwen3Model → attentionWithCacheUpdate, verified vs the HF config).
+//  The unverified Qwen3.6-based 27B keeps the crash-safe default, test-pinned.
 
 import Foundation
 import M1K3Inference
