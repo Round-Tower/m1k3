@@ -79,7 +79,7 @@ automatic avoid; the recurrence itself stays on-GPU per step (inherent to SSMs).
 | `mlx-community/Qwen3-14B-4bit` | ~8 GB (verify) | dense | `qwen3` | `.json` | ⏳ verify-owed | would make a clean all-dense huge |
 | `mlx-community/SmolLM3-3B-*` | ~1.8 GB (verify) | dense | `smollm3` | ReAct floor (no dialect) | ⏳ verify-owed | plan candidate; small |
 | **current** lil `Qwen3.5-4B` / huge `Qwen3.5-9B` | — | **GatedDeltaNet hybrid** | `qwen3_5` | `.xmlFunction` | ✅ but **CPU-spikes** | works; the perf problem |
-| **blocked** `gemma-4-12B-it-*` | — | unified | `gemma4_unified` | — | ❌ won't load | not in registry |
+| **blocked** `gemma-4-12B-it-*` | — | unified | `gemma4_unified` | — | ❌ won't load | not in registry · **⚠️ SUPERSEDED 2026-07-15: loads on 3.31.4, promoted to big** |
 
 ---
 
