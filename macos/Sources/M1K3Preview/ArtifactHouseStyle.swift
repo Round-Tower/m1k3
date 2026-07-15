@@ -71,7 +71,6 @@ public enum ArtifactHouseStyle {
     }
     h1, h2, h3, h4, h5, h6 { line-height: 1.25; text-wrap: balance; font-weight: 700; }
     h1 { font-size: 1.9rem; text-align: center; margin: 0 0 2.2rem; }
-    h1 + p { text-align: center; font-style: italic; color: var(--m1k3-muted); margin-top: -1.4rem; }
     h2 { font-size: 1.35rem; margin: 2.4em 0 0.7em; counter-increment: m1k3-sec; counter-reset: m1k3-subsec; }
     h2::before { content: counter(m1k3-sec) "\\2003"; }
     h3 { font-size: 1.1rem; margin: 1.8em 0 0.5em; counter-increment: m1k3-subsec; }

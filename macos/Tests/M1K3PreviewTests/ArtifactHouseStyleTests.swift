@@ -85,4 +85,35 @@ struct ArtifactHouseStyleTests {
         let formatted = ArtifactFormatter.formatHTML("<h1>Just a heading</h1><p>and prose</p>")
         #expect(formatted.contains(ArtifactHouseStyle.marker))
     }
+
+    @Test("no h1+p subtitle special-case — an ordinary intro paragraph must stay an ordinary paragraph")
+    func noSubtitleSpecialCase() {
+        // Review catch (#44): "# Title\n\nIntro." renders as literal h1+p
+        // adjacent siblings, so an unconditional h1 + p rule would centre and
+        // italicise the most common markdown reply's FIRST REAL PARAGRAPH as
+        // if it were a subtitle. Cut, not conditioned — classless means no
+        // shape-guessing.
+        #expect(!ArtifactHouseStyle.css.contains("h1 + p"))
+    }
+
+    @Test("a <header> element is not a <head> — injectors must not bury the CSP in body content")
+    func headerIsNotHead() {
+        // Boundary catch (#44, pre-existing in injectCSPMeta and inherited by
+        // injectHouseStyle): range(of: "<head") also matches "<header". A
+        // document with a <header> but NO real <head> must come back UNCHANGED
+        // from both injectors — a CSP meta inside <body> is silently inert.
+        let doc = "<!DOCTYPE html>\n<html>\n<body>\n<header>title</header>\n<p>x</p>\n</body>\n</html>"
+        #expect(ArtifactFormatter.injectCSPMeta(doc) == doc)
+        #expect(ArtifactFormatter.injectHouseStyle(doc) == doc)
+    }
+
+    @Test("a real <head> still receives both injections — including the '<head >' whitespace form")
+    func realHeadStillInjects() {
+        for open in ["<head>", "<head >", "<HEAD>"] {
+            let doc = "<!DOCTYPE html>\n<html>\n\(open)</head>\n<body><p>x</p></body>\n</html>"
+            let out = ArtifactFormatter.injectHouseStyle(ArtifactFormatter.injectCSPMeta(doc))
+            #expect(out.contains(ArtifactSandboxPolicy.contentSecurityPolicy), "CSP missing for \(open)")
+            #expect(out.contains(ArtifactHouseStyle.marker), "house sheet missing for \(open)")
+        }
+    }
 }

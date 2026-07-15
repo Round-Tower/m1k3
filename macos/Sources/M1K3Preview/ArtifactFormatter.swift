@@ -106,29 +106,47 @@ public enum ArtifactFormatter {
     /// with no `<head>` is returned unchanged (every synthesized path has one).
     static func injectHouseStyle(_ html: String) -> String {
         guard !html.contains(ArtifactHouseStyle.marker) else { return html }
-        let anchor: Range<String.Index>? = {
-            if let csp = html.range(of: ArtifactSandboxPolicy.cspMetaTag) { return csp }
-            guard let headOpen = html.range(of: "<head", options: [.caseInsensitive]),
-                  let tagClose = html.range(of: ">", range: headOpen.upperBound ..< html.endIndex)
-            else { return nil }
-            return tagClose
+        let anchor: String.Index? = {
+            if let csp = html.range(of: ArtifactSandboxPolicy.cspMetaTag) { return csp.upperBound }
+            return headContentIndex(of: html)
         }()
         guard let anchor else { return html }
         var result = html
-        result.insert(contentsOf: "\n  " + ArtifactHouseStyle.styleElement, at: anchor.upperBound)
+        result.insert(contentsOf: "\n  " + ArtifactHouseStyle.styleElement, at: anchor)
         return result
     }
 
-    /// Insert the sandbox CSP as the first child of `<head>`. Idempotent (skips if the
-    /// CSP is already present). If the document has no `<head>` it is returned unchanged
-    /// rather than guessing a location — every synthesized path above provides one.
+    /// The index just inside a TRUE `<head>` open tag, or nil when the document
+    /// has none. Boundary-checked: "<head" must be followed by `>` or
+    /// whitespace — `<header>` (a body element) must NOT match, or the CSP
+    /// meta lands in body content where WebKit silently ignores it (review
+    /// catch on #44; the bug predated the house sheet in `injectCSPMeta`).
+    static func headContentIndex(of html: String) -> String.Index? {
+        var search = html.startIndex ..< html.endIndex
+        while let open = html.range(of: "<head", options: [.caseInsensitive], range: search) {
+            if open.upperBound < html.endIndex {
+                let next = html[open.upperBound]
+                if next == ">" || next.isWhitespace,
+                   let tagClose = html.range(of: ">", range: open.upperBound ..< html.endIndex)
+                {
+                    return tagClose.upperBound
+                }
+            }
+            search = open.upperBound ..< html.endIndex
+        }
+        return nil
+    }
+
+    /// Insert the sandbox CSP as the first child of the TRUE `<head>` (via the
+    /// boundary-checked locator — `<header>` never matches). Idempotent (skips
+    /// if the CSP is already present). If the document has no `<head>` it is
+    /// returned unchanged rather than guessing a location — every synthesized
+    /// path above provides one.
     static func injectCSPMeta(_ html: String) -> String {
         guard !html.contains(ArtifactSandboxPolicy.contentSecurityPolicy) else { return html }
-        guard let headOpen = html.range(of: "<head", options: [.caseInsensitive]),
-              let tagClose = html.range(of: ">", range: headOpen.upperBound ..< html.endIndex)
-        else { return html }
+        guard let anchor = headContentIndex(of: html) else { return html }
         var result = html
-        result.insert(contentsOf: "\n  " + ArtifactSandboxPolicy.cspMetaTag, at: tagClose.upperBound)
+        result.insert(contentsOf: "\n  " + ArtifactSandboxPolicy.cspMetaTag, at: anchor)
         return result
     }
 
