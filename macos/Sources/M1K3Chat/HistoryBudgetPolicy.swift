@@ -7,7 +7,7 @@
 //  to invalidate — but how WIDE it can safely go is a per-tier fact, not a knob:
 //    • dense Qwen3 (lil) holds a ~32K window in an unbounded KVCacheSimple —
 //      a wide replay costs memory, never truncates.
-//    • gemma-4-e4b (big) holds a HARD RotatingKVCache(maxSize: 8192) — a prompt
+//    • gemma-4-12B (big) holds a HARD RotatingKVCache(maxSize: 8192) — a prompt
 //      over the window silently rotates the persona/grounding HEAD out during
 //      prefill, answering off-persona and ungrounded with NO error. So `big`
 //      MUST be clamped below 8192 (with margin for the char≈token estimate).

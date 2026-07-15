@@ -60,6 +60,8 @@ automatic avoid; the recurrence itself stays on-GPU per step (inherent to SSMs).
   `vision_embedder` to that drop list). Verified statically (conf 0.85) + the 11 tensors confirmed in the HF
   index; on-device load is the final gate. So: a `huge` candidate gated on an upstream `sanitize` fix, NOT a
   drop-in. (12B-4bit = 6.74 GB.)
+  **⚠️ SUPERSEDED 2026-07-15:** the drop-list fix (#363/#366, merged 06-29) shipped in **tag 3.31.4** — the
+  current pin. 12B loads clean, and the temporalOrder crash below did not reproduce. See the 2026-07-15 entry.
 - MoE (RAM-hungry, viable but heavy): `qwen3_moe`, `glm4_moe`, `gpt_oss`, `deepseek_v3`, `phimoe`,
   `olmoe`, `bailing_moe`, `afmoe`.
 
@@ -228,6 +230,7 @@ carry a stack of capabilities. Verified against the local checkout. **✅ = now 
   keys → load throws `unhandledKeys`. A real **`huge`** candidate + all-Gemma-4 ladder (`big` e4b + `huge`
   12B, Apache 2.0) ONCE the drop-list is patched. 12B-4bit = 6.74 GB (fits the 12 GB ceiling, but gemma-4 has
   no quantized KV → tight). Verified statically (recon workflow 2026-06-24); on-device load is the gate.
+  **⚠️ SUPERSEDED 2026-07-15:** shipped in tag 3.31.4; 12B is live as `big`. See the 2026-07-15 entry.
 
 **Qwen3.5 — the perf blocker is GONE (re-opens the bake-off):**
 - ✅ **GatedDeltaNet prefill 2.7–14.6×** (#225 asyncEval) — scales with context = our exact symptom.
@@ -333,6 +336,24 @@ item its own TDD'd id-swap or eval.
   huge* has a tool weakness worth a future look. Side-finding: the CHATEVAL **refusal scorer was
   false-FAILing genuine refusals** (curly-apostrophe mismatch + missing "I don't <verb>" phrasings) — fixed
   in this same change (`ChatEvalScorer.isRefusal`: apostrophe normalisation + flat-decline markers).
+- **2026-07-15 (the 12B gate): gemma-4-12B PROMOTED to `big` — both June blockers cleared, live-path swept.**
+  The `vision_embedder` sanitize fix (#363/#366) shipped in **tag 3.31.4** (the standing pin since 07-01), and
+  the `RotatingKVCache.temporalOrder` tool-use crash **did not reproduce**: the full tool arm ran on the
+  rotating cache, exit 0 (what changed upstream between the 06-24 pin and the tag is unattributed — the gate
+  is empirical, re-verify on any dep bump). Ten same-morning headless CHATEVAL runs, idle GPU (raw reports:
+  `macos/scratch/eval-2026-07-15-model-runs/`): **12B vs e4b** — live-path open-chat **8/8·24.9s vs
+  5/8·21.6s** (e4b's fails: 3 length-band blowouts + an "M1K3:" self-label leak) · code-gen **5/5·max 57s vs
+  4/5 with a 1032s melt** (code-landing-page) · reasoning **6/6 vs 3/6** · prompt-leak security **7/7 vs 4/7**
+  (e4b recites its rules verbatim) · tool-use **4/5·30.9s vs 5/5·11.9s** — the one cost: **~2.6× slower tool
+  turns** (12B's miss was a 125s-vs-120s ceiling nick, answer correct). Same cache geometry as e4b (rotating
+  8192, no quantized KV), ~7.4GB peak (06-24 memloop). Ships with a **16GB selection floor** (the seam kept
+  warm since Huge retired) + `approxDownloadMB` 6740 — existing Big users pay one ~6.7GB re-download at the
+  model gate. Key context finding: the 07-14 "26.8-min greeting" was GPU **contention**, not the model (same
+  fixture idle: 21.6s). Side-catch, fixed separately (PR #42): three more refusal-scorer false-FAIL phrasings.
+  Watch-item: if ~31s tool turns grate in-app, the per-tier think-budget conversation reopens — with the
+  live-path arm as its instrument. **Bonsai-8B evaluated same morning for `lil`: PARKED** — 2× faster than
+  Qwen3-4B everywhere but recites the hardened system prompt on 5/7 leak fixtures (details in the scratch
+  RESULTS.md); re-eval on a prism-ml update.
 
 <!-- Review: Kev + claude-opus-4-8, 2026-06-24 (bake-off), Confidence 0.9 — gemma-4-12B verified on-device
 end-to-end: loads (#363) + generates + RAM 7.4 GB, but a deterministic RotatingKVCache.temporalOrder crash on
@@ -348,3 +369,9 @@ load-bearing lens; CHATEVAL is the named decider). Prior: Unknown. -->
 dispatch), added the "What building off main unlocks" map, flipped the gemma4_unified registry status. All
 findings verified against the local mlx-swift-lm/mlx-swift checkouts (commit SHAs cited). The capability
 claims beyond PR #98 are marked 🔬 (reachable, verify/eval-owed), not shipped. Prior: Kev + claude-opus-4-8. -->
+<!-- Review: Kev + claude-fable-5, 2026-07-15, Confidence 0.9 — the 12B promotion entry + two SUPERSEDED
+notes on the (now-stale) blocked claims. Both gates verified empirically same-day: tag-source check for the
+sanitize fix, crash-free full tool arm for temporalOrder. The eval matrix is ten single runs (no variance
+bars) with an idle GPU; the contention finding is the instrument's own control (same fixture, 26.8min→21.6s).
+Honest opens: what fixed temporalOrder upstream is unattributed — re-verify on any dep bump; 12B RAM carried
+from the 06-24 memloop, not re-measured. Prior: Kev + claude-opus-4-8. -->

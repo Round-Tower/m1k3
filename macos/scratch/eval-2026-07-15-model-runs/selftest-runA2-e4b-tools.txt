@@ -1,0 +1,59 @@
+=== M1K3 SELF-TEST (inside .app bundle) ===
+✓ store+ingest: 1 chunk, 1 embedding(s)
+• AFM available: false
+• loading MLX Qwen3-Embedding (downloads on first use)…
+✓ MLX Qwen3-Embedding embed: dim=512 ‖v‖=1.000
+embedwarm: cold=3633ms warm=13ms delta=3620ms (delta = first-turn TTFT tax without the launch warm)
+• loading MLX generation model mlx-community/Llama-3.2-1B-Instruct-4bit…
+✓ MLX generate: A hydraulic seal is the device or surface that prevents leaks from fluid systems, particularly in vehicles and industrial equipment, by creating an impermeable barrier between two 
+• chateval: 5 fixture(s) × 1 brain(s) [kinds: tool-use]…
+• chateval brain big (Big)…
+  tool-datetime [tool-use]: PASS (20905ms)
+    ✓ non-empty — 109 chars
+    ✓ no think-leak
+    – follow-ups — 3 offered
+    – ends-with-question — no
+    ✓ calls datetime
+    ✓ responsive — 20905ms
+  tool-search-notes [tool-use]: PASS (11937ms)
+    ✓ non-empty — 104 chars
+    ✓ no think-leak
+    – follow-ups — 3 offered
+    – ends-with-question — no
+    ✓ calls search_knowledge
+    ✓ responsive — 11937ms
+  tool-search-doc [tool-use]: PASS (11569ms)
+    ✓ non-empty — 188 chars
+    ✓ no think-leak
+    – follow-ups — 0 offered
+    – ends-with-question — no
+    ✓ calls search_knowledge
+    ✓ responsive — 11569ms
+  tool-fact [tool-use]: PASS (11893ms)
+    ✓ non-empty — 265 chars
+    ✓ no think-leak
+    – follow-ups — 3 offered
+    – ends-with-question — no
+    ✓ calls lookup_fact
+    ✓ responsive — 11893ms
+  tool-web [tool-use]: PASS (17126ms)
+    ✓ non-empty — 1096 chars
+    ✓ no think-leak
+    – follow-ups — 0 offered
+    – ends-with-question — no
+    ✓ calls web_search
+    ✓ responsive — 17126ms
+
+=== CHATEVAL MATRIX (passed/total ⌀latency) ===
+task-kind  | big        
+------------------------
+open-chat  | —          
+grounded-Q | —          
+reasoning  | —          
+code-gen   | —          
+tool-use   | 5/5 11937ms
+refusal    | —          
+security   | —          
+------------------------
+overall    | 5/5 11937ms
+=== END SELF-TEST ===

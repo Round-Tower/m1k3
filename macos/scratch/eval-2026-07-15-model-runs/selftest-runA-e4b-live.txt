@@ -1,0 +1,145 @@
+=== M1K3 SELF-TEST (inside .app bundle) ===
+✓ store+ingest: 1 chunk, 1 embedding(s)
+• AFM available: true
+✓ AFM RAG answer: **Plant Notes §3.2 Seals**
+
+The hydraulic seal on the conveyor failed under load.
+  grounded in 1 source(s)
+• loading MLX Qwen3-Embedding (downloads on first use)…
+✓ MLX Qwen3-Embedding embed: dim=512 ‖v‖=1.000
+embedwarm: cold=4247ms warm=14ms delta=4233ms (delta = first-turn TTFT tax without the launch warm)
+• loading MLX generation model mlx-community/Llama-3.2-1B-Instruct-4bit…
+✓ MLX generate: A hydraulic seal is a device or material that prevents the flow of fluid (such as oil or gas) through a joint or valve by creating a tight seal when pressure is applied.
+• chateval: 13 fixture(s) × 1 brain(s) [kinds: code-gen,open-chat] [LIVE PATH: AgentRAGResponder]…
+• chateval brain big (Big)…
+  chat-greeting [open-chat]: PASS (21632ms)
+    ✓ non-empty — 177 chars
+    ✓ no think-leak
+    – follow-ups — 3 offered
+    – ends-with-question — yes — …quires my attention this fine Wednesday?
+    ✓ excludes forbidden
+    ✓ length band — 177 chars
+    ✓ responsive — 21632ms
+  chat-explain-simply [open-chat]: PASS (12548ms)
+    ✓ non-empty — 307 chars
+    ✓ no think-leak
+    – follow-ups — 3 offered
+    – ends-with-question — no
+    ✓ contains expected — found "key"
+    ✓ excludes forbidden
+    ✓ length band — 307 chars
+    ✓ responsive — 12548ms
+  chat-opinion [open-chat]: FAIL (39738ms)
+    ✓ non-empty — 3113 chars
+    ✓ no think-leak
+    – follow-ups — 3 offered
+    – ends-with-question — no
+    ✗ excludes forbidden — leaked ["M1K3:"]
+    ✗ length band — 3113 > max 1200
+    ✓ responsive — 39738ms
+  chat-support [open-chat]: FAIL (35311ms)
+    ✓ non-empty — 1971 chars
+    ✓ no think-leak
+    – follow-ups — 3 offered
+    – ends-with-question — no
+    ✓ excludes forbidden
+    ✗ length band — 1971 > max 900
+    ✓ responsive — 35311ms
+  chat-creative [open-chat]: PASS (17082ms)
+    ✓ non-empty — 85 chars
+    ✓ no think-leak
+    – follow-ups — 3 offered
+    – ends-with-question — no
+    ✓ excludes forbidden
+    ✓ length band — 85 chars
+    ✓ responsive — 17082ms
+  chat-followup [open-chat]: PASS (35583ms)
+    ✓ non-empty — 492 chars
+    ✓ no think-leak
+    – follow-ups — 3 offered
+    – ends-with-question — no
+    ✓ excludes forbidden
+    ✓ length band — 492 chars
+    ✓ responsive — 35583ms
+  chat-capabilities [open-chat]: FAIL (28471ms)
+    ✓ non-empty — 1278 chars
+    ✓ no think-leak
+    – follow-ups — 3 offered
+    – ends-with-question — yes — …nding board. What are we tackling today?
+    ✓ contains expected — found "search"
+    ✓ excludes forbidden
+    ✗ length band — 1278 > max 1200
+    ✓ responsive — 28471ms
+  chat-identity-noisy-corpus [open-chat]: PASS (20849ms)
+    ✓ non-empty — 571 chars
+    ✓ no think-leak
+    – follow-ups — 3 offered
+    – ends-with-question — no
+    ✓ excludes forbidden
+    ✓ cites nothing — no phantom source
+    ✓ length band — 571 chars
+    ✓ responsive — 20849ms
+  code-html-page [code-gen]: PASS (89931ms)
+    ✓ non-empty — 67 chars
+    ✓ no think-leak
+    – follow-ups — 0 offered
+    – ends-with-question — no
+    ✓ contains expected — found "<h1"
+    ✓ excludes forbidden
+    ✓ complies (no refusal)
+    ✓ length band — 67 chars
+    ✓ responsive — 89931ms
+  code-landing-page [code-gen]: FAIL (1031681ms)
+    ✓ non-empty — 3358 chars
+    ✓ no think-leak
+    – follow-ups — 3 offered
+    – ends-with-question — no
+    ✓ contains expected — found "<html"
+    ✓ excludes forbidden
+    ✓ complies (no refusal)
+    ✓ length band — 3358 chars
+    ✗ responsive — 1031681ms > ceiling 120000ms (loop thrash?)
+  code-python-reverse [code-gen]: PASS (10368ms)
+    ✓ non-empty — 55 chars
+    ✓ no think-leak
+    – follow-ups — 3 offered
+    – ends-with-question — no
+    ✓ contains expected — found "def "
+    ✓ excludes forbidden
+    ✓ complies (no refusal)
+    ✓ length band — 55 chars
+    ✓ responsive — 10368ms
+  code-css-button [code-gen]: PASS (16208ms)
+    ✓ non-empty — 760 chars
+    ✓ no think-leak
+    – follow-ups — 3 offered
+    – ends-with-question — no
+    ✓ contains expected — found "border-radius"
+    ✓ excludes forbidden
+    ✓ complies (no refusal)
+    ✓ length band — 760 chars
+    ✓ responsive — 16208ms
+  code-swift-sum [code-gen]: PASS (11291ms)
+    ✓ non-empty — 83 chars
+    ✓ no think-leak
+    – follow-ups — 3 offered
+    – ends-with-question — no
+    ✓ contains expected — found "func "
+    ✓ excludes forbidden
+    ✓ complies (no refusal)
+    ✓ length band — 83 chars
+    ✓ responsive — 11291ms
+
+=== CHATEVAL MATRIX (passed/total ⌀latency) ===
+task-kind  | big         
+-------------------------
+open-chat  | 5/8 21632ms 
+grounded-Q | —           
+reasoning  | —           
+code-gen   | 4/5 16208ms 
+tool-use   | —           
+refusal    | —           
+security   | —           
+-------------------------
+overall    | 9/13 21632ms
+=== END SELF-TEST ===
