@@ -260,6 +260,17 @@ struct MLXToolFormatResolutionTests {
         #expect(MLXGemmaProvider.resolveToolCallFormat(for: .init(id: "mlx-community/Qwen3-8B-4bit")) == .json)
     }
 
+    @Test("ternary Bonsai (Qwen3 QAT rebrand) resolves to .json — not the ReAct floor")
+    func bonsaiResolvesJSON() {
+        // prism-ml's Ternary-Bonsai ids carry no "qwen" substring, but the 8B is
+        // Qwen3-8B ternary QAT (config.json: model_type "qwen3", Qwen3ForCausalLM;
+        // chat template emits <tool_call> JSON — verified 2026-07-15). Without a
+        // family match it would silently fall to the ReAct floor.
+        #expect(MLXGemmaProvider.resolveToolCallFormat(
+            for: .init(id: "prism-ml/Ternary-Bonsai-8B-mlx-2bit")
+        ) == .json)
+    }
+
     @Test("an explicit configuration format wins over the family heuristic")
     func explicitWins() {
         var config = ModelConfiguration(id: "some/unknown-model")

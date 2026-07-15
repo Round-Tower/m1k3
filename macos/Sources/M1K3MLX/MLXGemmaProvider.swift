@@ -578,7 +578,11 @@ extension MLXGemmaProvider {
         let modelName = configuration.name.lowercased()
         // "qwen3" covers Qwen3 and every Qwen3.5 spelling; "gemma-3-" cannot
         // match gemma-3n ids ("gemma-3n…" has no trailing dash after the 3).
+        // "bonsai" (prism-ml Ternary-Bonsai) is dense Qwen3 under a brand id —
+        // model_type "qwen3" → Qwen3Model → attentionWithCacheUpdate, so
+        // quantized KV routes safely (verified against the 8B config 2026-07-15).
         return modelName.contains("qwen3") || modelName.contains("gemma-3-")
+            || modelName.contains("bonsai")
     }
 
     /// Prepend the synthetic `<think>` opener exactly once so downstream

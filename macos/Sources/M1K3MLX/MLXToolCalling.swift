@@ -246,7 +246,11 @@ extension MLXGemmaProvider: ToolCallingProvider {
         if name.contains("qwen3.5") || name.contains("qwen3_5") || name.contains("qwen3-5") {
             return .xmlFunction
         }
-        if name.contains("qwen") || name.contains("llama")
+        // prism-ml's Ternary-Bonsai is Qwen3 QAT under a brand id (no "qwen"
+        // substring; 8B verified 2026-07-15: model_type "qwen3", <tool_call>
+        // JSON template). ⚠️ Bonsai-27B is Qwen3.6-based — if it ever heads for
+        // production, re-verify its dialect rather than trusting this arm.
+        if name.contains("qwen") || name.contains("llama") || name.contains("bonsai")
             || name.contains("mistral") || name.contains("phi") { return .json }
         if name.contains("glm") { return .glm4 }
         if name.contains("lfm2") { return .lfm2 }
