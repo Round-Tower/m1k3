@@ -301,6 +301,21 @@ public enum BrainTier: String, CaseIterable, Identifiable, Sendable, Comparable 
         capped(tier, forPhysicalMemoryGB: physicalMemoryGB)
     }
 
+    /// Restore-boundary easing: a persisted pick BELOW its tier's hard floor
+    /// eases down via `capped` (it would otherwise run while its own picker row
+    /// renders locked — stranded); any selectable pick passes through UNTOUCHED.
+    /// Deliberately narrower than `capped` alone: an explicit pick that merely
+    /// exceeds the RECOMMENDATION ceiling (Big on a 16GB Mac) is legitimate —
+    /// demoting it would violate #81's never-touch-an-explicit-pick honesty rule.
+    /// Armed by the 12B floor (2026-07-15); a no-op while no tier carried one.
+    public static func selectableOrEased(
+        _ tier: BrainTier, forPhysicalMemoryGB gigabytes: Double
+    ) -> BrainTier {
+        tier.isSelectable(forPhysicalMemoryGB: gigabytes)
+            ? tier
+            : capped(tier, forPhysicalMemoryGB: gigabytes)
+    }
+
     /// Convenience: whether this tier is selectable on the machine we're on.
     public var isSelectableOnThisMac: Bool {
         isSelectable(forPhysicalMemoryGB: Self.physicalMemoryGB)

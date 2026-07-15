@@ -161,6 +161,21 @@ struct BrainTierTests {
         }
     }
 
+    @Test("a persisted pick below its tier's floor eases down; a selectable pick is never touched")
+    func selectableOrEased() {
+        // The 12B floor (2026-07-15) created a new boundary case: a persisted
+        // .big on a sub-16GB Mac would render as a LOCKED row while still
+        // running — stranded. Ease exactly that case through capped(); an
+        // explicit pick that merely exceeds the RECOMMENDATION ceiling (Big on
+        // a 16GB Mac) is legitimate and must never be demoted (#81's honesty
+        // rule — capped() is for automatic picks only).
+        #expect(BrainTier.selectableOrEased(.big, forPhysicalMemoryGB: 8) == .mini)
+        #expect(BrainTier.selectableOrEased(.big, forPhysicalMemoryGB: 16) == .big)
+        #expect(BrainTier.selectableOrEased(.big, forPhysicalMemoryGB: 64) == .big)
+        #expect(BrainTier.selectableOrEased(.lil, forPhysicalMemoryGB: 8) == .lil)
+        #expect(BrainTier.selectableOrEased(.mini, forPhysicalMemoryGB: 8) == .mini)
+    }
+
     @Test("rawValue round-trips for @AppStorage persistence; retired 'huge' is not a live rawValue")
     func persistenceRoundTrip() {
         for tier in BrainTier.allCases {
