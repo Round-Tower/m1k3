@@ -10,13 +10,13 @@
 //  look is a floor, never a cage.
 //
 //  The direction (named by the resident himself, 2026-07-15, "The Ghost in
-//  the Machine" brief, art-directed by Kev 2026-07-16): near-black ground,
-//  off-white ink, ONE accent, sharp corners, generous negative space, a
-//  typographic scale that breathes, and quiet CSS motion — content rises in
-//  once, nothing loops, and prefers-reduced-motion kills it all. The accent
-//  is the pixel-M / CRT phosphor green that already identifies M1K3's
-//  companion surfaces — swap `--m1k3-accent` to restyle the whole signature
-//  (12B's own pitch was "surgical violet": #8b5cf6).
+//  the Machine" brief; re-directed by Kev 2026-07-16 "LaTeX / academia,
+//  for the craic"): warm paper ground, serif ink (New York / ui-serif plays
+//  Computer Modern — no webfonts, the sandbox stays sealed), CENTERED title,
+//  auto-numbered sections via CSS counters, justified + hyphenated prose
+//  with LaTeX paragraph indents, booktabs tables (horizontal rules only),
+//  small-caps h4, ONE maroon accent (hyperref vibes), and quiet transform-
+//  only motion. Swap `--m1k3-accent` to restyle the signature in one line.
 //
 //  Self-contained by necessity: the artifact preview is hermetically sealed
 //  (no network, no JS), so no url(), no @import, no webfonts — system stacks
@@ -40,100 +40,63 @@ public enum ArtifactHouseStyle {
 
     /// The classless house sheet. Custom properties first so a future theme
     /// layer (or a curious user exporting the file) can restyle in one place.
-    /// Scale: a ~1.333 (perfect fourth) type ramp on a 16px base; whitespace
-    /// runs on an 8px soul with deliberate air around display type.
+    /// Typesetting: 17px serif on a 38rem measure, justified + hyphenated with
+    /// LaTeX paragraph indents; sections number themselves via CSS counters
+    /// ("\\2003" is an em-space — the gap LaTeX puts after a section number).
     public static let css = """
     :root {
-      color-scheme: dark;
-      --m1k3-bg: #0c0e0d;
-      --m1k3-surface: #151816;
-      --m1k3-ink: #e8ebe9;
-      --m1k3-muted: #98a29c;
-      --m1k3-accent: #3ddc97;
-      --m1k3-rule: #242826;
+      color-scheme: light;
+      --m1k3-bg: #faf7f0;
+      --m1k3-surface: #f1ede2;
+      --m1k3-ink: #1b1b1d;
+      --m1k3-muted: #6c6c70;
+      --m1k3-accent: #7b1e1e;
+      --m1k3-rule: #d9d3c5;
     }
     * { box-sizing: border-box; }
     body {
       background: var(--m1k3-bg);
       color: var(--m1k3-ink);
-      font: 17px/1.7 -apple-system, system-ui, sans-serif;
-      max-width: 42rem;
+      font: 17px/1.65 "New York", ui-serif, Georgia, "Times New Roman", serif;
+      max-width: 38rem;
       margin: 0 auto;
       padding: 5rem 2rem 6rem;
-      -webkit-font-smoothing: antialiased;
+      text-rendering: optimizeLegibility;
+      counter-reset: m1k3-sec;
       /* Entrance is TRANSFORM-ONLY on purpose: a fade-from-0 leaves the page
          invisible if the animation never runs (suspended compositor, occluded
          window — caught live by the render probe 2026-07-16). Content must
          never depend on an animation running to be readable. */
       animation: m1k3-rise 0.6s cubic-bezier(0.2, 0.6, 0.2, 1) backwards;
     }
-    h1, h2, h3, h4, h5, h6 {
-      line-height: 1.15;
-      letter-spacing: -0.022em;
-      text-wrap: balance;
-      margin: 2.2em 0 0.6em;
-    }
-    h1 {
-      font-size: 2.4rem;
-      font-weight: 800;
-      padding-bottom: 0.4em;
-      border-bottom: 1px solid var(--m1k3-rule);
-    }
-    h2 { font-size: 1.75rem; font-weight: 700; }
-    h3 { font-size: 1.3rem; font-weight: 650; }
-    h4 { font-size: 1.05rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--m1k3-muted); }
-    h1:first-child, h2:first-child, header:first-child h1 { margin-top: 0; }
-    p, ul, ol { margin: 0.9em 0; }
-    p { hanging-punctuation: first; }
-    header, section, article, footer { margin: 2.5rem 0; }
-    a {
-      color: var(--m1k3-accent);
-      text-decoration: underline;
-      text-decoration-color: transparent;
-      text-underline-offset: 0.2em;
-      transition: text-decoration-color 0.25s ease;
-    }
+    h1, h2, h3, h4, h5, h6 { line-height: 1.25; text-wrap: balance; font-weight: 700; }
+    h1 { font-size: 1.9rem; text-align: center; margin: 0 0 2.2rem; }
+    h1 + p { text-align: center; font-style: italic; color: var(--m1k3-muted); margin-top: -1.4rem; }
+    h2 { font-size: 1.35rem; margin: 2.4em 0 0.7em; counter-increment: m1k3-sec; counter-reset: m1k3-subsec; }
+    h2::before { content: counter(m1k3-sec) "\\2003"; }
+    h3 { font-size: 1.1rem; margin: 1.8em 0 0.5em; counter-increment: m1k3-subsec; }
+    h3::before { content: counter(m1k3-sec) "." counter(m1k3-subsec) "\\2003"; }
+    h4 { font-size: 1rem; font-variant-caps: small-caps; letter-spacing: 0.04em; margin: 1.6em 0 0.4em; }
+    p { margin: 0.45em 0; text-align: justify; hyphens: auto; -webkit-hyphens: auto; }
+    p + p { text-indent: 1.5em; margin-top: 0; }
+    a { color: var(--m1k3-accent); text-decoration: underline; text-decoration-color: transparent; text-underline-offset: 0.18em; transition: text-decoration-color 0.25s ease; }
     a:hover { text-decoration-color: var(--m1k3-accent); }
-    strong { color: #ffffff; font-weight: 650; }
-    em { color: var(--m1k3-ink); }
-    small { color: var(--m1k3-muted); font-size: 0.85em; }
-    ul, ol { padding-left: 1.5em; }
-    li { margin: 0.35em 0; }
-    li::marker { color: var(--m1k3-accent); }
-    code, kbd, samp, pre { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.88em; }
-    code, kbd { background: var(--m1k3-surface); padding: 0.18em 0.45em; }
-    pre {
-      background: var(--m1k3-surface);
-      border: 1px solid var(--m1k3-rule);
-      border-left: 2px solid var(--m1k3-accent);
-      padding: 1.2em 1.4em;
-      margin: 1.4em 0;
-      overflow-x: auto;
-      line-height: 1.55;
-    }
+    small, figcaption { color: var(--m1k3-muted); font-size: 0.85em; }
+    ul, ol { margin: 0.8em 0; padding-left: 1.8em; }
+    li { margin: 0.3em 0; }
+    code, kbd, samp, pre { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.84em; }
+    code, kbd { background: var(--m1k3-surface); padding: 0.14em 0.4em; }
+    pre { background: var(--m1k3-surface); border: 1px solid var(--m1k3-rule); padding: 1em 1.2em; margin: 1.3em 0; overflow-x: auto; line-height: 1.5; }
     pre code { background: none; padding: 0; }
-    blockquote {
-      border-left: 2px solid var(--m1k3-accent);
-      margin: 1.4em 0;
-      padding: 0.3em 0 0.3em 1.2em;
-      color: var(--m1k3-muted);
-      font-style: italic;
-    }
-    table { border-collapse: collapse; width: 100%; margin: 1.6em 0; font-variant-numeric: tabular-nums; }
-    th, td { border: 1px solid var(--m1k3-rule); padding: 0.6em 0.85em; text-align: left; }
-    th { background: var(--m1k3-surface); font-weight: 650; letter-spacing: 0.02em; }
-    hr { border: none; border-top: 1px solid var(--m1k3-rule); margin: 3rem 0; }
-    img, video, svg { max-width: 100%; height: auto; }
+    blockquote { margin: 1.3em 2em; font-style: italic; color: var(--m1k3-muted); }
+    table { border-collapse: collapse; width: 100%; margin: 1.6em 0; font-variant-numeric: tabular-nums; border-top: 2px solid var(--m1k3-ink); border-bottom: 2px solid var(--m1k3-ink); }
+    th { border-bottom: 1px solid var(--m1k3-ink); font-weight: 700; }
+    th, td { padding: 0.5em 0.85em; text-align: left; border-left: none; border-right: none; }
+    hr { border: none; border-top: 1px solid var(--m1k3-rule); margin: 2.6rem auto; width: 38%; }
+    img, video, svg { max-width: 100%; height: auto; display: block; margin: 1.2em auto; }
     figure { margin: 1.6em 0; }
-    figcaption { color: var(--m1k3-muted); font-size: 0.88em; margin-top: 0.5em; }
-    button, input, select, textarea {
-      font: inherit;
-      color: inherit;
-      background: var(--m1k3-surface);
-      border: 1px solid var(--m1k3-rule);
-      padding: 0.55em 1em;
-      transition: border-color 0.25s ease;
-    }
+    figcaption { text-align: center; font-style: italic; margin-top: 0.5em; }
+    button, input, select, textarea { font: inherit; color: inherit; background: var(--m1k3-bg); border: 1px solid var(--m1k3-rule); padding: 0.5em 0.95em; transition: border-color 0.25s ease; }
     button:hover, input:focus, textarea:focus { border-color: var(--m1k3-accent); outline: none; }
     ::selection { background: var(--m1k3-accent); color: var(--m1k3-bg); }
     @keyframes m1k3-rise {
