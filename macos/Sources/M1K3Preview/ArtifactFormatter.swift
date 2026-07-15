@@ -29,7 +29,7 @@ public enum ArtifactFormatter {
         <head>
           <meta charset="UTF-8">
           <meta name="viewport" content="width=device-width, initial-scale=1">
-          <style>\(markdownStylesheet)</style>
+          \(ArtifactHouseStyle.styleElement)
         </head>
         <body>
         \(body)
@@ -39,38 +39,8 @@ public enum ArtifactFormatter {
         return injectCSPMeta(document)
     }
 
-    /// Reader-friendly typography for rendered markdown; follows light/dark via
-    /// `prefers-color-scheme` so it sits well inside the app's dark chrome.
-    private static let markdownStylesheet = """
-    :root { color-scheme: light dark; }
-    body {
-      font: -apple-system-body, system-ui, sans-serif;
-      line-height: 1.6;
-      max-width: 46rem;
-      margin: 0 auto;
-      padding: 2rem 1.5rem;
-      color: #1d1d1f;
-    }
-    @media (prefers-color-scheme: dark) {
-      body { color: #e8e8ea; }
-      a { color: #6cb6ff; }
-      code, pre { background: rgba(255,255,255,0.08); }
-      hr { border-color: rgba(255,255,255,0.15); }
-      blockquote { border-color: rgba(255,255,255,0.2); color: #b0b0b4; }
-    }
-    h1, h2, h3, h4 { line-height: 1.25; margin: 1.4em 0 0.5em; }
-    h1 { font-size: 1.8rem; }
-    h2 { font-size: 1.4rem; }
-    p, ul, ol, blockquote { margin: 0.6em 0; }
-    li { margin: 0.2em 0; }
-    a { color: #0a66c2; }
-    code { font-family: ui-monospace, SFMono-Regular, monospace; font-size: 0.9em;
-      background: rgba(0,0,0,0.06); padding: 0.1em 0.35em; border-radius: 4px; }
-    pre { background: rgba(0,0,0,0.06); padding: 0.9em 1em; border-radius: 8px; overflow-x: auto; }
-    pre code { background: none; padding: 0; }
-    hr { border: none; border-top: 1px solid rgba(0,0,0,0.15); margin: 1.6em 0; }
-    blockquote { border-left: 3px solid rgba(0,0,0,0.2); padding-left: 1em; color: #555; }
-    """
+    // (The bespoke markdown stylesheet retired 2026-07-16 — markdown previews
+    // now ride ArtifactHouseStyle, one design language across every artifact.)
 
     // MARK: - HTML
 
@@ -124,19 +94,59 @@ public enum ArtifactFormatter {
         // can't reach (see ArtifactSandboxPolicy). The artifact preview also disables
         // JavaScript, so this is belt-and-braces — but a CSP costs nothing and survives
         // even if the preview surface ever re-enables scripting.
-        return injectCSPMeta(structured)
+        // Then the house sheet: injected at head-open, so it sits BEFORE any
+        // author <style> already in the document — the model's own styling
+        // always wins the cascade; the house look is the classless floor.
+        return injectHouseStyle(injectCSPMeta(structured))
     }
 
-    /// Insert the sandbox CSP as the first child of `<head>`. Idempotent (skips if the
-    /// CSP is already present). If the document has no `<head>` it is returned unchanged
-    /// rather than guessing a location — every synthesized path above provides one.
+    /// Insert the classless house sheet as an early child of `<head>` (after the
+    /// CSP meta when present — metas aren't stylesheets, but keeping the seal
+    /// first reads honestly). Idempotent via the marker attribute; a document
+    /// with no `<head>` is returned unchanged (every synthesized path has one).
+    static func injectHouseStyle(_ html: String) -> String {
+        guard !html.contains(ArtifactHouseStyle.marker) else { return html }
+        let anchor: String.Index? = {
+            if let csp = html.range(of: ArtifactSandboxPolicy.cspMetaTag) { return csp.upperBound }
+            return headContentIndex(of: html)
+        }()
+        guard let anchor else { return html }
+        var result = html
+        result.insert(contentsOf: "\n  " + ArtifactHouseStyle.styleElement, at: anchor)
+        return result
+    }
+
+    /// The index just inside a TRUE `<head>` open tag, or nil when the document
+    /// has none. Boundary-checked: "<head" must be followed by `>` or
+    /// whitespace — `<header>` (a body element) must NOT match, or the CSP
+    /// meta lands in body content where WebKit silently ignores it (review
+    /// catch on #44; the bug predated the house sheet in `injectCSPMeta`).
+    static func headContentIndex(of html: String) -> String.Index? {
+        var search = html.startIndex ..< html.endIndex
+        while let open = html.range(of: "<head", options: [.caseInsensitive], range: search) {
+            if open.upperBound < html.endIndex {
+                let next = html[open.upperBound]
+                if next == ">" || next.isWhitespace,
+                   let tagClose = html.range(of: ">", range: open.upperBound ..< html.endIndex)
+                {
+                    return tagClose.upperBound
+                }
+            }
+            search = open.upperBound ..< html.endIndex
+        }
+        return nil
+    }
+
+    /// Insert the sandbox CSP as the first child of the TRUE `<head>` (via the
+    /// boundary-checked locator — `<header>` never matches). Idempotent (skips
+    /// if the CSP is already present). If the document has no `<head>` it is
+    /// returned unchanged rather than guessing a location — every synthesized
+    /// path above provides one.
     static func injectCSPMeta(_ html: String) -> String {
         guard !html.contains(ArtifactSandboxPolicy.contentSecurityPolicy) else { return html }
-        guard let headOpen = html.range(of: "<head", options: [.caseInsensitive]),
-              let tagClose = html.range(of: ">", range: headOpen.upperBound ..< html.endIndex)
-        else { return html }
+        guard let anchor = headContentIndex(of: html) else { return html }
         var result = html
-        result.insert(contentsOf: "\n  " + ArtifactSandboxPolicy.cspMetaTag, at: tagClose.upperBound)
+        result.insert(contentsOf: "\n  " + ArtifactSandboxPolicy.cspMetaTag, at: anchor)
         return result
     }
 
