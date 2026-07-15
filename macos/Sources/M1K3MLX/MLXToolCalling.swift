@@ -31,6 +31,10 @@
 //  the live turn (LocalAgent sorts), colliding on the same cache key with
 //  different KV content. Measured win ~1.9 s lil / ~3.3 s big (SelfTest
 //  PREFIXWARM modes 1–3; mode 3 is the out-of-order tool-path proof).
+//  Review: Kev + claude-fable-5, 2026-07-15, Confidence 0.9 — Ternary-Bonsai-8B
+//  added to the .json arm by EXACT size id (config model_type "qwen3" +
+//  <tool_call> template verified against HF; the Qwen3.6-based 27B deliberately
+//  stays nil → ReAct floor). Live-proven same day: CHATEVAL tool-use 5/5 native.
 
 import Foundation
 import M1K3Inference
@@ -246,7 +250,13 @@ extension MLXGemmaProvider: ToolCallingProvider {
         if name.contains("qwen3.5") || name.contains("qwen3_5") || name.contains("qwen3-5") {
             return .xmlFunction
         }
-        if name.contains("qwen") || name.contains("llama")
+        // prism-ml's Ternary-Bonsai-8B is Qwen3 QAT under a brand id (no "qwen"
+        // substring; verified 2026-07-15: model_type "qwen3", <tool_call> JSON
+        // template). Matched by EXACT size id — the 27B is Qwen3.6-based and
+        // unverified, so it deliberately stays nil (ReAct floor) rather than
+        // silently riding this arm; extend per size only with the config +
+        // template re-verified.
+        if name.contains("qwen") || name.contains("llama") || name.contains("ternary-bonsai-8b")
             || name.contains("mistral") || name.contains("phi") { return .json }
         if name.contains("glm") { return .glm4 }
         if name.contains("lfm2") { return .lfm2 }

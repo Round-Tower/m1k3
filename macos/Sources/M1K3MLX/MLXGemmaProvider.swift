@@ -39,6 +39,10 @@
 //  Review: Kev + claude-fable-5, 2026-06-12, Confidence 0.8 — repetitionPenalty
 //  1.1 / repetitionContextSize 64 as the degenerate-loop guard (values pinned
 //  in tests; effect on think-phase + FACT-line distillation is verify-at-⌘R).
+//  Review: Kev + claude-fable-5, 2026-07-15, Confidence 0.9 — Ternary-Bonsai-8B
+//  joins the quantized-KV allow-list by exact size id (dense Qwen3 under the
+//  brand: Qwen3Model → attentionWithCacheUpdate, verified vs the HF config).
+//  The unverified Qwen3.6-based 27B keeps the crash-safe default, test-pinned.
 
 import Foundation
 import M1K3Inference
@@ -578,7 +582,13 @@ extension MLXGemmaProvider {
         let modelName = configuration.name.lowercased()
         // "qwen3" covers Qwen3 and every Qwen3.5 spelling; "gemma-3-" cannot
         // match gemma-3n ids ("gemma-3n…" has no trailing dash after the 3).
+        // Ternary-Bonsai-8B (prism-ml) is dense Qwen3 under a brand id —
+        // model_type "qwen3" → Qwen3Model → attentionWithCacheUpdate, so
+        // quantized KV routes safely (verified against the 8B config 2026-07-15).
+        // Exact size id on purpose: the Qwen3.6-based 27B is unverified and
+        // must fall to the crash-safe default, not inherit this allow-list.
         return modelName.contains("qwen3") || modelName.contains("gemma-3-")
+            || modelName.contains("ternary-bonsai-8b")
     }
 
     /// Prepend the synthetic `<think>` opener exactly once so downstream
