@@ -134,4 +134,63 @@ struct ModelCacheIntegrityTests {
             .appendingPathComponent("integrity-absent-\(UUID().uuidString)")
         #expect(ModelCacheIntegrity.healBeforeLoad(directory: dir) == .empty)
     }
+
+    @Test("missing shard WITH resumable .incomplete parts is a paused download — never torn")
+    func missingShardWithResumablePartsIsResuming() {
+        // The review catch: shard 1 renamed-complete + shard 2 still resumable
+        // is the ordinary state of ANY interrupted multi-shard download. Torn
+        // here would delete gigabytes of healthy partial on every retry. The
+        // crash state has NO .incomplete (HubApi believed the snapshot done).
+        let verdict = ModelCacheIntegrity.verdict(
+            indexWeightFiles: ["model-00001-of-00002.safetensors", "model-00002-of-00002.safetensors"],
+            safetensorsSizes: ["model-00001-of-00002.safetensors": 1000],
+            hasResumableParts: true
+        )
+        #expect(verdict == .resuming)
+    }
+
+    @Test("scan detects .incomplete under .cache and heal leaves the resumable download alone")
+    func healLeavesResumableDownloadAlone() throws {
+        let dir = try makeModelDir([
+            "model.safetensors.index.json": indexJSON(
+                shards: ["model-00001-of-00002.safetensors", "model-00002-of-00002.safetensors"]
+            ),
+            "model-00001-of-00002.safetensors": Data(repeating: 1, count: 64),
+        ])
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let staging = dir.appendingPathComponent(".cache/huggingface/download")
+        try FileManager.default.createDirectory(at: staging, withIntermediateDirectories: true)
+        try Data(repeating: 2, count: 8).write(
+            to: staging.appendingPathComponent("model-00002-of-00002.safetensors.abc123.incomplete")
+        )
+
+        #expect(ModelCacheIntegrity.healBeforeLoad(directory: dir) == .resuming)
+        #expect(FileManager.default.fileExists(atPath: dir.path))
+    }
+
+    @Test("foreign .metadata WITHOUT .incomplete does not protect — that is the crash state")
+    func metadataAloneDoesNotProtect() throws {
+        // The 2026-07-16 poisoned pre-seed left .cache/…/*.metadata but no
+        // .incomplete — HubApi believed the snapshot complete and loaded a
+        // missing-shard dir into the quantize fatalError. Metadata alone must
+        // NOT read as resumable.
+        let dir = try makeModelDir([
+            "model.safetensors.index.json": indexJSON(
+                shards: ["model-00001-of-00002.safetensors", "model-00002-of-00002.safetensors"]
+            ),
+            "model-00001-of-00002.safetensors": Data(repeating: 1, count: 64),
+        ])
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let staging = dir.appendingPathComponent(".cache/huggingface/download")
+        try FileManager.default.createDirectory(at: staging, withIntermediateDirectories: true)
+        try Data("etag".utf8).write(
+            to: staging.appendingPathComponent("model-00002-of-00002.safetensors.metadata")
+        )
+
+        guard case .torn = ModelCacheIntegrity.healBeforeLoad(directory: dir) else {
+            Issue.record("expected torn — metadata without incomplete is the crash state")
+            return
+        }
+        #expect(!FileManager.default.fileExists(atPath: dir.path))
+    }
 }

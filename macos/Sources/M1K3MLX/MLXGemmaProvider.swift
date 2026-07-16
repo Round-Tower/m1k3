@@ -48,8 +48,15 @@
 //  variants and dropped enable_thinking from both templates (verified vs HF);
 //  the Instruct variant is the wired lil, so an over-claimed toggle would ship
 //  a dead reasoning picker. Stock qwen3 keeps the toggle, test-pinned both ways.
+//  Review: Kev + claude-fable-5, 2026-07-16 (evening), Confidence 0.85 — the
+//  torn-cache pre-load tripwire (ModelCacheIntegrity.healBeforeLoad) inside
+//  the retry operation: a partial model dir crashed the process in mlx-swift's
+//  quantize (swift_unexpectedError; stack-evidenced). Directory via HubApi's
+//  own localRepoLocation (the LocalModelInventory never-drift rule); resumable
+//  .incomplete downloads are protected from the heal (review catch).
 
 import Foundation
+import Hub
 import M1K3Inference
 import MLX
 import MLXLLM
@@ -223,17 +230,13 @@ public final class MLXGemmaProvider: InferenceProvider, ModelPreloading, @unchec
                     // quantize pass and dies as swift_unexpectedError — a process
                     // death, not a thrown load failure. Heal (delete → HubApi
                     // re-downloads) BEFORE the loader can read it; inside the
-                    // retry so a failed attempt re-checks. Path mirrors
-                    // HubApiDownloader.llmDefault's base (Caches/models/<id>).
-                    if let caches = FileManager.default.urls(
-                        for: .cachesDirectory, in: .userDomainMask
-                    ).first {
-                        ModelCacheIntegrity.healBeforeLoad(
-                            directory: caches
-                                .appendingPathComponent("models")
-                                .appendingPathComponent(loadConfiguration.name)
-                        )
-                    }
+                    // retry so a failed attempt re-checks. Directory via HubApi's
+                    // OWN path resolution (the LocalModelInventory rule: detection
+                    // and download must never drift).
+                    ModelCacheIntegrity.healBeforeLoad(
+                        directory: HubApiDownloader.llmDefault.hub
+                            .localRepoLocation(Hub.Repo(id: loadConfiguration.name))
+                    )
                     return try await LLMModelFactory.shared.loadContainer(
                         from: HubApiDownloader.llmDefault,
                         using: TransformersTokenizerLoader(),

@@ -37,16 +37,27 @@ public enum ModelCacheIntegrity {
         case ok
         /// No weight files — the normal state before a first download.
         case empty
-        /// The state that crashes the loader: partial weights on disk.
+        /// Missing shards WITH resumable `.incomplete` parts alongside — an
+        /// interrupted download HubApi will resume. Never healed: deleting it
+        /// would throw away gigabytes of healthy partial on every retry
+        /// (review catch on the first cut of this file).
+        case resuming
+        /// The state that crashes the loader: partial weights on disk that
+        /// HubApi believes are a COMPLETE snapshot (no resumable parts).
         case torn(reason: String)
     }
 
     /// The decision core. `indexWeightFiles`: shard filenames referenced by
     /// model.safetensors.index.json (empty when no index).
     /// `safetensorsSizes`: filename → byte size for every *.safetensors present.
+    /// `hasResumableParts`: any `.incomplete` staged under `.cache/` — the
+    /// downloader's own in-flight marker. NOTE deliberately narrow: bare
+    /// `.metadata` files do NOT count (the 2026-07-16 poisoned pre-seed left
+    /// exactly metadata-without-incomplete, and that state crashed the loader).
     public static func verdict(
         indexWeightFiles: Set<String>,
-        safetensorsSizes: [String: Int]
+        safetensorsSizes: [String: Int],
+        hasResumableParts: Bool = false
     ) -> Verdict {
         if let empty = safetensorsSizes.first(where: { $0.value == 0 }) {
             return .torn(reason: "zero-byte shard \(empty.key)")
@@ -58,6 +69,9 @@ public enum ModelCacheIntegrity {
                 // artifact (config fetched first), not torn — nothing partial
                 // to poison the loader; HubApi fetches the shards next.
                 if safetensorsSizes.isEmpty { return .empty }
+                // Missing shards beside in-flight parts = a download to resume,
+                // not a corpse to bury.
+                if hasResumableParts { return .resuming }
                 return .torn(reason: "index references missing shard(s): \(missing.sorted().joined(separator: ", "))")
             }
             return .ok
@@ -83,7 +97,25 @@ public enum ModelCacheIntegrity {
         {
             indexed = Set(weightMap.values)
         }
-        return verdict(indexWeightFiles: indexed, safetensorsSizes: sizes)
+        return verdict(
+            indexWeightFiles: indexed,
+            safetensorsSizes: sizes,
+            hasResumableParts: hasIncompleteParts(under: directory.appendingPathComponent(".cache"))
+        )
+    }
+
+    /// Any `.incomplete` file under the downloader's `.cache` staging area —
+    /// the marker that distinguishes "interrupted, resumable" from "believed
+    /// complete but torn".
+    private static func hasIncompleteParts(under cacheDir: URL) -> Bool {
+        guard let walker = FileManager.default.enumerator(
+            at: cacheDir, includingPropertiesForKeys: nil,
+            options: [.skipsHiddenFiles]
+        ) else { return false }
+        for case let url as URL in walker where url.lastPathComponent.hasSuffix(".incomplete") {
+            return true
+        }
+        return false
     }
 
     /// The recovery: when the directory `loadContainer` is about to read is
