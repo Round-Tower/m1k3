@@ -22,6 +22,20 @@
 //  speak(_:) routes through the streaming session; finishPlayback() now stops
 //  the node (a drained player reads isPlaying forever — integration-test catch).
 //  Confidence 0.75.
+//  Review: Kev + claude-fable-5, 2026-07-16, Confidence 0.85 (concurrency deep
+//  pass, finding 9) — SynthBox resumed its offline-render continuation ONLY on
+//  write's zero-frame sentinel, so a stop/barge-in (stopSpeaking(at:.immediate))
+//  mid-render never delivered it and the continuation LEAKED — every caller
+//  awaiting speak() hung forever (the MCP speak HTTP call, the voice loop). Added
+//  didFinish (idempotent success backstop when no sentinel arrives) and didCancel
+//  (resume exactly once with CancellationError, sharing finish's done flag), plus
+//  a `catch is CancellationError` in speak(_:) so a barge-in ends silently rather
+//  than re-speaking the stopped utterance via plainSpeak. This is the Apple
+//  offline-render path (the M1K3 Voice + Built-in tiers, and Kokoro's Apple
+//  FALLBACK — Kokoro's neural path plays its own PCM and doesn't hit
+//  synthesizeToFloats). The exactly-once contract is unit-tested
+//  (SynthBoxCancellationTests, headless); the real cancelled-render WIRING (a
+//  live AVSpeechSynthesizer delivering didCancel) stays verify-by-launch.
 
 import AVFoundation
 import Foundation
@@ -127,6 +141,12 @@ public final class EffectfulSpeechProvider: NSObject, SpeechProviderWithWordTimi
             let chunk = TimedPCMChunk(samples: samples, timeline: timeline)
             let spoke = await speak(stream: .single(chunk), sampleRate: sampleRate)
             if !spoke { await plainSpeak(utterance) }
+        } catch is CancellationError {
+            // A barge-in/stop cancelled the offline render mid-flight (SynthBox's
+            // didCancel). Cancellation is NOT a failure — end silently rather than
+            // re-speaking the just-stopped utterance in the plain voice (the
+            // fallback-never-silent doctrine is about genuine failures).
+            return
         } catch {
             await plainSpeak(utterance)
         }
@@ -338,7 +358,11 @@ struct WordOnset: Equatable {
 /// `wordOnsets` are all `lock`-guarded, and the `done` flag guarantees `finish()`
 /// resumes the continuation at most once even though `write` callbacks arrive on a
 /// background thread.
-private final class SynthBox: NSObject, AVSpeechSynthesizerDelegate, @unchecked Sendable {
+/// `internal` (not `private`) so M1K3VoiceTests can pin the exactly-once
+/// resume contract directly — the delegate cancel/finish backstops below are
+/// verify-by-launch to WIRE (a real cancelled AVSpeechSynthesizer render), but
+/// the exactly-once guarantee they rely on is pure and unit-tested.
+final class SynthBox: NSObject, AVSpeechSynthesizerDelegate, @unchecked Sendable {
     private let lock = NSLock()
     private var samples: [Float] = []
     private var sampleRate: Double = 0
@@ -355,6 +379,26 @@ private final class SynthBox: NSObject, AVSpeechSynthesizerDelegate, @unchecked 
             let range = characterRange.location ..< characterRange.location + characterRange.length
             wordOnsets.append(WordOnset(textRange: range, sampleOffset: samples.count))
         }
+    }
+
+    /// Success backstop. `write`'s zero-frame sentinel (`ingest`) normally
+    /// resumes first; if it never arrives (some voices don't emit it), this
+    /// delegate callback still completes the continuation. Idempotent via the
+    /// `done` flag, so the common case where the sentinel won already ran is a
+    /// harmless no-op.
+    func speechSynthesizer(_: AVSpeechSynthesizer, didFinish _: AVSpeechUtterance) {
+        finish()
+    }
+
+    /// Cancel path — the fix for the leaked continuation. `stop()` calls
+    /// `synthesizer.stopSpeaking(at:.immediate)` mid-render; the zero-frame
+    /// sentinel then never arrives, so without this the continuation (and every
+    /// caller awaiting `speak`) would suspend forever. Resume exactly once with
+    /// `CancellationError` — NOT the partial samples (would play audio the user
+    /// just stopped) and NOT a generic error (would trigger the plain-voice
+    /// re-speak fallback). `speak(_:)` swallows the CancellationError silently.
+    func speechSynthesizer(_: AVSpeechSynthesizer, didCancel _: AVSpeechUtterance) {
+        cancel()
     }
 
     func ingest(_ buffer: AVAudioBuffer) {
@@ -392,5 +436,17 @@ private final class SynthBox: NSObject, AVSpeechSynthesizerDelegate, @unchecked 
         }
         guard let payload else { return }
         onDone?(.success(payload))
+    }
+
+    /// Resume exactly once with a cancellation, sharing `finish`'s `done` guard
+    /// so cancel-then-late-sentinel (or a double cancel) is a no-op.
+    private func cancel() {
+        let shouldResume = lock.withLock {
+            guard !done else { return false }
+            done = true
+            return true
+        }
+        guard shouldResume else { return }
+        onDone?(.failure(CancellationError()))
     }
 }
