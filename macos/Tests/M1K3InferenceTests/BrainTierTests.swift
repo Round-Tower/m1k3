@@ -61,7 +61,11 @@ struct BrainTierTests {
         // CPU-spikes on mlx-swift-lm 3.31.3 — see MODEL_CHOICES.md). Dense routes
         // through the existing qwen3 path: .json tools, no pre-open-think,
         // quantized KV — verified against the real Qwen3 chat template.
-        #expect(BrainTier.lil.mlxModelID == "mlx-community/Qwen3-4B-4bit")
+        // lil is the NON-THINKING Instruct-2507 refresh since 2026-07-16: same
+        // dense-qwen3 family/size, but no <think> phase — tools 4.4s vs 21.0s
+        // median, reasoning answers 1.8s vs 11.9s, security parity with the
+        // model it replaces (Run E, macos/scratch/eval-2026-07-15-model-runs/).
+        #expect(BrainTier.lil.mlxModelID == "mlx-community/Qwen3-4B-Instruct-2507-4bit")
         // big is gemma-4-12B since 2026-07-15: both June blockers cleared on the
         // pinned mlx-swift-lm 3.31.4 (vision_embedder sanitize IS in the tag;
         // the RotatingKVCache.temporalOrder tool-use crash did not reproduce),
