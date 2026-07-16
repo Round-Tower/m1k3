@@ -414,8 +414,11 @@ public final class ChatSession {
     /// NARROWER stall than the original (only when the drawer is open during a
     /// send, and net-lower main-thread time than the old always-on-main write),
     /// but its full fix is a `DatabasePool`/WAL read-write split — a separate
-    /// store change. The mirror-image blocking decode in `switchTo` and the
-    /// one-time init restore likewise stay synchronous (follow-ups).
+    /// store change. (Encode now runs inside the write closure, so on the rare
+    /// contended read the main-thread wait covers encode+insert, not just insert
+    /// — longer per hit, but far rarer than the old every-turn on-main cost.)
+    /// The mirror-image blocking decode in `switchTo` and the one-time init
+    /// restore likewise stay synchronous (follow-ups).
     func persistActiveConversation() async {
         guard let history else { return }
         do {

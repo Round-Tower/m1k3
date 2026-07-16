@@ -11,6 +11,13 @@
 //  Signed: Kev + claude-fable-5, 2026-06-11, Confidence 0.9 (round-trips,
 //  upsert, ordering, file persistence all test-pinned).
 //  Prior: GRDBCallPersistence idiom (Kev + claude-opus-4-8).
+//  Review: Kev + claude-fable-5, 2026-07-16, Confidence 0.85 (concurrency deep
+//  pass, finding 25/30) — added `saveAsync` to the ChatHistoryPersisting seam
+//  for the per-turn hot path (ChatSession is @MainActor). GRDBChatHistoryStore
+//  implements it with a native `dbQueue.write { }` so the O(conversation) encode
+//  + write run on the DB's writer queue, off the MainActor; a protocol default
+//  hops the sync `save` off-caller for the non-GRDB conformers. `save` and
+//  `saveAsync` share one private `upsert` body so their SQL can't drift.
 //
 
 import Foundation
@@ -138,46 +145,44 @@ public final class GRDBChatHistoryStore: ChatHistoryPersisting, @unchecked Senda
         }
     }
 
-    public func save(id: UUID, messages: [ChatMessage], updatedAt: Date) throws {
+    /// The single upsert body BOTH `save` (sync) and `saveAsync` (native async)
+    /// run inside their `dbQueue.write`, so the SQL + arguments can't drift
+    /// between the two paths (a future column added to one but not the other).
+    /// The JSON encode lives HERE, inside the write closure, so `saveAsync`'s runs
+    /// on GRDB's writer queue — off the calling MainActor (the point of 25/30).
+    private static func upsert(
+        _ db: Database, id: UUID, messages: [ChatMessage], updatedAt: Date
+    ) throws {
         let payload = try JSONEncoder().encode(messages)
+        try db.execute(
+            sql: """
+            INSERT INTO conversations (id, title, created_at, updated_at, payload)
+            VALUES (?, NULL, ?, ?, ?)
+            ON CONFLICT(id) DO UPDATE SET payload = excluded.payload, updated_at = excluded.updated_at
+            """,
+            arguments: [
+                id.uuidString,
+                updatedAt.timeIntervalSince1970,
+                updatedAt.timeIntervalSince1970,
+                payload,
+            ]
+        )
+    }
+
+    public func save(id: UUID, messages: [ChatMessage], updatedAt: Date) throws {
         try dbQueue.write { db in
-            try db.execute(
-                sql: """
-                INSERT INTO conversations (id, title, created_at, updated_at, payload)
-                VALUES (?, NULL, ?, ?, ?)
-                ON CONFLICT(id) DO UPDATE SET payload = excluded.payload, updated_at = excluded.updated_at
-                """,
-                arguments: [
-                    id.uuidString,
-                    updatedAt.timeIntervalSince1970,
-                    updatedAt.timeIntervalSince1970,
-                    payload,
-                ]
-            )
+            try Self.upsert(db, id: id, messages: messages, updatedAt: updatedAt)
         }
     }
 
     /// Native async override of `saveAsync`: GRDB's `dbQueue.write { }` suspends
     /// the caller on the DB's own writer queue (no parked cooperative-pool thread,
-    /// unlike the protocol default), and the O(conversation) JSON encode runs
-    /// INSIDE the write closure so it too executes off the calling MainActor —
-    /// the whole point of finding 25/30. Same upsert SQL as the sync `save`.
+    /// unlike the protocol default), and the shared `upsert` — including the
+    /// O(conversation) JSON encode — runs INSIDE the write closure, so it too
+    /// executes off the calling MainActor. The whole point of finding 25/30.
     public func saveAsync(id: UUID, messages: [ChatMessage], updatedAt: Date) async throws {
         try await dbQueue.write { db in
-            let payload = try JSONEncoder().encode(messages)
-            try db.execute(
-                sql: """
-                INSERT INTO conversations (id, title, created_at, updated_at, payload)
-                VALUES (?, NULL, ?, ?, ?)
-                ON CONFLICT(id) DO UPDATE SET payload = excluded.payload, updated_at = excluded.updated_at
-                """,
-                arguments: [
-                    id.uuidString,
-                    updatedAt.timeIntervalSince1970,
-                    updatedAt.timeIntervalSince1970,
-                    payload,
-                ]
-            )
+            try Self.upsert(db, id: id, messages: messages, updatedAt: updatedAt)
         }
     }
 
