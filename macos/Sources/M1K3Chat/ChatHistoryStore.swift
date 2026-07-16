@@ -41,7 +41,16 @@ public protocol ChatHistoryPersisting: Sendable {
     func loadMessages(id: UUID) throws -> [ChatMessage]?
     /// Upsert: a new id creates the row (createdAt = updatedAt); an existing
     /// id replaces the payload and advances updatedAt, preserving createdAt.
+    /// Synchronous — kept for the one-time launch migration (`TranscriptMigrator`
+    /// inside `AppEnvironment`'s SYNCHRONOUS init) and the direct store tests.
     func save(id: UUID, messages: [ChatMessage], updatedAt: Date) throws
+    /// Off-the-caller-actor upsert for the per-turn hot path (ChatSession is
+    /// `@MainActor` — the O(conversation) encode + write must not land on it).
+    /// Default hops the synchronous `save` onto a utility task; a store with a
+    /// native async writer (GRDBChatHistoryStore → GRDB's `dbQueue.write { }`)
+    /// overrides this so it suspends on the DB's own queue instead of parking a
+    /// cooperative-pool thread. Same upsert semantics as `save`.
+    func saveAsync(id: UUID, messages: [ChatMessage], updatedAt: Date) async throws
     /// No-op for unknown ids — titling races conversation deletion.
     func setTitle(id: UUID, title: String) throws
     @discardableResult
@@ -54,6 +63,20 @@ public protocol ChatHistoryPersisting: Sendable {
     /// Advance the watermark after a successful distillation. No-op for
     /// unknown ids (the setTitle precedent — distillation races deletion).
     func setDistilledWatermark(id: UUID, count: Int) throws
+}
+
+public extension ChatHistoryPersisting {
+    /// Default `saveAsync`: run the synchronous `save` on a detached utility task
+    /// so it never executes on the caller's actor (the MainActor, for ChatSession).
+    /// Awaited by the caller, so ordering and post-write invariants are preserved.
+    /// GRDBChatHistoryStore overrides this with a native async DB write; this
+    /// default keeps every other conformer (the in-memory test fakes, any future
+    /// non-GRDB store) honestly off-main without each re-implementing the hop.
+    func saveAsync(id: UUID, messages: [ChatMessage], updatedAt: Date) async throws {
+        try await Task.detached(priority: .utility) {
+            try self.save(id: id, messages: messages, updatedAt: updatedAt)
+        }.value
+    }
 }
 
 public final class GRDBChatHistoryStore: ChatHistoryPersisting, @unchecked Sendable {
@@ -118,6 +141,30 @@ public final class GRDBChatHistoryStore: ChatHistoryPersisting, @unchecked Senda
     public func save(id: UUID, messages: [ChatMessage], updatedAt: Date) throws {
         let payload = try JSONEncoder().encode(messages)
         try dbQueue.write { db in
+            try db.execute(
+                sql: """
+                INSERT INTO conversations (id, title, created_at, updated_at, payload)
+                VALUES (?, NULL, ?, ?, ?)
+                ON CONFLICT(id) DO UPDATE SET payload = excluded.payload, updated_at = excluded.updated_at
+                """,
+                arguments: [
+                    id.uuidString,
+                    updatedAt.timeIntervalSince1970,
+                    updatedAt.timeIntervalSince1970,
+                    payload,
+                ]
+            )
+        }
+    }
+
+    /// Native async override of `saveAsync`: GRDB's `dbQueue.write { }` suspends
+    /// the caller on the DB's own writer queue (no parked cooperative-pool thread,
+    /// unlike the protocol default), and the O(conversation) JSON encode runs
+    /// INSIDE the write closure so it too executes off the calling MainActor —
+    /// the whole point of finding 25/30. Same upsert SQL as the sync `save`.
+    public func saveAsync(id: UUID, messages: [ChatMessage], updatedAt: Date) async throws {
+        try await dbQueue.write { db in
+            let payload = try JSONEncoder().encode(messages)
             try db.execute(
                 sql: """
                 INSERT INTO conversations (id, title, created_at, updated_at, payload)

@@ -26,6 +26,13 @@ private final class InMemoryHistoryStore: ChatHistoryPersisting, @unchecked Send
     private let lock = NSLock()
     private var rows: [UUID: Row] = [:]
     private(set) var setTitleCalls: [(UUID, String)] = []
+    /// Records whether the most recent `save` ran on the main thread — the
+    /// probe for finding 25/30 (the per-turn transcript encode+write must move
+    /// off the MainActor). nil until the first save.
+    private var _lastSaveOnMainThread: Bool?
+    var lastSaveOnMainThread: Bool? {
+        lock.withLock { _lastSaveOnMainThread }
+    }
 
     func list() throws -> [ConversationSummary] {
         lock.lock()
@@ -44,6 +51,7 @@ private final class InMemoryHistoryStore: ChatHistoryPersisting, @unchecked Send
     func save(id: UUID, messages: [ChatMessage], updatedAt: Date) throws {
         lock.lock()
         defer { lock.unlock() }
+        _lastSaveOnMainThread = Thread.isMainThread
         if var row = rows[id] {
             row.messages = messages
             row.updatedAt = updatedAt
@@ -205,6 +213,18 @@ struct ChatSessionConversationsTests {
         #expect(try store.loadMessages(id: session.activeConversationID) == session.messages)
         #expect(session.historyRevision > revisionBefore)
         #expect(try store.list().count == 1)
+    }
+
+    @Test("the per-turn transcript encode+write runs OFF the main actor (finding 25/30)")
+    func persistRunsOffMainActor() async {
+        let store = InMemoryHistoryStore()
+        let session = ChatSession(responder: EchoResponder(), history: store)
+        await session.send("hello")
+        // persistActiveConversation is @MainActor, but the O(conversation) JSON
+        // encode + SQLite write it drives must not run ON the main thread — that
+        // was the per-turn hitch at answer completion. Awaited inline, so the row
+        // is still present the instant send returns (sendPersists pins that).
+        #expect(store.lastSaveOnMainThread == false)
     }
 
     @Test("a failed send still persists the failed message")

@@ -54,6 +54,35 @@ struct ChatHistoryStoreTests {
         #expect(loaded == original)
     }
 
+    @Test("saveAsync persists identically to save (native async write path)")
+    func saveAsyncRoundTrips() async throws {
+        let store = try GRDBChatHistoryStore()
+        let id = UUID()
+        let when = Date(timeIntervalSince1970: 2000)
+        let original = sampleMessages()
+        try await store.saveAsync(id: id, messages: original, updatedAt: when)
+        #expect(try store.loadMessages(id: id) == original)
+        let summaries = try store.list()
+        #expect(summaries.count == 1)
+        #expect(summaries[0].id == id)
+        #expect(summaries[0].updatedAt == when)
+    }
+
+    @Test("saveAsync upserts the same row as save (no duplicate, updatedAt advances)")
+    func saveAsyncUpserts() async throws {
+        let store = try GRDBChatHistoryStore()
+        let id = UUID()
+        let full = sampleMessages()
+        let created = Date(timeIntervalSince1970: 100)
+        try store.save(id: id, messages: [full[0]], updatedAt: created)
+        let updated = Date(timeIntervalSince1970: 300)
+        try await store.saveAsync(id: id, messages: full, updatedAt: updated)
+        #expect(try store.list().count == 1)
+        #expect(try store.loadMessages(id: id) == full)
+        #expect(try store.list()[0].createdAt == created)
+        #expect(try store.list()[0].updatedAt == updated)
+    }
+
     @Test("a second save upserts: payload replaced, updatedAt advanced, createdAt preserved")
     func upsert() throws {
         let store = try GRDBChatHistoryStore()
