@@ -92,6 +92,34 @@ struct MLXGemmaProviderTests {
         ))
     }
 
+    @Test("the 2507 line does NOT claim the thinking toggle — Instruct never thinks, Thinking always does")
+    func qwen2507ThinkingTogglePinnedOff() {
+        // Qwen split the 2507 refresh into two FIXED-mode variants; neither
+        // template carries enable_thinking (verified against the HF template
+        // 2026-07-16). The bare "qwen3" name-match would claim the toggle and
+        // leave the Settings reasoning picker as a control that does nothing —
+        // the dead-control rule says pin it off instead. THE WIRED LIL (since
+        // 2026-07-16) is the Instruct variant, so this pin is load-bearing.
+        #expect(!MLXGemmaProvider.templateSupportsThinkingToggle(
+            for: ModelConfiguration(id: "mlx-community/Qwen3-4B-Instruct-2507-4bit")
+        ))
+        #expect(!MLXGemmaProvider.templateSupportsThinkingToggle(
+            for: ModelConfiguration(id: "mlx-community/Qwen3-4B-Thinking-2507-4bit")
+        ))
+        // Stock (pre-2507) Qwen3 keeps the toggle — the exclusion must not
+        // over-reach.
+        #expect(MLXGemmaProvider.templateSupportsThinkingToggle(
+            for: ModelConfiguration(id: "mlx-community/Qwen3-4B-4bit")
+        ))
+        // And the 2507 line still rides the rest of the qwen3 family arms.
+        #expect(MLXGemmaProvider.supportsQuantizedKVCache(
+            for: ModelConfiguration(id: "mlx-community/Qwen3-4B-Instruct-2507-4bit")
+        ))
+        #expect(MLXGemmaProvider.resolveToolCallFormat(
+            for: ModelConfiguration(id: "mlx-community/Qwen3-4B-Instruct-2507-4bit")
+        ) == .json)
+    }
+
     @Test("tool-turn thinking is decided per-turn, never from construction-time state")
     func toolTurnThinkingIsPerTurn() {
         // A toggle family that ALSO pre-opens (Qwen3.5): thinking ON ⇒ no

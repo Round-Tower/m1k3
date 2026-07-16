@@ -43,6 +43,11 @@
 //  joins the quantized-KV allow-list by exact size id (dense Qwen3 under the
 //  brand: Qwen3Model → attentionWithCacheUpdate, verified vs the HF config).
 //  The unverified Qwen3.6-based 27B keeps the crash-safe default, test-pinned.
+//  Review: Kev + claude-fable-5, 2026-07-16, Confidence 0.9 — the 2507 line
+//  EXCLUDED from the thinking toggle: Qwen split the refresh into fixed-mode
+//  variants and dropped enable_thinking from both templates (verified vs HF);
+//  the Instruct variant is the wired lil, so an over-claimed toggle would ship
+//  a dead reasoning picker. Stock qwen3 keeps the toggle, test-pinned both ways.
 
 import Foundation
 import M1K3Inference
@@ -568,7 +573,13 @@ extension MLXGemmaProvider {
     /// `enable_thinking:false` was never sent and the model thought on every turn.
     static func templateSupportsThinkingToggle(for configuration: ModelConfiguration) -> Bool {
         // "qwen3" matches Qwen3-4B/8B AND every Qwen3.5 spelling (which contains it).
-        configuration.name.lowercased().contains("qwen3")
+        // The 2507 refresh is EXCLUDED: Qwen split it into fixed-mode variants
+        // (Instruct never thinks, Thinking always does) and dropped
+        // enable_thinking from both templates (verified 2026-07-16) — claiming
+        // the toggle would leave the reasoning picker a dead control. The
+        // Instruct variant is the wired lil since 2026-07-16.
+        let name = configuration.name.lowercased()
+        return name.contains("qwen3") && !name.contains("2507")
     }
 
     /// Allow-list of families whose attention routes through upstream's

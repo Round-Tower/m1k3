@@ -149,11 +149,15 @@ public enum BrainTier: String, CaseIterable, Identifiable, Sendable, Comparable 
     public var backing: BrainBacking {
         switch self {
         case .mini: .appleFoundationModels
-        // DENSE Qwen3 (not the Qwen3.5 GatedDeltaNet hybrid — that CPU-spikes on
-        // mlx-swift-lm 3.31.3, a per-timestep recurrent scan). Dense routes through
-        // the existing qwen3 path (.json tools, no pre-open-think, quantized KV).
-        // See macos/docs/MODEL_CHOICES.md.
-        case .lil: .mlx(modelID: "mlx-community/Qwen3-4B-4bit")
+        // DENSE Qwen3, the NON-THINKING Instruct-2507 refresh since 2026-07-16
+        // (was bare Qwen3-4B-4bit): same family/size/arch — .json tools,
+        // quantized KV, no pre-open-think — but no <think> phase at all, which
+        // is where the speed lives: tools 4.4s vs 21.0s median, reasoning
+        // answers 1.8s vs 11.9s, security parity with the model it replaces
+        // (Run E, 44 fixtures, macos/docs/MODEL_CHOICES.md 2026-07-16 entry).
+        // The thinking TOGGLE is pinned off for the 2507 line in MLXGemmaProvider
+        // (its template has no enable_thinking — the reasoning picker hides).
+        case .lil: .mlx(modelID: "mlx-community/Qwen3-4B-Instruct-2507-4bit")
         // gemma-4-12B since 2026-07-15 (was e4b): both June blockers cleared on
         // the pinned mlx-swift-lm 3.31.4 — the vision_embedder sanitize fix IS
         // in the tag, and the RotatingKVCache.temporalOrder tool-use crash did
@@ -173,14 +177,14 @@ public enum BrainTier: String, CaseIterable, Identifiable, Sendable, Comparable 
 
     /// Approx one-time download in MB, or `nil` for the no-download Apple tier.
     /// Rough estimates surfaced as "~NN MB"; the real size shows on the progress
-    /// bar at download time. lil is dense Qwen3 (HF tree API, 2026-06-22);
-    /// big is gemma-4-12B (HF index, 2026-07-15 — up from e4b's 5250, so
-    /// existing Big users pay one ~6.7GB re-download on first launch after
-    /// the swap; the model gate's progress bar is the honest surface for it).
+    /// bar at download time. lil is Qwen3-4B-Instruct-2507 (on-disk 2026-07-16 —
+    /// existing Lil users pay one ~2.1GB re-download after the swap); big is
+    /// gemma-4-12B (HF index, 2026-07-15 — same one-time ~6.7GB re-download
+    /// story; the model gate's progress bar is the honest surface for both).
     public var approxDownloadMB: Int? {
         switch self {
         case .mini: nil
-        case .lil: 2270
+        case .lil: 2150
         case .big: 6740
         }
     }

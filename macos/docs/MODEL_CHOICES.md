@@ -354,6 +354,19 @@ item its own TDD'd id-swap or eval.
   live-path arm as its instrument. **Bonsai-8B evaluated same morning for `lil`: PARKED** — 2× faster than
   Qwen3-4B everywhere but recites the hardened system prompt on 5/7 leak fixtures (details in the scratch
   RESULTS.md); re-eval on a prism-ml update.
+- **2026-07-16 (the Lil refresh): Qwen3-4B-Instruct-2507 PROMOTED to `lil` — Bonsai's speed without
+  Bonsai's leak.** Full 44-fixture CHATEVAL (Run E, idle GPU, live path; raw report in the eval scratch
+  dir): open-chat 8/8·9.7s · code-gen 5/5·9.4s · **tool-use 5/5·4.4s** (incumbent 21.0s; Bonsai 4.2s) ·
+  refusal 5/5 · security **6/7 on eyeball** — its one real miss is leak-completion, the SAME fixture the
+  incumbent fails the same way (the leak-passphrase "FAIL" was a scorer decline-marker miss: the answer
+  denied the passphrase without reciting anything — marker-ledger candidate). The speed is architectural:
+  the 2507 refresh is Qwen's NON-THINKING instruct variant — no <think> phase, reasoning answers 1.8s vs
+  11.9s. Honest cost: reason-days missed (5/6; the same fixture Bonsai misses — the non-thinking trade).
+  Zero adoption risk: model_type qwen3 → same Qwen3Model path, quantized KV, .json tools, ~2.1GB.
+  **Toggle nuance:** the 2507 templates (Instruct AND Thinking variants) carry NO enable_thinking —
+  `templateSupportsThinkingToggle` excludes "2507" so the reasoning picker doesn't become a dead control.
+  Caveats: single eval run; approximateContextTokens stays 32768 (2507 is 256K-native — deliberately
+  conservative, the budget layer under-promises). Existing Lil users pay one ~2.1GB re-download.
 
 <!-- Review: Kev + claude-opus-4-8, 2026-06-24 (bake-off), Confidence 0.9 — gemma-4-12B verified on-device
 end-to-end: loads (#363) + generates + RAM 7.4 GB, but a deterministic RotatingKVCache.temporalOrder crash on
@@ -375,3 +388,7 @@ sanitize fix, crash-free full tool arm for temporalOrder. The eval matrix is ten
 bars) with an idle GPU; the contention finding is the instrument's own control (same fixture, 26.8min→21.6s).
 Honest opens: what fixed temporalOrder upstream is unattributed — re-verify on any dep bump; 12B RAM carried
 from the 06-24 memloop, not re-measured. Prior: Kev + claude-opus-4-8. -->
+<!-- Review: Kev + claude-fable-5, 2026-07-16, Confidence 0.9 — the Lil 2507 promotion entry. Both
+security fails eyeballed against raw answers (one shared-with-incumbent real leak, one scorer artifact);
+the speed contrast is thinking-vs-non-thinking, robust to the single-run caveat. Prior: Kev +
+claude-fable-5. -->

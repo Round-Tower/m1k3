@@ -114,8 +114,9 @@ shell that wires concrete backends to the seams; `AppEnvironment` (+ its
 | `M1K3Diagnostics` | Privacy scrub + issue-report formatting + the diagnostic log partition for the secret-free "Report an issue" flow. Pure/dependency-free so the redaction rules are unit-pinned. |
 
 **Brains** (`BrainTier.swift`): three tiers — **Mini** (Apple Foundation Models,
-instant, no download), **Lil** (`Qwen3-4B-4bit`), **Big** (`gemma-4-12B-it-4bit`,
-since 2026-07-15 — 16GB selection floor).
+instant, no download), **Lil** (`Qwen3-4B-Instruct-2507-4bit`, since 2026-07-16 —
+the non-thinking refresh; the reasoning toggle is pinned off for the 2507 line),
+**Big** (`gemma-4-12B-it-4bit`, since 2026-07-15 — 16GB selection floor).
 First run is **Mini-first** (one screen, `HelloView` — instant AFM, nothing to
 download); Lil/Big are opt-in upgrades surfaced after the first answer or in
 Settings (`BrainPickerView`), not a three-way onboarding picker. The mobile
