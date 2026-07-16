@@ -22,6 +22,22 @@
 //  fall out of context — the other half of the context-headroom work. The
 //  isResponding guard moved to the exit/launch path; the rolling path runs at
 //  end-of-send (streaming done) so it can't contend with a live response.
+//  Review: Kev + claude-fable-5, 2026-07-16, Confidence 0.85 (concurrency deep
+//  pass, findings 25/30) — persistActiveConversation no longer runs the
+//  O(conversation) JSON encode + SQLite write ON the MainActor at the end of
+//  every send. It now calls a NEW `ChatHistoryPersisting.saveAsync`, which the
+//  GRDB store implements with a native `dbQueue.write { }` (encode + write on the
+//  DB's own queue — the codebase precedent in MemoryStore/KnowledgeStore), AWAITED
+//  inline so every persistence invariant holds (row present when send returns,
+//  ordering, no delete-resurrection under the isResponding guard). The synchronous
+//  `save` is KEPT: it is driven by the one-time TranscriptMigrator inside
+//  AppEnvironment's SYNCHRONOUS init(), so async-ifying it would have forced init()
+//  async (a composition-root ripple into a parked-WIP file). A protocol-default
+//  saveAsync hops the sync save off-caller for the non-GRDB conformers; a
+//  Thread.isMainThread probe pins the default off-main. Named residual: a
+//  DatabaseQueue serialises reads with writes, so the unguarded History-drawer read
+//  can still block main behind a write (narrower than the original; full fix is a
+//  DatabasePool/WAL split). switchTo's decode + init restore stay sync (follow-ups).
 
 import Foundation
 import M1K3Inference
@@ -365,7 +381,7 @@ public final class ChatSession {
                 }
             }
         }
-        persistActiveConversation()
+        await persistActiveConversation()
         scheduleTitlingIfNeeded(question: trimmed)
         // Rolling distillation: a no-op until the backlog outgrows the window,
         // then it captures the long tail mid-session so it stays recoverable.
@@ -374,10 +390,41 @@ public final class ChatSession {
 
     /// Save the live transcript to the active conversation's row and tell the
     /// drawer to refresh. Lazy row creation happens here — nowhere else writes.
-    func persistActiveConversation() {
+    ///
+    /// ChatSession is `@MainActor`, so the O(conversation) JSON encode + SQLite
+    /// write this drives used to land ON the main thread at the end of every
+    /// send — a hitch exactly at answer completion, competing with the final
+    /// message re-render and the avatar transition, and growing linearly with
+    /// conversation length (finding 25/30). It now goes through
+    /// `ChatHistoryPersisting.saveAsync`, which the GRDB store implements with a
+    /// native `dbQueue.write { }` (encode + write on the DB's own queue, off the
+    /// MainActor). Awaited inline (not fire-and-forget): the row is present the
+    /// instant `send` returns (the ~10 pinned persistence tests rely on it),
+    /// `switchTo`'s "current one is already persisted" precondition still holds,
+    /// and no detached upsert can resurrect a row a racing `deleteConversation`
+    /// removed. The `isResponding` `defer` in `send` has not fired at the call
+    /// site, so the existing switch/delete/new-conversation guards keep excluding
+    /// overlap and write ordering is preserved. `historyRevision` bumps on the
+    /// MainActor after the write completes.
+    ///
+    /// Residual (named, not fixed): `GRDBChatHistoryStore` is a `DatabaseQueue`,
+    /// which serialises reads and writes on one queue. The unguarded
+    /// `conversationSummaries()` read (the History drawer, usable mid-send) can
+    /// therefore still block the MainActor behind an in-flight write. This is a
+    /// NARROWER stall than the original (only when the drawer is open during a
+    /// send, and net-lower main-thread time than the old always-on-main write),
+    /// but its full fix is a `DatabasePool`/WAL read-write split — a separate
+    /// store change. (Encode now runs inside the write closure, so on the rare
+    /// contended read the main-thread wait covers encode+insert, not just insert
+    /// — longer per hit, but far rarer than the old every-turn on-main cost.)
+    /// The mirror-image blocking decode in `switchTo` and the one-time init
+    /// restore likewise stay synchronous (follow-ups).
+    func persistActiveConversation() async {
         guard let history else { return }
         do {
-            try history.save(id: activeConversationID, messages: messages, updatedAt: Date())
+            try await history.saveAsync(
+                id: activeConversationID, messages: messages, updatedAt: Date()
+            )
         } catch {
             // The transcript silently failed to persist while the UI looks saved —
             // record it (GRDB redacts SQL args by default, so this is PII-safe).
