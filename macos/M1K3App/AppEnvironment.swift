@@ -1786,6 +1786,9 @@ extension AppEnvironment {
                     accumulator.ingest(segment)
                     liveTranscript = accumulator.text
                 }
+                // A cancelled dictation (the discard button / Escape) must never
+                // send — cancelDictation() already reset the surface state.
+                guard !Task.isCancelled else { return }
                 await finishDictation(text: accumulator.text, confidence: accumulator.confidence)
             }
         } catch {
@@ -1803,6 +1806,21 @@ extension AppEnvironment {
     private func stopDictation() {
         liveTranscript = "" // clear the ticker on the stop tap, not when the stream drains
         dictationProvider?.stopListening()
+    }
+
+    /// Discard an in-flight dictation WITHOUT sending — the bail-out the
+    /// tap-to-send mic never offered (a stray dog bark used to leave you one
+    /// choice: fire the garble at the model). Cancels the consumer task first
+    /// so the drained stream can't reach `finishDictation`'s send.
+    func cancelDictation() {
+        guard isListening else { return }
+        dictationTask?.cancel()
+        dictationTask = nil
+        dictationProvider?.stopListening()
+        dictationProvider = nil
+        isListening = false
+        liveTranscript = ""
+        avatar.resetToIdle()
     }
 
     private func finishDictation(text: String, confidence: Float?) async {
