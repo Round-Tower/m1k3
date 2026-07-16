@@ -36,6 +36,12 @@
 //  synthesizeToFloats). The exactly-once contract is unit-tested
 //  (SynthBoxCancellationTests, headless); the real cancelled-render WIRING (a
 //  live AVSpeechSynthesizer delivering didCancel) stays verify-by-launch.
+//  Review fold (same PR, bot catch): SynthBox now carries the AVSpeechUtterance
+//  it OWNS and guards every delegate callback on `utterance === owner`. The
+//  synthesizer.delegate is a single shared property reassigned per render, so
+//  without this a barge-in's stale didCancel for utterance A could land on B's
+//  box and silence B (the catch-CancellationError makes it never speak) — the
+//  opposite of the fix. ingest also short-circuits once `done`.
 
 import AVFoundation
 import Foundation
@@ -244,7 +250,7 @@ public final class EffectfulSpeechProvider: NSObject, SpeechProviderWithWordTimi
             spoken.voice = voice
         }
 
-        let box = SynthBox()
+        let box = SynthBox(owner: spoken)
         synthesizer.delegate = box // weak; the write callbacks keep `box` alive
         return try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<PCM, Error>) in
             box.onDone = { continuation.resume(with: $0) }
@@ -370,11 +376,29 @@ final class SynthBox: NSObject, AVSpeechSynthesizerDelegate, @unchecked Sendable
     private var wordOnsets: [WordOnset] = []
     var onDone: ((Result<([Float], Double, [WordOnset]), Error>) -> Void)?
 
+    /// The utterance THIS box is rendering. `AVSpeechSynthesizer.delegate` is a
+    /// single shared property, and each `synthesizeToFloats` call reassigns it to
+    /// a fresh box — so on a barge-in (stop utterance A, start utterance B) a
+    /// straggling didFinish/didCancel for A can be delivered AFTER the delegate
+    /// already points at B's box. Every delegate callback carries the utterance
+    /// it's about, so we guard `utterance === owner` and ignore foreign events —
+    /// otherwise A's stale cancel would resume B's continuation with a spurious
+    /// CancellationError and silence B entirely. (`ingest` needs no such guard:
+    /// it's driven by `write`'s per-call completion closure, which captures its
+    /// own box directly rather than routing through the shared delegate.)
+    private let owner: AVSpeechUtterance
+
+    init(owner: AVSpeechUtterance) {
+        self.owner = owner
+        super.init()
+    }
+
     func speechSynthesizer(
         _: AVSpeechSynthesizer,
         willSpeakRangeOfSpeechString characterRange: NSRange,
-        utterance _: AVSpeechUtterance
+        utterance: AVSpeechUtterance
     ) {
+        guard utterance === owner else { return }
         lock.withLock {
             let range = characterRange.location ..< characterRange.location + characterRange.length
             wordOnsets.append(WordOnset(textRange: range, sampleOffset: samples.count))
@@ -385,8 +409,10 @@ final class SynthBox: NSObject, AVSpeechSynthesizerDelegate, @unchecked Sendable
     /// resumes first; if it never arrives (some voices don't emit it), this
     /// delegate callback still completes the continuation. Idempotent via the
     /// `done` flag, so the common case where the sentinel won already ran is a
-    /// harmless no-op.
-    func speechSynthesizer(_: AVSpeechSynthesizer, didFinish _: AVSpeechUtterance) {
+    /// harmless no-op. Guarded on `owner` so a stale finish for a superseded
+    /// utterance can't complete THIS box's render.
+    func speechSynthesizer(_: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) {
+        guard utterance === owner else { return }
         finish()
     }
 
@@ -397,11 +423,17 @@ final class SynthBox: NSObject, AVSpeechSynthesizerDelegate, @unchecked Sendable
     /// `CancellationError` — NOT the partial samples (would play audio the user
     /// just stopped) and NOT a generic error (would trigger the plain-voice
     /// re-speak fallback). `speak(_:)` swallows the CancellationError silently.
-    func speechSynthesizer(_: AVSpeechSynthesizer, didCancel _: AVSpeechUtterance) {
+    /// Guarded on `owner` so a barge-in's cancel for the PREVIOUS utterance can't
+    /// silence the successor (see the `owner` doc).
+    func speechSynthesizer(_: AVSpeechSynthesizer, didCancel utterance: AVSpeechUtterance) {
+        guard utterance === owner else { return }
         cancel()
     }
 
     func ingest(_ buffer: AVAudioBuffer) {
+        // Already resumed (a didFinish/didCancel raced ahead of the real terminal
+        // buffer): drop trailing audio rather than grow a payload nobody reads.
+        if lock.withLock({ done }) { return }
         guard let pcm = buffer as? AVAudioPCMBuffer else { return }
         let frames = Int(pcm.frameLength)
         if frames == 0 {
