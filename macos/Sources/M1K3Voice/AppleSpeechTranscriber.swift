@@ -32,6 +32,12 @@
 //  commit-point epilogue after engine.start(); onTermination(.cancelled) makes
 //  consumer-cancel teardown structural. Verify-by-launch per this file's
 //  convention (TCC dialog + real mic); the pure pieces stay unit-tested.
+//  Review: Kev + claude-fable-5, 2026-07-16 (round-3 metacognitive pass) — the
+//  non-final result branch now generation-gates its continuation yield too,
+//  matching the error branch and the WhisperKit onState sibling. A superseded
+//  session's late partial (fired after a stop bumped `generation` but before its
+//  finish() completed) could otherwise flicker a stale segment into the UI; the
+//  yield is now skipped when `generation != self.generation`.
 
 import AVFoundation
 import Foundation
@@ -227,7 +233,14 @@ public final class AppleSpeechTranscriber: TranscriptionProvider, @unchecked Sen
             }
             guard let result else { return }
             let text = result.bestTranscription.formattedString
-            if !text.isEmpty {
+            // Generation-gate the SHARED continuation exactly as the error branch
+            // above (and the WhisperKit sibling's onState) do: a superseded session's
+            // late, non-final partial must not flicker into a continuation the
+            // consumer has already asked to finish. Without this the two providers
+            // are asymmetric in precisely the dimension this hardening pass unifies.
+            // isFinal still routes through the generation-scoped stopListening below.
+            let isCurrent = self.lock.withLock { generation == self.generation }
+            if isCurrent, !text.isEmpty {
                 continuation.yield(TranscriptSegment(
                     text: text,
                     isFinal: result.isFinal,

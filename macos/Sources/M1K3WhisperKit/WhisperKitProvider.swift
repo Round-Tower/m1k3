@@ -32,14 +32,20 @@
 //  make the shared processor safe. Fix: each session builds its OWN
 //  `AudioProcessor()` (the constructor already accepts one), so `stopRecording()`
 //  is session-scoped and cross-session capture damage is impossible. Generation
-//  stamping remains only for the SHARED transcript state: a stale onState must not
-//  write `lastText` (which the next session's stop emits as its final segment —
-//  the "previous utterance re-sent as a fresh turn" bug) nor finish a successor's
-//  continuation. Verify-by-launch per this file's header. Named residual: a stop
-//  landing inside `startStreamTranscription`'s own permission suspension can still
-//  leave that session's OWN engine running briefly — narrow (immediate stop during
-//  first-launch mic-permission resolution), contained to one session's processor,
-//  ⌘R-owed.
+//  stamping remains for the SHARED transcript state (a stale onState must not write
+//  `lastText` — which the next session's stop emits as its final segment, the
+//  "previous utterance re-sent as a fresh turn" bug — nor finish a successor's
+//  continuation) AND now drives a per-session SELF-STOP: `startStreamTranscription`
+//  suspends at an XPC mic-permission hop on EVERY start (not just first launch), so a
+//  stop landing in that window spends the provider's one fire-and-forget teardown on
+//  a not-yet-armed engine, and the session would then record FOREVER (hot mic to app
+//  quit + unbounded audio buffer) with no reference left to stop it. Fix: the first
+//  state callback after the engine arms re-checks generation FIRST — before the
+//  empty-text guard, so the placeholder-text zombie is caught — and self-stops its
+//  OWN streamer, safe precisely because each session owns its processor. A 2-round
+//  adversarial verify pass (6 lenses) drove this: the self-stop belt was WRONG on the
+//  shared processor (it killed live successors) and CORRECT on the per-session one.
+//  Verify-by-launch per this file's header.
 
 import AVFoundation
 import Foundation
@@ -65,6 +71,35 @@ public final class WhisperKitProvider: TranscriptionProvider, @unchecked Sendabl
     /// no-op instead of polluting the shared transcript state or finishing the
     /// wrong continuation.
     private var generation: UInt64 = 0
+
+    /// Per-session self-stop seam. Holds the session's own streamer (write-once,
+    /// before `startStreamTranscription()` enables any callback) so a stale
+    /// `onState` can stop ITS OWN capture — safe now that each session owns its
+    /// AudioProcessor. `claimSelfStop()` fires at most once. This closes the
+    /// zombie window: a stop landing inside `startStreamTranscription`'s permission
+    /// suspension can't be reached by the provider's stop (it already spent its
+    /// one fire-and-forget on a not-yet-armed engine), so the session would
+    /// otherwise record forever; the first callback after it arms self-stops it.
+    private final class StreamerBox: @unchecked Sendable {
+        private let lock = NSLock()
+        private var streamer: AudioStreamTranscriber?
+        private var stopClaimed = false
+        var value: AudioStreamTranscriber? {
+            lock.withLock { streamer }
+        }
+
+        func set(_ streamer: AudioStreamTranscriber) {
+            lock.withLock { self.streamer = streamer }
+        }
+
+        func claimSelfStop() -> Bool {
+            lock.withLock {
+                if stopClaimed { return false }
+                stopClaimed = true
+                return true
+            }
+        }
+    }
 
     /// Coalesces concurrent model loads into one in-flight download; the loaded
     /// model is cached in `whisperKit` for the sync `isAvailable`/`startListening`
@@ -152,6 +187,8 @@ public final class WhisperKitProvider: TranscriptionProvider, @unchecked Sendabl
                 if case .cancelled = reason { self?.stopListening(ifGeneration: generation) }
             }
 
+            let streamerBox = StreamerBox()
+
             // Yield cumulative text whenever WhisperKit's running transcription grows.
             // `clean` strips both `<|…|>` control tokens AND non-speech annotations
             // ([BLANK_AUDIO], [Music]…) — the latter were surviving into voice-first
@@ -159,20 +196,31 @@ public final class WhisperKitProvider: TranscriptionProvider, @unchecked Sendabl
             let onState: AudioStreamTranscriberCallback = { [weak self] _, newState in
                 guard let self else { return }
                 let text = WhisperTranscriptText.clean(newState.currentText)
-                // "Waiting for speech..." is WhisperKit's pre-speech placeholder string.
-                guard !text.isEmpty, text != "Waiting for speech..." else { return }
-                // Generation-guard the SHARED transcript write: a stale streamer's
-                // late callback must not overwrite `lastText` (which the current
-                // session's stop would then emit as its final segment) nor yield
-                // into a superseded session. Its own capture is on its own
-                // processor, so there is nothing else to tear down here.
-                let isCurrent = self.lock.withLock {
-                    guard generation == self.generation else { return false }
+                // Generation FIRST, BEFORE the empty-text guard: a stale streamer's
+                // very first callback (fired synchronously when isRecording flips
+                // true, with placeholder/empty text) is how we catch a session that
+                // armed AFTER its stop already ran — see the header's zombie note.
+                // Such a session self-stops ITS OWN capture (safe: own processor),
+                // rather than recording forever. A stale write to the SHARED
+                // `lastText` is also blocked (the current session's stop would emit
+                // it as a final segment — the re-sent-utterance bug).
+                let action = self.lock.withLock { () -> OnStateAction in
+                    guard generation == self.generation else { return .selfStop }
+                    // "Waiting for speech..." is WhisperKit's pre-speech placeholder.
+                    guard !text.isEmpty, text != "Waiting for speech..." else { return .ignore }
                     self.lastText = text
-                    return true
+                    return .yield
                 }
-                guard isCurrent else { return }
-                continuation.yield(TranscriptSegment(text: text, isFinal: false))
+                switch action {
+                case .selfStop:
+                    if streamerBox.claimSelfStop() {
+                        Task { await streamerBox.value?.stopStreamTranscription() }
+                    }
+                case .yield:
+                    continuation.yield(TranscriptSegment(text: text, isFinal: false))
+                case .ignore:
+                    break
+                }
             }
 
             let streamer = AudioStreamTranscriber(
@@ -184,7 +232,11 @@ public final class WhisperKitProvider: TranscriptionProvider, @unchecked Sendabl
                 // A FRESH processor per session (not the shared kit.audioProcessor):
                 // this session's stopRecording() then touches only THIS engine, so a
                 // stale teardown can never kill a live successor's mic. The heavy
-                // models above are stateless and safe to share.
+                // models above are stateless and safe to share. (Caveat: a future
+                // MULTILINGUAL variant — no `.en` suffix, language: nil below — drives
+                // WhisperKit's TextDecoder.detectLanguage, whose languageLogitsFilter
+                // lazy-cache is not thread-safe under the deliberate stop/start decode
+                // overlap; serialize sessions or pin language before adopting one.)
                 audioProcessor: AudioProcessor(),
                 // skipSpecialTokens defaults to false → tokens in the text; turn it on
                 // (the stripper above is the belt-and-braces backstop). Pin language to
@@ -196,6 +248,9 @@ public final class WhisperKitProvider: TranscriptionProvider, @unchecked Sendabl
                 ),
                 stateChangeCallback: onState
             )
+            // Populate the self-stop box BEFORE the streamer can fire any callback
+            // (callbacks only start inside startStreamTranscription, below).
+            streamerBox.set(streamer)
             let accepted = lock.withLock {
                 guard generation == self.generation else { return false }
                 self.streamer = streamer
@@ -261,6 +316,15 @@ public final class WhisperKitProvider: TranscriptionProvider, @unchecked Sendabl
 
 public enum WhisperKitProviderError: Error, Sendable {
     case modelNotLoaded
+}
+
+/// What a state-change callback should do once it has resolved its session's
+/// currency under `lock`: self-stop a stale (possibly zombie) streamer, yield the
+/// cleaned partial, or ignore a placeholder/empty update.
+private enum OnStateAction {
+    case selfStop
+    case yield
+    case ignore
 }
 
 /// `@unchecked Sendable` box so a loaded `WhisperKit` can cross the
