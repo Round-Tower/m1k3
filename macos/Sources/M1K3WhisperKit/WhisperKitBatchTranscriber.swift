@@ -24,6 +24,8 @@ import Foundation
 import M1K3Calls
 import M1K3Inference
 import M1K3Voice // TranscriptSanitizer (repetition collapse + tidy)
+
+// @preconcurrency is LOAD-BEARING (checked 2026-07-16) — see WhisperKitProvider.
 @preconcurrency import WhisperKit
 
 /// `@unchecked Sendable`: the loaded model is guarded by `lock`; WhisperKit's own

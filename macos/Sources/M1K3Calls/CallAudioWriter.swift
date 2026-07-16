@@ -18,7 +18,9 @@
 //  Signed: Kev + claude-opus-4-8, 2026-06-21, Confidence 0.85, Prior: Unknown
 //
 
-@preconcurrency import AVFoundation
+// NOT @preconcurrency (dropped 2026-07-16, proven dead by full-SIL compile on all
+// three SDKs) — see StereoCallRecorder for the rationale.
+import AVFoundation
 import Foundation
 
 public enum CallAudioWriterError: Error, Sendable, LocalizedError {

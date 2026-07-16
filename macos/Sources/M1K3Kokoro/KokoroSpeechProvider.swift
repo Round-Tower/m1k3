@@ -25,6 +25,15 @@
 //  the renderer (speak(stream:)) with word timelines; Apple fallback only when
 //  nothing was spoken at all; word-timing callbacks forwarded like lifecycle.
 //  Confidence 0.8.
+//  Review: Kev + claude-fable-5, 2026-07-16 (concurrency deep pass) — the
+//  download path validated nothing: URLSession delivers HTTP 4xx/5xx as a
+//  completed download, so an error body was staged as weights and the
+//  file-existence fast path then trusted it forever (neural voice silently
+//  dead, Apple fallback, no retry). Now: 2xx status gate in the delegate, a
+//  plausibility floor that self-heals already-poisoned stages, and a
+//  cancellation handler on the download await (all pinned in
+//  KokoroDownloadValidationTests; the swallowed-preload-failure fallback
+//  design is deliberately untouched).
 
 import Foundation
 import M1K3Inference
@@ -165,6 +174,22 @@ public final class KokoroSpeechProvider: SpeechProviderWithWordTiming, ModelPrel
         let modelDest = modelDirectory.appendingPathComponent("kokoro-v1.0.onnx")
         let voicesDest = modelDirectory.appendingPathComponent("voices-v1.0.bin")
 
+        // Self-heal a poisoned stage: a pre-status-check download could stage an
+        // HTTP error body as weights, and file-existence alone would then trust
+        // it forever (Apple-voice fallback with no retry path). An implausibly
+        // small file is deleted here so the download blocks below re-fetch it.
+        for (dest, floor) in [
+            (modelDest, KokoroDownloadValidation.modelFloorBytes),
+            (voicesDest, KokoroDownloadValidation.voicesFloorBytes),
+        ] where fileManager.fileExists(atPath: dest.path)
+            && !KokoroDownloadValidation.isPlausibleStage(dest, floorBytes: floor)
+        {
+            Self.log.warning(
+                "Kokoro staged file \(dest.lastPathComponent, privacy: .public) is implausibly small — discarding and re-downloading"
+            )
+            try? fileManager.removeItem(at: dest)
+        }
+
         if fileManager.fileExists(atPath: modelDest.path),
            fileManager.fileExists(atPath: voicesDest.path)
         {
@@ -217,21 +242,60 @@ public final class KokoroSpeechProvider: SpeechProviderWithWordTiming, ModelPrel
     }
 }
 
+// MARK: - Download validation
+
+/// The two checks that keep a bad download from permanently bricking the neural
+/// voice (2026-07-16 concurrency deep pass): URLSession delivers HTTP 4xx/5xx as
+/// a COMPLETED download, so an error body would be staged as weights and
+/// file-existence would trust it forever. Status validation stops future bad
+/// stages; the plausibility floor also self-heals installs already poisoned.
+enum KokoroDownloadValidation {
+    /// Deliberately far below the real payloads (~326 MB model, ~28 MB voices):
+    /// the floors only need to reject staged HTML error pages (a few KB).
+    static let modelFloorBytes: Int64 = 50 * 1024 * 1024
+    static let voicesFloorBytes: Int64 = 1024 * 1024
+
+    /// HTTP responses must be 2xx; anything else (file://, nil) is not this
+    /// check's concern and passes through.
+    static func isAcceptable(_ response: URLResponse?) -> Bool {
+        guard let http = response as? HTTPURLResponse else { return true }
+        return (200 ..< 300).contains(http.statusCode)
+    }
+
+    static func isPlausibleStage(_ url: URL, floorBytes: Int64) -> Bool {
+        guard let size = (try? FileManager.default.attributesOfItem(atPath: url.path)[.size]) as? Int64 else {
+            return false
+        }
+        return size >= floorBytes
+    }
+}
+
+/// The downloaded "weights" were an HTTP error body — surfaced instead of staged.
+struct KokoroDownloadHTTPError: LocalizedError {
+    let statusCode: Int
+    var errorDescription: String? {
+        "Kokoro download failed with HTTP status \(statusCode)"
+    }
+}
+
 // MARK: - Progress-reporting download
 
 /// A small URLSession download wrapper that reports a 0…1 fraction and moves the
 /// finished file to a destination. Lives here (not in the app) so the whole staging
-/// path is in the isolated Kokoro target.
+/// path is in the isolated Kokoro target. `internal` (not private) so the
+/// cancellation and staging contracts are pinned in KokoroDownloadValidationTests
+/// via file:// URLs — no network in the suite.
 ///
-/// `@unchecked Sendable` safety: `continuation` is write-once by `run()` *before*
-/// `session.downloadTask(...).resume()` — the event that lets any delegate callback
-/// fire — so that write happens-before every delegate read. The URLSession's own
-/// serial delegate queue serialises the callbacks: the first to complete resumes the
-/// continuation and clears it to nil, so any later callback on that queue sees nil
-/// and skips. The continuation therefore resumes exactly once. No lock needed.
-private final class FileDownloader: NSObject, URLSessionDownloadDelegate, @unchecked Sendable {
+/// `@unchecked Sendable` safety: the continuation lives behind `lock` and is
+/// consumed by `takeContinuation()` — an atomic take-and-nil — so exactly one of
+/// its resumers (the delegate callbacks on URLSession's serial queue, or the
+/// cancellation handler on whatever thread cancellation lands) ever receives it.
+/// Resume-exactly-once holds by construction, with NO dependency on URLSession
+/// delivering a delegate callback for a task cancelled before resume().
+final class FileDownloader: NSObject, URLSessionDownloadDelegate, @unchecked Sendable {
     private let progress: @Sendable (Double) -> Void
     private let destination: URL
+    private let lock = NSLock()
     private var continuation: CheckedContinuation<Void, Error>?
 
     private init(destination: URL, progress: @escaping @Sendable (Double) -> Void) {
@@ -248,12 +312,39 @@ private final class FileDownloader: NSObject, URLSessionDownloadDelegate, @unche
         try await downloader.run(url)
     }
 
+    /// Atomically claim the continuation: whoever takes it resumes it; everyone
+    /// else sees nil and no-ops.
+    private func takeContinuation() -> CheckedContinuation<Void, Error>? {
+        lock.withLock {
+            let taken = continuation
+            continuation = nil
+            return taken
+        }
+    }
+
     private func run(_ url: URL) async throws {
-        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-            self.continuation = continuation
-            let session = URLSession(configuration: .default, delegate: self, delegateQueue: nil)
-            session.downloadTask(with: url).resume()
-            session.finishTasksAndInvalidate()
+        let session = URLSession(configuration: .default, delegate: self, delegateQueue: nil)
+        let task = session.downloadTask(with: url)
+        // Cancellation-responsive without trusting delegate ordering: onCancel
+        // claims the continuation itself, and the pre-cancelled entry path is
+        // caught by the isCancelled check below — so a cancelled prepare never
+        // rides out ~326 MB and the continuation can never leak, whatever
+        // URLSession does with a task cancelled before resume().
+        defer { session.finishTasksAndInvalidate() }
+        try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+                lock.withLock { self.continuation = continuation }
+                // onCancel may already have fired (a task cancelled before this
+                // body ran) — it found no continuation to claim, so claim it here.
+                if Task.isCancelled {
+                    takeContinuation()?.resume(throwing: CancellationError())
+                    return
+                }
+                task.resume()
+            }
+        } onCancel: {
+            task.cancel()
+            takeContinuation()?.resume(throwing: CancellationError())
         }
     }
 
@@ -270,9 +361,17 @@ private final class FileDownloader: NSObject, URLSessionDownloadDelegate, @unche
 
     func urlSession(
         _: URLSession,
-        downloadTask _: URLSessionDownloadTask,
+        downloadTask: URLSessionDownloadTask,
         didFinishDownloadingTo location: URL
     ) {
+        // URLSession treats HTTP 4xx/5xx as a COMPLETED download — without this
+        // check the error body would be staged as model weights (and trusted by
+        // every future launch). Fail loudly instead; nothing touches the disk.
+        guard KokoroDownloadValidation.isAcceptable(downloadTask.response) else {
+            let status = (downloadTask.response as? HTTPURLResponse)?.statusCode ?? -1
+            takeContinuation()?.resume(throwing: KokoroDownloadHTTPError(statusCode: status))
+            return
+        }
         // Must move the temp file out synchronously — it's deleted when this returns.
         do {
             let fileManager = FileManager.default
@@ -280,17 +379,15 @@ private final class FileDownloader: NSObject, URLSessionDownloadDelegate, @unche
                 try fileManager.removeItem(at: destination)
             }
             try fileManager.moveItem(at: location, to: destination)
-            continuation?.resume()
+            takeContinuation()?.resume()
         } catch {
-            continuation?.resume(throwing: error)
+            takeContinuation()?.resume(throwing: error)
         }
-        continuation = nil
     }
 
     func urlSession(_: URLSession, task _: URLSessionTask, didCompleteWithError error: Error?) {
         if let error {
-            continuation?.resume(throwing: error)
-            continuation = nil
+            takeContinuation()?.resume(throwing: error)
         }
     }
 }

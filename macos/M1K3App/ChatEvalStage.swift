@@ -41,6 +41,7 @@ import M1K3Eval
 import M1K3Inference
 import M1K3Knowledge
 import M1K3MLX
+import Synchronization
 
 /// The single free-text argument every eval tool takes. `@Generable` gives AFM
 /// the schema it needs to populate a native tool call.
@@ -52,15 +53,14 @@ private struct EvalToolArguments {
 
 /// Thread-safe record of which tools a brain actually invoked during one turn —
 /// shared across the tool instances handed to a single AFM session.
-private final class ToolCallRecorder: @unchecked Sendable {
-    private let lock = NSLock()
-    private var names: [String] = []
+private final class ToolCallRecorder: Sendable {
+    private let names = Mutex<[String]>([])
     func record(_ name: String) {
-        lock.withLock { names.append(name) }
+        names.withLock { $0.append(name) }
     }
 
     var captured: [String] {
-        lock.withLock { names }
+        names.withLock { $0 }
     }
 }
 

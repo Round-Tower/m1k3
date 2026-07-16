@@ -28,6 +28,10 @@ import Foundation
 import M1K3Inference
 import M1K3Voice
 import os
+
+// @preconcurrency is LOAD-BEARING here (checked 2026-07-16): removing it yields
+// real `sending` diagnostics on AudioStreamTranscriber construction (non-Sendable
+// AudioEncoding/TextDecoding/tokenizer). Re-check on the next WhisperKit bump.
 @preconcurrency import WhisperKit
 
 /// `@unchecked Sendable`: WhisperKit + the active streamer/continuation are

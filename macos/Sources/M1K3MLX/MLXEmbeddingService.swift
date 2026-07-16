@@ -30,18 +30,30 @@
 //  Review: Kev + claude-fable-5, 2026-07-09 — `embedQuery` override applies
 //  Qwen3-Embedding's asymmetric query instruction via EmbeddingText.forQuery
 //  (KEYEVAL-measured; floors re-derived in GroundingGate). Confidence 0.85.
+//  Review: Kev + claude-fable-5, 2026-07-16 (concurrency deep pass) — the plain
+//  `var modelContainer` cache was an unguarded check-then-act across the ~4s
+//  cold load: a launch warm racing a first embed (MCP recall / first chat turn)
+//  could load TWO ~600MB containers and race the unsynchronized write. Load is
+//  now coalesced through `SingleFlightLoader` — the exact fix MLXGemmaProvider
+//  adopted for the same bug class on 06-08/09; the embedder was the last
+//  straggler. Behaviour otherwise identical (failures clear the slot, so
+//  `isAvailable()` retry semantics are preserved).
 
 import Foundation
+import M1K3Inference
 import M1K3Knowledge
 import MLX
 import MLXEmbedders
 import MLXLMCommon
 import MLXNN
 
-/// `@unchecked Sendable`: `modelContainer` is an MLX actor; all model access is
-/// actor-isolated inside `perform`. Same guarantee the prior knowledge-server's service relies on.
+/// `@unchecked Sendable`: model loading is coalesced through a `SingleFlightLoader`
+/// actor and the loaded `EmbedderModelContainer` is itself an isolation actor (all
+/// model access is actor-isolated inside `perform`); everything else is immutable.
 public final class MLXEmbeddingService: EmbeddingService, @unchecked Sendable {
-    private var modelContainer: EmbedderModelContainer?
+    /// Single-flights the container load so a launch warm racing a first embed
+    /// shares ONE ~600MB load instead of each kicking off their own.
+    private let loader: SingleFlightLoader<EmbedderModelContainer>
     private let configuration: ModelConfiguration
     private let onLoadProgress: (@Sendable (Double) -> Void)?
 
@@ -83,6 +95,14 @@ public final class MLXEmbeddingService: EmbeddingService, @unchecked Sendable {
         self.configuration = configuration
         self.dimension = dimension
         self.onLoadProgress = onLoadProgress
+        loader = SingleFlightLoader { progress in
+            try await EmbedderModelFactory.shared.loadContainer(
+                from: HubApiDownloader.embedderDefault,
+                using: TransformersTokenizerLoader(),
+                configuration: configuration,
+                progressHandler: { prog in progress(prog.fractionCompleted) }
+            )
+        }
     }
 
     /// Query-side asymmetry (Qwen3-Embedding's official convention): user
@@ -149,15 +169,7 @@ public final class MLXEmbeddingService: EmbeddingService, @unchecked Sendable {
         // The embedder shares the process-global MLX memory state with the LLM
         // and can be the first MLX code to run (ingest before any chat turn).
         MLXMemoryBudget.applyOnce()
-        if let modelContainer { return modelContainer }
         let report = onLoadProgress
-        let container = try await EmbedderModelFactory.shared.loadContainer(
-            from: HubApiDownloader.embedderDefault,
-            using: TransformersTokenizerLoader(),
-            configuration: configuration,
-            progressHandler: { prog in report?(prog.fractionCompleted) }
-        )
-        modelContainer = container
-        return container
+        return try await loader.value { report?($0) }
     }
 }
