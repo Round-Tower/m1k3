@@ -82,6 +82,20 @@ was requested. Fix: the same `lock.withLock { generation == self.generation }`
 guard the error branch uses, hoisted above the yield — the two providers are now
 uniform in exactly the dimension this pass set out to unify.
 
+## Follow-up (bot review, not this PR)
+
+The second bot review made a good structural suggestion worth a future PR: the
+crux logic — claim/supersede over a monotonic `generation` counter plus the
+`engineOwner` stamp — is pure and hardware-independent, so it could be extracted
+into a small non-AVFoundation value type (e.g. `SessionClaim<Owner>`) and pinned
+with `swift test`. Today the trickiest logic in the change (the interleavings
+three adversarial rounds were needed to reason through) has zero `swift test`
+coverage and leans entirely on verify-by-launch + adversarial review. That's the
+documented convention for the AVAudioEngine/SFSpeech/WhisperKit *edges*, but the
+claim logic itself doesn't touch hardware and could get fast deterministic
+regression coverage. Deferred to keep this PR a focused race-fix; logged here so
+it isn't lost.
+
 ## Residual (honest)
 
 Two nits survive, both documented in-source and neither a regression:

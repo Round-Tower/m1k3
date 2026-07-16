@@ -45,7 +45,9 @@
 //  OWN streamer, safe precisely because each session owns its processor. A 2-round
 //  adversarial verify pass (6 lenses) drove this: the self-stop belt was WRONG on the
 //  shared processor (it killed live successors) and CORRECT on the per-session one.
-//  Verify-by-launch per this file's header.
+//  Verify-by-launch per this file's header. Confidence 0.8 — three adversarial-verify
+//  rounds, not launch-tested; upstream WhisperKit timing taken on faith per the
+//  metallib-wall convention. Evidence in macos/scratch/voice-session-audit-2026-07-16/.
 
 import AVFoundation
 import Foundation

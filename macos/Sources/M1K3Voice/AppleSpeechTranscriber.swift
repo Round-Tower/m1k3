@@ -32,20 +32,34 @@
 //  commit-point epilogue after engine.start(); onTermination(.cancelled) makes
 //  consumer-cancel teardown structural. Verify-by-launch per this file's
 //  convention (TCC dialog + real mic); the pure pieces stay unit-tested.
+//  Confidence 0.8 — the interleavings are adversarially verified across three
+//  rounds, not launch-tested; every AVFoundation/SFSpeech timing claim is static
+//  reasoning per the metallib-wall convention. Full evidence in
+//  macos/scratch/voice-session-audit-2026-07-16/.
 //  Review: Kev + claude-fable-5, 2026-07-16 (round-3 metacognitive pass) — the
 //  non-final result branch now generation-gates its continuation yield too,
 //  matching the error branch and the WhisperKit onState sibling. A superseded
 //  session's late partial (fired after a stop bumped `generation` but before its
 //  finish() completed) could otherwise flicker a stale segment into the UI; the
-//  yield is now skipped when `generation != self.generation`.
+//  yield is now skipped when `generation != self.generation`. Confidence 0.85 —
+//  a mechanical symmetry fold matching an already-verified pattern.
 
 import AVFoundation
 import Foundation
 import os
 import Speech
 
-/// `@unchecked Sendable`: all mutable recognition state is guarded by `lock`;
-/// the audio-tap closure only appends to the (lock-held) request.
+/// `@unchecked Sendable`, guarded by TWO locks with a fixed order
+/// (`engineLock` outer, `lock` inner — never the reverse):
+/// - `lock` guards the recognition state (`generation`, `request`, `task`,
+///   `continuation`) and the audio-tap closure only appends to the (lock-held)
+///   request.
+/// - `engineLock` guards the shared `AVAudioEngine` and its `engineOwner: UInt64?`
+///   ownership stamp: every engine mutation (install/start/teardown/route-change
+///   reinstall) acts only if it still owns the engine for the current generation,
+///   so a superseded session can never strip a successor's live tap. This second
+///   lock is load-bearing for the whole session-lifetime race story — see the
+///   `engineLock` declaration below for why it is deliberately separate from `lock`.
 public final class AppleSpeechTranscriber: TranscriptionProvider, @unchecked Sendable {
     public let name = "Apple Speech"
 
@@ -291,6 +305,14 @@ public final class AppleSpeechTranscriber: TranscriptionProvider, @unchecked Sen
         // and this check, its teardownEngineIfOwner may have run BEFORE we set
         // ownership (no-op then) — so tear our own engine down now. Guarded by
         // ownership, so if a successor has since armed, we leave it alone.
+        //
+        // A racing stopListening for THIS generation may have already called
+        // endAudio()/cancel()/finish() on these same request/task/continuation
+        // objects. The double call is INTENTIONAL and safe: the engine stop is
+        // deduplicated by the ownership check in teardownEngineIfOwner, and
+        // endAudio()/cancel()/finish() are each idempotent (the standard defensive
+        // idiom) — so the two teardown paths coincide harmlessly rather than
+        // needing a single serialised owner of the non-engine pieces too.
         let staleAfterStart = lock.withLock { generation != self.generation }
         if staleAfterStart {
             teardownEngineIfOwner(generation)
@@ -354,6 +376,14 @@ public final class AppleSpeechTranscriber: TranscriptionProvider, @unchecked Sen
             Self.log.error("degenerate mic format — not installing tap (route not ready)")
             return false
         }
+        // Residual (pre-existing, informational): the closure reads `self?.request`
+        // FRESH per buffer rather than closing over the request live at install
+        // time. removeTap(onBus:) is not guaranteed to synchronously drain an
+        // in-flight render-thread callback, so a trailing buffer from a just-removed
+        // tap could theoretically append into a SUCCESSOR session's request (a few
+        // stray samples). Unrelated to the session-lifetime races closed here and
+        // not observed in practice; closing over the specific request instance would
+        // tighten it if it ever surfaces.
         inputNode.installTap(onBus: 0, bufferSize: 1024, format: format) { [weak self] buffer, _ in
             self?.lock.withLock { self?.request?.append(buffer) }
         }
