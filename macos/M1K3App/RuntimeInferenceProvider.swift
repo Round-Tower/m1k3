@@ -13,29 +13,34 @@
 //  the stored vector space, so swapping it would require a re-index.
 //
 //  Signed: Kev + claude-opus-4-8, 2026-06-06, Confidence 0.8, Prior: Unknown
+//  Review: Kev + claude-fable-5, 2026-07-16 (concurrency deep pass) — both types
+//  move from NSLock + `@unchecked Sendable` to `Mutex` + checked `Sendable`
+//  (the Swappable*-family house shape): the box holds its slot in a Mutex, and
+//  with that the provider's stored properties are all immutable Sendables, so
+//  the compiler proves what the escape hatch used to assert.
 
 import Foundation
 import M1K3Inference
+import Synchronization
 
 /// Thread-safe holder for the picker's current selection. The @Observable
 /// AppEnvironment writes it on the main actor; the façade reads it anywhere.
-final class RuntimeSelectionBox: @unchecked Sendable {
-    private let lock = NSLock()
-    private var stored: RuntimeOption
+final class RuntimeSelectionBox: Sendable {
+    private let stored: Mutex<RuntimeOption>
 
     init(_ initial: RuntimeOption) {
-        stored = initial
+        stored = Mutex(initial)
     }
 
     var value: RuntimeOption {
-        get { lock.withLock { stored } }
-        set { lock.withLock { stored = newValue } }
+        get { stored.withLock { $0 } }
+        set { stored.withLock { $0 = newValue } }
     }
 }
 
 /// Routes each generation to the selected backend. Unknown / not-yet-wired
 /// selections fall back to Apple Foundation Models.
-final class RuntimeInferenceProvider: InferenceProvider, @unchecked Sendable {
+final class RuntimeInferenceProvider: InferenceProvider, Sendable {
     let name = "runtime"
 
     private let selection: RuntimeSelectionBox

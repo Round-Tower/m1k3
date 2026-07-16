@@ -29,7 +29,12 @@
 //  processingFormat, written to a .partial, frame-count validated, then atomically
 //  renamed — so an empty or interrupted write never surfaces as a recording.
 
-@preconcurrency import AVFoundation
+// NOT @preconcurrency (dropped 2026-07-16, proven dead by full-SIL compile on all
+// three SDKs): the attribute was blanket-suppressing Sendable diagnostics in the
+// one file that smuggles AVAudioPCMBuffer/AVAudioEngine (non-Sendable in SDK 26)
+// across a Sendable boundary — exactly where the next careless capture needs the
+// compiler to shout, not stay silent.
+import AVFoundation
 import Foundation
 import os
 

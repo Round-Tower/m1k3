@@ -19,24 +19,30 @@
 //  macOS app and the iOS/visionOS shell reuse ONE swap façade. It was the last
 //  stranded member of the Swappable* family; its siblings already live in the
 //  package. Made `public` (+ public init); logic byte-identical to the app copy.
+//  Review: Kev + claude-fable-5, 2026-07-16 (concurrency deep pass) — NSLock +
+//  `@unchecked Sendable` → `Mutex` + checked `Sendable`, converging on the shape
+//  its named siblings (SwappableInferenceProvider / SwappableSpeechProvider)
+//  already ship: the compiler now verifies Sendable instead of a review-time
+//  hope, so a future added mutable property is a compile error, not a latent
+//  race. Behaviour byte-identical; the seam stays pinned by EmbedQuerySeamTests.
 //
 
 import Foundation
+import Synchronization
 
-public final class SwappableEmbeddingService: EmbeddingService, @unchecked Sendable {
-    private let lock = NSLock()
-    private var current: any EmbeddingService
+public final class SwappableEmbeddingService: EmbeddingService, Sendable {
+    private let current: Mutex<any EmbeddingService>
 
     public init(_ initial: any EmbeddingService) {
-        current = initial
+        current = Mutex(initial)
     }
 
     public var active: any EmbeddingService {
-        lock.withLock { current }
+        current.withLock { $0 }
     }
 
     public func setEmbedder(_ embedder: any EmbeddingService) {
-        lock.withLock { current = embedder }
+        current.withLock { $0 = embedder }
     }
 
     public var dimension: Int {
