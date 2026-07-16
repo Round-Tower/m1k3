@@ -218,7 +218,23 @@ public final class MLXGemmaProvider: InferenceProvider, ModelPreloading, @unchec
                     )
                 },
                 operation: {
-                    try await LLMModelFactory.shared.loadContainer(
+                    // Pre-load tripwire (2026-07-16): a torn cache dir (index
+                    // promising shards the disk doesn't back) reaches mlx-swift's
+                    // quantize pass and dies as swift_unexpectedError — a process
+                    // death, not a thrown load failure. Heal (delete → HubApi
+                    // re-downloads) BEFORE the loader can read it; inside the
+                    // retry so a failed attempt re-checks. Path mirrors
+                    // HubApiDownloader.llmDefault's base (Caches/models/<id>).
+                    if let caches = FileManager.default.urls(
+                        for: .cachesDirectory, in: .userDomainMask
+                    ).first {
+                        ModelCacheIntegrity.healBeforeLoad(
+                            directory: caches
+                                .appendingPathComponent("models")
+                                .appendingPathComponent(loadConfiguration.name)
+                        )
+                    }
+                    return try await LLMModelFactory.shared.loadContainer(
                         from: HubApiDownloader.llmDefault,
                         using: TransformersTokenizerLoader(),
                         configuration: loadConfiguration
