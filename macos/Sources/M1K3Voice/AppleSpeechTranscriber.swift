@@ -18,6 +18,20 @@
 //  Prior: internal call-pipeline project, AppleSpeechTranscriber + LiveTranscriptionSession
 //  (Kev) — collapsed to one live-session provider, cumulative text, on-device
 //  forced, device-picker + call-domain fields dropped.
+//  Review: Kev + claude-fable-5, 2026-07-16 (concurrency deep pass, findings
+//  1/6/14/16) — sessions are now GENERATION-stamped. Three races closed:
+//  (a) a stale recognition callback (cancel-error or late isFinal from a
+//  superseded session) used to run stopListening against CURRENT state and
+//  silently kill the fresh session; (b) a stop landing while begin() sat in the
+//  TCC-authorization suspension let begin re-arm the engine afterwards — mic
+//  hot after stop, no teardown path (the audit's worst voice finding); (c) a
+//  consumer cancelling the stream (instead of pairing stopListening) leaked the
+//  live mic. Now: start/stop each bump `generation` under `lock`;
+//  stopListening(ifGeneration:) claims state atomically and stale callers
+//  no-op; begin() re-checks liveness after every suspension and runs a
+//  commit-point epilogue after engine.start(); onTermination(.cancelled) makes
+//  consumer-cancel teardown structural. Verify-by-launch per this file's
+//  convention (TCC dialog + real mic); the pure pieces stay unit-tested.
 
 import AVFoundation
 import Foundation
@@ -47,6 +61,21 @@ public final class AppleSpeechTranscriber: TranscriptionProvider, @unchecked Sen
     /// mic connecting, or capture forcing the A2DP→HFP profile switch) reinstalls
     /// the tap on the NEW input format instead of leaving it deaf on the old one.
     private var configObserver: NSObjectProtocol?
+    /// Session identity (guarded by `lock`). Bumped by every start AND stop, so a
+    /// callback or in-flight `begin()` belonging to a superseded session can prove
+    /// it is stale and no-op instead of tearing down (or arming) the wrong session.
+    /// AsyncStream.Continuation is not Equatable and a nil-check can't distinguish
+    /// "stopped" from "restarted", so the counter is the only correct identity.
+    private var generation: UInt64 = 0
+    /// Which generation's tap is currently installed on the bus / engine armed
+    /// (nil = idle). Guarded by `engineLock` — mutated and read ONLY inside an
+    /// engineLock hold, alongside the engine op it authorizes. This is what makes
+    /// the stale-cleanup paths (a superseded begin's unwind/epilogue, a stop for a
+    /// session that already handed the mic on) safe: they tear the engine down
+    /// only if they still own it, so they can never strip a successor's live tap
+    /// or stop its running engine. The shared `AVAudioEngine` had session identity
+    /// only in its state before; now it has an explicit owner.
+    private var engineOwner: UInt64?
 
     public init(locale: Locale = .current) {
         self.locale = locale
@@ -63,33 +92,69 @@ public final class AppleSpeechTranscriber: TranscriptionProvider, @unchecked Sen
     public func startListening() throws -> AsyncStream<TranscriptSegment> {
         stopListening()
         return AsyncStream { continuation in
-            lock.withLock { self.continuation = continuation }
-            Task { await self.begin(continuation) }
+            let generation = lock.withLock {
+                self.generation &+= 1
+                self.continuation = continuation
+                return self.generation
+            }
+            // Consumer cancellation (task torn down without a paired
+            // stopListening) must release the mic structurally. Gated on
+            // .cancelled: .finished only ever originates from stopListening
+            // itself, and the generation scope keeps a cancelled OLD consumer
+            // from killing a newer session.
+            continuation.onTermination = { [weak self] reason in
+                if case .cancelled = reason { self?.stopListening(ifGeneration: generation) }
+            }
+            Task { await self.begin(continuation, generation: generation) }
         }
     }
 
     public func stopListening() {
-        // Stop the engine + drain the tap OUTSIDE the lock: `audioEngine.stop()`
-        // blocks until in-flight tap callbacks return, and those callbacks take
-        // `lock` — holding it here would be a lock-inversion deadlock (which is
-        // hit every time recognition settles, since the result callback calls
-        // stopListening on `isFinal`).
-        engineLock.withLock {
-            audioEngine.stop()
-            audioEngine.inputNode.removeTap(onBus: 0)
-        }
-        let (request, task, continuation, observer) = lock.withLock {
-            let captured = (self.request, self.task, self.continuation, self.configObserver)
-            self.request = nil
-            self.task = nil
-            self.continuation = nil
-            self.configObserver = nil
+        stopListening(ifGeneration: nil)
+    }
+
+    /// Tear down the CURRENT session — but only if it is still the session the
+    /// caller belongs to. `nil` means "whatever is live now" (the public stop);
+    /// a stale generation no-ops, so a superseded session's late callbacks can
+    /// never kill their successor. Claiming also bumps `generation`, which is
+    /// what invalidates an in-flight `begin()` (see its re-checks).
+    private func stopListening(ifGeneration expected: UInt64?) {
+        let claimed = lock.withLock {
+            () -> (UInt64, SFSpeechAudioBufferRecognitionRequest?, SFSpeechRecognitionTask?,
+                   AsyncStream<TranscriptSegment>.Continuation?, NSObjectProtocol?)? in
+            if let expected, expected != generation { return nil }
+            let claimedGeneration = generation
+            generation &+= 1
+            let captured = (claimedGeneration, request, task, continuation, configObserver)
+            request = nil
+            task = nil
+            continuation = nil
+            configObserver = nil
             return captured
         }
+        guard let (claimedGeneration, request, task, continuation, observer) = claimed else { return }
+        // Tear the engine down only if THIS claimed session still owns it — a
+        // begin() that hasn't armed yet leaves ownership with an older/nil value,
+        // so this no-ops and begin's own commit-point cleans up. Prevents a stop
+        // from stripping a successor that armed in the gap. Engine ops run OUTSIDE
+        // `lock`: `audioEngine.stop()` blocks on in-flight tap callbacks, which
+        // take `lock` — holding it would be the inversion this file documents.
+        teardownEngineIfOwner(claimedGeneration)
         if let observer { NotificationCenter.default.removeObserver(observer) }
         request?.endAudio()
         task?.cancel()
         continuation?.finish()
+    }
+
+    /// Tear down the engine + tap IFF `generation` still owns them (guarded by
+    /// `engineLock`). A stale caller no-ops rather than killing the live session.
+    private func teardownEngineIfOwner(_ generation: UInt64) {
+        engineLock.withLock {
+            guard engineOwner == generation else { return }
+            audioEngine.stop()
+            audioEngine.inputNode.removeTap(onBus: 0)
+            engineOwner = nil
+        }
     }
 
     // MARK: - Private
@@ -97,7 +162,18 @@ public final class AppleSpeechTranscriber: TranscriptionProvider, @unchecked Sen
     /// Request authorization, then wire the mic into a streaming recognition
     /// request. On any failure the stream simply finishes (the caller sees no
     /// segments and can surface "couldn't start listening").
-    private func begin(_ continuation: AsyncStream<TranscriptSegment>.Continuation) async {
+    ///
+    /// Runs off-actor from an unstructured Task, so a stop (or a restart) can
+    /// land at ANY suspension — most dramatically while `authorized()` sits in
+    /// the system TCC dialog for seconds. Every step therefore re-proves the
+    /// session is still current before touching shared engine state, and the
+    /// commit-point epilogue after `engine.start()` re-checks once more: without
+    /// it, a stop landing between the task store and the start left the mic
+    /// recording with no owner and no teardown path.
+    private func begin(
+        _ continuation: AsyncStream<TranscriptSegment>.Continuation,
+        generation: UInt64
+    ) async {
         guard await Self.authorized(),
               let recognizer = SFSpeechRecognizer(locale: locale),
               recognizer.isAvailable
@@ -109,25 +185,44 @@ public final class AppleSpeechTranscriber: TranscriptionProvider, @unchecked Sen
         let request = SFSpeechAudioBufferRecognitionRequest()
         request.shouldReportPartialResults = true
         request.requiresOnDeviceRecognition = recognizer.supportsOnDeviceRecognition
-        // Store the request before installing the tap, so the first audio buffers
-        // aren't dropped by `self.request` still being nil when the tap fires.
-        lock.withLock { self.request = request }
+        // Store the request before installing the tap (so the first audio buffers
+        // aren't dropped by `self.request` still being nil when the tap fires) —
+        // atomically with the liveness re-check: a stop that landed during the
+        // authorization suspension already bumped the generation, and a stale
+        // begin must not clobber a successor session's request.
+        let stillCurrent = lock.withLock {
+            guard generation == self.generation else { return false }
+            self.request = request
+            return true
+        }
+        guard stillCurrent else {
+            // Never touch the engine here: a newer session may own it.
+            continuation.finish()
+            return
+        }
 
         // A Bluetooth mic engaging (or TCC settling) can leave the input format
         // degenerate at this instant; refuse a dead tap rather than capture
         // silence. The route-change observer below reinstalls once it's ready.
-        guard installInputTap() else {
-            Self.log.error("mic input route not ready — could not start listening")
-            stopListening()
+        // Installing also CLAIMS engine ownership for this generation (under
+        // engineLock, atomically with the install) so every later teardown can
+        // check it. A stale generation never installs.
+        guard installTapAsOwner(generation) else {
+            Self.log.error("mic input route not ready or session superseded — not listening")
+            stopListening(ifGeneration: generation)
             continuation.finish()
             return
         }
-        observeConfigurationChanges()
+        observeConfigurationChanges(ifGeneration: generation)
 
         let task = recognizer.recognitionTask(with: request) { [weak self] result, error in
             guard let self else { return }
+            // Generation-scoped teardown on BOTH exits: stopListening endAudio()s
+            // then cancel()s the old task, so a superseded session comes back as
+            // a late isFinal OR a cancel-error — either used to tear down the
+            // NEW session's engine/tap/continuation.
             if error != nil {
-                self.stopListening()
+                self.stopListening(ifGeneration: generation)
                 return
             }
             guard let result else { return }
@@ -139,16 +234,91 @@ public final class AppleSpeechTranscriber: TranscriptionProvider, @unchecked Sen
                     confidence: Self.confidence(of: result.bestTranscription)
                 ))
             }
-            if result.isFinal { self.stopListening() }
+            if result.isFinal { self.stopListening(ifGeneration: generation) }
         }
 
-        lock.withLock { self.task = task }
+        let taskAccepted = lock.withLock {
+            guard generation == self.generation else { return false }
+            self.task = task
+            return true
+        }
+        guard taskAccepted else {
+            // A stop claimed the session while the recognition task was being
+            // created: unwind this begin()'s pieces. teardownEngineIfOwner only
+            // touches the engine if WE still own it — if the claiming stop (or a
+            // successor) already took ownership, this no-ops, so we never strip a
+            // successor's tap.
+            task.cancel()
+            request.endAudio()
+            teardownEngineIfOwner(generation)
+            continuation.finish()
+            return
+        }
 
-        do {
+        // Start the engine only while we still own it (guarded inside engineLock);
+        // a stop that claimed us between the task store and here already flipped
+        // ownership, so startEngineIfOwner no-ops and the epilogue finishes us.
+        switch startEngineIfOwner(generation) {
+        case .notOwner:
+            // A newer session owns the engine; just release our non-engine pieces.
+            request.endAudio()
+            task.cancel()
+            continuation.finish()
+            return
+        case .failed:
+            stopListening(ifGeneration: generation)
+            continuation.finish()
+            return
+        case .started:
+            break
+        }
+
+        // COMMIT-POINT EPILOGUE: the engine is now RUNNING and we owned it through
+        // the start. If a stop claimed the session in the gap between the start
+        // and this check, its teardownEngineIfOwner may have run BEFORE we set
+        // ownership (no-op then) — so tear our own engine down now. Guarded by
+        // ownership, so if a successor has since armed, we leave it alone.
+        let staleAfterStart = lock.withLock { generation != self.generation }
+        if staleAfterStart {
+            teardownEngineIfOwner(generation)
+            request.endAudio()
+            task.cancel()
+            continuation.finish()
+        }
+    }
+
+    /// Install this session's tap AND claim engine ownership atomically under
+    /// `engineLock`. Refuses (false) if the session is already superseded or the
+    /// mic route isn't ready (degenerate format). Installing a fresh tap first
+    /// drains any stale one on the bus (idempotent), so a leftover tap can't
+    /// collide.
+    private func installTapAsOwner(_ generation: UInt64) -> Bool {
+        engineLock.withLock {
+            guard lock.withLock({ generation == self.generation }) else { return false }
+            audioEngine.inputNode.removeTap(onBus: 0)
+            guard installInputTap() else { return false }
+            engineOwner = generation
+            return true
+        }
+    }
+
+    private enum EngineStartOutcome { case started, notOwner, failed }
+
+    /// Prepare + start the engine IFF `generation` owns it (guarded by
+    /// `engineLock`). On failure it relinquishes ownership so a retry/route-change
+    /// can re-arm cleanly.
+    private func startEngineIfOwner(_ generation: UInt64) -> EngineStartOutcome {
+        engineLock.withLock {
+            guard engineOwner == generation else { return .notOwner }
             audioEngine.prepare()
-            try audioEngine.start()
-        } catch {
-            stopListening()
+            do {
+                try audioEngine.start()
+                return .started
+            } catch {
+                audioEngine.inputNode.removeTap(onBus: 0)
+                engineOwner = nil
+                return .failed
+            }
         }
     }
 
@@ -177,28 +347,43 @@ public final class AppleSpeechTranscriber: TranscriptionProvider, @unchecked Sen
         return true
     }
 
-    private func observeConfigurationChanges() {
+    private func observeConfigurationChanges(ifGeneration generation: UInt64) {
         let observer = NotificationCenter.default.addObserver(
             forName: .AVAudioEngineConfigurationChange, object: audioEngine, queue: nil
         ) { [weak self] _ in
-            self?.handleConfigurationChange()
+            self?.handleConfigurationChange(generation: generation)
         }
-        lock.withLock { self.configObserver = observer }
+        // Store only while still the live session — a stale begin() must not
+        // plant an observer the racing stop already can't see (it captured and
+        // removed the PREVIOUS one when it claimed).
+        let accepted = lock.withLock {
+            guard generation == self.generation else { return false }
+            self.configObserver = observer
+            return true
+        }
+        if !accepted { NotificationCenter.default.removeObserver(observer) }
     }
 
     /// The audio route changed — a Bluetooth mic connecting, or starting capture
     /// forcing the headset's A2DP→HFP profile switch. The installed tap is bound
     /// to the OLD input format and now delivers nothing, so reinstall against the
-    /// new format and restart. Engine ops run OUTSIDE the lock: `audioEngine.stop()`
-    /// blocks on in-flight tap callbacks and those take the lock (the inversion
-    /// `stopListening` documents).
-    private func handleConfigurationChange() {
-        guard lock.withLock({ request != nil }) else { return } // not listening
+    /// new format and restart. Generation-scoped: an in-flight notification from a
+    /// removed observer must not re-arm the engine for a session that has since
+    /// been stopped (ownerless hot mic) or install a second tap into a starting
+    /// successor (a crash). The whole reinstall runs under `engineLock` with the
+    /// ownership check inside it, so it is atomic against every other engine op.
+    private func handleConfigurationChange(generation: UInt64) {
         Self.log.notice("audio route changed — reinstalling mic tap at the new format")
         engineLock.withLock {
+            // Only OUR session, still current, still the engine owner.
+            guard engineOwner == generation,
+                  lock.withLock({ generation == self.generation }) else { return }
             audioEngine.inputNode.removeTap(onBus: 0)
             if audioEngine.isRunning { audioEngine.stop() }
-            guard installInputTap() else { return }
+            guard installInputTap() else {
+                // Route not ready yet; ownership stands so the next notification retries.
+                return
+            }
             audioEngine.prepare()
             do {
                 try audioEngine.start()
