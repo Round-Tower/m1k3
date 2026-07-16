@@ -38,6 +38,39 @@ private final class ProgressCollector: @unchecked Sendable {
 
 private enum LoaderTestError: Error { case boom }
 
+/// A manually-opened latch: the loader operation parks on `wait()` until the
+/// test calls `open()`, so cancellation promptness is proven by ORDER (the
+/// waiter completes while the load is still parked), not by wall-clock timing.
+private actor Gate {
+    private var opened = false
+    private var waiters: [CheckedContinuation<Void, Never>] = []
+
+    func open() {
+        opened = true
+        for waiter in waiters {
+            waiter.resume()
+        }
+        waiters = []
+    }
+
+    func wait() async {
+        if opened { return }
+        await withCheckedContinuation { waiters.append($0) }
+    }
+}
+
+private final class Flag: @unchecked Sendable {
+    private let lock = NSLock()
+    private var value = false
+    func set() {
+        lock.withLock { value = true }
+    }
+
+    var isSet: Bool {
+        lock.withLock { value }
+    }
+}
+
 struct SingleFlightLoaderTests {
     @Test("concurrent callers share one load (the double-load race fix)")
     func concurrentCallersShareOneLoad() async throws {
@@ -123,5 +156,60 @@ struct SingleFlightLoaderTests {
 
         #expect(result == 1)
         #expect(await counter.count == 1) // still exactly one load, no duplicate
+    }
+
+    @Test("a cancelled waiter throws promptly instead of riding out the load")
+    func cancelledWaiterThrowsPromptly() async throws {
+        let gate = Gate()
+        let counter = InvocationCounter()
+        let finished = Flag()
+        let loader = SingleFlightLoader<Int> { _ in
+            _ = await counter.bump()
+            await gate.wait() // parked until the test opens the gate
+            return 1
+        }
+
+        let waiter = Task {
+            defer { finished.set() }
+            return try await loader.value()
+        }
+        while await counter.count == 0 {
+            await Task.yield()
+        } // flight underway
+        waiter.cancel()
+
+        // The waiter must complete WHILE the load is still parked on the gate —
+        // that ordering, not wall-clock, is the promptness proof. The settle
+        // beat only gives the cancellation handler time to run.
+        try? await Task.sleep(for: .milliseconds(200))
+        #expect(finished.isSet, "cancelled waiter should not stay suspended behind the in-flight load")
+
+        await gate.open() // release the flight either way so the test can't hang
+        let outcome = await waiter.result
+        #expect(throws: CancellationError.self) { _ = try outcome.get() }
+
+        // The flight itself was NOT cancelled: a later caller rejoins its result.
+        let value = try await loader.value()
+        #expect(value == 1)
+        #expect(await counter.count == 1)
+    }
+
+    @Test("a load that itself throws CancellationError clears the slot for retry")
+    func operationCancellationErrorClearsSlot() async throws {
+        let counter = InvocationCounter()
+        let loader = SingleFlightLoader<Int> { _ in
+            let attempt = await counter.bump()
+            if attempt == 1 { throw CancellationError() }
+            return 5
+        }
+
+        // A CancellationError thrown BY the operation is a load failure, not a
+        // waiter cancel — it must clear the slot, or the loader is poisoned and
+        // replays the stale error to every future caller with no retry path.
+        await #expect(throws: CancellationError.self) { _ = try await loader.value() }
+        let retried = try await loader.value()
+
+        #expect(retried == 5)
+        #expect(await counter.count == 2)
     }
 }
