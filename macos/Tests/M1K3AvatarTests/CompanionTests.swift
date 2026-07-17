@@ -114,7 +114,13 @@ struct CompanionTests {
     @Test("named resolves a bundled id, and treats empty/unknown as the pixel face")
     func namedResolution() {
         #expect(CompanionSpec.named("Fox") == .fox)
-        #expect(CompanionSpec.named("Gecko") == nil) // dropped — stale id → pixel face
+        // Gecko's comeback (2026-07-17): the 06-21 drop was the Rig-prim trap +
+        // the pack's 11-frame takes, both fixed in #20 — re-exported with
+        // --retime 4, rkprobe --tick 8/8 MOVES. The old stale-id-→-nil pin
+        // reverses: a persisted "Gecko" now resolves to a real creature again.
+        #expect(CompanionSpec.named("Gecko") == .gecko)
+        // Colobus joins the same day, same pipeline run (rkprobe 8/8 MOVES).
+        #expect(CompanionSpec.named("Colobus") == .colobus)
         #expect(CompanionSpec.named("") == nil) // the pixel-face sentinel
         #expect(CompanionSpec.named("pixel") == nil)
         #expect(CompanionSpec.named("Wolpertinger") == nil)
