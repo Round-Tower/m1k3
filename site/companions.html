@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Meet the Companions — M1K3's 3D Voice-Mode Creatures</title>
+<meta name="description" content="M1K3's voice mode has an opt-in cast of low-poly 3D companions — Fox, Inkfish, Sparrow, Gecko, and Colobus — rendered entirely on your Mac with RealityKit. They walk while M1K3 listens, run while it thinks, and jump when it's delighted." />
+<meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" />
+<link rel="canonical" href="https://m1k3.app/companions" />
+<link rel="icon" href="favicon.svg" type="image/svg+xml" />
+<link rel="icon" href="icon-192.png" type="image/png" sizes="192x192" />
+<link rel="apple-touch-icon" href="apple-touch-icon.png" />
+<meta name="theme-color" content="#050505" />
+<meta property="og:site_name" content="M1K3" />
+<meta property="og:locale" content="en_IE" />
+<meta property="og:title" content="Meet the Companions — M1K3's 3D Voice-Mode Creatures" />
+<meta property="og:description" content="An opt-in cast of low-poly 3D creatures for M1K3's voice mode, rendered entirely on-device. The pixel face stays the default; the companions are for fun." />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://m1k3.app/companions" />
+<meta property="og:image" content="https://m1k3.app/og.png" />
+<meta property="og:image:width" content="1200" />
+<meta property="og:image:height" content="630" />
+<meta property="og:image:alt" content="M1K3 for Mac — 'Your AI. Your Mac. Nothing leaves.' A wireframe fox on a dark CRT grid; a private, on-device AI companion for macOS." />
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:title" content="Meet the Companions — M1K3's 3D Voice-Mode Creatures" />
+<meta name="twitter:description" content="Fox, Inkfish, Sparrow, Gecko, and Colobus — low-poly 3D companions for M1K3's voice mode, rendered entirely on your Mac." />
+<meta name="twitter:image" content="https://m1k3.app/og.png" />
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "Article",
+  "headline": "Meet the Companions — M1K3's 3D Voice-Mode Creatures",
+  "description": "M1K3's voice mode has an opt-in cast of low-poly 3D companions, rendered entirely on-device with RealityKit.",
+  "url": "https://m1k3.app/companions",
+  "image": "https://m1k3.app/og.png",
+  "author": { "@type": "Organization", "name": "Round Tower", "url": "https://round-tower.ie" },
+  "publisher": { "@type": "Organization", "name": "Round Tower", "url": "https://round-tower.ie" },
+  "datePublished": "2026-07-17",
+  "dateModified": "2026-07-17"
+}
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=VT323&family=IBM+Plex+Mono:wght@300;400;500&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="geo.css" />
+<style>
+/* Page-local: the cast grid. Tokens from geo.css; zero JS like its siblings. */
+.cast {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 20px;
+  margin: 32px 0 8px;
+}
+.creature {
+  border: 1px solid var(--line);
+  background: var(--bg-2);
+  padding: 18px 18px 20px;
+  text-align: center;
+}
+.creature img {
+  width: 100%;
+  max-width: 260px;
+  height: auto;
+  image-rendering: auto;
+  margin-bottom: 12px;
+}
+.creature h3 {
+  font-family: var(--pixel);
+  font-size: 1.7rem;
+  font-weight: 400;
+  letter-spacing: 0.04em;
+  color: var(--ink-bright);
+  text-shadow: var(--glow-soft);
+  margin-bottom: 6px;
+}
+.creature .role {
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+  display: block;
+  margin-bottom: 10px;
+}
+.creature p { font-size: 0.92rem; color: var(--ink); }
+</style>
+</head>
+<body>
+
+<div class="scanlines"></div>
+<div class="vignette"></div>
+
+<nav>
+  <a class="wordmark" href="/">M1K3<span class="cursor">_</span></a>
+  <div class="links">
+    <a href="/">Home</a>
+    <a href="/#features">Features</a>
+    <a href="/#faq">FAQ</a>
+    <a href="https://github.com/Round-Tower/m1k3">GitHub</a>
+    <a class="btn btn-ghost" href="/#get" style="padding:10px 18px;">Download</a>
+  </div>
+</nav>
+
+<main class="article">
+  <header class="article-head">
+    <span class="label">// the cast</span>
+    <h1>Meet the companions</h1>
+    <p class="meta">Updated 2026-07-17 · Low-poly creatures for voice mode, rendered entirely on your Mac.</p>
+  </header>
+
+  <div class="answer">
+    <p><strong>M1K3's voice mode has an opt-in cast of 3D companions.</strong> Pick one in Settings and it stands in for the pixel face while you talk: it idles while M1K3 listens, breaks into a run while it thinks, and jumps when it's delighted to answer. Everything is rendered locally with RealityKit — like every other part of M1K3, nothing about your conversation leaves the Mac. The pixel face stays the default; the creatures are for fun.</p>
+  </div>
+
+  <div class="cast">
+    <figure class="creature">
+      <img src="/companions/fox.png" alt="Fox — a low-poly orange fox, M1K3's original 3D companion" width="512" height="512" loading="lazy" />
+      <h3>FOX</h3>
+      <span class="role">the original</span>
+      <p>The first companion, and the face of the launch page. Surveys the room while you speak, as a fox does.</p>
+    </figure>
+    <figure class="creature">
+      <img src="/companions/inkfish.png" alt="Inkfish — a low-poly purple squid companion" width="512" height="512" loading="lazy" />
+      <h3>INKFISH</h3>
+      <span class="role">the swimmer</span>
+      <p>Water-native: gliding is walking, jetting is running. Never pretends to have legs.</p>
+    </figure>
+    <figure class="creature">
+      <img src="/companions/sparrow.png" alt="Sparrow — a low-poly brown bird companion" width="512" height="512" loading="lazy" />
+      <h3>SPARROW</h3>
+      <span class="role">the flier</span>
+      <p>Air-native: moving means being on the wing, and delight is a little hop.</p>
+    </figure>
+    <figure class="creature">
+      <img src="/companions/gecko.png" alt="Gecko — a low-poly green gecko companion" width="512" height="512" loading="lazy" />
+      <h3>GECKO</h3>
+      <span class="role">the comeback kid</span>
+      <p>Cut from the first lineup when her animations froze; it took a proper debugging saga to learn the renderer refuses skeletons with a certain name. She animates beautifully now.</p>
+    </figure>
+    <figure class="creature">
+      <img src="/companions/colobus.png" alt="Colobus — a low-poly black-and-white monkey companion" width="512" height="512" loading="lazy" />
+      <h3>COLOBUS</h3>
+      <span class="role">the newest</span>
+      <p>Joined the same day the gecko came back — the pipeline was warm. Big eyes, bigger reactions.</p>
+    </figure>
+  </div>
+
+  <h2>How it works</h2>
+  <p>Each creature ships as a set of baked animation clips, and M1K3 maps its state onto them — listening, thinking, and speaking each get a gait, and errors get an honest flinch. Companions are pure presentation: they read the same avatar state the pixel face does, and switching between them (or back to the pixel face) changes nothing about how M1K3 hears, thinks, or remembers.</p>
+  <p>The models are deliberately tiny — a few hundred kilobytes each — so the whole cast adds almost nothing to the app. If a creature's assets aren't bundled, it simply doesn't appear in the picker.</p>
+
+  <section class="page-cta" id="get">
+    <span class="label">// try it</span>
+    <h2>Pick your companion</h2>
+    <p>Settings → Voice companion, then start voice mode.</p>
+    <div class="cta-row">
+      <a class="btn btn-primary" href="https://testflight.apple.com/join/Fxp2F5Je">Join the TestFlight beta</a>
+      <a class="btn btn-ghost" href="https://github.com/Round-Tower/m1k3">Build from source</a>
+    </div>
+  </section>
+
+  <aside class="more">
+    <span class="label">// more answers</span>
+    <div class="more-links">
+      <a href="/private-chatgpt-alternative-mac">Private ChatGPT alternative for Mac</a>
+      <a href="/local-llm-mac-guide">Run a local LLM on a Mac</a>
+      <a href="/mcp-knowledge-server">Give Claude a local memory (MCP)</a>
+      <a href="/privacy">Is M1K3 really private?</a>
+      <a href="/">M1K3 home</a>
+    </div>
+  </aside>
+</main>
+
+<footer>
+  <span>© 2026 <a href="https://round-tower.ie">ROUND TOWER</a> · MADE IN IRELAND · FOX: <a href="https://github.com/KhronosGroup/glTF-Sample-Assets/tree/main/Models/Fox" rel="license">PIXELMANNEN / TOMKRANIS, CC-BY 4.0</a> · CREATURES: <a href="https://quaternius.com" rel="license">QUATERNIUS, CC0</a></span>
+  <span><a href="https://github.com/sponsors/Round-Tower" aria-label="Sponsor M1K3 on GitHub">SPONSOR ♥</a> · <a href="https://github.com/Round-Tower/m1k3">GITHUB</a> · NO TRACKING ON THIS PAGE, OBVIOUSLY</span>
+</footer>
+
+<!-- Signed: Kev + claude-fable-5, 2026-07-17, Confidence 0.85.
+     "Meet the companions" cast page, made during creative 10% time the day
+     Gecko came back and Colobus joined. Renders are real headless RealityKit
+     previews of the shipping USDZ assets (companion-pipeline preview tool).
+     Copy grounded in CompanionSpec.swift + the site's existing claims; the
+     Gecko story references the Rig-prim trap root-caused in PR #20. Zero JS;
+     styles shared via geo.css + a page-local cast grid. Attribution matches
+     index.html's footer. Prior: none (new file). -->
+</body>
+</html>
