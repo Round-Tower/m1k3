@@ -260,7 +260,7 @@ struct MLXToolFormatResolutionTests {
         #expect(MLXGemmaProvider.resolveToolCallFormat(for: .init(id: "mlx-community/Qwen3-8B-4bit")) == .json)
     }
 
-    @Test("ternary Bonsai (Qwen3 QAT rebrand) resolves to .json — not the ReAct floor")
+    @Test("ternary Bonsai resolves per size: 8B (Qwen3 QAT) → .json, 27B (qwen3_5) → .xmlFunction")
     func bonsaiResolvesJSON() {
         // prism-ml's Ternary-Bonsai ids carry no "qwen" substring, but the 8B is
         // Qwen3-8B ternary QAT (config.json: model_type "qwen3", Qwen3ForCausalLM;
@@ -269,12 +269,15 @@ struct MLXToolFormatResolutionTests {
         #expect(MLXGemmaProvider.resolveToolCallFormat(
             for: .init(id: "prism-ml/Ternary-Bonsai-8B-mlx-2bit")
         ) == .json)
-        // The 27B is Qwen3.6-based and UNVERIFIED — it must NOT silently ride
-        // the 8B's verified arm (review catch: a broad "bonsai" match trades one
-        // silent misroute for a structurally identical one). nil → ReAct floor.
+        // The 27B is a DIFFERENT family than the 8B: config model_type "qwen3_5"
+        // (Qwen3_5ForConditionalGeneration) and its chat template renders the
+        // Qwen3.5 XML function dialect (<tool_call>\n<function=name>\n
+        // <parameter=…>) — verified against the HF config + chat_template.jinja
+        // 2026-07-17, which is the re-verification the old nil pin demanded.
+        // It must ride the .xmlFunction arm, NOT the 8B's .json arm.
         #expect(MLXGemmaProvider.resolveToolCallFormat(
             for: .init(id: "prism-ml/Ternary-Bonsai-27B-mlx-2bit")
-        ) == nil)
+        ) == .xmlFunction)
     }
 
     @Test("an explicit configuration format wins over the family heuristic")
@@ -298,6 +301,13 @@ struct MLXThinkTemplateTests {
         #expect(MLXGemmaProvider.templatePreOpensThink(for: .init(id: "mlx-community/Qwen3.5-2B-4bit")))
         #expect(MLXGemmaProvider.templatePreOpensThink(for: .init(id: "mlx-community/Qwen3.5-9B-4bit")))
         #expect(MLXGemmaProvider.templatePreOpensThink(for: .init(id: "mlx-community/qwen3_5-instruct")))
+        // Bonsai-27B is qwen3_5 under a brand id with NO qwen spelling — its
+        // template ends the generation prompt with an opened <think> (verified
+        // against the HF chat_template.jinja 2026-07-17). Without this arm the
+        // name heuristic misses it and reasoning splitting never engages.
+        #expect(MLXGemmaProvider.templatePreOpensThink(
+            for: .init(id: "prism-ml/Ternary-Bonsai-27B-mlx-2bit")
+        ))
     }
 
     @Test("qwen3 and non-reasoning families do NOT pre-open think")
@@ -310,6 +320,11 @@ struct MLXThinkTemplateTests {
         #expect(!MLXGemmaProvider.templatePreOpensThink(for: .init(id: "mlx-community/Qwen3-8B-4bit")))
         #expect(!MLXGemmaProvider.templatePreOpensThink(for: .init(id: "mlx-community/gemma-4-e4b-it-4bit")))
         #expect(!MLXGemmaProvider.templatePreOpensThink(for: .init(id: "meta/Llama-3.2-1B")))
+        // The Bonsai-27B arm must not over-reach to the 8B — that one is dense
+        // Qwen3 (no pre-open).
+        #expect(!MLXGemmaProvider.templatePreOpensThink(
+            for: .init(id: "prism-ml/Ternary-Bonsai-8B-mlx-2bit")
+        ))
     }
 
     @Test("enable_thinking toggle support spans the WHOLE Qwen3 family, not just 3.5")

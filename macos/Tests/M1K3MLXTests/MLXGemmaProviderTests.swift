@@ -75,13 +75,18 @@ struct MLXGemmaProviderTests {
         #expect(MLXGemmaProvider.supportsQuantizedKVCache(
             for: ModelConfiguration(id: "prism-ml/Ternary-Bonsai-8B-mlx-2bit")
         ))
-        // The Qwen3.6-based 27B is unverified → crash-safe default (no quant).
-        #expect(!MLXGemmaProvider.supportsQuantizedKVCache(
+        // Bonsai-27B is qwen3_5 under a brand id (config verified 2026-07-17).
+        // The family's full-attention layers route through upstream's
+        // attentionWithCacheUpdate dispatcher (Qwen35.swift:367, re-audited at
+        // mlx-swift-lm 3.31.4) and quantized KV ran in production on the same
+        // arch when lil was Qwen3.5-4B — safe, so the old unverified-default
+        // exclusion lifts.
+        #expect(MLXGemmaProvider.supportsQuantizedKVCache(
             for: ModelConfiguration(id: "prism-ml/Ternary-Bonsai-27B-mlx-2bit")
         ))
     }
 
-    @Test("Bonsai does NOT claim the thinking toggle — its template has no enable_thinking")
+    @Test("Bonsai thinking toggle per size: the 8B template has no enable_thinking, the 27B's reads it")
     func bonsaiThinkingTogglePinnedOff() {
         // Unlike stock Qwen3, prism-ml's Bonsai chat template carries no
         // enable_thinking switch (verified against the HF template 2026-07-15) —
@@ -89,6 +94,12 @@ struct MLXGemmaProviderTests {
         // silently break fast mode's expectations. Pin it off.
         #expect(!MLXGemmaProvider.templateSupportsThinkingToggle(
             for: ModelConfiguration(id: "prism-ml/Ternary-Bonsai-8B-mlx-2bit")
+        ))
+        // The 27B DIFFERS: its qwen3_5 template reads enable_thinking (verified
+        // against the HF chat_template.jinja 2026-07-17) — so it claims the
+        // toggle and the reasoning picker stays a live control on this brain.
+        #expect(MLXGemmaProvider.templateSupportsThinkingToggle(
+            for: ModelConfiguration(id: "prism-ml/Ternary-Bonsai-27B-mlx-2bit")
         ))
     }
 

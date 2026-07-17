@@ -246,8 +246,14 @@ extension MLXGemmaProvider: ToolCallingProvider {
         if name.contains("gemma-4") || name.contains("gemma4") { return .gemma4 }
         if name.contains("gemma") { return .gemma }
         // Qwen3.5 is trained on the XML function dialect, NOT <tool_call> JSON
-        // (matches upstream infer(): qwen3_5 → .xmlFunction).
-        if name.contains("qwen3.5") || name.contains("qwen3_5") || name.contains("qwen3-5") {
+        // (matches upstream infer(): qwen3_5 → .xmlFunction). Bonsai-27B is
+        // qwen3_5 under a brand id — config model_type + the <function=…>
+        // <parameter=…> template verified against HF 2026-07-17, the
+        // re-verification the old nil pin demanded. Exact size id: the 8B is
+        // dense Qwen3 and rides the .json arm below.
+        if name.contains("qwen3.5") || name.contains("qwen3_5") || name.contains("qwen3-5")
+            || name.contains("ternary-bonsai-27b")
+        {
             return .xmlFunction
         }
         // prism-ml's Ternary-Bonsai-8B is Qwen3 QAT under a brand id (no "qwen"
