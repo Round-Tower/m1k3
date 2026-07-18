@@ -67,17 +67,21 @@ public actor KokoroSynthesizer {
     /// Kokoro's native output sample rate.
     public static let sampleRate: Double = 24000
 
-    /// Immutable loaded state. `@unchecked Sendable` is sound here: it is built once and
-    /// never mutated after `init`, and every inference call in this file runs
-    /// SEQUENTIALLY (the per-chunk loop in `produceChunks` awaits each detached
-    /// `infer` before starting the next) — never concurrently against the same
-    /// `KokoroModel`, so the box can be shared across the detached inference tasks
-    /// without a data race, whatever mlx-swift's own thread-safety story is for
-    /// truly concurrent forward passes on one model instance.
+    /// Immutable loaded state. `@unchecked Sendable` is sound here: it is built once
+    /// and never mutated after `init`, and every forward pass is funnelled through
+    /// `inferenceQueue` — a SERIAL queue — so no two inferences ever run
+    /// concurrently against the same `KokoroModel`. The per-chunk loop alone is NOT
+    /// enough: actor reentrancy lets two overlapping `synthesizeStream` calls
+    /// interleave at the awaits, so cross-call serialization must live at the
+    /// resource, not in the loop (PR #58 review catch — the old ORT backend was
+    /// immune because `run()` is documented thread-safe; mlx-swift makes no such
+    /// promise for one model instance).
     private final class Loaded: @unchecked Sendable {
         let model: KokoroModel
         let voices: KokoroVoices
         let g2p: KokoroG2P
+        /// All forward passes run here, serially, off the cooperative pool.
+        let inferenceQueue = DispatchQueue(label: "app.m1k3.kokoro.inference", qos: .userInitiated)
 
         init(modelDirectory: URL, voicesURL: URL) throws {
             let fileManager = FileManager.default
@@ -167,12 +171,16 @@ public actor KokoroSynthesizer {
             let style = try box.voices.style(voice: voice, tokenCount: result.tokens.count)
             let modelTokens = KokoroMLXInput.modelTokens(result.tokens)
             // Inference is OS-blocking (Metal dispatch + a synchronous host-side
-            // eval); run it off the cooperative pool. Sequential across chunks by
-            // construction (this loop awaits each chunk before the next), so no
-            // concurrent forward pass ever shares `box.model`.
-            let samples = try await Task.detached(priority: .userInitiated) {
-                try Self.infer(box, tokens: modelTokens, style: style, speed: speed)
-            }.value
+            // eval); run it on the box's SERIAL inference queue — off the
+            // cooperative pool AND safe against overlapping synthesizeStream
+            // calls interleaving via actor reentrancy (see Loaded's doc).
+            let samples = try await withCheckedThrowingContinuation { continuation in
+                box.inferenceQueue.async {
+                    continuation.resume(with: Result {
+                        try Self.infer(box, tokens: modelTokens, style: style, speed: speed)
+                    })
+                }
+            }
             let timeline = KokoroWordTiming.timeline(
                 text: text,
                 result: result,

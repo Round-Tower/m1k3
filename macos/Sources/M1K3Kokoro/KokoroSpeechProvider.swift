@@ -192,6 +192,10 @@ public final class KokoroSpeechProvider: SpeechProviderWithWordTiming, ModelPrel
         let modelDest = modelDirectory.appendingPathComponent("model.safetensors")
         let voicesDest = modelDirectory.appendingPathComponent("voices-v1.0.bin")
 
+        // Reclaim the retired ONNX model (~326 MB) from installs that predate the
+        // MLX backend — nothing reads it anymore (PR #58 review suggestion).
+        try? fileManager.removeItem(at: modelDirectory.appendingPathComponent("kokoro-v1.0.onnx"))
+
         // Self-heal a poisoned stage: a pre-status-check download could stage an
         // HTTP error body as weights, and file-existence alone would then trust
         // it forever (Apple-voice fallback with no retry path). An implausibly
