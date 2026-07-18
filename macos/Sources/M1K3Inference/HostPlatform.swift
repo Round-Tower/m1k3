@@ -19,25 +19,21 @@
 //
 
 public enum HostPlatform {
-    /// "…running entirely on this Mac." — the subject form.
-    public static let thisDevice: String = {
+    /// The bare device noun — compose it with any determiner the sentence
+    /// needs ("the \(noun)'ll keep", "My \(noun)'s gone properly warm").
+    public static let noun: String = {
         #if os(macOS)
-            return "this Mac"
+            return "Mac"
         #elseif os(visionOS)
-            return "this Vision Pro"
+            return "Vision Pro"
         #else
-            return "this device"
+            return "device"
         #endif
     }()
 
+    /// "…running entirely on this Mac." — the subject form.
+    public static let thisDevice = "this \(noun)"
+
     /// "…just me and your Mac…" — the possessive form.
-    public static let yourDevice: String = {
-        #if os(macOS)
-            return "your Mac"
-        #elseif os(visionOS)
-            return "your Vision Pro"
-        #else
-            return "your device"
-        #endif
-    }()
+    public static let yourDevice = "your \(noun)"
 }

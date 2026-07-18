@@ -19,16 +19,21 @@
 import Testing
 
 struct HostPlatformTests {
-    @Test("macOS keeps the exact frozen prompt nouns — 'this Mac' / 'your Mac'")
+    @Test("macOS keeps the exact frozen prompt nouns — 'Mac' / 'this Mac' / 'your Mac'")
     func macOSNounsAreByteIdentical() {
         #if os(macOS)
+            #expect(HostPlatform.noun == "Mac")
             #expect(HostPlatform.thisDevice == "this Mac")
             #expect(HostPlatform.yourDevice == "your Mac")
+            // The two determiner phrases the prompt composes from the bare noun
+            // — frozen exactly as the literals they replaced (PR #59 review).
+            #expect("the \(HostPlatform.noun)'ll" == "the Mac'll")
+            #expect("My \(HostPlatform.noun)'s" == "My Mac's")
         #endif
     }
 
     @Test("the nouns are lowercase noun phrases — safe mid-sentence")
-    func nounsCompseMidSentence() {
+    func nounsComposeMidSentence() {
         #expect(HostPlatform.thisDevice.hasPrefix("this "))
         #expect(HostPlatform.yourDevice.hasPrefix("your "))
         #expect(!HostPlatform.thisDevice.contains("\n"))
