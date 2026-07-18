@@ -101,6 +101,13 @@ let package = Package(
         // smoke (not just load-and-generate) — tool-calling is the reason this
         // dependency moves.
         .package(url: "https://github.com/ml-explore/mlx-swift-lm.git", .upToNextMinor(from: "3.31.4")),
+        // mlx-swift itself (MLX/MLXNN/MLXFFT/MLXFast) — mlx-swift-lm depends on
+        // this but doesn't re-export its products, so M1K3Kokoro (which needs
+        // the raw neural-net/FFT primitives for the vendored Kokoro port, not
+        // mlx-swift-lm's LLM-loading machinery) declares it directly. SAME URL
+        // mlx-swift-lm itself pins (`https://github.com/ml-explore/mlx-swift`,
+        // no `.git` suffix) so SwiftPM resolves one copy, not two.
+        .package(url: "https://github.com/ml-explore/mlx-swift", .upToNextMinor(from: "0.31.4")),
         // Downloader/Tokenizer for the MLX stack. 3.x removed the built-in HF
         // client; the official adapter packages (swift-tokenizers-mlx) clash
         // with WhisperKit's swift-transformers (duplicate `Tokenizers` target),
@@ -116,10 +123,6 @@ let package = Package(
         // M1K3WhisperKit target; Apple Speech (system framework) is the
         // always-available fallback behind the same TranscriptionProvider seam.
         .package(url: "https://github.com/argmaxinc/WhisperKit.git", from: "0.15.0"),
-        // ONNX Runtime — runs the Kokoro neural-TTS model on-device. Self-contained
-        // binary (no transitive deps → cannot clash with the mlx-swift stack), isolated
-        // to the M1K3Kokoro target so the core build never links it.
-        .package(url: "https://github.com/microsoft/onnxruntime-swift-package-manager", from: "1.16.0"),
     ],
     targets: [
         // The single source of truth for unified logging: the `app.m1k3`
@@ -489,19 +492,28 @@ let package = Package(
             path: "Tests/M1K3AvatarTests"
         ),
         // M1K3 Voice — the premium neural TTS tier (Kokoro). Isolated like
-        // M1K3MLX/M1K3WhisperKit so only this target (and the app) will link the
-        // ONNX runtime + G2P phonemizer once the synthesis spike lands. This
-        // session it carries the SpeechProvider scaffold + model-download
-        // (ModelPreloading) only — NO heavy dep yet, so the build stays fast and
-        // the working MLX/WhisperKit stack is untouched. Conforms to M1K3Voice's
-        // SpeechProviderWithLifecycle and M1K3Inference's ModelPreloading.
+        // M1K3MLX/M1K3WhisperKit so only this target (and the app) links the
+        // heavy backend + G2P phonemizer. Backend swapped 2026-07-18: ONNX
+        // Runtime → pure MLX (a vendored StyleTTS2/Kokoro port under
+        // Sources/M1K3Kokoro/MLX/Vendored/, MIT, Blaizzy/mlx-audio-swift) — the
+        // visionOS unlock, since onnxruntime-swift-package-manager had no xrOS
+        // slice. Conforms to M1K3Voice's SpeechProviderWithLifecycle and
+        // M1K3Inference's ModelPreloading.
         .target(
             name: "M1K3Kokoro",
             dependencies: [
                 "M1K3LogCore", "M1K3Voice", "M1K3Inference",
-                .product(name: "onnxruntime", package: "onnxruntime-swift-package-manager"),
+                .product(name: "MLX", package: "mlx-swift"),
+                .product(name: "MLXNN", package: "mlx-swift"),
+                .product(name: "MLXFFT", package: "mlx-swift"),
+                .product(name: "MLXFast", package: "mlx-swift"),
+                .product(name: "MLXLMCommon", package: "mlx-swift-lm"),
             ],
             path: "Sources/M1K3Kokoro",
+            // The vendoring paper trail (MLX/Vendored/README.md + LICENSE) isn't
+            // Swift source and isn't a runtime resource — exclude it explicitly so
+            // SwiftPM doesn't warn about unhandled files on every build.
+            exclude: ["MLX/Vendored/README.md", "MLX/Vendored/LICENSE"],
             resources: [.copy("Resources/g2p-en-gb.deflate")]
         ),
         .testTarget(

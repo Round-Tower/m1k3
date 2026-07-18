@@ -6,8 +6,9 @@
 	     audioanalyticsd mach-lookup exceptions, which the App Store rejects
 	     (temporary-exception.* and private-service exception.mach-lookup are
 	     disallowed). Those exist only for the AVSpeechSynthesizer system-voice
-	     path; the Kokoro neural voice (on-device ONNX, no mach service) needs
-	     none of them. See macos/tools/release/README.md §2. -->
+	     path; the Kokoro neural voice (on-device MLX/Metal, no mach service —
+	     ONNX Runtime removed 2026-07-18) needs none of them. See
+	     macos/tools/release/README.md §2. -->
 
 	<key>com.apple.security.app-sandbox</key>
 	<true/>

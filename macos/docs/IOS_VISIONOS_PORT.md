@@ -19,7 +19,7 @@ shell — **not** in the library graph. After declaring `.iOS(.v26)` + `.visionO
 |---|---|---|
 | M1K3Knowledge, M1K3Memory, M1K3Inference | ✅ | pure logic + GRDB; `MemoryStore` was pre-annotated "works unchanged on iOS" |
 | M1K3MLX | ✅ | the full MLX/Metal graph cross-compiles |
-| M1K3Kokoro | ✅ | ONNX Runtime (CPU EP today — perf caveat below) |
+| M1K3Kokoro | ✅ | MLX backend since 2026-07-18 (was ONNX Runtime); see the RESOLVED note below |
 | M1K3WhisperKit | ✅ | after the M1K3Calls guard |
 | M1K3MemoryViz, M1K3Avatar | ✅ | RealityKit; `ConstellationPalette` was already `canImport(AppKit)`-guarded |
 | M1K3Chat, M1K3Agent | ✅ | FoundationModels (`@_weakLinked`) needs **no** availability change at deployment floor 26 |
@@ -36,6 +36,17 @@ no visionOS slice** ("no library for this platform was found"). It has an iOS sl
 builds for iOS), just not xrOS. Phase-2 options: exclude M1K3Kokoro from the visionOS
 product and fall back to AVSpeech TTS on Vision Pro, or wait for an upstream xrOS binary.
 Nothing in M1K3's own source blocks visionOS.
+
+> **RESOLVED 2026-07-18 — the xrOS gap above is gone.** `M1K3Kokoro`'s ONNX Runtime
+> backend was replaced with a pure-MLX one (a vendored StyleTTS2/Kokoro port, MIT,
+> `Sources/M1K3Kokoro/MLX/Vendored/`, from Blaizzy/mlx-audio-swift) — MLX/MLXNN/MLXFFT/
+> MLXFast already build for visionOS (same graph M1K3MLX already proved ✅ above), so
+> `M1K3Kokoro` needs no more platform exclusion or AVSpeech fallback on Vision Pro on
+> dependency grounds. `swift build` for the package targets `.macOS/.iOS/.visionOS`
+> stays green post-swap (`swift build`/`swift test --parallel`, this session). Kokoro is
+> still not WIRED into the `M1K3iOSApp/` shell's UI (a separate, still-open Phase-2
+> product decision — see the shell inventory below), but the dependency-level blocker
+> this note originally described no longer exists.
 
 ## The two real compile breaks the probe found (now fixed)
 
@@ -112,8 +123,9 @@ it's load-bearing and only tested through the Mac app today.
   (bionic/dyslexia focus reader), generation stats, artifact/WebView panel (UIViewRepresentable).
 - **Phase B — Voice.** AVAudioSession lifecycle (the one true blocker) behind the
   SpeechProvider/TranscriptionProvider seams; voice mode (avatar hero + karaoke +
-  push-to-talk), Kokoro TTS (iOS ✓; visionOS needs the ONNX xrOS slice or AVSpeech
-  fallback), WhisperKit/Apple STT, interruption/route handling.
+  push-to-talk), Kokoro TTS (iOS ✓; visionOS dependency gap RESOLVED 2026-07-18 —
+  the MLX backend has no xrOS slice problem, see above), WhisperKit/Apple STT,
+  interruption/route handling.
 - **Phase C — Shell & navigation (iOS-native, not a port).** TabView/NavigationStack
   for Chat / Memories / Documents / Settings; onboarding + capability ladder. The
   menu-bar companion's iOS soul: Home/Lock-Screen widgets, App Intents/Shortcuts
@@ -197,8 +209,8 @@ for it), so on-device run is verify-owed, same as the spike.
 ### Still to do (honestly device/runtime-gated — NOT claimed done)
 
 - **Phase B — Voice.** `AVAudioSession` lifecycle behind the `SpeechProvider`/
-  `TranscriptionProvider` seams; Kokoro TTS (iOS ✓; visionOS needs the ONNX xrOS slice or
-  an AVSpeech fallback), WhisperKit/Apple STT. Not wired in the shell.
+  `TranscriptionProvider` seams; Kokoro TTS (iOS ✓; visionOS dependency gap RESOLVED
+  2026-07-18 — MLX backend, no xrOS slice problem). Not wired in the shell.
 - **On-device run** — MLX generation, memory behaviour under the 4 GB mobile ceiling, the
   streaming feel, first-run onboarding, AFM availability on real AI-off hardware.
 - **Phase D — Spatial (visionOS flagship)** — volumetric avatar + walkable memory

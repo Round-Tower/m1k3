@@ -81,7 +81,7 @@ proven from `swift test`.
 
 The package is **protocol-seam first**: pure, dependency-free logic in the core
 targets (so `swift test` drives TDD in seconds), with heavy backends (MLX,
-WhisperKit, Kokoro/ONNX, GRDB) isolated into their own targets behind protocols
+WhisperKit, Kokoro/MLX, GRDB) isolated into their own targets behind protocols
 so they never weigh down the core build. The SwiftUI app (`M1K3App/`) is a thin
 shell that wires concrete backends to the seams; `AppEnvironment` (+ its
 `AppEnvironment+*.swift` extensions) is the composition root.
@@ -104,7 +104,7 @@ shell that wires concrete backends to the seams; `AppEnvironment` (+ its
 | `M1K3Voice` | TTS (`SpeechProvider`) + transcription (`TranscriptionProvider`) seams (system AVFoundation/Speech only). |
 | `M1K3MLX` | **Heavy.** MLX embeddings + Gemma/Qwen generation on Metal. Conforms to the `EmbeddingService`/`InferenceProvider` seams. |
 | `M1K3WhisperKit` | **Heavy.** WhisperKit on-device transcription (CoreML). Apple Speech is the always-available fallback behind the same seam. |
-| `M1K3Kokoro` | **Heavy.** Kokoro neural TTS via ONNX Runtime + G2P phonemizer. |
+| `M1K3Kokoro` | **Heavy.** Kokoro neural TTS via a pure-MLX backend (a vendored StyleTTS2/Kokoro port, MIT, `Sources/M1K3Kokoro/MLX/Vendored/`; ONNX Runtime removed 2026-07-18 — the visionOS unlock) + M1K3's own G2P phonemizer. |
 | `M1K3Calls` | Model-agnostic call intelligence: batch transcription + diarization + two-stage summarization protocols. |
 | `M1K3Avatar` | 3D companion (RealityKit) + pure emotion/animation types + earcons. Per-clip companion USDZs as resources. |
 | `M1K3MCPKit` / `M1K3MCP` | MCP server: testable tool handlers (`-Kit`) + the thin stdio executable (`M1K3MCP`) Claude spawns. |

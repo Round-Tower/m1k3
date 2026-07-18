@@ -2,7 +2,9 @@
 //  KokoroG2P.swift
 //  M1K3Kokoro
 //
-//  Pure grapheme→phoneme→token mapping for the Kokoro ONNX model. Splits text into
+//  Pure grapheme→phoneme→token mapping for the Kokoro model (backend-agnostic —
+//  the same vocab ids feed both the historical ONNX path and the current MLX
+//  one). Splits text into
 //  words (looked up in a bundled pronunciation dictionary) and punctuation (mapped to
 //  the model's vocab tokens), assembling the int64 token sequence Kokoro expects:
 //  per-word phonemes joined by the space token, punctuation attached directly, wrapped
