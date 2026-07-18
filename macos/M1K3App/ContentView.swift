@@ -372,6 +372,25 @@ struct ContentView: View {
                 .help("Start a fresh conversation — this one stays in History")
                 .accessibilityLabel("New chat")
 
+                if env.isListening {
+                    // The bail-out: discard the dictation WITHOUT sending. The
+                    // mic stays tap-to-send (muscle memory); this is the exit
+                    // that never existed when the take goes wrong. Escape works.
+                    Button { env.cancelDictation() } label: {
+                        Image(systemName: "xmark")
+                            .imageScale(.large)
+                            .fontWeight(.semibold)
+                            .frame(width: 22, height: 22)
+                    }
+                    .buttonStyle(.glass)
+                    .buttonBorderShape(.circle)
+                    .keyboardShortcut(.cancelAction)
+                    .help("Discard dictation — nothing is sent")
+                    .accessibilityLabel("Discard dictation")
+                    .accessibilityHint("Stops listening without sending")
+                    .transition(.scale.combined(with: .opacity))
+                }
+
                 Button { env.toggleDictation() } label: {
                     Image(systemName: env.isListening ? "mic.fill" : "mic")
                         .imageScale(.large)
