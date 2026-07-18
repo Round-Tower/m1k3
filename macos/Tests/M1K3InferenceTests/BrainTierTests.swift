@@ -41,6 +41,15 @@ struct BrainTierTests {
         }
     }
 
+    @Test("macOS keeps Lil's exact card copy — the platform-honesty byte freeze")
+    func lilDetailMacOSBytesFrozen() {
+        #if os(macOS)
+            #expect(BrainTier.lil.detail.hasSuffix("Runs entirely on your Mac."))
+        #else
+            #expect(!BrainTier.lil.detail.contains("Mac"))
+        #endif
+    }
+
     @Test("display names follow the M1K3 family naming")
     func displayNames() {
         #expect(BrainTier.mini.displayName == "Mini")

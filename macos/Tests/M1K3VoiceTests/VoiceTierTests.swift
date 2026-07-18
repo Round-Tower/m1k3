@@ -21,6 +21,15 @@ struct VoiceTierTests {
         #expect(VoiceTier.m1k3Voice.requiresDownload == true)
     }
 
+    @Test("macOS keeps M1K3 Voice's exact card copy — the platform-honesty byte freeze")
+    func m1k3VoiceDetailMacOSBytesFrozen() {
+        #if os(macOS)
+            #expect(VoiceTier.m1k3Voice.detail.contains("runs entirely on your Mac"))
+        #else
+            #expect(!VoiceTier.m1k3Voice.detail.contains("Mac"))
+        #endif
+    }
+
     @Test("every tier has a non-empty tagline, detail, and glyph")
     func metadataPopulated() {
         for tier in VoiceTier.allCases {

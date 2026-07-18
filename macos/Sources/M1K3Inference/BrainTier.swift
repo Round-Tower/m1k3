@@ -137,15 +137,11 @@ public enum BrainTier: String, CaseIterable, Identifiable, Sendable, Comparable 
 
     /// Platform-honest wording: the same card renders in the iOS/visionOS shell,
     /// where "your Mac" would be a lie on an iPhone (caught on-simulator,
-    /// 2026-07-18).
+    /// 2026-07-18; consolidated onto HostPlatform same-day — macOS bytes frozen,
+    /// pinned in BrainTierTests).
     private static var lilDetail: String {
-        #if os(macOS)
-            "A downloaded local engine — multi-turn conversation, memory, and "
-                + "reasoning that keeps up with you. Runs entirely on your Mac."
-        #else
-            "A downloaded local engine — multi-turn conversation, memory, and "
-                + "reasoning that keeps up with you. Runs entirely on your device."
-        #endif
+        "A downloaded local engine — multi-turn conversation, memory, and "
+            + "reasoning that keeps up with you. Runs entirely on \(HostPlatform.yourDevice)."
     }
 
     /// SF Symbol for the brain card. Speed → power, echoing the KMP emojis
