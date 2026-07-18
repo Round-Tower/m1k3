@@ -40,7 +40,7 @@ struct AvatarChatBackground: View {
     var body: some View {
         let resolved = treatment
         ZStack {
-            AvatarSurface(env: env)
+            AvatarSurface(env: env, paused: !resolved.animatesMotion)
                 .scaleEffect(resolved.scale)
                 .blur(radius: resolved.blur)
                 .opacity(resolved.opacity)

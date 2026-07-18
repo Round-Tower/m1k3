@@ -10,6 +10,12 @@
 //
 //  Signed: Kev + claude-opus-4-8, 2026-07-06, Confidence 0.8 (compile-verified;
 //  on-device streaming feel is Phase-B verify-owed). Prior: Unknown.
+//  Review: claude-fable-5, 2026-07-18 — the Mac-feel pass: once a conversation
+//  is underway the avatar no longer shrinks to a dock — it becomes the
+//  full-bleed reactive ChatBackdrop (bloom/recede via the shared, TDD'd
+//  ChatBackdropTreatment), matching the Mac's background-avatar mode. Follow-up
+//  chips are wired tap-to-send, and autoscroll now also fires when chips land
+//  (they arrive at .complete without a text change).
 //
 
 import M1K3Avatar
@@ -19,11 +25,25 @@ import SwiftUI
 
 struct ChatScreen: View {
     @Environment(AppCore.self) private var core
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    @AppStorage(AppCore.avatarBackdropKey) private var avatarBackdrop = true
     @State private var draft = ""
     @FocusState private var inputFocused: Bool
 
     private var chatting: Bool {
         !core.chat.messages.isEmpty
+    }
+
+    /// The live avatar backdrop is on when chatting, unless the user opted out
+    /// or asked the OS for Reduce Transparency (a layered live scene is exactly
+    /// what that setting asks us not to do — the Mac's glass swap, same spirit).
+    private var backdropActive: Bool {
+        chatting && avatarBackdrop && !reduceTransparency
+    }
+
+    /// Composing — keyboard up or a draft in hand; recedes the backdrop avatar.
+    private var isComposing: Bool {
+        inputFocused || !draft.isEmpty
     }
 
     var body: some View {
@@ -42,22 +62,36 @@ struct ChatScreen: View {
 
     // MARK: - Backdrop
 
+    /// The gradient base is the iOS stand-in for the Mac's behind-window glass;
+    /// once a conversation is underway the reactive avatar backdrop layers over
+    /// it (ONE RealityView at a time — the hero hands off to the backdrop).
     private var backdrop: some View {
-        LinearGradient(
-            colors: [Color(red: 0.05, green: 0.05, blue: 0.11), .black],
-            startPoint: .top, endPoint: .bottom
-        )
+        ZStack {
+            LinearGradient(
+                colors: [Color(red: 0.05, green: 0.05, blue: 0.11), .black],
+                startPoint: .top, endPoint: .bottom
+            )
+            if backdropActive {
+                ChatBackdrop(core: core, isComposing: isComposing)
+                    .transition(.opacity)
+            }
+        }
         .ignoresSafeArea()
+        .animation(.easeInOut(duration: 0.35), value: backdropActive)
     }
 
     // MARK: - Hero avatar
 
+    /// The big pixel face owns the empty state; once chatting it hands off to
+    /// the full-bleed ChatBackdrop instead of shrinking to a dock (the Mac's
+    /// background-avatar mode, which reads far better on a phone). The load /
+    /// readiness rows stay inline in both states.
     private var hero: some View {
         VStack(spacing: 6) {
-            AvatarView(controller: core.avatar)
-                .frame(height: chatting ? 76 : 168)
-                .padding(.horizontal, chatting ? 140 : 56)
             if !chatting {
+                AvatarView(controller: core.avatar)
+                    .frame(height: 168)
+                    .padding(.horizontal, 56)
                 Text("M1K3")
                     .font(.pixel(28))
                     .kerning(2)
@@ -136,7 +170,20 @@ struct ChatScreen: View {
                         emptyState
                     }
                     ForEach(core.chat.messages) { message in
-                        MessageBubble(message: message).id(message.id)
+                        MessageBubble(
+                            message: message,
+                            scrimmed: backdropActive,
+                            onSendFollowUp: { question in
+                                // Same gate as the input bar (see send()) — chips on
+                                // EARLIER turns stay tappable while a new answer
+                                // streams; ChatSession would silently drop the send
+                                // and the avatar epilogue would bloom the backdrop
+                                // over the streaming text.
+                                guard !core.chat.isResponding, core.isReady else { return }
+                                Task { await core.send(question) }
+                            }
+                        )
+                        .id(message.id)
                     }
                 }
                 .padding(.horizontal, 16)
@@ -145,10 +192,18 @@ struct ChatScreen: View {
                 .frame(maxWidth: .infinity)
             }
             .onChange(of: core.chat.messages.last?.text) {
-                if let last = core.chat.messages.last {
-                    withAnimation { proxy.scrollTo(last.id, anchor: .bottom) }
-                }
+                scrollToLatest(proxy)
             }
+            // Chips land at .complete WITHOUT a text change — scroll for them too.
+            .onChange(of: core.chat.messages.last?.followUps) {
+                scrollToLatest(proxy)
+            }
+        }
+    }
+
+    private func scrollToLatest(_ proxy: ScrollViewProxy) {
+        if let last = core.chat.messages.last {
+            withAnimation { proxy.scrollTo(last.id, anchor: .bottom) }
         }
     }
 

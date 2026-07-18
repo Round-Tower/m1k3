@@ -8,6 +8,8 @@
 //  budget and is deliberately not offered (BrainTier.recommended(platform:.mobile)).
 //
 //  Signed: Kev + claude-opus-4-8, 2026-07-06, Confidence 0.8. Prior: Unknown.
+//  Review: claude-fable-5, 2026-07-18 — added the Reading section (the shared
+//  ReadingMode picker + live ReadingText preview), part of the Mac-feel pass.
 //
 
 import M1K3Inference
@@ -16,6 +18,8 @@ import SwiftUI
 struct SettingsScreen: View {
     @Environment(AppCore.self) private var core
     @AppStorage(AppCore.webSearchEnabledKey) private var webSearchEnabled = true
+    @AppStorage(ReadingMode.storageKey) private var readingModeRaw = ReadingMode.standard.rawValue
+    @AppStorage(AppCore.avatarBackdropKey) private var avatarBackdrop = true
 
     /// Mobile-safe tiers only (see file header).
     private let brains: [BrainTier] = [.mini, .lil]
@@ -65,6 +69,28 @@ struct SettingsScreen: View {
                     Text("When on, M1K3 can search the web to answer. The only capability that sends chat-derived queries off this device.")
                 }
 
+                Section {
+                    Toggle("Avatar backdrop in chat", isOn: $avatarBackdrop)
+                } header: {
+                    Text("Appearance")
+                } footer: {
+                    Text("M1K3's face fills the background while you chat — bright when idle, receding while it thinks or you type. Off keeps a plain dark backdrop. Reduce Transparency also turns it off.")
+                }
+
+                Section {
+                    Picker("Reply typeface", selection: $readingModeRaw) {
+                        ForEach(ReadingMode.allCases) { mode in
+                            Text(mode.displayName).tag(mode.rawValue)
+                        }
+                    }
+                    ReadingText("Reading should feel effortless — pick what suits your eyes.")
+                        .font(.callout)
+                } header: {
+                    Text("Reading")
+                } footer: {
+                    Text(readingMode.detail)
+                }
+
                 Section("Knowledge") {
                     LabeledContent("Indexed documents", value: "\(core.indexedItemCount)")
                 }
@@ -80,6 +106,10 @@ struct SettingsScreen: View {
             }
             .navigationTitle("Settings")
         }
+    }
+
+    private var readingMode: ReadingMode {
+        ReadingMode(rawValue: readingModeRaw) ?? .standard
     }
 
     private var miniHint: String? {

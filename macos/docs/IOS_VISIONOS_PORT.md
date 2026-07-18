@@ -263,3 +263,52 @@ the `AppCore` glue has no iOS test bundle.) Verified: `swift test` 1752/260 + Ma
 visionOS xcodebuild all BUILD SUCCEEDED.
 
 _Signed: Kev + claude-opus-4-8, 2026-07-07 (DRY + mobile memory), Confidence 0.85._
+
+---
+
+## Addendum — 2026-07-18: the Mac-feel aesthetic pass (feat/ios-aesthetic-pass)
+
+First pass at closing the LOOK gap Kev named ("the iOS app doesn't have the Mac
+aesthetic we nailed"). All composition of already-shared, already-TDD'd pieces —
+no new policy logic:
+
+- **Reactive avatar backdrop** (`M1K3iOSApp/ChatBackdrop.swift`): once a
+  conversation starts, the pixel face stops shrinking to a 76pt dock and becomes
+  the full-bleed background — bloom when idle, recede (dim/blur/scale) while an
+  answer streams or the user is composing. Drives the shared
+  `ChatBackdropTreatment` (package-tested); one RealityView at a time (the hero
+  hands off to the backdrop). `isComposing` is broader than the Mac's
+  `!draft.isEmpty` — keyboard focus alone recedes, because the keyboard
+  shortens the viewport on a phone.
+- **Reading modes on mobile**: `ReadingMode.swift` + `ReadingText.swift` joined
+  `&mobileShellSources`, with the OpenDyslexic-{Regular,Bold}.otf resources
+  (`BundledFonts.register()` already listed them; the resource lines make the
+  registration real). Settings gains a Reading section (picker + live preview).
+- **FOLLOWUPS chips rendered**: the shared `ChatSession` was already populating
+  `message.followUps` on iOS — `MessageBubble` now renders the chips
+  (`.complete`-gated, tap-to-send via `core.send`), with the Mac's
+  `LegibilityScrim` treatment on flat assistant turns over the live backdrop.
+  Autoscroll also fires on chip arrival (no text change at `.complete`).
+- **Platform-honest copy**: `BrainTier.detail` for Lil said "Runs entirely on
+  your Mac" on an iPhone (caught on-simulator) — now `#if os(macOS)` branched.
+
+Review folds (multi-lens review, all adversarially confirmed): chip taps now
+share the input bar's `isResponding` gate (a mid-stream tap was silently eaten
+AND the avatar epilogue bloomed the backdrop over streaming text); the backdrop
+is opt-out-able (Settings → Appearance) and Reduce Transparency disables it;
+and `ChatBackdropTreatment.animatesMotion` finally has a consumer —
+`AvatarView`/`CRTOverlay` gained a `paused` flag (recede/still/Reduce Motion
+render one frame and stop the 30fps clocks), wired on BOTH platforms
+(`ChatBackdrop` + the Mac's `AvatarChatBackground` via `AvatarSurface`;
+companion/constellation surfaces are a logged follow-up).
+
+Verify-owed (named): backdrop legibility + bloom/recede feel on device; the
+paused-face look on both platforms (one crisp frame, no drift); CRT canvas +
+full-bleed RealityView thermals on A-series in the BLOOM state (receded/still
+are now quiet); OpenDyslexic rendering on device; chip frequency on the mobile
+ladder (Mini/Lil emit FOLLOWUPS less reliably than Big).
+
+_Signed: Kev + claude-fable-5, 2026-07-18 (Mac-feel pass), Confidence 0.85
+(composition of TDD'd shared pieces; sim-verified live — bloom/recede/scrim/
+streaming seen working; on-device feel + thermals verify-owed as named).
+Prior: Kev + claude-opus-4-8 (the shell this restyles)._

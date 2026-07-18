@@ -128,12 +128,24 @@ public enum BrainTier: String, CaseIterable, Identifiable, Sendable, Comparable 
             "Apple's built-in on-device model. Instant, private, and always ready — "
                 + "no download. The quickest way to start."
         case .lil:
-            "A downloaded local engine — multi-turn conversation, memory, and "
-                + "reasoning that keeps up with you. Runs entirely on your Mac."
+            Self.lilDetail
         case .big:
             "Maximum capability for most Macs — deeper reasoning and longer "
                 + "context, fully local. The full M1K3."
         }
+    }
+
+    /// Platform-honest wording: the same card renders in the iOS/visionOS shell,
+    /// where "your Mac" would be a lie on an iPhone (caught on-simulator,
+    /// 2026-07-18).
+    private static var lilDetail: String {
+        #if os(macOS)
+            "A downloaded local engine — multi-turn conversation, memory, and "
+                + "reasoning that keeps up with you. Runs entirely on your Mac."
+        #else
+            "A downloaded local engine — multi-turn conversation, memory, and "
+                + "reasoning that keeps up with you. Runs entirely on your device."
+        #endif
     }
 
     /// SF Symbol for the brain card. Speed → power, echoing the KMP emojis

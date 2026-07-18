@@ -8,6 +8,11 @@
 //  Mac app follows so reading modes work on words, not markup).
 //
 //  Signed: Kev + claude-opus-4-8, 2026-07-06, Confidence 0.8. Prior: Unknown.
+//  Review: claude-fable-5, 2026-07-18 — the Mac-feel pass: assistant turns now
+//  render through the shared ReadingText (default/serif/OpenDyslexic/bionic),
+//  gain the LegibilityScrim treatment (the avatar is a live backdrop now), and
+//  the FOLLOWUPS chips the shared ChatSession was already populating are finally
+//  rendered — tap-to-send via `onSendFollowUp`, mirroring MessageView.
 //
 
 import M1K3Chat
@@ -16,6 +21,10 @@ import SwiftUI
 
 struct MessageBubble: View {
     let message: ChatMessage
+    /// Chat backdrop active — M1K3's flat turns get a soft scrim so they read
+    /// over the moving avatar (the Mac's LegibilityScrim treatment).
+    var scrimmed = false
+    var onSendFollowUp: (String) -> Void = { _ in }
 
     var body: some View {
         switch message.role {
@@ -34,11 +43,9 @@ struct MessageBubble: View {
                     activityRow(label)
                 }
                 if !message.text.isEmpty {
-                    Text(message.text)
-                        .font(.body)
-                        .lineSpacing(4)
+                    ReadingText(message.text)
                         .foregroundStyle(.primary)
-                        .textSelection(.enabled)
+                        .modifier(LegibilityScrim(active: scrimmed))
                 }
                 if case let .failed(reason) = message.status {
                     Text(reason)
@@ -48,6 +55,7 @@ struct MessageBubble: View {
                 if !message.sources.isEmpty {
                     sourcesRow(message.sources)
                 }
+                followUpChips
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
@@ -74,5 +82,61 @@ struct MessageBubble: View {
                 .lineLimit(1)
         }
         .padding(.top, 2)
+    }
+
+    /// Up to 3 tap-to-send follow-up questions (FollowUpSplit parsed them from
+    /// the model's trailing FOLLOWUPS: line — see ChatSession.send). Gated on
+    /// `.complete`, matching the Mac's belt-and-braces.
+    @ViewBuilder
+    private var followUpChips: some View {
+        if case .complete = message.status, !message.followUps.isEmpty {
+            VStack(alignment: .leading, spacing: 6) {
+                ForEach(message.followUps, id: \.self) { question in
+                    FollowUpChip(question: question) { onSendFollowUp(question) }
+                }
+            }
+            .padding(.top, 2)
+        }
+    }
+}
+
+private struct FollowUpChip: View {
+    let question: String
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 6) {
+                Image(systemName: "arrow.turn.down.right").imageScale(.small)
+                Text(question)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+            }
+            .font(.caption.weight(.medium))
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .m1k3Glass(cornerRadius: 14)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Ask: \(question)")
+    }
+}
+
+/// The Mac's readability scrim for flat turns over a live avatar backdrop:
+/// off → truly card-free; on → a soft dark scrim hugs the text.
+private struct LegibilityScrim: ViewModifier {
+    let active: Bool
+
+    func body(content: Content) -> some View {
+        content
+            .padding(.horizontal, active ? 12 : 0)
+            .padding(.vertical, active ? 8 : 4)
+            .background {
+                if active {
+                    RoundedRectangle(cornerRadius: 14)
+                        .fill(.black.opacity(0.3))
+                }
+            }
+            .animation(.easeInOut(duration: 0.2), value: active)
     }
 }

@@ -154,13 +154,23 @@ targets:
       - path: M1K3iOSApp
       # Shared, cross-platform look-and-feel lifted from the macOS app target:
       # the procedural pixel-face avatar (now #if-guarded for UIColor), its
-      # emotion→colour map (pure SwiftUI), and the Silkscreen pixel brand font.
+      # emotion→colour map (pure SwiftUI), the reading modes (ReadingMode enum +
+      # ReadingText renderer — zero AppKit), the Silkscreen pixel brand font,
+      # and the OpenDyslexic faces the dyslexia reading mode needs
+      # (BundledFonts.register() already lists them; it silently skips missing
+      # resources, so the .otf lines below are load-bearing).
       - path: M1K3App/AvatarView.swift
       - path: M1K3App/AvatarEmotion+SwiftUI.swift
       - path: M1K3App/PixelFont.swift
+      - path: M1K3App/ReadingMode.swift
+      - path: M1K3App/ReadingText.swift
       - path: M1K3App/Resources/Fonts/Silkscreen-Regular.ttf
         buildPhase: resources
       - path: M1K3App/Resources/Fonts/Silkscreen-Bold.ttf
+        buildPhase: resources
+      - path: M1K3App/Resources/Fonts/OpenDyslexic-Regular.otf
+        buildPhase: resources
+      - path: M1K3App/Resources/Fonts/OpenDyslexic-Bold.otf
         buildPhase: resources
     dependencies: &mobileShellDeps
       # The portable package pipeline (protocol-seam first, so it cross-compiles):
