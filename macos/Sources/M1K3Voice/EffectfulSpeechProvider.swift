@@ -127,6 +127,14 @@ public final class EffectfulSpeechProvider: NSObject, SpeechProviderWithWordTimi
         // first speak() would suspend forever — and AppEnvironment.speak() does not
         // serialise calls. stop() resumes the prior playback and fires its single
         // onSpeakingEnded before we start fresh.
+        // TODO(#52 review residual): if two speak() calls race such that BOTH
+        // observe isSpeaking() == false before either starts rendering, the
+        // loser's SynthBox is never the synthesizer's current delegate — its
+        // didCancel/didFinish land on the winner's box, are (correctly)
+        // ignored by the utterance === owner guard, and the loser's
+        // continuation never resolves. Pre-existing hazard, now the last leak
+        // standing after the #52 fix; the clean fix is serialising speak()
+        // entry (an actor-held gate), not weakening the identity guard.
         if await isSpeaking() { await stop() }
         do {
             let (samples, sampleRate, wordOnsets) = try await synthesizeToFloats(utterance)

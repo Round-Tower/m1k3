@@ -86,6 +86,10 @@ public extension ChatHistoryPersisting {
     }
 }
 
+/// `@unchecked Sendable`: the only mutable state is `dbQueue`, set once in init;
+/// GRDB's `DatabaseQueue` internally serialises all reads/writes on its own
+/// queue, so cross-thread use of the store is safe by the library's contract
+/// (same justification as the KnowledgeStore/MemoryStore GRDB stores).
 public final class GRDBChatHistoryStore: ChatHistoryPersisting, @unchecked Sendable {
     private let dbQueue: DatabaseQueue
 
