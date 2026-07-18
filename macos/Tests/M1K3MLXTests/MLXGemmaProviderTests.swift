@@ -87,7 +87,7 @@ struct MLXGemmaProviderTests {
     }
 
     @Test("Bonsai thinking toggle per size: the 8B template has no enable_thinking, the 27B's reads it")
-    func bonsaiThinkingTogglePinnedOff() {
+    func bonsaiThinkingTogglePerSize() {
         // Unlike stock Qwen3, prism-ml's Bonsai chat template carries no
         // enable_thinking switch (verified against the HF template 2026-07-15) —
         // claiming toggle support would render a kwarg the template ignores and
