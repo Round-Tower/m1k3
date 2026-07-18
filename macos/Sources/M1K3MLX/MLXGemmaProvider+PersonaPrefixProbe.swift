@@ -50,7 +50,11 @@ extension MLXGemmaProvider {
             ),
             ToolDefinition(
                 name: "datetime",
-                description: "Get the current date and time on this Mac.",
+                // Mirrors DateTimeTool.description (M1K3AgentTools — no dep
+                // edge to a tools layer from a backend, so the string is
+                // duplicated with the same HostPlatform interpolation) so the
+                // probe's token counts stay representative of the live prompt.
+                description: "Get the current date and time on \(HostPlatform.thisDevice). Argument: optional, ignored.",
                 parameters: []
             ),
         ].map(MLXToolMapping.toolSpec(from:))
