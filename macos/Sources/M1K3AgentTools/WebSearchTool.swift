@@ -24,6 +24,7 @@
 
 import Foundation
 import M1K3Agent
+import M1K3Inference
 import os
 
 public struct WebSearchTool: AgentTool {
@@ -64,7 +65,7 @@ public struct WebSearchTool: AgentTool {
             case .rateLimited:
                 Self.log.notice("rate-limited: DDG served the challenge page for \"\(query, privacy: .public)\"")
                 return ToolResult(output: "Error: web search is temporarily unavailable "
-                    + "(DuckDuckGo rate-limited this Mac). Answer from what you already have.")
+                    + "(DuckDuckGo rate-limited \(HostPlatform.thisDevice)). Answer from what you already have.")
             case let .results(results) where results.isEmpty:
                 // .notice: "the search found nothing" is a load-bearing breadcrumb
                 // (distinguishes empty-result from never-ran) that must persist.

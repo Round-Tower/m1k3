@@ -571,7 +571,7 @@ public struct AgentRAGResponder: RAGResponding, Sendable {
         case (true, true):
             "- For current or external information — weather, news, prices, "
                 + "anything happening now — use web_search. search_knowledge only "
-                + "finds documents already stored on this Mac."
+                + "finds documents already stored on \(HostPlatform.thisDevice)."
         case (true, false):
             "- For current or external information — weather, news, prices, "
                 + "anything happening now — use web_search."

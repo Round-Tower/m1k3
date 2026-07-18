@@ -270,7 +270,7 @@ let package = Package(
         // The app injects these into the chat agent; M1K3Chat never links this.
         .target(
             name: "M1K3AgentTools",
-            dependencies: ["M1K3Agent", "M1K3Preview"],
+            dependencies: ["M1K3Agent", "M1K3Inference", "M1K3Preview"],
             path: "Sources/M1K3AgentTools"
         ),
         .testTarget(

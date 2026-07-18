@@ -10,6 +10,7 @@
 
 import Foundation
 import M1K3Agent
+import M1K3Inference
 
 /// Pure snapshot → sentence formatting, every branch deterministic.
 enum SystemStatusFormatter {
@@ -52,7 +53,7 @@ enum SystemStatusFormatter {
 public struct SystemStatusTool: AgentTool {
     public let name = "system_status"
     public let description =
-        "Get this Mac's battery, free disk space and uptime. Argument: optional, ignored."
+        "Get \(HostPlatform.thisDevice)'s battery, free disk space and uptime. Argument: optional, ignored."
     public let parameters = [
         ToolParameter(name: "query", description: "ignored"),
     ]
